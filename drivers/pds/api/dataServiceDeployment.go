@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -19,17 +20,13 @@ func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.Models
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-
 	dsModels, res, err := dsClient.ApiProjectsIdDeploymentsGet(ctx, projectID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiProjectsIdDeploymentsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
-	return dsModels.GetData(), err
+	return dsModels.GetData(), nil
 }
 
 // CreateDeployment return newly created deployment model.
@@ -49,20 +46,17 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiProjectsIdDeploymentsPost(ctx, projectID).Body(createRequest).Execute()
-
-	if res.StatusCode != status.StatusCreated {
-		log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
 
-// CreateDeploymentWithScehduleBackup return newly created deployment model with schedule backup enabled.
-func (ds *DataServiceDeployment) CreateDeploymentWithSchehduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
+// CreateDeploymentWithScheduleBackup return newly created deployment model with schedule backup enabled.
+func (ds *DataServiceDeployment) CreateDeploymentWithScheduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	scheduledBackup := pds.RequestsDeploymentScheduledBackup{
 		BackupPolicyId: &backupPolicyID,
@@ -84,13 +78,11 @@ func (ds *DataServiceDeployment) CreateDeploymentWithSchehduleBackup(projectID s
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiProjectsIdDeploymentsPost(ctx, projectID).Body(createRequest).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
@@ -100,13 +92,11 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdGet(ctx, deploymentID).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
@@ -116,14 +106,11 @@ func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdStatusGet(ctx, deploymentID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdStatusGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, nil, fmt.Errorf("Error when calling `ApiDeploymentsIdStatusGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, res, err
 }
@@ -133,14 +120,11 @@ func (ds *DataServiceDeployment) GetDeploymentEvents(deploymentID string) (*pds.
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdEventsGet(ctx, deploymentID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdEventsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdEventsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
@@ -150,14 +134,11 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdCredentialsGet(ctx, deploymentID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
@@ -168,8 +149,7 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	createRequest := pds.ControllersUpdateDeploymentRequest{
 		ApplicationConfigurationOverrides:  &appConfigOverride,
@@ -179,9 +159,8 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 		ResourceSettingsTemplateId:         &resourceTemplateID,
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ctx, deploymentID).Body(createRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
@@ -191,14 +170,11 @@ func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return pds.DeploymentsConnectionDetails{}, nil, err
+		return pds.DeploymentsConnectionDetails{}, nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdConnectionInfoGet(ctx, deploymentID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDeploymentsIdConnectionInfoGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return pds.DeploymentsConnectionDetails{}, nil, fmt.Errorf("Error when calling `ApiDeploymentsIdConnectionInfoGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel.GetConnectionDetails(), dsModel.GetClusterDetails(), err
 }
@@ -208,13 +184,11 @@ func (ds *DataServiceDeployment) DeleteDeployment(deploymentID string) (*status.
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := dsClient.ApiDeploymentsIdDelete(ctx, deploymentID).Execute()
-	if res.StatusCode != status.StatusAccepted {
-		log.Errorf("Error when calling `ApiDeploymentsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, err
 }

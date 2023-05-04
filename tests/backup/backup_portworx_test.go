@@ -839,9 +839,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		for i := 0; i < len(scheduleNames); i++ {
-			scheduleUid, err := GetScheduleUID(scheduleNames[i], orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleNames[i]))
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			err = DeleteSchedule(scheduleNames[i], SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] and schedule policies [%v]", scheduleNames[i], periodicSchedulePolicyNames[i]))
 		}
 		log.InfoD("Deleting created restores")

@@ -643,7 +643,7 @@ func (d *DefaultDriver) ValidateStoragePools() error {
 }
 
 // ExpandPool resizes a pool of a given ID
-func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ExpandPool()",
@@ -651,7 +651,7 @@ func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_
 }
 
 // ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
-func (d *DefaultDriver) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *DefaultDriver) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ExpandPoolUsingPxctlCmd()",

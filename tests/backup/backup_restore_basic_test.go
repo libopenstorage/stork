@@ -623,9 +623,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		log.InfoD("Clean up objects after test execution")
 		log.Infof("Deleting backup schedules")
 		for _, scheduleName := range scheduleNames {
-			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")
@@ -765,9 +763,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		log.InfoD("Clean up objects after test execution")
 		log.Infof("Deleting backup schedules")
 		for _, scheduleName := range scheduleNames {
-			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")
@@ -1119,9 +1115,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		defer EndPxBackupTorpedoTest(allContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting schedule [%s] uid", scheduleName))
-		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+		err = DeleteSchedule(scheduleName, destinationClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{schedulePolicyName}
@@ -1796,9 +1790,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
-		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		log.FailOnError(err, "Error while getting schedule uid %s", scheduleName)
-		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
@@ -2082,9 +2074,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
-			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-			log.FailOnError(err, "Error while getting schedule uid %s", scheduleName)
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
@@ -2628,10 +2618,8 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
 		log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName})
-		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))

@@ -629,9 +629,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
-			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-			log.FailOnError(err, "Error while getting schedule uid %s", scheduleName)
-			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
