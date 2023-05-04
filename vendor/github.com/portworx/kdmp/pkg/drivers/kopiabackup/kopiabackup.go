@@ -427,6 +427,7 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	}
 	var resourceNamespace string
 	var live bool
+	logrus.Infof("buildJob -- live backup %v", live)
 	// filter out the pods that are create by us
 	count := len(pods)
 	for _, pod := range pods {
@@ -493,6 +494,14 @@ func roleFor(live bool) *rbacv1.Role {
 	}
 	// Only live backup, we will add the hostaccess and privilege option.
 	if live {
+		// TODO: need to add a check such that these roles are add for Tanzu environment
+		tanzuPrivilegedRule := rbacv1.PolicyRule{
+			APIGroups:     []string{"extensions"},
+			Resources:     []string{"podsecuritypolicies"},
+			ResourceNames: []string{"pks-privileged"},
+			Verbs:         []string{"use"},
+		}
+		role.Rules = append(role.Rules, tanzuPrivilegedRule)
 		hostAccessRule := rbacv1.PolicyRule{
 			APIGroups:     []string{"security.openshift.io"},
 			Resources:     []string{"securitycontextconstraints"},

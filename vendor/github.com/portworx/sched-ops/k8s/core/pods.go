@@ -217,6 +217,7 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 	for _, p := range pods.Items {
 		for _, v := range p.Spec.Volumes {
 			if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == pvcName {
+				logrus.Infof("getPodsUsingPVCWithListOptions -- v.PersistentVolumeClaim.ClaimName %v - pvcName %v", v.PersistentVolumeClaim.ClaimName, pvcName)
 				// Along PVC present in the volume list, we also checking whether any of the container in the
 				// pod is really using it by mount them.
 				for _, container := range p.Spec.Containers {
@@ -230,6 +231,7 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 			}
 		}
 	}
+	logrus.Infof("getPodsUsingPVCWithListOptions --- retList %v", retList)
 	return retList, nil
 }
 
