@@ -1,0 +1,29 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pgbench-data
+  namespace: pgbench
+  labels:
+    name: pgbench-data
+  annotations:
+    torpedo.io/autopilot-enabled: "true"
+spec:
+  storageClassName: pgbench-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 12Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pgbench-state
+  namespace: pgbench
+spec:
+  storageClassName: pgbench-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
