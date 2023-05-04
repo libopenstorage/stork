@@ -86,6 +86,7 @@ const (
 	licenseCountUpdateRetryTime               = 1 * time.Minute
 	podReadyTimeout                           = 30 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
+	namespaceDeleteTimeout                    = 10 * time.Minute
 )
 
 var (
@@ -2319,6 +2320,34 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 		if err != nil {
 			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
 		}
+	}
+	return nil
+}
+
+// DeleteAppNamespace deletes the given namespace and wait for termination
+func DeleteAppNamespace(namespace string) error {
+	k8sCore := core.Instance()
+	err := k8sCore.DeleteNamespace(namespace)
+	if err != nil {
+		return err
+	}
+	namespaceDeleteCheck := func() (interface{}, bool, error) {
+		nsObj, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				return "", false, nil
+			} else {
+				return "", false, err
+			}
+		}
+		if nsObj.Status.Phase == "Terminating" {
+			return "", true, fmt.Errorf("namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
+	if err != nil {
+		return err
 	}
 	return nil
 }
