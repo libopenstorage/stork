@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -19,15 +20,11 @@ func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplica
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	atModel, res, err := atClient.ApiTenantsIdApplicationConfigurationTemplatesGet(ctx, tenantID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return atModel.GetData(), nil
 }
@@ -38,15 +35,11 @@ func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicat
 	log.Infof("Get list of storage templates for tenant ID - %v", templateID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	atModel, res, err := atClient.ApiApplicationConfigurationTemplatesIdGet(ctx, templateID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return atModel, nil
 }
@@ -58,15 +51,11 @@ func (at *AppConfigTemplate) CreateTemplate(tenantID string, dataServiceID strin
 	createRequest := pds.ControllersCreateApplicationConfigurationTemplateRequest{ConfigItems: data, DataServiceId: &dataServiceID, Name: &name}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	atModel, res, err := atClient.ApiTenantsIdApplicationConfigurationTemplatesPost(ctx, tenantID).Body(createRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return atModel, nil
 }
@@ -79,15 +68,11 @@ func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, 
 	updateRequest := pds.ControllersUpdateApplicationConfigurationTemplateRequest{ConfigItems: data, Name: &name}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	atModel, res, err := atClient.ApiApplicationConfigurationTemplatesIdPut(ctx, templateID).Body(updateRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return atModel, nil
 }
@@ -102,11 +87,8 @@ func (at *AppConfigTemplate) DeleteTemplate(templateID string) (*status.Response
 		return nil, err
 	}
 	res, err := atClient.ApiApplicationConfigurationTemplatesIdDelete(ctx, templateID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }

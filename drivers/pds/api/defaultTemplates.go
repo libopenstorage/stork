@@ -6,7 +6,6 @@ import (
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // DefaultTemplates struct
@@ -22,13 +21,8 @@ func (ds *DefaultTemplates) ListApplicationConfigurationTemplates(tenantID strin
 		return nil, fmt.Errorf("failed to get context, Err %v", err)
 	}
 	dsModels, res, err := dsClient.ApiTenantsIdApplicationConfigurationTemplatesGet(ctx, tenantID).Execute()
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get application configuration templates for given tenant, Error: %v %v", err, res)
-	}
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDataServicesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModels.GetData(), err
 }
@@ -41,10 +35,8 @@ func (ds *DefaultTemplates) ListResourceSettingTemplates(tenantID string) ([]pds
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModels, res, err := dsClient.ApiTenantsIdResourceSettingsTemplatesGet(ctx, tenantID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDataServicesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdResourceSettingsTemplatesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModels.GetData(), err
 }
@@ -54,14 +46,11 @@ func (ds *DefaultTemplates) ListStorageOptionsTemplates(tenantID string) ([]pds.
 	dsClient := ds.apiClient.StorageOptionsTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModels, res, err := dsClient.ApiTenantsIdStorageOptionsTemplatesGet(ctx, tenantID).Execute()
-
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiDataServicesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdStorageOptionsTemplatesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModels.GetData(), err
 }

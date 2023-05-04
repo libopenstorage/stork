@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -19,15 +20,11 @@ func (st *StorageSettingsTemplate) ListTemplates(tenantID string) ([]pds.ModelsS
 	log.Infof("Get list of storage templates for tenant ID - %v", tenantID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	pdsStorageTemplates, res, err := stClient.ApiTenantsIdStorageOptionsTemplatesGet(ctx, tenantID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdStorageOptionsTemplatesGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdStorageOptionsTemplatesGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return pdsStorageTemplates.GetData(), nil
 }
@@ -38,15 +35,11 @@ func (st *StorageSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsSt
 	log.Infof("Get storage template details for UUID - %v", templateID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	stModel, res, err := stClient.ApiStorageOptionsTemplatesIdGet(ctx, templateID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiStorageOptionsTemplatesIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiStorageOptionsTemplatesIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return stModel, nil
 }
@@ -58,15 +51,11 @@ func (st *StorageSettingsTemplate) CreateTemplate(tenantID string, fg bool, fs s
 	createRequest := pds.ControllersCreateStorageOptionsTemplateRequest{Fg: &fg, Fs: &fs, Name: &name, Provisioner: &provisioner, Repl: &repl, Secure: &secure}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	stModel, res, err := stClient.ApiTenantsIdStorageOptionsTemplatesPost(ctx, tenantID).Body(createRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdStorageOptionsTemplatesPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdStorageOptionsTemplatesPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return stModel, nil
 }
@@ -78,15 +67,11 @@ func (st *StorageSettingsTemplate) UpdateTemplate(templateID string, fg bool, fs
 	updateRequest := pds.ControllersUpdateStorageOptionsTemplateRequest{Fg: &fg, Fs: &fs, Name: &name, Repl: &repl, Secure: &secure}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	stModel, res, err := stClient.ApiStorageOptionsTemplatesIdPut(ctx, templateID).Body(updateRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiStorageOptionsTemplatesIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiStorageOptionsTemplatesIdPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return stModel, nil
 }
@@ -97,15 +82,11 @@ func (st *StorageSettingsTemplate) DeleteTemplate(templateID string) (*status.Re
 	log.Infof("Delete strogae template: %v", templateID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := stClient.ApiStorageOptionsTemplatesIdDelete(ctx, templateID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiStorageOptionsTemplatesIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiStorageOptionsTemplatesIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }
