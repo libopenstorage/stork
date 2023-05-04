@@ -1540,7 +1540,7 @@ func GetAppStorageClasses(appCtx *scheduler.Context) (*[]string, error) {
 // CreateScheduleOptions uses the current Context (kubeconfig) to generate schedule options
 // NOTE: When using a ScheduleOption that was created during a context (kubeconfig)
 // that is different from the current context, make sure to re-generate ScheduleOptions
-func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
+func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.ScheduleOptions {
 	log.Infof("Creating ScheduleOptions")
 
 	//if not hyper converged set up deploy apps only on storageless nodes
@@ -1568,6 +1568,7 @@ func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
 			StorageProvisioner: Inst().Provisioner,
 			Nodes:              storagelessNodes,
 			Labels:             storageLessNodeLabels,
+			Namespace:          namespace,
 		}
 		return options
 
@@ -1575,6 +1576,7 @@ func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
+			Namespace:          namespace,
 		}
 		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
 		return options
@@ -1592,7 +1594,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 
 	Step("schedule applications", func() {
-		options := CreateScheduleOptions(errChan...)
+		options := CreateScheduleOptions("", errChan...)
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
 		// Need to check err != nil before calling processError
@@ -1604,6 +1606,31 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 	})
 
+	return contexts
+}
+
+// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
+func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var err error
+
+	Step("schedule applications", func() {
+		options := CreateScheduleOptions(namespace, errChan...)
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, options)
+		// Need to check err != nil before calling processError
+		if err != nil {
+			processError(err, errChan...)
+		}
+		if len(contexts) == 0 {
+			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+		}
+	})
 	return contexts
 }
 
