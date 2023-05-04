@@ -215,16 +215,16 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 }
 
 // CreateBackupWithValidation creates backup, checks for success, and validates the backup
-func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
-	for _, scheduledAppContext := range scheduledAppContexts {
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
 	}
 	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
-	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts, make([]string, 0))
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.BackupUpdateResponse, error) {
@@ -289,17 +289,17 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 	return nil
 }
 
-// CreateBackupWithCustomResourceTypeWithValidation creates backup with ciustom resources, checks for success, and validates the backup
-func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+// CreateBackupWithCustomResourceTypeWithValidation creates backup with custom resources selected through resourceTypesFilter, checks for success, and validates the backup
+func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, resourceTypesFilter []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
-	for _, scheduledAppContext := range scheduledAppContexts {
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
 	}
-	err := CreateBackupWithCustomResourceType(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypes, ctx)
+	err := CreateBackupWithCustomResourceType(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypesFilter, ctx)
 	if err != nil {
 		return err
 	}
-	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts, resourceTypes)
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypesFilter)
 }
 
 // CreateScheduleBackup creates a schedule backup
@@ -1284,8 +1284,8 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
-// ValidateBackup validates a backup's spec's objects (resources) and volumes. This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
-func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string) error {
+// ValidateBackup validates a backup's spec's objects (resources) and volumes. resourceTypesFilter can be used to select specific types to validate (nil means all types). This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
+func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string) error {
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
 
 	log.Infof("Obtaining backup info for backup [%s]", backupName)
@@ -1358,8 +1358,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 				continue specloop
 			}
 
-			if len(resourceTypes) > 0 && !Contains(resourceTypes, kind) {
-				log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypes, name, kind, ns, scheduledAppContextNamespace, backupName)
+			if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
+				log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypesFilter, name, kind, ns, scheduledAppContextNamespace, backupName)
 				continue specloop
 			}
 
@@ -1407,8 +1407,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		}
 		log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", scheduledAppContextNamespace, scheduledVolumes)
 
-		if len(resourceTypes) == 0 ||
-			(len(resourceTypes) > 0 && Contains(resourceTypes, "PersistentVolumeClaim")) {
+		if len(resourceTypesFilter) == 0 ||
+			(len(resourceTypesFilter) > 0 && Contains(resourceTypesFilter, "PersistentVolumeClaim")) {
 			// Verify if volumes are present
 		volloop:
 			for _, spec := range scheduledAppContext.App.SpecList {
