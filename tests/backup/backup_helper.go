@@ -89,9 +89,10 @@ const (
 )
 
 var (
-	// User should keep updating preRuleApp, postRuleApp
+	// User should keep updating preRuleApp, postRuleApp, appsWithCRDsAndWebhooks
 	preRuleApp                  = []string{"cassandra", "postgres"}
 	postRuleApp                 = []string{"cassandra"}
+	appsWithCRDsAndWebhooks     = []string{"elasticsearch-crd-webhook"} // The apps which have CRDs and webhooks
 	globalAWSBucketName         string
 	globalAzureBucketName       string
 	globalGCPBucketName         string

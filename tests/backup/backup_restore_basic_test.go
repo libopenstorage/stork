@@ -2775,3 +2775,379 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// BackupCRsThenMultipleRestoresOnHigherK8sVersion deploys CRs via operator (CRD + webhook) -> backups them up -> creates two simultaneous restores on a cluster with higher K8s version :: one restore is Success and other PartialSuccess
+var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
+
+	var (
+		backupNames          []string
+		restoreNames         []string
+		restoreLaterNames    []string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+	)
+
+	var (
+		originalAppList   = Inst().AppList
+		namespaceMapping  = make(map[string]string)
+		backupLocationMap = make(map[string]string)
+		labelSelectors    = make(map[string]string)
+		providers         = getProviders()
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "Deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
+
+		log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
+		Inst().AppList = appsWithCRDsAndWebhooks
+	})
+
+	It("Deploy CRs (CRD + webhook); Backup; two simultaneous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
+
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("creating source and destination cluster", func() {
+			log.InfoD("creating source and destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "create source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+
+		Step("verify kubernetes version of source and destination cluster", func() {
+			var srcVer, destVer semver.Version
+			log.InfoD("begin verification kubernetes version of source and destination cluster")
+
+			defer func() {
+				log.InfoD("switching to default context")
+				err := Inst().S.SetConfig("")
+				log.FailOnError(err, "failed to SetClusterContext to default cluster")
+			}()
+
+			Step("Get kubernetes source cluster version", func() {
+				log.InfoD("switched context to source")
+
+				sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+				log.FailOnError(err, "failed to get kubeconfig path for source cluster. Error: [%v]", err)
+
+				err = Inst().S.SetConfig(sourceClusterConfigPath)
+				log.FailOnError(err, "failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
+
+				ver, err := k8s.ClusterVersion()
+				log.FailOnError(err, "failed to get source cluster version")
+				srcVer, err = semver.Make(ver)
+				log.FailOnError(err, "failed to get source cluster version")
+			})
+
+			Step("Get kubernetes destination cluster version", func() {
+				log.InfoD("switched context to destination")
+
+				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+				log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
+
+				err = Inst().S.SetConfig(destinationClusterConfigPath)
+				log.FailOnError(err, "failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
+
+				ver, err := k8s.ClusterVersion()
+				log.FailOnError(err, "failed to get destination cluster version")
+				destVer, err = semver.Make(ver)
+				log.FailOnError(err, "failed to get destination cluster version")
+			})
+
+			log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVer.String(), destVer.String())
+			isValid := srcVer.LT(destVer)
+			dash.VerifyFatal(isValid, true,
+				"source cluster kubernetes version should be lesser than the destination cluster kubernetes version.")
+		})
+
+		Step("schedule the applications on source cluster and validate", func() {
+			log.InfoD("schedule the applications on source cluster and validate")
+
+			log.InfoD("scheduling applications")
+			scheduledAppContexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplications(taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(appCtx, taskName)
+					appCtx.ScheduleOptions.Namespace = namespace
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				}
+			}
+
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+
+			log.InfoD("waiting (for 1 minutes) for any CRs to finish starting up.")
+			time.Sleep(time.Minute * 1)
+			log.Warnf("no verification is done; it might lead to undetectable errors.")
+		})
+
+		Step("Creating backup location and cloud credentials", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Taking backup of application from source cluster", func() {
+			log.InfoD("taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			backupNames = make([]string, 0)
+			for _, appCtx := range scheduledAppContexts {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, scheduledNamespace, time.Now().Unix())
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, scheduledNamespace, backupLocationName)
+				err := CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{scheduledNamespace}, labelSelectors, orgID, sourceClusterUid, "", "", "", "", ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+
+				// Validation code will be added here in upcoming PR
+			}
+		})
+
+		Step("Restoring the backed up applications on destination cluster", func() {
+
+			log.InfoD("Restoring the backed up applications on destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			for i, appCtx := range scheduledAppContexts {
+				var initialRestoreName, restoreLaterName string
+
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+
+				Step("Restoring the backed up application to namespace of same name on destination cluster", func() {
+					log.InfoD("restoring the backed up application to namespace of same name on destination cluster")
+
+					initialRestoreName = fmt.Sprintf("%s-%s-initial-%v", restoreNamePrefix, scheduledNamespace, time.Now().Unix())
+					restoreNamespace := scheduledNamespace
+					namespaceMapping[scheduledNamespace] = restoreNamespace
+
+					log.InfoD("creating Initial Restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", initialRestoreName, destinationClusterName, orgID, restoreNamespace)
+					_, err = CreateRestoreWithoutCheck(initialRestoreName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("initiation of initial restore [%s]", initialRestoreName))
+					restoreNames = append(restoreNames, initialRestoreName)
+
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  initialRestoreName,
+						OrgId: orgID,
+					}
+					restoreInProgressCheck := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						if err != nil {
+							err := fmt.Errorf("failed getting restore status for - [%s]; Err: [%s]", initialRestoreName, err)
+							return "", false, err
+						}
+						restoreResponseStatus := resp.GetRestore().GetStatus()
+
+						// Status should be LATER than InProgress in order for next STEP to execute
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_InProgress {
+							log.InfoD("restore status of [%s] is [%s]; expected [InProgress].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, nil
+						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].\nhelp: check for remnant cluster-level resources on destination cluster.", initialRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, err
+						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].\nhelp: check for status frequently", initialRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, err
+						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
+							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
+							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].", initialRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, err
+						}
+
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [InProgress]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						return "", true, err
+					}
+					_, err = DoRetryWithTimeoutWithGinkgoRecover(restoreInProgressCheck, 10*time.Minute, 4*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("status of initial restore [%s] is [InProgress]", initialRestoreName))
+				})
+
+				var restoreLaterStatusErr error
+				var laterRestoreStatus interface{}
+
+				Step("Restoring the backed up application to namespace with different name on destination cluster", func() {
+					log.InfoD("Restoring the backed up application to namespace with different name on destination cluster")
+
+					restoreLaterName = fmt.Sprintf("%s-%s-later-%v", restoreNamePrefix, scheduledNamespace, time.Now().Unix())
+					restoreLaterNamespace := fmt.Sprintf("%s-%s", scheduledNamespace, "later")
+					namespaceMapping := make(map[string]string) //using local version in order to not change 'global' mapping as the key is the same
+					namespaceMapping[scheduledNamespace] = restoreLaterNamespace
+
+					log.InfoD("creating Later Restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", restoreLaterName, destinationClusterName, orgID, restoreLaterNamespace)
+					_, err = CreateRestoreWithoutCheck(restoreLaterName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("initiation of later restore [%s]", restoreLaterName))
+					restoreLaterNames = append(restoreLaterNames, restoreLaterName)
+
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  restoreLaterName,
+						OrgId: orgID,
+					}
+					restorePartialSuccessOrSuccessCheck := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						if err != nil {
+							err := fmt.Errorf("failed getting restore status for - [%s]; Err: [%s]", restoreLaterName, err)
+							return "", false, err
+						}
+						restoreResponseStatus := resp.GetRestore().GetStatus()
+
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+							log.InfoD("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'.\ncondition fulfilled.", restoreLaterName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, nil
+						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
+							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
+							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'.", restoreLaterName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, err
+						}
+
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for 'PartialSuccess' or 'Success'...", restoreLaterName, restoreResponseStatus.GetStatus())
+						return "", true, err
+					}
+					laterRestoreStatus, restoreLaterStatusErr = DoRetryWithTimeoutWithGinkgoRecover(restorePartialSuccessOrSuccessCheck, 10*time.Minute, 30*time.Second)
+
+					// we don't end the test if there is an error here, as we also want to ensure that we look into the status of the following `Step`, so that we have the full details of what went wrong.
+					dash.VerifySafely(restoreLaterStatusErr, nil, fmt.Sprintf("status of later restore [%s] is either 'PartialSuccess' or 'Success'", restoreLaterName))
+
+					// We can consider validation and cleanup for 'PartialSuccess' and 'Success'
+					if restoreLaterStatusErr == nil {
+						// Validation code will be added here in upcoming PR
+					} else {
+						log.Warnf("proceeding to next step, after which the test will be failed.")
+					}
+				})
+
+				Step("Verifying and validating status of Initial and Later Restore", func() {
+					log.InfoD("Verifying status of Initial and Later Restore")
+					// getting the status of initial restore
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  initialRestoreName,
+						OrgId: orgID,
+					}
+					restoreSuccessOrPartialSuccessCheck := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						if err != nil {
+							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", initialRestoreName, err)
+							return "", false, err
+						}
+						restoreResponseStatus := resp.GetRestore().GetStatus()
+
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
+							log.InfoD("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'.\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, nil
+						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
+							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
+							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'.", initialRestoreName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, err
+						}
+
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for 'PartialSuccess' or 'Success'...", initialRestoreName, restoreResponseStatus.GetStatus())
+						return "", true, err
+					}
+					initialRestoreStatus, initialRestoreError := DoRetryWithTimeoutWithGinkgoRecover(restoreSuccessOrPartialSuccessCheck, 10*time.Minute, 30*time.Second)
+
+					dash.VerifyFatal(initialRestoreError, nil, fmt.Sprintf("status of initial restore [%s] is 'PartialSuccess' or 'Success'", initialRestoreName))
+
+					// Validation code will be added here in upcoming PR
+
+					// If Later Restore was an error before, we have to fail the test at this point, having processed the other stage
+					dash.VerifyFatal(restoreLaterStatusErr, nil, fmt.Sprintf("status of later restore [%s] is 'PartialSuccess' or 'Success'", restoreLaterName))
+
+					// Checking actual validity of restore status
+					log.InfoD("Validating status of Initial and Later Restore...")
+					validity := false
+					errHelpStr := ""
+					log.InfoD("states of [initial,later] restore are [%s,%s]", initialRestoreStatus, laterRestoreStatus)
+					if (initialRestoreStatus == api.RestoreInfo_StatusInfo_Success && laterRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess) ||
+						(initialRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess && laterRestoreStatus == api.RestoreInfo_StatusInfo_Success) {
+						validity = true
+					} else if initialRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess && laterRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess {
+						validity = false
+						errHelpStr = "Error. help: ensure no remnant cluster-level resources on destination cluster."
+					} else if initialRestoreStatus == api.RestoreInfo_StatusInfo_Success && laterRestoreStatus == api.RestoreInfo_StatusInfo_Success {
+						validity = false
+						errHelpStr = "Error. help: ensure app has cluster-level resources."
+					}
+					dash.VerifyFatal(validity, true, fmt.Sprintf("states of (initial,later) restore are (Success,PartialSuccess) or (PartialSuccess,Success).\n %s", errHelpStr))
+				})
+
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer func() { Inst().AppList = originalAppList }()
+
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		defer EndTorpedoTest()
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "fetching px-central-admin ctx")
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = false
+
+		log.InfoD("deleting applications scheduled on source clusters")
+		ValidateAndDestroy(scheduledAppContexts, opts)
+
+		log.InfoD("waiting (for 1 minute) for any Resources created by Operator of Custom Resources to finish being destroyed.")
+		time.Sleep(time.Minute * 1)
+		log.Warn("no verification of destruction is done; it might lead to undetectable errors")
+
+		log.InfoD("deleting restores")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("deleting Restore [%s]", restoreName))
+		}
+
+		log.InfoD("deleting restore-laters")
+		for _, restoreLaterName := range restoreLaterNames {
+			err = DeleteRestore(restoreLaterName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("deleting Restore [%s]", restoreLaterName))
+		}
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
