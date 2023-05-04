@@ -1872,6 +1872,13 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.NamespaceSelectors != nil {
+		in, out := &in.NamespaceSelectors, &out.NamespaceSelectors
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.IncludeResources != nil {
 		in, out := &in.IncludeResources, &out.IncludeResources
 		*out = new(bool)
