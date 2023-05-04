@@ -107,6 +107,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		})
 		Step("Taking backup of multiple namespaces", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
