@@ -614,10 +614,9 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	var (
 		appList                     = Inst().AppList
-		contexts                    []*scheduler.Context
+		scheduledAppContexts        []*scheduler.Context
 		preRuleNameList             []string
 		postRuleNameList            []string
-		appContexts                 []*scheduler.Context
 		appNamespaces               []string
 		beforeSize                  int
 		credName                    string
@@ -641,7 +640,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	podListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
-	contexts = make([]*scheduler.Context, 0)
+	scheduledAppContexts = make([]*scheduler.Context, 0)
 	appNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress", nil, 58050)
@@ -659,22 +658,22 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Schedule backup while resizing the volume", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")
@@ -754,7 +753,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Resize the volume before backup schedule", func() {
 					log.InfoD("Resize the volume before backup schedule")
-					for _, ctx := range contexts {
+					for _, ctx := range scheduledAppContexts {
 						var appVolumes []*volume.Volume
 						log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
 						appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -783,13 +782,16 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Create schedule backup after initiating volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 					scheduleNames = append(scheduleNames, scheduleName)
 					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-					err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-						labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+
+					err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
+
 					firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 				})
@@ -812,10 +814,14 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+
 					firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
-					err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of the first schedule backup named [%s]", firstScheduleBackupName))
+
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of recent backup [%s]", firstScheduleBackupName))
+
 					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
 					currentScheduleBackupCount := len(allScheduleBackupNames)
@@ -833,10 +839,11 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					}
 					nextScheduleBackupNameRef, err = DoRetryWithTimeoutWithGinkgoRecover(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
+
 					nextScheduleBackupName = nextScheduleBackupNameRef.(string)
 					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
-					err = backupSuccessCheck(nextScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
+					err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
 				})
 				Step("Restoring application from first schedule backup", func() {
 					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", firstScheduleBackupName))
@@ -861,7 +868,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		for i := 0; i < len(scheduleNames); i++ {
@@ -881,7 +888,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
