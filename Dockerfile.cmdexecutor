@@ -1,11 +1,13 @@
-FROM registry.access.redhat.com/rhel7-atomic
+FROM registry.access.redhat.com/ubi8-minimal:latest
 MAINTAINER Portworx Inc. <support@portworx.com>
 
+ARG VERSION=master
+ARG RELEASE=latest
 LABEL name="openstorage/cmdexecutor" \
       maintainer="support@portworx.com" \
       vendor="Portworx Inc." \
-      version="1.1" \
-      release="1" \
+      version=${VERSION} \
+      release=${RELEASE} \
       summary="STORK Command executor" \
       description="CLI to execute async commands for Kubernetes Pods" \
       url="https://github.com/libopenstorage/stork" \
