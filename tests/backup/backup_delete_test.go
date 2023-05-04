@@ -17,12 +17,12 @@ import (
 )
 
 // createBackupUntilIncrementalBackup creates backup until incremental backups is created returns the name of the incremental backup created
-func createBackupUntilIncrementalBackup(namespace string, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string, ctx context.Context) (string, error) {
+func createBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContextToBackup *scheduler.Context, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string) (string, error) {
+	namespace := scheduledAppContextToBackup.ScheduleOptions.Namespace
 	incrementalBackupName := fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-	err := CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-		labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+	err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
 	if err != nil {
-		return "", fmt.Errorf("verifying incremental backup [%s] creation", incrementalBackupName)
+		return "", fmt.Errorf("creation and validation of incremental backup [%s] creation", incrementalBackupName)
 	}
 
 	log.InfoD("Check if backups are incremental backups or not")
@@ -63,8 +63,7 @@ func createBackupUntilIncrementalBackup(namespace string, customBackupLocationNa
 				log.InfoD(fmt.Sprintf("Recreate incremental backup iteration: %d", maxBackupsBeforeIncremental))
 				// Create a new incremental backups
 				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+				err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
 				if err != nil {
 					return "", fmt.Errorf("verifying incremental backup [%s] creation", incrementalBackupName)
 				}
