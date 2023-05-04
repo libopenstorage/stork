@@ -294,23 +294,22 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 // This testcase verifies resize after the volume is restored from a backup
 var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	var (
-		appList          = Inst().AppList
-		contexts         []*scheduler.Context
-		preRuleNameList  []string
-		postRuleNameList []string
-		appContexts      []*scheduler.Context
-		bkpNamespaces    []string
-		clusterUid       string
-		clusterStatus    api.ClusterInfo_StatusInfo_Status
-		restoreName      string
-		namespaceMapping map[string]string
-		credName         string
+		appList              = Inst().AppList
+		scheduledAppContexts []*scheduler.Context
+		preRuleNameList      []string
+		postRuleNameList     []string
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		restoreName          string
+		namespaceMapping     map[string]string
+		credName             string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
 	BackupLocationMap := make(map[string]string)
 	var backupLocation string
-	contexts = make([]*scheduler.Context, 0)
+	scheduledAppContexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
 
@@ -330,22 +329,22 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Resize after the volume is restored from a backup", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -411,9 +410,9 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
-				err = CreateBackup(backupName, SourceClusterName, backupLocation, BackupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, BackupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
 
@@ -431,7 +430,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		Step("Resize volume after the restore is completed", func() {
 			log.InfoD("Resize volume after the restore is completed")
 			var err error
-			for _, ctx := range contexts {
+			for _, ctx := range scheduledAppContexts {
 				var appVolumes []*volume.Volume
 				log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
 				appVolumes, err = Inst().S.GetVolumes(ctx)
@@ -458,17 +457,17 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		})
 
 		Step("Validate applications post restore", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
