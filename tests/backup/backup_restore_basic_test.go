@@ -1468,20 +1468,19 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 // MultipleCustomRestoreSameTimeDiffStorageClassMapping issues multiple custom restores at the same time using different storage class mapping
 var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		backupLocationUID string
-		cloudCredName     string
-		cloudCredUID      string
-		bkpLocationName   string
-		backupName        string
-		restoreList       []string
-		sourceScName      *storageApi.StorageClass
-		scNames           []string
-		scCount           int
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupName           string
+		restoreList          []string
+		sourceScName         *storageApi.StorageClass
+		scNames              []string
+		scCount              int
 	)
 	namespaceMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
@@ -1495,15 +1494,15 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 		StartTorpedoTest("MultipleCustomRestoreSameTimeDiffStorageClassMapping",
 			"Issue multiple custom restores at the same time using different storage class mapping", nil, 58052)
 		log.InfoD("Deploy applications needed for backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1513,7 +1512,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Register cluster for backup", func() {
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
@@ -1565,9 +1564,9 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 		Step("Taking backup of application for different combination of restores", func() {
 			log.InfoD("Taking backup of application for different combination of restores")
 			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup: %s", backupName))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Multiple restore for same backup in different storage class in same cluster at the same time", func() {
 			log.InfoD(fmt.Sprintf("Multiple restore for same backup into %d different storage class in same cluster at the same time", scCount))
@@ -1596,12 +1595,12 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		log.InfoD("Deleting created restores")
 		for _, restoreName := range restoreList {
 			wg.Add(1)
