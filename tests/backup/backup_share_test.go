@@ -3945,9 +3945,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 	userBackupLocationMapping := map[string]string{}
 	var backupUIDList []string
 	var backupName string
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	var backupLocationUID string
-	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -3959,15 +3958,15 @@ var _ = Describe("{SwapShareBackup}", func() {
 		StartTorpedoTest("SwapShareBackup",
 			"Share backup with same name between two users", nil, 82940)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -4034,10 +4033,11 @@ var _ = Describe("{SwapShareBackup}", func() {
 				backupName = "backup1-82940"
 				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
-				err = CreateBackup(backupName, SourceClusterName, userBackupLocationMapping[user], backupLocationUID, []string{bkpNamespaces[0]},
-					nil, orgID, clusterUid, "", "", "", "", ctx)
 
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verifying backup creation for %s", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, userBackupLocationMapping[user], backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+
 				backupDriver := Inst().Backup
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				backupUIDList = append(backupUIDList, backupUID)
@@ -4098,11 +4098,11 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {
