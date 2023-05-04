@@ -2378,7 +2378,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				recentBackupName := fetchedUserBackups[len(fetchedUserBackups)-1]
 				log.InfoD("Recent backup name [%s] ", recentBackupName)
 				err = backupSuccessCheckWithValidation(ctx, recentBackupName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", recentBackupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of recent backup [%s]", recentBackupName))
 			}
 		})
 	})
