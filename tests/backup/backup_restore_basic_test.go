@@ -111,7 +111,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidatation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Selecting random backed-up apps and restoring them", func() {
@@ -239,7 +239,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithCustomResourceTypeWithValidatation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, []string{"PersistentVolumeClaim"}, nil, orgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, []string{"PersistentVolumeClaim"}, nil, orgID, clusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] with custom resources", backupName))
 			}
 		})
@@ -430,7 +430,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidatation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})

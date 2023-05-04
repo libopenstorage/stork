@@ -214,8 +214,8 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-// CreateBackupWithValidatation creates backup, checks for success, and validates the backup
-func CreateBackupWithValidatation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+// CreateBackupWithValidation creates backup, checks for success, and validates the backup
+func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
 		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
@@ -290,8 +290,8 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 	return nil
 }
 
-// CreateBackupWithCustomResourceTypeWithValidatation creates backup with ciustom resources, checks for success, and validates the backup
-func CreateBackupWithCustomResourceTypeWithValidatation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+// CreateBackupWithCustomResourceTypeWithValidation creates backup with ciustom resources, checks for success, and validates the backup
+func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
 		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
