@@ -224,7 +224,6 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 	if err != nil {
 		return err
 	}
-	log.InfoD("Validating Backup [%s]", backupName)
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts, make([]string, 0))
 }
 
