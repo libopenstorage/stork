@@ -2421,19 +2421,18 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 // UI testing is need to validate that user with FullAccess cannot duplicate the backup shared
 var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		userNames         []string
-		backupName        string
-		backupLocationUID string
-		cloudCredName     string
-		cloudCredUID      string
-		bkpLocationName   string
-		userBackupName    string
-		ctxNonAdmin       context.Context
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		userNames            []string
+		backupName           string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		userBackupName       string
+		ctxNonAdmin          context.Context
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -2443,15 +2442,15 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		StartTorpedoTest("ShareBackupsAndClusterWithUser",
 			"Share backup to user with full access and try to duplicate the backup from the shared user", nil, 82943)
 		log.InfoD("Deploy applications need fot taking backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2460,7 +2459,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications ")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create Users", func() {
 			userNames = createUsers(numberOfUsers)
@@ -2493,9 +2492,10 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		})
 		Step("Taking backup of applications", func() {
 			backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespaces[0])
-			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+
 		})
 		Step("Share backup with user having full access", func() {
 			log.InfoD("Share backup with user having full access")
@@ -2512,19 +2512,19 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
 				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 				userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
-				err = CreateBackup(userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctxNonAdmin)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", userBackupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				err = CreateBackupWithValidation(ctxNonAdmin, userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", userBackupName))
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		log.Infof("Deleting backup created by px-central-admin")
 
 		log.Infof("Deleting registered clusters for non-admin context")
