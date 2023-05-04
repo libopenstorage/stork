@@ -336,6 +336,9 @@ type Driver interface {
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 
+	//UpdateStickyFlag update sticky flag using pxctl command
+	UpdateStickyFlag(volumeName, stickyOption string) error
+
 	//ValidatePureFaFbMountOptions validates mount options by executing mount command
 	ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
 

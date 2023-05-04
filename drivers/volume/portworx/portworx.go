@@ -1462,6 +1462,22 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 	return nil
 }
 
+func (d *portworx) UpdateStickyFlag(volumeName, stickyOption string) error {
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s %s --sticky %s", pxctlVolumeUpdate, volumeName, stickyOption)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting sticky option to %s for volume %s, Err: %v", stickyOption, volumeName, err)
+	}
+	return nil
+}
+
 func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	cmd := fmt.Sprintf(mountGrepVolume, volumeName)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
