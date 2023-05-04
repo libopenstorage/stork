@@ -2234,7 +2234,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 
 var _ = Describe("{ClusterBackupShareToggle}", func() {
 	var (
-		contexts                   []*scheduler.Context
+		scheduledAppContexts       []*scheduler.Context
 		cloudCredUID               string
 		cloudCredName              string
 		backupLocationUID          string
@@ -2253,16 +2253,16 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ClusterBackupShareToggle", "Verification of backup sharing and access level functionality", nil, 82936)
 		log.InfoD("Scheduling applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				log.Infof("Scheduled application with namespace [%s]", namespace)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2270,7 +2270,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 	It("Validates that the user is able to perform operations on a shared backup after toggling the access", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create a user", func() {
 			log.InfoD("Creating a user")
@@ -2334,11 +2334,8 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
-			err = CreateScheduleBackup(scheduleName, backupClusterName, backupLocationName, backupLocationUID, appNamespaces,
-				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
-			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			err = CreateScheduleBackupWithValidation(ctx, scheduleName, backupClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
 		})
 		Step("Validate the Access toggle", func() {
@@ -2381,14 +2378,14 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				log.InfoD("All the backups for user [%s] - %v", username, fetchedUserBackups)
 				recentBackupName := fetchedUserBackups[len(fetchedUserBackups)-1]
 				log.InfoD("Recent backup name [%s] ", recentBackupName)
-				err = backupSuccessCheck(recentBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				err = backupSuccessCheckWithValidation(ctx, recentBackupName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", recentBackupName))
 			}
 		})
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		//Delete Schedule Backup-
@@ -2412,7 +2409,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
