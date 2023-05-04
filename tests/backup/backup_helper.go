@@ -2121,7 +2121,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	return nil
 }
 
-// CreateBackupWithNamespaceLabel creates a backup with Namespace label
+// CreateBackupWithNamespaceLabel creates a backup with Namespace label and checks for success
 func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context.Context) error {
@@ -2162,6 +2162,15 @@ func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLo
 	}
 	log.Infof("Successfully created backup [%s] with namespace label [%s]", backupName, namespaceLabel)
 	return nil
+}
+
+// CreateBackupWithNamespaceLabelWithValidation creates backup with namespace label, checks for success, and validates the backup.
+func CreateBackupWithNamespaceLabelWithValidation(ctx context.Context, backupName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string) error {
+	err := CreateBackupWithNamespaceLabel(backupName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, ctx)
+	if err != nil {
+		return err
+	}
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsExpectedInBackup, make([]string, 0))
 }
 
 // CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label
