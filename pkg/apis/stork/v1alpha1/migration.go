@@ -30,6 +30,7 @@ type MigrationSpec struct {
 	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`
 	SkipDeletedNamespaces        *bool             `json:"skipDeletedNamespaces"`
 	TransformSpecs               []string          `json:"transformSpecs"`
+	IgnoreOwnerReferencesCheck   *bool             `json:"ignoreOwnerReferencesCheck"`
 }
 
 // MigrationStatus is the status of a migration operation

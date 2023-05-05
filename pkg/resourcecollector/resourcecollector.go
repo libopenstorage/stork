@@ -98,6 +98,9 @@ type Options struct {
 	// content in them, the etcd Server times-out, hence limit will be used to reduce
 	// the number of resources fetched in a single call.
 	ResourceCountLimit int64
+	// IgnoreOwnerReferencesCheck if set then resources having ownerreferences should be collected
+	// even if the owner gets collected.
+	IgnoreOwnerReferencesCheck bool
 }
 
 // Objects Collection of objects
@@ -342,7 +345,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		}
 	}
 
-	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap)
+	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap, opts.IgnoreOwnerReferencesCheck)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -499,7 +502,7 @@ func (r *ResourceCollector) GetResources(
 		}
 	}
 
-	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap)
+	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap, opts.IgnoreOwnerReferencesCheck)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -695,10 +698,10 @@ func (r *ResourceCollector) objectToBeCollected(
 func (r *ResourceCollector) pruneOwnedResources(
 	objects []runtime.Unstructured,
 	resourceMap map[types.UID]bool,
+	ignoreOwnerReferencesCheck bool,
 ) ([]runtime.Unstructured, []runtime.Unstructured, error) {
 	updatedObjects := make([]runtime.Unstructured, 0)
 	pvcObjectsWithOwnerRef := make([]runtime.Unstructured, 0)
-
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -724,8 +727,23 @@ func (r *ResourceCollector) pruneOwnedResources(
 					}
 				}
 			} else {
+				// skipOwnerRefCheck is set at a resource level
+				// whereas ignoreOwnerReferencesCheck is set in migration CR
 				if !skipOwnerRefCheck(metadata.GetAnnotations()) {
 					for _, owner := range owners {
+						if ignoreOwnerReferencesCheck {
+							// Even if ignoreOwnerReferencesCheck is set, we will not collect replicaset
+							// if it's owner is deployment kind and it is already getting collected
+							if objectType.GetKind() == "ReplicaSet" {
+								// Skip object if we are already collecting its owner
+								if _, exists := resourceMap[owner.UID]; exists {
+									if owner.Kind == "Deployment" {
+										collect = false
+									}
+								}
+							}
+							break
+						}
 						// We don't collect pods, there might be some leader
 						// election objects that could have pods as the owner, so
 						// don't collect those objects

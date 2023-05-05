@@ -1938,6 +1938,11 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.IgnoreOwnerReferencesCheck != nil {
+		in, out := &in.IgnoreOwnerReferencesCheck, &out.IgnoreOwnerReferencesCheck
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 
