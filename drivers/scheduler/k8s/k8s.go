@@ -1320,6 +1320,25 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
+// GetUpdatedSpec takes a spec and returns the latest version of it by `GET`-ing it
+func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		pvc.Kind = "PersistentVolumeClaim"
+
+		return pvc, nil
+	}
+
+	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
+}
+
 func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) (*corev1.Namespace, error) {
 	k8sOps := k8sCore
 
@@ -1434,6 +1453,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
 				log.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				sc.Kind = "StorageClass"
+
 				return sc, nil
 			}
 		}
@@ -1443,6 +1467,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
 		return sc, nil
@@ -1491,6 +1519,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if k8serrors.IsAlreadyExists(err) {
 			if pvc, err = k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace); err == nil {
 				log.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				pvc.Kind = "PersistentVolumeClaim"
+
 				return pvc, nil
 			}
 		}
@@ -1500,6 +1533,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", newPvcObj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		pvc.Kind = "PersistentVolumeClaim"
 
 		log.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 
@@ -1529,6 +1566,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if k8serrors.IsAlreadyExists(err) {
 			if snap, err = k8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
 				log.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				snap.Kind = "VolumeSnapshot"
+
 				return snap, nil
 			}
 		}
@@ -1538,6 +1580,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", obj.Metadata.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		snap.Kind = "VolumeSnapshot"
 
 		log.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
 		return snap, nil
@@ -1821,6 +1867,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				dep.Kind = "Deployment"
 				return dep, nil
 			}
 		}
@@ -1830,6 +1879,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		dep.Kind = "Deployment"
 
 		log.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
 		return dep, nil
@@ -1911,6 +1964,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if svc, err = k8sCore.GetService(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Service: %v", app.Key, svc.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				svc.Kind = "Service"
+
 				return svc, nil
 			}
 		}
@@ -1920,6 +1978,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		svc.Kind = "Service"
 
 		log.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
@@ -1935,6 +1997,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Secret: %v", app.Key, secret.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				secret.Kind = "Secret"
+
 				return secret, nil
 			}
 		}
@@ -1944,6 +2011,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		secret.Kind = "Secret"
 
 		log.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
