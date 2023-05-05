@@ -1355,7 +1355,7 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 		// If PVC is present, fetch the corresponding PV spec and get the zone information
 		if driver.String() == volume.GCEDriverName || driver.String() == volume.AWSDriverName {
 			pv, err := core.Instance().GetPersistentVolume(pvName)
-			if err != nil && !errors.IsNotFound(err) {
+			if err != nil && !k8s_errors.IsNotFound(err) {
 				return newVolInfos, existingInfos, fmt.Errorf("erorr getting pv %s: %v", pvName, err)
 			}
 
