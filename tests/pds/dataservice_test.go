@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	dataservice "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	dataservice "github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
