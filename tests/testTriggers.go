@@ -32,6 +32,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 
+	apios "github.com/libopenstorage/openstorage/api"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storage "github.com/portworx/sched-ops/k8s/storage"
@@ -393,6 +394,8 @@ const (
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// AutoFsTrimAsyncDR runs Async DR of volumes with FSTRIM=true parameter and validates it exists on DR as well
 	AutoFsTrimAsyncDR = "autofstrimasyncdr"
+	// IopsBwAsyncDR runs Async DR of volumes with volumes having iothrottle set
+	IopsBwAsyncDR = "iopsbwasyncdr"
 	// stork application backup runs stork backups for applications
 	StorkApplicationBackup = "storkapplicationbackup"
 	// stork application backup volume resize runs stork backups for applications and inject volume resize in between
@@ -6807,6 +6810,136 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 		}
 		dash.VerifyFatal(cVol.Spec.AutoFstrim, true, fmt.Sprintf("fstrim should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.AutoFstrim))
 		dash.VerifyFatal(cVol.Spec.Nodiscard, true, fmt.Sprintf("nodiscard should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.Nodiscard))
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
+	}
+	updateMetrics(*event)
+}
+
+func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(IopsBwAsyncDR)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Async DR with volumes having Iops and BW  triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: IopsBwAsyncDR,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "adr-iops"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
+		appVolumes            []*volume.Volume
+		expected_iot          *apios.IoThrottle
+	)
+	chaosLevel := ChaosMap[IopsBwAsyncDR]
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to write kubeconfig: %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to Set source kubeconfig: %v", err))
+			return
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+				// Get Autofstrim status for vols
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("not able to get appVolumes, err is: %v", err))
+					return
+				}
+				for _, vol := range appVolumes {
+					cVol, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error inspecting volume %v", vol.Name))
+						return
+					}
+					if cVol.Spec.IoThrottle == nil {
+						UpdateOutcome(event, fmt.Errorf("iothrottle value should present in volume %v for this test, please use spec which use volumes with iothrottle", vol.Name))
+						return
+					}
+					expected_iot = cVol.Spec.IoThrottle
+					break
+				}
+				Step("Create cluster pair between source and destination clusters", func() {
+					// Set cluster context to cluster where torpedo is running
+					ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				})
+			}
+		}
+	})
+
+	log.Infof("Migration Namespaces: %v", migrationNamespaces)
+	log.Infof("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+	}
+
+	// Validate Iops and Bw on destination volumes
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to Set destination kubeconfig: %v", err))
+		return
+	}
+	for _, vol := range appVolumes {
+		cVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("error inspecting volume %v, err is %v", vol.Name, err))
+		}
+		actual_iot := cVol.Spec.IoThrottle
+		if actual_iot.ReadBwMbytes != expected_iot.ReadBwMbytes {
+			UpdateOutcome(event, fmt.Errorf("read bw on volume %v, expected: %v, got: %v", vol.Name, expected_iot.ReadBwMbytes, actual_iot.ReadBwMbytes))
+		}
+		if actual_iot.WriteIops != expected_iot.WriteIops {
+			UpdateOutcome(event, fmt.Errorf("write iops on volume %v, expected: %v, got: %v", vol.Name, expected_iot.WriteIops, actual_iot.WriteIops))
+		}
 	}
 	err = SetSourceKubeConfig()
 	if err != nil {

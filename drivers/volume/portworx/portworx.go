@@ -2858,29 +2858,29 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	return nil
 }
 
-// configurePxReleaseManifestEnvVars configure PX Release Manifest URL for edge end production PX versions
+// configurePxReleaseManifestEnvVars configure PX Release Manifest URL for edge and production PX versions, if needed
 func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenURL string) ([]corev1.EnvVar, error) {
 	var newEnvVarList []corev1.EnvVar
 
-	// Set release manifest URL in case of edge-install.portworx.com
+	// Remove release manifest URLs from Env Vars, if any exist
+	for _, env := range origEnvVarList {
+		if env.Name == pxReleaseManifestURLEnvVarName {
+			continue
+		}
+		newEnvVarList = append(newEnvVarList, env)
+	}
+
+	// Set release manifest URL in case of edge
 	if strings.Contains(specGenURL, "edge") {
 		releaseManifestURL, err := optest.ConstructPxReleaseManifestURL(specGenURL)
 		if err != nil {
 			return nil, err
 		}
 
-		// Add release manifest URL to Env Vars incase of edge URL
-		newEnvVarList = origEnvVarList
+		// Add release manifest URL to Env Vars
 		newEnvVarList = append(newEnvVarList, corev1.EnvVar{Name: pxReleaseManifestURLEnvVarName, Value: releaseManifestURL})
-	} else {
-		for _, env := range origEnvVarList {
-			// Skip adding or remove release manifest URL to Env Vars incase of production URL
-			if env.Name == pxReleaseManifestURLEnvVarName {
-				continue
-			}
-			newEnvVarList = append(newEnvVarList, env)
-		}
 	}
+
 	return newEnvVarList, nil
 }
 
