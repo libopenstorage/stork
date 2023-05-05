@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fio
+spec:
+  serviceName: fio
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fio
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - fio
+            topologyKey: kubernetes.io/hostname
+      schedulerName: stork
+      containers:
+      - name: fio
+        image: portworx/fio_drv
+        command: ["/bin/sh"]
+        args: ["-c", "COUNTER=0;sleep $[($RANDOM % 600)+ 1]; now=$(date); echo $now;while true; do echo FIO run will start now...; fio /configs/fio.job --status-interval=1 --eta=never --output=/logs/fio.log; echo completed-fio-run; sleep 5; ls -alt /scratch/; rm -rf /scratch/*; ls -alt /scratch/; sleep 1800; COUNTER=$((COUNTER+1)); echo Completed-iteration $COUNTER;done"]
+        volumeMounts:
+        - name: fio-config-vol
+          mountPath: /configs
+        - name: fio-data
+          mountPath: /scratch
+        - name: fio-log
+          mountPath: /logs
+      - name: grok
+        image: pwxvin/grok-exporter:v1.0.0-RC4
+        ports:
+        - name: grok-port
+          containerPort: 9144
+          protocol: TCP
+        volumeMounts:
+        - name: grok-config-volume
+          mountPath: /etc/grok_exporter
+        - name: fio-log
+          mountPath: /logs
+      volumes:
+      - name: fio-config-vol
+        configMap:
+          name: fio-job-config
+      - name: grok-config-volume
+        configMap:
+          name: grok-exporter
+  volumeClaimTemplates:
+  - metadata:
+      name: fio-data
+    spec:
+      storageClassName: fio-sc-iobw
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 250Gi
+  - metadata:
+      name: fio-log
+    spec:
+      storageClassName: fio-log-iobw
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grok-exporter-svc
+  labels:
+      app: fio
+spec:
+  clusterIP: None
+  selector:
+    app: fio
+  ports:
+  - name: grok-port
+    port: 9144
+    targetPort: 9144
