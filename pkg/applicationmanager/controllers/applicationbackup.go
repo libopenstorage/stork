@@ -1612,6 +1612,7 @@ func (a *ApplicationBackupController) backupResources(
 			resourceInfos = append(resourceInfos, resourceInfo)
 		}
 		backup.Status.Resources = resourceInfos
+		backup.Status.ResourceCount = len(resourceInfos)
 		backup.Status.LastUpdateTimestamp = metav1.Now()
 		backupCrSize, err := utils.GetSizeOfObject(backup)
 		if err != nil {
@@ -1639,7 +1640,6 @@ func (a *ApplicationBackupController) backupResources(
 			// update the flag and resource-count.
 			// Strip off the resource info it contributes to bigger size of AB CR in case of large number of resource
 			backup.Status.Resources = make([]*stork_api.ApplicationBackupResourceInfo, 0)
-			backup.Status.ResourceCount = len(resourceInfos)
 			backup.Status.LargeResourceEnabled = true
 		}
 		// Store the new status
