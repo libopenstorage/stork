@@ -190,6 +190,7 @@ const (
 	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage             = "redis:latest"
 	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
+	mysqlBenchImage              = "portworx/pds-mysqlbench:v1"
 	postgresql                   = "PostgreSQL"
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
@@ -1849,6 +1850,62 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 	return pod, nil
 }
 
+// Create MySql Workload (Non-TPCC)
+func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
+	var replicas int32 = 1
+	var value []string
+	deploymentSpec := &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: deploymentName + "-",
+			Namespace:    namespace,
+		},
+		Spec: v1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": deploymentName},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": deploymentName},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    deploymentName,
+							Image:   mysqlBenchImage,
+							Command: []string{"/bin/sh", "-c"},
+							Env:     make([]corev1.EnvVar, 3),
+							Args:    []string{command},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyAlways,
+				},
+			},
+		},
+	}
+	value = append(value, dnsEndpoint)
+	value = append(value, "pds")
+	value = append(value, pdsPassword)
+
+	for index := range env {
+		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Name = env[index]
+		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Value = value[index]
+	}
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	//TODO: Remove static sleep and verify the injected data
+	time.Sleep(2 * time.Minute)
+
+	return deployment, err
+}
+
 // CreateRmqWorkload generate workloads for rmq
 func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*corev1.Pod, error) {
 	var value []string
@@ -2031,6 +2088,14 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		dep, err = RunConsulBenchWorkload(params.DeploymentName, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
+		}
+	case mysql:
+		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
+		// ToDo: Move the python command to the docker container/ Part of image.
+		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
+		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, mysqlcmd, params.DeploymentName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
 	}
 	return pod, dep, nil
