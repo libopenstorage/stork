@@ -219,6 +219,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 		defaultBool := true
 		spec.SkipDeletedNamespaces = &defaultBool
 	}
+	if spec.IgnoreOwnerReferencesCheck == nil {
+		defaultBool := false
+		spec.IgnoreOwnerReferencesCheck = &defaultBool
+	}
 	return spec
 }
 
@@ -955,6 +959,9 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, m
 	}
 	if *migration.Spec.IncludeNetworkPolicyWithCIDR {
 		resourceCollectorOpts.IncludeAllNetworkPolicies = true
+	}
+	if *migration.Spec.IgnoreOwnerReferencesCheck {
+		resourceCollectorOpts.IgnoreOwnerReferencesCheck = true
 	}
 	if volumesOnly {
 		allObjects, pvcsWithOwnerRef, err = m.getVolumeOnlyMigrationResources(migration, migrationNamespaces, resourceCollectorOpts)
