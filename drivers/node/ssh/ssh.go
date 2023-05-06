@@ -664,12 +664,12 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return "", fmt.Errorf("fail to setup stderr")
+		return "", fmt.Errorf("fail to setup stderr, err: %v", err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return "", fmt.Errorf("fail to setup stdout")
+		return "", fmt.Errorf("fail to setup stdout, err: %v", err)
 	}
 	if options.Sudo {
 		cmd = fmt.Sprintf("sudo su -c '%s' -", cmd) // Hyphen necessary to preserve PATH for commands like "which pxctl"
@@ -688,9 +688,10 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 
 	if ignoreErr == false && err != nil {
+		log.Infof("SSH ERR: %v", err)
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.UsableAddr,
-			Cause: fmt.Sprintf("failed to run command due to: %v", sterr),
+			Cause: fmt.Sprintf("failed to run command. sterr: %v, err: %v", sterr, err),
 		}
 	}
 	return out, nil

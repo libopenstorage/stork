@@ -134,11 +134,11 @@ const (
 	k8sDestroyTimeout      = 10 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
-	deleteTasksWaitTimeout   = 3 * time.Minute
+	deleteTasksWaitTimeout   = 5 * time.Minute
 	// DefaultRetryInterval  Default retry interval
 	DefaultRetryInterval = 10 * time.Second
 	// DefaultTimeout default timeout
-	DefaultTimeout = 3 * time.Minute
+	DefaultTimeout = 5 * time.Minute
 	// SnapshotReadyTimeout timeout for snapshot to be ready
 	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500

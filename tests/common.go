@@ -473,7 +473,6 @@ func processError(err error, errChan ...*chan error) {
 	// Useful for frameworks like longevity that must continue
 	// execution and must not fail immediately
 	if len(errChan) > 0 {
-		log.Errorf(fmt.Sprintf("%v", err))
 		updateChannel(err, errChan...)
 	} else {
 		log.FailOnError(err, "processError")
@@ -482,6 +481,7 @@ func processError(err error, errChan ...*chan error) {
 
 func updateChannel(err error, errChan ...*chan error) {
 	if len(errChan) > 0 && err != nil {
+		log.Errorf(fmt.Sprintf("%v", err))
 		*errChan[0] <- err
 	}
 }
@@ -4007,7 +4007,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
-
+	var replicaSets []*opsapi.ReplicaSet
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
@@ -4027,7 +4027,8 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 				return
 			}
 
-			replicaSets, err := Inst().V.GetReplicaSets(v)
+			replicaSets, err = Inst().V.GetReplicaSets(v)
+
 			if err == nil {
 				replicaNodes := replicaSets[0].Nodes
 				log.InfoD("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
@@ -4051,6 +4052,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 							UpdateOutcome(event, err)
 							return
 						}
+
 						pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 						if err != nil {
 							UpdateOutcome(event, err)
@@ -4186,7 +4188,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
 							} else {
-								log.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
+								log.Infof("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(10 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
@@ -5604,8 +5606,9 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()
+	timeString := time.Now().Format(time.RFC1123)
 	for count > 0 {
-		volName := fmt.Sprintf("%s-%d", VolumeCreatePxRestart, count)
+		volName := fmt.Sprintf("%s-%d-%s", VolumeCreatePxRestart, count, timeString)
 		log.Infof("Creating volume : %s", volName)
 		volCreateRequest := &opsapi.SdkVolumeCreateRequest{
 			Name: volName,

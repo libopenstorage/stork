@@ -73,6 +73,7 @@ type MetadataNode struct {
 	DbSize     int      `json:"DbSize"`
 	IsHealthy  bool     `json:"IsHealthy"`
 	ID         string   `json:"ID"`
+	Name       string   `json:"Name"`
 }
 
 // DefaultDriver implements defaults for Driver interface

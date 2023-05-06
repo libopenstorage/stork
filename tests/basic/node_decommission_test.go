@@ -32,14 +32,14 @@ var _ = Describe("{DecommissionNode}", func() {
 
 		ValidateApplications(contexts)
 
-		var workerNodes []node.Node
-		Step(fmt.Sprintf("get worker nodes"), func() {
-			workerNodes = node.GetWorkerNodes()
-			dash.VerifyFatal(len(workerNodes) > 0, true, "Verify worker nodes")
+		var storageDriverNodes []node.Node
+		Step(fmt.Sprintf("get storage driver nodes"), func() {
+			storageDriverNodes = node.GetStorageDriverNodes()
+			dash.VerifyFatal(len(storageDriverNodes) > 0, true, "Verify worker nodes")
 		})
 
 		nodeIndexMap := make(map[int]int)
-		lenWorkerNodes := len(workerNodes)
+		lenWorkerNodes := len(storageDriverNodes)
 		chaosLevel := Inst().ChaosLevel
 		// chaosLevel in this case is the number of worker nodes to be decommissioned
 		// in case of being greater than that, it will assume the total no of worker nodes
@@ -56,14 +56,16 @@ var _ = Describe("{DecommissionNode}", func() {
 
 		// decommission nodes one at a time according to chaosLevel
 		for nodeIndex := range nodeIndexMap {
-			nodeToDecommission := workerNodes[nodeIndex]
+			nodeToDecommission := storageDriverNodes[nodeIndex]
+			nodeToDecommission, err := node.GetNodeByName(nodeToDecommission.Name) //This is required when multiple nodes are decommissioned sequentially
+			log.FailOnError(err, fmt.Sprintf("node [%s] not found with name", nodeToDecommission.Name))
 			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 				dash.VerifyFatal(err, nil, "Validate node decommission preparation")
 				err = Inst().V.DecommissionNode(&nodeToDecommission)
-				dash.VerifyFatal(err, nil, "Validate node decommission init")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node [%s] decommission init", nodeToDecommission.Name))
 				stepLog = fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -79,7 +81,7 @@ var _ = Describe("{DecommissionNode}", func() {
 					}
 					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 					log.FailOnError(err, "Failed to get decommissioned node status")
-					dash.VerifyFatal(decommissioned.(bool), true, "Validate node is decommissioned")
+					dash.VerifyFatal(decommissioned.(bool), true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
 				})
 			})
 			stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)
@@ -87,8 +89,41 @@ var _ = Describe("{DecommissionNode}", func() {
 				log.InfoD(stepLog)
 				err := Inst().V.RejoinNode(&nodeToDecommission)
 				dash.VerifyFatal(err, nil, "Validate node rejoin init")
+				var rejoinedNode *api.StorageNode
+				t := func() (interface{}, bool, error) {
+					drvNodes, err := Inst().V.GetDriverNodes()
+					if err != nil {
+						return false, true, err
+					}
+
+					for _, n := range drvNodes {
+						if n.Hostname == nodeToDecommission.Hostname {
+							rejoinedNode = n
+							return true, false, nil
+						}
+					}
+
+					return false, true, fmt.Errorf("node %s not joined yet", nodeToDecommission.Name)
+				}
+				_, err = task.DoRetryWithTimeout(t, appReadinessTimeout, defaultRetryInterval)
+				log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", nodeToDecommission.Name))
+				dash.VerifyFatal(rejoinedNode != nil, true, fmt.Sprintf("verify node [%s] rejoined PX cluster", nodeToDecommission.Name))
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "error refreshing node registry")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "error refreshing storage drive endpoints")
+				nodeToDecommission = node.Node{}
+				for _, n := range node.GetStorageDriverNodes() {
+					if n.Name == rejoinedNode.Hostname {
+						nodeToDecommission = n
+						break
+					}
+				}
+				if nodeToDecommission.Name == "" {
+					log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
+				}
 				err = Inst().V.WaitDriverUpOnNode(nodeToDecommission, Inst().DriverStartTimeout)
-				dash.VerifyFatal(err, nil, "Validate driver up on reoined node")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver up on rejoined node [%s] after rejoining", nodeToDecommission.Name))
 			})
 
 		}
