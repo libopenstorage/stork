@@ -222,7 +222,7 @@ func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 }
 
 func getClusterID() (string, error) {
-	workerNode := node.GetWorkerNodes()[0]
+	workerNode := node.GetStorageDriverNodes()[0]
 	clusterID, err := Inst().N.RunCommand(workerNode, fmt.Sprintf("cat %s", "/etc/pwx/cluster_uuid"), node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,

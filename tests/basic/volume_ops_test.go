@@ -99,7 +99,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 							currAggr, err := Inst().V.GetAggregationLevel(v)
 							log.FailOnError(err, "Failed to get volume  %s aggregate level", v.Name)
 							if currAggr > 1 {
-								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
+								MaxRF = int64(len(node.GetStorageDriverNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							opts := volume.Options{
@@ -366,7 +366,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							currAggr, err := Inst().V.GetAggregationLevel(v)
 							log.FailOnError(err, "Failed to get vol %s aggregation level", v.Name)
 							if currAggr > 1 {
-								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
+								MaxRF = int64(len(node.GetStorageDriverNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, nil, true)
