@@ -1790,6 +1790,16 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
+// DestroyApps destroy applications without validating them
+func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
+	Step("destroy apps", func() {
+		log.InfoD("Destroying apps")
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+}
+
 // AddLabelsOnNode adds labels on the node
 func AddLabelsOnNode(n node.Node, labels map[string]string) error {
 	for labelKey, labelValue := range labels {
