@@ -87,6 +87,7 @@ func testMigration(t *testing.T) {
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
 	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
+	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -452,6 +453,19 @@ func migrationLabelExcludeSelectorTest(t *testing.T) {
 		"label-exclude-selector-migration",
 		true,
 		false,
+		true,
+	)
+}
+
+func namespaceLabelSelectorTest(t *testing.T) {
+	triggerMigrationTest(
+		t,
+		"ns-selector-test",
+		"cassandra",
+		[]string{"mysql-1-pvc"},
+		"namespace-selector-migration",
+		true,
+		true,
 		true,
 	)
 }
