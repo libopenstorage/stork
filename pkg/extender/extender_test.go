@@ -365,12 +365,6 @@ func pxCSIExtPodNoDriverTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "us-east-1"))
-
-	if err := driver.UpdateNodeStatus(3, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to StorageDown: %v", err)
-	}
-
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
 		t.Fatalf("Error sending filter request: %v", err)
@@ -400,13 +394,13 @@ func pxCSIExtPodDriverTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "", ""))
 
-	if err := driver.CreateCluster(5, nodes); err != nil {
+	if err := driver.CreateCluster(6, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 	pod := newPod("px-csi-ext-foo", nil)
 
 	if err := driver.UpdateNodeStatus(5, volume.NodeDegraded); err != nil {
-		t.Fatalf("Error setting node status to StorageDown: %v", err)
+		t.Fatalf("Error setting node status to Degraded: %v", err)
 	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -415,6 +409,8 @@ func pxCSIExtPodDriverTest(t *testing.T) {
 	}
 	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
 
+	// Remove the degraded node from the list
+	nodes.Items = nodes.Items[:5]
 	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
 	if err != nil {
 		t.Fatalf("Error sending prioritize request: %v", err)
@@ -480,7 +476,7 @@ func pxCSIExtPodOfflinePxNodesTest(t *testing.T) {
 	pod := newPod("px-csi-ext-foo", nil)
 
 	if err := driver.UpdateNodeStatus(2, volume.NodeOffline); err != nil {
-		t.Fatalf("Error setting node status to StorageDown: %v", err)
+		t.Fatalf("Error setting node status to Offline: %v", err)
 	}
 
 	filterResponse, err := sendFilterRequest(pod, nodes)

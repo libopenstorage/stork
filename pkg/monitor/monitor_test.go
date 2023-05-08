@@ -316,7 +316,7 @@ func testStorageDownNode(t *testing.T) {
 	require.NoError(t, err, "failed to create pod")
 
 	err = driver.UpdateNodeStatus(node2Index, volume.NodeStorageDown)
-	require.NoError(t, err, "Error setting node status to Degraded")
+	require.NoError(t, err, "Error setting node status to StorageDown")
 	defer func() {
 		err = driver.UpdateNodeStatus(node2Index, volume.NodeOnline)
 		require.NoError(t, err, "Error setting node status to Online")
