@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -2476,7 +2477,9 @@ func TriggerEmailReporter() {
 		log.Errorf("Failed to send out email, Err: %q", err)
 	}
 
-	filePath := fmt.Sprintf("%s/%s-%s.html", Inst().LogLoc, EmailSubject, timeString)
+	fileName := fmt.Sprintf("%s_%s", EmailSubject, timeString)
+	fileName = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(fileName, "_")
+	filePath := fmt.Sprintf("%s/%s.html", Inst().LogLoc, fileName)
 
 	if err := os.WriteFile(filePath, []byte(content), 0664); err != nil {
 		log.Errorf("Failed to create html report, Err: %q", err)
