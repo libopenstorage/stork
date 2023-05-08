@@ -5607,6 +5607,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()
 	timeString := time.Now().Format(time.RFC1123)
+	timeString = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(timeString, "_")
 	for count > 0 {
 		volName := fmt.Sprintf("%s-%d-%s", VolumeCreatePxRestart, count, timeString)
 		log.Infof("Creating volume : %s", volName)
