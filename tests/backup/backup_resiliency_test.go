@@ -1575,18 +1575,17 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 // CancelAllRunningRestoreJobs cancels all the running restore jobs while restores are in progress
 var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		appNamespaces     []string
-		cloudAccountName  string
-		cloudAccountUID   string
-		bkpLocationName   string
-		backupLocationUID string
-		srcClusterUid     string
-		backupNames       []string
-		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
-		destClusterStatus api.ClusterInfo_StatusInfo_Status
-		restoreNames      []string
+		scheduledAppContexts []*scheduler.Context
+		appNamespaces        []string
+		cloudAccountName     string
+		cloudAccountUID      string
+		bkpLocationName      string
+		backupLocationUID    string
+		srcClusterUid        string
+		backupNames          []string
+		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
+		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+		restoreNames         []string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1596,15 +1595,15 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CancelAllRunningRestoreJobs", "Cancel all the running restore jobs while restores are in progress", nil, 58058)
 		log.InfoD("Deploying applications required for the testcase")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1613,7 +1612,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding cloud account and backup location", func() {
 			log.InfoD("Adding cloud account and backup location")
@@ -1664,9 +1663,9 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 					go func(backupName string, namespace string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 					}(backupName, namespace)
 				}
 				backupNamesMap[namespace] = backupNames
@@ -1768,13 +1767,13 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		log.InfoD("Deleting the remaining restores in case of failure")
 		adminRestores, err := GetAllRestoresAdmin()
 		for _, restoreName := range adminRestores {
