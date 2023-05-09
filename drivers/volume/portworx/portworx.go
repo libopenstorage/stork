@@ -1016,16 +1016,17 @@ func (d *portworx) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority
 func (d *portworx) EnterMaintenance(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
+
 			return nil, true, err
 		}
 		return nil, false, nil
 	}
-	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
-	time.Sleep(3 * time.Minute)
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 	t = func() (interface{}, bool, error) {
 		apiNode, err := d.GetDriverNode(&n)
 		if err != nil {
@@ -1435,7 +1436,7 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 }
 
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(
 		nodes[0],
@@ -2199,7 +2200,7 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
-	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+	log.InfoD("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
 
 	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -2208,13 +2209,14 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 			ResizeFactor: &api.SdkStoragePoolResizeRequest_Percentage{
 				Percentage: percentage,
 			},
-			OperationType: e,
+			OperationType:           e,
+			SkipWaitForCleanVolumes: true,
 		})
 		if err != nil {
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			log.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize response: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
@@ -2263,10 +2265,9 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 	sdkport, _ := d.getSDKPort()
 	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
-	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
-
 	}
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
 
@@ -3086,7 +3087,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	log.Infof("Waiting for a minute for node [%s] to transistion to maintenece mode", n.Name)
+	log.Infof("Waiting for a minute for node [%s] to transition to maintenance mode", n.Name)
 	time.Sleep(1 * time.Minute)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
@@ -4938,16 +4939,25 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 // GetPoolsUsedSize returns map of pool id and current used size
 func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
 
-	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
-		Timeout:         2 * time.Minute,
-		TimeBeforeRetry: 10 * time.Second,
-	})
+	t := func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 
 	if err != nil {
 		return nil, err
 	}
-	outLines := strings.Split(out, "\n")
+	outLines := strings.Split(out.(string), "\n")
 
 	poolsData := make(map[string]string)
 	var poolId string

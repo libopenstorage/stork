@@ -514,7 +514,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 			for _, node := range nodes[1:] {
 				err := Inst().S.DisableSchedulingOnNode(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate disable scheduling on node %s", node.Name))
@@ -556,7 +556,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 			}
 		})
 		Step("Uncordon all nodes", func() {
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 			for _, node := range nodes {
 				err := Inst().S.EnableSchedulingOnNode(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate enable scheduling on node %s", node.Name))
@@ -631,7 +631,7 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 			}
 		})
 		Step("Uncordon all nodes", func() {
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 			for _, node := range nodes {
 				err := Inst().S.EnableSchedulingOnNode(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate enable scheduling on node %s", node.Name))
@@ -706,7 +706,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 		It(stepLog, func() {
 			log.InfoD(stepLog)
 			contexts = make([]*scheduler.Context, 0)
-			n := node.GetWorkerNodes()[0]
+			n := node.GetStorageDriverNodes()[0]
 			if provider == vaultTransitSecretProvider {
 				// vault-transit login with `pxctl secrets vaulttransit login`
 				provider = "vaulttransit"

@@ -634,6 +634,10 @@ spec:
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES
       value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
+    - name: TARGET_PXBACKUP_VERSION
+      value: "${TARGET_PXBACKUP_VERSION}"
+    - name: TARGET_STORK_VERSION
+      value: "${TARGET_STORK_VERSION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

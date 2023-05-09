@@ -5056,8 +5056,8 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 		kvdbMembers, err := Inst().V.GetKvdbMembers(stoageDriverNodes[0])
 		log.FailOnError(err, "Error getting KVDB members")
 
-		for k := range kvdbMembers {
-			kvdbNodesIDs = append(kvdbNodesIDs, k)
+		for _, n := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
 		}
 		for _, n := range stoageDriverNodes {
 			if Contains(kvdbNodesIDs, n.Id) {
@@ -7449,8 +7449,8 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 		log.FailOnError(err, "Error getting KVDB members")
 
 		var stNode node.Node
-		for k := range kvdbMembers {
-			kvdbNodesIDs = append(kvdbNodesIDs, k)
+		for _, k := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, k.Name)
 		}
 		for _, n := range stNodes {
 			if !Contains(kvdbNodesIDs, n.Id) {
