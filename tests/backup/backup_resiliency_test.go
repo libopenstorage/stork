@@ -28,10 +28,9 @@ var _ = Describe("{BackupRestartPX}", func() {
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
-	var appContexts []*scheduler.Context
 	var backupLocation string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -42,6 +41,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818)
@@ -59,21 +59,21 @@ var _ = Describe("{BackupRestartPX}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Restart PX when backup in progress", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -140,9 +140,10 @@ var _ = Describe("{BackupRestartPX}", func() {
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
-				_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup %s", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				appContextsToBackupMap[backupName] = appContextsToBackup
+				_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 			}
 		})
 
@@ -164,19 +165,18 @@ var _ = Describe("{BackupRestartPX}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
-
-				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
