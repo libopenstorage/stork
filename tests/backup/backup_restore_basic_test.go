@@ -2091,17 +2091,16 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 // MultipleInPlaceRestoreSameTime issues multiple in place restores at the same time
 var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		backupLocationUID string
-		cloudCredName     string
-		cloudCredUID      string
-		bkpLocationName   string
-		backupName        string
-		restoreList       []string
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupName           string
+		restoreList          []string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -2113,15 +2112,15 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 		StartTorpedoTest("MultipleInPlaceRestoreSameTime",
 			"Issue multiple in-place restores at the same time", nil, 58051)
 		log.InfoD("Deploy applications needed for backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2131,7 +2130,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Register cluster for backup", func() {
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
@@ -2170,9 +2169,9 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNameSpace},
-						labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup: %s of namespce : %s", backupName, bkpNameSpace))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, bkpNameSpace))
 					backupNamespaceMapping[bkpNameSpace] = backupName
 				}(bkpNameSpace, backupName)
 			}
@@ -2221,12 +2220,12 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		log.InfoD("Deleting created restores")
 		for _, restoreName := range restoreList {
 			wg.Add(1)
