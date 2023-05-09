@@ -691,7 +691,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+						_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
 							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
 					}(backupName, namespace)
