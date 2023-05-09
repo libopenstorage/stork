@@ -2532,7 +2532,7 @@ func AreSlicesEqual(slice1, slice2 interface{}) bool {
 	return true
 }
 
-// GetNextScheduleBackupName returns the upcoming schedule backup when this function is called
+// GetNextScheduleBackupName returns the upcoming schedule backup after it has been initiated
 func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
 	var nextScheduleBackupName string
 	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
@@ -2548,16 +2548,43 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 		}
 		return ordinalScheduleBackupName, false, nil
 	}
-	log.InfoD("Waiting for the next schedule backup to be triggered")
+	log.InfoD("Waiting for [%d] minutes for the next schedule backup to be triggered", scheduleInterval)
 	time.Sleep(scheduleInterval * time.Minute)
 	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-
-	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
-	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return "", err
 	}
 	nextScheduleBackupName = nextScheduleBackup.(string)
+	return nextScheduleBackupName, nil
+}
+
+// GetNextCompletedScheduleBackupName returns the upcoming schedule backup
+// after it has been created and checked for success status
+func GetNextCompletedScheduleBackupName(ctx context.Context, scheduleName string, scheduleInterval time.Duration) (string, error) {
+	nextScheduleBackupName, err := GetNextScheduleBackupName(scheduleName, scheduleInterval, ctx)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
+	err = backupSuccessCheck(nextScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	return nextScheduleBackupName, nil
+}
+
+// GetNextCompletedScheduleBackupNameWithValidation returns the upcoming schedule backup
+// after it has been created and checked for success status and validated
+func GetNextCompletedScheduleBackupNameWithValidation(ctx context.Context, scheduleName string, scheduledAppContextsToBackup []*scheduler.Context, scheduleInterval time.Duration) (string, error) {
+	nextScheduleBackupName, err := GetNextScheduleBackupName(scheduleName, scheduleInterval, ctx)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
+	err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
 	return nextScheduleBackupName, nil
 }
 
