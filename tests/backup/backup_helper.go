@@ -370,8 +370,8 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	return ValidateBackup(ctx, firstScheduleBackupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
-// CreateBackupWithoutCheck creates backup without waiting for success
-func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
+// CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
+func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) (*api.BackupInspectResponse, error) {
 
@@ -419,6 +419,16 @@ func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation s
 		return resp, err
 	}
 	return resp, nil
+}
+
+// CreateBackupWithoutCheck creates backup without waiting for success
+func CreateBackupWithoutCheck(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) (*api.BackupInspectResponse, error) {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
+	}
+
+	return CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 }
 
 // CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
