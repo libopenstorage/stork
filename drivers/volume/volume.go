@@ -288,6 +288,10 @@ const (
 	NodeOnline NodeStatus = "Online"
 	// NodeOffline Node is Offline
 	NodeOffline NodeStatus = "Offline"
+	// NodeStorageDown Node is Online but storage is down.
+	// The expection from the driver is applications can continue their IO
+	// since the data is replicated to other nodes.
+	NodeStorageDown NodeStatus = "StorageDown"
 	// NodeDegraded Node is in degraded state
 	NodeDegraded NodeStatus = "Degraded"
 )

@@ -1165,6 +1165,28 @@ func addRunToMilestone(testrailID int, testResult *string) (int, error) {
 	return runID, nil
 }
 
+func getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
+	var pods []v1.Pod
+
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			depPods, err := apps.Instance().GetDeploymentPods(obj)
+			if err != nil {
+				return nil, err
+			}
+			pods = append(pods, depPods...)
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			ssPods, err := apps.Instance().GetStatefulSetPods(obj)
+			if err != nil {
+				return nil, err
+			}
+			pods = append(pods, ssPods...)
+		}
+	}
+
+	return pods, nil
+}
+
 func TestMain(m *testing.M) {
 	flag.IntVar(&snapshotScaleCount,
 		"snapshot-scale-count",
