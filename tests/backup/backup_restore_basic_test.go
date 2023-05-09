@@ -1354,8 +1354,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 		bkpNamespaces               []string
 		cloudCredUidList            []string
 		nsLabelsMap                 map[string]string
-		contexts                    []*scheduler.Context
-		appContexts                 []*scheduler.Context
+		scheduledAppContexts        []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	namespaceMapping := make(map[string]string)
@@ -1363,15 +1362,15 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupMultipleNsWithSameLabel", "Taking backup and restoring multiple namespace having same labels", nil, 84851)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 10; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 		log.InfoD("Created namespaces %v", bkpNamespaces)
@@ -1380,7 +1379,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding labels to all namespaces", func() {
 			log.InfoD("Adding labels to all namespaces")
@@ -1429,10 +1428,12 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 			log.InfoD("Taking a backup of multiple applications with namespace label filter")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+
 			multipleNamespaceBackupName = fmt.Sprintf("%s-%v", "multiple-namespace-backup", time.Now().Unix())
-			err = CreateBackupWithNamespaceLabel(multipleNamespaceBackupName, SourceClusterName, backupLocationName, backupLocationUID,
-				nil, orgID, clusterUid, "", "", "", "", nsLabelString, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with label [%s]", multipleNamespaceBackupName, nsLabelString))
+			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithNamespaceLabelWithValidation(ctx, multipleNamespaceBackupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, clusterUid, "", "", "", "", nsLabelString)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled backup [%s] of namespaces (scheduled contexts) [%v] with label [%s]", multipleNamespaceBackupName, bkpNamespaces, nsLabelString))
+
 			err = NamespaceLabelBackupSuccessCheck(multipleNamespaceBackupName, ctx, bkpNamespaces, nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Reverifying labels added to backup [%s]", multipleNamespaceBackupName))
 		})
@@ -1447,7 +1448,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		for _, restoreName := range restoreNames {
@@ -1457,7 +1458,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
