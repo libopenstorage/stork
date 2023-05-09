@@ -478,9 +478,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 
 		// Get list of all volumes present in the cluster
 		log.InfoD("Listing all the volumes present in the cluster")
-
 		allVolumeIds, err := Inst().V.ListAllVolumes()
-		log.Infof(fmt.Sprintf("Error is [%v]", err))
 		log.FailOnError(err, "failed to list all the volume")
 		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
 
@@ -512,11 +510,9 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		for _, eachVol := range attachedVolumes {
 			vol, err := Inst().V.InspectVolume(eachVol)
 			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume [%v]", eachVol))
-			log.Infof(fmt.Sprintf("Volume attached State [%v]", vol.State))
 			dash.VerifyFatal(vol.State.String() != "attached", true,
 				fmt.Sprintf("failed due to volume [%v] state is not attahced, current state is [%v]", eachVol, vol.State.String()))
 		}
-
 	})
 
 	JustAfterEach(func() {
