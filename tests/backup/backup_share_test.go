@@ -1258,12 +1258,11 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -1280,15 +1279,15 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		StartTorpedoTest("CancelClusterBackupShare",
 			"Share all backups at cluster level with a user group and revoke it and validate", nil, 82935)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1296,7 +1295,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		providers := getProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Create Users", func() {
@@ -1418,9 +1417,9 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					err = CreateBackup(backupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-						labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}(backupName)
 			}
 			wg.Wait()
@@ -1732,11 +1731,11 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
