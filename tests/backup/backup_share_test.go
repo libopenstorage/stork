@@ -281,18 +281,17 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 // DifferentAccessSameUser shares backup to user with Viewonly access who is part of group with FullAccess
 var _ = Describe("{DifferentAccessSameUser}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		bkpNamespaces     []string
-		clusterUid        string
-		clusterStatus     api.ClusterInfo_StatusInfo_Status
-		groupName         string
-		userNames         []string
-		backupName        string
-		backupLocationUID string
-		cloudCredName     string
-		cloudCredUID      string
-		bkpLocationName   string
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		groupName            string
+		userNames            []string
+		backupName           string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
 	)
 	userContexts := make([]context.Context, 0)
 	backupLocationMap := make(map[string]string)
@@ -303,15 +302,15 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		StartTorpedoTest("DifferentAccessSameUser",
 			"Take a backup and add user with readonly access and the group  with full access", nil, 82938)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -320,7 +319,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications ")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create Users", func() {
 			log.InfoD("Creating users testuser")
@@ -372,9 +371,9 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Taking backup of applications", func() {
 			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Share backup with user having viewonly access", func() {
 			log.InfoD("Share backup with user having viewonly access")
@@ -413,12 +412,12 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 
 	JustAfterEach(func() {
 		// For all the delete methods we need to add return and handle the error here
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		err = backup.DeleteUser(userNames[0])
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userNames[0]))
 		err = backup.DeleteGroup(groupName)
