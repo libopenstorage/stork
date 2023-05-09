@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -11,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 )
 
 // NodeCountForLicensing applies label portworx.io/nobackup=true on any worker node of application cluster and verifies that this worker node is not counted for licensing
@@ -144,23 +145,22 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		sourceClusterWorkerNodes      []node.Node
 		destinationClusterWorkerNodes []node.Node
 		totalNumberOfWorkerNodes      []node.Node
-		contexts                      []*scheduler.Context
-		appContexts                   []*scheduler.Context
+		scheduledAppContexts          []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	JustBeforeEach(func() {
-		StartTorpedoTest("NodeCountForLicensingBeforeClusterAddition",
+		StartTorpedoTest("LicensingCountWithNodeLabelledBeforeClusterAddition",
 			"Applies label portworx.io/nobackup=true before adding of application cluster to backup and verifies the license count", nil, 82954)
 		log.InfoD("Deploy applications needed for taking backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -181,7 +181,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		})
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications ")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Creating cloud account and backup location", func() {
 			log.InfoD("Creating cloud account and backup location")
@@ -248,9 +248,9 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking Backup of application")
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces,
-				nil, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup: %s", backupName))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Restoring the backed up application", func() {
 			log.InfoD("Restoring the backed up application")
@@ -287,10 +287,10 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		err := SetDestinationKubeConfig()
 		dash.VerifySafely(err, nil, "Switching context to destination cluster")
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
