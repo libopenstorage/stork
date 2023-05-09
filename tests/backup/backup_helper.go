@@ -42,7 +42,7 @@ const (
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
-	upgradeStorkImage                         = "UPGRADE_STORK_IMAGE"
+	upgradeStorkImage                         = "TARGET_STORK_VERSION"
 	latestStorkImage                          = "openstorage/stork:23.2.0"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
