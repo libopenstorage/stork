@@ -789,8 +789,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 // ScaleMongoDBWhileBackupAndRestore scales down MongoDB to repl=0 and backup to original replica when backups and restores are in progress
 var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	var (
-		contexts             []*scheduler.Context
-		appContexts          []*scheduler.Context
+		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string
 		cloudCredName        string
 		cloudCredUID         string
@@ -809,6 +808,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 	numberOfBackups := 5
 	scaledDownReplica := int32(0)
 
@@ -816,15 +816,15 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		StartTorpedoTest("ScaleMongoDBWhileBackupAndRestore",
 			"Scale down MongoDB to repl=0 when backups and restores are in progress", nil, 58075)
 		log.InfoD("Deploying applications required for the testcase")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -834,7 +834,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -888,15 +888,16 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 					sem <- struct{}{}
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					appContextsToBackupMap[backupName] = appContextsToBackup
 					wg.Add(1)
-					go func(backupName string, namespace string) {
+					go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
-					}(backupName, namespace)
+						_, err := CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
+					}(backupName, namespace, appContextsToBackup)
 				}
 			}
 			wg.Wait()
@@ -944,8 +945,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Verifying the backup status for backup - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 			}
 		})
 		Step("Restoring the backups taken", func() {
@@ -1018,7 +1019,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
 		statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
 		if *statefulSet.Spec.Replicas != originalReplicaCount {
@@ -1044,7 +1045,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
