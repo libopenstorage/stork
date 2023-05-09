@@ -382,11 +382,10 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 // This test does restart the px-backup pod, Mongo pods during backup sharing
 var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	numberOfUsers := 10
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	userContexts := make([]context.Context, 0)
 	CloudCredUIDMap := make(map[string]string)
 	backupMap := make(map[string]string, 0)
-	var appContexts []*scheduler.Context
 	var backupLocation string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -404,21 +403,21 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartBackupPodDuringBackupSharing", "Restart backup pod during backup sharing", nil, 82948)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Restart backup pod during backup sharing", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -464,10 +463,11 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Start backup of application to bucket", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{bkpNamespaces[0]},
-				nil, orgID, clusterUid, "", "", "", "", ctx)
-			log.FailOnError(err, "Backup creation failed for backup %s", backupName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 		})
 
@@ -571,13 +571,13 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting the backups")
 		for _, backup := range backupNames {
