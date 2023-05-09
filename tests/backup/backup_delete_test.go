@@ -441,8 +441,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 // DeleteBucketVerifyCloudBackupMissing validates the backup state (CloudBackupMissing) when bucket is deleted.
 var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 	var (
-		contexts                   []*scheduler.Context
-		appContexts                []*scheduler.Context
+		scheduledAppContexts       []*scheduler.Context
 		clusterUid                 string
 		cloudAccountUID            string
 		cloudAccountName           string
@@ -461,26 +460,27 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 	providers := getProviders()
 	backupLocationMap = make(map[string]string)
 	localBucketNameMap = make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteBucketVerifyCloudBackupMissing", "Validates the backup state (CloudBackupMissing) when bucket is deleted.", nil, 58070)
 		log.Infof("Deploying applications required for the testcase")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 
 	It("Delete bucket and Validates the backup state", func() {
 		Step("Validate deployed applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Adding cloud path/bucket", func() {
@@ -543,9 +543,12 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 				scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 				scheduleNames = append(scheduleNames, scheduleName)
 				labelSelectors := make(map[string]string)
-				err = CreateScheduleBackup(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", scheduleName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				appContextsToBackupMap[scheduleName] = appContextsToBackup
+
+				err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
+
 				schBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 				log.FailOnError(err, "Getting first schedule backup name")
 				backupNames = append(backupNames, schBackupName)
@@ -559,8 +562,9 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				labelSelectors := make(map[string]string)
-				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
 		})
@@ -639,19 +643,19 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 			for _, scheduleName := range scheduleNames {
 				latestScheduleBkpName, err := GetLatestScheduleBackupName(ctx, scheduleName, orgID)
 				log.FailOnError(err, "Error while getting latest schedule backup name")
-				err = backupSuccessCheck(latestScheduleBkpName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of latest schedule backup [%s]", latestScheduleBkpName))
+				err = backupSuccessCheckWithValidation(ctx, latestScheduleBkpName, appContextsToBackupMap[scheduleName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of latest schedule backup [%s]", latestScheduleBkpName))
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
