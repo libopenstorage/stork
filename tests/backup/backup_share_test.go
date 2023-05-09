@@ -2731,12 +2731,11 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	numberOfBackups := 20
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	var backupLocationName string
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var backupNotDeleted string
@@ -2749,15 +2748,15 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		StartTorpedoTest("DeleteSharedBackup",
 			"Share backup with multiple users and delete the backup", nil, 82937)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2767,7 +2766,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create Users", func() {
 			err = backup.AddUser(userName, firstName, lastName, email, commonPassword)
@@ -2818,9 +2817,9 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-							nil, orgID, clusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					}(backupName)
 				}
 				wg.Wait()
@@ -2895,11 +2894,11 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
