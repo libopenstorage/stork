@@ -746,6 +746,23 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) ListAllVolumes() ([]string, error) {
+	log.InfoD("Entering list all volumes ")
+	volDriver := d.getVolDriver()
+	if volDriver == nil {
+		fmt.Printf("Volume driver is nil")
+	}
+
+	volumes, err := volDriver.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{})
+	fmt.Printf(fmt.Sprintf("error is [%v]", err))
+	if err != nil {
+		log.Infof(fmt.Sprintf("Error is [%v]", err))
+		return nil, err
+	}
+	log.Infof(fmt.Sprintf("list of all volume IDs present [%v]", volumes.GetVolumeIds()))
+	return volumes.GetVolumeIds(), nil
+}
+
 func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
 	volDriver := d.getVolDriver()
 	resp, err := volDriver.Create(d.getContext(),

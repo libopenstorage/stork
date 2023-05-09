@@ -2,8 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/portworx/torpedo/pkg/log"
 	"math"
+	"math/rand"
 	"reflect"
 	"time"
 
@@ -413,4 +415,113 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
+})
+
+// Volume replication change
+var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
+	var testrailID = 0
+	// JIRA ID :https://portworx.atlassian.net/browse/PWX-26820
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateLargeNumberOfVolumes", "Volumes more than 684 went into down state after creation", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	var totalVolumesToCreate = 20
+	var newVolumeIDs []string
+	var attachedVolumes []string
+
+	stepLog := "has to schedule apps and update replication factor for attached node"
+	It(stepLog, func() {
+		done := make(chan bool)
+		log.InfoD(stepLog)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
+		}
+		deleteVolumes := func() {
+			done <- true
+			for _, each := range newVolumeIDs {
+				log.InfoD(fmt.Sprintf("delete volume [%v]", each))
+				log.FailOnError(Inst().V.DetachVolume(each), fmt.Sprintf("Failed to detach volume [%v]", each))
+				log.FailOnError(Inst().V.DeleteVolume(each), fmt.Sprintf("Delete Volume with ID [%v] failed", each))
+			}
+		}
+
+		// Run inspect continuously in the background
+		log.InfoD("start attach volume in the backend while more than 100 volumes got created")
+		go func(volumeIds []string) {
+			attachedCount := 0
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					if len(newVolumeIDs) > 5 {
+						for _, each := range newVolumeIDs {
+							if attachedCount <= 10 {
+								_, err := Inst().V.AttachVolume(each)
+								log.FailOnError(err, "Attaching volume failed")
+								attachedCount += 1
+								attachedVolumes = append(attachedVolumes, each)
+								time.Sleep(1 * time.Second)
+							}
+						}
+						done <- true
+					}
+				}
+			}
+		}(newVolumeIDs)
+
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		defer deleteVolumes()
+
+		// Get list of all volumes present in the cluster
+		log.InfoD("Listing all the volumes present in the cluster")
+
+		allVolumeIds, err := Inst().V.ListAllVolumes()
+		log.Infof(fmt.Sprintf("Error is [%v]", err))
+		log.FailOnError(err, "failed to list all the volume")
+		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
+
+		volumesToBeCreated := totalVolumesToCreate - len(allVolumeIds)
+		log.InfoD(fmt.Sprintf("Total number of new volumes to be created in the cluster [%v]", volumesToBeCreated))
+
+		// Create volumes in the cluster till it reaches maximum count
+		for initVol := 0; initVol < volumesToBeCreated; initVol++ {
+			id := uuid.New()
+			volName := fmt.Sprintf("volume_%s", id.String()[:8])
+			log.InfoD(fmt.Sprintf("Volume [%v] will be created with Name [%v]", initVol, volName))
+
+			// get size of the volume from size 1GiB till 100GiB
+			minSize := 1
+			maxSize := 100
+			randSize := uint64(rand.Intn(maxSize-minSize) + minSize)
+
+			// Pick HA Update from 1 to 3
+			haUpdate := int64(rand.Intn(3-1) + 1)
+
+			volId, err := Inst().V.CreateVolume(volName, randSize, haUpdate)
+			log.FailOnError(err, fmt.Sprintf("Failed to create volume with volName [%v]", volName))
+			log.InfoD("Volume Created with ID [%v]", volId)
+			newVolumeIDs = append(newVolumeIDs, volId)
+		}
+		done <- true
+
+		// Validate Volume Attached status
+		for _, eachVol := range attachedVolumes {
+			vol, err := Inst().V.InspectVolume(eachVol)
+			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume [%v]", eachVol))
+			log.Infof(fmt.Sprintf("Volume attached State [%v]", vol.State))
+			dash.VerifyFatal(vol.State.String() != "attached", true,
+				fmt.Sprintf("failed due to volume [%v] state is not attahced, current state is [%v]", eachVol, vol.State.String()))
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
 })

@@ -80,6 +80,9 @@ type Driver interface {
 	// GetVolumeDriverNamespace returns the namespace of this driver.
 	GetVolumeDriverNamespace() (string, error)
 
+	// ListAllVolumes returns volumeIDs of all volumes present in the cluster
+	ListAllVolumes() ([]string, error)
+
 	// CreateVolume creates a volume with the default setting
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
