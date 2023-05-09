@@ -36,6 +36,7 @@ func TestExtender(t *testing.T) {
 	t.Run("statefulsetTest", statefulsetTest)
 	t.Run("multiplePVCTest", multiplePVCTest)
 	t.Run("driverNodeErrorTest", driverNodeErrorTest)
+	t.Run("poolMaintenanceTest", poolMaintenanceTest)
 	t.Run("antihyperconvergenceTest", antihyperconvergenceTest)
 	t.Run("antihyperconvergenceTestPreferRemoteOnlyTest", antihyperconvergenceTestPreferRemoteOnlyTest)
 	t.Run("equalPodSpreadTest", equalPodSpreadTest)
@@ -206,6 +207,62 @@ func driverNodeErrorTest(t *testing.T) {
 	require.NoError(t, err, "Error starting driver on Node %+v", scheduledNodes[0])
 
 	err = volumeDriver.WaitDriverUpOnNode(stoppedNode, defaultWaitTimeout)
+	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func poolMaintenanceTest(t *testing.T) {
+	var testrailID, testResult = 86080, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "pool-test"),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+
+	err = volumeDriver.EnterPoolMaintenance(scheduledNodes[0])
+	require.NoError(t, err, "Error entering pool maintenance mode on scheduled node %+v", scheduledNodes[0])
+	poolMaintenanceNode := scheduledNodes[0]
+
+	// Wait for node to go into maintenance mode
+	time.Sleep(5 * time.Minute)
+
+	// Delete the pods so that they get rescheduled
+	pods, err := getPodsForApp(ctxs[0])
+	require.NoError(t, err, "Failed to get pods for app")
+	err = core.Instance().DeletePods(pods, false)
+	require.NoError(t, err, "Error deleting the pods")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state after deletion")
+
+	scheduledNodes, err = schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+	require.NotEqual(t, poolMaintenanceNode.Name, scheduledNodes[0].Name, "Pod should not be scheduled on node in PoolMaintenance state")
+
+	err = volumeDriver.ExitPoolMaintenance(poolMaintenanceNode)
+	require.NoError(t, err, "Error exiting pool maintenance mode on node %+v", scheduledNodes[0])
+
+	err = volumeDriver.WaitDriverUpOnNode(poolMaintenanceNode, defaultWaitTimeout)
 	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)

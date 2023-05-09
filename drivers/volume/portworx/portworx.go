@@ -530,9 +530,12 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 	return info, nil
 }
-
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
+	case api.Status_STATUS_POOLMAINTENANCE:
+		fallthrough
+	case api.Status_STATUS_STORAGE_DOWN:
+		return storkvolume.NodeStorageDown
 	case api.Status_STATUS_INIT:
 		fallthrough
 	case api.Status_STATUS_OFFLINE:
@@ -551,8 +554,6 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 		fallthrough
 	case api.Status_STATUS_OK:
 		return storkvolume.NodeOnline
-	case api.Status_STATUS_STORAGE_DOWN:
-		fallthrough
 	case api.Status_STATUS_STORAGE_DEGRADED:
 		fallthrough
 	case api.Status_STATUS_STORAGE_REBALANCE:

@@ -31,6 +31,7 @@ func TestHealthMonitor(t *testing.T) {
 
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("stopKubeletTest", stopKubeletTest)
+	t.Run("poolMaintenanceHealthTest", poolMaintenanceHealthTest)
 	t.Run("healthCheckFixTest", healthCheckFixTest)
 	t.Run("stopDriverCsiPodFailoverTest", stopDriverCsiPodFailoverTest)
 
@@ -152,6 +153,53 @@ func stopKubeletTest(t *testing.T) {
 	testResult = testResultPass
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 
+}
+
+func poolMaintenanceHealthTest(t *testing.T) {
+	var testrailID, testResult = 86081, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "pool-health"),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodesPre, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodesPre), "App should be scheduled on one node")
+
+	err = volumeDriver.EnterPoolMaintenance(scheduledNodesPre[0])
+	require.NoError(t, err, "Error entering pool maintenance on scheduled Node %+v", scheduledNodesPre[0])
+	poolMaintenanceNode := scheduledNodesPre[0]
+
+	// node timeout bumped to 4 mins from stork 2.9.0
+	// ref: https://github.com/libopenstorage/stork/pull/1028
+	time.Sleep(5 * time.Minute)
+
+	// The pod should not be deleted from a node which is in pool maintenance state
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state after deletion")
+
+	scheduledNodesPost, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodesPost), "App should be scheduled on one node")
+	require.Equal(t, poolMaintenanceNode.Name, scheduledNodesPost[0].Name, "Pod should not restarted on pool maintenance node")
+
+	err = volumeDriver.ExitPoolMaintenance(poolMaintenanceNode)
+	require.NoError(t, err, "Error exiting pool maintenance on Node %+v", poolMaintenanceNode)
+
+	err = volumeDriver.WaitDriverUpOnNode(poolMaintenanceNode, defaultWaitTimeout)
+	require.NoError(t, err, "Error waiting for Node to start %+v", poolMaintenanceNode)
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func healthCheckFixTest(t *testing.T) {
