@@ -2246,12 +2246,10 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "10"))
 	var (
-		contexts                 []*scheduler.Context
+		scheduledAppContexts     []*scheduler.Context
 		backupLocationUID        string
 		cloudCredUID             string
-		backupName               string
 		cloudCredUidList         []string
-		appContexts              []*scheduler.Context
 		bkpNamespaces            []string
 		clusterUid               string
 		clusterStatus            api.ClusterInfo_StatusInfo_Status
@@ -2267,20 +2265,21 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 	backupLocationMap := make(map[string]string)
 	backupLocationMapNew := make(map[string]string)
 	credMap := make(map[string]map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("CloudSnapsSafeWhenBackupLocationDeleteTest",
 			"Validate if cloud snaps present if backup location is deleted", nil, 58069)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -2288,7 +2287,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 		providers := getProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -2332,26 +2331,30 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Taking %d backups", numberOfBackups)
+			var mutex sync.Mutex
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				for _, namespace := range bkpNamespaces {
 					for i := 0; i < numberOfBackups; i++ {
-						sem <- struct{}{}
 						time.Sleep(timeBetweenConsecutiveBackups)
 						backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 						backupNames = append(backupNames, backupName)
+						sem <- struct{}{}
 						wg.Add(1)
-						go func(backupName string) {
+						go func(backupName, backupLocationName, backupLocationUID, namespace string) {
 							defer GinkgoRecover()
 							defer wg.Done()
 							defer func() { <-sem }()
-							err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-								labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
-						}(backupName)
+							appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+							mutex.Lock()
+							appContextsToBackupMap[backupName] = appContextsToBackup
+							mutex.Unlock()
+							err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+						}(backupName, backupLocationName, backupLocationUID, namespace)
 					}
-					wg.Wait()
 				}
 			}
+			wg.Wait()
 			log.Infof("List of backups - %v", backupNames)
 		})
 
@@ -2398,9 +2401,11 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for backupLocationUID, customBackupLocationName = range backupLocationMapNew {
 				for _, namespace := range bkpNamespaces {
-					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-					err = CreateBackup(backupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation %s", backupName))
+					backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					appContextsToBackupMap[backupName] = appContextsToBackup
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					backupNames = append(backupNames, backupName)
 					backupNamespaceMap[namespace] = backupName
 				}
@@ -2436,25 +2441,17 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			log.FailOnError(err, "Getting a list of all backups")
 			log.InfoD("Check each backup for success status")
 			for _, bkp = range curBackups.GetBackups() {
-				backupInspectRequest := &api.BackupInspectRequest{
-					Name:  bkp.Name,
-					Uid:   bkp.Uid,
-					OrgId: orgID,
-				}
-				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-				log.FailOnError(err, fmt.Sprintf("failed to Inspect Backup %s", bkp.Name))
-				actual := resp.GetBackup().GetStatus().Status
-				expected := api.BackupInfo_StatusInfo_Success
-				dash.VerifyFatal(actual, expected, fmt.Sprintf("backup [%s] has success status", bkp.Name))
+				err := backupSuccessCheckWithValidation(ctx, bkp.Name, appContextsToBackupMap[bkp.Name], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", bkp.Name))
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
