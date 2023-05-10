@@ -175,34 +175,7 @@ func getPXNamespace() string {
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
-
-	backupDriver := Inst().Backup
-	bkpCreateRequest := &api.BackupCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  backupName,
-			OrgId: orgID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bLocation,
-			Uid:  bLocationUID,
-		},
-		Cluster:        clusterName,
-		Namespaces:     namespaces,
-		LabelSelectors: labelSelectors,
-		ClusterRef: &api.ObjectRef{
-			Name: clusterName,
-			Uid:  uid,
-		},
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
