@@ -2203,8 +2203,8 @@ func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName str
 	return nil
 }
 
-// CreateNamespaceLabelBackupWithoutCheck creates backup with namespace label filter without waiting for success
-func CreateNamespaceLabelBackupWithoutCheck(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
+// CreateBackupWithNamespaceLabelWithoutCheck creates backup with namespace label filter without waiting for success
+func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context.Context) (*api.BackupInspectResponse, error) {
 
