@@ -422,12 +422,11 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		cloudCredUID               string
 		backupLocation             string
 		appList                    = Inst().AppList
-		contexts                   []*scheduler.Context
+		scheduledAppContexts       []*scheduler.Context
 		scheduleNames              []string
 		preRuleNameList            []string
 		postRuleNameList           []string
 		appNamespaces              []string
-		appContexts                []*scheduler.Context
 		clusterStatus              api.ClusterInfo_StatusInfo_Status
 	)
 	labelSelectors := make(map[string]string)
@@ -435,7 +434,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 	backupLocationMap := make(map[string]string)
 	podListBeforeSizeMap := make(map[string]int)
 	podListAfterSizeMap := make(map[string]int)
-	contexts = make([]*scheduler.Context, 0)
+	scheduledAppContexts = make([]*scheduler.Context, 0)
 	appNamespaces = make([]string, 0)
 	modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 	JustBeforeEach(func() {
@@ -454,22 +453,22 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Schedule backup while resizing the volume", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Creating pre and post rule for deployed apps", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")
@@ -550,7 +549,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Resize the volume before backup schedule", func() {
 					log.InfoD("Resize the volume before backup schedule")
-					for _, ctx := range contexts {
+					for _, ctx := range scheduledAppContexts {
 						var appVolumes []*volume.Volume
 						log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
 						appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -599,31 +598,31 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[i])
 					log.FailOnError(err, "Unable to fetch post rule Uid")
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-					err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-						labelSelectors, orgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 					scheduleNames = append(scheduleNames, scheduleName)
 				})
 				Step("Verifying backup success after initializing volume resize", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Unable to px-central-admin ctx")
-					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
 					log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 					time.Sleep(15 * time.Minute)
+
 					secondScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching recent backup %v", secondScheduleBackupName))
-					err = backupSuccessCheck(secondScheduleBackupName, orgID, 5, 30, ctx)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = backupSuccessCheckWithValidation(ctx, secondScheduleBackupName, appContextsToBackup, orgID, 5, 30)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", secondScheduleBackupName))
 				})
 			}
 		}
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
@@ -634,7 +633,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
