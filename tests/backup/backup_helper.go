@@ -320,7 +320,7 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	err := CreateScheduleBackup(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 		return err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return ValidateBackup(ctx, firstScheduleBackupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
+	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
