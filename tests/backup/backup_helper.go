@@ -2339,10 +2339,8 @@ func CreateNamespaceLabelBackupWithoutCheck(backupName string, clusterName strin
 	return resp, nil
 }
 
-// CreateNamespaceLabelScheduleBackupWithoutCheck creates a schedule backup with namespace label filter without waiting for success
-func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string,
-	labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string,
-	schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
+// CreateScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
+func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -2384,6 +2382,20 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 		return resp, err
 	}
 	return resp, nil
+}
+
+// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success, and validates the backup.
+func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) error {
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, schPolicyName, schPolicyUID, ctx)
+	if err != nil {
+		return err
+	}
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // suspendBackupSchedule will suspend backup schedule
