@@ -3734,13 +3734,12 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 	userContexts := make([]context.Context, 0)
 	namespaceMapping := make(map[string]string)
 	backupLocationMap := make(map[string]string)
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	var backupName string
 	var backupLocationName string
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -3750,15 +3749,15 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		StartTorpedoTest("IssueMultipleDeletesForSharedBackup",
 			"Share backup with multiple users and delete the backup", nil, 82944)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -3767,7 +3766,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create Users", func() {
 			users = createUsers(numberOfUsers)
@@ -3807,10 +3806,10 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				nil, orgID, clusterUid, "", "", "", "", ctx)
-			log.FailOnError(err, "Failed to create Backup %s", backupName)
-			log.Infof("List of backups - %s", backupName)
+
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[0:1])
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		backupMap := make(map[string]string, 0)
 		Step("Share backup with multiple users", func() {
@@ -3890,11 +3889,11 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting restores")
 		for _, user := range users {
