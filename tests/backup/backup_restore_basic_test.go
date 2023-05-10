@@ -1601,7 +1601,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 	})
 })
 
-// AddMultipleNamespaceLabel add labels to multiple namespace, perform manual backup, schedule backup using namespace label selector and restore
+// AddMultipleNamespaceLabels add labels to multiple namespace, perform manual backup, schedule backup using namespace label selector and restore
 var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 	var (
 		batchSize                  int
@@ -1621,8 +1621,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		restoreNames               []string
 		bkpNamespaces              []string
 		cloudCredUidList           []string
-		contexts                   []*scheduler.Context
-		appContexts                []*scheduler.Context
+		scheduledAppContexts       []*scheduler.Context
 		scheduleRestoreMapping     map[string]string
 		fetchedLabelMap            map[string]string
 		labelMap                   map[string]string
@@ -1636,15 +1635,15 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		log.InfoD("Deploy applications")
 		batchSize = 10
 		desiredNumLabels = 1000
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1652,7 +1651,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding labels to namespaces in multiple of 10 until 1000", func() {
 			log.InfoD("Adding labels to namespaces in multiple of 10 until 1000")
@@ -1708,11 +1707,13 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			log.InfoD("Taking a manual backup of application using namespace label")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+
 			namespaceLabel = MapToKeyValueString(fetchedLabelMap)
 			backupName = fmt.Sprintf("%s-%v", "backup", time.Now().Unix())
-			err = CreateBackupWithNamespaceLabel(backupName, SourceClusterName, backupLocationName, backupLocationUID,
-				nil, orgID, clusterUid, "", "", "", "", namespaceLabel, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with label [%s]", backupName, namespaceLabel))
+			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[0:1])
+			err = CreateBackupWithNamespaceLabelWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, clusterUid, "", "", "", "", namespaceLabel)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled backup [%s] with label [%s]", backupName, namespaceLabel))
+
 			err = NamespaceLabelBackupSuccessCheck(backupName, ctx, bkpNamespaces, namespaceLabel)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, namespaceLabel, backupName))
 		})
@@ -1732,10 +1733,12 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			log.InfoD("Creating a schedule backup with namespace label filter")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateScheduleBackupWithNamespaceLabel(scheduleName, SourceClusterName, backupLocationName, backupLocationUID,
-				nil, orgID, "", "", "", "", namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup [%s] with labels [%v]", scheduleName, namespaceLabel))
+			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[0:1])
+			err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled schedule backup [%s] with label [%s]", scheduleName, namespaceLabel))
+
 			firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupName, ctx, bkpNamespaces, namespaceLabel)
@@ -1766,7 +1769,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
 		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
@@ -1780,7 +1783,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 	})
 })
 
