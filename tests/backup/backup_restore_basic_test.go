@@ -1036,6 +1036,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			namespaces := []string{"*"}
 			labelSelectors := make(map[string]string)
+			// not using CreateScheduleBackupWithValidation because list namespace is special character
 			err := CreateScheduleBackup(scheduleName, destinationClusterName, backupLocationName, backupLocationUID, namespaces,
 				labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
@@ -1070,22 +1071,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			var err error
 			allContexts := append(scheduledAppContexts, newScheduledAppContexts...)
 			nextScheduleBackupName, err = GetNextCompletedScheduleBackupNameWithValidation(ctx, scheduleName, allContexts, time.Duration(intervalInMins))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of next schedule backup [%s] of schedule [%s]", nextScheduleBackupName, scheduleName))
-
-			nextScheduleBackupUid, err := Inst().Backup.GetBackupUID(ctx, nextScheduleBackupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
-			backupInspectRequest := &api.BackupInspectRequest{
-				Name:  nextScheduleBackupName,
-				Uid:   nextScheduleBackupUid,
-				OrgId: orgID,
-			}
-			resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspecting next schedule backup named [%s] and uid [%s]", nextScheduleBackupName, nextScheduleBackupUid))
-			backedUpNamespaces := resp.GetBackup().GetNamespaces()
-			log.InfoD("Namespaces in next schedule backup named [%s] and uid [%s] are [%v]", nextScheduleBackupName, nextScheduleBackupUid, backedUpNamespaces)
-			for _, namespace := range newAppNamespaces {
-				dash.VerifyFatal(strings.Contains(strings.Join(backedUpNamespaces, ","), namespace), true, fmt.Sprintf("Checking the new application namespace [%s] against the next scheduled backup named [%s]", namespace, nextScheduleBackupName))
-			}
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of next schedule backup [%s] of schedule [%s] after getting triggered and completing, and inclusion of new app namespaces [%v]", nextScheduleBackupName, scheduleName, newAppNamespaces))
 		})
 		Step("Restore new application namespaces from next schedule backup in source cluster", func() {
 			log.InfoD("Restoring new application namespaces from next schedule backup in source cluster")
