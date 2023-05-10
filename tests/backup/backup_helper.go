@@ -2135,34 +2135,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context.Context) error {
-
-	backupDriver := Inst().Backup
-	bkpCreateRequest := &api.BackupCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  backupName,
-			OrgId: orgID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bkpLocation,
-			Uid:  bkpLocationUID,
-		},
-		Cluster:        clusterName,
-		LabelSelectors: labelSelectors,
-		ClusterRef: &api.ObjectRef{
-			Name: clusterName,
-			Uid:  uid,
-		},
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-		NsLabelSelectors: namespaceLabel,
-	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err := CreateBackupWithNamespaceLabelWithoutCheck(backupName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, ctx)
 	if err != nil {
 		return err
 	}
