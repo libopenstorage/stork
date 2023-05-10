@@ -2460,23 +2460,22 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 		cloudCredUidList           []string
 		bkpNamespaces              []string
 		nsLabelsMap                map[string]string
-		contexts                   []*scheduler.Context
-		appContexts                []*scheduler.Context
+		scheduledAppContexts       []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
 		StartTorpedoTest("SetUnsetNSLabelDuringScheduleBackup", "Create multiple namespaces and set unset namespace labels during the backup schedule", nil, 84849)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 		log.InfoD("Created namespaces %v", bkpNamespaces)
@@ -2485,7 +2484,7 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding labels to namespaces", func() {
 			log.InfoD("Adding labels to namespaces")
@@ -2546,17 +2545,20 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateScheduleBackupWithNamespaceLabel(scheduleName, SourceClusterName, backupLocationName, backupLocationUID,
-				nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+			err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with namespace labels, having schedule name [%s]", scheduleName))
+
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupName, ctx, bkpNamespaces, nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, nsLabelString, firstScheduleBackupName))
+
 			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 			time.Sleep(15 * time.Minute)
 			secondScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the second schedule backup [%s]", secondScheduleBackupName))
+			err = backupSuccessCheckWithValidation(ctx, secondScheduleBackupName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of second schedule backup named [%s] of schedule named [%s]", secondScheduleBackupName, scheduleName))
 			err = NamespaceLabelBackupSuccessCheck(secondScheduleBackupName, ctx, bkpNamespaces, nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, nsLabelString, secondScheduleBackupName))
 		})
@@ -2569,8 +2571,10 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 			log.InfoD("Verify namespace with removed labels is not present in next schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			nextScheduleBackupNameOne, err = GetNextScheduleBackupName(scheduleName, 15, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup", nextScheduleBackupNameOne))
+
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[1:])
+			nextScheduleBackupNameOne, err = GetNextCompletedScheduleBackupNameWithValidation(ctx, scheduleName, appContextsToBackup, 15)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of schedule backup 1 [%s] of schedule [%s] after getting triggered and completing", nextScheduleBackupNameOne, scheduleName))
 			err = NamespaceLabelBackupSuccessCheck(nextScheduleBackupNameOne, ctx, bkpNamespaces[1:], nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, nsLabelString, nextScheduleBackupNameOne))
 		})
@@ -2583,14 +2587,15 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 			log.InfoD("Verify namespace inclusion in next schedule backup after setting the namespace labels back")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			nextScheduleBackupNameTwo, err = GetNextScheduleBackupName(scheduleName, 15, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup", nextScheduleBackupNameTwo))
+
+			nextScheduleBackupNameTwo, err = GetNextCompletedScheduleBackupNameWithValidation(ctx, scheduleName, scheduledAppContexts, 15)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of schedule backup 2 [%s] of schedule [%s] after getting triggered and completing", nextScheduleBackupNameTwo, scheduleName))
 			err = NamespaceLabelBackupSuccessCheck(nextScheduleBackupNameTwo, ctx, bkpNamespaces, nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, nsLabelString, nextScheduleBackupNameTwo))
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 		log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName})
@@ -2601,7 +2606,7 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
