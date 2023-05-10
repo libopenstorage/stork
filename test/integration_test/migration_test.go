@@ -458,16 +458,63 @@ func migrationLabelExcludeSelectorTest(t *testing.T) {
 }
 
 func namespaceLabelSelectorTest(t *testing.T) {
-	triggerMigrationTest(
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	// Deploy mysql-1-pvc in namespace "mysql-1-pvc-ns-selector-test"
+	ctxNs2, err := schedulerDriver.Schedule("ns-selector-test",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"mysql-1-pvc"},
+			Labels:  nil,
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxNs2), "Only one task should have started")
+
+	// Deploy cassandra in namespace "cassandra-ns-selector-test"
+	// This namespace has label kubernetes.io/metadata.name=cassandra-ns-selector-test
+	ctxs, preMigrationCtx := triggerMigration(
 		t,
 		"ns-selector-test",
 		"cassandra",
-		[]string{"mysql-1-pvc"},
-		"namespace-selector-migration",
+		[]string{},
+		[]string{"namespace-selector-migration"},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	// Validate but do not destroy migration and apps
+	validateAndDestroyMigration(
+		t,
+		ctxs,
+		preMigrationCtx,
 		true,
 		true,
 		true,
+		true, //Skip Deleting App on Destination
+		true, //Skip Deleting App on Source
 	)
+
+	// Validate that mysql-1-pvc is not migrated as it doesn't have the required namespace labels
+	err = schedulerDriver.WaitForRunning(ctxNs2[0], defaultWaitTimeout/16, defaultWaitInterval)
+	require.Error(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Destroy migration
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	// Destroy cassandra app context
+	destroyAndWait(t, ctxs)
+
+	// Destroy mysql-1-pvc app context
+	destroyAndWait(t, ctxNs2)
 }
 
 // migrationIntervalScheduleTest runs test for migrations with schedules that are

@@ -548,11 +548,9 @@ func (m *MigrationController) getMigrationNamespaces(ctx context.Context, migrat
 	uniqueNamespaces := make(map[string]bool)
 
 	for _, ns := range migration.Spec.Namespaces {
-		if _, ok := uniqueNamespaces[ns]; !ok {
-			migrationNamespaces = append(migrationNamespaces, ns)
-		}
 		uniqueNamespaces[ns] = true
 	}
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -561,7 +559,6 @@ func (m *MigrationController) getMigrationNamespaces(ctx context.Context, migrat
 	if err != nil {
 		return nil, err
 	}
-
 	for key, val := range migration.Spec.NamespaceSelectors {
 		label := key + "=" + val
 		namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: label})
@@ -569,11 +566,12 @@ func (m *MigrationController) getMigrationNamespaces(ctx context.Context, migrat
 			return nil, err
 		}
 		for _, namespace := range namespaces.Items {
-			if _, ok := uniqueNamespaces[namespace.GetName()]; !ok {
-				migrationNamespaces = append(migrationNamespaces, namespace.GetName())
-			}
 			uniqueNamespaces[namespace.GetName()] = true
 		}
+	}
+
+	for namespace := range uniqueNamespaces {
+		migrationNamespaces = append(migrationNamespaces, namespace)
 	}
 	return migrationNamespaces, nil
 }
