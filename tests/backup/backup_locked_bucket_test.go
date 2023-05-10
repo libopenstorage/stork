@@ -203,18 +203,17 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 // This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
 var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	var (
-		appList          = Inst().AppList
-		backupName       string
-		contexts         []*scheduler.Context
-		preRuleNameList  []string
-		postRuleNameList []string
-		appContexts      []*scheduler.Context
-		bkpNamespaces    []string
-		clusterUid       string
-		clusterStatus    api.ClusterInfo_StatusInfo_Status
-		backupList       []string
-		beforeSize       int
-		credName         string
+		appList              = Inst().AppList
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		preRuleNameList      []string
+		postRuleNameList     []string
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupList           []string
+		beforeSize           int
+		credName             string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -223,7 +222,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	podListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
-	contexts = make([]*scheduler.Context, 0)
+	scheduledAppContexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
@@ -242,22 +241,22 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Resize after the volume is restored from a backup", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -330,9 +329,9 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
 					backupList = append(backupList, backupName)
-					err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-						labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				})
 				Step("Restoring the backups application", func() {
 					ctx, err := backup.GetAdminCtxFromSecret()
@@ -354,7 +353,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				Step("Resize volume after the restore is completed", func() {
 					log.InfoD("Resize volume after the restore is completed")
 					var err error
-					for _, ctx := range contexts {
+					for _, ctx := range scheduledAppContexts {
 						var appVolumes []*volume.Volume
 						log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
 						appVolumes, err = Inst().S.GetVolumes(ctx)
@@ -399,11 +398,11 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
