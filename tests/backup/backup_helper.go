@@ -383,6 +383,7 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	if err != nil {
 		return err
 	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
 	return ValidateBackup(ctx, firstScheduleBackupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
