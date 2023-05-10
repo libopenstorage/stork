@@ -888,12 +888,11 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
 	userContexts := make([]context.Context, 0)
 	var bkpNamespaces []string
 	var clusterUid string
@@ -907,15 +906,15 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		StartTorpedoTest("ShareLargeNumberOfBackupsWithLargeNumberOfUsers",
 			"Share large number of backups to large number of users", nil, 82941)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -923,7 +922,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		providers := getProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Create Users", func() {
@@ -1026,19 +1025,19 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.InfoD("Taking %d backups", numberOfBackups)
 			for _, namespace := range bkpNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
-					sem <- struct{}{}
 					time.Sleep(timeBetweenConsecutiveBackups)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
+					sem <- struct{}{}
 					wg.Add(1)
-					go func(backupName string) {
+					go func(backupName, namespace string) {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						err = CreateBackup(backupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-							labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
-					}(backupName)
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					}(backupName, namespace)
 				}
 				wg.Wait()
 			}
@@ -1180,11 +1179,11 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
