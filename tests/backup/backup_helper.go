@@ -2238,48 +2238,18 @@ func CreateBackupWithNamespaceLabelWithValidation(ctx context.Context, backupNam
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsExpectedInBackup, make([]string, 0))
 }
 
-// CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label
-func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string,
-	labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string,
-	postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
-
-	var firstScheduleBackupName string
-	backupDriver := Inst().Backup
-	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  scheduleName,
-			OrgId: orgID,
-		},
-		SchedulePolicyRef: &api.ObjectRef{
-			Name: schPolicyName,
-			Uid:  schPolicyUID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bkpLocation,
-			Uid:  bkpLocationUID,
-		},
-		SchedulePolicy: schPolicyName,
-		Cluster:        clusterName,
-		LabelSelectors: labelSelectors,
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-		NsLabelSelectors: namespaceLabel,
-	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+// CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label and checks for success
+func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
 		return err
 	}
 	time.Sleep(1 * time.Minute)
-	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
 	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
 	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
