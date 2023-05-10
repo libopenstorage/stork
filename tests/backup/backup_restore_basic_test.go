@@ -2624,41 +2624,41 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 // BackupRestoreOnDifferentK8sVersions Restores from a duplicate backup on a cluster with a different kubernetes version
 var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 	var (
-		cloudCredUID       string
-		cloudCredName      string
-		backupLocationUID  string
-		backupLocationName string
-		clusterUid         string
-		appNamespaces      []string
-		restoreNames       []string
-		backupLocationMap  map[string]string
-		srcVersion         semver.Version
-		destVersion        semver.Version
-		contexts           []*scheduler.Context
-		clusterStatus      api.ClusterInfo_StatusInfo_Status
+		cloudCredUID         string
+		cloudCredName        string
+		backupLocationUID    string
+		backupLocationName   string
+		clusterUid           string
+		appNamespaces        []string
+		restoreNames         []string
+		backupLocationMap    map[string]string
+		srcVersion           semver.Version
+		destVersion          semver.Version
+		scheduledAppContexts []*scheduler.Context
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
 	)
 	namespaceMapping := make(map[string]string)
 	duplicateBackupNameMap := make(map[string]string)
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupRestoreOnDifferentK8sVersions", "Restoring from a duplicate backup on a cluster with a different kubernetes version", nil, 83721)
 		log.InfoD("Scheduling applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				log.Infof("Scheduled application with namespace [%s]", namespace)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Restoring from a duplicate backup on a cluster with a different kubernetes version", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Configure source and destination clusters with px-central-admin", func() {
 			log.InfoD("Configuring source and destination clusters with px-central-admin")
@@ -2724,12 +2724,14 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-				err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+
 				duplicateBackupName := fmt.Sprintf("%s-duplicate-%v", BackupNamePrefix, time.Now().Unix())
 				duplicateBackupNameMap[duplicateBackupName] = namespace
-				err = CreateBackup(duplicateBackupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying duplicate backup creation: %s", duplicateBackupName))
+				err = CreateBackupWithValidation(ctx, duplicateBackupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of duplicate backup [%s]", duplicateBackupName))
 			}
 		})
 		Step("Restoring duplicate backup on destination cluster with different kubernetes version", func() {
@@ -2748,7 +2750,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		err := SetSourceKubeConfig()
 		dash.VerifyFatal(err, nil, "Switching context to source cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -2760,7 +2762,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
