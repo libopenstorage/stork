@@ -294,40 +294,12 @@ func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backu
 func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
-	var firstScheduleBackupName string
-	backupDriver := Inst().Backup
-	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  scheduleName,
-			OrgId: orgID,
-		},
-		SchedulePolicyRef: &api.ObjectRef{
-			Name: schPolicyName,
-			Uid:  schPolicyUID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bLocation,
-			Uid:  bLocationUID,
-		},
-		SchedulePolicy: schPolicyName,
-		Cluster:        clusterName,
-		Namespaces:     namespaces,
-		LabelSelectors: labelSelectors,
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
 		return err
 	}
 	time.Sleep(1 * time.Minute)
-	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
 	}
