@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -3132,7 +3131,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 // ScheduleBackupDeleteAndRecreateNS Validates schedule backups when namespaces are deleted and recreated
 var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 	var (
-		contexts                     []*scheduler.Context
+		scheduledAppContexts         []*scheduler.Context
 		cloudCredUID                 string
 		cloudCredName                string
 		backupLocationName           string
@@ -3161,11 +3160,11 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 			namespace := fmt.Sprintf("test-namespace-%s", taskName)
 			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
 			appNamespaces = append(appNamespaces, namespace)
-			contexts = append(contexts, appContexts...)
 			for index, ctx := range appContexts {
 				appName := Inst().AppList[index]
 				ctx.ReadinessTimeout = appReadinessTimeout
 				log.InfoD("Scheduled application [%s] in source cluster in namespace [%s]", appName, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -3173,7 +3172,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 	It("Validates schedule backups when namespaces are deleted and recreated", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
@@ -3234,11 +3233,8 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appNamespaces,
-				labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
-			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 		})
 		Step("Delete the App namespaces created", func() {
 			log.InfoD("Delete the App namespaces created")
@@ -3249,44 +3245,30 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 		})
 		Step("Recreating the namespaces deleted with same names", func() {
 			log.InfoD("Recreating the namespaces deleted with same names")
+			scheduledAppContexts = scheduledAppContexts[:0] // clear out array; keep underlying allocation
 			for i := 0; i < numDeployments; i++ {
 				taskName := fmt.Sprintf("src-%s-%d", taskNamePrefix, i)
 				namespace := fmt.Sprintf("test-namespace-%s", taskName)
 				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
-				contexts = append(contexts, appContexts...)
 				for index, ctx := range appContexts {
 					appName := Inst().AppList[index]
 					ctx.ReadinessTimeout = appReadinessTimeout
 					log.InfoD("Scheduled application [%s] in source cluster in namespace [%s]", appName, namespace)
+					scheduledAppContexts = append(scheduledAppContexts, ctx)
 				}
 			}
 		})
 		Step("Validate app namespaces recreated", func() {
 			log.InfoD("Validating app namespaces recreated")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
-		Step("Verify recreated application namespaces inclusion in next schedule backup", func() {
-			log.InfoD("Verifying recreated application namespaces inclusion in next schedule backup")
+		Step("Verify inclusion of recreated application namespaces in next schedule backup", func() {
+			log.InfoD("Verifying inclusion of recreated application namespaces in next schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			latestScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, time.Duration(schedulePolicyintervalInMins), ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of latest schedule backup with schedule name - %s", scheduleName))
-			err = backupSuccessCheck(latestScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+latestScheduleBackupName)
-			latestScheduleBackupUid, err := Inst().Backup.GetBackupUID(ctx, latestScheduleBackupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of of latest schedule backup named [%s] of schedule named [%s]", latestScheduleBackupName, scheduleName))
-			backupInspectRequest := &api.BackupInspectRequest{
-				Name:  latestScheduleBackupName,
-				Uid:   latestScheduleBackupUid,
-				OrgId: orgID,
-			}
-			resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspecting latest schedule backup named [%s] and uid [%s]", latestScheduleBackupName, latestScheduleBackupUid))
-			backedUpNamespaces = resp.GetBackup().GetNamespaces()
-			log.InfoD("Namespaces in latest schedule backup named [%s] and uid [%s] are [%v]", latestScheduleBackupName, latestScheduleBackupUid, backedUpNamespaces)
-			for _, namespace := range appNamespaces {
-				dash.VerifyFatal(strings.Contains(strings.Join(backedUpNamespaces, ","), namespace), true, fmt.Sprintf("Checking the deleted application namespace [%s] against the latest scheduled backup named [%s]", namespace, latestScheduleBackupName))
-			}
+
+			latestScheduleBackupName, err = GetNextCompletedScheduleBackupNameWithValidation(ctx, scheduleName, scheduledAppContexts, time.Duration(schedulePolicyintervalInMins))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of next schedule backup [%s] of schedule [%s] after getting triggered and completing, and inclusion of recreated app namespaces [%v]", latestScheduleBackupName, scheduleName, appNamespaces))
 		})
 		Step("Restoring the backed up applications from latest scheduled backup", func() {
 			log.InfoD("Restoring the backed up applications from latest scheduled backup")
@@ -3302,7 +3284,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
@@ -3314,7 +3296,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateAndDestroy(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
