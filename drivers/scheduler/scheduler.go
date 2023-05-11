@@ -113,6 +113,10 @@ type InitOptions struct {
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
 	SecureApps []string
+	// AnthosAdminWorkStationNodeIP needed for anthos scheduler
+	AnthosAdminWorkStationNodeIP string
+	// AnthosInstancePath needed for anthos scheduler
+	AnthosInstancePath string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
