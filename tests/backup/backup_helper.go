@@ -324,6 +324,7 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	if err != nil {
 		return err
 	}
+	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
