@@ -510,7 +510,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		for _, eachVol := range attachedVolumes {
 			vol, err := Inst().V.InspectVolume(eachVol)
 			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume [%v]", eachVol))
-			dash.VerifyFatal(vol.State.String() != "attached", true,
+			dash.VerifyFatal(vol.State.String() == "attached", true,
 				fmt.Sprintf("failed due to volume [%v] state is not attahced, current state is [%v]", eachVol, vol.State.String()))
 		}
 	})
