@@ -190,7 +190,7 @@ type ClusterPairPluginInterface interface {
 type MigratePluginInterface interface {
 	// Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
-	StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
+	StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error)
 	// Get the status of migration of the volumes specified in the status
 	// for the migration spec
 	GetMigrationStatus(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
@@ -425,7 +425,7 @@ func (c *ClusterPairNotSupported) DeletePair(*storkapi.ClusterPair) error {
 type MigrationNotSupported struct{}
 
 // StartMigration returns ErrNotSupported
-func (m *MigrationNotSupported) StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+func (m *MigrationNotSupported) StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
