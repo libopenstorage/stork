@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -21,15 +22,12 @@ func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	log.Info("Get list of Accounts.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	accountsModel, res, err := client.ApiAccountsGet(ctx).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiAccountsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiAccountsGet``: %v\n.Full HTTP response: %v", err, res)
 	}
 	return accountsModel.GetData(), nil
 }
@@ -40,15 +38,12 @@ func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error)
 	log.Infof("Get the account detail having UUID: %v", accountID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	accountModel, res, err := client.ApiAccountsIdGet(ctx, accountID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Full HTTP response: %v\n", res)
-		log.Errorf("Error when calling `ApiAccountsIdGet``: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiAccountsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return accountModel, nil
 }
@@ -60,14 +55,11 @@ func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, err
 	log.Infof("Get the users belong to the account having name: %v", accountInfo.GetName())
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	usersModel, res, err := client.ApiAccountsIdUsersGet(ctx, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Full HTTP response: %v\n", res)
-		log.Errorf("Error when calling `ApiAccountsIdUsersGet``: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error when called `ApiAccountsIdUsersGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return usersModel.GetData(), nil
 }
@@ -79,16 +71,14 @@ func (account *Account) AcceptEULA(accountID string, eulaVersion string) error {
 	log.Infof("Get the users belong to the account having name: %v", accountInfo.GetName())
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return err
+		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	updateRequest := pds.ControllersAcceptEULARequest{
 		Version: &eulaVersion,
 	}
 	res, err := client.ApiAccountsIdEulaPut(ctx, accountID).Body(updateRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Full HTTP response: %v\n", res)
-		log.Errorf("Error when calling `ApiAccountsIdUsersGet``: %v\n", err)
+		return fmt.Errorf("Error when called `ApiAccountsIdEulaPut`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return err
 }

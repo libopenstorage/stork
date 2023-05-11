@@ -201,6 +201,15 @@ if [ -z "$TORPEDO_JOB_NAME"]; then
     TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 
+ANTHOS_ADMIN_WS_NODE=""
+if [ -n "$ANTHOS_ADMIN_WS_NODE" ]; then
+    ANTHOS_ADMIN_WS_NODE="${ANTHOS_ADMIN_WS_NODE}"
+fi
+ANTHOS_INST_PATH=""
+if [ -n "$ANTHOS_INST_PATH" ]; then
+    ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
+fi
+
 for i in $@
 do
 case $i in
@@ -482,6 +491,8 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
+            "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
+            "--anthos-inst-path=$ANTHOS_INST_PATH",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
@@ -634,6 +645,10 @@ spec:
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES
       value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
+    - name: TARGET_PXBACKUP_VERSION
+      value: "${TARGET_PXBACKUP_VERSION}"
+    - name: TARGET_STORK_VERSION
+      value: "${TARGET_STORK_VERSION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

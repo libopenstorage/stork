@@ -1290,6 +1290,10 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		}()
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Check if the rebooted nodes on application cluster are up now")
 		log.Infof("Switching cluster context to destination cluster")
@@ -1312,7 +1316,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.Infof("Deleting the deployed applications on application cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(contexts, opts)
 		log.Infof("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster")

@@ -1,11 +1,11 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // ServiceAccount struct
@@ -18,14 +18,11 @@ func (sa *ServiceAccount) ListServiceAccounts(tenantID string) ([]pds.ModelsServ
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saModels, res, err := saClient.ApiTenantsIdServiceAccountsGet(ctx, tenantID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdServiceAccountsGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdServiceAccountsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return saModels.GetData(), nil
 }
@@ -35,14 +32,11 @@ func (sa *ServiceAccount) GetServiceAccount(serviceAccountID string) (*pds.Contr
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saModel, res, err := saClient.ApiServiceAccountsIdGet(ctx, serviceAccountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiServiceAccountsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiServiceAccountsIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return saModel, nil
 }
@@ -53,15 +47,11 @@ func (sa *ServiceAccount) CreateServiceAccountToken(tenantID string, name string
 	createRequest := pds.ControllersCreateServiceAccountRequest{Name: &name}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saModel, res, err := saClient.ApiTenantsIdServiceAccountsPost(ctx, tenantID).Body(createRequest).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiServiceAccountsIdTokenGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdServiceAccountsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return saModel, nil
 }
@@ -71,15 +61,11 @@ func (sa *ServiceAccount) GetServiceAccountToken(serviceAccountID string) (*pds.
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saModel, res, err := saClient.ApiServiceAccountsIdTokenGet(ctx, serviceAccountID).Execute()
-
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiServiceAccountsIdTokenGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiServiceAccountsIdTokenGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return saModel, nil
 }
@@ -89,14 +75,11 @@ func (sa *ServiceAccount) DeleteServiceAccount(serviceAccountID string) (*status
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	res, err := saClient.ApiServiceAccountsIdDelete(ctx, serviceAccountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiServiceAccountsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-		return nil, err
+		return nil, fmt.Errorf("Error when calling `ApiServiceAccountsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }

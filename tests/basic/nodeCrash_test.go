@@ -36,7 +36,7 @@ var _ = Describe("{CrashOneNode}", func() {
 		stepLog = "get all nodes and crash one by one"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodesToCrash := node.GetWorkerNodes()
+			nodesToCrash := node.GetStorageDriverNodes()
 
 			// Crash node and check driver status
 			stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)

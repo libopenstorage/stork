@@ -94,6 +94,7 @@ var _ = Describe("{Longevity}", func() {
 		ConfluentAsyncDR:       TriggerConfluentAsyncDR,
 		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
 		AutoFsTrimAsyncDR:      TriggerAutoFsTrimAsyncDR,
+		IopsBwAsyncDR:          TriggerIopsBwAsyncDR,
 		StorkApplicationBackup: TriggerStorkApplicationBackup,
 		StorkAppBkpVolResize:   TriggerStorkAppBkpVolResize,
 		StorkAppBkpHaUpdate:    TriggerStorkAppBkpHaUpdate,
@@ -522,7 +523,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	topologyGroups := len(topologyLabels)
 
 	// Adding the labels on node.
-	for nodeIdx, n := range node.GetWorkerNodes() {
+	for nodeIdx, n := range node.GetStorageDriverNodes() {
 		labelIdx := int32(nodeIdx % topologyGroups)
 		for key, value := range topologyLabels[labelIdx] {
 			if err = Inst().S.AddLabelOnNode(n, key, value); err != nil {
@@ -551,7 +552,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	// Wait for PX pods to be up
 	log.Info("Waiting for Volume Driver to be up and running")
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if err := Inst().V.WaitForPxPodsToBeUp(n); err != nil {
 			return nil, fmt.Errorf("PX pod not coming up in a node [%s]. Error:[%v]", n.Name, err)
 		}
@@ -626,6 +627,7 @@ func populateIntervals() {
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrimAsyncDR] = make(map[int]time.Duration)
+	triggerInterval[IopsBwAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[ConfluentAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
@@ -792,6 +794,17 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrimAsyncDR][3] = 21 * baseInterval
 	triggerInterval[AutoFsTrimAsyncDR][2] = 24 * baseInterval
 	triggerInterval[AutoFsTrimAsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[IopsBwAsyncDR][10] = 1 * baseInterval
+	triggerInterval[IopsBwAsyncDR][9] = 3 * baseInterval
+	triggerInterval[IopsBwAsyncDR][8] = 6 * baseInterval
+	triggerInterval[IopsBwAsyncDR][7] = 9 * baseInterval
+	triggerInterval[IopsBwAsyncDR][6] = 12 * baseInterval
+	triggerInterval[IopsBwAsyncDR][5] = 15 * baseInterval
+	triggerInterval[IopsBwAsyncDR][4] = 18 * baseInterval
+	triggerInterval[IopsBwAsyncDR][3] = 21 * baseInterval
+	triggerInterval[IopsBwAsyncDR][2] = 24 * baseInterval
+	triggerInterval[IopsBwAsyncDR][1] = 27 * baseInterval
 
 	triggerInterval[ConfluentAsyncDR][10] = 1 * baseInterval
 	triggerInterval[ConfluentAsyncDR][9] = 3 * baseInterval
@@ -1350,6 +1363,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[AutoFsTrimAsyncDR][0] = 0
+	triggerInterval[IopsBwAsyncDR][0] = 0
 	triggerInterval[ConfluentAsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[StorkApplicationBackup][0] = 0

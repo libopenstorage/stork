@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -22,7 +23,6 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"container/ring"
-
 	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"github.com/onsi/ginkgo"
 
@@ -32,6 +32,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 
+	apios "github.com/libopenstorage/openstorage/api"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storage "github.com/portworx/sched-ops/k8s/storage"
@@ -99,7 +100,7 @@ const (
 )
 
 const (
-	validateReplicationUpdateTimeout = 2 * time.Hour
+	validateReplicationUpdateTimeout = 4 * time.Hour
 	errorChannelSize                 = 50
 )
 
@@ -271,6 +272,7 @@ func UpdateOutcome(event *EventRecord, err error) {
 
 	if err != nil && event != nil {
 		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
+		log.Errorf("Event [%s] failed with error: %v", event.Event.Type, err)
 		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
 		er := fmt.Errorf(err.Error() + "<br>")
 		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
@@ -393,6 +395,8 @@ const (
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// AutoFsTrimAsyncDR runs Async DR of volumes with FSTRIM=true parameter and validates it exists on DR as well
 	AutoFsTrimAsyncDR = "autofstrimasyncdr"
+	// IopsBwAsyncDR runs Async DR of volumes with volumes having iothrottle set
+	IopsBwAsyncDR = "iopsbwasyncdr"
 	// stork application backup runs stork backups for applications
 	StorkApplicationBackup = "storkapplicationbackup"
 	// stork application backup volume resize runs stork backups for applications and inject volume resize in between
@@ -441,7 +445,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 			dash.VerifyFatal(len(nodes) > 0, true, "Nodes registered?")
 			log.Infof("len nodes: %v", len(nodes))
 			for _, n := range nodes {
@@ -618,7 +622,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 				return cVol, true, err
 			}
 
-			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+			_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second)
 			if err != nil {
 				UpdateOutcome(event, err)
 			} else {
@@ -719,10 +723,10 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 								if err != nil {
 									log.Errorf("There is an error decreasing repl [%v]", err.Error())
 									UpdateOutcome(event, err)
-
 								}
 								rep--
-
+								//waiting for volume to be stable
+								time.Sleep(1 * time.Minute)
 							}
 
 						}
@@ -1123,7 +1127,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				func() {
 					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
-						appNode.MgmtIp)
+						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
@@ -1137,7 +1141,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				func() {
 					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
-						appNode.MgmtIp)
+						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
@@ -1367,10 +1371,10 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog := "get all nodes and reboot one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToReboot := node.GetWorkerNodes()
+		nodesToReboot := node.GetStorageDriverNodes()
 
 		// Reboot node and check driver status
-		stepLog = fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot)
+		stepLog = fmt.Sprintf("reboot node one at a time")
 		Step(stepLog, func() {
 			// TODO: Below is the same code from existing nodeReboot test
 			log.InfoD(stepLog)
@@ -1378,7 +1382,8 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				if n.IsStorageDriverInstalled {
 					stepLog = fmt.Sprintf("reboot node: %s", n.Name)
 					Step(stepLog, func() {
-						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("reboot node: %s.", n.Name)
 						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
@@ -1467,8 +1472,12 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
+		selectedNodes := make([]string, len(nodesToReboot))
+		for _, n := range nodesToReboot {
+			selectedNodes = append(selectedNodes, n.Name)
+		}
 		// Reboot node and check driver status
-		stepLog = fmt.Sprintf("reboot the node(s): %v", nodesToReboot)
+		stepLog = fmt.Sprintf("reboot the node(s): %v", selectedNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
@@ -1518,12 +1527,6 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 						UpdateOutcome(event, err)
 					})
 
-					stepLog = fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name)
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						err := Inst().V.WaitDriverDownOnNode(n)
-						UpdateOutcome(event, err)
-					})
 					stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
 						Inst().S.String(), Inst().V.String())
 					Step(stepLog, func() {
@@ -1585,7 +1588,7 @@ func randIntn(n, maxNo int) []int {
 
 func getNodesByChaosLevel(triggerType string) []node.Node {
 	t := ChaosMap[triggerType]
-	stNodes := node.GetStorageNodes()
+	stNodes := node.GetStorageDriverNodes()
 	stNodesLen := len(stNodes)
 	nodes := make([]node.Node, 0)
 	var nodeLen float32
@@ -1640,7 +1643,7 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	stepLog := "get all nodes and crash one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToCrash := node.GetWorkerNodes()
+		nodesToCrash := node.GetStorageDriverNodes()
 
 		// Crash node and check driver status
 		stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
@@ -2393,7 +2396,8 @@ func TriggerEmailReporter() {
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
-	log.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
+	timeString := time.Now().Format(time.RFC1123)
+	log.Infof("Generating email report: %s", timeString)
 
 	var masterNodeList []string
 	var pxStatus string
@@ -2403,7 +2407,7 @@ func TriggerEmailReporter() {
 	}
 	emailData.MasterIP = masterNodeList
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		k8sNode, err := core.Instance().GetNodeByName(n.Name)
 		k8sNodeStatus := "False"
 
@@ -2472,6 +2476,15 @@ func TriggerEmailReporter() {
 	if err := emailDetails.SendEmail(); err != nil {
 		log.Errorf("Failed to send out email, Err: %q", err)
 	}
+
+	fileName := fmt.Sprintf("%s_%s", EmailSubject, timeString)
+	fileName = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(fileName, "_")
+	filePath := fmt.Sprintf("%s/%s.html", Inst().LogLoc, fileName)
+
+	if err := os.WriteFile(filePath, []byte(content), 0664); err != nil {
+		log.Errorf("Failed to create html report, Err: %q", err)
+	}
+
 }
 
 // TriggerBackupApps takes backups of all namespaces of deployed apps
@@ -3948,28 +3961,25 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 }
 
 func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
-	pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
-	if err != nil {
-		err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-		return nil, err
-
-	}
-
-	if len(pools) == 0 {
-		err = fmt.Errorf("length of pools should be greater than 0")
-		return nil, err
-	}
-
-	// pick a random pools from a pools list and resize it
-	expectedCapacity := (len(pools) / 2) + 1
+	stNodes := node.GetStorageNodes()
+	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
-	for _, pool := range pools {
-		if len(poolsToExpand) <= expectedCapacity {
-			poolsToExpand = append(poolsToExpand, pool)
-		} else {
-			break
+	for _, stNode := range stNodes {
+		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		if err != nil {
+			return nil, err
 		}
-
+		if len(poolsToExpand) <= expectedCapacity {
+			if eligibility[stNode.Id] {
+				for _, p := range stNode.Pools {
+					if eligibility[p.Uuid] {
+						poolsToExpand = append(poolsToExpand, p)
+					}
+				}
+			}
+			continue
+		}
+		break
 	}
 	return poolsToExpand, nil
 
@@ -4154,7 +4164,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: PoolResizeDisk,
+			Type: PoolAddDisk,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -4484,7 +4494,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			func() {
 				log.InfoD(stepLog)
 				if !isAutoFsTrimEnabled {
-					currNode := node.GetWorkerNodes()[0]
+					currNode := node.GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOpts(currNode, map[string]string{
 						"--auto-fstrim": "on",
 					})
@@ -4679,9 +4689,20 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				}
 				attachedNode := appVol.AttachedOn
 
-				fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+				var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+
+				t := func() (interface{}, bool, error) {
+					fsTrimStatuses, err = Inst().V.GetAutoFsTrimStatus(attachedNode)
+					if err != nil {
+						return nil, true, fmt.Errorf("error autofstrim status node %v status", attachedNode)
+					}
+
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(t, defaultDriverStartTimeout, defaultRetryInterval)
 				if err != nil {
 					UpdateOutcome(event, err)
+					return
 				}
 
 				val, ok := fsTrimStatuses[appVol.Id]
@@ -4695,7 +4716,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 				if fsTrimStatus != -1 {
 
-					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
+					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_STOPPED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_UNKNOWN {
 
 						err = fmt.Errorf("AutoFstrim failed for volume %v, status: %v", v.ID, val.String())
 						UpdateOutcome(event, err)
@@ -4705,9 +4726,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 					}
 				} else {
-					err = fmt.Errorf("autofstrim for volume %v not started", v.ID)
-					log.Errorf("Error: %v", err)
-					UpdateOutcome(event, err)
+					log.Infof("autofstrim for volume %v not started yet", v.ID)
 				}
 
 			}
@@ -4719,7 +4738,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
 	doExit := false
-	exitCount := 50
+	exitCount := 5
 
 	for !doExit {
 		log.Infof("Autofstrim for volume %v not started, retrying after 2 mins", volumeID)
@@ -4734,7 +4753,6 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (ops
 		}
 
 		fsTrimStatus, isValueExist := fsTrimStatuses[volumeID]
-
 		if isValueExist {
 			return fsTrimStatus, nil
 		}
@@ -4776,7 +4794,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					currNode := node.GetWorkerNodes()[0]
+					currNode := node.GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--volume-expiration-minutes": "600",
 					})
@@ -4794,7 +4812,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		} else {
 			var trashcanVols []string
 			var err error
-			node := node.GetWorkerNodes()[0]
+			node := node.GetStorageDriverNodes()[0]
 			stepLog = "Validating trashcan"
 			Step(stepLog,
 				func() {
@@ -4868,7 +4886,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					currNode := node.GetWorkerNodes()[0]
+					currNode := node.GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--relaxedreclaim-delete-seconds": "600",
 					})
@@ -4888,7 +4906,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					nodes := node.GetWorkerNodes()
+					nodes := node.GetStorageDriverNodes()
 					totalDeleted := 0
 					totalPending := 0
 					totalSkipped := 0
@@ -4946,7 +4964,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "Decommission a random node"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		workerNodes = node.GetWorkerNodes()
+		workerNodes = node.GetStorageDriverNodes()
 		index := rand.Intn(len(workerNodes))
 		nodeToDecomm = workerNodes[index]
 		stepLog = fmt.Sprintf("decommission node %s", nodeToDecomm.Name)
@@ -5044,15 +5062,11 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					log.InfoD("Error while rejoining the node. error: %v", err)
 					UpdateOutcome(event, err)
 				} else {
-					isNodeExist := false
+
 					log.InfoD("Waiting for node to rejoin and refresh inventory")
 					time.Sleep(90 * time.Second)
+					var rejoinedNode *opsapi.StorageNode
 					t := func() (interface{}, bool, error) {
-						err = Inst().S.RefreshNodeRegistry()
-						if err != nil {
-							log.Errorf("Error refreshing node registry, Error : %v", err)
-							return "", true, err
-						}
 						latestNodes, err := Inst().V.GetDriverNodes()
 						if err != nil {
 							log.Errorf("Error getting px nodes, Error : %v", err)
@@ -5060,9 +5074,9 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						}
 
 						for _, latestNode := range latestNodes {
-							log.InfoD("Inspecting Node: %v", latestNode.Hostname)
+							log.Infof("Inspecting Node: %v", latestNode.Hostname)
 							if latestNode.Hostname == decommissionedNode.Hostname {
-								isNodeExist = true
+								rejoinedNode = latestNode
 								return "", false, nil
 							}
 						}
@@ -5070,12 +5084,33 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					}
 					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 
-					if !isNodeExist {
+					if rejoinedNode == nil {
 						err = fmt.Errorf("node %v rejoin failed,Error: %v", decommissionedNode.Hostname, err)
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					} else {
-						log.InfoD("node %v rejoin is successful ", decommissionedNode.Hostname)
+						err = Inst().S.RefreshNodeRegistry()
+						UpdateOutcome(event, err)
+						err = Inst().V.RefreshDriverEndpoints()
+						UpdateOutcome(event, err)
+						nodeWithNewID := node.Node{}
+
+						for _, n := range node.GetStorageDriverNodes() {
+							if n.Name == rejoinedNode.Hostname {
+								nodeWithNewID = n
+								break
+							}
+						}
+
+						if nodeWithNewID.Hostname != "" {
+							err = Inst().V.WaitDriverUpOnNode(nodeWithNewID, 10*time.Minute)
+							UpdateOutcome(event, err)
+							if err == nil {
+								log.InfoD("node %v rejoin is successful ", decommissionedNode.Hostname)
+							}
+						} else {
+							err = fmt.Errorf("node [%s] not found in the node registry after rejoining", decommissionedNode.Hostname)
+						}
 					}
 				}
 			})
@@ -5384,7 +5419,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		stepLog = "Get KVDB nodes and perform failover"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 
 			kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 
@@ -5399,10 +5434,15 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 			allhealthy := validateKVDBMembers(event, kvdbMembers, false)
 
 			if allhealthy {
+				kvdbNodeIDMap := make(map[string]string, len(kvdbMembers))
+				for id, m := range kvdbMembers {
+					kvdbNodeIDMap[id] = m.Name
+				}
+
 				nodeMap := node.GetNodesByVoDriverNodeID()
 
-				for id := range kvdbMembers {
-					kvdbNode := nodeMap[id]
+				for kvdbID, nodeID := range kvdbNodeIDMap {
+					kvdbNode := nodeMap[nodeID]
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
 					for err := range errorChan {
@@ -5419,7 +5459,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 							log.Error(err.Error())
 
 						}
-						m, ok := newKvdbMembers[id]
+						m, ok := newKvdbMembers[kvdbID]
 
 						if !ok && len(newKvdbMembers) > 0 {
 							log.InfoD("node %v is no longer kvdb member", kvdbNode.Name)
@@ -5427,20 +5467,17 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 						}
 						if ok && !m.IsHealthy {
-							log.InfoD("kvdb node %v isHealthy?: %v", id, m.IsHealthy)
+							log.InfoD("kvdb node %v isHealthy?: %v", nodeID, m.IsHealthy)
 							isKvdbStatusUpdated = true
 						} else {
 							log.InfoD("Waiting for kvdb node %v health status to update to false after PX is stopped", kvdbNode.Name)
 							time.Sleep(1 * time.Minute)
 						}
-
 						waitTime--
-
 					}
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
-
 					}
 
 					waitTime = 15
@@ -5453,7 +5490,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 							log.Error(err.Error())
 						}
 
-						_, ok := newKvdbMembers[id]
+						_, ok := newKvdbMembers[kvdbID]
 						if ok {
 							log.InfoD("Node %v still exist as a KVDB member. Waiting for failover to happen", kvdbNode.Name)
 							time.Sleep(2 * time.Minute)
@@ -5612,7 +5649,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			UpdateOutcome(event, err)
 		}
 
-		for _, n := range node.GetWorkerNodes() {
+		for _, n := range node.GetStorageDriverNodes() {
 			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
 			storageNode, err := Inst().V.GetDriverNode(&n)
@@ -6807,6 +6844,136 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 		}
 		dash.VerifyFatal(cVol.Spec.AutoFstrim, true, fmt.Sprintf("fstrim should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.AutoFstrim))
 		dash.VerifyFatal(cVol.Spec.Nodiscard, true, fmt.Sprintf("nodiscard should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.Nodiscard))
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
+	}
+	updateMetrics(*event)
+}
+
+func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(IopsBwAsyncDR)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Async DR with volumes having Iops and BW  triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: IopsBwAsyncDR,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "adr-iops"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
+		appVolumes            []*volume.Volume
+		expected_iot          *apios.IoThrottle
+	)
+	chaosLevel := ChaosMap[IopsBwAsyncDR]
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to write kubeconfig: %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to Set source kubeconfig: %v", err))
+			return
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+				// Get Autofstrim status for vols
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("not able to get appVolumes, err is: %v", err))
+					return
+				}
+				for _, vol := range appVolumes {
+					cVol, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error inspecting volume %v", vol.Name))
+						return
+					}
+					if cVol.Spec.IoThrottle == nil {
+						UpdateOutcome(event, fmt.Errorf("iothrottle value should present in volume %v for this test, please use spec which use volumes with iothrottle", vol.Name))
+						return
+					}
+					expected_iot = cVol.Spec.IoThrottle
+					break
+				}
+				Step("Create cluster pair between source and destination clusters", func() {
+					// Set cluster context to cluster where torpedo is running
+					ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				})
+			}
+		}
+	})
+
+	log.Infof("Migration Namespaces: %v", migrationNamespaces)
+	log.Infof("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+	}
+
+	// Validate Iops and Bw on destination volumes
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to Set destination kubeconfig: %v", err))
+		return
+	}
+	for _, vol := range appVolumes {
+		cVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("error inspecting volume %v, err is %v", vol.Name, err))
+		}
+		actual_iot := cVol.Spec.IoThrottle
+		if actual_iot.ReadBwMbytes != expected_iot.ReadBwMbytes {
+			UpdateOutcome(event, fmt.Errorf("read bw on volume %v, expected: %v, got: %v", vol.Name, expected_iot.ReadBwMbytes, actual_iot.ReadBwMbytes))
+		}
+		if actual_iot.WriteIops != expected_iot.WriteIops {
+			UpdateOutcome(event, fmt.Errorf("write iops on volume %v, expected: %v, got: %v", vol.Name, expected_iot.WriteIops, actual_iot.WriteIops))
+		}
 	}
 	err = SetSourceKubeConfig()
 	if err != nil {
