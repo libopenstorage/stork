@@ -742,6 +742,25 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
+// UpdateNodeCreds update username and ssh key path
+func (s *SSH) UpdateNodeCreds(username string, keyPath string) error {
+	s.username = username
+	s.keyPath = keyPath
+	pubkey, err := getKeyFile(s.keyPath)
+	if err != nil {
+		return fmt.Errorf("error getting public keyPath from keyfile")
+	}
+	s.sshConfig = &ssh_pkg.ClientConfig{
+		User: username,
+		Auth: []ssh_pkg.AuthMethod{
+			ssh_pkg.PublicKeys(pubkey),
+		},
+		HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
+		Timeout:         time.Second * 5,
+	}
+	return nil
+}
+
 // GetBlockDrives returns the block drives on the node
 func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
