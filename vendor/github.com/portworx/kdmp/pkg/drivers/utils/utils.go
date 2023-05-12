@@ -842,3 +842,37 @@ func GetNodeAffinityFromDeployment(name, namespace string) (*corev1.NodeAffinity
 	}
 	return deploy.Spec.Template.Spec.Affinity.NodeAffinity, nil
 }
+
+// IsJobPodMountFailed - checks for mount failure in a Job pod
+func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
+	fn := "IsJobPodMountFailed"
+
+	pod, err := core.Instance().GetPodsByOwner(job.UID, namespace)
+	if err != nil {
+		errMsg := fmt.Sprintf("Getting pod of job [%s/%s] failed: %v", namespace, job.Name, err)
+		logrus.Debugf("%s: %v", fn, errMsg)
+		return false
+	}
+
+	if len(pod) > 0 && len(pod[0].Status.ContainerStatuses) != 0 {
+		containerStatus := pod[0].Status.ContainerStatuses[0]
+		if containerStatus.State.Waiting != nil &&
+			containerStatus.State.Waiting.Reason == "ContainerCreating" {
+			opts := metav1.ListOptions{
+				FieldSelector: "involvedObject.name=" + pod[0].Name,
+			}
+			events, err := core.Instance().ListEvents(namespace, opts)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to fetch events for pod [%s/%s]: %v", namespace, pod[0].Name, err)
+				logrus.Debugf("%s: %v", fn, errMsg)
+				return false
+			}
+			for _, event := range events.Items {
+				if event.Reason == "FailedMount" && event.Count > 0 {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
