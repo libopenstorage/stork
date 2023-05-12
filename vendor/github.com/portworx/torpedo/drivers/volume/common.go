@@ -643,7 +643,7 @@ func (d *DefaultDriver) ValidateStoragePools() error {
 }
 
 // ExpandPool resizes a pool of a given ID
-func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ExpandPool()",
@@ -651,7 +651,7 @@ func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_
 }
 
 // ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
-func (d *DefaultDriver) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *DefaultDriver) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ExpandPoolUsingPxctlCmd()",
@@ -813,11 +813,27 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	}
 }
 
-// ValidateMountOptions for pure volumes
+// UpdateStickyFlag update sticky flag on volume
+func (d *DefaultDriver) UpdateStickyFlag(volumeName, stickyOption string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateStickyFlag",
+	}
+}
+
+// ValidatePureFaFbMountOptions Validates MountOptions for pure volumes
 func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateMountOptions",
+	}
+}
+
+// ValidatePureFaCreateOptions validates createoptions for pure volumes
+func (d *DefaultDriver) ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateOptions",
 	}
 }
 
