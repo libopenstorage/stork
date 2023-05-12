@@ -2269,6 +2269,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				ss.Kind = "StatefulSet"
+
 				return ss, nil
 			}
 		}
@@ -2280,6 +2285,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		log.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		ss.Kind = "StatefulSet"
+
 		return ss, nil
 
 	} else if obj, ok := spec.(*corev1.Service); ok {
@@ -2400,6 +2410,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if configMap, err = k8sCore.GetConfigMap(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				configMap.Kind = "ConfigMap"
+
 				return configMap, nil
 			}
 		}
@@ -2411,6 +2426,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		log.Infof("[%v] Created Config Map: %v", app.Key, configMap.Name)
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		configMap.Kind = "ConfigMap"
+
 		return configMap, nil
 	} else if obj, ok := spec.(*v1.Endpoints); ok {
 		obj.Namespace = ns.Name
