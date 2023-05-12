@@ -868,6 +868,50 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
+// ScheduleWithCustomAppSpecs Schedules the application with custom app specs
+func (k *K8s) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+	var contexts []*scheduler.Context
+	oldOptionsNamespace := options.Namespace
+	for _, app := range apps {
+
+		appNamespace := app.GetID(instanceID)
+		if options.Namespace != "" {
+			appNamespace = options.Namespace
+		} else {
+			options.Namespace = appNamespace
+		}
+		if len(options.TopologyLabels) > 1 {
+			rotateTopologyArray(&options)
+		}
+
+		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		specObjects = append(specObjects, helmSpecObjects...)
+		ctx := &scheduler.Context{
+			UID: instanceID,
+			App: &spec.AppSpec{
+				Key:      app.Key,
+				SpecList: specObjects,
+				Enabled:  app.Enabled,
+			},
+			ScheduleOptions: options,
+		}
+
+		contexts = append(contexts, ctx)
+		options.Namespace = oldOptionsNamespace
+	}
+
+	return contexts, nil
+}
+
 // CreateSpecObjects Create application
 func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
 	var specObjects []interface{}
