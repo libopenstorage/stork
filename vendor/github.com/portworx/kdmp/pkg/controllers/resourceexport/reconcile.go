@@ -157,7 +157,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			updateData := updateResourceExportFields{
 				stage:  kdmpapi.ResourceExportStageFinal,
 				status: kdmpapi.ResourceExportStatusFailed,
-				reason: fmt.Sprintf("failed to create ResourceBackup CR [%v/%v]", resourceExport.Namespace, resourceExport.Name),
+				reason: progress.Reason,
 			}
 			if len(progress.Reason) == 0 {
 				// As we couldn't get actual reason from executor
