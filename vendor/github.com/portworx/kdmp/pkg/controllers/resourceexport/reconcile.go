@@ -26,16 +26,20 @@ import (
 // updateResourceExportFields when an update needs to be done to ResourceExport
 // user can choose which field to be updated and pass the same to updateStatus()
 type updateResourceExportFields struct {
-	stage               kdmpapi.ResourceExportStage
-	status              kdmpapi.ResourceExportStatus
-	reason              string
-	id                  string
-	resources           []*kdmpapi.ResourceRestoreResourceInfo
-	RestoreCompleteList []*storkapi.ApplicationRestoreVolumeInfo
+	stage                 kdmpapi.ResourceExportStage
+	status                kdmpapi.ResourceExportStatus
+	reason                string
+	id                    string
+	resources             []*kdmpapi.ResourceRestoreResourceInfo
+	RestoreCompleteList   []*storkapi.ApplicationRestoreVolumeInfo
+	TotalResourceCount    int64
+	RestoredResourceCount int64
+	ResourceApplyStage    kdmpapi.ResourceExportResourceApplyPhase
+	LargeResourceEnabled  bool
 }
 
 func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (bool, error) {
-	funct := "re.process"
+	funct := "resourceExport.process"
 	if in == nil {
 		return false, nil
 	}
@@ -141,7 +145,6 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		}
 		return false, c.updateStatus(resourceExport, updateData)
 	case kdmpapi.ResourceExportStageInProgress:
-
 		// Read the job status and move the reconciler to next state
 		progress, err := driver.JobStatus(resourceExport.Status.TransferID)
 		logrus.Tracef("%s job progress: %v", funct, progress)
@@ -172,6 +175,18 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 				status: kdmpapi.ResourceExportStatusInProgress,
 				reason: "RestoreExport job in progress",
 			}
+			// When Resource-backup(RB) CR is In-PROGRESS, it is returned here till job is completed
+			// Lets update the Resource-Export(RE) CR with latests data here.
+			// Get the RB CR for writing, ignore if not created yet
+			rb, err := kdmp.Instance().GetResourceBackup(resourceExport.Name, resourceExport.Namespace)
+			if err != nil {
+				return true, c.updateStatus(resourceExport, updateData)
+			}
+			if rb.Status.ResourceApplyStage != kdmpapi.ResourceApplyStatus("") {
+				updateData.TotalResourceCount = rb.Status.TotalResourceCount
+				updateData.RestoredResourceCount = rb.Status.RestoredResourceCount
+				updateData.ResourceApplyStage = kdmpapi.ResourceExportResourceApplyPhase(rb.Status.ResourceApplyStage)
+			}
 			return true, c.updateStatus(resourceExport, updateData)
 		}
 
@@ -186,12 +201,11 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 			}
 			return false, c.updateStatus(resourceExport, updateData)
 		}
-
 		switch progress.State {
 		case drivers.JobStateFailed:
 			errMsg := fmt.Sprintf("%s transfer job failed: %s", resourceExport.Status.TransferID, progress.Reason)
 			// If a job has failed it means it has tried all possible retires and given up.
-			// In such a scenario we need to fail DE CR and move to clean up stage
+			// In such a scenario we need to fail RE CR and move to clean up stage
 			updateData := updateResourceExportFields{
 				stage:     kdmpapi.ResourceExportStageFinal,
 				status:    kdmpapi.ResourceExportStatusFailed,
@@ -202,13 +216,16 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		case drivers.JobStateCompleted:
 			// Go for clean up with success state
 			updateData := updateResourceExportFields{
-				stage:               kdmpapi.ResourceExportStageFinal,
-				status:              kdmpapi.ResourceExportStatusSuccessful,
-				reason:              "Job successful",
-				resources:           rb.Status.Resources,
-				RestoreCompleteList: rb.RestoreCompleteList,
+				stage:                 kdmpapi.ResourceExportStageFinal,
+				status:                kdmpapi.ResourceExportStatusSuccessful,
+				reason:                "Job successful",
+				resources:             rb.Status.Resources,
+				RestoreCompleteList:   rb.RestoreCompleteList,
+				TotalResourceCount:    rb.Status.TotalResourceCount,
+				RestoredResourceCount: rb.Status.RestoredResourceCount,
+				ResourceApplyStage:    kdmpapi.ResourceExportResourceApplyPhase(rb.Status.ResourceApplyStage),
+				LargeResourceEnabled:  rb.Status.LargeResourceEnabled,
 			}
-
 			return true, c.updateStatus(resourceExport, updateData)
 		}
 	case kdmpapi.ResourceExportStageFinal:
@@ -287,8 +304,25 @@ func (c *Controller) updateStatus(re *kdmpapi.ResourceExport, data updateResourc
 		if len(data.resources) != 0 {
 			re.Status.Resources = data.resources
 		}
+
 		if len(data.RestoreCompleteList) != 0 {
 			re.RestoreCompleteList = data.RestoreCompleteList
+		}
+
+		if data.TotalResourceCount != 0 {
+			re.Status.TotalResourceCount = data.TotalResourceCount
+		}
+
+		if data.RestoredResourceCount != 0 {
+			re.Status.RestoredResourceCount = data.RestoredResourceCount
+		}
+
+		if data.ResourceApplyStage != "" {
+			re.Status.ResourceExportResourceApplyStage = data.ResourceApplyStage
+		}
+
+		if data.LargeResourceEnabled {
+			re.Status.LargeResourceEnabled = true
 		}
 
 		updErr = c.client.Update(context.TODO(), re)
