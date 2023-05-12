@@ -496,31 +496,49 @@ func WriteVolumeBackupStatus(
 
 // UpdateStatusInResourceBackup -- Updating resourceBackup status
 func UpdateStatusInResourceBackup(
-	status kdmpapi.ResourceBackupStatus,
-	reason string,
-	progress float64,
+	newRbStatus kdmpapi.ResourceBackupProgressStatus,
 	rbName string,
 	rbNamespace string,
-) error {
+) (*kdmpapi.ResourceBackup, error) {
+	var rb *kdmpapi.ResourceBackup
+	var err error
 	for i := 0; i < maxRetry; i++ {
-		rb, err := kdmpschedops.Instance().GetResourceBackup(rbName, rbNamespace)
+		rb, err = kdmpschedops.Instance().GetResourceBackup(rbName, rbNamespace)
 		if err != nil {
 			errMsg := fmt.Sprintf("error reading ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
 			time.Sleep(retrySleep)
-			return fmt.Errorf(errMsg)
+			return nil, fmt.Errorf(errMsg)
 		}
-		rb.Status.Status = status
-		rb.Status.Reason = reason
-		rb.Status.ProgressPercentage = progress
-		_, err = kdmpschedops.Instance().UpdateResourceBackup(rb)
+		if !newRbStatus.LargeResourceEnabled {
+			rb.Status.LargeResourceEnabled = newRbStatus.LargeResourceEnabled
+		}
+		if newRbStatus.Status != "" {
+			rb.Status.Status = newRbStatus.Status
+		}
+		if newRbStatus.Reason != "" {
+			rb.Status.Reason = newRbStatus.Reason
+		}
+		if newRbStatus.ProgressPercentage != 0 {
+			rb.Status.ProgressPercentage = newRbStatus.ProgressPercentage
+		}
+		if newRbStatus.RestoredResourceCount != 0 {
+			rb.Status.RestoredResourceCount = newRbStatus.RestoredResourceCount
+		}
+		if newRbStatus.ResourceApplyStage != "" {
+			rb.Status.ResourceApplyStage = newRbStatus.ResourceApplyStage
+		}
+		if newRbStatus.TotalResourceCount != 0 {
+			rb.Status.TotalResourceCount = newRbStatus.TotalResourceCount
+		}
+		rb, err = kdmpschedops.Instance().UpdateResourceBackup(rb)
 		if err != nil {
 			errMsg := fmt.Sprintf("error updating ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
 			time.Sleep(retrySleep)
-			return fmt.Errorf(errMsg)
+			return nil, fmt.Errorf(errMsg)
 		}
 	}
 
-	return nil
+	return rb, nil
 }
 
 // UpdateResourceBackupStatus  -- Updating resourceBackup status
