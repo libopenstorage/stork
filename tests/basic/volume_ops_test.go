@@ -427,7 +427,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
-	var totalVolumesToCreate = 20
+	var totalVolumesToCreate = 700
 	var newVolumeIDs []string
 	var attachedVolumes []string
 
@@ -456,9 +456,9 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 				case <-done:
 					return
 				default:
-					if len(newVolumeIDs) > 5 {
+					if len(newVolumeIDs) > 100 {
 						for _, each := range newVolumeIDs {
-							if attachedCount <= 10 {
+							if attachedCount <= 100 {
 								_, err := Inst().V.AttachVolume(each)
 								log.FailOnError(err, "Attaching volume failed")
 								attachedCount += 1
@@ -481,6 +481,11 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		allVolumeIds, err := Inst().V.ListAllVolumes()
 		log.FailOnError(err, "failed to list all the volume")
 		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
+
+		if len(allVolumeIds) <= totalVolumesToCreate {
+			log.FailOnError(fmt.Errorf("exceeded total volume count limit.. exiting [%d]", len(allVolumeIds)),
+				"Total volume count exceeded ")
+		}
 
 		volumesToBeCreated := totalVolumesToCreate - len(allVolumeIds)
 		log.InfoD(fmt.Sprintf("Total number of new volumes to be created in the cluster [%v]", volumesToBeCreated))
