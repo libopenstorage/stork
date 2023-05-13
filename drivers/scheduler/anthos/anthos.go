@@ -22,60 +22,60 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type gcp struct {
+type Gcp struct {
 	ComponentAccessServiceAccountKeyPath string `yaml:"componentAccessServiceAccountKeyPath"`
 }
 
-type hostConfig struct {
-	ip      string   `yaml:"ip"`
-	gateway string   `yaml:"gateway"`
-	netmask string   `yaml:"netmask"`
-	dns     []string `yaml:"dns"`
+type HostConfig struct {
+	Ip      string   `yaml:"ip"`
+	Gateway string   `yaml:"gateway"`
+	Netmask string   `yaml:"netmask"`
+	Dns     []string `yaml:"dns"`
 }
 
 type Network struct {
-	ipAllocationMode string     `yaml:"ipAllocationMode"`
-	hostConfig       hostConfig `yaml:"hostconfig"`
+	IpAllocationMode string     `yaml:"ipAllocationMode"`
+	HostConfig       HostConfig `yaml:"hostconfig"`
 }
 
 type Workstation struct {
-	cpus         int     `yaml:"cpus"`
-	diskGB       int     `yaml:"diskGB"`
-	dataDiskMB   int     `yaml:"dataDiskMB"`
-	dataDiskName string  `yaml:"dataDiskName"`
-	memoryMB     int     `yaml:"memoryMB"`
-	name         string  `yaml:"name"`
-	network      Network `yaml:"network"`
-	ntpServer    string  `yaml:"ntpServer"`
-	proxyUrl     string  `yaml:"proxyUrl"`
+	Cpus         int     `yaml:"cpus"`
+	DiskGB       int     `yaml:"diskGB"`
+	DataDiskMB   int     `yaml:"dataDiskMB"`
+	DataDiskName string  `yaml:"dataDiskName"`
+	MemoryMB     int     `yaml:"memoryMB"`
+	Name         string  `yaml:"name"`
+	Network      Network `yaml:"network"`
+	NtpServer    string  `yaml:"ntpServer"`
+	ProxyUrl     string  `yaml:"proxyUrl"`
 }
 
 type FileRef struct {
-	entry string `yaml:"entry"`
-	path  string `yaml:"path"`
+	Entry string `yaml:"entry"`
+	Path  string `yaml:"path"`
 }
 
-type credentials struct {
-	address string  `yaml:"address"`
-	fileRef FileRef `yaml:"fileRef"`
+type Credentials struct {
+	Address string  `yaml:"address"`
+	FileRef FileRef `yaml:"fileRef"`
 }
 
-type VCenter struct {
-	caCertPath   string      `yaml:"caCertPath"`
-	cluster      string      `yaml:"cluster"`
-	credentials  credentials `yaml:"credentials"`
-	datacenter   string      `yaml:"datacenter"`
-	datastore    string      `yaml:"datastore"`
-	folder       string      `yaml:"folder"`
-	network      string      `yaml:"network"`
-	resourcePool string      `yaml:"resourcePool"`
+type vCenter struct {
+	CaCertPath   string      `yaml:"caCertPath"`
+	Cluster      string      `yaml:"cluster"`
+	Credentials  Credentials `yaml:"credentials"`
+	Datacenter   string      `yaml:"datacenter"`
+	Datastore    string      `yaml:"datastore"`
+	Folder       string      `yaml:"folder"`
+	Network      string      `yaml:"network"`
+	ResourcePool string      `yaml:"resourcePool"`
 }
 
 type AdminWorkstation struct {
-	adminWorkstation Workstation `yaml:"adminWorkstation"`
-	gcp              gcp         `yaml:"gcp"`
-	proxyUrl         string      `yaml:"proxyUrl"`
-	vCenter          VCenter     `yaml:"vCenter"`
+	AdminWorkstation Workstation `yaml:"adminWorkstation"`
+	Gcp              Gcp         `yaml:"gcp"`
+	ProxyUrl         string      `yaml:"proxyUrl"`
+	VCenter          vCenter     `yaml:"vCenter"`
 }
 
 const (
@@ -177,10 +177,13 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if err := anth.K8s.Init(schedOpts); err != nil {
 		return err
 	}
+	if err := anth.setUserNameAndKey(); err != nil {
+		return err
+	}
 	if err := anth.adminWsSSHInstance.Init(node.InitOptions{SpecDir: schedOpts.SpecDir}); err != nil {
 		return err
 	}
-	if err := anth.adminWsSSHInstance.UpdateNodeCreds(adminUserName, anth.adminWsKeyPath); err != nil {
+	if err := anth.unsetUserNameAndKey(); err != nil {
 		return err
 	}
 	if err := anth.getVersion(); err != nil {
@@ -191,10 +194,7 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 
 // execOnAdminWSNode execute command on admin workstation node
 func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
-	if err := os.Setenv("TORPEDO_SSH_KEY", anth.adminWsKeyPath); err != nil {
-		return "", err
-	}
-	if err := os.Setenv("TORPEDO_SSH_USER", adminUserName); err != nil {
+	if err := anth.setUserNameAndKey(); err != nil {
 		return "", err
 	}
 	var connectOpts = node.ConnectionOpts{
@@ -206,10 +206,7 @@ func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
 	if err != nil {
 		return out, err
 	}
-	if err := os.Unsetenv("TORPEDO_SSH_KEY"); err != nil {
-		return "", err
-	}
-	if err := os.Unsetenv("TORPEDO_SSH_USER"); err != nil {
+	if err := anth.unsetUserNameAndKey(); err != nil {
 		return "", err
 	}
 	return out, err
@@ -254,10 +251,10 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	}
 	timeTaken := time.Since(startTime)
 	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
-	if err := anth.RefreshNodeRegistry(); err != nil {
+	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 		return err
 	}
-	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
+	if err := anth.RefreshNodeRegistry(); err != nil {
 		return err
 	}
 	return nil
@@ -271,7 +268,7 @@ func (anth *anthos) invokeUpgradeAdminCluster(version string) error {
 		return err
 	}
 	timeTaken := time.Since(initTime)
-	log.Infof("Anthos upgrade took: %v time to complete upgrade from % to %s version",
+	log.Infof("Anthos upgrade took: %v time to complete upgrade from %s to %s version",
 		timeTaken, anth.version, version)
 	if err := anth.updateNodeInstance(); err != nil {
 		return err
@@ -409,14 +406,14 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 		anth.adminWsNode.UsableAddr = adminWsNewIp[0][1]
 		anth.instances[0].PublicIpAddress = adminWsNewIp[0][1]
 	}
-	if err := os.Setenv("TORPEDO_SSH_KEY", anth.adminWsKeyPath); err != nil {
+	if err := anth.setUserNameAndKey(); err != nil {
 		return err
 	}
 	err = anth.adminWsSSHInstance.TestConnection(*anth.adminWsNode, node.ConnectionOpts{
 		Timeout:         defaultTestConnectionTimeout,
 		TimeBeforeRetry: defaultWaitUpgradeRetry,
 	})
-	if err := os.Unsetenv("TORPEDO_SSH_KEY"); err != nil {
+	if err := anth.unsetUserNameAndKey(); err != nil {
 		return err
 	}
 	if err != nil {
@@ -455,6 +452,11 @@ func (anth *anthos) upgradeAdminCluster(version string) error {
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading admin cluster is failing: [%s]. Err: (%v)", out, err)
 	}
+	cmd = fmt.Sprintf("chown -R %s:%s /home/ubuntu/*", adminUserName, adminUserName)
+	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
+		return fmt.Errorf("updating file permission after upgrade is failing: [%s]. Err: (%v)", out, err)
+	}
+	log.Debug("Successfully upgraded the admin cluster")
 	return nil
 }
 
@@ -491,9 +493,9 @@ func (anth *anthos) updateAdminWorkstationNode() error {
 	if err != nil {
 		return err
 	}
-	admWSObj.gcp.ComponentAccessServiceAccountKeyPath = path.Join(anth.instPath, gcpAccessFile)
-	admWSObj.vCenter.credentials.fileRef.path = path.Join(anth.confPath, vcenterCredFile)
-	admWSObj.vCenter.caCertPath = path.Join(anth.confPath, vcenterCrtFile)
+	admWSObj.Gcp.ComponentAccessServiceAccountKeyPath = path.Join(anth.instPath, gcpAccessFile)
+	admWSObj.VCenter.Credentials.FileRef.Path = path.Join(anth.confPath, vcenterCredFile)
+	admWSObj.VCenter.CaCertPath = path.Join(anth.confPath, vcenterCrtFile)
 	out, err := yaml.Marshal(&admWSObj)
 	if err != nil {
 		return err
@@ -502,6 +504,28 @@ func (anth *anthos) updateAdminWorkstationNode() error {
 		return err
 	}
 	log.Debugf("[%s] file path successfully updated", adminWsConfigPath)
+	return nil
+}
+
+// setUserNameAndKey set torpedo username and keypath
+func (anth *anthos) setUserNameAndKey() error {
+	if err := os.Setenv("TORPEDO_SSH_KEY", anth.adminWsKeyPath); err != nil {
+		return err
+	}
+	if err := os.Setenv("TORPEDO_SSH_USER", adminUserName); err != nil {
+		return err
+	}
+	return nil
+}
+
+// unsetUserNameAndKey unset torpedo username and keyPath
+func (anth *anthos) unsetUserNameAndKey() error {
+	if err := os.Unsetenv("TORPEDO_SSH_KEY"); err != nil {
+		return err
+	}
+	if err := os.Unsetenv("TORPEDO_SSH_USER"); err != nil {
+		return err
+	}
 	return nil
 }
 
