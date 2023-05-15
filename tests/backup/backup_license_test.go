@@ -290,7 +290,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		err := SetDestinationKubeConfig()
 		dash.VerifySafely(err, nil, "Switching context to destination cluster")
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")

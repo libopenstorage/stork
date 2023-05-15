@@ -271,7 +271,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		// Cleaning up applications created
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		// Remove all the restores created
 		log.Info("Deleting restored namespaces")
@@ -429,7 +429,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		// Cleaning up applications created
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		// Cleaning up px-backup cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -655,7 +655,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))

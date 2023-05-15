@@ -279,7 +279,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
@@ -467,7 +467,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -888,7 +888,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })

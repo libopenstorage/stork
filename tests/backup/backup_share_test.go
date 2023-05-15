@@ -259,7 +259,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		//Deleting user
 		err := backup.DeleteUser(userName)
@@ -417,7 +417,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		err = backup.DeleteUser(userNames[0])
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userNames[0]))
 		err = backup.DeleteGroup(groupName)
@@ -836,7 +836,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
@@ -1183,7 +1183,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
@@ -1734,7 +1734,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
@@ -1991,7 +1991,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
@@ -2202,7 +2202,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
@@ -2404,7 +2404,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -2516,7 +2516,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Deleting backup created by px-central-admin")
 
 		log.Infof("Deleting registered clusters for non-admin context")
@@ -2677,7 +2677,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		backupDriver := Inst().Backup
 		for _, backupName := range backupNames {
 			wg.Add(1)
@@ -2897,7 +2897,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
@@ -3115,7 +3115,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		backupDriver := Inst().Backup
 		for _, backupName := range newBackupNames {
 			wg.Add(1)
@@ -3353,7 +3353,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -3608,7 +3608,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting restore created by users")
 		for _, restoreName := range restoreList {
 			wg.Add(1)
@@ -3892,7 +3892,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting restores")
 		for _, user := range users {
@@ -4096,7 +4096,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {

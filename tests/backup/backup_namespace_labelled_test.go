@@ -170,7 +170,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Generating user context")
 		for _, userName := range users {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
