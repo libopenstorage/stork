@@ -1829,7 +1829,7 @@ func (m *MigrationController) applyResources(
 			}
 			var regErr error
 			if _, regErr = destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), res, metav1.CreateOptions{}); regErr != nil && !errors.IsAlreadyExists(regErr) {
-				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), err)
+				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), regErr)
 			}
 			if regErr == nil {
 				// wait for crd to be ready
