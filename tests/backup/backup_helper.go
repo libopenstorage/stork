@@ -77,7 +77,7 @@ const (
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
 	latestPxBackupVersion                     = "2.4.0"
-	latestPxBackupHelmBranch                  = "master"
+	defaultPxBackupHelmBranch                 = "master"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
@@ -1928,7 +1928,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	storageClassName := pvcs.Items[0].Spec.StorageClassName
 
 	// Get the tarball required for helm upgrade
-	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", latestPxBackupHelmBranch, versionToUpgrade)
+	helmBranch, isPresent := os.LookupEnv("PX_BACKUP_HELM_REPO_BRANCH")
+	if !isPresent {
+		helmBranch = defaultPxBackupHelmBranch
+	}
+	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", helmBranch, versionToUpgrade)
 	log.Infof("curl command to get tarball: %v ", cmd)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {

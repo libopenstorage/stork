@@ -3180,10 +3180,6 @@ func ValidateAlertManagerEnabled(pxImageList map[string]string, cluster *corev1.
 		return fmt.Errorf("failed to get service alertmanager-portworx")
 	}
 
-	if _, err := coreops.Instance().GetService("alertmanager-operated", cluster.Namespace); err != nil {
-		return fmt.Errorf("failed to get service alertmanager-operated")
-	}
-
 	logrus.Infof("Alert manager is enabled and deployed")
 	return nil
 }
@@ -3200,10 +3196,6 @@ func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1
 			if !cluster.Spec.Monitoring.Prometheus.AlertManager.Enabled && !errors.IsNotFound(err) {
 				return "", true, fmt.Errorf("wait for service alertmanager-portworx deletion, err %v", err)
 			}
-		}
-
-		if _, err := coreops.Instance().GetService("alertmanager-operated", cluster.Namespace); !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("wait for service alertmanager-operated deletion, err %v", err)
 		}
 
 		return "", false, nil
