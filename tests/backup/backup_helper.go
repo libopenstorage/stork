@@ -1795,7 +1795,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 // TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided.
 // NOTE: To be used after switching k8s context (cluster) which has the namespace
 func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) (*scheduler.Context, error) {
-	log.InfoD("Getting Restore Context from Backup Context")
+	log.Infof("TransformAppContextWithMappings with namespace mapping [%v] and storage Class Mapping [%v]", namespaceMapping, storageClassMapping)
 
 	restoreAppContext := *appContext
 
@@ -1834,7 +1834,7 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	restoreAppContext.App = &app
 
 	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
-	options := CreateScheduleOptions()
+	options := CreateScheduleOptions("")
 	if namespace, ok := namespaceMapping[appContext.ScheduleOptions.Namespace]; ok {
 		options.Namespace = namespace
 	} else {
