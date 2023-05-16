@@ -13,6 +13,8 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	"github.com/libopenstorage/stork/pkg/pluralmap"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -91,6 +93,14 @@ type Options struct {
 	// resource collector to perform transformations on certain k8s resources.
 	// TODO: temporary change required to handle project related transformations
 	RancherProjectMappings map[string]string
+	// limit ensures the k8s APIs will use this value in ListOption while fetching
+	// the resources from cluster. In case of Large number of resources with substantial
+	// content in them, the etcd Server times-out, hence limit will be used to reduce
+	// the number of resources fetched in a single call.
+	ResourceCountLimit int64
+	// IgnoreOwnerReferencesCheck if set then resources having ownerreferences should be collected
+	// even if the owner gets collected.
+	IgnoreOwnerReferencesCheck bool
 }
 
 // Objects Collection of objects
@@ -305,9 +315,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		default:
 			selectors = labels.Set(labelSelectors).String()
 		}
-		objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
-			LabelSelector: selectors,
-		})
+		objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
 		}
@@ -337,7 +345,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		}
 	}
 
-	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap)
+	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap, opts.IgnoreOwnerReferencesCheck)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -447,9 +455,7 @@ func (r *ResourceCollector) GetResources(
 				default:
 					selectors = labels.Set(labelSelectors).String()
 				}
-				objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
-					LabelSelector: selectors,
-				})
+				objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
 				if err != nil {
 					if apierrors.IsForbidden(err) {
 						continue
@@ -496,7 +502,7 @@ func (r *ResourceCollector) GetResources(
 		}
 	}
 
-	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap)
+	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap, opts.IgnoreOwnerReferencesCheck)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -519,6 +525,38 @@ func (r *ResourceCollector) GetResources(
 	}
 
 	return allObjects, pvcsWithOwnerReference, nil
+}
+
+// gatherResourceInChunks() collects all the resources present per ns or resource types.
+// It does it in batch of 500 unless specified by user via a config-map. This function
+// primarily helps in avoiding server timeout error when the number of resource or size
+// of it large.
+func gatherResourceInChunks(dynamicClient dynamic.ResourceInterface, opts Options, selectors string) (*unstructured.UnstructuredList, error) {
+	var err error
+	fn := "gatherResourceInChunks"
+	objectsList := &unstructured.UnstructuredList{}
+	var temp *unstructured.UnstructuredList
+	listOps := metav1.ListOptions{
+		LabelSelector: selectors,
+		Limit:         opts.ResourceCountLimit,
+	}
+	for {
+		temp, err = dynamicClient.List(context.TODO(), listOps)
+		if err != nil {
+			logrus.Warnf("%v: failed to list resources", fn)
+			return nil, err
+		}
+		if len(temp.GetContinue()) != 0 {
+			listOps.Continue = temp.GetContinue()
+			objectsList.Items = append(objectsList.Items, temp.Items...)
+			continue
+		} else {
+			// Append the final set of data left...
+			objectsList.Items = append(objectsList.Items, temp.Items...)
+			break
+		}
+	}
+	return objectsList, err
 }
 
 // IsNsPresentInIncludeResource checks if a given ns is present in the IncludeResource object
@@ -660,10 +698,10 @@ func (r *ResourceCollector) objectToBeCollected(
 func (r *ResourceCollector) pruneOwnedResources(
 	objects []runtime.Unstructured,
 	resourceMap map[types.UID]bool,
+	ignoreOwnerReferencesCheck bool,
 ) ([]runtime.Unstructured, []runtime.Unstructured, error) {
 	updatedObjects := make([]runtime.Unstructured, 0)
 	pvcObjectsWithOwnerRef := make([]runtime.Unstructured, 0)
-
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -689,8 +727,23 @@ func (r *ResourceCollector) pruneOwnedResources(
 					}
 				}
 			} else {
+				// skipOwnerRefCheck is set at a resource level
+				// whereas ignoreOwnerReferencesCheck is set in migration CR
 				if !skipOwnerRefCheck(metadata.GetAnnotations()) {
 					for _, owner := range owners {
+						if ignoreOwnerReferencesCheck {
+							// Even if ignoreOwnerReferencesCheck is set, we will not collect replicaset
+							// if it's owner is deployment kind and it is already getting collected
+							if objectType.GetKind() == "ReplicaSet" {
+								// Skip object if we are already collecting its owner
+								if _, exists := resourceMap[owner.UID]; exists {
+									if owner.Kind == "Deployment" {
+										collect = false
+									}
+								}
+							}
+							break
+						}
 						// We don't collect pods, there might be some leader
 						// election objects that could have pods as the owner, so
 						// don't collect those objects
@@ -1079,10 +1132,20 @@ func (r *ResourceCollector) ApplyResource(
 func (r *ResourceCollector) DeleteResources(
 	dynamicInterface dynamic.Interface,
 	objects []runtime.Unstructured,
+	updateTimestamp chan int,
 ) error {
 	// First delete all the objects
 	deleteStart := metav1.Now()
+	startTime := time.Now()
 	for _, object := range objects {
+		if updateTimestamp != nil {
+			elapsedTime := time.Since(startTime)
+			if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
+				updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
+				startTime = time.Now()
+			}
+		}
+
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
 			continue
@@ -1108,6 +1171,13 @@ func (r *ResourceCollector) DeleteResources(
 
 	// Then wait for them to actually be deleted
 	for _, object := range objects {
+		if updateTimestamp != nil {
+			elapsedTime := time.Since(startTime)
+			if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
+				updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
+				startTime = time.Now()
+			}
+		}
 		// Objects that support merging aren't deleted
 		if r.mergeSupportedForResource(object) {
 			continue
@@ -1140,6 +1210,40 @@ func (r *ResourceCollector) DeleteResources(
 		}
 	}
 	return nil
+}
+
+// ObjectTobeDeleted returns list of objects present on destination but not on source
+func (r *ResourceCollector) ObjectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
+	var deleteObjects []runtime.Unstructured
+	for _, o := range destObjects {
+		name, namespace, kind, err := utils.GetObjectDetails(o)
+		if err != nil {
+			// skip purging if we are not able to get object details
+			logrus.Errorf("Unable to get object details %v", err)
+			continue
+		}
+		// Don't return objects that support merging
+		if r.mergeSupportedForResource(o) {
+			continue
+		}
+		isPresent := false
+		for _, s := range srcObjects {
+			sname, snamespace, skind, err := utils.GetObjectDetails(s)
+			if err != nil {
+				// skip purging if we are not able to get object details
+				continue
+			}
+			if skind == kind && snamespace == namespace && sname == name {
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
+			deleteObjects = append(deleteObjects, o)
+		}
+	}
+	return deleteObjects
 }
 
 func (r *ResourceCollector) getDynamicClient(
@@ -1231,6 +1335,7 @@ func (r *ResourceCollector) prepareRancherApplicationResource(
 }
 
 func GetDefaultRuleSet() *inflect.Ruleset {
+
 	// TODO: we should use k8s code generator logic to pluralize
 	// crd resources instead of depending on inflect lib
 	ruleset := inflect.NewDefaultRuleset()
@@ -1251,5 +1356,8 @@ func GetDefaultRuleSet() *inflect.Ruleset {
 	ruleset.AddPlural("scheduling", "scheduling")
 	ruleset.AddPlural("spss", "spss")
 
+	for kind, group := range pluralmap.Instance().GetCRDKindToPluralMap() {
+		ruleset.AddPlural(kind, group)
+	}
 	return ruleset
 }

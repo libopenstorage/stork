@@ -44,8 +44,25 @@ const (
 	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
 	// ObjectLockDefaultIncrementalCount defines default incremental backup count
 	ObjectLockDefaultIncrementalCount = 5
+	//LargeResourceSizeLimit defines the maximum size of CR beyond which the backup and restores will be treated as Large resource type.
+	LargeResourceSizeLimitName = "large-resource-size-limit"
+	//LargeResourceSizeLimitDefault defines the default size of CR beyond which the backup and restores will be treated as Large resource type.
+	LargeResourceSizeLimitDefault = 1 << (10 * 2)
 	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
 	minProtectionPeriod = 1
+	// RestoreVolumeBatchCountKey - restore volume batch count value
+	RestoreVolumeBatchCountKey = "restore-volume-backup-count"
+	// DefaultRestoreVolumeBatchCount - default value for restore volume batch count
+	DefaultRestoreVolumeBatchCount = 25
+	// ResourceCountLimitKeyName defines the number of resources to be read via one List API call.
+	// It is assigned to Limit field of ListOption structure
+	ResourceCountLimitKeyName = "resource-count-limit"
+	// DefaultResourceCountLimit defines the default value for resource count for list api
+	DefaultResourceCountLimit = int64(500)
+	// DefaultRestoreVolumeBatchSleepInterval - restore volume batch sleep interval
+	DefaultRestoreVolumeBatchSleepInterval = "20s"
+	// RestoreVolumeBatchSleepIntervalKey - restore volume batch sleep interval key
+	RestoreVolumeBatchSleepIntervalKey = "restore-volume-sleep-interval"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
@@ -268,11 +285,11 @@ func GetServiceAccountFromDeployment(name, namespace string) (string, error) {
 	return deploy.Spec.Template.Spec.ServiceAccountName, nil
 }
 
-// GetImageRegistryFromDeployment - extract image registry and image registry secret from deployment spec
-func GetImageRegistryFromDeployment(name, namespace string) (string, string, error) {
+// GetImageInfoFromDeployment - extract image registry, image registry secret & image tag from deployment spec
+func GetImageInfoFromDeployment(name, namespace string) (string, string, string, error) {
 	deploy, err := apps.Instance().GetDeployment(name, namespace)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
 	// Here the assumption is that the image format will be <registry-name>/<extra-dir-name>/<repo-name>/image:tag
@@ -281,11 +298,14 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 	// here minus 1 is for image name
 	registryFields := imageFields[0 : len(imageFields)-1]
 	registry := strings.Join(registryFields, "/")
+
+	imageTag := strings.Split(imageFields[len(imageFields)-1], ":")[1]
+
 	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
 	if imageSecret != nil {
-		return registry, imageSecret[0].Name, nil
+		return registry, imageSecret[0].Name, imageTag, nil
 	}
-	return registry, "", nil
+	return registry, "", imageTag, nil
 }
 
 // GetStorkPodNamespace - will return the stork pod namespace.

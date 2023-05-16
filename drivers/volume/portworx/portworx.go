@@ -530,9 +530,12 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 	return info, nil
 }
-
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
+	case api.Status_STATUS_POOLMAINTENANCE:
+		fallthrough
+	case api.Status_STATUS_STORAGE_DOWN:
+		return storkvolume.NodeStorageDown
 	case api.Status_STATUS_INIT:
 		fallthrough
 	case api.Status_STATUS_OFFLINE:
@@ -551,8 +554,6 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 		fallthrough
 	case api.Status_STATUS_OK:
 		return storkvolume.NodeOnline
-	case api.Status_STATUS_STORAGE_DOWN:
-		fallthrough
 	case api.Status_STATUS_STORAGE_DEGRADED:
 		fallthrough
 	case api.Status_STATUS_STORAGE_REBALANCE:
@@ -2517,7 +2518,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 	return nil
 }
 
-func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+func (p *portworx) StartMigration(migration *storkapi.Migration, migrationNamespaces []string) ([]*storkapi.MigrationVolumeInfo, error) {
 	if !p.initDone {
 		if err := p.initPortworxClients(); err != nil {
 			return nil, err
@@ -2541,7 +2542,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 		return nil, err
 	}
 
-	if len(migration.Spec.Namespaces) == 0 {
+	if len(migrationNamespaces) == 0 {
 		return nil, fmt.Errorf("namespaces for migration cannot be empty")
 	}
 
@@ -2550,7 +2551,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 	volumeInfos := make([]*storkapi.MigrationVolumeInfo, 0)
-	for _, namespace := range migration.Spec.Namespaces {
+	for _, namespace := range migrationNamespaces {
 		pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
 		if err != nil {
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)

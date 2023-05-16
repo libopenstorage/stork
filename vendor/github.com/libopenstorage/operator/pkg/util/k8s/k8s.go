@@ -44,6 +44,9 @@ const (
 	NodeRoleLabelControlPlane = "node-role.kubernetes.io/control-plane"
 	NodeRoleLabelInfra        = "node-role.kubernetes.io/infra"
 	NodeRoleLabelWorker       = "node-role.kubernetes.io/worker"
+	// UpdateRevisionConflictErr contains controller-runtime update error message when updating stale objects
+	UpdateRevisionConflictErr = "the object has been modified; please apply your changes to the latest version and try again"
+	DefaultK8SRegistryPath    = "registry.k8s.io"
 )
 
 var (
@@ -536,13 +539,13 @@ func DeleteClusterRoleBinding(
 	return k8sClient.Delete(context.TODO(), crb)
 }
 
-// CreateOrUpdateConfigMap creates a config map if not present,
-// else updates it if it has changed
+// CreateOrUpdateConfigMap creates a config map if not present, else updates it if it has changed
+// returns whether data is modified
 func CreateOrUpdateConfigMap(
 	k8sClient client.Client,
 	configMap *v1.ConfigMap,
 	ownerRef *metav1.OwnerReference,
-) error {
+) (bool, error) {
 	existingConfigMap := &v1.ConfigMap{}
 	err := k8sClient.Get(
 		context.TODO(),
@@ -554,14 +557,14 @@ func CreateOrUpdateConfigMap(
 	)
 	if errors.IsNotFound(err) {
 		logrus.Infof("Creating %v ConfigMap", configMap.Name)
-		return k8sClient.Create(context.TODO(), configMap)
+		return false, k8sClient.Create(context.TODO(), configMap)
 	} else if err != nil {
-		return err
+		return false, err
 	}
 
 	enabled, err := strconv.ParseBool(existingConfigMap.Annotations[constants.AnnotationReconcileObject])
 	if err == nil && !enabled {
-		return nil
+		return false, nil
 	}
 
 	modified := !reflect.DeepEqual(configMap.Data, existingConfigMap.Data) ||
@@ -575,9 +578,9 @@ func CreateOrUpdateConfigMap(
 
 	if modified || len(configMap.OwnerReferences) > len(existingConfigMap.OwnerReferences) {
 		logrus.Infof("Updating %v ConfigMap", configMap.Name)
-		return k8sClient.Update(context.TODO(), configMap)
+		return modified, k8sClient.Update(context.TODO(), configMap)
 	}
-	return nil
+	return false, nil
 }
 
 // DeleteConfigMap deletes a config map if present and owned
@@ -1220,8 +1223,31 @@ func DeleteDaemonSet(
 	return k8sClient.Update(context.TODO(), ds)
 }
 
-// UpdateStorageClusterStatus updates the status of given StorageCluster object
-// on the latest copy
+// UpdateStorageCluster updates given StorageCluster object on the latest copy
+func UpdateStorageCluster(
+	k8sClient client.Client,
+	cluster *corev1.StorageCluster,
+) error {
+	existingCluster := &corev1.StorageCluster{}
+	if err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		existingCluster,
+	); err != nil {
+		return err
+	}
+
+	cluster.ResourceVersion = existingCluster.ResourceVersion
+	if !reflect.DeepEqual(cluster, existingCluster) {
+		return k8sClient.Update(context.TODO(), cluster)
+	}
+	return nil
+}
+
+// UpdateStorageClusterStatus updates the status of given StorageCluster object on the latest copy
 func UpdateStorageClusterStatus(
 	k8sClient client.Client,
 	cluster *corev1.StorageCluster,
@@ -1239,7 +1265,10 @@ func UpdateStorageClusterStatus(
 	}
 
 	cluster.ResourceVersion = existingCluster.ResourceVersion
-	return k8sClient.Status().Update(context.TODO(), cluster)
+	if !reflect.DeepEqual(cluster.Status, existingCluster.Status) {
+		return k8sClient.Status().Update(context.TODO(), cluster)
+	}
+	return nil
 }
 
 // CreateOrUpdateStorageNode creates a StorageNode if not present, else updates it
@@ -1383,6 +1412,11 @@ func CreateOrUpdatePrometheusRule(
 		return k8sClient.Create(context.TODO(), rule)
 	} else if err != nil {
 		return err
+	}
+
+	enabled, err := strconv.ParseBool(existingRule.ObjectMeta.Annotations[constants.AnnotationReconcileObject])
+	if err == nil && !enabled {
+		return nil
 	}
 
 	modified := !reflect.DeepEqual(rule.Spec, existingRule.Spec)

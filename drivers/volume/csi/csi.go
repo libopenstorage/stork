@@ -654,7 +654,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 			if err != nil {
 				return err
 			}
-			for _, vs := range vsList.Items {
+			for _, val := range vsList.Items {
+				vs := val
 				vsMap[vs.Name] = &vs
 			}
 
@@ -667,7 +668,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 		if err != nil {
 			return err
 		}
-		for _, vsContent := range vsContentList.Items {
+		for _, val := range vsContentList.Items {
+			vsContent := val
 			vsContentMap[vsContent.Name] = &vsContent
 		}
 		log.ApplicationRestoreLog(restore).Debugf("collected %v snapshots and %v snapshotcontents to clean", len(vsMap), len(vsContentMap))
@@ -685,7 +687,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 		if err != nil {
 			return err
 		}
-		for _, vs := range vsList.Items {
+		for _, val := range vsList.Items {
+			vs := val
 			vsMap[vs.Name] = &vs
 		}
 
@@ -698,7 +701,8 @@ func (c *csi) cleanupSnapshotsForRestore(
 	if err != nil {
 		return err
 	}
-	for _, vsContent := range vsContentList.Items {
+	for _, val := range vsContentList.Items {
+		vsContent := val
 		vsContentMap[vsContent.Name] = &vsContent
 	}
 	log.ApplicationRestoreLog(restore).Debugf("collected %v snapshots and %v snapshotcontents to clean", len(vsMap), len(vsContentMap))
@@ -1680,7 +1684,10 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 		if vrInfo.DriverName != storkvolume.CSIDriverName {
 			continue
 		}
-		pvcRestoreSucceeded := (vrInfo.Status == storkapi.ApplicationRestoreStatusPartialSuccess || vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful)
+		// For existing volume, the status will be retained.
+		pvcRestoreSucceeded := (vrInfo.Status == storkapi.ApplicationRestoreStatusPartialSuccess ||
+			vrInfo.Status == storkapi.ApplicationRestoreStatusSuccessful ||
+			vrInfo.Status == storkapi.ApplicationRestoreStatusRetained)
 
 		// Only clean up dangling PVC if it's restore did not succeed
 		if !pvcRestoreSucceeded {

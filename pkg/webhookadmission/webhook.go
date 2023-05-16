@@ -19,7 +19,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,83 +93,33 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	arReq := admissionReview.Request
 	resourceName := arReq.Name
 
-	switch arReq.Kind.Kind {
-	case "StatefulSet":
-		var ss appv1.StatefulSet
-		if err = json.Unmarshal(arReq.Object.Raw, &ss); err != nil {
-			log.Errorf("Could not unmarshal admission review object: %v", err)
-			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
-			http.Error(w, "Decode error", http.StatusBadRequest)
-			return
-		}
-		if resourceName == "" {
-			resourceName = ss.GenerateName
-		}
-		log.Debugf("Received admission review request for sts %s,%s", resourceName, arReq.Namespace)
-		if !skipSchedulerUpdate(skipHookAnnotation, ss.ObjectMeta.Annotations) {
-			isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, arReq.Namespace)
-			if err != nil {
-				c.Recorder.Event(&ss, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
-				http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
-				return
-			}
-			schedPath = appSchedPrefix + podSpecSchedPath
-		}
-	case "Deployment":
-		var deployment appv1.Deployment
-		if err := json.Unmarshal(arReq.Object.Raw, &deployment); err != nil {
-			log.Errorf("Could not unmarshal admission review object: %v", err)
-			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
-			http.Error(w, "Decode error", http.StatusBadRequest)
-			return
-		}
-		if resourceName == "" {
-			resourceName = deployment.GenerateName
-		}
-		log.Debugf("Received admission review request for deployment %s,%s", resourceName, arReq.Namespace)
-		if !skipSchedulerUpdate(skipHookAnnotation, deployment.ObjectMeta.Annotations) {
-			isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, arReq.Namespace)
-			if err != nil {
-				c.Recorder.Event(&deployment, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
-				http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
-				return
-			}
-			schedPath = appSchedPrefix + podSpecSchedPath
-		}
-	case "Pod":
-		var pod v1.Pod
-		if err := json.Unmarshal(arReq.Object.Raw, &pod); err != nil {
-			log.Errorf("Could not unmarshal admission review object: %v", err)
-			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
-			http.Error(w, "Decode error", http.StatusBadRequest)
-			return
-		}
-		if resourceName == "" {
-			resourceName = pod.GenerateName
-		}
-		log.Debugf("Received admission review request for pod %s,%s", resourceName, arReq.Namespace)
-		if !skipSchedulerUpdate(skipHookAnnotation, pod.ObjectMeta.Annotations) {
-			isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, arReq.Namespace)
-			if err != nil {
-				c.Recorder.Event(&pod, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
-				http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
-				return
-			}
-			schedPath = podSpecSchedPath
+	if arReq.Kind.Kind != "Pod" {
+		errMsg := fmt.Errorf("kind=%s not supported", arReq.Kind.Kind)
+		log.Errorf("Failed to serve admission review request: %v", err)
+		c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "invalid admission review request", errMsg.Error())
+		return
+	}
 
-			// get extra patches for pods
-			if isStorkResource {
-				// pod object does not have name and namespace populated, so we pass them separately. Also,
-				// if the pod is using generateName, arReq.Name is empty.
-				patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
-				if err != nil {
-					log.Errorf("Failed to get pod patches for pod %s/%s: %v", arReq.Namespace, resourceName, err)
-					c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not get pod patches", err.Error())
-					http.Error(w, "Could not get pod patches", http.StatusInternalServerError)
-					return
-				}
-			}
+	var pod v1.Pod
+	if err := json.Unmarshal(arReq.Object.Raw, &pod); err != nil {
+		log.Errorf("Could not unmarshal admission review object: %v", err)
+		c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+		http.Error(w, "Decode error", http.StatusBadRequest)
+		return
+	}
+	if resourceName == "" {
+		resourceName = pod.GenerateName
+	}
+	log.Debugf("Received admission review request for pod %s,%s", resourceName, arReq.Namespace)
+	if !skipSchedulerUpdate(skipHookAnnotation, pod.ObjectMeta.Annotations) {
+		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, arReq.Namespace)
+		if err != nil {
+			log.Errorf("Failed to serve admission review request %v", err)
+			c.Recorder.Event(&pod, v1.EventTypeWarning, "Could not get volume owner info for pod", err.Error())
+			http.Error(w, "Could not get volume owner info : "+err.Error(), http.StatusInternalServerError)
+			return
 		}
+		schedPath = podSpecSchedPath
 	}
 
 	if !isStorkResource {
@@ -181,6 +130,16 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			Allowed: true,
 		}
 	} else {
+		// pod object does not have name and namespace populated, so we pass them separately. Also,
+		// if the pod is using generateName, arReq.Name is empty.
+		patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
+		if err != nil {
+			log.Errorf("Failed to get pod patches for pod %s/%s: %v", arReq.Namespace, resourceName, err)
+			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not get pod patches", err.Error())
+			http.Error(w, "Could not get pod patches", http.StatusInternalServerError)
+			return
+		}
+
 		// create patch
 		log.Debugf("Updating scheduler to stork for Resource:%s, Name: %s, Namespace:%s",
 			arReq.Kind.Kind, resourceName, arReq.Namespace)

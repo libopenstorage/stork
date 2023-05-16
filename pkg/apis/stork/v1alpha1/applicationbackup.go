@@ -59,16 +59,18 @@ const (
 
 // ApplicationBackupStatus is the status of a application backup operation
 type ApplicationBackupStatus struct {
-	Stage               ApplicationBackupStageType       `json:"stage"`
-	Status              ApplicationBackupStatusType      `json:"status"`
-	Reason              string                           `json:"reason"`
-	Resources           []*ApplicationBackupResourceInfo `json:"resources"`
-	Volumes             []*ApplicationBackupVolumeInfo   `json:"volumes"`
-	BackupPath          string                           `json:"backupPath"`
-	TriggerTimestamp    metav1.Time                      `json:"triggerTimestamp"`
-	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
-	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
-	TotalSize           uint64                           `json:"totalSize"`
+	Stage                ApplicationBackupStageType       `json:"stage"`
+	Status               ApplicationBackupStatusType      `json:"status"`
+	Reason               string                           `json:"reason"`
+	Resources            []*ApplicationBackupResourceInfo `json:"resources"`
+	Volumes              []*ApplicationBackupVolumeInfo   `json:"volumes"`
+	BackupPath           string                           `json:"backupPath"`
+	TriggerTimestamp     metav1.Time                      `json:"triggerTimestamp"`
+	LastUpdateTimestamp  metav1.Time                      `json:"lastUpdateTimestamp"`
+	FinishTimestamp      metav1.Time                      `json:"finishTimestamp"`
+	TotalSize            uint64                           `json:"totalSize"`
+	ResourceCount        int                              `json:"resourceCount"`
+	LargeResourceEnabled bool                             `json:"largeResourceEnabled"`
 }
 
 // ObjectInfo contains info about an object being backed up or restored

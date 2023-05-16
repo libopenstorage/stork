@@ -40,7 +40,8 @@ const (
 	// environment variable for command executor image registry and image registry secret.
 	cmdExecutorImageRegistryEnvVar       = "CMD-EXECUTOR-IMAGE-REGISTRY"
 	cmdExecutorImageRegistrySecretEnvVar = "CMD-EXECUTOR-IMAGE-REGISTRY-SECRET"
-	defaultCmdExecutorImage              = "cmdexecutor:0.1"
+	defaultCmdExecutorImage              = "cmdexecutor"
+	defaultCmdExecutorTag                = "0.1"
 	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
 	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
@@ -343,7 +344,7 @@ func executeCommandAction(
 			return err
 		}
 		// If env is not set get the values from stork deployment spec.
-		registry, registrySecret, err := k8sutils.GetImageRegistryFromDeployment(
+		registry, registrySecret, imageTag, err := k8sutils.GetImageInfoFromDeployment(
 			k8sutils.StorkDeploymentName,
 			storkPodNs,
 		)
@@ -351,14 +352,14 @@ func executeCommandAction(
 			return err
 		}
 		if len(registry) != 0 {
-			cmdExecutorImage = registry + "/" + defaultCmdExecutorImage
+			cmdExecutorImage = registry + "/" + defaultCmdExecutorImage + ":" + imageTag
 		} else {
-			cmdExecutorImage = defaultCmdExecutorImage
+			cmdExecutorImage = defaultCmdExecutorImage + ":" + defaultCmdExecutorTag
 		}
 		cmdExecutorImageSecret = registrySecret
 	} else {
 		// if env is set get it from env variable.
-		cmdExecutorImage = os.Getenv(cmdExecutorImageRegistryEnvVar) + "/" + defaultCmdExecutorImage
+		cmdExecutorImage = os.Getenv(cmdExecutorImageRegistryEnvVar) + "/" + defaultCmdExecutorImage + ":" + defaultCmdExecutorTag
 		cmdExecutorImageSecret = os.Getenv(cmdExecutorImageRegistrySecretEnvVar)
 	}
 	ruleAnnotations := rule.GetAnnotations()

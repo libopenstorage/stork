@@ -36,6 +36,7 @@ func TestExtender(t *testing.T) {
 	t.Run("statefulsetTest", statefulsetTest)
 	t.Run("multiplePVCTest", multiplePVCTest)
 	t.Run("driverNodeErrorTest", driverNodeErrorTest)
+	t.Run("poolMaintenanceTest", poolMaintenanceTest)
 	t.Run("antihyperconvergenceTest", antihyperconvergenceTest)
 	t.Run("antihyperconvergenceTestPreferRemoteOnlyTest", antihyperconvergenceTestPreferRemoteOnlyTest)
 	t.Run("equalPodSpreadTest", equalPodSpreadTest)
@@ -45,6 +46,10 @@ func TestExtender(t *testing.T) {
 }
 
 func noPVCTest(t *testing.T) {
+	var testrailID, testResult = 50785, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "nopvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-nopvc"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -54,9 +59,17 @@ func noPVCTest(t *testing.T) {
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func singlePVCTest(t *testing.T) {
+	var testrailID, testResult = 50786, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "singlepvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -75,9 +88,17 @@ func singlePVCTest(t *testing.T) {
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetTest(t *testing.T) {
+	var testrailID, testResult = 50787, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "sstest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"elasticsearch"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -104,9 +125,17 @@ func statefulsetTest(t *testing.T) {
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func multiplePVCTest(t *testing.T) {
+	var testrailID, testResult = 50788, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "multipvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -124,9 +153,17 @@ func multiplePVCTest(t *testing.T) {
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func driverNodeErrorTest(t *testing.T) {
+	var testrailID, testResult = 50789, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "drivererrtest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -173,9 +210,73 @@ func driverNodeErrorTest(t *testing.T) {
 	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func poolMaintenanceTest(t *testing.T) {
+	var testrailID, testResult = 86080, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "pool-test"),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+
+	err = volumeDriver.EnterPoolMaintenance(scheduledNodes[0])
+	require.NoError(t, err, "Error entering pool maintenance mode on scheduled node %+v", scheduledNodes[0])
+	poolMaintenanceNode := scheduledNodes[0]
+
+	// Wait for node to go into maintenance mode
+	time.Sleep(5 * time.Minute)
+
+	// Delete the pods so that they get rescheduled
+	pods, err := getPodsForApp(ctxs[0])
+	require.NoError(t, err, "Failed to get pods for app")
+	err = core.Instance().DeletePods(pods, false)
+	require.NoError(t, err, "Error deleting the pods")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state after deletion")
+
+	scheduledNodes, err = schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+	require.NotEqual(t, poolMaintenanceNode.Name, scheduledNodes[0].Name, "Pod should not be scheduled on node in PoolMaintenance state")
+
+	err = volumeDriver.ExitPoolMaintenance(poolMaintenanceNode)
+	require.NoError(t, err, "Error exiting pool maintenance mode on node %+v", scheduledNodes[0])
+
+	err = volumeDriver.WaitDriverUpOnNode(poolMaintenanceNode, defaultWaitTimeout)
+	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func pvcOwnershipTest(t *testing.T) {
+	var testrailID, testResult = 50781, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "ownershiptest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-repl-1"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -246,9 +347,17 @@ func pvcOwnershipTest(t *testing.T) {
 	require.NoError(t, err, "Volume driver is not up on Node %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func antihyperconvergenceTest(t *testing.T) {
+	var testrailID, testResult = 85859, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule("antihyperconvergencetest",
 		scheduler.ScheduleOptions{
 			AppKeys: []string{"test-sv4-svc-repl1"},
@@ -271,9 +380,17 @@ func antihyperconvergenceTest(t *testing.T) {
 	verifyAntihyperconvergence(t, scheduledNodes, volumeNames)
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
+	var testrailID, testResult = 85860, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule("preferremoteonlytest",
 		scheduler.ScheduleOptions{
 			AppKeys: []string{"test-sv4-svc-repl1-prefer-remote-only"},
@@ -326,6 +443,10 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 		err = core.Instance().UnCordonNode(schedNode.Name, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error uncordorning k8s node for stork test pod")
 	}
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []string) {
@@ -363,6 +484,10 @@ func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []st
 }
 
 func equalPodSpreadTest(t *testing.T) {
+	var testrailID, testResult = 84664, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule("equal-pod-spread-test",
 		scheduler.ScheduleOptions{
 			AppKeys: []string{"postgres"},
@@ -394,4 +519,8 @@ func equalPodSpreadTest(t *testing.T) {
 
 	logrus.Info("Deleting apps created by the test")
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }

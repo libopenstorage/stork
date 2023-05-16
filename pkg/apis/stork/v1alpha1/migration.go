@@ -16,6 +16,7 @@ type MigrationSpec struct {
 	ClusterPair                  string            `json:"clusterPair"`
 	AdminClusterPair             string            `json:"adminClusterPair"`
 	Namespaces                   []string          `json:"namespaces"`
+	NamespaceSelectors           map[string]string `json:"namespaceSelectors"`
 	IncludeResources             *bool             `json:"includeResources"`
 	IncludeVolumes               *bool             `json:"includeVolumes"`
 	StartApplications            *bool             `json:"startApplications"`
@@ -29,6 +30,7 @@ type MigrationSpec struct {
 	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`
 	SkipDeletedNamespaces        *bool             `json:"skipDeletedNamespaces"`
 	TransformSpecs               []string          `json:"transformSpecs"`
+	IgnoreOwnerReferencesCheck   *bool             `json:"ignoreOwnerReferencesCheck"`
 }
 
 // MigrationStatus is the status of a migration operation

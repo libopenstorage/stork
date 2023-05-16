@@ -68,6 +68,7 @@ func testMigration(t *testing.T) {
 	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
 	if authTokenConfigMap == "" {
 		t.Run("labelSelectorTest", migrationLabelSelectorTest)
+		t.Run("labelExcludeSelectorTest", migrationLabelExcludeSelectorTest)
 		t.Run("intervalScheduleTest", migrationIntervalScheduleTest)
 		t.Run("dailyScheduleTest", migrationDailyScheduleTest)
 		t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
@@ -85,6 +86,8 @@ func testMigration(t *testing.T) {
 	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
+	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
+	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -439,6 +442,79 @@ func migrationLabelSelectorTest(t *testing.T) {
 		false,
 		true,
 	)
+}
+
+func migrationLabelExcludeSelectorTest(t *testing.T) {
+	triggerMigrationTest(
+		t,
+		"migration-label-exclude-selector-test",
+		"cassandra",
+		[]string{"mysql-1-pvc"},
+		"label-exclude-selector-migration",
+		true,
+		false,
+		true,
+	)
+}
+
+func namespaceLabelSelectorTest(t *testing.T) {
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	// Deploy mysql-1-pvc in namespace "mysql-1-pvc-ns-selector-test"
+	ctxNs2, err := schedulerDriver.Schedule("ns-selector-test",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"mysql-1-pvc"},
+			Labels:  nil,
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxNs2), "Only one task should have started")
+
+	// Deploy cassandra in namespace "cassandra-ns-selector-test"
+	// This namespace has label kubernetes.io/metadata.name=cassandra-ns-selector-test
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"ns-selector-test",
+		"cassandra",
+		[]string{},
+		[]string{"namespace-selector-migration"},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	// Validate but do not destroy migration and apps
+	validateAndDestroyMigration(
+		t,
+		ctxs,
+		preMigrationCtx,
+		true,
+		true,
+		true,
+		true, //Skip Deleting App on Destination
+		true, //Skip Deleting App on Source
+	)
+
+	// Validate that mysql-1-pvc is not migrated as it doesn't have the required namespace labels
+	err = schedulerDriver.WaitForRunning(ctxNs2[0], defaultWaitTimeout/16, defaultWaitInterval)
+	require.Error(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Destroy migration
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	// Destroy cassandra app context
+	destroyAndWait(t, ctxs)
+
+	// Destroy mysql-1-pvc app context
+	destroyAndWait(t, ctxNs2)
 }
 
 // migrationIntervalScheduleTest runs test for migrations with schedules that are
@@ -1551,4 +1627,152 @@ func transformResourceTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, true)
+}
+
+// Testrail ID 85741 - https://portworx.testrail.net/index.php?/cases/view/85741
+func serviceAndServiceAccountUpdate(t *testing.T) {
+	var err error
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	instanceID := "update"
+	appKey := "mysql-service-account"
+	additionalAppKey := []string{}
+	migrationAppKey := "mysql-service-acc-migration-schedule"
+	migrateAllAppsExpected := true
+	skipStoragePair := false
+	startAppsOnMigration := false
+	pairReverse := false
+	autoMount := true
+	testNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+
+	_, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKey, []string{migrationAppKey}, migrateAllAppsExpected, skipStoragePair, startAppsOnMigration, pairReverse, "", nil)
+
+	// Validate intial migration
+	validateMigration(t, migrationAppKey, preMigrationCtx.GetID())
+
+	logrus.Infof("First migration completed successfully. Updating service account and service before next migration.")
+
+	// Update service account's secret references, automountservicetoken, and service's ports
+	serviceAccountSrc, err := core.Instance().GetServiceAccount(appKey, testNamespace)
+	require.NoError(t, err, "Error getting service account on source")
+
+	serviceAccountSrc.AutomountServiceAccountToken = &autoMount
+
+	// Update existing secret ref name in the service account
+	for i := 0; i < len(serviceAccountSrc.Secrets); i++ {
+		serviceAccountSrc.Secrets[i].Name = serviceAccountSrc.Secrets[i].Name + "-test"
+	}
+
+	// Add new secret reference to service account
+	objRef := v1.ObjectReference{
+		Name:      "new",
+		Namespace: testNamespace,
+	}
+	serviceAccountSrc.Secrets = append(serviceAccountSrc.Secrets, objRef)
+
+	serviceAccountSrc, err = core.Instance().UpdateServiceAccount(serviceAccountSrc)
+	require.NoError(t, err, "Error updating service account on source")
+
+	// After update do a get on service account to get values of secret references
+	serviceAccountSrc, err = core.Instance().GetServiceAccount(appKey, testNamespace)
+	require.NoError(t, err, "Error getting service account on source")
+
+	// Collect secret references on source cluster
+	secretRefSrc := make(map[string]bool)
+	for i := 0; i < len(serviceAccountSrc.Secrets); i++ {
+		secretRefSrc[serviceAccountSrc.Secrets[i].Name] = true
+	}
+
+	mysqlService, err := core.Instance().GetService("mysql-service", testNamespace)
+	require.NoError(t, err, "Error getting mysql service on source")
+
+	// Update ports on the service on source clusters
+	var updatedPorts []int32
+	for i := 0; i < len(mysqlService.Spec.Ports); i++ {
+		mysqlService.Spec.Ports[i].Port = mysqlService.Spec.Ports[i].Port + 1
+		updatedPorts = append(updatedPorts, mysqlService.Spec.Ports[i].Port)
+	}
+
+	mysqlService, err = core.Instance().UpdateService(mysqlService)
+	require.NoError(t, err, "Error updating mysql service on source")
+
+	logrus.Infof("Waiting for next migration to trigger...")
+	time.Sleep(5 * time.Minute)
+
+	validateMigration(t, migrationAppKey, preMigrationCtx.GetID())
+	logrus.Infof("Migration completed successfully, after updating service and service account.")
+
+	// Verify service account update on migration
+	err = setDestinationKubeConfig()
+	serviceAccountDest, err := core.Instance().GetServiceAccount(appKey, testNamespace)
+	require.NoError(t, err, "Error getting service account on destination")
+	require.Equal(t, true, *serviceAccountDest.AutomountServiceAccountToken)
+
+	// Delete service account on source and migrate again
+	logrus.Infof("Deleting  service account on source cluster.")
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	err = core.Instance().DeleteServiceAccount(appKey, testNamespace)
+	require.NoError(t, err, "Failed to delete service account on source")
+
+	time.Sleep(5 * time.Minute)
+
+	validateMigration(t, migrationAppKey, preMigrationCtx.GetID())
+	logrus.Infof("Migration completed successfully, after deletion of service account.")
+
+	// Validate service and service account on destination cluster, for updates made on the source cluster earlier
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	serviceAccountDest, err = core.Instance().GetServiceAccount(appKey, testNamespace)
+	require.NoError(t, err, "service account NOT found on destination, should NOT have been deleted by migration")
+
+	// Get secret references on destination and compare with source cluster
+	secretRefDest := make(map[string]bool)
+	for i := 0; i < len(serviceAccountDest.Secrets); i++ {
+		secretRefDest[serviceAccountDest.Secrets[i].Name] = true
+	}
+
+	// First check that there are more secret references on destination
+	require.GreaterOrEqual(t, len(secretRefDest), len(secretRefSrc),
+		"number of secret references should be greater or equal on destination since we append")
+
+	// Also check if all secret references from source are present on destination as well
+	for sec := range secretRefSrc {
+		_, ok := secretRefDest[sec]
+		require.True(t, ok, "secret %s not present on destination service account", sec)
+	}
+
+	mysqlServiceDest, err := core.Instance().GetService("mysql-service", testNamespace)
+	require.NoError(t, err, "Error getting mysql service on source")
+
+	// Validate ports for service are updated on destination cluster
+	for i := 0; i < len(mysqlServiceDest.Spec.Ports); i++ {
+		require.Equal(t, updatedPorts[i], mysqlServiceDest.Spec.Ports[i].Port,
+			"ports not updated for service on destination cluster, expected %d, found %d",
+			updatedPorts[i], mysqlServiceDest.Spec.Ports[i].Port)
+	}
+
+	// Clean up destination cluster while we are on it
+	err = core.Instance().DeleteNamespace(testNamespace)
+	require.NoError(t, err, "failed to delete namespace %s on destintation cluster")
+
+	// Clean up source cluster
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	err = core.Instance().DeleteNamespace(testNamespace)
+	require.NoError(t, err, "failed to delete namespace %s on destintation cluster")
+
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
 }

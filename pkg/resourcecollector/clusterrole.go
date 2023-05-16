@@ -1,12 +1,12 @@
 package resourcecollector
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 )
@@ -64,6 +64,10 @@ func (r *ResourceCollector) clusterRoleBindingToBeCollected(
 	if val, ok := crb.Labels["kubernetes.io/bootstrapping"]; ok && val == "rbac-defaults" {
 		return false, nil
 	}
+	name := crb.GetName()
+	if strings.HasPrefix(name, "system:") {
+		return false, nil
+	}
 	// Check if there is a subject for the namespace which is requested
 	for _, subject := range crb.Subjects {
 		collect, err := r.subjectInNamespace(&subject, namespace, true)
@@ -89,6 +93,9 @@ func (r *ResourceCollector) clusterRoleToBeCollected(
 	}
 
 	name := metadata.GetName()
+	if strings.HasPrefix(name, "system:") {
+		return false, nil
+	}
 	// Find the corresponding ClusterRoleBinding and see if it belongs to the requested namespace
 	for _, crb := range crbs.Items {
 		if crb.RoleRef.Name == name {
