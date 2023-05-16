@@ -1664,21 +1664,21 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 			err := fmt.Errorf("the namespace (restoredAppContext) [%s] provided to the ValidateRestore, is apparently not present in the restore [%s], hence cannot validate", expectedRestoredAppContextNamespace, restoreName)
 			errors = append(errors, err)
 			continue
-	}
+		}
 
 		// collect the backup resources whose specs should be present in this expectedRestoredAppContext (namespace)
 		restoredObjectsInNS := make([]*api.RestoreInfo_RestoredResource, 0)
 		for _, resource := range restoredResourcesInfo {
 			if resource.GetNamespace() == expectedRestoredAppContextNamespace {
 				restoredObjectsInNS = append(restoredObjectsInNS, resource)
-		}
+			}
 		}
 
 	specloop:
 		for _, specObj := range expectedRestoredAppContext.App.SpecList {
 
 			name, kind, ns, err := GetSpecNameKindNamepace(specObj)
-		if err != nil {
+			if err != nil {
 				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (restoredAppContext) [%s], spec: [%+v]", err, expectedRestoredAppContextNamespace, specObj)
 				errors = append(errors, err)
 				continue specloop
@@ -1690,7 +1690,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 					err := fmt.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this object will be ignored", name, kind, ns, expectedRestoredAppContextNamespace)
 					errors = append(errors, err)
 					continue specloop
-			}
+				}
 
 				if kind == "StorageClass" || kind == "VolumeSnapshot" {
 					// we don't restore "StorageClass"s and "VolumeSnapshot"s (becuase we don't back them up)
@@ -1700,7 +1700,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 				if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
 					log.Infof("kind: [%s] is not in resourceTypesFilter [%v], so object (name: [%s], kind: [%s], namespace: [%s]) in expectedRestoredAppContext [%s] will not be checked for in restore [%s]", kind, resourceTypesFilter, name, kind, ns, expectedRestoredAppContextNamespace, restoreName)
 					continue specloop
-			}
+				}
 
 				for _, restoredObj := range restoredObjectsInNS {
 					if name == restoredObj.Name &&
@@ -1716,25 +1716,25 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 							} else {
 								err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [%s], with reason [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status, restoredObj.Status.Reason)
 								errors = append(errors, err)
+							}
 						}
-					}
 
 						if k8s, ok := Inst().S.(*k8s.K8s); ok {
-							_, err := k8s.GetObjectSpec(specObj)
+							_, err := k8s.GetUpdatedSpec(specObj)
 							if err == nil {
 								log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 							} else {
 								err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 								errors = append(errors, err)
-				}
+							}
 						} else {
 							err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 							errors = append(errors, err)
-			}
+						}
 
 						continue specloop
+					}
 				}
-			}
 
 				// The following error means that something was NOT backed up or restored,
 				// OR it wasn't supposed to be either backed up or restored, and we forgot to exclude the check.
@@ -1747,8 +1747,8 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 				}
 
 				continue specloop
+			}
 		}
-	}
 
 		// VALIDATION OF VOLUMES
 		log.InfoD("Validating Restored Volumes for the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
@@ -1774,27 +1774,27 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					errors = append(errors, err)
 					continue
-	}
+				}
 
 				var actualVol *volume.Volume
 				var ok bool
 				if actualVol, ok = actualVolumeMap[restoredVolInfo.RestoreVolume]; !ok {
 					err := fmt.Errorf("in restore [%s], said restored volume [%s] cannot be found in the actual cluster [%s]", restoreName, restoredVolInfo.RestoreVolume, expectedRestoredAppContextNamespace)
 					errors = append(errors, err)
-			continue
-		}
+					continue
+				}
 
 				if actualVol.Name != restoredVolInfo.Pvc {
 					err := fmt.Errorf("in restore [%s], for restored volume [%s], PVC used is given as [%s], but actual PVC used was found to be [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Pvc, actualVol.Name)
 					errors = append(errors, err)
-		}
+				}
 
 				var expectedVolumeDriver string
 				if os.Getenv("BACKUP_TYPE") == "Generic" {
 					expectedVolumeDriver = "kdmp"
 				} else {
 					expectedVolumeDriver = Inst().V.String()
-	}
+				}
 
 				if restoredVolInfo.DriverName != expectedVolumeDriver {
 					err := fmt.Errorf("in restore [%s], for restored volume [%s], volume driver actually used is given as [%s], but expected is [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.DriverName, expectedVolumeDriver)
@@ -1807,10 +1807,10 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		log.InfoD("Validate applications in restored namespace [%s] due to restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		errorChan := make(chan error, errorChannelSize)
 		ValidateContext(expectedRestoredAppContext, &errorChan)
-			for err := range errorChan {
-				errors = append(errors, err)
-			}
+		for err := range errorChan {
+			errors = append(errors, err)
 		}
+	}
 
 	errStrings := make([]string, 0)
 	for _, err := range errors {
@@ -1822,7 +1822,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	} else {
-	return nil
+		return nil
 	}
 }
 

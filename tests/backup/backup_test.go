@@ -295,7 +295,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.InfoD("Destroying restored apps on destination clusters")
 		restoredAppContexts := make([]*scheduler.Context, 0)
 		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string))
+			restoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
 			if err != nil {
 				log.Errorf("TransformAppContextWithMappings: %v", err)
 				continue
