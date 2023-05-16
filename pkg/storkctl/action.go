@@ -20,17 +20,17 @@ const (
 	actionWaitInterval   time.Duration = 10 * time.Second
 )
 
-func newDoCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	doCommands := &cobra.Command{
-		Use:    "do",
-		Short:  "do actions",
+func newTriggerCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	triggerCommands := &cobra.Command{
+		Use:    "trigger",
+		Short:  "trigger actions",
 		Hidden: true,
 	}
 
-	doCommands.AddCommand(
+	triggerCommands.AddCommand(
 		newFailoverCommand(cmdFactory, ioStreams),
 	)
-	return doCommands
+	return triggerCommands
 }
 
 func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
