@@ -50,6 +50,10 @@ func verifyInPlaceSnapshotRestore(t *testing.T, ctx []*scheduler.Context, startT
 }
 
 func simpleSnapshotRestoreTest(t *testing.T) {
+	var testrailID, testResult = 50799, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// foldername + name as namespaces
 	snapCtx, err := schedulerDriver.Schedule("splocal",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-snap-restore"}})
@@ -63,9 +67,17 @@ func simpleSnapshotRestoreTest(t *testing.T) {
 	// cleanup test
 	destroyAndWait(t, snapCtx)
 	destroyAndWait(t, restoreCtx)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func groupSnapshotRestoreTest(t *testing.T) {
+	var testrailID, testResult = 50800, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	snapCtx, err := schedulerDriver.Schedule("spgroup",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -84,9 +96,17 @@ func groupSnapshotRestoreTest(t *testing.T) {
 	// cleanup test
 	destroyAndWait(t, snapCtx)
 	destroyAndWait(t, restoreCtx)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func cloudSnapshotRestoreTest(t *testing.T) {
+	var testrailID, testResult = 50801, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	if testing.Short() {
 		t.Skip("Skipping test: cloudSnapshotRestoreTest.")
 	}
@@ -105,9 +125,17 @@ func cloudSnapshotRestoreTest(t *testing.T) {
 	// cleanup test
 	destroyAndWait(t, snapCtx)
 	destroyAndWait(t, restoreCtx)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func groupCloudSnapshotRestoreTest(t *testing.T) {
+	var testrailID, testResult = 50802, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	if testing.Short() {
 		t.Skip("Skipping test: groupCloudSnapshotRestoreTest.")
 	}
@@ -128,9 +156,17 @@ func groupCloudSnapshotRestoreTest(t *testing.T) {
 	// cleanup test
 	destroyAndWait(t, snapCtx)
 	destroyAndWait(t, restoreCtx)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func inPlaceSnapshotRestoreDataTest(t *testing.T) {
+	var testrailID, testResult = 86223, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	testnamespacePostfix := "snapvdbench"
 	appCtx, err := schedulerDriver.Schedule(testnamespacePostfix,
 		scheduler.ScheduleOptions{AppKeys: []string{"vdbench-repl-2-app"}})
@@ -189,4 +225,8 @@ func inPlaceSnapshotRestoreDataTest(t *testing.T) {
 
 	err = k8sextops.Instance().DeleteSnapshot(snapObj.Metadata.Name, snapObj.Metadata.Namespace)
 	require.NoError(t, err, "Error deleting vdbench PVC snapshot")
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
