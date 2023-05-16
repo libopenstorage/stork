@@ -57,12 +57,24 @@ func testSnapshot(t *testing.T) {
 }
 
 func simpleSnapshotTest(t *testing.T) {
+	var testrailID, testResult = 50792, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctx := createSnapshot(t, []string{"mysql-snap-restore"}, "simple-snap-restore")
 	verifySnapshot(t, ctx, "mysql-data", 3, 2, true, defaultWaitTimeout)
 	destroyAndWait(t, ctx)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func cloudSnapshotTest(t *testing.T) {
+	var testrailID, testResult = 50793, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -104,9 +116,17 @@ func cloudSnapshotTest(t *testing.T) {
 	fmt.Printf("checking dataVolumesInUse: %v\n", dataVolumesInUse)
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func groupSnapshotTest(t *testing.T) {
+	var testrailID, testResult = 50795, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxsToDestroy := make([]*scheduler.Context, 0)
 	// Positive tests
 	ctxsPass := createGroupsnaps(t, []string{
@@ -163,9 +183,17 @@ func groupSnapshotTest(t *testing.T) {
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
 	destroyAndWait(t, ctxsToDestroy)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func groupSnapshotScaleTest(t *testing.T) {
+	var testrailID, testResult = 50796, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	allContexts := make([]*scheduler.Context, 0)
 	// Triggers 2 snaps, so use half the count in the loop
 	for i := 0; i < snapshotScaleCount/2; i++ {
@@ -187,6 +215,10 @@ func groupSnapshotScaleTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, allContexts)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func getSnapAnnotation(snapName string) map[string]string {
@@ -426,6 +458,10 @@ func snapshotScheduleTests(t *testing.T) {
 }
 
 func cloudSnapshotScaleTest(t *testing.T) {
+	var testrailID, testResult = 86218, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs := make([][]*scheduler.Context, snapshotScaleCount)
 	for i := 0; i < snapshotScaleCount; i++ {
 		ctxs[i] = createSnapshot(t, []string{"mysql-cloudsnap-restore"}, "scale-"+strconv.Itoa(i))
@@ -444,6 +480,10 @@ func cloudSnapshotScaleTest(t *testing.T) {
 	for i := 0; i < snapshotScaleCount; i++ {
 		destroyAndWait(t, ctxs[i])
 	}
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName string, snapshotScheduleName string) {
 	err := storkops.Instance().DeleteSchedulePolicy(policyName)
@@ -460,6 +500,10 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 }
 
 func intervalSnapshotScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50797, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctx := createApp(t, "interval-snap-sched-test")
 	policyName := "intervalpolicy"
 	retain := 2
@@ -523,9 +567,17 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 
 	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func dailySnapshotScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86219, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctx := createApp(t, "daily-snap-sched-test")
 	policyName := "dailypolicy"
 	retain := 2
@@ -580,9 +632,17 @@ func dailySnapshotScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	commonSnapshotScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeDaily)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func weeklySnapshotScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86220, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctx := createApp(t, "weekly-snap-sched-test")
 	policyName := "weeklypolicy"
 	retain := 2
@@ -638,9 +698,17 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	commonSnapshotScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeWeekly)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func monthlySnapshotScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50786, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctx := createApp(t, "monthly-snap-sched-test")
 	policyName := "monthlypolicy"
 	retain := 2
@@ -700,6 +768,10 @@ func monthlySnapshotScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	commonSnapshotScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeMonthly)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func commonSnapshotScheduleTests(
@@ -754,6 +826,10 @@ func commonSnapshotScheduleTests(
 }
 
 func invalidPolicySnapshotScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86222, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctx := createApp(t, "invalid-snap-sched-test")
 	policyName := "invalidpolicy"
 	scheduledTime := time.Now()
@@ -813,6 +889,10 @@ func invalidPolicySnapshotScheduleTest(t *testing.T) {
 		scheduleName, namespace))
 	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func storageclassTests(t *testing.T) {
