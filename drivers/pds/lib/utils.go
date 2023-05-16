@@ -190,7 +190,7 @@ const (
 	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage             = "redis:latest"
 	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
-	mysqlBenchImage              = "portworx/pds-mysqlbench:v1"
+	mysqlBenchImage              = "portworx/pds-mysqlbench:v4"
 	postgresql                   = "PostgreSQL"
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
@@ -1851,7 +1851,7 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 }
 
 // Create MySql Workload (Non-TPCC)
-func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
+func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, pdsPort string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
 	var replicas int32 = 1
 	var value []string
 	deploymentSpec := &v1.Deployment{
@@ -1874,7 +1874,7 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, 
 							Name:    deploymentName,
 							Image:   mysqlBenchImage,
 							Command: []string{"/bin/sh", "-c"},
-							Env:     make([]corev1.EnvVar, 3),
+							Env:     make([]corev1.EnvVar, 4),
 							Args:    []string{command},
 						},
 					},
@@ -1886,6 +1886,7 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, 
 	value = append(value, dnsEndpoint)
 	value = append(value, "pds")
 	value = append(value, pdsPassword)
+	value = append(value, pdsPort)
 
 	for index := range env {
 		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Name = env[index]
@@ -2090,10 +2091,12 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
 		}
 	case mysql:
-		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
+		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS", "PDS_PORT"}
+		// ToDo: Fetch the port number dynamically
+		pdsPort := "6446"
 		// ToDo: Move the python command to the docker container/ Part of image.
-		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
-		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, mysqlcmd, params.DeploymentName)
+		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS} -port ${PDS_PORT}")
+		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, pdsPort, params.Namespace, env, mysqlcmd, params.DeploymentName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
