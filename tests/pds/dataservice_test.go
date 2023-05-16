@@ -776,16 +776,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
-		defer EndTorpedoTest()
+		EndTorpedoTest()
 	})
 })
 
@@ -1157,11 +1148,23 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
 
+	log.Debugf("map before deletion %v", dataServiceVersionBuildMap)
+
 	Step("Validate Storage Configurations", func() {
 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 	})
+
+	for version := range dataServiceVersionBuildMap {
+		delete(dataServiceVersionBuildMap, version)
+	}
+
+	log.Debugf("map post deletion %v", dataServiceVersionBuildMap)
+
+	for version, build := range dataServiceVersionBuildMap {
+		log.Debugf("version :%s   build:%s", version, build)
+	}
 
 	Step("Running Workloads before scaling up of dataservices ", func() {
 		var params pdslib.WorkloadGenerationParams
@@ -1202,13 +1205,17 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		id := pdslib.GetDataServiceID(dataservice)
 		dash.VerifyFatal(id != "", true, "Validating dataservice id")
 		log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-		for version := range dataServiceVersionBuildMap {
-			delete(dataServiceVersionBuildMap, version)
-		}
-		_, _, dataServiceVersionBuildMap, err := pdslib.GetVersionsImage(dsVersion, dsBuild, id)
+
+		_, _, dsVersionBuildMap, err := pdslib.GetVersionsImage(dsVersion, dsBuild, id)
 		log.FailOnError(err, "Error while fetching versions/image information")
 
-		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+		log.Debugf("Newly generated map %v", dsVersionBuildMap)
+
+		for version, build := range dsVersionBuildMap {
+			log.Debugf("New version :%s   build:%s", version, build)
+		}
+
+		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dsVersionBuildMap)
 		dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
 	})
 
