@@ -43,12 +43,12 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				util.CheckErr(err)
 				return
 			}
-			failed_to_start := false
+			failedToStart := false
 			for _, namespace := range namespaces {
 				if incompleteAction := getAnyIncompleteAction(namespace); incompleteAction != nil {
-					if !failed_to_start {
+					if !failedToStart {
 						printMsg("Failed to start failover as there pending actions for following namespaces:", ioStreams.Out)
-						failed_to_start = true
+						failedToStart = true
 					}
 					printMsg(fmt.Sprintf(
 						"Namespace %v has action %v in state %v",
@@ -56,7 +56,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 						ioStreams.Out)
 				}
 			}
-			if failed_to_start {
+			if failedToStart {
 				return
 			}
 			for _, namespace := range namespaces {
