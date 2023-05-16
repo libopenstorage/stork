@@ -1320,8 +1320,8 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
-// GetObjectSpec gets the spec of a K8s Object. Just `name`, and if required `namespace` must be spcified on `spec` in order to GET the spec from K8s (if it exists).
-func (k *K8s) GetObjectSpec(spec interface{}) (interface{}, error) {
+// GetUpdatedSpec gets the updated spec of a K8s Object. Just `name`, and if required `namespace` must be spcified on `spec` in order to GET the spec from K8s (if it exists).
+func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 	if specObj, ok := spec.(*appsapi.Deployment); ok {
 		dep, err := k8sApps.GetDeployment(specObj.Name, specObj.Namespace)
 		if err == nil {
