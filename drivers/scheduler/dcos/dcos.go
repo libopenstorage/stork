@@ -252,6 +252,48 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 	return contexts, nil
 }
 
+// ScheduleWithCustomAppSpecs Schedules the application with custom app specs
+func (d *dcos) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+	var contexts []*scheduler.Context
+	for _, app := range apps {
+		var specObjects []interface{}
+		for _, spec := range app.SpecList {
+			if application, ok := spec.(*marathon.Application); ok {
+				if err := d.randomizeVolumeNames(application); err != nil {
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: err.Error(),
+					}
+				}
+				obj, err := MarathonClient().CreateApplication(application)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: err.Error(),
+					}
+				}
+
+				specObjects = append(specObjects, obj)
+			} else {
+				return nil, fmt.Errorf("Unsupported object received in app %v while scheduling", app.Key)
+			}
+		}
+
+		ctx := &scheduler.Context{
+			UID: instanceID,
+			App: &spec.AppSpec{
+				Key:      app.Key,
+				SpecList: specObjects,
+				Enabled:  app.Enabled,
+			},
+		}
+
+		contexts = append(contexts, ctx)
+	}
+
+	return contexts, nil
+}
+
 // AddTasks adds tasks to an existing context
 func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
 	if ctx == nil {

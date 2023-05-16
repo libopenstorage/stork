@@ -39,15 +39,13 @@ var _ = Describe("{UpgradePxBackup}", func() {
 // StorkUpgradeWithBackup validates backups with stork upgrade
 var _ = Describe("{StorkUpgradeWithBackup}", func() {
 	var (
-		contexts             []*scheduler.Context
-		appContexts          []*scheduler.Context
+		scheduledAppContexts []*scheduler.Context
 		backupLocationName   string
 		backupLocationUID    string
 		cloudCredUID         string
 		bkpNamespaces        []string
 		scheduleNames        []string
 		cloudAccountName     string
-		backupName           string
 		scheduleName         string
 		schBackupName        string
 		schPolicyUid         string
@@ -62,26 +60,27 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 	bkpNamespaces = make([]string, 0)
 	timeStamp := strconv.Itoa(int(time.Now().Unix()))
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("StorkUpgradeWithBackup", "Validates the scheduled backups and creation of new backup after stork upgrade", nil, testrailID)
 		log.Infof("Application installation")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 
 	It("StorkUpgradeWithBackup", func() {
 		Step("Validate deployed applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
@@ -138,9 +137,10 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicPolicyName))
 			for _, namespace := range bkpNamespaces {
 				scheduleName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", scheduleName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				appContextsToBackupMap[scheduleName] = appContextsToBackup
+				err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				scheduleNames = append(scheduleNames, scheduleName)
 			}
 		})
@@ -164,9 +164,9 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 				dash.VerifyFatal(len(allScheduleBackupNames) > 1, true, fmt.Sprintf("Verfiying the backup count is increased for backups with schedule name - %s", scheduleName))
 				//Get the status of latest backup
 				schBackupName, err = GetLatestScheduleBackupName(ctx, scheduleName, orgID)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of latest schedule backup with schedule name - %s", scheduleName))
-				err = backupSuccessCheck(schBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+schBackupName)
+				log.FailOnError(err, fmt.Sprintf("Failed to get latest schedule backup with schedule name - %s", scheduleName))
+				err = backupSuccessCheckWithValidation(ctx, schBackupName, appContextsToBackupMap[scheduleName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of the latest schedule backup [%s]", schBackupName))
 			}
 		})
 
@@ -175,16 +175,16 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", backupName))
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
@@ -200,7 +200,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		log.Infof("Deleting the deployed apps after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })

@@ -67,11 +67,11 @@ type NodeStatus struct {
 	// Phase is the current status of the storage node
 	Phase string `json:"phase,omitempty"`
 	// Network details used by the storage driver
-	Network NetworkStatus `json:"network,omitempty"`
+	Network *NetworkStatus `json:"network,omitempty"`
 	// Storage details used by the storage driver
-	Storage StorageStatus `json:"storage,omitempty"`
+	Storage *StorageStatus `json:"storage,omitempty"`
 	// Geo topology information for a node
-	Geo Geography `json:"geography,omitempty"`
+	Geo *Geography `json:"geography,omitempty"`
 	// Conditions is an array of current node conditions
 	Conditions []NodeCondition `json:"conditions,omitempty"`
 	// Checks are a list of pre or post flight checks that are performed by the Operator

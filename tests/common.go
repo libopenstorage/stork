@@ -1527,8 +1527,11 @@ func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptio
 }
 
 // GetAppNamespace returns namespace in which context is created
-func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
-	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
+func GetAppNamespace(ctx *scheduler.Context, taskName string) string {
+	if ctx.ScheduleOptions.Namespace == "" {
+		return ctx.App.GetID(fmt.Sprintf("%s-%s", taskName, Inst().InstanceID))
+	}
+	return ctx.ScheduleOptions.Namespace
 }
 
 // GetAppStorageClasses gets the storage classes belonging to an app's PVCs
