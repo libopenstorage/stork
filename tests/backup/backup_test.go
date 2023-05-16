@@ -232,19 +232,13 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, scheduledNamespace, time.Now().Unix())
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, scheduledNamespace, backupLocationName)
-				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContexts[i]}, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
 		})
 
 		Step("Restoring the backed up namespaces", func() {
-			defer func() {
-				log.InfoD("switching to default context")
-				err1 := SetClusterContext("")
-				log.FailOnError(err1, "failed to SetClusterContext to default cluster")
-			}()
-
 			log.InfoD("Restoring the backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -255,17 +249,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
 				}
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
-
-				log.Infof("Obtaining DestinationClusterConfigPath")
-				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-				log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
-
-				err = SetClusterContext(destinationClusterConfigPath)
-				log.FailOnError(err, "failed to SetClusterContext to %s cluster", destinationClusterConfigPath)
-
 			}
 		})
 	})
@@ -299,14 +285,14 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
-		log.Info("Deleting scheduled namespaces on source cluster")
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		log.Info("Destroying scheduled apps on source cluster")
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch to context to destination cluster")
 
-		log.InfoD("deleting restored namespaces on destination clusters")
+		log.InfoD("Destroying restored apps on destination clusters")
 		restoredAppContexts := make([]*scheduler.Context, 0)
 		for _, scheduledAppContext := range scheduledAppContexts {
 			restoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string))
@@ -316,7 +302,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			}
 			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 		}
-		ValidateAndDestroy(restoredAppContexts, opts)
+		DestroyApps(restoredAppContexts, opts)
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
