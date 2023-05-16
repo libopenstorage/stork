@@ -348,6 +348,11 @@ var (
 )
 
 var (
+	// ClusterConfigPathMap maps cluster name registered in px-backup to the path to the kubeconfig
+	ClusterConfigPathMap = make(map[string]string, 2)
+)
+
+var (
 	testRailHostname string
 	testRailUsername string
 	testRailPassword string
@@ -3460,6 +3465,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	if err != nil {
 		return err
 	}
+	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
 	// Register destination cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
 	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
@@ -3485,6 +3491,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	if err != nil {
 		return err
 	}
+	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
 	return nil
 }
 
