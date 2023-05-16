@@ -28,10 +28,9 @@ var _ = Describe("{BackupRestartPX}", func() {
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
-	var appContexts []*scheduler.Context
 	var backupLocation string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -42,6 +41,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818)
@@ -59,21 +59,21 @@ var _ = Describe("{BackupRestartPX}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Restart PX when backup in progress", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -140,9 +140,10 @@ var _ = Describe("{BackupRestartPX}", func() {
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
-				_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup %s", backupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				appContextsToBackupMap[backupName] = appContextsToBackup
+				_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 			}
 		})
 
@@ -164,19 +165,18 @@ var _ = Describe("{BackupRestartPX}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
-
-				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 
 			}
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -194,10 +194,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
-	var appContexts []*scheduler.Context
 	var backupLocation string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -206,6 +205,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces := make([]string, 0)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 	var backupNames []string
 
 	JustBeforeEach(func() {
@@ -224,21 +224,21 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			}
 		}
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Kill Stork when backup and restore in-progress", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -304,8 +304,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				appContextsToBackupMap[backupName] = appContextsToBackup
+				_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup %s", backupName))
 				backupNames = append(backupNames, backupName)
 			}
@@ -322,12 +323,12 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 			}
 		})
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Restoring the backups application", func() {
 			for _, backupName := range backupNames {
@@ -353,17 +354,17 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			}
 		})
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		backupDriver := Inst().Backup
 		for _, backupName := range backupNames {
@@ -381,11 +382,10 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 // This test does restart the px-backup pod, Mongo pods during backup sharing
 var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	numberOfUsers := 10
-	var contexts []*scheduler.Context
+	var scheduledAppContexts []*scheduler.Context
 	userContexts := make([]context.Context, 0)
 	CloudCredUIDMap := make(map[string]string)
 	backupMap := make(map[string]string, 0)
-	var appContexts []*scheduler.Context
 	var backupLocation string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -403,21 +403,21 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartBackupPodDuringBackupSharing", "Restart backup pod during backup sharing", nil, 82948)
 		log.InfoD("Deploy applications")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
 	It("Restart backup pod during backup sharing", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -463,10 +463,11 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Start backup of application to bucket", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{bkpNamespaces[0]},
-				nil, orgID, clusterUid, "", "", "", "", ctx)
-			log.FailOnError(err, "Backup creation failed for backup %s", backupName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 		})
 
@@ -570,13 +571,13 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting the backups")
 		for _, backup := range backupNames {
@@ -690,7 +691,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+						_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
 							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
 					}(backupName, namespace)
@@ -788,8 +789,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 // ScaleMongoDBWhileBackupAndRestore scales down MongoDB to repl=0 and backup to original replica when backups and restores are in progress
 var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	var (
-		contexts             []*scheduler.Context
-		appContexts          []*scheduler.Context
+		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string
 		cloudCredName        string
 		cloudCredUID         string
@@ -808,6 +808,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 	numberOfBackups := 5
 	scaledDownReplica := int32(0)
 
@@ -815,15 +816,15 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		StartTorpedoTest("ScaleMongoDBWhileBackupAndRestore",
 			"Scale down MongoDB to repl=0 when backups and restores are in progress", nil, 58075)
 		log.InfoD("Deploying applications required for the testcase")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -833,7 +834,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -887,15 +888,16 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 					sem <- struct{}{}
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					appContextsToBackupMap[backupName] = appContextsToBackup
 					wg.Add(1)
-					go func(backupName string, namespace string) {
+					go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
-					}(backupName, namespace)
+						_, err := CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
+					}(backupName, namespace, appContextsToBackup)
 				}
 			}
 			wg.Wait()
@@ -943,8 +945,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Verifying the backup status for backup - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 			}
 		})
 		Step("Restoring the backups taken", func() {
@@ -1017,7 +1019,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
 		statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
 		if *statefulSet.Spec.Replicas != originalReplicaCount {
@@ -1043,7 +1045,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
@@ -1064,39 +1066,48 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 // source cluster is backup cluster and destination cluster is application cluster for this testcase
 var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		appNamespaces     []string
-		cloudCredName     string
-		cloudCredUID      string
-		bkpLocationName   string
-		backupLocationUID string
-		destClusterUid    string
-		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
-		destClusterStatus api.ClusterInfo_StatusInfo_Status
-		backupNames       []string
-		newBackupNames    []string
-		listOfWorkerNodes []node.Node
+		scheduledAppContexts []*scheduler.Context
+		appNamespaces        []string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupLocationUID    string
+		destClusterUid       string
+		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
+		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+		backupNames          []string
+		newBackupNames       []string
+		listOfWorkerNodes    []node.Node
+		ctx                  context.Context
 	)
 	labelSelectors := make(map[string]string)
 	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "2"))
 	backupLocationMap := make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
+	newAppContextsToBackupMap := make(map[string][]*scheduler.Context)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
 			"Reboots node when backup is in progress", nil, 55817)
 		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
-		err := SetDestinationKubeConfig()
+
+		var err error
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.InfoD("Deploying applications required for the testcase on application cluster")
-		contexts = make([]*scheduler.Context, 0)
+
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < numberOfBackups; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 		log.Infof("The list of namespaces are %v", appNamespaces)
@@ -1104,15 +1115,16 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	It("Reboot node when backup is in progress", func() {
 		var sem = make(chan struct{}, numberOfBackups)
 		var wg sync.WaitGroup
+
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications on destination cluster")
-			ValidateApplications(contexts)
-		})
-		Step("Switching cluster context back to source[backup] cluster", func() {
+			ValidateApplications(scheduledAppContexts)
+
 			log.InfoD("Switching cluster context back to source[backup] cluster")
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
 		})
+
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
 			providers := getProviders()
@@ -1122,9 +1134,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
 					getGlobalBucketName(provider), orgID, "")
@@ -1133,9 +1143,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Registering source and destination clusters for backup", func() {
 			log.InfoD("Registering source and destination clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
 			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -1148,22 +1156,21 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				sem <- struct{}{}
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				appContextsToBackupMap[backupName] = appContextsToBackup
 				wg.Add(1)
-				go func(backupName string, namespace string) {
+				go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
 					// Here we are using destination cluster as application cluster
-					_, err = CreateBackupWithoutCheck(backupName, destinationClusterName, bkpLocationName, backupLocationUID,
-						[]string{namespace}, labelSelectors, orgID, destClusterUid, "", "", "", "", ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
-				}(backupName, namespace)
+					_, err := CreateBackupWithoutCheck(ctx, backupName, destinationClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, destClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
+				}(backupName, namespace, appContextsToBackup)
 			}
 			wg.Wait()
 			log.InfoD("The list of backups taken are: %v", backupNames)
@@ -1181,25 +1188,16 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				},
 			})
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[0].Name))
-			log.InfoD("Switching cluster context back to source cluster")
-			err = SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster")
-
 		})
 		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
 			log.InfoD("Check if backup is successful after one worker node on application cluster is rebooted")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Inspecting backup success for - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 			}
 		})
 		Step("Check if the rebooted node on application cluster is up now", func() {
 			log.InfoD("Check if the rebooted node on application cluster is up now")
-			log.InfoD("Switching cluster context to destination cluster")
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
 			nodeReadyStatus := func() (interface{}, bool, error) {
 				err := Inst().S.IsNodeReady(listOfWorkerNodes[0])
@@ -1208,41 +1206,34 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[0].Name))
 			err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[0], Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[0].Name))
-			log.InfoD("Switching cluster context back to source[backup] cluster")
-			err = SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster")
 		})
 		Step("Taking new backup of applications", func() {
 			log.InfoD("Taking new backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				sem <- struct{}{}
 				backupName := fmt.Sprintf("new-%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				newBackupNames = append(newBackupNames, backupName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				newAppContextsToBackupMap[backupName] = appContextsToBackup
 				wg.Add(1)
-				go func(backupName string, namespace string) {
+				go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
 					// Here we are using destination cluster as application cluster
-					_, err = CreateBackupWithoutCheck(backupName, destinationClusterName, bkpLocationName, backupLocationUID,
-						[]string{namespace}, labelSelectors, orgID, destClusterUid, "", "", "", "", ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
-				}(backupName, namespace)
+					_, err := CreateBackupWithoutCheck(ctx, backupName, destinationClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, destClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
+				}(backupName, namespace, appContextsToBackup)
 			}
 			wg.Wait()
 			log.InfoD("The list of new backups taken are: %v", newBackupNames)
 		})
 		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
 			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
-			log.InfoD("Switching cluster context to application[destination] cluster")
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
 			for i := 0; i < 2; i++ {
 				err := Inst().N.RebootNode(listOfWorkerNodes[i], node.RebootNodeOpts{
@@ -1254,24 +1245,16 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 				})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[i].Name))
 			}
-			log.InfoD("Switching cluster context back to source cluster")
-			err = SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster")
 		})
 		Step("Check if backup is successful after two worker nodes are rebooted", func() {
 			log.InfoD("Check if backup is successful after two worker nodes are rebooted")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range newBackupNames {
-				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, "Inspecting backup success for - "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, newAppContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 			}
 		})
 		Step("Check if the rebooted nodes on application cluster are up now", func() {
 			log.InfoD("Check if the rebooted nodes on application cluster are up now")
-			log.Infof("Switching cluster context to destination cluster")
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Switching context to destination cluster failed")
 			listOfWorkerNodes = node.GetWorkerNodes()
 			for i := 0; i < 2; i++ {
 				nodeReadyStatus := func() (interface{}, bool, error) {
@@ -1294,7 +1277,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
 		}()
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Check if the rebooted nodes on application cluster are up now")
 		log.Infof("Switching cluster context to destination cluster")
 		err := SetDestinationKubeConfig()
@@ -1316,7 +1299,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.Infof("Deleting the deployed applications on application cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster")
@@ -1329,8 +1312,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 // ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress scales down px-backup deployment to 0 and backup to original replica when backups and restores are in progress
 var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func() {
 	var (
-		contexts             []*scheduler.Context
-		appContexts          []*scheduler.Context
+		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string
 		cloudCredName        string
 		cloudCredUID         string
@@ -1349,6 +1331,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
+	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 	numberOfBackups := 4
 	scaledDownReplica := int32(0)
 
@@ -1356,15 +1339,15 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		StartTorpedoTest("ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress",
 			"Scale down px-backup deployment to 0 when backups and restores are in progress", nil, 58074)
 		log.InfoD("Deploying applications required for the testcase")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1374,7 +1357,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1427,15 +1410,16 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 					sem <- struct{}{}
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					appContextsToBackupMap[backupName] = appContextsToBackup
 					wg.Add(1)
-					go func(backupName string, namespace string) {
+					go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						_, err = CreateBackupWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
-					}(backupName, namespace)
+						_, err := CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
+					}(backupName, namespace, appContextsToBackup)
 				}
 			}
 			wg.Wait()
@@ -1478,8 +1462,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				log.FailOnError(err, "Getting the status for backup- "+backupName)
+				err := backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
 			}
 		})
 		Step("Restoring the backups taken", func() {
@@ -1547,7 +1531,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Updating the px_backup deployment replica count as it was at the start of this testcase")
 		backupDeployment, err = apps.Instance().GetDeployment(pxBackupDeployment, pxBackupNS)
 		log.FailOnError(err, "Getting px-backup deployment")
@@ -1576,7 +1560,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
 			wg.Add(1)
@@ -1595,18 +1579,17 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 // CancelAllRunningRestoreJobs cancels all the running restore jobs while restores are in progress
 var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 	var (
-		contexts          []*scheduler.Context
-		appContexts       []*scheduler.Context
-		appNamespaces     []string
-		cloudAccountName  string
-		cloudAccountUID   string
-		bkpLocationName   string
-		backupLocationUID string
-		srcClusterUid     string
-		backupNames       []string
-		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
-		destClusterStatus api.ClusterInfo_StatusInfo_Status
-		restoreNames      []string
+		scheduledAppContexts []*scheduler.Context
+		appNamespaces        []string
+		cloudAccountName     string
+		cloudAccountUID      string
+		bkpLocationName      string
+		backupLocationUID    string
+		srcClusterUid        string
+		backupNames          []string
+		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
+		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+		restoreNames         []string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1616,15 +1599,15 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CancelAllRunningRestoreJobs", "Cancel all the running restore jobs while restores are in progress", nil, 58058)
 		log.InfoD("Deploying applications required for the testcase")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 	})
@@ -1633,7 +1616,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding cloud account and backup location", func() {
 			log.InfoD("Adding cloud account and backup location")
@@ -1684,9 +1667,9 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 					go func(backupName string, namespace string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, srcClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 					}(backupName, namespace)
 				}
 				backupNamesMap[namespace] = backupNames
@@ -1788,13 +1771,13 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting the remaining restores in case of failure")
 		adminRestores, err := GetAllRestoresAdmin()
 		for _, restoreName := range adminRestores {

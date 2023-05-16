@@ -286,7 +286,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Deleting scheduled namespaces on source cluster")
-		ValidateAndDestroy(scheduledAppContexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 
 		backupDriver := Inst().Backup
 		log.Info("Deleting backed up namespaces")
