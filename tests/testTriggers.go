@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -444,7 +445,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 			dash.VerifyFatal(len(nodes) > 0, true, "Nodes registered?")
 			log.Infof("len nodes: %v", len(nodes))
 			for _, n := range nodes {
@@ -1370,7 +1371,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog := "get all nodes and reboot one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToReboot := node.GetWorkerNodes()
+		nodesToReboot := node.GetStorageDriverNodes()
 
 		// Reboot node and check driver status
 		stepLog = fmt.Sprintf("reboot node one at a time")
@@ -1642,7 +1643,7 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	stepLog := "get all nodes and crash one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToCrash := node.GetWorkerNodes()
+		nodesToCrash := node.GetStorageDriverNodes()
 
 		// Crash node and check driver status
 		stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
@@ -2406,7 +2407,7 @@ func TriggerEmailReporter() {
 	}
 	emailData.MasterIP = masterNodeList
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		k8sNode, err := core.Instance().GetNodeByName(n.Name)
 		k8sNodeStatus := "False"
 
@@ -2476,7 +2477,9 @@ func TriggerEmailReporter() {
 		log.Errorf("Failed to send out email, Err: %q", err)
 	}
 
-	filePath := fmt.Sprintf("%s/%s-%s.html", Inst().LogLoc, EmailSubject, timeString)
+	fileName := fmt.Sprintf("%s_%s", EmailSubject, timeString)
+	fileName = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(fileName, "_")
+	filePath := fmt.Sprintf("%s/%s.html", Inst().LogLoc, fileName)
 
 	if err := os.WriteFile(filePath, []byte(content), 0664); err != nil {
 		log.Errorf("Failed to create html report, Err: %q", err)
@@ -4491,7 +4494,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			func() {
 				log.InfoD(stepLog)
 				if !isAutoFsTrimEnabled {
-					currNode := node.GetWorkerNodes()[0]
+					currNode := node.GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOpts(currNode, map[string]string{
 						"--auto-fstrim": "on",
 					})
@@ -4791,7 +4794,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					currNode := node.GetWorkerNodes()[0]
+					currNode := node.GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--volume-expiration-minutes": "600",
 					})
@@ -4809,7 +4812,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		} else {
 			var trashcanVols []string
 			var err error
-			node := node.GetWorkerNodes()[0]
+			node := node.GetStorageDriverNodes()[0]
 			stepLog = "Validating trashcan"
 			Step(stepLog,
 				func() {
@@ -4883,7 +4886,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					currNode := node.GetWorkerNodes()[0]
+					currNode := node.GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--relaxedreclaim-delete-seconds": "600",
 					})
@@ -4903,7 +4906,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					nodes := node.GetWorkerNodes()
+					nodes := node.GetStorageDriverNodes()
 					totalDeleted := 0
 					totalPending := 0
 					totalSkipped := 0
@@ -4961,7 +4964,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "Decommission a random node"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		workerNodes = node.GetWorkerNodes()
+		workerNodes = node.GetStorageDriverNodes()
 		index := rand.Intn(len(workerNodes))
 		nodeToDecomm = workerNodes[index]
 		stepLog = fmt.Sprintf("decommission node %s", nodeToDecomm.Name)
@@ -5416,7 +5419,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		stepLog = "Get KVDB nodes and perform failover"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodes := node.GetWorkerNodes()
+			nodes := node.GetStorageDriverNodes()
 
 			kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 
@@ -5646,7 +5649,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			UpdateOutcome(event, err)
 		}
 
-		for _, n := range node.GetWorkerNodes() {
+		for _, n := range node.GetStorageDriverNodes() {
 			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
 			storageNode, err := Inst().V.GetDriverNode(&n)

@@ -523,7 +523,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	topologyGroups := len(topologyLabels)
 
 	// Adding the labels on node.
-	for nodeIdx, n := range node.GetWorkerNodes() {
+	for nodeIdx, n := range node.GetStorageDriverNodes() {
 		labelIdx := int32(nodeIdx % topologyGroups)
 		for key, value := range topologyLabels[labelIdx] {
 			if err = Inst().S.AddLabelOnNode(n, key, value); err != nil {
@@ -552,7 +552,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	// Wait for PX pods to be up
 	log.Info("Waiting for Volume Driver to be up and running")
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if err := Inst().V.WaitForPxPodsToBeUp(n); err != nil {
 			return nil, fmt.Errorf("PX pod not coming up in a node [%s]. Error:[%v]", n.Name, err)
 		}

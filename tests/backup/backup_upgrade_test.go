@@ -452,7 +452,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			log.Infof("First schedule backup name: [%s]", firstScheduleBackupName)
 		})
 		Step("Upgrading px-backup", func() {
-			latestPxBackupVersionFromEnv := os.Getenv("LATEST_PXBACKUP_VERSION")
+			latestPxBackupVersionFromEnv := os.Getenv("TARGET_PXBACKUP_VERSION")
 			if latestPxBackupVersionFromEnv == "" {
 				latestPxBackupVersionFromEnv = latestPxBackupVersion
 			}

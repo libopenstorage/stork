@@ -9,11 +9,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
+
+	"github.com/portworx/sched-ops/k8s/apps"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -125,6 +126,9 @@ import (
 	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
@@ -208,6 +212,10 @@ const (
 	torpedoJobTypeFlag       = "torpedo-job-type"
 	clusterCreationTimeout   = 5 * time.Minute
 	clusterCreationRetryTime = 10 * time.Second
+
+	// Anthos
+	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
+	anthosInstPathCliFlag = "anthos-inst-path"
 )
 
 // Dashboard params
@@ -399,6 +407,8 @@ func InitInstance() {
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 		SecureApps:                       Inst().SecureAppList,
+		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
+		AnthosInstancePath:               Inst().AnthosInstPath,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -1512,8 +1522,11 @@ func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptio
 }
 
 // GetAppNamespace returns namespace in which context is created
-func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
-	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
+func GetAppNamespace(ctx *scheduler.Context, taskName string) string {
+	if ctx.ScheduleOptions.Namespace == "" {
+		return ctx.App.GetID(fmt.Sprintf("%s-%s", taskName, Inst().InstanceID))
+	}
+	return ctx.ScheduleOptions.Namespace
 }
 
 // GetAppStorageClasses gets the storage classes belonging to an app's PVCs
@@ -1782,6 +1795,16 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 		}
 	})
 
+	Step("destroy apps", func() {
+		log.InfoD("Destroying apps")
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+}
+
+// DestroyApps destroy applications without validating them
+func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("destroy apps", func() {
 		log.InfoD("Destroying apps")
 		for _, ctx := range contexts {
@@ -4443,6 +4466,8 @@ type Torpedo struct {
 	JobName                             string
 	JobType                             string
 	PortworxPodRestartCheck             bool
+	AnthosAdminWorkStationNodeIP        string
+	AnthosInstPath                      string
 }
 
 // ParseFlags parses command line flags
@@ -4493,6 +4518,8 @@ func ParseFlags() {
 	var testsetID int
 	var torpedoJobName string
 	var torpedoJobType string
+	var anthosWsNodeIp string
+	var anthosInstPath string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -4557,6 +4584,8 @@ func ParseFlags() {
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
+	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
+	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -4762,6 +4791,8 @@ func ParseFlags() {
 				JobName:                             torpedoJobName,
 				JobType:                             torpedoJobType,
 				PortworxPodRestartCheck:             pxPodRestartCheck,
+				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
+				AnthosInstPath:                      anthosInstPath,
 			}
 		})
 	}
@@ -5607,6 +5638,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()
 	timeString := time.Now().Format(time.RFC1123)
+	timeString = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(timeString, "_")
 	for count > 0 {
 		volName := fmt.Sprintf("%s-%d-%s", VolumeCreatePxRestart, count, timeString)
 		log.Infof("Creating volume : %s", volName)

@@ -367,7 +367,7 @@ github.com/fatih/color
 # github.com/fatih/structs v1.1.0
 ## explicit
 github.com/fatih/structs
-# github.com/fsnotify/fsnotify v1.5.4
+# github.com/fsnotify/fsnotify v1.6.0
 ## explicit; go 1.16
 github.com/fsnotify/fsnotify
 # github.com/gambol99/go-marathon v0.7.1
@@ -679,11 +679,14 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594
+# github.com/libopenstorage/operator v0.0.0-20230511042455-244266620049
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/drivers/storage/portworx/util
+github.com/libopenstorage/operator/pkg/apis
 github.com/libopenstorage/operator/pkg/apis/core/v1
+github.com/libopenstorage/operator/pkg/apis/portworx
+github.com/libopenstorage/operator/pkg/apis/portworx/v1
 github.com/libopenstorage/operator/pkg/client/clientset/versioned
 github.com/libopenstorage/operator/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/core/v1
