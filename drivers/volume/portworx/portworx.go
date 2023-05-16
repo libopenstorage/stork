@@ -2467,10 +2467,10 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		return fmt.Errorf("error fetching pvcList %v", err)
 	}
 
-	count_promoted_volumes := 0
-	count_total_volumes := len(pvcList.Items)
+	countPromotedVolumes := 0
+	countTotalVolumes := len(pvcList.Items)
 	defer func() {
-		logrus.Infof("promoted %v/%v volumes", count_promoted_volumes, count_total_volumes)
+		logrus.Infof("promoted %v/%v volumes", countPromotedVolumes, countTotalVolumes)
 	}()
 
 	for _, pvc := range pvcList.Items {
@@ -2511,7 +2511,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 		if err := volDriver.Set(vol.GetId(), volLocator, nil); err != nil {
 			return fmt.Errorf("failed to promote volume %v with error %v", vol.GetId(), err)
 		}
-		count_promoted_volumes += 1
+		countPromotedVolumes += 1
 		logrus.Infof("promoted volume %v", vol.GetId())
 	}
 	return nil
