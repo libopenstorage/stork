@@ -35,6 +35,8 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 )
 
 const (
@@ -839,7 +841,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	}()
 	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
-		expectedRestoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping)
+		expectedRestoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
 		if err != nil {
 			log.Errorf("TransformAppContextWithMappings: %v", err)
 			continue
@@ -1804,13 +1806,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		// VALIDATE APPLICATIONS
 		log.InfoD("Validate applications in restored namespace [%s] due to restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range expectedRestoredAppContexts {
-			ValidateContext(ctx, &errorChan)
+		ValidateContext(expectedRestoredAppContext, &errorChan)
 			for err := range errorChan {
 				errors = append(errors, err)
 			}
 		}
-	}
 
 	errStrings := make([]string, 0)
 	for _, err := range errors {
@@ -1828,29 +1828,42 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 
 // TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided.
 // NOTE: To be used after switching k8s context (cluster) which has the namespace
-func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string) (*scheduler.Context, error) {
-	log.Infof("TransformAppContextWithMappings with namespace mapping [%v] and storage Class Mapping [%v]", namespaceMapping, storageClassMapping)
+func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, forRestore bool) (*scheduler.Context, error) {
+	appContextNamespace := appContext.ScheduleOptions.Namespace
+	log.Infof("TransformAppContextWithMappings of appContext [%s] with namespace mapping [%v] and storage Class Mapping [%v]", appContextNamespace, namespaceMapping, storageClassMapping)
 
 	restoreAppContext := *appContext
+	var errors []error
 
 	// TODO: remove workaround in future.
 	allStorageClassMappingsPresent := true
 
 	specObjects := make([]interface{}, 0)
 	for _, appSpecOrig := range appContext.App.SpecList {
+		if forRestore {
+			// if we can transforming to obtain a restored specs, VolumeSnapshot should be ignored
+			if obj, ok := appSpecOrig.(*snapv1.VolumeSnapshot); ok {
+				log.Infof("TransformAppContextWithMappings is for restore contexts, ignoring transformation of 'VolumeSnapshot' [%s] in appContext [%s]", obj.Metadata.Name, appContextNamespace)
+				continue
+			}
+		}
+
 		appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
 		if err != nil {
-			log.Errorf("Failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
+			err := fmt.Errorf("failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
+			errors = append(errors, err)
 			continue
 		}
 		err = TransformToRestoredSpec(appSpec, storageClassMapping)
 		if err != nil {
-			log.Errorf("Failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
+			err := fmt.Errorf("failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
+			errors = append(errors, err)
 			continue
 		}
 		err = UpdateNamespace(appSpec, namespaceMapping)
 		if err != nil {
-			log.Errorf("Failed to Update the namespace for %v, with ns map %s. Err: %v", appSpec, namespaceMapping, err)
+			err := fmt.Errorf("failed to Update the namespace for %v, with ns map %s. Err: %v", appSpec, namespaceMapping, err)
+			errors = append(errors, err)
 			continue
 		}
 		specObjects = append(specObjects, appSpec)
@@ -1863,16 +1876,27 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 		}
 	}
 
+	errStrings := make([]string, 0)
+	for _, err := range errors {
+		if err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+
+	if len(errStrings) > 0 {
+		return nil, fmt.Errorf("TransformAppContextWithMappings Errors: {%s}", strings.Join(errStrings, "}\n{"))
+	}
+
 	app := *appContext.App
 	app.SpecList = specObjects
 	restoreAppContext.App = &app
 
 	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
 	options := CreateScheduleOptions("")
-	if namespace, ok := namespaceMapping[appContext.ScheduleOptions.Namespace]; ok {
+	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
 		options.Namespace = namespace
 	} else {
-		options.Namespace = appContext.ScheduleOptions.Namespace
+		options.Namespace = appContextNamespace
 	}
 	restoreAppContext.ScheduleOptions = options
 
