@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	storageapi "k8s.io/api/storage/v1"
 )
 
 const (
@@ -1820,8 +1821,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	}
 }
 
-// TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided.
-// NOTE: To be used after switching k8s context (cluster) which has the namespace
+// TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided. When `forRestore` is true, VolumeSnapshots and StorageClasses are ignored. To be used after switching k8s context (cluster) which has the namespace
 func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, forRestore bool) (*scheduler.Context, error) {
 	appContextNamespace := appContext.ScheduleOptions.Namespace
 	log.Infof("TransformAppContextWithMappings of appContext [%s] with namespace mapping [%v] and storage Class Mapping [%v]", appContextNamespace, namespaceMapping, storageClassMapping)
@@ -1838,6 +1838,9 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 			// if we can transforming to obtain a restored specs, VolumeSnapshot should be ignored
 			if obj, ok := appSpecOrig.(*snapv1.VolumeSnapshot); ok {
 				log.Infof("TransformAppContextWithMappings is for restore contexts, ignoring transformation of 'VolumeSnapshot' [%s] in appContext [%s]", obj.Metadata.Name, appContextNamespace)
+				continue
+			} else if obj, ok := appSpecOrig.(*storageapi.StorageClass); ok {
+				log.Infof("TransformAppContextWithMappings is for restore contexts, ignoring transformation of 'StorageClass' [%s] in appContext [%s]", obj.Name, appContextNamespace)
 				continue
 			}
 		}
