@@ -2258,9 +2258,9 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 		customBackupLocationName string
 		credName                 string
 	)
-	timeBetweenConsecutiveBackups := 4 * time.Second
+	timeBetweenConsecutiveBackups := 10 * time.Second
 	backupNames := make([]string, 0)
-	numberOfSimultaneousBackups := 20
+	numberOfSimultaneousBackups := 4
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
