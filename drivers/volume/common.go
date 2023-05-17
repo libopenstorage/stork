@@ -107,6 +107,13 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 
 }
 
+func (d *DefaultDriver) ListAllVolumes() ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListAllVolumes()",
+	}
+}
+
 // CreateVolume creates a volume with the given setting
 // returns volume_id of the new volume
 func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
