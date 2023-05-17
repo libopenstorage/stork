@@ -3,10 +3,12 @@ package dataservice
 import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
@@ -14,9 +16,10 @@ import (
 
 // PDS vars
 var (
-	components *pdsapi.Components
-	deployment *pds.ModelsDeployment
-	apiClient  *pds.APIClient
+	components    *pdsapi.Components
+	deployment    *pds.ModelsDeployment
+	apiClient     *pds.APIClient
+	targetCluster *targetcluster.TargetCluster
 
 	err                                  error
 	isVersionAvailable                   bool
@@ -38,6 +41,7 @@ const (
 	zookeeper      = "ZooKeeper"
 	redis          = "Redis"
 	deploymentName = "qa"
+	driverName     = "pds"
 )
 
 // PDS packages
@@ -48,7 +52,7 @@ var (
 
 type DataserviceType struct{}
 
-//TestParams has the prereqs for deploying pds dataservices
+// TestParams has the prereqs for deploying pds dataservices
 type TestParams struct {
 	DeploymentTargetId string
 	DnsZone            string
@@ -242,7 +246,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
-//DeployPDSDataservices method will be used to deploy ds and run common px tests
+// DeployPDSDataservices method will be used to deploy ds and run common px tests
 func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, error) {
 	log.InfoD("Deployment of pds apps called from schedule applications")
 	var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
@@ -272,6 +276,9 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 	}
 	testparams.DnsZone = dnsZone
 
+	err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
+	log.FailOnError(err, "Target Cluster Registeration failed")
+
 	deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting deployment Target ID %v", err)
@@ -298,6 +305,10 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to deploy pds apps %v", err)
 		}
+
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+
 		deployments[ds] = deployment
 		pdsApps = append(pdsApps, deployment)
 	}
@@ -322,6 +333,14 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 		Contexts = append(Contexts, ctx)
 	}
 	return Contexts
+}
+
+func init() {
+	log.Infof("pds data services drivers got registerd...")
+	err = pdsdriver.Register(driverName, &DataserviceType{})
+	if err != nil {
+		log.Errorf("Error while Registering pds dataservice type driver: %v", err)
+	}
 }
 
 func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {
