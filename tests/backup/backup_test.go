@@ -98,23 +98,27 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		cloudCredUID         string
 		backupLocationUID    string
 		backupLocationName   string
-	)
-
-	var (
-		appList           = Inst().AppList
-		backupLocationMap = make(map[string]string)
-		labelSelectors    = make(map[string]string)
-		providers         = getProviders()
-		intervalName      = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
-		dailyName         = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
-		weeklyName        = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
-		monthlyName       = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
+		appList              []string
+		backupLocationMap    map[string]string
+		labelSelectors       map[string]string
+		providers            []string
+		intervalName         string
+		dailyName            string
+		weeklyName           string
+		monthlyName          string
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 
-		log.InfoD("assuming that current context is set to source cluster.")
+		appList = Inst().AppList
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = getProviders()
+		intervalName = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
+		dailyName = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
+		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
+		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
