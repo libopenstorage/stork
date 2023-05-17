@@ -43,7 +43,7 @@ const (
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
 	upgradeStorkImage                         = "TARGET_STORK_VERSION"
-	latestStorkImage                          = "openstorage/stork:23.2.0"
+	latestStorkImage                          = "23.3.1"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -2061,6 +2061,7 @@ func getStorkImageVersion() (string, error) {
 
 // upgradeStorkVersion upgrades the stork to the provided version.
 func upgradeStorkVersion(storkImageToUpgrade string) error {
+	var finalImageToUpgrade string
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return err
@@ -2073,9 +2074,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-
-	storkImageVersionToUpgradeStr := strings.Split(storkImageToUpgrade, ":")[len(strings.Split(storkImageToUpgrade, ":"))-1]
-	storkImageVersionToUpgrade, err := version.NewSemver(storkImageVersionToUpgradeStr)
+	storkImageVersionToUpgrade, err := version.NewSemver(storkImageToUpgrade)
 	if err != nil {
 		return err
 	}
@@ -2086,7 +2085,12 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if currentStorkVersion.GreaterThanOrEqual(storkImageVersionToUpgrade) {
 		return fmt.Errorf("Cannot upgrade stork version from %s to %s as the current version is higher than the provided version", currentStorkVersion, storkImageVersionToUpgrade)
 	}
-
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		finalImageToUpgrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToUpgrade)
+	} else {
+		finalImageToUpgrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToUpgrade)
+	}
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
 		log.Infof("Operator based Portworx deployment, Upgrading stork via StorageCluster")
@@ -2094,7 +2098,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		if err != nil {
 			return err
 		}
-		storageSpec.Spec.Stork.Image = storkImageToUpgrade
+		storageSpec.Spec.Stork.Image = finalImageToUpgrade
 		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
 		if err != nil {
 			return err
@@ -2105,14 +2109,14 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		if err != nil {
 			return err
 		}
-
-		storkDeployment.Spec.Template.Spec.Containers[0].Image = storkImageToUpgrade
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = finalImageToUpgrade
 		_, err = apps.Instance().UpdateDeployment(storkDeployment)
 		if err != nil {
 			return err
 		}
 	}
-
+	// Sleep for upgrade request to go through before validating.
+	time.Sleep(10 * time.Second)
 	// validate stork pods after upgrade
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
@@ -2128,8 +2132,8 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		return err
 	}
 
-	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageVersionToUpgradeStr) {
-		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageVersionToUpgradeStr, postUpgradeStorkImageVersionStr)
+	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageToUpgrade) {
+		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToUpgrade, postUpgradeStorkImageVersionStr)
 	}
 
 	log.Infof("Succesfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)

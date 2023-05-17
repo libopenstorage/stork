@@ -25,7 +25,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
 				})
@@ -72,10 +72,17 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
 				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
 
+				id := pdslib.GetDataServiceID(ds.Name)
+				dash.VerifyFatal(id != "", true, "Validating dataservice id")
+				log.Infof("Getting versionID  for Data service version %s and buildID for %s ", ds.Version, ds.Image)
+
+				_, _, dsVersionBuildMap, err := pdslib.GetVersionsImage(ds.Version, ds.Image, id)
+				log.FailOnError(err, "Error while fetching versions/image information")
+
 				//TODO: Rename the method ValidateDataServiceVolumes
 				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-				ValidateDeployments(resourceTemp, storageOp, config, int(ds.ScaleReplicas), dataServiceVersionBuildMap)
+				ValidateDeployments(resourceTemp, storageOp, config, int(ds.ScaleReplicas), dsVersionBuildMap)
 				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 
 			}
@@ -129,13 +136,14 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
+				var dsVersionBuildMap = make(map[string][]string)
 				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
 					pdslib.MarkResiliencyTC(true, true)
 
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
 
@@ -157,7 +165,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
 				})
 			}
 		})
@@ -184,10 +192,11 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 	It("Reboot Node While App Version update is going on", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var generateWorkloads = make(map[string]string)
+		var dsVersionBuildMap = make(map[string][]string)
 
 		Step("Deploy and Validate Data services", func() {
 			for _, ds := range params.DataServiceToTest {
-				deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, true,
+				deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, true,
 					dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 				log.FailOnError(err, "Error while deploying data services")
 
@@ -201,7 +210,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 
 				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-				ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+				ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dsVersionBuildMap)
 			}
 		})
 
@@ -248,13 +257,13 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 				id := pdslib.GetDataServiceID(ds.Name)
 				dash.VerifyFatal(id != "", true, "Validating dataservice id")
 				log.Infof("Getting versionID  for Data service version %s and buildID for %s ", ds.Version, ds.Image)
-				for version := range dataServiceVersionBuildMap {
-					delete(dataServiceVersionBuildMap, version)
+				for version := range dsVersionBuildMap {
+					delete(dsVersionBuildMap, version)
 				}
-				_, _, dataServiceVersionBuildMap, err := pdslib.GetVersionsImage(ds.Version, ds.Image, id)
+				_, _, dsVersionBuildMap, err = pdslib.GetVersionsImage(ds.Version, ds.Image, id)
 				log.FailOnError(err, "Error while fetching versions/image information")
 
-				ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
+				ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
 				dash.VerifyFatal(config.Spec.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
 			}
 
@@ -308,6 +317,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 
 	It("Deploy Data Services", func() {
 		Step("Deploy Data Services", func() {
+			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
 				Step("Start deployment, Kill Deployment Controller Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
@@ -322,7 +332,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
 
@@ -335,7 +345,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
 				})
 			}
 		})
@@ -359,6 +369,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
+			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
 				Step("Start deployment, Reboot multiple nodes on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
@@ -366,7 +377,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 					pdslib.MarkResiliencyTC(true, false)
 
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
 
@@ -388,7 +399,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
 				})
 			}
 		})
@@ -412,6 +423,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 
 	It("Deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
+			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
 				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
@@ -426,7 +438,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
 
@@ -440,7 +452,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 
-					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
 				})
 			}
 		})
@@ -468,7 +480,7 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
 				})

@@ -648,6 +648,7 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (string, string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
+	dsVersionBuildMap := make(map[string][]string)
 
 	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
 	if err != nil {
@@ -655,6 +656,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	}
 	isVersionAvailable = false
 	isBuildAvailable = false
+
 	for i := 0; i < len(versions); i++ {
 		log.Debugf("version name %s and is enabled=%t", *versions[i].Name, *versions[i].Enabled)
 		if *versions[i].Name == dsVersion {
@@ -664,7 +666,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 				if *images[j].Build == dsBuild {
 					versionID = versions[i].GetId()
 					imageID = images[j].GetId()
-					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
+					dsVersionBuildMap[versions[i].GetName()] = append(dsVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
 					isBuildAvailable = true
 					break
 				}
@@ -676,7 +678,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	if !(isVersionAvailable && isBuildAvailable) {
 		return "", "", nil, fmt.Errorf("version/build passed is not available")
 	}
-	return versionID, imageID, dataServiceVersionBuildMap, nil
+	return versionID, imageID, dsVersionBuildMap, nil
 }
 
 // GetAllVersionsImages returns all the versions and Images of dataservice
