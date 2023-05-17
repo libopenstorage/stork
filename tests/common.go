@@ -9,13 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
 
 	"github.com/portworx/sched-ops/k8s/apps"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
+	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
@@ -139,6 +139,12 @@ import (
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
 	SkipClusterScopedObjects = "skipClusterScopedObjects"
+)
+
+// PDS params
+const (
+	deployPDSAppsFlag = "deploy-pds-apps"
+	pdsDriveCliFlag   = "pds-driver"
 )
 
 const (
@@ -437,6 +443,10 @@ func InitInstance() {
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	log.FailOnError(err, "Error occured while monitor Initialization")
+
+	if Inst().Pds != nil {
+		log.Infof("PDS Dataservice Initialised")
+	}
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
@@ -1609,15 +1619,24 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 	}()
 	var contexts []*scheduler.Context
+	var taskName string
 	var err error
-
 	Step("schedule applications", func() {
-		options := CreateScheduleOptions("", errChan...)
-		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.Schedule(taskName, options)
-		// Need to check err != nil before calling processError
-		if err != nil {
-			processError(err, errChan...)
+		if Inst().IsPDSApps {
+			log.InfoD("Scheduling PDS Apps...")
+			pdsapps, err := Inst().Pds.DeployPDSDataservices()
+			if err != nil {
+				processError(err, errChan...)
+			}
+			contexts = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+		} else {
+			options := CreateScheduleOptions("", errChan...)
+			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+			contexts, err = Inst().S.Schedule(taskName, options)
+			// Need to check err != nil before calling processError
+			if err != nil {
+				processError(err, errChan...)
+			}
 		}
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
@@ -4433,6 +4452,7 @@ type Torpedo struct {
 	V                                   volume.Driver
 	N                                   node.Driver
 	M                                   monitor.Driver
+	Pds                                 pds.Driver
 	SpecDir                             string
 	AppList                             []string
 	SecureAppList                       []string
@@ -4473,6 +4493,7 @@ type Torpedo struct {
 	JobName                             string
 	JobType                             string
 	PortworxPodRestartCheck             bool
+	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
 }
@@ -4481,12 +4502,13 @@ type Torpedo struct {
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var monitorDriver monitor.Driver
 	var backupDriver backup.Driver
+	var pdsDriver pds.Driver
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
@@ -4504,6 +4526,7 @@ func ParseFlags() {
 	var hyperConverged bool
 	var enableDash bool
 	var pxPodRestartCheck bool
+	var deployPDSApps bool
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -4591,6 +4614,8 @@ func ParseFlags() {
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
+	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
+	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.Parse()
@@ -4676,6 +4701,16 @@ func ParseFlags() {
 				log.Infof("Backup driver found %v", backupDriver)
 			}
 		}
+
+		log.Infof("Pds driver name %s", pdsDriverName)
+		if pdsDriverName != "" {
+			if pdsDriver, err = pds.Get(pdsDriverName); err != nil {
+				log.Fatalf("cannot find pds driver for %s. Err: %v\n", pdsDriverName, err)
+			} else {
+				log.Infof("Pds driver found")
+			}
+		}
+
 		dash = aetosutil.Get()
 		if enableDash && !isDashboardReachable() {
 			enableDash = false
@@ -4760,6 +4795,7 @@ func ParseFlags() {
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
 				M:                                   monitorDriver,
+				Pds:                                 pdsDriver,
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
@@ -4798,8 +4834,7 @@ func ParseFlags() {
 				JobName:                             torpedoJobName,
 				JobType:                             torpedoJobType,
 				PortworxPodRestartCheck:             pxPodRestartCheck,
-				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
-				AnthosInstPath:                      anthosInstPath,
+				IsPDSApps:                           deployPDSApps,
 			}
 		})
 	}
