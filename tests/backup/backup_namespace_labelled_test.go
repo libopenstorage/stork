@@ -3,6 +3,9 @@ package tests
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -10,8 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"sync"
-	"time"
 )
 
 // NamespaceLabelledBackupSharedWithDifferentAccessMode takes namespace labelled backup and share with users having different access mode
@@ -24,8 +25,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		bkpLocationName          string
 		backupNames              []string
 		listOfLabelledNamespaces []string
-		contexts                 []*scheduler.Context
-		appContexts              []*scheduler.Context
+		scheduledAppContexts     []*scheduler.Context
 		srcClusterStatus         api.ClusterInfo_StatusInfo_Status
 		destClusterStatus        api.ClusterInfo_StatusInfo_Status
 	)
@@ -42,16 +42,16 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		StartTorpedoTest("NamespaceLabelledBackupSharedWithDifferentAccessMode",
 			"Take namespace labelled backup and share with users having different access mode", nil, 85040)
 		log.Infof("Deploy applications needed for backup")
-		contexts = make([]*scheduler.Context, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		// Here we have deployed 2*numberOfUsers namespaces/application
 		for i := 0; i < 2*numberOfUsers; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
+			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
 		log.InfoD("List of all namespaces deployed are %v", bkpNamespaces)
@@ -60,7 +60,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Generating multiple labels", func() {
 			log.InfoD("Generating multiple labels")
@@ -126,9 +126,9 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 				go func(backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err := CreateBackupWithNamespaceLabel(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-						nil, orgID, srcClusterUid, "", "", "", "", MapToKeyValueString(labels), ctx)
-					log.FailOnError(err, "Failed while trying to take namespace labelled backup %v of applications %v", backupName, listOfLabelledNamespaces)
+					scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, listOfLabelledNamespaces)
+					err := CreateBackupWithNamespaceLabelWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, srcClusterUid, "", "", "", "", MapToKeyValueString(labels))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled backup [%s] of namespaces (scheduled contexts) [%v]", backupName, listOfLabelledNamespaces))
 				}(backupName)
 			}
 			wg.Wait()
@@ -165,12 +165,15 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting labels from namespaces - %v", listOfLabelledNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(labels, listOfLabelledNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] to namespaces [%v]", labels, listOfLabelledNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Generating user context")
 		for _, userName := range users {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)

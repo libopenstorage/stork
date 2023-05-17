@@ -190,7 +190,7 @@ const (
 	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage             = "redis:latest"
 	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
-	mysqlBenchImage              = "portworx/pds-mysqlbench:v1"
+	mysqlBenchImage              = "portworx/pds-mysqlbench:v4"
 	postgresql                   = "PostgreSQL"
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
@@ -648,6 +648,7 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (string, string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
+	dsVersionBuildMap := make(map[string][]string)
 
 	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
 	if err != nil {
@@ -655,6 +656,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	}
 	isVersionAvailable = false
 	isBuildAvailable = false
+
 	for i := 0; i < len(versions); i++ {
 		log.Debugf("version name %s and is enabled=%t", *versions[i].Name, *versions[i].Enabled)
 		if *versions[i].Name == dsVersion {
@@ -664,7 +666,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 				if *images[j].Build == dsBuild {
 					versionID = versions[i].GetId()
 					imageID = images[j].GetId()
-					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
+					dsVersionBuildMap[versions[i].GetName()] = append(dsVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
 					isBuildAvailable = true
 					break
 				}
@@ -676,7 +678,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	if !(isVersionAvailable && isBuildAvailable) {
 		return "", "", nil, fmt.Errorf("version/build passed is not available")
 	}
-	return versionID, imageID, dataServiceVersionBuildMap, nil
+	return versionID, imageID, dsVersionBuildMap, nil
 }
 
 // GetAllVersionsImages returns all the versions and Images of dataservice
@@ -1851,7 +1853,7 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 }
 
 // Create MySql Workload (Non-TPCC)
-func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
+func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, pdsPort string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
 	var replicas int32 = 1
 	var value []string
 	deploymentSpec := &v1.Deployment{
@@ -1874,7 +1876,7 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, 
 							Name:    deploymentName,
 							Image:   mysqlBenchImage,
 							Command: []string{"/bin/sh", "-c"},
-							Env:     make([]corev1.EnvVar, 3),
+							Env:     make([]corev1.EnvVar, 4),
 							Args:    []string{command},
 						},
 					},
@@ -1886,6 +1888,7 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, 
 	value = append(value, dnsEndpoint)
 	value = append(value, "pds")
 	value = append(value, pdsPassword)
+	value = append(value, pdsPort)
 
 	for index := range env {
 		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Name = env[index]
@@ -2090,10 +2093,12 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
 		}
 	case mysql:
-		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
+		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS", "PDS_PORT"}
+		// ToDo: Fetch the port number dynamically
+		pdsPort := "6446"
 		// ToDo: Move the python command to the docker container/ Part of image.
-		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
-		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, mysqlcmd, params.DeploymentName)
+		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS} -port ${PDS_PORT}")
+		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, pdsPort, params.Namespace, env, mysqlcmd, params.DeploymentName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}

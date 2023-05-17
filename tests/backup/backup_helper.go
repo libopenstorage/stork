@@ -43,7 +43,7 @@ const (
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
 	upgradeStorkImage                         = "TARGET_STORK_VERSION"
-	latestStorkImage                          = "openstorage/stork:23.2.0"
+	latestStorkImage                          = "23.3.1"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -175,34 +175,7 @@ func getPXNamespace() string {
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
-
-	backupDriver := Inst().Backup
-	bkpCreateRequest := &api.BackupCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  backupName,
-			OrgId: orgID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bLocation,
-			Uid:  bLocationUID,
-		},
-		Cluster:        clusterName,
-		Namespaces:     namespaces,
-		LabelSelectors: labelSelectors,
-		ClusterRef: &api.ObjectRef{
-			Name: clusterName,
-			Uid:  uid,
-		},
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
@@ -224,17 +197,19 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 }
 
 // CreateBackupWithValidation creates backup, checks for success, and validates the backup
-func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
-	for _, scheduledAppContext := range scheduledAppContexts {
-		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
 	}
 	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
-	log.InfoD("Validating Backup [%s]", backupName)
-	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts, make([]string, 0))
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.BackupUpdateResponse, error) {
@@ -299,57 +274,32 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 	return nil
 }
 
-// CreateBackupWithCustomResourceTypeWithValidation creates backup with ciustom resources, checks for success, and validates the backup
-func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
+// CreateBackupWithCustomResourceTypeWithValidation creates backup with custom resources selected through resourceTypesFilter, checks for success, and validates the backup
+func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, resourceTypesFilter []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
-	for _, scheduledAppContext := range scheduledAppContexts {
-		namespaces = append(namespaces, scheduledAppContext.ScheduleOptions.Namespace)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
 	}
-	err := CreateBackupWithCustomResourceType(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypes, ctx)
+	err := CreateBackupWithCustomResourceType(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypesFilter, ctx)
 	if err != nil {
 		return err
 	}
-	return ValidateBackup(ctx, backupName, orgID, scheduledAppContexts, resourceTypes)
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypesFilter)
 }
 
-// CreateScheduleBackup creates a schedule backup
+// CreateScheduleBackup creates a schedule backup and checks for success of first (immediately triggered) backup
 func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
-	var firstScheduleBackupName string
-	backupDriver := Inst().Backup
-	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  scheduleName,
-			OrgId: orgID,
-		},
-		SchedulePolicyRef: &api.ObjectRef{
-			Name: schPolicyName,
-			Uid:  schPolicyUID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bLocation,
-			Uid:  bLocationUID,
-		},
-		SchedulePolicy: schPolicyName,
-		Cluster:        clusterName,
-		Namespaces:     namespaces,
-		LabelSelectors: labelSelectors,
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
 		return err
 	}
 	time.Sleep(1 * time.Minute)
-	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
 	}
@@ -361,8 +311,30 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	return nil
 }
 
-// CreateBackupWithoutCheck creates backup without waiting for success
-func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, and validates that backup
+func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) error {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	if err != nil {
+		return err
+	}
+	time.Sleep(1 * time.Minute)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+}
+
+// CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
+func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) (*api.BackupInspectResponse, error) {
 
@@ -410,6 +382,19 @@ func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation s
 		return resp, err
 	}
 	return resp, nil
+}
+
+// CreateBackupWithoutCheck creates backup without waiting for success
+func CreateBackupWithoutCheck(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) (*api.BackupInspectResponse, error) {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+
+	return CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 }
 
 // CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
@@ -1294,8 +1279,17 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
-// ValidateBackup validates a backup's spec's objects (resources) and volumes. This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
-func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypes []string) error {
+// backupSuccessCheckWithValidation checks if backup is Success and then validates the backup
+func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration) error {
+	err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+	if err != nil {
+		return err
+	}
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
+}
+
+// ValidateBackup validates a backup's spec's objects (resources) and volumes. resourceTypesFilter can be used to select specific types to validate (nil means all types). This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
+func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string) error {
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
 
 	log.Infof("Obtaining backup info for backup [%s]", backupName)
@@ -1368,8 +1362,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 				continue specloop
 			}
 
-			if len(resourceTypes) > 0 && !Contains(resourceTypes, kind) {
-				log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypes, name, kind, ns, scheduledAppContextNamespace, backupName)
+			if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
+				log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypesFilter, name, kind, ns, scheduledAppContextNamespace, backupName)
 				continue specloop
 			}
 
@@ -1417,8 +1411,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		}
 		log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", scheduledAppContextNamespace, scheduledVolumes)
 
-		if len(resourceTypes) == 0 ||
-			(len(resourceTypes) > 0 && Contains(resourceTypes, "PersistentVolumeClaim")) {
+		if len(resourceTypesFilter) == 0 ||
+			(len(resourceTypesFilter) > 0 && Contains(resourceTypesFilter, "PersistentVolumeClaim")) {
 			// Verify if volumes are present
 		volloop:
 			for _, spec := range scheduledAppContext.App.SpecList {
@@ -2067,6 +2061,7 @@ func getStorkImageVersion() (string, error) {
 
 // upgradeStorkVersion upgrades the stork to the provided version.
 func upgradeStorkVersion(storkImageToUpgrade string) error {
+	var finalImageToUpgrade string
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return err
@@ -2079,9 +2074,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-
-	storkImageVersionToUpgradeStr := strings.Split(storkImageToUpgrade, ":")[len(strings.Split(storkImageToUpgrade, ":"))-1]
-	storkImageVersionToUpgrade, err := version.NewSemver(storkImageVersionToUpgradeStr)
+	storkImageVersionToUpgrade, err := version.NewSemver(storkImageToUpgrade)
 	if err != nil {
 		return err
 	}
@@ -2092,7 +2085,12 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if currentStorkVersion.GreaterThanOrEqual(storkImageVersionToUpgrade) {
 		return fmt.Errorf("Cannot upgrade stork version from %s to %s as the current version is higher than the provided version", currentStorkVersion, storkImageVersionToUpgrade)
 	}
-
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		finalImageToUpgrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToUpgrade)
+	} else {
+		finalImageToUpgrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToUpgrade)
+	}
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
 		log.Infof("Operator based Portworx deployment, Upgrading stork via StorageCluster")
@@ -2100,7 +2098,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		if err != nil {
 			return err
 		}
-		storageSpec.Spec.Stork.Image = storkImageToUpgrade
+		storageSpec.Spec.Stork.Image = finalImageToUpgrade
 		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
 		if err != nil {
 			return err
@@ -2111,14 +2109,14 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		if err != nil {
 			return err
 		}
-
-		storkDeployment.Spec.Template.Spec.Containers[0].Image = storkImageToUpgrade
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = finalImageToUpgrade
 		_, err = apps.Instance().UpdateDeployment(storkDeployment)
 		if err != nil {
 			return err
 		}
 	}
-
+	// Sleep for upgrade request to go through before validating.
+	time.Sleep(10 * time.Second)
 	// validate stork pods after upgrade
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
@@ -2134,46 +2132,19 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		return err
 	}
 
-	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageVersionToUpgradeStr) {
-		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageVersionToUpgradeStr, postUpgradeStorkImageVersionStr)
+	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageToUpgrade) {
+		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToUpgrade, postUpgradeStorkImageVersionStr)
 	}
 
 	log.Infof("Succesfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
 }
 
-// CreateBackupWithNamespaceLabel creates a backup with Namespace label
+// CreateBackupWithNamespaceLabel creates a backup with Namespace label and checks for success
 func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context.Context) error {
-
-	backupDriver := Inst().Backup
-	bkpCreateRequest := &api.BackupCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  backupName,
-			OrgId: orgID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bkpLocation,
-			Uid:  bkpLocationUID,
-		},
-		Cluster:        clusterName,
-		LabelSelectors: labelSelectors,
-		ClusterRef: &api.ObjectRef{
-			Name: clusterName,
-			Uid:  uid,
-		},
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-		NsLabelSelectors: namespaceLabel,
-	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err := CreateBackupWithNamespaceLabelWithoutCheck(backupName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, ctx)
 	if err != nil {
 		return err
 	}
@@ -2185,48 +2156,27 @@ func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLo
 	return nil
 }
 
-// CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label
-func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string,
-	labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string,
-	postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
-
-	var firstScheduleBackupName string
-	backupDriver := Inst().Backup
-	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  scheduleName,
-			OrgId: orgID,
-		},
-		SchedulePolicyRef: &api.ObjectRef{
-			Name: schPolicyName,
-			Uid:  schPolicyUID,
-		},
-		BackupLocationRef: &api.ObjectRef{
-			Name: bkpLocation,
-			Uid:  bkpLocationUID,
-		},
-		SchedulePolicy: schPolicyName,
-		Cluster:        clusterName,
-		LabelSelectors: labelSelectors,
-		PreExecRuleRef: &api.ObjectRef{
-			Name: preRuleName,
-			Uid:  preRuleUid,
-		},
-		PostExecRuleRef: &api.ObjectRef{
-			Name: postRuleName,
-			Uid:  postRuleUid,
-		},
-		NsLabelSelectors: namespaceLabel,
+// CreateBackupWithNamespaceLabelWithValidation creates backup with namespace label, checks for success, and validates the backup.
+func CreateBackupWithNamespaceLabelWithValidation(ctx context.Context, backupName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string) error {
+	err := CreateBackupWithNamespaceLabel(backupName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, ctx)
+	if err != nil {
+		return err
 	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsExpectedInBackup, make([]string, 0))
+}
+
+// CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label and checks for success
+func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
 		return err
 	}
 	time.Sleep(1 * time.Minute)
-	firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return err
 	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
 	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
@@ -2235,8 +2185,8 @@ func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName str
 	return nil
 }
 
-// CreateNamespaceLabelBackupWithoutCheck creates backup with namespace label filter without waiting for success
-func CreateNamespaceLabelBackupWithoutCheck(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
+// CreateBackupWithNamespaceLabelWithoutCheck creates backup with namespace label filter without waiting for success
+func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context.Context) (*api.BackupInspectResponse, error) {
 
@@ -2286,10 +2236,8 @@ func CreateNamespaceLabelBackupWithoutCheck(backupName string, clusterName strin
 	return resp, nil
 }
 
-// CreateNamespaceLabelScheduleBackupWithoutCheck creates a schedule backup with namespace label filter without waiting for success
-func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string,
-	labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string,
-	schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
+// CreateScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
+func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -2331,6 +2279,21 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 		return resp, err
 	}
 	return resp, nil
+}
+
+// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success, and validates the backup.
+func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) error {
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
+	if err != nil {
+		return err
+	}
+	time.Sleep(1 * time.Minute)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // suspendBackupSchedule will suspend backup schedule
@@ -2415,6 +2378,17 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string) error {
 	for _, namespace := range namespaces {
 		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteLabelsFromMultipleNamespaces delete labels from multiple namespace
+func DeleteLabelsFromMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
 		if err != nil {
 			return err
 		}
@@ -2633,7 +2607,7 @@ func AreSlicesEqual(slice1, slice2 interface{}) bool {
 	return true
 }
 
-// GetNextScheduleBackupName returns the upcoming schedule backup when this function is called
+// GetNextScheduleBackupName returns the upcoming schedule backup after it has been initiated
 func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
 	var nextScheduleBackupName string
 	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
@@ -2649,16 +2623,43 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 		}
 		return ordinalScheduleBackupName, false, nil
 	}
-	log.InfoD("Waiting for the next schedule backup to be triggered")
+	log.InfoD("Waiting for [%d] minutes for the next schedule backup to be triggered", scheduleInterval)
 	time.Sleep(scheduleInterval * time.Minute)
 	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-
-	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
-	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return "", err
 	}
 	nextScheduleBackupName = nextScheduleBackup.(string)
+	return nextScheduleBackupName, nil
+}
+
+// GetNextCompletedScheduleBackupName returns the upcoming schedule backup
+// after it has been created and checked for success status
+func GetNextCompletedScheduleBackupName(ctx context.Context, scheduleName string, scheduleInterval time.Duration) (string, error) {
+	nextScheduleBackupName, err := GetNextScheduleBackupName(scheduleName, scheduleInterval, ctx)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
+	err = backupSuccessCheck(nextScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	return nextScheduleBackupName, nil
+}
+
+// GetNextCompletedScheduleBackupNameWithValidation returns the upcoming schedule backup
+// after it has been created and checked for success status and validated
+func GetNextCompletedScheduleBackupNameWithValidation(ctx context.Context, scheduleName string, scheduledAppContextsToBackup []*scheduler.Context, scheduleInterval time.Duration) (string, error) {
+	nextScheduleBackupName, err := GetNextScheduleBackupName(scheduleName, scheduleInterval, ctx)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
+	err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
 	return nextScheduleBackupName, nil
 }
 

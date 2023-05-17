@@ -821,6 +821,14 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	}
 }
 
+// UpdateStickyFlag update sticky flag on volume
+func (d *DefaultDriver) UpdateStickyFlag(volumeName, stickyOption string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateStickyFlag",
+	}
+}
+
 // ValidatePureFaFbMountOptions Validates MountOptions for pure volumes
 func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	return &errors.ErrNotSupported{
