@@ -6737,6 +6737,16 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1be
 	return nil
 }
 
+// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
+func (k *K8s) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
+	var snapshotClasses *v1beta1.VolumeSnapshotClassList
+	var err error
+	if snapshotClasses, err = k8sExternalsnap.ListSnapshotClasses(); err != nil {
+		return nil, err
+	}
+	return snapshotClasses, nil
+}
+
 // GetPodsRestartCount return map of HostIP and it restart count in given namespace
 func (k *K8s) GetPodsRestartCount(namespace string, podLabelMap map[string]string) (map[*v1.Pod]int32, error) {
 	podRestartCountMap := make(map[*v1.Pod]int32)

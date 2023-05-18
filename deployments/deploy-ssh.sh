@@ -91,6 +91,10 @@ if [ -z "${IS_PURE_VOLUMES}" ]; then
     IS_PURE_VOLUMES=false
 fi
 
+if [ -z "${DEPLOY_PDS_APPS}" ]; then
+    DEPLOY_PDS_APPS=false
+fi
+
 if [ -z "${PURE_FA_CLONE_MANY_TEST}" ]; then
     PURE_FA_CLONE_MANY_TEST=false
 fi
@@ -193,11 +197,11 @@ if [ -z "$AWS_REGION" ]; then
     echo "Using default AWS_REGION of ${AWS_REGION}"
 fi
 
-if [ -z "$TORPEDO_JOB_TYPE"]; then
+if [ -z "$TORPEDO_JOB_TYPE" ]; then
     TORPEDO_JOB_TYPE="functional"
 fi
 
-if [ -z "$TORPEDO_JOB_NAME"]; then
+if [ -z "$TORPEDO_JOB_NAME" ]; then
     TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 
@@ -462,6 +466,8 @@ spec:
             "--",
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
+            "--deploy-pds-apps=$DEPLOY_PDS_APPS",
+            "--pds-driver", "$PDS_DRIVER",
             "--secure-apps", "$SECURE_APP_LIST",
             "--repl1-apps", "$REPL1_APP_LIST",
             "--scheduler", "$SCHEDULER",
@@ -651,6 +657,8 @@ spec:
       value: "${TARGET_STORK_VERSION}"
     - name: PX_BACKUP_HELM_REPO_BRANCH
       value: "${PX_BACKUP_HELM_REPO_BRANCH}"
+    - name: BACKUP_TYPE
+      value: "${BACKUP_TYPE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

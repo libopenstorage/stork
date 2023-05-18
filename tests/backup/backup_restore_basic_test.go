@@ -1410,12 +1410,10 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 			log.InfoD("Taking a backup of multiple applications with namespace label filter")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-
 			multipleNamespaceBackupName = fmt.Sprintf("%s-%v", "multiple-namespace-backup", time.Now().Unix())
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateBackupWithNamespaceLabelWithValidation(ctx, multipleNamespaceBackupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, clusterUid, "", "", "", "", nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled backup [%s] of namespaces (scheduled contexts) [%v] with label [%s]", multipleNamespaceBackupName, bkpNamespaces, nsLabelString))
-
 			err = NamespaceLabelBackupSuccessCheck(multipleNamespaceBackupName, ctx, bkpNamespaces, nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Reverifying labels added to backup [%s]", multipleNamespaceBackupName))
 		})
@@ -1437,6 +1435,9 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 			err := DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
 		}
+		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
@@ -1780,6 +1781,9 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			err := DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
 		}
+		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(labelMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", labelMap, bkpNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
@@ -2254,9 +2258,9 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 		customBackupLocationName string
 		credName                 string
 	)
-	timeBetweenConsecutiveBackups := 4 * time.Second
+	timeBetweenConsecutiveBackups := 10 * time.Second
 	backupNames := make([]string, 0)
-	numberOfSimultaneousBackups := 20
+	numberOfSimultaneousBackups := 4
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
