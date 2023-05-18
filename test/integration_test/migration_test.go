@@ -256,6 +256,10 @@ func validateAndDestroyMigration(
 }
 
 func deploymentMigrationTest(t *testing.T) {
+	var testrailID, testResult = 50803, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"mysql-migration",
@@ -266,9 +270,17 @@ func deploymentMigrationTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deploymentMigrationReverseTest(t *testing.T) {
+	var testrailID, testResult = 54210, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 
 	ctxs, preMigrationCtx := triggerMigration(
@@ -326,9 +338,17 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	//validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, preMigrationCtx, true, true, true, true, false)
 
 	destroyAndWait(t, []*scheduler.Context{postMigrationCtx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationTest(t *testing.T) {
+	var testrailID, testResult = 50804, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"cassandra-migration",
@@ -339,9 +359,17 @@ func statefulsetMigrationTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationStartAppFalseTest(t *testing.T) {
+	var testrailID, testResult = 86243, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"cassandra-migration",
@@ -352,9 +380,17 @@ func statefulsetMigrationStartAppFalseTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationRuleTest(t *testing.T) {
+	var testrailID, testResult = 50805, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"cassandra-migration-rule",
@@ -365,9 +401,17 @@ func statefulsetMigrationRuleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
+	var testrailID, testResult = 50806, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-pre-exec-missing",
@@ -378,8 +422,16 @@ func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
+	var testrailID, testResult = 50807, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-post-exec-missing",
@@ -390,9 +442,17 @@ func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationDisallowedNamespaceTest(t *testing.T) {
+	var testrailID, testResult = 50808, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-disallowed-namespace",
@@ -403,9 +463,17 @@ func migrationDisallowedNamespaceTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationFailingPreExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50809, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-failing-pre-exec-rule",
@@ -416,9 +484,17 @@ func migrationFailingPreExecRuleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationFailingPostExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50810, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-failing-post-exec-rule",
@@ -429,9 +505,17 @@ func migrationFailingPostExecRuleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationLabelSelectorTest(t *testing.T) {
+	var testrailID, testResult = 50811, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-label-selector-test",
@@ -442,9 +526,17 @@ func migrationLabelSelectorTest(t *testing.T) {
 		false,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationLabelExcludeSelectorTest(t *testing.T) {
+	var testrailID, testResult = 86245, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration-label-exclude-selector-test",
@@ -455,9 +547,17 @@ func migrationLabelExcludeSelectorTest(t *testing.T) {
 		false,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func namespaceLabelSelectorTest(t *testing.T) {
+	var testrailID, testResult = 86244, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	defer func() {
 		err = setSourceKubeConfig()
@@ -515,11 +615,19 @@ func namespaceLabelSelectorTest(t *testing.T) {
 
 	// Destroy mysql-1-pvc app context
 	destroyAndWait(t, ctxNs2)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // migrationIntervalScheduleTest runs test for migrations with schedules that are
 // intervals of time
 func migrationIntervalScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50812, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -548,12 +656,20 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	require.NoError(t, err, "Error setting mock time")
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // intervalScheduleCleanupTest runs test for migrations with schedules that are
 // intervals of time, will try to perform cleanup of k8s resources which are deleted
 // on source cluster
 func intervalScheduleCleanupTest(t *testing.T) {
+	var testrailID, testResult = 86246, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	var name, namespace string
 	var pvcs *v1.PersistentVolumeClaimList
@@ -622,6 +738,10 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	validateMigrationCleanup(t, name, namespace, pvcs)
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.PersistentVolumeClaimList) {
@@ -661,18 +781,46 @@ func validateMigration(t *testing.T, name, namespace string) {
 }
 
 func migrationDailyScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50813, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationWeeklyScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50814, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationMonthlyScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50815, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationScheduleInvalidTest(t *testing.T) {
+	var testrailID, testResult = 50816, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationSchedules := []string{
 		"mysql-migration-schedule-daily-invalid",
 		"mysql-migration-schedule-weekly-invalid",
@@ -724,6 +872,10 @@ func migrationScheduleInvalidTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // NOTE: below test assumes all schedule policies used here  (interval, daily, weekly or monthly) have a
@@ -911,6 +1063,10 @@ func migrationScheduleTest(
 }
 
 func migrationScaleTest(t *testing.T) {
+	var testrailID, testResult = 86247, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationScaleTest(
 		t,
 		"mysql-migration",
@@ -919,6 +1075,10 @@ func migrationScaleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func triggerMigrationScaleTest(t *testing.T, migrationKey, migrationAppKey string, includeResourcesFlag, includeVolumesFlag, startApplicationsFlag bool) {
@@ -986,6 +1146,10 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey, migrationAppKey strin
 }
 
 func clusterPairFailuresTest(t *testing.T) {
+	var testrailID, testResult = 86248, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule("cluster-pair-failures",
 		scheduler.ScheduleOptions{AppKeys: []string{testKey}})
 	require.NoError(t, err, "Error scheduling task")
@@ -1066,9 +1230,16 @@ func clusterPairFailuresTest(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 	destroyAndWait(t, ctxs)
 
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func bidirectionalClusterPairTest(t *testing.T) {
+	var testrailID, testResult = 86249, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	clusterPairName := "birectional-cluster-pair"
 	clusterPairNamespace := "bidirectional-clusterpair-ns"
 
@@ -1112,9 +1283,17 @@ func bidirectionalClusterPairTest(t *testing.T) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func operatorMigrationMongoTest(t *testing.T) {
+	var testrailID, testResult = 86250, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration",
@@ -1125,9 +1304,17 @@ func operatorMigrationMongoTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func operatorMigrationRabbitmqTest(t *testing.T) {
+	var testrailID, testResult = 86251, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	_, err := core.Instance().CreateNamespace(&v1.Namespace{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: rabbitmqNamespace,
@@ -1152,6 +1339,10 @@ func operatorMigrationRabbitmqTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func createMigration(
@@ -1225,6 +1416,10 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 // reflected correctly after change on source pvc
 // it also make sure that sc param is kept for migrated pvcs
 func pvcResizeMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86252, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	var namespace string
 	var pvcs *v1.PersistentVolumeClaimList
@@ -1316,6 +1511,10 @@ func pvcResizeMigrationTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
@@ -1406,6 +1605,10 @@ func suspendMigrationTest(t *testing.T) {
 }
 
 func endpointMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86256, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	namespace := "endpoint-migration-schedule-interval"
 	// Reset config in case of error
@@ -1467,10 +1670,18 @@ func endpointMigrationTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // networkPolicyMigrationTest validate migrated network policy
 func networkPolicyMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86257, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// validate default behaviour of network policy migration where policy which has CIDR set
 	// will not be migrated
 	validateNetworkPolicyMigration(t, false)
@@ -1478,6 +1689,10 @@ func networkPolicyMigrationTest(t *testing.T) {
 	// validate behaviour of network policy migration where policy which has CIDR set
 	// will be migrated using IncludeNetworkPolicyWithCIDR option in migration schedule
 	validateNetworkPolicyMigration(t, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 func validateNetworkPolicyMigration(t *testing.T, all bool) {
 	var err error
@@ -1571,6 +1786,10 @@ func validateNetworkPolicyMigration(t *testing.T, all bool) {
 }
 
 func transformResourceTest(t *testing.T) {
+	var testrailID, testResult = 86253, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -1627,10 +1846,18 @@ func transformResourceTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // Testrail ID 85741 - https://portworx.testrail.net/index.php?/cases/view/85741
 func serviceAndServiceAccountUpdate(t *testing.T) {
+	var testrailID, testResult = 85741, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -1775,4 +2002,8 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 
 	err = setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }

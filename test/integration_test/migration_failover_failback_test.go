@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -57,10 +58,22 @@ func testMigrationFailoverFailback(t *testing.T) {
 }
 
 func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86259, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	failoverAndFailbackMigrationTest(t)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86260, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// Migrate the resources
 	instanceID := "mysql-migration-failover-failback-rancher"
 	appKey := "mysql-enc-pvc-rancher"
@@ -106,6 +119,10 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	scaleFactor := testMigrationFailover(t, preMigrationCtx, ctxs, "", appKey, instanceID)
 
 	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor, projectIDMappingsReverse, appKey, instanceID)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func failoverAndFailbackMigrationTest(t *testing.T) {
