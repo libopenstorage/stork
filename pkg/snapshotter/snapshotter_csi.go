@@ -635,6 +635,9 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 		Kind:     "VolumeSnapshot",
 		Name:     o.RestoreSnapshotName,
 	}
+	// Overwritting the pvc.Spec.DataSourceRef to point same volumesnapshot name as that of pvc.Spec.DataSource
+	// Otherwise the pvc creation fails if pvc.Spec.DataSourceRef was poiinting to some stale vs name.
+	pvc.Spec.DataSourceRef = pvc.Spec.DataSource
 	pvc.Status = v1.PersistentVolumeClaimStatus{
 		Phase: v1.ClaimPending,
 	}
