@@ -129,6 +129,9 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
 
+	// import pso driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/pso"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"

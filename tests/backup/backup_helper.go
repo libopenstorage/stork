@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -187,6 +188,30 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
+// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
+func GetCsiSnapshotClassName() (string, error) {
+	var snapShotClasses *v1beta1.VolumeSnapshotClassList
+	var err error
+	if snapShotClasses, err = Inst().S.GetAllSnapshotClasses(); err != nil {
+		return "", err
+	}
+	if len(snapShotClasses.Items) > 0 {
+		log.InfoD("Volume snapshot classes found - ")
+		for _, snapshotClass := range snapShotClasses.Items {
+			log.InfoD(snapshotClass.GetName())
+			if strings.Contains(snapshotClass.GetName(), "csi") {
+				log.InfoD("CSI volume snapshot class - %s", snapshotClass.GetName())
+				return snapshotClass.GetName(), nil
+			}
+		}
+		log.Warnf("no csi volume snapshot classes found")
+		return "", nil
+	} else {
+		log.Warnf("no volume snapshot classes found")
+		return "", nil
+	}
+}
+
 func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces []string) (filteredAppContexts []*scheduler.Context) {
 	for _, appContext := range appContexts {
 		if Contains(namespaces, appContext.ScheduleOptions.Namespace) {
@@ -364,6 +389,18 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 			Uid:  postRuleUid,
 		},
 	}
+
+	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+		log.Infof("Detected generic backup type")
+		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return nil, err
+		}
+		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
+	}
+
 	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
@@ -1457,8 +1494,15 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 							errors = append(errors, err)
 						}
 
-						if backedupVol.DriverName != Inst().V.String() {
-							err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.DriverName, scheduledAppContext.ScheduleOptions.StorageProvisioner)
+						var expectedVolumeDriver string
+						if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+							expectedVolumeDriver = "kdmp"
+						} else {
+							expectedVolumeDriver = Inst().V.String()
+						}
+
+						if backedupVol.DriverName != expectedVolumeDriver {
+							err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one expected is [%s]", backedupVol.GetName(), backedupVol.DriverName, expectedVolumeDriver)
 							errors = append(errors, err)
 						}
 
@@ -2215,6 +2259,17 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 			Uid:  postRuleUid,
 		},
 		NsLabelSelectors: namespaceLabel,
+	}
+
+	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+		log.Infof("Detected generic backup type")
+		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return nil, err
+		}
+		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
 	}
 	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
