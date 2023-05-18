@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"regexp"
 
+
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
@@ -4830,6 +4832,8 @@ func ParseFlags() {
 				JobName:                             torpedoJobName,
 				JobType:                             torpedoJobType,
 				PortworxPodRestartCheck:             pxPodRestartCheck,
+				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
+				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
 			}
 		})
