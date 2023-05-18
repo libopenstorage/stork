@@ -8781,3 +8781,144 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+
+var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
+
+	//step1: feed p1 size GB I/O on the volume
+	//step2: After I/O done p1 should be offline and full, expand the pool p1 using add-disk
+	//step4: validate the pool and the data
+
+	var testrailID = 50631
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50631
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorageFullPoolLegacyAddDisk", "Feed a pool full, then expand the pool using add-disk", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	stepLog := "Create vols and make pool full"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := getNodeWithLeastSize()
+		stNodes := node.GetStorageNodes()
+		var secondReplNode node.Node
+		for _, stNode := range stNodes {
+			if stNode.Name != selectedNode.Name {
+				secondReplNode = stNode
+			}
+		}
+
+		applist := Inst().AppList
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}()
+		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "is journal enabled check failed")
+
+		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
+		log.FailOnError(err, "Error setting pools for clean volumes")
+
+		Inst().AppList = []string{"fio-fastpath"}
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullad-%d", i))...)
+		}
+		defer appsValidateAndDestroy(contexts)
+
+		err = WaitForPoolOffline(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
+
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+		var offlinePoolUUID string
+		for i, s := range poolsStatus {
+			if s == "Offline" {
+				offlinePoolUUID = i
+				break
+			}
+		}
+		selectedPool, err := GetStoragePoolByUUID(offlinePoolUUID)
+		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
+
+		defer func() {
+			status, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+			}
+		}()
+
+		log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", selectedNode.Name))
+		err = Inst().V.EnterPoolMaintenance(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", selectedNode.Name))
+		status, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+		log.InfoD(fmt.Sprintf("pool %s status %s", selectedNode.Name, status[selectedPool.Uuid]))
+
+		stepLog = fmt.Sprintf("expand pool %s using add-disk", selectedPool.Uuid)
+		var expandedExpectedPoolSize uint64
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
+
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+		})
+		stepLog = fmt.Sprintf("Ensure that pool %s expansion is successful", selectedPool.Uuid)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = waitForPoolToBeResized(expandedExpectedPoolSize, selectedPool.Uuid, isjournal)
+			log.FailOnError(err, "Error waiting for poor resize")
+			status, err = Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
+			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
+			}
+
+			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", selectedPool.Uuid))
+			newPoolSize := resizedPool.TotalSize / units.GiB
+			isExpansionSuccess := false
+			expectedSizeWithJournal := expandedExpectedPoolSize - 3
+
+			if newPoolSize >= expectedSizeWithJournal {
+				isExpansionSuccess = true
+			}
+			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("expected new pool size to be %v or %v, got %v", expandedExpectedPoolSize, expectedSizeWithJournal, newPoolSize))
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
