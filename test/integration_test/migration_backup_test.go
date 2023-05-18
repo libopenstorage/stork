@@ -28,6 +28,10 @@ func TestMigrationBackup(t *testing.T) {
 }
 
 func deploymentMigrationBackupTest(t *testing.T) {
+	var testrailID, testResult = 54209, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	for location, secret := range allConfigMap {
 		logrus.Infof("Backing up to cloud: %v using secret %v", location, secret)
 		var err error
@@ -135,4 +139,8 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		err = setRemoteConfig("")
 		require.NoError(t, err, "Error resetting remote config")
 	}
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }

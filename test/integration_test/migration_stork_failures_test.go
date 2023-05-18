@@ -34,14 +34,32 @@ func TestMigrationStorkFailures(t *testing.T) {
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
+	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
+	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
 }
 
 func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {
+	var testrailID, testResult = 51458, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	deleteStorkPodsDuringMigrationTest(t, "source", false)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deleteStorkPodsDestDuringMigrationTest(t *testing.T) {
+	var testrailID, testResult = 51459, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	deleteStorkPodsDuringMigrationTest(t, "destination", true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStorkDest bool) {
