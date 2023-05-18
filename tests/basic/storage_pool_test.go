@@ -4973,7 +4973,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			if status[selectedPool.Uuid] == "In Maintenance" {
 				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
 				err = Inst().V.ExitPoolMaintenance(*selectedNode)
-				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
 			}
 
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
