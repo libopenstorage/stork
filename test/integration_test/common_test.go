@@ -28,6 +28,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
@@ -513,6 +514,9 @@ func setRemoteConfig(kubeConfig string) error {
 
 	operatorOps := operator.Instance()
 	operatorOps.SetConfig(config)
+
+	k8sBatchOps := batch.Instance()
+	k8sBatchOps.SetConfig(config)
 
 	return nil
 }
@@ -1194,29 +1198,14 @@ func scaleDownApps(
 	return scaleFactors
 }
 
-func validateMigrationOnSrcAndDest(
+func validateMigrationOnSrc(
 	t *testing.T,
 	migrationName string,
 	namespace string,
-	preMigrationCtx *scheduler.Context,
-	startAppsOnMigration bool,
-	expectedResources uint64,
-	expectedVolumes uint64,
 ) {
 	err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error validating migration")
-	logrus.Infof("Validated migration: %v", migrationName)
-
-	funcValidateMigrationOnDestination := func() {
-		if startAppsOnMigration {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
-		} else {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
-			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
-		}
-	}
-	executeOnDestination(t, funcValidateMigrationOnDestination)
+	logrus.Infof("Validated migration on src: %v", migrationName)
 }
 
 func changePxServiceToLoadBalancer(internalLB bool) error {
