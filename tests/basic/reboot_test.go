@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume"
+	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/pkg/log"
@@ -23,6 +25,47 @@ const (
 	defaultRebootTimeRange       = 5 * time.Minute
 )
 
+var (
+	volMountedMap = make(map[string][]*volume.Volume)
+	RebootTime = time.Time{}
+)
+
+func updateSharedV4Map(context *scheduler.Context) error {
+	listOfVolumes, err := Inst().S.GetVolumes(context)
+	if err != nil{
+		return  err
+	}
+	// Need to reset the map to get new values
+	volMountedMap = map[string][]*volume.Volume{}
+	for _, vol := range listOfVolumes {
+		appVol, _ := Inst().V.InspectVolume(vol.ID)
+		// appVol.Spec.Sharedv4ServiceSpec.Type = 2 denotes CLUSTER IP
+		if appVol.Spec.Sharedv4 == true &&  appVol.Spec.Sharedv4ServiceSpec.Type ==  2 {
+			volMountedMap[appVol.AttachedOn] = append(volMountedMap[appVol.AttachedOn], vol)
+		}
+	}
+	return nil
+}
+
+func nodeContainsSharedv4Vol(nodeIp string) bool {
+	log.Info("Checking if %s has NFS volume", nodeIp)
+	_, ok := volMountedMap[nodeIp]
+	return ok
+}
+
+func validateVolumeTime(volumes []*volume.Volume) error{
+	for _, vol := range volumes{
+		log.Info("Validating %s volume now", vol.ID)
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return err
+		}
+		timeDifference := appVol.AttachTime.AsTime().Sub(RebootTime).Seconds()
+		dash.VerifySafely(timeDifference < 120, true, fmt.Sprintf("%s volume took %.0f secs to move", vol.ID, timeDifference))
+	}
+	return nil
+}
+
 var _ = Describe("{RebootOneNode}", func() {
 	var testrailID = 35266
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35266
@@ -35,7 +78,6 @@ var _ = Describe("{RebootOneNode}", func() {
 
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		log.InfoD("has to schedule apps and reboot node(s) with volumes")
-		var err error
 		contexts = make([]*scheduler.Context, 0)
 
 		log.InfoD("Scheduling Applications")
@@ -49,14 +91,26 @@ var _ = Describe("{RebootOneNode}", func() {
 		Step("get all nodes and reboot one by one", func() {
 			log.InfoD("get all nodes and reboot one by one")
 			nodesToReboot := node.GetStorageDriverNodes()
-
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
 				log.InfoD("reboot node one at a time from the node(s): %v", nodesToReboot)
 				for _, n := range nodesToReboot {
+					err := updateSharedV4Map(contexts[0])
+					if err != nil{
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Error getting sharedv4 svc vols %v", err))
+					}
 					if n.IsStorageDriverInstalled {
 						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
 							log.InfoD("reboot node: %s", n.Name)
+							rebootTime, err := Inst().N.RunCommand(n, "date",node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+								IgnoreError:     false,
+								Sudo:            false,
+							})
+							rebootString := strings.TrimSpace(string(rebootTime))
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Got date from node: %s. Err: %v", n.Name, err))
+							RebootTime, err = time.Parse(time.UnixDate, rebootString)
 							err = Inst().N.RebootNode(n, node.RebootNodeOpts{
 								Force: true,
 								ConnectionOpts: node.ConnectionOpts{
@@ -99,6 +153,18 @@ var _ = Describe("{RebootOneNode}", func() {
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 							dash.VerifyFatal(err == nil, true, fmt.Sprintf("node %s volume driver is up ? Err: %v", n.Name, err))
 
+						})
+
+						Step(fmt.Sprintf("Validate volume got migrated on time"), func(){
+							// If the volume was mounted on this node
+							if nodeContainsSharedv4Vol(n.MgmtIp) {
+								log.InfoD("Checking node %s to see volume got migrated in <2 mins", n.MgmtIp)
+								volumesToCheck := volMountedMap[n.MgmtIp]
+								err := validateVolumeTime(volumesToCheck)
+								dash.VerifySafely(err == nil, true, "Volumes got migrated on time?")
+							} else {
+								log.InfoD("Skipping the volume check for node %s since it does not contain shared V4 vol", n.MgmtIp)
+							}
 						})
 
 						Step(fmt.Sprintf("validate apps"), func() {
