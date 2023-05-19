@@ -14,8 +14,6 @@ import (
 	"net/http"
 	"regexp"
 
-
-
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
