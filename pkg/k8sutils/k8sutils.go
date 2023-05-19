@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -169,8 +170,31 @@ func ValidateCRDV1(client *clientset.Clientset, crdName string) error {
 	})
 }
 
-// CreateCRD creates the given custom resource
-func CreateCRD(resource apiextensions.CustomResource) error {
+// CreateCRD creates the given custom resource for the respective apiextensions version
+func CreateCRD(
+	resource apiextensions.CustomResource,
+	validateCRDTimeout time.Duration,
+	validateCRDInterval time.Duration) error {
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := CreateCRDV1(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+// CreateCRDV1 creates the given custom resource for apiextensionsV1
+func CreateCRDV1(resource apiextensions.CustomResource) error {
 	scope := apiextensionsv1.NamespaceScoped
 	if string(resource.Scope) == string(apiextensionsv1.ClusterScoped) {
 		scope = apiextensionsv1.ClusterScoped

@@ -301,3 +301,14 @@ func BackupLocationLog(location *storkv1.BackupLocation) *logrus.Entry {
 
 	return logrus.WithFields(logrus.Fields{})
 }
+
+// ActionLog formats a log message with action information
+func ActionLog(action *storkv1.Action) *logrus.Entry {
+	if action != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ActionName": action.Name,
+			"Namespace":  action.Namespace,
+		})
+	}
+	return logrus.WithFields(logrus.Fields{})
+}

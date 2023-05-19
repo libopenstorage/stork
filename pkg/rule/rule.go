@@ -116,7 +116,7 @@ func Init() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(storkRuleResource)
+		err := k8sutils.CreateCRDV1(storkRuleResource)
 		if err != nil && !k8s_errors.IsAlreadyExists(err) {
 			return err
 		}

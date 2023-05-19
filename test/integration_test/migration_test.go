@@ -189,8 +189,11 @@ func validateMigrationSummary(
 	require.Equal(t, migObj.Status.Summary.NumberOfMigratedVolumes, expectedVolumes, "unexpected number of volumes migrated")
 	require.Equal(t, migObj.Status.Summary.TotalNumberOfResources, expectedResources, "unexpected number of total resources")
 	require.Equal(t, migObj.Status.Summary.TotalNumberOfVolumes, expectedVolumes, "unexpected number of total volumes")
-	require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
-
+	if expectedVolumes > 0 {
+		require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
+	} else {
+		require.True(t, migObj.Status.Summary.TotalBytesMigrated == 0, "expected bytes total to be zero")
+	}
 }
 
 func validateAndDestroyMigration(
@@ -215,42 +218,39 @@ func validateAndDestroyMigration(
 		require.NoError(t, err, "Error waiting for migration to get to Ready state")
 
 		// wait on cluster 2 for the app to be running
-		err = setDestinationKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
-
-		if startAppsOnMigration {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
-			if !migrateAllAppsExpected {
-				err = schedulerDriver.WaitForRunning(allAppsCtx, defaultWaitTimeout/2, defaultWaitInterval)
-				require.Error(t, err, "All apps shouldn't have been migrated")
+		funcWaitAndDelete := func() {
+			if startAppsOnMigration {
+				err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+				require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+				if !migrateAllAppsExpected {
+					err = schedulerDriver.WaitForRunning(allAppsCtx, defaultWaitTimeout/2, defaultWaitInterval)
+					require.Error(t, err, "All apps shouldn't have been migrated")
+				}
+			} else {
+				err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
+				require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
 			}
-		} else {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
-			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
-		}
 
-		/* Failing right now as SC's are not migrated
-		* else {
-			logrus.Infof("test only validating storage components as migration has startApplications disabled")
-			err = schedulerDriver.InspectVolumes(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error validating storage components on remote cluster after migration")
-		}*/
+			/* Failing right now as SC's are not migrated
+			* else {
+				logrus.Infof("test only validating storage components as migration has startApplications disabled")
+				err = schedulerDriver.InspectVolumes(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+				require.NoError(t, err, "Error validating storage components on remote cluster after migration")
+			}*/
 
-		// Validate the migration summary
-		// destroy mysql app on cluster 2
-		if !skipAppDeletion && !skipDestDeletion {
-			destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+			// Validate the migration summary
+			// destroy mysql app on cluster 2
+			if !skipAppDeletion && !skipDestDeletion {
+				destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+			}
 		}
+		executeOnDestination(t, funcWaitAndDelete)
 	} else {
 		require.Error(t, err, "Expected migration to fail")
 	}
 
+	// destroy app on cluster 1
 	if !skipAppDeletion {
-		// destroy app on cluster 1
-		err := setSourceKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-
 		destroyAndWait(t, ctxs)
 	}
 }
@@ -917,10 +917,11 @@ func migrationScaleTest(t *testing.T) {
 		"mysql-1-pvc",
 		true,
 		true,
+		true,
 	)
 }
 
-func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKey string, includeResourcesFlag bool, startApplicationsFlag bool) {
+func triggerMigrationScaleTest(t *testing.T, migrationKey, migrationAppKey string, includeResourcesFlag, includeVolumesFlag, startApplicationsFlag bool) {
 	var appCtxs []*scheduler.Context
 	var ctxs []*scheduler.Context
 	var allMigrations []*v1alpha1.Migration
@@ -951,7 +952,7 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 		ctxs = append(ctxs, currCtxs...)
 
 		currMigNamespace := migrationAppKey + "-" + migrationKey + "-" + strconv.Itoa(i)
-		currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &includeVolumesFlag, &startApplicationsFlag)
 		require.NoError(t, err, "failed to create migration: %s in namespace %s", migrationKey, currMigNamespace)
 		allMigrations = append(allMigrations, currMig)
 
@@ -1160,6 +1161,7 @@ func createMigration(
 	clusterPair string,
 	migrationNamespace string,
 	includeResources *bool,
+	includeVolumes *bool,
 	startApplications *bool,
 ) (*v1alpha1.Migration, error) {
 
@@ -1171,6 +1173,7 @@ func createMigration(
 		Spec: v1alpha1.MigrationSpec{
 			ClusterPair:       clusterPair,
 			IncludeResources:  includeResources,
+			IncludeVolumes:    includeVolumes,
 			StartApplications: startApplications,
 			Namespaces:        []string{migrationNamespace},
 		},

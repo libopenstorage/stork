@@ -194,7 +194,7 @@ func (c *ClusterDomainsStatusController) createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}

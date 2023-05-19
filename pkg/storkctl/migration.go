@@ -9,23 +9,16 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
-	"github.com/libopenstorage/stork/pkg/resourcecollector"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/dynamic"
-	"github.com/portworx/sched-ops/k8s/openshift"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -200,22 +193,11 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 						return
 					}
 					printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to true", migr.Namespace, migr.Name), ioStreams.Out)
-
 				}
 			}
 			for _, ns := range activationNamespaces {
-				updateStatefulSets(ns, true, ioStreams)
-				updateDeployments(ns, true, ioStreams)
-				updateDeploymentConfigs(ns, true, ioStreams)
-				updateIBPObjects("IBPPeer", ns, true, ioStreams)
-				updateIBPObjects("IBPCA", ns, true, ioStreams)
-				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
-				updateIBPObjects("IBPConsole", ns, true, ioStreams)
-				updateVMObjects("VirtualMachine", ns, true, ioStreams)
-				updateCRDObjects(ns, true, ioStreams, config)
-				updateCronJobObjects(ns, true, ioStreams)
+				resourceutils.ScaleReplicas(ns, true, printFunc(ioStreams), config)
 			}
-
 		},
 	}
 	activateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Activate applications in all namespaces")
@@ -260,16 +242,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 			}
 
 			for _, ns := range deactivationNamespaces {
-				updateStatefulSets(ns, false, ioStreams)
-				updateDeployments(ns, false, ioStreams)
-				updateDeploymentConfigs(ns, false, ioStreams)
-				updateIBPObjects("IBPPeer", ns, false, ioStreams)
-				updateIBPObjects("IBPCA", ns, false, ioStreams)
-				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
-				updateIBPObjects("IBPConsole", ns, false, ioStreams)
-				updateVMObjects("VirtualMachine", ns, true, ioStreams)
-				updateCRDObjects(ns, false, ioStreams, config)
-				updateCronJobObjects(ns, false, ioStreams)
+				resourceutils.ScaleReplicas(ns, false, printFunc(ioStreams), config)
 			}
 
 			for _, ns := range migrationScheduleNamespaces {
@@ -301,307 +274,18 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 	return deactivateMigrationCommand
 }
 
-func updateStatefulSets(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	statefulSets, err := apps.Instance().ListStatefulSets(namespace, metav1.ListOptions{})
-	if err != nil {
-		util.CheckErr(err)
-		return
-	}
-	for _, statefulSet := range statefulSets.Items {
-		if replicas, update := getUpdatedReplicaCount(statefulSet.Annotations, activate, ioStreams); update {
-			statefulSet.Spec.Replicas = &replicas
-			_, err := apps.Instance().UpdateStatefulSet(&statefulSet)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error updating replicas for statefulset %v/%v : %v", statefulSet.Namespace, statefulSet.Name, err), ioStreams.ErrOut)
-				continue
-			}
-			printMsg(fmt.Sprintf("Updated replicas for statefulset %v/%v to %v", statefulSet.Namespace, statefulSet.Name, replicas), ioStreams.Out)
-		}
-
-	}
-}
-
-func updateDeployments(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	deployments, err := apps.Instance().ListDeployments(namespace, metav1.ListOptions{})
-	if err != nil {
-		util.CheckErr(err)
-		return
-	}
-	for _, deployment := range deployments.Items {
-		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, ioStreams); update {
-			deployment.Spec.Replicas = &replicas
-			_, err := apps.Instance().UpdateDeployment(&deployment)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error updating replicas for deployment %v/%v : %v", deployment.Namespace, deployment.Name, err), ioStreams.ErrOut)
-				continue
-			}
-			printMsg(fmt.Sprintf("Updated replicas for deployment %v/%v to %v", deployment.Namespace, deployment.Name, replicas), ioStreams.Out)
+func printFunc(ioStreams genericclioptions.IOStreams) func(string, string) {
+	return func(msg, stream string) {
+		switch stream {
+		case "out":
+			printMsg(msg, ioStreams.Out)
+		case "err":
+			printMsg(msg, ioStreams.ErrOut)
+		default:
+			printMsg("printFunc received invalid stream", ioStreams.ErrOut)
+			printMsg(msg, ioStreams.ErrOut)
 		}
 	}
-}
-
-func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	deployments, err := openshift.Instance().ListDeploymentConfigs(namespace)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			util.CheckErr(err)
-		}
-		return
-	}
-	for _, deployment := range deployments.Items {
-		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, ioStreams); update {
-			deployment.Spec.Replicas = replicas
-			_, err := openshift.Instance().UpdateDeploymentConfig(&deployment)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error updating replicas for deploymentconfig %v/%v : %v", deployment.Namespace, deployment.Name, err), ioStreams.ErrOut)
-				continue
-			}
-			printMsg(fmt.Sprintf("Updated replicas for deploymentconfig %v/%v to %v", deployment.Namespace, deployment.Name, replicas), ioStreams.Out)
-		}
-	}
-}
-
-func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams, config *rest.Config) {
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
-	if err != nil {
-		util.CheckErr(err)
-		return
-	}
-	configClient, err := k8sdynamic.NewForConfig(config)
-	if err != nil {
-		util.CheckErr(err)
-		return
-	}
-	ruleset := resourcecollector.GetDefaultRuleSet()
-
-	for _, res := range crdList.Items {
-		for _, crd := range res.Resources {
-			var client k8sdynamic.ResourceInterface
-			opts := &metav1.ListOptions{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       crd.Kind,
-					APIVersion: crd.Group + "/" + crd.Version},
-			}
-			gvk := schema.FromAPIVersionAndKind(opts.APIVersion, opts.Kind)
-			resourceInterface := configClient.Resource(gvk.GroupVersion().WithResource(ruleset.Pluralize(strings.ToLower(gvk.Kind))))
-			client = resourceInterface.Namespace(ns)
-			objects, err := client.List(context.TODO(), *opts)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					continue
-				}
-				util.CheckErr(err)
-				return
-			}
-			for _, o := range objects.Items {
-				annotations := o.GetAnnotations()
-				if annotations == nil {
-					printMsg(fmt.Sprintf("Warn: Skipping CR update %s-%s/%s, annotations not found", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), ioStreams.ErrOut)
-					continue
-				}
-				if crd.SuspendOptions.Path != "" {
-					crd.NestedSuspendOptions = append(crd.NestedSuspendOptions, crd.SuspendOptions)
-				}
-				if len(crd.NestedSuspendOptions) == 0 {
-					continue
-				}
-				for _, suspend := range crd.NestedSuspendOptions {
-					specPath := strings.Split(suspend.Path, ".")
-					if len(specPath) > 1 {
-						var disableVersion interface{}
-						if suspend.Type == "bool" {
-							if val, err := strconv.ParseBool(suspend.Value); err != nil {
-								disableVersion = !activate
-							} else {
-								disableVersion = val
-								if activate {
-									disableVersion = !val
-								}
-							}
-						} else if suspend.Type == "int" {
-							replicas, _ := getSuspendIntOpts(o.GetAnnotations(), activate, suspend.Path, ioStreams)
-							disableVersion = replicas
-						} else if suspend.Type == "string" {
-							suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, suspend.Path, ioStreams)
-							if err != nil {
-								util.CheckErr(err)
-								return
-							}
-							disableVersion = suspend
-						} else {
-							util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
-							return
-						}
-						err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
-						if err != nil {
-							printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", suspend.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), ioStreams.ErrOut)
-							continue
-						}
-					}
-				}
-				_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
-				if err != nil {
-					printMsg(fmt.Sprintf("Error updating CR %v %v/%v: %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-					continue
-				}
-				printMsg(fmt.Sprintf("Updated CR for %v %v/%v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), ioStreams.Out)
-				if !activate {
-					if crd.PodsPath == "" {
-						continue
-					}
-					podpath := strings.Split(crd.PodsPath, ".")
-					pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
-					if err != nil {
-						printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-						continue
-					}
-					if !found {
-						continue
-					}
-					for _, pod := range pods {
-						err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
-						printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-						continue
-					}
-				}
-			}
-
-		}
-	}
-}
-func updateIBPObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	objects, err := dynamic.Instance().ListObjects(
-		&metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       kind,
-				APIVersion: "ibp.com/v1alpha1"},
-		},
-		namespace)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			util.CheckErr(err)
-		}
-		return
-	}
-	for _, o := range objects.Items {
-		if replicas, update := getUpdatedReplicaCount(o.GetAnnotations(), activate, ioStreams); update {
-			err := unstructured.SetNestedField(o.Object, int64(replicas), "spec", "replicas")
-			if err != nil {
-				printMsg(fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-				continue
-			}
-			_, err = dynamic.Instance().UpdateObject(&o)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-				continue
-			}
-			printMsg(fmt.Sprintf("Updated replicas for %v %v/%v to %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), replicas), ioStreams.Out)
-		}
-	}
-}
-func updateVMObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	objects, err := dynamic.Instance().ListObjects(
-		&metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       kind,
-				APIVersion: "kubevirt.io/v1"},
-		},
-		namespace)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			util.CheckErr(err)
-		}
-		return
-	}
-	for _, o := range objects.Items {
-		path := []string{"spec", "running"}
-		unstructured.RemoveNestedField(o.Object, path...)
-		printMsg(fmt.Sprintf("Removed field for %v %v/%v", strings.ToLower(kind), o.GetNamespace(), o.GetName()), ioStreams.Out)
-	}
-}
-
-func updateCronJobObjects(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	cronJobs, err := batch.Instance().ListCronJobs(namespace, metav1.ListOptions{})
-	if err != nil {
-		util.CheckErr(err)
-		return
-	}
-
-	for _, cronJob := range cronJobs.Items {
-		*cronJob.Spec.Suspend = !activate
-		_, err = batch.Instance().UpdateCronJob(&cronJob)
-		if err != nil {
-			printMsg(fmt.Sprintf("Error updating suspend option for cronJob %v/%v : %v", cronJob.Namespace, cronJob.Name, err), ioStreams.ErrOut)
-			continue
-		}
-		printMsg(fmt.Sprintf("Updated suspend option for cronjob %v/%v to %v", cronJob.Namespace, cronJob.Name, !activate), ioStreams.Out)
-	}
-
-}
-func getSuspendStringOpts(annotations map[string]string, activate bool, path string, ioStreams genericclioptions.IOStreams) (string, error) {
-	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
-		suspend := strings.Split(val, ",")
-		if len(suspend) != 2 {
-			return "", fmt.Errorf("migrated annotation does not have proper values %s/%s", migration.StorkAnnotationPrefix+path, val)
-		}
-		if activate {
-			return suspend[0], nil
-		}
-		return suspend[1], nil
-	}
-	// for backward compatibility of old migrated cr's
-	crdOpts := migration.StorkMigrationCRDActivateAnnotation
-	if !activate {
-		crdOpts = migration.StorkMigrationCRDDeactivateAnnotation
-	}
-	suspend, present := annotations[crdOpts]
-	if !present {
-		return "", fmt.Errorf("required migration annotation not found %s", crdOpts)
-	}
-	return suspend, nil
-}
-
-func getSuspendIntOpts(annotations map[string]string, activate bool, path string, ioStreams genericclioptions.IOStreams) (int64, bool) {
-	intOpts := ""
-	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
-		intOpts = strings.Split(val, ",")[0]
-	} else if val, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
-		// for old migrated cr compatibility
-		intOpts = val
-	} else {
-		return 0, false
-	}
-	var replicas int64
-	if activate {
-		parsedReplicas, err := strconv.Atoi(intOpts)
-		if err != nil {
-			printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
-			return 0, false
-		}
-		replicas = int64(parsedReplicas)
-	} else {
-		replicas = 0
-	}
-	return replicas, true
-}
-
-func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
-	if replicas, present := annotations[migration.StorkMigrationReplicasAnnotation]; present {
-		var updatedReplicas int32
-		if activate {
-			parsedReplicas, err := strconv.Atoi(replicas)
-			if err != nil {
-				printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
-				return 0, false
-			}
-			updatedReplicas = int32(parsedReplicas)
-		} else {
-			updatedReplicas = 0
-		}
-		return updatedReplicas, true
-	}
-
-	return 0, false
 }
 
 func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
