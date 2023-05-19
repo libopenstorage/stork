@@ -2004,6 +2004,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 	log.Infof("Terminal output: %s", output)
 
+	// Collect mongoDB logs right after the command
+	ginkgoTest := CurrentGinkgoTestDescription()
+	testCaseName := fmt.Sprintf("%s-start", ginkgoTest.FullTestText)
+	CollectMongoDBLogs(testCaseName)
+
 	// Wait for post install hook job to be completed
 	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
 		job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
@@ -2026,6 +2031,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if err != nil {
 		return err
 	}
+
+	// Collect mongoDB logs once the postInstallHook is completed
+	ginkgoTest = CurrentGinkgoTestDescription()
+	testCaseName = fmt.Sprintf("%s-end", ginkgoTest.FullTestText)
+	CollectMongoDBLogs(testCaseName)
 
 	pxBackupUpgradeEndTime := time.Now()
 	pxBackupUpgradeDuration := pxBackupUpgradeEndTime.Sub(pxBackupUpgradeStartTime)
@@ -2082,6 +2092,10 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		log.Infof("Checking status for pod - %s", pod.GetName())
 		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 		if err != nil {
+			// Collect mongoDB logs right after the command
+			ginkgoTest := CurrentGinkgoTestDescription()
+			testCaseName := fmt.Sprintf("%s-error", ginkgoTest.FullTestText)
+			CollectMongoDBLogs(testCaseName)
 			return err
 		}
 	}
