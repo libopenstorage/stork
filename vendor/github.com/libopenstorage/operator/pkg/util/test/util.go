@@ -20,6 +20,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/hashicorp/go-version"
 	ocp_configv1 "github.com/openshift/api/config/v1"
+	consolev1 "github.com/openshift/api/console/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -111,6 +112,9 @@ const (
 	defaultTelemetryInPxctlValidationTimeout  = 20 * time.Minute
 	defaultTelemetryInPxctlValidationInterval = 30 * time.Second
 
+	defaultStorageNodesValidationTimeout  = 30 * time.Minute
+	defaultStorageNodesValidationInterval = 30 * time.Second
+
 	defaultDmthinValidationTimeout  = 20 * time.Minute
 	defaultDmthinValidationInterval = 10 * time.Second
 
@@ -119,6 +123,9 @@ const (
 
 	defaultDeleteStorageClusterTimeout  = 3 * time.Minute
 	defaultDeleteStorageClusterInterval = 10 * time.Second
+
+	defaultValidateStorageClusterOnlineTimeout  = 30 * time.Minute
+	defaultValidateStorageClusterOnlineInterval = 1 * time.Minute
 
 	defaultRunCmdInPxPodTimeout  = 25 * time.Second
 	defaultRunCmdInPxPodInterval = 5 * time.Second
@@ -132,6 +139,7 @@ var (
 	pxVer2_12, _                      = version.NewVersion("2.12.0-")
 	opVer1_9_1, _                     = version.NewVersion("1.9.1-")
 	opVer1_10, _                      = version.NewVersion("1.10.0-")
+	opVer23_3, _                      = version.NewVersion("23.3.0-")
 	opVer23_5, _                      = version.NewVersion("23.5.0-")
 	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
 )
@@ -155,6 +163,9 @@ func FakeK8sClient(initObjects ...runtime.Object) client.Client {
 		logrus.Error(err)
 	}
 	if err := ocp_configv1.AddToScheme(s); err != nil {
+		logrus.Error(err)
+	}
+	if err := consolev1.AddToScheme(s); err != nil {
 		logrus.Error(err)
 	}
 	return fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(initObjects...).Build()
@@ -683,6 +694,7 @@ func ValidateStorageCluster(
 		return err
 	}
 
+	// Validate components
 	if err = validateComponents(pxImageList, liveCluster, timeout, interval); err != nil {
 		return err
 	}
@@ -2935,6 +2947,15 @@ func ValidateTelemetry(pxImageList map[string]string, cluster *corev1.StorageClu
 	}
 	logrus.Infof("PX Operator version: [%s]", opVersion.String())
 
+	// Update Telemetry status for PX Operator 23.3+
+	if opVersion.GreaterThanOrEqual(opVer23_3) {
+		newCluster, err := updateTelemetryStatus(pxImageList, cluster)
+		if err != nil {
+			return nil
+		}
+		cluster = newCluster
+	}
+
 	if cluster.Spec.Monitoring != nil &&
 		cluster.Spec.Monitoring.Telemetry != nil &&
 		cluster.Spec.Monitoring.Telemetry.Enabled {
@@ -2957,6 +2978,72 @@ func ValidateTelemetry(pxImageList map[string]string, cluster *corev1.StorageClu
 		return ValidateTelemetryV2Disabled(cluster, timeout, interval)
 	}
 	return ValidateTelemetryV1Disabled(cluster, timeout, interval)
+}
+
+// updateTelemetryStatus NOTE: This is a workaround to get Telemetry state again
+// from StorageCluster after validating that PX is online and upgraded, because
+// there are multiple condition for when it can be disabled/enabled after sometime
+// 1) PX Operator 23.3+ enables Telemetry by default, if it can reach Pure1 endpont succcessfully
+// 2) PX Operator 23.3+ will disable or not enabled Telemetry by default, if it cannot reach Pure1 endpoint, even if it was enabled by user
+// 3) PX Operator will enable Telemetry after you upgrade to PX Operator 23.3+, If it is not disabled3) PX Operator will enable Telemetry after you upgrade to PX Operator 23.3+, If it is not disabled3) PX Operator will enable Telemetry after you upgrade to PX Operator 23.3+, If it is not disabled
+func updateTelemetryStatus(pxImageList map[string]string, cluster *corev1.StorageCluster) (*corev1.StorageCluster, error) {
+	// Making sure cluster is online
+	liveCluster, err := ValidateStorageClusterIsOnline(cluster, defaultValidateStorageClusterOnlineTimeout, defaultValidateStorageClusterOnlineInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate storagenodes are upgraded
+	if err := ValidateAllStorageNodesAreUpgraded(pxImageList, liveCluster); err != nil {
+		return nil, err
+	}
+
+	// Check Telemetry state before timeout
+	if liveCluster.Spec.Monitoring != nil && liveCluster.Spec.Monitoring.Telemetry != nil {
+		logrus.Debugf("Telemetry state in the StorageCluster [%s] before sleep is [%v]", liveCluster.Name, liveCluster.Spec.Monitoring.Telemetry.Enabled)
+	} else {
+		logrus.Debugf("Telemetry state in the StorageCluster [%s] before sleep is [nil]", liveCluster.Name)
+	}
+
+	logrus.Debugf("Sleeping for 2 minutes to get new Telemetry state")
+	time.Sleep(2 * time.Minute)
+
+	// Get StorageCluster
+	newCluster, err := operatorops.Instance().GetStorageCluster(liveCluster.Name, liveCluster.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update Telemetry status
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil {
+		cluster.Spec.Monitoring.Telemetry.Enabled = newCluster.Spec.Monitoring.Telemetry.Enabled
+	} else {
+		cluster.Spec.Monitoring = newCluster.Spec.Monitoring
+	}
+
+	// Check Telemetry state before timeout
+	if liveCluster.Spec.Monitoring != nil && liveCluster.Spec.Monitoring.Telemetry != nil {
+		logrus.Debugf("Telemetry state in the StorageCluster [%s] after sleep is [%v]", liveCluster.Name, liveCluster.Spec.Monitoring.Telemetry.Enabled)
+	} else {
+		logrus.Debugf("Telemetry state in the StorageCluster [%s] after sleep is [nil]", liveCluster.Name)
+	}
+
+	return cluster, nil
+}
+
+// ValidateAllStorageNodesAreUpgraded validates that all storagenodes are online and have expected PX version
+func ValidateAllStorageNodesAreUpgraded(pxImageList map[string]string, cluster *corev1.StorageCluster) error {
+	// Get list of expected Portworx node names
+	expectedPxNodeList, err := GetExpectedPxNodeList(cluster)
+	if err != nil {
+		return err
+	}
+
+	// Validate StorageNodes are online and have expected PX version
+	if err = validateStorageNodes(pxImageList, cluster, len(expectedPxNodeList), defaultStorageNodesValidationTimeout, defaultStorageNodesValidationInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 func runCmdInsidePxPod(pxPod *v1.Pod, cmd string, namespace string, ignoreErr bool) (string, error) {
