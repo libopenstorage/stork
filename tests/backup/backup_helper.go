@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -89,6 +90,7 @@ const (
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
 	podReadyTimeout                           = 30 * time.Minute
+	storkPodReadyTimeout                      = 15 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
 )
@@ -2180,7 +2182,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
 	if err != nil {
 		return err
 	}
