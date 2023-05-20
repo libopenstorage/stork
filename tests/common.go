@@ -14,8 +14,6 @@ import (
 	"net/http"
 	"regexp"
 
-
-
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
@@ -255,6 +253,7 @@ const (
 	SchedulePolicyAllName             = "schedule-policy-all"
 	SchedulePolicyScaleName           = "schedule-policy-scale"
 	BucketNamePrefix                  = "tp-backup-bucket"
+	mongodbStatefulset                = "pxc-backup-mongodb"
 )
 
 const (
@@ -5060,6 +5059,18 @@ func collectStorkLogs(testCaseName string) {
 		return
 	}
 	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
+}
+
+// CollectMongoDBLogs collects MongoDB logs and stores them using the collectLogsFromPods function
+func CollectMongoDBLogs(testCaseName string) {
+	pxbLabel := make(map[string]string)
+	pxbLabel["app.kubernetes.io/component"] = mongodbStatefulset
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "mongodb")
 }
 
 // collectPxBackupLogs collects Px-Backup logs and stores them using the collectLogsFromPods function

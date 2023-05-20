@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -89,6 +90,7 @@ const (
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
 	podReadyTimeout                           = 30 * time.Minute
+	storkPodReadyTimeout                      = 15 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
 )
@@ -2004,6 +2006,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 	log.Infof("Terminal output: %s", output)
 
+	// Collect mongoDB logs right after the command
+	ginkgoTest := CurrentGinkgoTestDescription()
+	testCaseName := fmt.Sprintf("%s-start", ginkgoTest.FullTestText)
+	CollectMongoDBLogs(testCaseName)
+
 	// Wait for post install hook job to be completed
 	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
 		job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
@@ -2026,6 +2033,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if err != nil {
 		return err
 	}
+
+	// Collect mongoDB logs once the postInstallHook is completed
+	ginkgoTest = CurrentGinkgoTestDescription()
+	testCaseName = fmt.Sprintf("%s-end", ginkgoTest.FullTestText)
+	CollectMongoDBLogs(testCaseName)
 
 	pxBackupUpgradeEndTime := time.Now()
 	pxBackupUpgradeDuration := pxBackupUpgradeEndTime.Sub(pxBackupUpgradeStartTime)
@@ -2082,6 +2094,10 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		log.Infof("Checking status for pod - %s", pod.GetName())
 		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 		if err != nil {
+			// Collect mongoDB logs right after the command
+			ginkgoTest := CurrentGinkgoTestDescription()
+			testCaseName := fmt.Sprintf("%s-error", ginkgoTest.FullTestText)
+			CollectMongoDBLogs(testCaseName)
 			return err
 		}
 	}
@@ -2166,7 +2182,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
 	if err != nil {
 		return err
 	}
