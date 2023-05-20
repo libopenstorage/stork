@@ -496,18 +496,18 @@ func validateTelemetrySecret(cluster *corev1.StorageCluster, timeout, interval t
 		secret, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
 		if err != nil {
 			if errors.IsNotFound(err) && !force {
-				// skip secret existence validation
+				// Skip secret existence validation
 				return nil, false, nil
 			}
 			return nil, true, fmt.Errorf("failed to get secret pure-telemetry-certs: %v", err)
 		}
 		logrus.Debugf("Found secret %s", secret.Name)
 
-		// validate secret owner reference if telemetry enabled
+		// Validate secret owner reference if telemetry enabled
 		if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil && cluster.Spec.Monitoring.Telemetry.Enabled {
 			ownerRef := metav1.NewControllerRef(cluster, corev1.SchemeGroupVersion.WithKind("StorageCluster"))
 			if cluster.Spec.DeleteStrategy != nil && cluster.Spec.DeleteStrategy.Type == corev1.UninstallAndWipeStorageClusterStrategyType {
-				// validate secret should have owner reference
+				// Validate secret should have owner reference
 				for _, reference := range secret.OwnerReferences {
 					if reference.UID == ownerRef.UID {
 						logrus.Debugf("Found ownerReference for StorageCluster %s in secret %s", ownerRef.Name, secret.Name)
@@ -516,10 +516,14 @@ func validateTelemetrySecret(cluster *corev1.StorageCluster, timeout, interval t
 				}
 				return nil, true, fmt.Errorf("waiting for ownerReference to be set to StorageCluster %s in secret %s", cluster.Name, secret.Name)
 			}
-			// validate secret owner should not have owner reference
-			for _, reference := range secret.OwnerReferences {
-				if reference.UID == ownerRef.UID {
-					return nil, true, fmt.Errorf("secret %s should not have ownerReference to StorageCluster %s", secret.Name, cluster.Name)
+			// Validate secret owner should not have owner reference
+			// Do not validate reference for PX Operators below 1.10, as this was introduced in 1.10+, see PWX-26326 for more info
+			opVersion, _ := GetPxOperatorVersion()
+			if opVersion.GreaterThanOrEqual(opVer1_10) {
+				for _, reference := range secret.OwnerReferences {
+					if reference.UID == ownerRef.UID {
+						return nil, true, fmt.Errorf("secret %s should not have ownerReference to StorageCluster %s", secret.Name, cluster.Name)
+					}
 				}
 			}
 			return nil, false, nil
