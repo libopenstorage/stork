@@ -1592,13 +1592,14 @@ func (c *csiDriver) RestoreFromLocalSnapshot(backupLocation *storkapi.BackupLoca
 	}
 
 	// create a new pvc for restore from the snapshot
+	pvcName := pvc.Name
 	pvc, err = c.RestoreVolumeClaim(
 		RestoreSnapshotName(vsName),
 		RestoreNamespace(namespace),
 		PVC(*pvc),
 	)
 	if err != nil {
-		return status, fmt.Errorf("failed to restore pvc %s/%s from csi local snapshot: %v", namespace, pvc.Name, err)
+		return status, fmt.Errorf("failed to restore pvc %s/%s from csi local snapshot: %v", namespace, pvcName, err)
 	}
 	logrus.Debugf("created pvc: %s/%s", pvc.Namespace, pvc.Name)
 
