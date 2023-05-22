@@ -1899,6 +1899,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		return err
 	}
 
+	restore.Status.ResourceCount = len(restore.Status.Resources)
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
