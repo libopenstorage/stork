@@ -59,13 +59,8 @@ func testFailoverBasic(t *testing.T) {
 		t, migrationName, namespaces[0], preMigrationCtxs[0],
 		startAppsOnMigration, uint64(4), uint64(0))
 
-	scaleFactor := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactor: %v", scaleFactor)
-
-	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
-	})
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
 }
 
 // Failover namespace without a migration on the destination
@@ -111,13 +106,8 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
-	scaleFactors := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactors: %v", scaleFactors)
-
-	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
-	})
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
 }
 
 // Failover a namespace with multiple running applications
@@ -144,12 +134,27 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
-	scaleFactors := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactors: %v", scaleFactors)
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
+}
 
+func deactivateClusterDomainAndTriggerFailover(
+	t *testing.T,
+	actionName string,
+	namespaces []string,
+	preMigrationCtxs []*scheduler.Context,
+	isFailoverSuccessful bool,
+) {
+	srcNode := node.GetStorageDriverNodes()[0]
 	executeOnDestination(t, func() {
+		destNode := node.GetStorageDriverNodes()[0]
+		updateClusterDomain(t, false, srcNode, destNode, false)
+		defer func() {
+			setSourceKubeConfig()
+			updateClusterDomain(t, true, srcNode, destNode, true)
+		}()
 		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
+		validateFailover(t, actionName, namespaces, preMigrationCtxs, isFailoverSuccessful)
 	})
 }
 
