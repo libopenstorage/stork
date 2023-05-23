@@ -815,12 +815,12 @@ func WaitForPVAvailable(pvName string) (*corev1.PersistentVolume, error) {
 	return pv, nil
 }
 
-//GetPvcNameForJob - returns the PVC name for a job
+// GetPvcNameForJob - returns the PVC name for a job
 func GetPvcNameForJob(jobName string) string {
 	return "pvc-" + jobName
 }
 
-//GetPvNameForJob - returns pv name for a job
+// GetPvNameForJob - returns pv name for a job
 func GetPvNameForJob(jobName string) string {
 	return "pv-" + jobName
 }
