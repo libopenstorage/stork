@@ -600,7 +600,10 @@ func namespaceLabelSelectorTest(t *testing.T) {
 		true, //Skip Deleting App on Source
 	)
 
-	// Validate that mysql-1-pvc is not migrated as it doesn't have the required namespace labels
+	// Validate on destination cluster that mysql-1-pvc is not migrated as it doesn't have the required namespace labels
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	err = schedulerDriver.WaitForRunning(ctxNs2[0], defaultWaitTimeout/16, defaultWaitInterval)
 	require.Error(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
 
