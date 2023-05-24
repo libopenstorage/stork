@@ -444,7 +444,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			for _, each := range newVolumeIDs {
 				log.InfoD(fmt.Sprintf("delete volume [%v]", each))
 				log.FailOnError(Inst().V.DetachVolume(each), fmt.Sprintf("Failed to detach volume [%v]", each))
-				log.FailOnError(Inst().V.DeleteVolume(each), fmt.Sprintf("Delete Volume with ID [%v] failed", each))
+				log.FailOnError(Inst().V.DeleteVolume(each), fmt.Sprintf("Delete volume with ID [%v] failed", each))
 			}
 		}
 
@@ -461,7 +461,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 						for _, each := range newVolumeIDs {
 							if attachedCount <= 100 {
 								_, err := Inst().V.AttachVolume(each)
-								log.FailOnError(err, "Attaching volume failed")
+								log.FailOnError(err, "attaching volume failed")
 								attachedCount += 1
 								attachedVolumes = append(attachedVolumes, each)
 								time.Sleep(1 * time.Second)
@@ -495,7 +495,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		for initVol := 0; initVol < volumesToBeCreated; initVol++ {
 			id := uuid.New()
 			volName := fmt.Sprintf("volume_%s", id.String()[:8])
-			log.InfoD(fmt.Sprintf("Volume [%v] will be created with Name [%v]", initVol, volName))
+			log.InfoD(fmt.Sprintf("Volume [%v] will be created with name [%v]", initVol, volName))
 
 			// get size of the volume from size 1GiB till 100GiB
 			minSize := 1
@@ -506,7 +506,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			haUpdate := int64(rand.Intn(3-1) + 1)
 
 			volId, err := Inst().V.CreateVolume(volName, randSize, haUpdate)
-			log.FailOnError(err, fmt.Sprintf("Failed to create volume with volName [%v]", volName))
+			log.FailOnError(err, fmt.Sprintf("Failed to create volume with vol Name [%v]", volName))
 			log.InfoD("Volume Created with ID [%v]", volId)
 			newVolumeIDs = append(newVolumeIDs, volId)
 		}
@@ -534,7 +534,8 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("CreateDeleteVolumeKillKVDBMaster", "Create Delete volume in loop kill kvdb master node in random intervals", nil, testrailID)
+		StartTorpedoTest("CreateDeleteVolumeKillKVDBMaster",
+			"Create Delete volume in loop kill kvdb master node in random intervals", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -556,7 +557,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		defer appsValidateAndDestroy(contexts)
 		// Kill KVDB Master in regular interval
 		kvdbMaster, err := GetKvdbMasterNode()
-		log.FailOnError(err, "Getting KVDB Master Node deatails failed")
+		log.FailOnError(err, "Getting KVDB Master Node details failed")
 		log.InfoD("KVDB Master Node is [%v]", kvdbMaster.Name)
 
 		// Go routine to kill kvdb master in regular intervals
@@ -568,7 +569,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			default:
 				for {
 					// Wait for KVDB Members to be online
-					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB Members to be active")
+					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
 					// Kill KVDB Master Node
 					masterNode, err := GetKvdbMasterNode()
@@ -580,7 +581,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 					log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
 
 					// Kill kvdb master PID for regular intervals
-					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to Kill Kvdb Node")
+					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
 
 					// Wait for some time after killing kvdb master Node
 					time.Sleep(5 * time.Minute)
@@ -597,7 +598,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			doneVolDelete <- true
 
 			for _, each := range volumesCreated {
-				log.FailOnError(Inst().V.DeleteVolume(each), "Volume deletion failed on the cluster with volume ID [%s]", each)
+				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 			}
 		}
 		defer stopRoutine()
@@ -616,7 +617,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 					haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
 
 					volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
-					log.FailOnError(err, "Volume creation failed on the cluster with volume name [%s]", VolName)
+					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 					volumesCreated = append(volumesCreated, volId)
 				}
 			}
@@ -632,7 +633,8 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 				for {
 					if len(volumesCreated) > 5 {
 						deleteVolume := volumesCreated[0]
-						log.FailOnError(Inst().V.DeleteVolume(deleteVolume), "Volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+						log.FailOnError(Inst().V.DeleteVolume(deleteVolume),
+							"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
 
 						// Remove the first element
 						for i := 0; i < len(volumesCreated)-1; i++ {
@@ -645,7 +647,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			}
 		}()
 
-		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for atleast one hour
+		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for latest one hour
 		duration := 1 * time.Hour
 		timeout := time.After(duration)
 		select {
