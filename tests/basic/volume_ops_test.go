@@ -549,11 +549,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
 		doneVolCreate := make(chan bool)
 		doneVolDelete := make(chan bool)
-		/*
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
-			}*/
 
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
+		}
+		defer appsValidateAndDestroy(contexts)
 		// Kill KVDB Master in regular interval
 		kvdbMaster, err := GetKvdbMasterNode()
 		log.FailOnError(err, "Getting KVDB Master Node deatails failed")
