@@ -122,17 +122,14 @@ func main() {
 	}
 
 	executors := make([]cmdexecutor.Executor, 0)
-	stdoutChans := make(map[string]chan string)
 	errChans := make(map[string]chan error)
 	// Start the commands
 	for _, pod := range podNames {
 		executor := cmdexecutor.Init(pod.Namespace, pod.Name, podContainer, command, taskID)
-		stdoutChan := make(chan string)
 		errChan := make(chan error)
 		errChans[createPodStringFromNameAndNamespace(pod.Namespace, pod.Name)] = errChan
-		stdoutChans[createPodStringFromNameAndNamespace(pod.Namespace, pod.Name)] = stdoutChan
 
-		err = executor.Start(stdoutChan, errChan)
+		err = executor.Start(errChan)
 		if err != nil {
 			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", pod.Namespace, pod.Name, err)
 			persistStatusErr := status.Persist(hostname, msg)
@@ -161,21 +158,15 @@ func main() {
 	for _, executor := range executors {
 		ns, name := executor.GetPod()
 		podKey := createPodStringFromNameAndNamespace(ns, name)
-		go func(errChan chan error, stdoutChan chan string, doneChan chan bool, execInst cmdexecutor.Executor) {
+		go func(errChan chan error, doneChan chan bool, execInst cmdexecutor.Executor) {
 			err := execInst.Wait(time.Duration(statusCheckTimeout) * time.Second)
-
 			if err != nil {
 				errChan <- err
 				return
 			}
-			// log the output of command execution before marking it done
-			// note: if wait is returning err, it won't log output
-			for stdout := range stdoutChan {
-				logrus.Infof("[%s] :: %s", podKey, stdout)
-			}
 
 			doneChan <- true
-		}(errChans[podKey], stdoutChans[podKey], done, executor)
+		}(errChans[podKey], done, executor)
 	}
 
 	// Now go into a wait loop which will exit if either of the 2 things happen
@@ -187,14 +178,12 @@ Loop:
 		select {
 		case err := <-aggErrorChan:
 			// If we hit any error, persist the error using hostname as key and then exit
-			if err != nil {
-				persistStatusErr := status.Persist(hostname, err.Error())
-				if persistStatusErr != nil {
-					logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
-				}
-
-				logrus.Fatalf(err.Error())
+			persistStatusErr := status.Persist(hostname, err.Error())
+			if persistStatusErr != nil {
+				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
 			}
+
+			logrus.Fatalf(err.Error())
 		case isDone := <-done:
 			if isDone {
 				// as each executor is done, track how many are done
