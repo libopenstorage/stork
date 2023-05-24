@@ -1885,8 +1885,8 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, pdsPort string, na
 			},
 		},
 	}
-	value = append(value, dnsEndpoint)
 	value = append(value, "pds")
+	value = append(value, dnsEndpoint)
 	value = append(value, pdsPassword)
 	value = append(value, pdsPort)
 
