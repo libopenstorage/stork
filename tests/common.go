@@ -290,6 +290,7 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
+	defaultKvdbRetryInterval  = 5 * time.Minute
 )
 
 const (
@@ -6742,6 +6743,25 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	return allKvdbNodes, nil
 }
 
+func GetKvdbMasterNode() (*node.Node, error) {
+	var getKvdbLeaderNode node.Node
+	allkvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, each := range allkvdbNodes {
+		if each.Leader {
+			getKvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+	return &getKvdbLeaderNode, nil
+}
+
 // GetKvdbMasterPID returns the PID of KVDB master node
 func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	var processPid string
@@ -6764,6 +6784,41 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 		}
 	}
 	return processPid, err
+}
+
+func WaitForKVDBMembers() error {
+	t := func() (interface{}, bool, error) {
+		allKvdbNodes, err := GetAllKvdbNodes()
+		if len(allKvdbNodes) != 3 {
+			return "", true, err
+		}
+		for _, each := range allKvdbNodes {
+			if each.IsHealthy {
+				return "", false, nil
+			}
+		}
+		return "", true, err
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultKvdbRetryInterval, 20*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// KillKvdbMemberUsingPid return error in case of command failure
+func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
+	pid, err := GetKvdbMasterPID(kvdbNode)
+	if err != nil {
+		return err
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, kvdbNode)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // getReplicaNodes returns the list of nodes which has replicas

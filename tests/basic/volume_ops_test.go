@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -517,6 +518,146 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume [%v]", eachVol))
 			dash.VerifyFatal(vol.State.String() == "attached", true,
 				fmt.Sprintf("failed due to volume [%v] state is not attahced, current state is [%v]", eachVol, vol.State.String()))
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+// Volume replication change
+var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
+	var testrailID = 0
+	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateDeleteVolumeKillKVDBMaster", "Create Delete volume in loop kill kvdb master node in random intervals", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "has to schedule apps and update replication factor for attached node"
+	It(stepLog, func() {
+
+		var wg sync.WaitGroup
+		numGoroutines := 3
+
+		wg.Add(numGoroutines)
+		done := make(chan bool) // done routine for kvdb kill on regular intervals
+		doneVolCreate := make(chan bool)
+		doneVolDelete := make(chan bool)
+		/*
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
+			}*/
+
+		// Kill KVDB Master in regular interval
+		kvdbMaster, err := GetKvdbMasterNode()
+		log.FailOnError(err, "Getting KVDB Master Node deatails failed")
+		log.InfoD("KVDB Master Node is [%v]", kvdbMaster.Name)
+
+		// Go routine to kill kvdb master in regular intervals
+		go func() {
+			select {
+			case <-done:
+				wg.Done()
+				return
+			default:
+				for {
+					// Wait for KVDB Members to be online
+					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB Members to be active")
+
+					// Kill KVDB Master Node
+					masterNode, err := GetKvdbMasterNode()
+					log.FailOnError(err, "failed getting details of KVDB master node")
+
+					// Get KVDB Master PID
+					pid, err := GetKvdbMasterPID(*masterNode)
+					log.FailOnError(err, "failed getting PID of KVDB master node")
+					log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+					// Kill kvdb master PID for regular intervals
+					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to Kill Kvdb Node")
+
+					// Wait for some time after killing kvdb master Node
+					time.Sleep(5 * time.Minute)
+				}
+			}
+		}()
+
+		// Go Routine to create volume continuously
+		volumesCreated := []string{}
+
+		stopRoutine := func() {
+			done <- true
+			doneVolCreate <- true
+			doneVolDelete <- true
+
+			for _, each := range volumesCreated {
+				log.FailOnError(Inst().V.DeleteVolume(each), "Volume deletion failed on the cluster with volume ID [%s]", each)
+			}
+		}
+		defer stopRoutine()
+
+		go func() {
+			select {
+			case <-done:
+				wg.Done()
+				return
+			default:
+				for {
+					// Volume create continuously
+					uuidObj := uuid.New()
+					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+					Size := uint64(rand.Intn(100) + 1)  // Size of the Volume between 1G to 100G
+					haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
+
+					volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
+					log.FailOnError(err, "Volume creation failed on the cluster with volume name [%s]", VolName)
+					volumesCreated = append(volumesCreated, volId)
+				}
+			}
+		}()
+
+		// Go Routine to delete volume continuously in parallel to volume create
+		go func() {
+			select {
+			case <-done:
+				wg.Done()
+				return
+			default:
+				for {
+					if len(volumesCreated) > 5 {
+						deleteVolume := volumesCreated[0]
+						log.FailOnError(Inst().V.DeleteVolume(deleteVolume), "Volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+					}
+				}
+			}
+		}()
+
+		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for atleast one hour
+		duration := 1 * time.Hour
+		timeout := time.After(duration)
+		select {
+		case <-timeout:
+			// Timeout reached terminate all go routines
+			done <- true
+			doneVolCreate <- true
+			doneVolDelete <- true
+
+			// Wait for GO Routine to complete
+			wg.Wait()
+
 		}
 	})
 
