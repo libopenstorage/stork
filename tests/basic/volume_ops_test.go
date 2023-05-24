@@ -482,7 +482,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		log.FailOnError(err, "failed to list all the volume")
 		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
 
-		if len(allVolumeIds) <= totalVolumesToCreate {
+		if len(allVolumeIds) >= totalVolumesToCreate {
 			log.FailOnError(fmt.Errorf("exceeded total volume count limit.. exiting [%d]", len(allVolumeIds)),
 				"Total volume count exceeded ")
 		}
