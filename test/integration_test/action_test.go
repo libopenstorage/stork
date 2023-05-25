@@ -262,3 +262,28 @@ func getNamespaces(instanceIDs []string, appKey string) []string {
 	}
 	return namespaces
 }
+
+func updateClusterDomain(t *testing.T, activate bool, srcNode, destNode node.Node, wait bool) {
+	var cmd string
+	// TODO: query for cluster domain and use it here
+	if activate {
+		cmd = "cluster domains activate --name dc1"
+	} else {
+		cmd = "cluster domains deactivate --name dc1"
+	}
+	out, err := volumeDriver.GetPxctlCmdOutput(destNode, cmd)
+	require.NoError(t, err)
+	if wait {
+		if activate {
+			logrus.Infof("Not waiting for driver to come up on node %v", srcNode.GetDataIp())
+			// TODO: WaitDriverUpOnNode fails as it receives 0 pods for the GetPodsByNode call
+			// err = volumeDriver.WaitDriverUpOnNode(srcNode, defaultWaitTimeout)
+			// require.NoError(t, err)
+		} else {
+			logrus.Infof("Waiting for driver to do go down on node %v", srcNode.GetDataIp())
+			err = volumeDriver.WaitDriverDownOnNode(srcNode)
+			require.NoError(t, err)
+		}
+	}
+	logrus.Infof(out)
+}
