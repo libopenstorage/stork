@@ -6786,6 +6786,7 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	return processPid, err
 }
 
+// WaitForKVDBMembers waits till all kvdb members comes up online and healthy
 func WaitForKVDBMembers() error {
 	t := func() (interface{}, bool, error) {
 		allKvdbNodes, err := GetAllKvdbNodes()
