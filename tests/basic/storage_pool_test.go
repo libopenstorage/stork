@@ -6219,12 +6219,19 @@ outer:
 		for k, v := range labels {
 			if k == "pxpool" && v == fmt.Sprintf("%d", poolToBeResized.ID) {
 				drvSize = drv.Size
-				i := strings.Index(drvSize, "G")
-				if i == -1 {
-					return 0, fmt.Errorf("unable to determine drive size with info [%v]", drv)
+				sizeString := []string{"G", "T"}
+				indexChecked := false
+				for _, eachString := range sizeString {
+					i := strings.Index(drvSize, eachString)
+					if i != -1 {
+						indexChecked = true
+						drvSize = drvSize[:i]
+					}
+					if !indexChecked {
+						return 0, fmt.Errorf("unable to determine drive size with info [%v]", drv)
+					}
+					break outer
 				}
-				drvSize = drvSize[:i]
-				break outer
 			}
 		}
 	}
@@ -6317,7 +6324,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
