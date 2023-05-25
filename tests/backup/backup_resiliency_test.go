@@ -874,6 +874,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			dash.VerifyFatal(err, nil, "Getting backup namespace")
 			log.InfoD("Getting the replica factor of mongodb statefulset in backup namespace [%s] before taking backup", pxBackupNS)
 			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			originalReplicaCount = *statefulSet.Spec.Replicas
 			log.Infof("Number of replica for mongodb pod before backup is %v", originalReplicaCount)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting mongodb statefulset replica in backup namespace %s", pxBackupNS))
@@ -907,17 +908,18 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			log.InfoD("Scaling MongoDB statefulset replica to 0 while backup is in progress")
 			*statefulSet.Spec.Replicas = scaledDownReplica
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
 			log.Infof("mongodb replica after scaling to 0 is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling down MongoDB statefulset replica to 0"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == scaledDownReplica, true, "Verify mongodb statefulset replica after scaling down")
 			log.InfoD("Sleeping for 1 minute so that at least one request is hit to mongodb for the created backups")
 			time.Sleep(1 * time.Minute)
 			log.InfoD("Scaling MongoDB statefulset to original replica while backup is in progress")
 			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			*statefulSet.Spec.Replicas = originalReplicaCount
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling backup MongoDB statefulset replica to original count")
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling MongoDB statefulset back to original replica"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
 			log.Infof("Verify that at least one mongodb pod is in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
@@ -973,17 +975,18 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			log.InfoD("Scaling MongoDB statefulset replica to 0 while restore is in progress")
 			*statefulSet.Spec.Replicas = scaledDownReplica
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
 			log.Infof("mongodb replica after scaling to 0 is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling down MongoDB statefulset replica to 0"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == scaledDownReplica, true, "Getting mongodb statefulset replica after scaling down")
 			log.InfoD("Sleeping for 1 minute so that at least one request is hit to mongodb for the restores taken")
 			time.Sleep(1 * time.Minute)
 			log.InfoD("Scaling MongoDB statefulset to original replica while restore is in progress")
 			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			*statefulSet.Spec.Replicas = originalReplicaCount
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling back MongoDB statefulset replica to original count")
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling MongoDB statefulset back to original replica"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
 			log.Infof("Verify that at least one mongodb pod is in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
@@ -1022,9 +1025,11 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
 		statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+		dash.VerifySafely(err, nil, "Getting mongodb statefulset details")
 		if *statefulSet.Spec.Replicas != originalReplicaCount {
 			*statefulSet.Spec.Replicas = originalReplicaCount
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifySafely(err, nil, "Scaling back MongoDB statefulset replica to original count")
 		}
 		log.Infof("Verify that all the mongodb pod are in Ready state at the end of the testcase")
 		mongoDBPodStatus := func() (interface{}, bool, error) {
