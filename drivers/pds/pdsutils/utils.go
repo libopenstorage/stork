@@ -5,10 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"os"
-
-	"github.com/portworx/torpedo/pkg/log"
 
 	"net/http"
 

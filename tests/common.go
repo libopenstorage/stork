@@ -9,13 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/pds"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
 
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
@@ -125,6 +125,9 @@ import (
 
 	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+
+	// import driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
@@ -443,10 +446,6 @@ func InitInstance() {
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	log.FailOnError(err, "Error occured while monitor Initialization")
-
-	if Inst().Pds != nil {
-		log.Infof("PDS Dataservice Initialised")
-	}
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
@@ -4705,7 +4704,7 @@ func ParseFlags() {
 			if pdsDriver, err = pds.Get(pdsDriverName); err != nil {
 				log.Fatalf("cannot find pds driver for %s. Err: %v\n", pdsDriverName, err)
 			} else {
-				log.Infof("Pds driver found")
+				log.Infof("Pds driver found %v", pdsDriver)
 			}
 		}
 

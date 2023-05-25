@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 	"fmt"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"strings"
 	"sync"
@@ -35,6 +36,7 @@ const (
 
 // PDS vars
 var (
+	dataservice               *dataservices.DataserviceType
 	wg                        sync.WaitGroup
 	ResiliencyFlag            = false
 	hasResiliencyConditionMet = false
@@ -183,7 +185,8 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 	if aggregatedError != nil {
 		return aggregatedError
 	}
-	err := ValidateDataServiceDeployment(deployment, namespace)
+	//validate method needs to be called from the testcode
+	err := dataservice.ValidateDataServiceDeployment(deployment, namespace)
 	return err
 }
 
