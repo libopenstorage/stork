@@ -26,7 +26,7 @@ func TestDataService(t *testing.T) {
 
 }
 
-//imports based on functionalities
+// imports based on functionalities
 var (
 	dsTest        *dataservices.DataserviceType
 	customParams  *parameters.Customparams

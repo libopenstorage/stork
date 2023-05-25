@@ -268,6 +268,10 @@ github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/deepmap/oapi-codegen v1.8.2
+## explicit; go 1.14
+github.com/deepmap/oapi-codegen/pkg/runtime
+github.com/deepmap/oapi-codegen/pkg/types
 # github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible
 ## explicit
 github.com/dgrijalva/jwt-go
@@ -280,7 +284,7 @@ github.com/docker/cli/cli/config
 github.com/docker/cli/cli/config/configfile
 github.com/docker/cli/cli/config/credentials
 github.com/docker/cli/cli/config/types
-# github.com/docker/distribution v2.8.1+incompatible => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
+# github.com/docker/distribution v2.8.2+incompatible => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
 ## explicit; go 1.12
 github.com/docker/distribution
 github.com/docker/distribution/digestset
@@ -497,6 +501,9 @@ github.com/googleapis/gax-go/v2/internal
 # github.com/gorilla/mux v1.8.0
 ## explicit; go 1.12
 github.com/gorilla/mux
+# github.com/gorilla/websocket v1.4.2
+## explicit; go 1.12
+github.com/gorilla/websocket
 # github.com/gosuri/uitable v0.0.4
 ## explicit
 github.com/gosuri/uitable
@@ -574,6 +581,21 @@ github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.0.1
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
+# github.com/influxdata/influxdb-client-go v1.4.0
+## explicit; go 1.13
+github.com/influxdata/influxdb-client-go
+github.com/influxdata/influxdb-client-go/api
+github.com/influxdata/influxdb-client-go/api/http
+github.com/influxdata/influxdb-client-go/api/query
+github.com/influxdata/influxdb-client-go/api/write
+github.com/influxdata/influxdb-client-go/domain
+github.com/influxdata/influxdb-client-go/internal/gzip
+github.com/influxdata/influxdb-client-go/internal/http
+github.com/influxdata/influxdb-client-go/internal/log
+github.com/influxdata/influxdb-client-go/internal/write
+# github.com/influxdata/line-protocol v0.0.0-20200327222509-2487e7298839
+## explicit; go 1.13
+github.com/influxdata/line-protocol
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath
@@ -679,7 +701,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20230511042455-244266620049
+# github.com/libopenstorage/operator v0.0.0-20230520011658-1e7a1349f832
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/drivers/storage/portworx/util
@@ -855,10 +877,11 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.1.3
 ## explicit; go 1.16
 github.com/opencontainers/runc/libcontainer/user
-# github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
-## explicit; go 1.15
+# github.com/openshift/api v0.0.0-20230426193520-54a14470e5dc
+## explicit; go 1.19
 github.com/openshift/api/apps/v1
 github.com/openshift/api/config/v1
+github.com/openshift/api/console/v1
 github.com/openshift/api/security/v1
 # github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 ## explicit; go 1.13
@@ -970,6 +993,21 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
+## explicit; go 1.19
+github.com/rancher/norman/clientbase
+github.com/rancher/norman/httperror
+github.com/rancher/norman/types
+github.com/rancher/norman/types/convert
+github.com/rancher/norman/types/definition
+github.com/rancher/norman/types/slice
+github.com/rancher/norman/types/values
+# github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
+## explicit; go 1.19
+github.com/rancher/rancher/pkg/client/generated/management/v3
+# github.com/rancher/wrangler v1.1.0
+## explicit; go 1.19
+github.com/rancher/wrangler/pkg/name
 # github.com/rubenv/sql-migrate v1.1.2
 ## explicit; go 1.16
 github.com/rubenv/sql-migrate
@@ -1158,6 +1196,7 @@ golang.org/x/sys/windows/registry
 golang.org/x/term
 # golang.org/x/text v0.8.0
 ## explicit; go 1.17
+golang.org/x/text/cases
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
 golang.org/x/text/encoding/htmlindex
@@ -1168,6 +1207,7 @@ golang.org/x/text/encoding/korean
 golang.org/x/text/encoding/simplifiedchinese
 golang.org/x/text/encoding/traditionalchinese
 golang.org/x/text/encoding/unicode
+golang.org/x/text/internal
 golang.org/x/text/internal/language
 golang.org/x/text/internal/language/compact
 golang.org/x/text/internal/tag

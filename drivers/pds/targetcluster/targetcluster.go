@@ -2,12 +2,13 @@ package targetcluster
 
 import (
 	"fmt"
-	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
 	"strings"
 	"time"
+
+	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 
 	apps "github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -147,18 +148,11 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	log.Infof("Terminal output: %v", output)
 
-	log.InfoD("Verify the health of all the pods in %s namespace", PDSNamespace)
+	log.InfoD("Verify the health of all the deployments in %s namespace", PDSNamespace)
 	err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-		pods, err := k8sCore.GetPods(PDSNamespace, nil)
+		err := targetCluster.ValidatePDSComponents()
 		if err != nil {
 			return false, nil
-		}
-		log.Infof("There are %d pods present in the namespace %s", len(pods.Items), PDSNamespace)
-		for _, pod := range pods.Items {
-			err = k8sCore.ValidatePod(&pod, 10*time.Second, 5*time.Second)
-			if err != nil {
-				return false, nil
-			}
 		}
 		return true, nil
 	})
@@ -183,18 +177,18 @@ func (targetCluster *TargetCluster) IsReachable(url string) (bool, error) {
 
 // ValidatePDSComponents used to validate all k8s object in pds-system namespace
 func (targetCluster *TargetCluster) ValidatePDSComponents() error {
-	pods, err := k8sCore.GetPods(PDSNamespace, nil)
+	var options metav1.ListOptions
+	deploymentList, err := apps.Instance().ListDeployments(PDSNamespace, options)
 	if err != nil {
 		return err
 	}
-
-	for _, pod := range pods.Items {
-		err = k8sCore.ValidatePod(&pod, DefaultTimeout, DefaultRetryInterval)
+	log.Infof("There are %d deployments present in the namespace %s", len(deploymentList.Items), PDSNamespace)
+	for _, deployment := range deploymentList.Items {
+		err = apps.Instance().ValidateDeployment(&deployment, DefaultTimeout, DefaultRetryInterval)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 

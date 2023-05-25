@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -43,7 +45,7 @@ const (
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
 	upgradeStorkImage                         = "TARGET_STORK_VERSION"
-	latestStorkImage                          = "openstorage/stork:23.2.0"
+	latestStorkImage                          = "23.3.1"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -88,6 +90,7 @@ const (
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
 	podReadyTimeout                           = 30 * time.Minute
+	storkPodReadyTimeout                      = 15 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
 )
@@ -185,6 +188,30 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	}
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
+}
+
+// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
+func GetCsiSnapshotClassName() (string, error) {
+	var snapShotClasses *v1beta1.VolumeSnapshotClassList
+	var err error
+	if snapShotClasses, err = Inst().S.GetAllSnapshotClasses(); err != nil {
+		return "", err
+	}
+	if len(snapShotClasses.Items) > 0 {
+		log.InfoD("Volume snapshot classes found - ")
+		for _, snapshotClass := range snapShotClasses.Items {
+			log.InfoD(snapshotClass.GetName())
+			if strings.Contains(snapshotClass.GetName(), "csi") {
+				log.InfoD("CSI volume snapshot class - %s", snapshotClass.GetName())
+				return snapshotClass.GetName(), nil
+			}
+		}
+		log.Warnf("no csi volume snapshot classes found")
+		return "", nil
+	} else {
+		log.Warnf("no volume snapshot classes found")
+		return "", nil
+	}
 }
 
 func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces []string) (filteredAppContexts []*scheduler.Context) {
@@ -364,6 +391,18 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 			Uid:  postRuleUid,
 		},
 	}
+
+	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+		log.Infof("Detected generic backup type")
+		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return nil, err
+		}
+		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
+	}
+
 	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
@@ -1457,8 +1496,15 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 							errors = append(errors, err)
 						}
 
-						if backedupVol.DriverName != Inst().V.String() {
-							err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.DriverName, scheduledAppContext.ScheduleOptions.StorageProvisioner)
+						var expectedVolumeDriver string
+						if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+							expectedVolumeDriver = "kdmp"
+						} else {
+							expectedVolumeDriver = Inst().V.String()
+						}
+
+						if backedupVol.DriverName != expectedVolumeDriver {
+							err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one expected is [%s]", backedupVol.GetName(), backedupVol.DriverName, expectedVolumeDriver)
 							errors = append(errors, err)
 						}
 
@@ -1960,6 +2006,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 	log.Infof("Terminal output: %s", output)
 
+	// Collect mongoDB logs right after the command
+	ginkgoTest := CurrentGinkgoTestDescription()
+	testCaseName := fmt.Sprintf("%s-start", ginkgoTest.FullTestText)
+	CollectMongoDBLogs(testCaseName)
+
 	// Wait for post install hook job to be completed
 	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
 		job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
@@ -1982,6 +2033,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if err != nil {
 		return err
 	}
+
+	// Collect mongoDB logs once the postInstallHook is completed
+	ginkgoTest = CurrentGinkgoTestDescription()
+	testCaseName = fmt.Sprintf("%s-end", ginkgoTest.FullTestText)
+	CollectMongoDBLogs(testCaseName)
 
 	pxBackupUpgradeEndTime := time.Now()
 	pxBackupUpgradeDuration := pxBackupUpgradeEndTime.Sub(pxBackupUpgradeStartTime)
@@ -2038,6 +2094,10 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		log.Infof("Checking status for pod - %s", pod.GetName())
 		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 		if err != nil {
+			// Collect mongoDB logs right after the command
+			ginkgoTest := CurrentGinkgoTestDescription()
+			testCaseName := fmt.Sprintf("%s-error", ginkgoTest.FullTestText)
+			CollectMongoDBLogs(testCaseName)
 			return err
 		}
 	}
@@ -2061,6 +2121,7 @@ func getStorkImageVersion() (string, error) {
 
 // upgradeStorkVersion upgrades the stork to the provided version.
 func upgradeStorkVersion(storkImageToUpgrade string) error {
+	var finalImageToUpgrade string
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return err
@@ -2073,9 +2134,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-
-	storkImageVersionToUpgradeStr := strings.Split(storkImageToUpgrade, ":")[len(strings.Split(storkImageToUpgrade, ":"))-1]
-	storkImageVersionToUpgrade, err := version.NewSemver(storkImageVersionToUpgradeStr)
+	storkImageVersionToUpgrade, err := version.NewSemver(storkImageToUpgrade)
 	if err != nil {
 		return err
 	}
@@ -2086,7 +2145,12 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	if currentStorkVersion.GreaterThanOrEqual(storkImageVersionToUpgrade) {
 		return fmt.Errorf("Cannot upgrade stork version from %s to %s as the current version is higher than the provided version", currentStorkVersion, storkImageVersionToUpgrade)
 	}
-
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		finalImageToUpgrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToUpgrade)
+	} else {
+		finalImageToUpgrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToUpgrade)
+	}
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
 		log.Infof("Operator based Portworx deployment, Upgrading stork via StorageCluster")
@@ -2094,7 +2158,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		if err != nil {
 			return err
 		}
-		storageSpec.Spec.Stork.Image = storkImageToUpgrade
+		storageSpec.Spec.Stork.Image = finalImageToUpgrade
 		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
 		if err != nil {
 			return err
@@ -2105,20 +2169,20 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		if err != nil {
 			return err
 		}
-
-		storkDeployment.Spec.Template.Spec.Containers[0].Image = storkImageToUpgrade
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = finalImageToUpgrade
 		_, err = apps.Instance().UpdateDeployment(storkDeployment)
 		if err != nil {
 			return err
 		}
 	}
-
+	// Sleep for upgrade request to go through before validating.
+	time.Sleep(10 * time.Second)
 	// validate stork pods after upgrade
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
 		return err
 	}
-	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
 	if err != nil {
 		return err
 	}
@@ -2128,8 +2192,8 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		return err
 	}
 
-	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageVersionToUpgradeStr) {
-		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageVersionToUpgradeStr, postUpgradeStorkImageVersionStr)
+	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageToUpgrade) {
+		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToUpgrade, postUpgradeStorkImageVersionStr)
 	}
 
 	log.Infof("Succesfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
@@ -2163,7 +2227,7 @@ func CreateBackupWithNamespaceLabelWithValidation(ctx context.Context, backupNam
 
 // CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label and checks for success
 func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context.Context) error {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, schPolicyName, schPolicyUID, ctx)
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
 	if err != nil {
 		return err
 	}
@@ -2211,6 +2275,17 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 			Uid:  postRuleUid,
 		},
 		NsLabelSelectors: namespaceLabel,
+	}
+
+	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+		log.Infof("Detected generic backup type")
+		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return nil, err
+		}
+		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
 	}
 	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
@@ -2279,7 +2354,7 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 
 // CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success, and validates the backup.
 func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) error {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, schPolicyName, schPolicyUID, ctx)
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
 	if err != nil {
 		return err
 	}
@@ -2357,14 +2432,15 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 	}
 	namespaceList := resp.GetBackup().GetNamespaces()
 	log.Infof("The list of namespaces backed up are %v", namespaceList)
-	if !AreSlicesEqual(namespaceList, listOfLabelledNamespaces) {
+	if !AreStringSlicesEqual(namespaceList, listOfLabelledNamespaces) {
 		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
 	}
 	backupLabels := resp.GetBackup().GetNsLabelSelectors()
 	log.Infof("The list of labels applied to backup are %v", backupLabels)
 	expectedLabels := strings.Split(namespaceLabel, ",")
 	actualLabels := strings.Split(backupLabels, ",")
-	if !AreSlicesEqual(expectedLabels, actualLabels) {
+	AreStringSlicesEqual(expectedLabels, actualLabels)
+	if !AreStringSlicesEqual(expectedLabels, actualLabels) {
 		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", actualLabels, expectedLabels)
 	}
 	return nil
@@ -2374,6 +2450,17 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string) error {
 	for _, namespace := range namespaces {
 		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteLabelsFromMultipleNamespaces delete labels from multiple namespace
+func DeleteLabelsFromMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
 		if err != nil {
 			return err
 		}
@@ -2592,6 +2679,21 @@ func AreSlicesEqual(slice1, slice2 interface{}) bool {
 	return true
 }
 
+// AreStringSlicesEqual compares two slices of string
+func AreStringSlicesEqual(slice1 []string, slice2 []string) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	sort.Sort(sort.StringSlice(slice1))
+	sort.Sort(sort.StringSlice(slice2))
+	for i, v := range slice1 {
+		if v != slice2[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // GetNextScheduleBackupName returns the upcoming schedule backup after it has been initiated
 func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
 	var nextScheduleBackupName string
@@ -2645,6 +2747,37 @@ func GetNextCompletedScheduleBackupNameWithValidation(ctx context.Context, sched
 	if err != nil {
 		return "", err
 	}
+	return nextScheduleBackupName, nil
+}
+
+// GetNextPeriodicScheduleBackupName returns next periodic schedule backup name with the given interval
+func GetNextPeriodicScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
+	var nextScheduleBackupName string
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	currentScheduleBackupCount := len(allScheduleBackupNames)
+	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		return ordinalScheduleBackupName, false, nil
+	}
+	log.InfoD("Waiting for %v minutes for the next schedule backup to be triggered", scheduleInterval)
+	time.Sleep(scheduleInterval * time.Minute)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	nextScheduleBackupName = nextScheduleBackup.(string)
 	return nextScheduleBackupName, nil
 }
 

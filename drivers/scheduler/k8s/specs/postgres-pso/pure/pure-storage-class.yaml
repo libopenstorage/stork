@@ -1,0 +1,12 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: pure-sc
+parameters:
+  backend: block
+  createoptions: -q
+  csi.storage.k8s.io/fstype: xfs
+provisioner: pure-csi
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true

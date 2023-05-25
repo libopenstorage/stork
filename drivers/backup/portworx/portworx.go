@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1531,68 +1530,6 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 		if err != nil {
 			err = fmt.Errorf("Failed to delete schedule policy %s with error [%v]", policyList[i], err)
 			return err
-		}
-	}
-	return nil
-}
-
-func (p *portworx) ValidateBackupCluster() error {
-	flag := false
-	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns, err := backup.GetPxBackupNamespace()
-	if err != nil {
-		return err
-	}
-	pods, err := core.Instance().GetPods(ns, labelSelectors)
-	if err != nil {
-		err = fmt.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
-			err)
-		return err
-	}
-	for _, pod := range pods.Items {
-		log.Infof("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
-		bkpPod, err := core.Instance().GetPodByName(pod.GetName(), ns)
-		if err != nil {
-			err = fmt.Errorf("Error: %v Occured while getting the pxcentral-post-install-hook pod details", err)
-			return err
-		}
-		containerList := bkpPod.Status.ContainerStatuses
-		for i := 0; i < len(containerList); i++ {
-			status := containerList[i].State.Terminated.Reason
-			if status == "Completed" {
-				log.Infof("pxcentral-post-install-hook pod is in completed state")
-				flag = true
-				break
-			}
-		}
-	}
-	if flag == false {
-		err = fmt.Errorf("pxcentral-post-install-hook pod is not in completed state")
-		return err
-	}
-	bkpPods, err := core.Instance().GetPods(ns, nil)
-	if err != nil {
-		err = fmt.Errorf("Unable to get pods in namespace %s with error %v", ns, err)
-		return err
-	}
-	for _, pod := range bkpPods.Items {
-		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
-		if !matched {
-			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
-			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
-			if !(equal || equal1) {
-				log.Info("Checking if all the containers are up or not")
-				res := core.Instance().IsPodRunning(pod)
-				if !res {
-					err = fmt.Errorf("All the containers of pod %s are not Up", pod.GetName())
-					return err
-				}
-				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
-				if err != nil {
-					err = fmt.Errorf("An Error: %v  Occured while validating the pod %s", err, pod.GetName())
-					return err
-				}
-			}
 		}
 	}
 	return nil
