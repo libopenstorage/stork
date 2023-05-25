@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -10,8 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	dataservice "github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
@@ -71,7 +70,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 				Step("Validate Deployments after pods are up", func() {
 					log.InfoD("Validate Deployments after pds pods are up")
-					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 					log.FailOnError(err, "Error while validating data services")
 					log.InfoD("Deployments pods are up and healthy")
 				})
@@ -193,7 +192,7 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 		Step(steplog, func() {
 			log.InfoD(steplog)
 			for _, dep := range deps {
-				err = pdslib.ValidateDataServiceDeployment(dep, namespace)
+				err = dsTest.ValidateDataServiceDeployment(dep, namespace)
 				log.FailOnError(err, "Error while validating data services")
 				log.InfoD("Deployments pods are up and healthy")
 			}
@@ -403,7 +402,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					go func() {
 						defer wg.Done()
 						log.InfoD("Validating the dataservice deployment during pds-agent pod downtime")
-						err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+						err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 						log.FailOnError(err, "Error while validating dataservice during pds-agent downtime")
 					}()
 
@@ -419,7 +418,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 				Step("Validate Deployments after pods are up", func() {
 					log.InfoD("Validate Deployments after pds pods are up")
-					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 					log.FailOnError(err, "Error while validating data services")
 					log.InfoD("Deployments pods are up and healthy")
 				})
@@ -450,7 +449,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
 		Step("Enable/Disable PDS Namespace", func() {
 			pdsNamespace := "pds" + strconv.Itoa(rand.Int())
-			testns, _, err := pdslib.CreatePDSNamespace(pdsNamespace)
+			testns, _, err := targetCluster.CreatePDSNamespace(pdsNamespace)
 			log.FailOnError(err, "Error while creating pds namespace")
 			log.InfoD("PDS Namespace created %v", testns)
 
@@ -562,7 +561,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 			Step("Validate Deployments before scale up", func() {
 				for ds, deployment := range deployments {
-					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 					log.FailOnError(err, "Error while validating dataservices")
 					log.InfoD("Data-service: %v is up and healthy", ds.Name)
 				}
@@ -572,11 +571,11 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				for ds, deployment := range deployments {
 					log.InfoD("Scaling up DataService %v ", ds.Name)
 
-					dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+					dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting app configuration template")
 					dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource setting template")
 					dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
@@ -585,7 +584,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 					log.FailOnError(err, "Error while updating dataservices")
 
-					err = pdslib.ValidateDataServiceDeployment(updatedDeployment, namespace)
+					err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 					log.FailOnError(err, "Error while validating data service deployment")
 
 					_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -703,11 +702,11 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) {
 	Step("Deploy and Validate Data Service and run TPCC Workload", func() {
 		isDeploymentsDeleted = false
-		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
+		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, dataservice)
 		log.FailOnError(err, "Error while getting resource template")
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
+		dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, dataservice)
 		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
@@ -727,7 +726,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
-		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 
 		Step("Validate Storage Configurations", func() {
@@ -1102,11 +1101,11 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
 	Step("Validate Data Service Deployments", func() {
-		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
 	Step("Validate Storage Configurations", func() {
-		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 		log.FailOnError(err, "Error while getting resource template")
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -1119,11 +1118,11 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild string, replicas int32, ds PDSDataService) {
 	Step("Deploy, Validate and Update Data Services", func() {
 		isDeploymentsDeleted = false
-		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
+		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, dataservice)
 		log.FailOnError(err, "Error while getting resource template")
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
+		dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, dataservice)
 		log.FailOnError(err, "Error while getting app configuration template")
 		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
@@ -1144,7 +1143,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
-		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
 
@@ -1196,7 +1195,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		log.FailOnError(err, "Error while updating data services")
 		log.InfoD("data service deployed %v ", dataservice)
 
-		err = pdslib.ValidateDataServiceDeployment(updatedDeployment, namespace)
+		err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 		log.FailOnError(err, "error while Validating DataService Deployment")
 
 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -1321,7 +1320,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 		Step("Deploy All Supported Data Services in the namespace", func() {
 
 			log.InfoD("Deploying deployment %v in namespace: %v", deploymentTargetID, nname)
-			newNamespaceID, err := pdslib.GetnameSpaceID(nname, deploymentTargetID)
+			newNamespaceID, err := targetCluster.GetnameSpaceID(nname, deploymentTargetID)
 			log.FailOnError(err, "error while getting namespaceid")
 			Expect(newNamespaceID).NotTo(BeEmpty())
 
@@ -1448,7 +1447,7 @@ var _ = Describe("{RestartPXPods}", func() {
 				})
 
 				Step("Validate that the deployment is healthy", func() {
-					err := pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					err := dsTest.ValidateDataServiceDeployment(deployment, namespace)
 					log.FailOnError(err, "error while validating dataservice")
 				})
 
@@ -1585,7 +1584,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 
 				Step("Validate Deployments after nodes are up", func() {
 					log.Info("Validate Deployments after nodes are up")
-					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 					log.FailOnError(err, "error validating deployment")
 					log.Info("Deployments pods are up and healthy")
 				})
