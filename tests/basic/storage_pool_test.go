@@ -8782,7 +8782,6 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 	})
 })
 
-
 var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 
 	//step1: feed p1 size GB I/O on the volume
@@ -8794,7 +8793,7 @@ var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 	var runID int
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("StorageFullPoolLegacyAddDisk", "Feed a pool full, then expand the pool using add-disk", nil, testrailID)
+		StartTorpedoTest("StorageFullPoolLegacyAddDisk", "Feed a pool full, then expand the pool using legacy add-disk", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
@@ -8881,9 +8880,18 @@ var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, true)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			log.InfoD("Initiate add cloud drive and validate")
+			err := addCloudDrive(*selectedNode, selectedPool.ID)
+			//err = Inst().V.AddCloudDrive(&stNode, deviceSpec, selectedPool.ID)
+			if err != nil {
+				err1 := fmt.Sprintf("add cloud drive failed on node %s, err: %v", selectedNode.Name, err)
+				dash.VerifyFatal(err, nil, err1)
+				//return fmt.Errorf("add cloud drive failed on node %s, err: %v", selectedNode.Name, err)
+			}
+
+			//log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
+			//err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, true)
+			//dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 		})
 		stepLog = fmt.Sprintf("Ensure that pool %s expansion is successful", selectedPool.Uuid)
 		Step(stepLog, func() {
