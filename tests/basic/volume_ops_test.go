@@ -548,8 +548,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		wg.Add(numGoroutines)
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
-		doneVolCreate := make(chan bool)
-		doneVolDelete := make(chan bool)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
@@ -594,8 +592,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		stopRoutine := func() {
 			done <- true
-			doneVolCreate <- true
-			doneVolDelete <- true
 
 			for _, each := range volumesCreated {
 				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
@@ -654,8 +650,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		case <-timeout:
 			// Timeout reached terminate all go routines
 			done <- true
-			doneVolCreate <- true
-			doneVolDelete <- true
 
 			// Wait for GO Routine to complete
 			wg.Wait()
