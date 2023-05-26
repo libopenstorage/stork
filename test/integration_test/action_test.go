@@ -42,7 +42,7 @@ func setupOnce(t *testing.T) {
 // Simple failover with one namespace and one app
 func testFailoverBasic(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-basic"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -66,7 +66,7 @@ func testFailoverBasic(t *testing.T) {
 // Failover namespace without a migration on the destination
 func testFailoverWithoutMigration(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-without-migration"}
 	storageClass := "px-sc"
 	actionName := "failover-action"
 	namespaces := getNamespaces(instanceIDs, appKey)
@@ -85,7 +85,7 @@ func testFailoverWithoutMigration(t *testing.T) {
 // Failover multiple namespaces simultaneously
 func testFailoverForMultipleNamespaces(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover-1", "failover-2"}
+	instanceIDs := []string{"failover-multiple-namespaces-1", "failover-multiple-namespaces-2"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -114,7 +114,7 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 func testFailoverWithMultipleApplications(t *testing.T) {
 	appKey := "mysql-nearsync"
 	additionalAppKeys := []string{"cassandra"}
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-multiple-applications"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -138,6 +138,7 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 		t, actionName, namespaces, preMigrationCtxs, true)
 }
 
+// assumes it will be executed with source config set
 func deactivateClusterDomainAndTriggerFailover(
 	t *testing.T,
 	actionName string,
@@ -145,14 +146,13 @@ func deactivateClusterDomainAndTriggerFailover(
 	preMigrationCtxs []*scheduler.Context,
 	isFailoverSuccessful bool,
 ) {
-	srcNode := node.GetStorageDriverNodes()[0]
+	clusterDomains, err := storkVolumeDriver.GetClusterDomains()
+	require.NoError(t, err)
+	updateClusterDomain(t, clusterDomains, false, true)
+	defer func() {
+		updateClusterDomain(t, clusterDomains, true, true)
+	}()
 	executeOnDestination(t, func() {
-		destNode := node.GetStorageDriverNodes()[0]
-		updateClusterDomain(t, false, srcNode, destNode, false)
-		defer func() {
-			setSourceKubeConfig()
-			updateClusterDomain(t, true, srcNode, destNode, true)
-		}()
 		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, isFailoverSuccessful)
 	})
@@ -164,7 +164,7 @@ func deactivateClusterDomainAndTriggerFailover(
 // through if PX is down on the nearsync node for a volume
 func testFailoverForFailedPromoteVolume(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-failed-promote-volume"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -238,6 +238,7 @@ func startFailover(
 	for _, namespace := range namespaces {
 		_, err := createActionCR(t, actionName, namespace)
 		require.NoError(t, err, "error creating Action CR")
+		logrus.Infof("Created Action CR")
 	}
 }
 
@@ -266,29 +267,4 @@ func getNamespaces(instanceIDs []string, appKey string) []string {
 		namespaces = append(namespaces, fmt.Sprintf("%v-%v", appKey, instanceID))
 	}
 	return namespaces
-}
-
-func updateClusterDomain(t *testing.T, activate bool, srcNode, destNode node.Node, wait bool) {
-	var cmd string
-	// TODO: query for cluster domain and use it here
-	if activate {
-		cmd = "cluster domains activate --name dc1"
-	} else {
-		cmd = "cluster domains deactivate --name dc1"
-	}
-	out, err := volumeDriver.GetPxctlCmdOutput(destNode, cmd)
-	require.NoError(t, err)
-	if wait {
-		if activate {
-			logrus.Infof("Not waiting for driver to come up on node %v", srcNode.GetDataIp())
-			// TODO: WaitDriverUpOnNode fails as it receives 0 pods for the GetPodsByNode call
-			// err = volumeDriver.WaitDriverUpOnNode(srcNode, defaultWaitTimeout)
-			// require.NoError(t, err)
-		} else {
-			logrus.Infof("Waiting for driver to do go down on node %v", srcNode.GetDataIp())
-			err = volumeDriver.WaitDriverDownOnNode(srcNode)
-			require.NoError(t, err)
-		}
-	}
-	logrus.Infof(out)
 }
