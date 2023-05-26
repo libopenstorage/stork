@@ -284,16 +284,29 @@ func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operati
 }
 
 // DeletePool deletes the pool with given poolID
-func (d *portworx) DeletePool(n node.Node, poolID string) error {
+func (d *portworx) DeletePool(n node.Node, poolID string, retry bool) error {
 	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
 	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
-	out, err := d.nodeDriver.RunCommand(
-		n,
-		cmd,
-		node.ConnectionOpts{
-			Timeout:         maintenanceWaitTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		})
+	var out string
+	var err error
+	if retry {
+		out, err = d.nodeDriver.RunCommand(
+			n,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         maintenanceWaitTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+	} else {
+		out, err = d.nodeDriver.RunCommandWithNoRetry(
+			n,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         maintenanceWaitTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+	}
+
 	if err != nil {
 		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
 	}
@@ -5096,6 +5109,35 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 		}
 	}
 	return poolsData, nil
+}
+
+// GetJournalDevicePath returns journal device path in the given node
+func (d *portworx) GetJournalDevicePath(n *node.Node) (string, error) {
+	for _, addr := range n.Addresses {
+		if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
+			log.Warnf("testAndSetEndpoint failed for %v: %v", addr, err)
+			continue
+		}
+	}
+
+	t := func() (interface{}, bool, error) {
+		storageSpec, err := d.GetStorageSpec()
+		if err != nil {
+			return "", true, err
+		}
+		if storageSpec.GetJournalDev() == "auto" {
+			return "", true, fmt.Errorf("journalDev not yet updated")
+		}
+
+		return storageSpec.GetJournalDev(), false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, upgradeTimeout, defaultRetryInterval)
+	if err != nil {
+		return "", err
+	}
+	return out.(string), nil
+
 }
 
 // IsIOsInProgressForTheVolume checks if IOs are happening in the given volume

@@ -5719,18 +5719,61 @@ var _ = Describe("{PoolDelete}", func() {
 		stNodes := node.GetStorageNodes()
 		var nodeSelected node.Node
 		var nodePools []node.StoragePool
-		for _, stNode := range stNodes {
-			if len(stNode.StoragePools) > 1 {
-				nodePools = stNode.StoragePools
-				nodeSelected = stNode
-				break
+
+		randomIndex := rand.Intn(len(stNodes))
+		nodeSelected = stNodes[randomIndex]
+		nodePools = nodeSelected.StoragePools
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+		var jrnlPartPoolID string
+
+		if isjournal && len(nodePools) > 1 {
+
+			jDev, err := Inst().V.GetJournalDevicePath(&nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", nodeSelected.Name))
+
+			log.Infof("JournalDev: %s", jDev)
+			if jDev == "" {
+				log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
 			}
+
+			systemOpts := node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+				Action: "start",
+			}
+
+			drivesMap, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
+			jPath := jDev[:len(jDev)-1]
+		outer:
+			for k, v := range drivesMap {
+				if strings.Contains(k, jPath) {
+					drvlabels := v.Labels
+					for k, v := range drvlabels {
+						if k == "pxpool" {
+							log.Infof("Journal partitioned with drive path: %s with pool id: %s", k, v)
+							jrnlPartPoolID = v
+							break outer
+						}
+					}
+				}
+			}
+			if jrnlPartPoolID != "" {
+				err = DeleteGivenPoolInNode(nodeSelected, jrnlPartPoolID, false)
+				isValidError := strings.Contains(err.Error(), "pool with autojournal partition cannot be deleted when there are multiple pools")
+				dash.VerifyFatal(isValidError, true, fmt.Sprintf("pool %s deletion failed with err : %s", jrnlPartPoolID, err.Error()))
+			} else {
+				log.Infof("No pool is partitioned with journal device")
+			}
+
 		}
 
-		dash.VerifyFatal(len(nodePools) > 1, true, "Node has multiple storage pools?")
 		var poolToDelete node.StoragePool
 		for _, pl := range nodePools {
-			if pl.ID != 0 {
+			if strconv.Itoa(int(pl.ID)) != jrnlPartPoolID {
 				poolToDelete = pl
 				break
 			}
@@ -5810,9 +5853,6 @@ var _ = Describe("{PoolDelete}", func() {
 			log.InfoD("Current Size of the pool %s is %d", poolIDSelected, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolIDSelected, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-			isjournal, err := isJournalEnabled()
-			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDSelected, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using auto option", poolIDSelected))
@@ -6390,7 +6430,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		if IsLocalCluster(*nodeDetail) == true || IsIksCluster() == true {
 			// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
-			err = Inst().V.DeletePool(*nodeDetail, "0")
+			err = Inst().V.DeletePool(*nodeDetail, "0", true)
 			dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
 
 		}
@@ -6426,7 +6466,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.FailOnError(Inst().V.WaitDriverDownOnNode(*nodeDetail), fmt.Sprintf("Failed while waiting node to become down [%v]", nodeDetail.Name))
 
 		// Delete the Pool with Invalid Pool ID
-		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
+		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID, false)
 		dash.VerifyFatal(err != nil, true,
 			fmt.Sprintf("Expected Failure? : Node Detail [%v]", nodeDetail.Name))
 		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
@@ -6733,7 +6773,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 
 		// Once 4 Pools are added Delete Pool 1 and Pool 3 from the Node
 		for _, poolID := range []string{"1", "3"} {
-			log.FailOnError(Inst().V.DeletePool(*nodeDetail, poolID),
+			log.FailOnError(Inst().V.DeletePool(*nodeDetail, poolID, true),
 				fmt.Sprintf("Deleting Pool with ID [%s] from Node [%v] failed", poolID, nodeDetail.Name))
 		}
 
@@ -7582,7 +7622,7 @@ func deletePoolAndValidate(stNode node.Node, poolIDToDelete string) {
 
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err = DeleteGivenPoolInNode(stNode, poolIDToDelete)
+		err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting pool [%s] in the node [%s]", poolIDToDelete, stNode.Name))
 
 		poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
