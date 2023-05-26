@@ -45,6 +45,7 @@ import (
 	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/networking"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/policy"
 	"github.com/portworx/sched-ops/k8s/prometheus"
 	"github.com/portworx/sched-ops/k8s/rbac"
@@ -206,6 +207,7 @@ var (
 	k8sPolicy                = policy.Instance()
 	k8sAdmissionRegistration = admissionregistration.Instance()
 	k8sApiExtensions         = apiextensions.Instance()
+	k8sOperator              = operator.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -364,6 +366,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sAdmissionRegistration.SetConfig(config)
 	k8sExternalsnap.SetConfig(config)
 	k8sApiExtensions.SetConfig(config)
+	k8sOperator.SetConfig(config)
 
 	return nil
 }

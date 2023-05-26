@@ -24,7 +24,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
 			log.InfoD("Check the status of backup pods")
-			err := Inst().Backup.ValidateBackupCluster()
+			err := ValidateAllPodsInPxBackupNamespace()
 			dash.VerifyFatal(err, nil, "Backup Cluster Verification successful")
 		})
 	})

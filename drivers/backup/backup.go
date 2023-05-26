@@ -132,9 +132,6 @@ type Cluster interface {
 		timeBeforeRetry time.Duration,
 	) error
 
-	// ValidateBackupCluster validates if backup pods are up or not
-	ValidateBackupCluster() error
-
 	// GetClusterUID returns uid of the given cluster name in an organization
 	GetClusterUID(ctx context.Context, orgID string, clusterName string) (string, error)
 
