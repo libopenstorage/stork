@@ -520,3 +520,56 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 		EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{KillTeleportDuringDeployment}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillTeleportDuringDeployment", "Kill Teleport Pod when a DS Deployment is happening", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+		Step("Deploy Data Services", func() {
+			var dsVersionBuildMap = make(map[string][]string)
+			for _, ds := range params.DataServiceToTest {
+				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
+					isDeploymentsDeleted = false
+					// Global Resiliency TC marker
+					pdslib.MarkResiliencyTC(true, false)
+					// Type of failure that this TC needs to cover
+					failuretype := pdslib.TypeOfFailure{
+						Type: KillTeleportPodDuringDeployment,
+						Method: func() error {
+							return pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsTeleportPod)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+					// Deploy and Validate this Data service after injecting the type of failure we want to catch
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+					log.FailOnError(err, "Error while deploying data services")
+
+					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
+					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Teleport Pod test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource template")
+					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
+	})
+})
