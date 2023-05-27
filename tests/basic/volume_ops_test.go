@@ -560,12 +560,12 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
 					// Wait for KVDB Members to be online
 					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
@@ -585,6 +585,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 					time.Sleep(5 * time.Minute)
 				}
 			}
+
 		}()
 
 		// Go Routine to create volume continuously
@@ -600,12 +601,12 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		defer stopRoutine()
 
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
 					// Volume create continuously
 					uuidObj := uuid.New()
 					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
@@ -621,12 +622,12 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go Routine to delete volume continuously in parallel to volume create
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
 					if len(volumesCreated) > 5 {
 						deleteVolume := volumesCreated[0]
 						log.FailOnError(Inst().V.DeleteVolume(deleteVolume),
@@ -650,7 +651,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		case <-timeout:
 			// Timeout reached terminate all go routines
 			done <- true
-
 			// Wait for GO Routine to complete
 			wg.Wait()
 

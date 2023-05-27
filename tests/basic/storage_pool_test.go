@@ -8818,22 +8818,13 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
-					// Get all kvdb nodes from the cluster
-					kvdbNodes, err := GetAllKvdbNodes()
-					log.FailOnError(err, "fetching all kvdb nodes from the cluster errored out")
-					dash.VerifyFatal(len(kvdbNodes) == 3, true, "not all kvdb nodes exists")
-					for _, eachkvdbNode := range kvdbNodes {
-						if !eachkvdbNode.IsHealthy {
-							log.FailOnError(fmt.Errorf("kvdbNode [%s] is not healthy", eachkvdbNode.ID),
-								"kvdb node healthy?")
-						}
-					}
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
+					log.FailOnError(WaitForKVDBMembers(), "not all kvdb members in healthy state")
 					// Wait for some time after killing kvdb master Node
 					time.Sleep(1 * time.Minute)
 				}
@@ -8859,12 +8850,12 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 
 		// Resize the Pool few times expanding drives for 5 GB every time and wait for pool resize to complete
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
 					poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 					log.FailOnError(err, "Failed to get pool details with uuid [%v]", poolUUID)
 
