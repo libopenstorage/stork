@@ -8814,6 +8814,18 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
 		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
@@ -8830,23 +8842,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				}
 			}
 		}()
-
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumehapoolops-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-
-		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs(contexts)
-		log.FailOnError(err, "Failed to get pool running with IO")
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-
-		// Get Node Details of the Pool with IO
-		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
 		// Resize the Pool few times expanding drives for 5 GB every time and wait for pool resize to complete
 		go func() {
