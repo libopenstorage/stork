@@ -170,7 +170,7 @@ func jobForDeleteResource(
 		jobOption.AppCRNamespace,
 	}, " ")
 
-	nfsExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
+	nfsExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
 		jobOption.NfsImageExecutorSourceNs,
 		jobOption.JobName,
@@ -202,7 +202,6 @@ func jobForDeleteResource(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.JobName)),
 					ServiceAccountName: jobOption.ServiceAccountName,
 					Containers: []corev1.Container{
 						{
@@ -239,6 +238,10 @@ func jobForDeleteResource(
 				},
 			},
 		},
+	}
+	// Add the image secret in job spec only if it is present in the stork deployment.
+	if len(imageRegistrySecret) != 0 {
+		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.JobName))
 	}
 	if len(jobOption.NfsServer) != 0 {
 		volumeMount := corev1.VolumeMount{
