@@ -6800,6 +6800,7 @@ func WaitForKVDBMembers() error {
 			}
 		}
 		if isHealthy == 3 {
+			log.InfoD("all 3 kvdb nodes are online and healthy, exiting.")
 			return "", false, nil
 		}
 		return "", true, err
