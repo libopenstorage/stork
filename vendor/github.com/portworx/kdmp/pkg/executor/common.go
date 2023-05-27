@@ -502,12 +502,13 @@ func UpdateStatusInResourceBackup(
 ) (*kdmpapi.ResourceBackup, error) {
 	var rb *kdmpapi.ResourceBackup
 	var err error
+	var errMsg string
 	for i := 0; i < maxRetry; i++ {
 		rb, err = kdmpschedops.Instance().GetResourceBackup(rbName, rbNamespace)
 		if err != nil {
-			errMsg := fmt.Sprintf("error reading ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
+			errMsg = fmt.Sprintf("error reading ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
 			time.Sleep(retrySleep)
-			return nil, fmt.Errorf(errMsg)
+			continue
 		}
 		if !newRbStatus.LargeResourceEnabled {
 			rb.Status.LargeResourceEnabled = newRbStatus.LargeResourceEnabled
@@ -532,12 +533,15 @@ func UpdateStatusInResourceBackup(
 		}
 		rb, err = kdmpschedops.Instance().UpdateResourceBackup(rb)
 		if err != nil {
-			errMsg := fmt.Sprintf("error updating ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
+			errMsg = fmt.Sprintf("error updating ResourceBackup CR[%v/%v]: %v", rbNamespace, rbName, err)
 			time.Sleep(retrySleep)
-			return nil, fmt.Errorf(errMsg)
+		} else {
+			break
 		}
 	}
-
+	if err != nil {
+		return nil, fmt.Errorf(errMsg)
+	}
 	return rb, nil
 }
 

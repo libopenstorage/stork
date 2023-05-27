@@ -2205,9 +2205,9 @@ func startNfsCSIRestoreVolumeJob(
 			drivers.WithNamespace(de.Namespace),
 			drivers.WithJobNamespace(de.Namespace),
 			drivers.WithNfsServer(bl.Location.NFSConfig.ServerAddr),
-			drivers.WithNfsExportDir(bl.Location.Path),
+			drivers.WithNfsExportDir(bl.Location.NFSConfig.SubPath),
 			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
-			drivers.WithNfsSubPath(bl.Location.NFSConfig.SubPath),
+			drivers.WithNfsSubPath(bl.Location.Path),
 		)
 	}
 	return "", fmt.Errorf("unknown driver for nfs csi volume restore: %s", drv.Name())
