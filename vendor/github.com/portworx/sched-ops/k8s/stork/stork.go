@@ -37,7 +37,6 @@ type Ops interface {
 	MigrationOps
 	ClusterDomainsOps
 	SchedulePolicyOps
-	ActionOps
 	NamespacedSchedulePolicyOps
 	BackupLocationOps
 	ApplicationBackupRestoreOps

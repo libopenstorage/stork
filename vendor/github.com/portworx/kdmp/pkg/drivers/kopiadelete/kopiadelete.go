@@ -227,7 +227,6 @@ func jobFor(
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
 					ServiceAccountName: jobOption.ServiceAccountName,
-					ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
 					Containers: []corev1.Container{
 						{
 							Name:  "kopiaexecutor",
@@ -264,6 +263,10 @@ func jobFor(
 				},
 			},
 		},
+	}
+	// Add the image secret in job spec only if it is present in the stork deployment.
+	if len(imageRegistrySecret) != 0 {
+		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
 
 	if len(jobOption.NfsServer) != 0 {

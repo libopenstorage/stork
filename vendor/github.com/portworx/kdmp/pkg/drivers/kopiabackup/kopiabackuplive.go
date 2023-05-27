@@ -70,7 +70,7 @@ func jobForLiveBackup(
 	}
 
 	privileged := true
-	kopiaExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
 		jobName,
@@ -103,7 +103,6 @@ func jobForLiveBackup(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobName)),
 					ServiceAccountName: jobName,
 					NodeName:           mountPod.Spec.NodeName,
 					Containers: []corev1.Container{
@@ -156,6 +155,11 @@ func jobForLiveBackup(
 				},
 			},
 		},
+	}
+
+	// Add the image secret in job spec only if it is present in the stork deployment.
+	if len(imageRegistrySecret) != 0 {
+		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
 
 	if len(jobOption.NfsServer) != 0 {

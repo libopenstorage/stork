@@ -200,7 +200,7 @@ func jobFor(
 		vb.Status.SnapshotID,
 	}, " ")
 
-	kopiaExecutorImage, _, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
 		jobName,
@@ -233,7 +233,6 @@ func jobFor(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobName)),
 					ServiceAccountName: jobName,
 					Containers: []corev1.Container{
 						{
@@ -282,6 +281,11 @@ func jobFor(
 				},
 			},
 		},
+	}
+
+	// Add the image secret in job spec only if it is present in the stork deployment.
+	if len(imageRegistrySecret) != 0 {
+		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
 
 	if drivers.CertFilePath != "" {

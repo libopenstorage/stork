@@ -1969,7 +1969,7 @@ github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9 h1:pZQ5uaWk
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
 github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973/go.mod h1:/EFTTQyBxNzul96urrYPdjNEYeDzVgZzK88gRQjoVmk=
 github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a/go.mod h1:9ZIMQaePJPyVsx85zoWn6W+uhjTv/A+7JLoG8j58xgI=
-github.com/libopenstorage/stork v1.4.1-0.20230502135851-9cacb19e1df5/go.mod h1:RK6MPw0080h2ADDXDnJzQ+cKn1SEClTyoAW7sUAhi98=
+github.com/libopenstorage/stork v1.4.1-0.20230519043154-cbc10dffaf19/go.mod h1:Xm4DHoViynFXMQKBXGj3IkA77LY2RBFkNtv6vbo3wNw=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 h1:5vqfYYWm4b+lbkMtvvWtWBiqLbmLN6dNvWaa7wVsz/Q=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1/go.mod h1:xwNGC7xiz/BQ/wbMkvHujL8Gjgseg+x41xMek7sKRRQ=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de h1:9TO3cAIGXtEhnIaL+V+BEER86oLrvS+kWobKpbJuye0=
@@ -2355,8 +2355,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/polyfloyd/go-errorlint v1.0.5/go.mod h1:APVvOesVSAnne5SClsPxPdfvZTVDojXh1/G3qb5wjGI=
 github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611/go.mod h1:4hklRW/4DQpLqkcXcjtNprbH2tz/sJaNtqinfPWl/LA=
-github.com/portworx/kdmp v0.4.1-0.20230512150336-6cfeaacef991 h1:hELIW5tdLVqOC272+gpHSqQdEt1nYAjSyRgBmLE+GPE=
-github.com/portworx/kdmp v0.4.1-0.20230512150336-6cfeaacef991/go.mod h1:qwi3mjMZHRLCNCH4U08fCBsI9UCDJ1U/rH+v/rZmGR4=
+github.com/portworx/kdmp v0.4.1-0.20230527125723-be8d38730d3a h1:rfxQftYl+wLPH/WrbdJhegGX8wjGJbm31HXBYwhT+Wg=
+github.com/portworx/kdmp v0.4.1-0.20230527125723-be8d38730d3a/go.mod h1:BlJ+7XNBMoQhmwdNZ6WBeTF1FcD5lH/UNYUL4kFU29E=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 h1:jkqzdbOnejgSN5HG/FLt4enNrozWT/K+nlmaRm3P1II=
