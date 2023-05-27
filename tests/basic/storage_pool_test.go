@@ -8811,21 +8811,130 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 
 		wg.Add(numGoroutines)
 		done := make(chan bool)
+
+		volumesCreated := []string{}
+
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumepooloperations-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs(contexts)
-		log.FailOnError(err, "Failed to get pool running with IO")
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		var timeOutExceeded bool
+		timeOutExceeded = false
 
-		// Get Node Details of the Pool with IO
-		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+		// handle panic inside go routine
+		handlePanic := func() {
+			if r := recover(); r != nil {
+				log.FailOnError(fmt.Errorf("error during go routine [%v]", r), "routine failed! ")
+			}
+		}
+
+		doPoolOperations := func() {
+			defer handlePanic()
+			// Get Pool with running IO on the cluster
+			poolUUID, err := GetPoolIDWithIOs(contexts)
+			log.FailOnError(err, "Failed to get pool running with IO")
+			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+			// Get Node Details of the Pool with IO
+			nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+			log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+			for {
+
+				poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+				log.FailOnError(err, "Failed to get pool details with uuid [%v]", poolUUID)
+
+				expectedSize := (poolToBeResized.TotalSize / units.GiB) + 10
+				log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+				poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
+					api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+					api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+				randomIndex := rand.Intn(len(poolResizeType))
+				pickType := poolResizeType[randomIndex]
+				log.InfoD("Expanding Pool [%v] using resize type [%v]", poolToBeResized.Uuid, pickType)
+
+				log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+				log.InfoD("Expanding Pool [%v] using resize type [%v]", poolUUID, pickType)
+				err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+				isjournal, err := isJournalEnabled()
+				log.FailOnError(err, "Failed to check if Journal enabled")
+
+				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+				dash.VerifyFatal(resizeErr, nil,
+					fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+				if timeOutExceeded {
+					fmt.Printf("timeout exceeded ... exiting from go pool routine")
+					return
+				}
+			}
+
+		}
+
+		doVolumeOperations := func() {
+			defer handlePanic()
+			for {
+				uuidObj := uuid.New()
+				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+				Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
+				haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+
+				volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
+				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+				log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+
+				volumesCreated = append(volumesCreated, volId)
+
+				// HA Update on the volume
+				_, err = Inst().V.InspectVolume(volId)
+				log.FailOnError(err, "Failed to inspect volume [%s]", VolName)
+
+				//clonedId, err := Inst().V.CloneVolume(volId)
+				//log.FailOnError(err, "cloning volume with volume ID failed [%s]", clonedId)
+
+				//volumesCreated = append(volumesCreated, clonedId)
+
+				for _, eachVol := range volumesCreated {
+					if len(volumesCreated) > 5 {
+						_, err = Inst().V.AttachVolume(eachVol)
+						log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
+
+						err = Inst().V.DetachVolume(eachVol)
+						log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+
+						// Delete the Volume
+						err = Inst().V.DeleteVolume(eachVol)
+						log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+					}
+					if timeOutExceeded {
+						fmt.Printf("timeout exceeded ... exitint from go volume routine")
+						return
+					}
+
+				}
+
+			}
+		}
+
+		stopRoutine := func() {
+			done <- true
+			for _, each := range volumesCreated {
+				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+			}
+		}
+		defer stopRoutine()
 
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
@@ -8838,114 +8947,30 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				default:
 					log.FailOnError(WaitForKVDBMembers(), "not all kvdb members in healthy state")
 					// Wait for some time after killing kvdb master Node
-					time.Sleep(1 * time.Minute)
+					time.Sleep(5 * time.Minute)
+					if timeOutExceeded {
+						fmt.Printf("timeout exceeded ... exitint from go kvdb routine")
+						break
+					}
 				}
 			}
 		}()
 
-		// Resize the Pool few times expanding drives for 5 GB every time and wait for pool resize to complete
-		go func() {
-			for {
-				select {
-				case <-done:
-					wg.Done()
-					return
-				default:
-					poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-					log.FailOnError(err, "Failed to get pool details with uuid [%v]", poolUUID)
-
-					expectedSize := (poolToBeResized.TotalSize / units.GiB) + 10
-					log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-
-					poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
-						api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
-						api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
-					randomIndex := rand.Intn(len(poolResizeType))
-					pickType := poolResizeType[randomIndex]
-					log.InfoD("Expanding Pool [%v] using resize type [%v]", poolToBeResized.Uuid, pickType)
-
-					log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-					log.InfoD("Expanding Pool [%v] using resize type [%v]", poolUUID, pickType)
-					err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
-					dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-					isjournal, err := isJournalEnabled()
-					log.FailOnError(err, "Failed to check if Journal enabled")
-
-					resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-					dash.VerifyFatal(resizeErr, nil,
-						fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
-				}
-			}
-		}()
-
-		volumesCreated := []string{}
-
-		stopRoutine := func() {
-			done <- true
-			for _, each := range volumesCreated {
-				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
-			}
-		}
-		defer stopRoutine()
-
-		doVolumeOperations := func() {
-			// Create a new Volume
-			// Volume create continuously
-			uuidObj := uuid.New()
-			VolName := fmt.Sprintf("volume_%s", uuidObj.String())
-			Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
-			haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
-
-			volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
-			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
-
-			volumesCreated = append(volumesCreated, volId)
-
-			// HA Update on the volume
-			_, err = Inst().V.InspectVolume(volId)
-			log.FailOnError(err, "Failed to inspect volume [%s]", VolName)
-
-			_, err = Inst().V.CloneVolume(volId)
-			log.FailOnError(err, "cloning volume with volume ID failed [%s]", volId)
-
-			_, err = Inst().V.AttachVolume(volId)
-			log.FailOnError(err, "attach volume with volume ID failed [%s]", volId)
-
-			err = Inst().V.DetachVolume(volId)
-			log.FailOnError(err, "detach volume with volume ID failed [%s]", volId)
-
-			// Delete the Volume
-			err = Inst().V.DeleteVolume(volId)
-			log.FailOnError(err, "failed to delete volume with volume ID [%s]", volId)
-
-			/*
-			   we attempt to delete all volumes in case if remaining from stop routine function.
-			   in case if there is some residue or some volume did not delete with doVolumeOperations,
-			   those volumes will be deleted later
-			*/
-
-			// Making sure that all deleted volumes are removed from the list.
-			for i := 0; i < len(volumesCreated)-1; i++ {
-				volumesCreated[i] = volumesCreated[i+1]
-			}
-			// Resize the array by truncating the first element
-			volumesCreated = volumesCreated[:len(volumesCreated)-1]
-		}
-
-		duration := 1 * time.Hour
+		duration := 2 * time.Hour
 		timeout := time.After(duration)
 		select {
 		case <-timeout:
+			fmt.Printf("timeout exceeded ... exitint from go routine : Main")
+			timeOutExceeded = true
 			// Timeout reached terminate all go routines
 			done <- true
 			// Wait for GO Routine to complete
 			wg.Wait()
 		default:
-			doVolumeOperations()
-		}
+			go doVolumeOperations()
+			go doPoolOperations()
 
+		}
 	})
 
 	JustAfterEach(func() {
