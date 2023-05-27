@@ -2057,7 +2057,7 @@ func (a *ApplicationRestoreController) createCRD() error {
 	}
 	if ok {
 		err := k8sutils.CreateCRDV1(resource)
-		if err != nil && !errors.IsAlreadyExists(err) {
+		if err != nil && !k8s_errors.IsAlreadyExists(err) {
 			return err
 		}
 		return apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval)
