@@ -56,7 +56,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
+	storage_v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -906,7 +906,7 @@ func addSecurityAnnotation(spec interface{}) error {
 	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
 		return fmt.Errorf("failed to get secret namespace from config map")
 	}
-	if obj, ok := spec.(*storageapi.StorageClass); ok {
+	if obj, ok := spec.(*storage_v1.StorageClass); ok {
 		if obj.Parameters == nil {
 			obj.Parameters = make(map[string]string)
 		}
@@ -1395,6 +1395,37 @@ func getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
 	}
 
 	return pods, nil
+}
+
+type StorageClass struct {
+	name        string
+	provisioner string
+	// parameters
+	repl                          int
+	nearsync                      bool
+	nearsync_replication_strategy string
+}
+
+func createStorageClass(storageClass StorageClass) (*storage_v1.StorageClass, error) {
+	parameters := make(map[string]string)
+	if storageClass.repl != 0 {
+		parameters["repl"] = strconv.Itoa(storageClass.repl)
+	} else {
+		parameters["repl"] = "1"
+	}
+	if storageClass.nearsync {
+		parameters["nearsync"] = "true"
+	}
+	if storageClass.nearsync_replication_strategy != "" {
+		parameters["nearsync_replication_strategy"] = storageClass.nearsync_replication_strategy
+	}
+	return storage.Instance().CreateStorageClass(&storage_v1.StorageClass{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: storageClass.name,
+		},
+		Provisioner: storageClass.provisioner,
+		Parameters:  parameters,
+	})
 }
 
 func TestMain(m *testing.M) {
