@@ -548,7 +548,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		wg.Add(numGoroutines)
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
-		routineStopped := false
+		terminate := false
 
 		errChan := make(chan error)
 
@@ -602,7 +602,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		volumesCreated := []string{}
 
 		stopRoutine := func() {
-			if !routineStopped {
+			if !terminate {
 				done <- true
 
 				for _, each := range volumesCreated {
@@ -667,8 +667,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		select {
 		case <-timeout:
 			stopRoutine()
-			routineStopped = true
+			terminate = true
 		case err := <-errChan:
+			stopRoutine()
 			log.FailOnError(err, "error seen during go routine")
 
 		}

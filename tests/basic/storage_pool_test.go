@@ -8828,27 +8828,37 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 
 		var timeout bool
 		timeout = false
-
+		terminate := false
+		stopRoutine := func() {
+			if !terminate {
+				done <- true
+				wg.Done()
+				close(done)
+				timeout = true
+				for _, each := range volumesCreated {
+					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+				}
+				terminate = true
+			}
+		}
 		// handle panic inside go routine
 		handlePanic := func() {
 			if r := recover(); r != nil {
+				fmt.Printf("Panic occured handling panic")
 				timeout = true
+				stopRoutine()
 				errChan <- fmt.Errorf("panic occurred: %v", r)
 			}
 		}
 
-		stopRoutine := func() {
-			defer handlePanic()
-			done <- true
-			for _, each := range volumesCreated {
-				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
-			}
-		}
 		defer stopRoutine()
 
 		doPoolOperations := func() {
 			defer handlePanic()
 			for {
+				if timeout {
+					return
+				}
 				poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 				log.FailOnError(err, "Failed to get pool details with uuid [%v]", poolUUID)
 
@@ -8873,9 +8883,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 				dash.VerifyFatal(resizeErr, nil,
 					fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
-				if timeout {
-					return
-				}
 			}
 
 		}
@@ -8883,6 +8890,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		doVolumeOperations := func() {
 			defer handlePanic()
 			for {
+				if timeout {
+					return
+				}
 				uuidObj := uuid.New()
 				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
 				Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
@@ -8924,9 +8934,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 						volumesCreated = volumesCreated[:len(volumesCreated)-1]
 					}
 				}
-				if timeout {
-					return
-				}
 
 			}
 		}
@@ -8934,6 +8941,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
+			defer handlePanic()
 			for {
 				select {
 				case <-done:
@@ -8944,9 +8952,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 					// Wait for some time after killing kvdb master Node
 					time.Sleep(5 * time.Minute)
 					if timeout {
-						{
-							return
-						}
+						return
 					}
 				}
 			}
@@ -8956,19 +8962,18 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		timeoutduration := time.After(duration)
 		select {
 		case <-timeoutduration:
-			fmt.Printf("timeout exceeded ... exitint from go routine : Main")
-			timeout = true
-			// Timeout reached terminate all go routines
-			done <- true
+			fmt.Printf("timeout exceeded ... exiting from go routine : Main")
+			stopRoutine()
+			// Wait for GO Routine to complete
+			wg.Wait()
 		case err := <-errChan:
+			stopRoutine()
 			log.FailOnError(err, "error seen during go routine")
 		default:
 			go doVolumeOperations()
 			go doPoolOperations()
 
 		}
-		// Wait for GO Routine to complete
-		wg.Wait()
 	})
 
 	JustAfterEach(func() {
