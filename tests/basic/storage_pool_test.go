@@ -8826,17 +8826,13 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		log.FailOnError(err, "Failed to get pool running with IO")
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
-		// Get Node Details of the Pool with IO
-		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
-
-		var timeOutExceeded bool
-		timeOutExceeded = false
+		var timeout bool
+		timeout = false
 
 		// handle panic inside go routine
 		handlePanic := func() {
 			if r := recover(); r != nil {
+				timeout = true
 				errChan <- fmt.Errorf("panic occurred: %v", r)
 			}
 		}
@@ -8853,7 +8849,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		doPoolOperations := func() {
 			defer handlePanic()
 			for {
-
 				poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 				log.FailOnError(err, "Failed to get pool details with uuid [%v]", poolUUID)
 
@@ -8878,8 +8873,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 				dash.VerifyFatal(resizeErr, nil,
 					fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
-				if timeOutExceeded {
-					fmt.Printf("timeout exceeded ... exiting from go pool routine")
+				if timeout {
 					return
 				}
 			}
@@ -8929,11 +8923,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 						// Resize the array by truncating the last element
 						volumesCreated = volumesCreated[:len(volumesCreated)-1]
 					}
-					if timeOutExceeded {
-						fmt.Printf("timeout exceeded ... exitint from go volume routine")
-						return
-					}
-
+				}
+				if timeout {
+					return
 				}
 
 			}
@@ -8951,20 +8943,21 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 					log.FailOnError(WaitForKVDBMembers(), "not all kvdb members in healthy state")
 					// Wait for some time after killing kvdb master Node
 					time.Sleep(5 * time.Minute)
-					if timeOutExceeded {
-						fmt.Printf("timeout exceeded ... exitint from go kvdb routine")
-						break
+					if timeout {
+						{
+							return
+						}
 					}
 				}
 			}
 		}()
 
 		duration := 2 * time.Hour
-		timeout := time.After(duration)
+		timeoutduration := time.After(duration)
 		select {
-		case <-timeout:
+		case <-timeoutduration:
 			fmt.Printf("timeout exceeded ... exitint from go routine : Main")
-			timeOutExceeded = true
+			timeout = true
 			// Timeout reached terminate all go routines
 			done <- true
 		case err := <-errChan:
