@@ -8959,7 +8959,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			}
 		}()
 
-		duration := 40 * time.Minute
+		duration := 2 * time.Hour
 		timeout := time.After(duration)
 		select {
 		case <-timeout:
@@ -8967,8 +8967,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			timeOutExceeded = true
 			// Timeout reached terminate all go routines
 			done <- true
-			// Wait for GO Routine to complete
-			wg.Wait()
 		case err := <-errChan:
 			log.FailOnError(err, "error seen during go routine")
 		default:
@@ -8976,6 +8974,8 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			go doPoolOperations()
 
 		}
+		// Wait for GO Routine to complete
+		wg.Wait()
 	})
 
 	JustAfterEach(func() {

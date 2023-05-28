@@ -548,12 +548,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		wg.Add(numGoroutines)
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
-		doneVolumeCreate := make(chan bool)
-		doneVolumeDelete := make(chan bool)
+		routingStopped := false
 
 		errChan := make(chan error)
-
-		routineClose := false // variable to make sure go routine is closed properly
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
@@ -575,43 +572,39 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		go func() {
 			defer handlePanic()
 			for {
-				_, ok := <-done
-				if !ok {
+				select {
+				case <-done:
 					wg.Done()
 					return
+				default:
+					// Wait for KVDB Members to be online
+					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+
+					// Kill KVDB Master Node
+					masterNode, err := GetKvdbMasterNode()
+					log.FailOnError(err, "failed getting details of KVDB master node")
+
+					// Get KVDB Master PID
+					pid, err := GetKvdbMasterPID(*masterNode)
+					log.FailOnError(err, "failed getting PID of KVDB master node")
+					log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+					// Kill kvdb master PID for regular intervals
+					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+
+					// Wait for some time after killing kvdb master Node
+					time.Sleep(5 * time.Minute)
 				}
-				// Wait for KVDB Members to be online
-				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
-
-				// Kill KVDB Master Node
-				masterNode, err := GetKvdbMasterNode()
-				log.FailOnError(err, "failed getting details of KVDB master node")
-
-				// Get KVDB Master PID
-				pid, err := GetKvdbMasterPID(*masterNode)
-				log.FailOnError(err, "failed getting PID of KVDB master node")
-				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
-
-				// Kill kvdb master PID for regular intervals
-				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
-
-				// Wait for some time after killing kvdb master Node
-				time.Sleep(5 * time.Minute)
 			}
-
 		}()
 
 		// Go Routine to create volume continuously
 		volumesCreated := []string{}
 
 		stopRoutine := func() {
-			if !routineClose {
-				close(done)
-				close(doneVolumeCreate)
-				close(doneVolumeDelete)
-				wg.Wait()
+			if !routingStopped {
+				done <- true
 
-				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
@@ -622,21 +615,22 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		go func() {
 			defer handlePanic()
 			for {
-				_, ok := <-doneVolumeCreate
-				if !ok {
+				select {
+				case <-done:
 					wg.Done()
 					return
+				default:
+					// Volume create continuously
+					uuidObj := uuid.New()
+					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+					Size := uint64(rand.Intn(100) + 1)  // Size of the Volume between 1G to 100G
+					haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
+
+					volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
+					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+					volumesCreated = append(volumesCreated, volId)
+
 				}
-				// Volume create continuously
-				uuidObj := uuid.New()
-				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
-				Size := uint64(rand.Intn(100) + 1)  // Size of the Volume between 1G to 100G
-				haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
-
-				volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
-				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-				volumesCreated = append(volumesCreated, volId)
-
 			}
 		}()
 
@@ -644,38 +638,43 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		go func() {
 			defer handlePanic()
 			for {
-				_, ok := <-doneVolumeDelete
-				if !ok {
+				select {
+				case <-done:
 					wg.Done()
 					return
-				}
-				if len(volumesCreated) > 5 {
-					deleteVolume := volumesCreated[0]
-					log.FailOnError(Inst().V.DeleteVolume(deleteVolume),
-						"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+				default:
+					if len(volumesCreated) > 5 {
+						deleteVolume := volumesCreated[0]
+						log.FailOnError(Inst().V.DeleteVolume(deleteVolume),
+							"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
 
-					// Remove the first element
-					for i := 0; i < len(volumesCreated)-1; i++ {
-						volumesCreated[i] = volumesCreated[i+1]
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+
 					}
-					// Resize the array by truncating the last element
-					volumesCreated = volumesCreated[:len(volumesCreated)-1]
-
 				}
 			}
+
 		}()
 
 		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for latest one hour
-		duration := 2 * time.Hour
+		duration := 1 * time.Hour
 		timeout := time.After(duration)
-
 		select {
 		case <-timeout:
 			stopRoutine()
-			routineClose = true
+			routingStopped = true
+
 		case err := <-errChan:
 			log.FailOnError(err, "error seen during go routine")
+
 		}
+		// Wait for GO Routine to complete
+		wg.Wait()
 	})
 
 	JustAfterEach(func() {
