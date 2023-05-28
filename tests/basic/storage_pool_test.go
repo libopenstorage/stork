@@ -8811,6 +8811,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 
 		wg.Add(numGoroutines)
 		done := make(chan bool)
+		errChan := make(chan error)
 
 		volumesCreated := []string{}
 
@@ -8820,28 +8821,37 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
 		var timeOutExceeded bool
 		timeOutExceeded = false
 
 		// handle panic inside go routine
 		handlePanic := func() {
 			if r := recover(); r != nil {
-				log.FailOnError(fmt.Errorf("error during go routine [%v]", r), "routine failed! ")
+				errChan <- fmt.Errorf("panic occurred: %v", r)
 			}
 		}
 
+		stopRoutine := func() {
+			defer handlePanic()
+			done <- true
+			for _, each := range volumesCreated {
+				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+			}
+		}
+		defer stopRoutine()
+
 		doPoolOperations := func() {
 			defer handlePanic()
-			// Get Pool with running IO on the cluster
-			poolUUID, err := GetPoolIDWithIOs(contexts)
-			log.FailOnError(err, "Failed to get pool running with IO")
-			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-
-			// Get Node Details of the Pool with IO
-			nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-			log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
-
 			for {
 
 				poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
@@ -8907,6 +8917,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 						err = Inst().V.DetachVolume(eachVol)
 						log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
 
+						time.Sleep(5 * time.Second)
 						// Delete the Volume
 						err = Inst().V.DeleteVolume(eachVol)
 						log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
@@ -8928,14 +8939,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			}
 		}
 
-		stopRoutine := func() {
-			done <- true
-			for _, each := range volumesCreated {
-				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
-			}
-		}
-		defer stopRoutine()
-
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
@@ -8956,7 +8959,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			}
 		}()
 
-		duration := 2 * time.Hour
+		duration := 40 * time.Minute
 		timeout := time.After(duration)
 		select {
 		case <-timeout:
@@ -8966,6 +8969,8 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			done <- true
 			// Wait for GO Routine to complete
 			wg.Wait()
+		case err := <-errChan:
+			log.FailOnError(err, "error seen during go routine")
 		default:
 			go doVolumeOperations()
 			go doPoolOperations()

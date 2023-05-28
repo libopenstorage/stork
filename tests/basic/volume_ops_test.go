@@ -551,6 +551,8 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		doneVolumeCreate := make(chan bool)
 		doneVolumeDelete := make(chan bool)
 
+		errChan := make(chan error)
+
 		routineClose := false // variable to make sure go routine is closed properly
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -565,7 +567,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		// handle panic inside go routine
 		handlePanic := func() {
 			if r := recover(); r != nil {
-				log.FailOnError(fmt.Errorf("error during go routine [%v]", r), "routine failed! ")
+				errChan <- fmt.Errorf("panic occurred: %v", r)
 			}
 		}
 
@@ -671,6 +673,8 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		case <-timeout:
 			stopRoutine()
 			routineClose = true
+		case err := <-errChan:
+			log.FailOnError(err, "error seen during go routine")
 		}
 	})
 
