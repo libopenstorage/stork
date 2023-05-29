@@ -3389,7 +3389,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 					// return nil, err
 				}
 			} else {
-				vInfo.TotalSize = resp.GetSize()
+				vInfo.TotalSize = resp.GetCompressedObjectBytes()
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
