@@ -634,6 +634,8 @@ type StorageClusterStatus struct {
 }
 
 // ComponentImages is a collection of all the images managed by the operator
+// -note: please keep in sync w/ `manifest.Release` structure
+// -WARN: the ComponentImages are annotated w/ `json:` while `manifest.Release` uses `yaml:`
 type ComponentImages struct {
 	Stork                      string `json:"stork,omitempty"`
 	UserInterface              string `json:"userInterface,omitempty"`
@@ -657,6 +659,9 @@ type ComponentImages struct {
 	LogUploader                string `json:"logUploader,omitempty"`
 	TelemetryProxy             string `json:"telemetryProxy,omitempty"`
 	PxRepo                     string `json:"pxRepo,omitempty"`
+	KubeScheduler              string `json:"kubeScheduler,omitempty"`
+	KubeControllerManager      string `json:"kubeControllerManager,omitempty"`
+	Pause                      string `json:"pause,omitempty"`
 }
 
 // Storage represents cluster storage details
