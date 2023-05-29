@@ -529,7 +529,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
+var _ = Describe("{}", func() {
 	var testrailID = 0
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
@@ -564,6 +564,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		// handle panic inside go routine
 		handlePanic := func() {
 			if r := recover(); r != nil {
+				fmt.Printf("panic occured .. handling panic.[%v]", r)
 				errChan <- fmt.Errorf("panic occurred: %v", r)
 			}
 		}
@@ -604,7 +605,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		stopRoutine := func() {
 			if !terminate {
 				done <- true
-
+				close(done)
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
