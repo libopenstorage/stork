@@ -2940,6 +2940,28 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 	return nil
 }
 
+// NamespaceExistsInNamespaceMapping checks if namespace is present in map of namespace mapping
+func NamespaceExistsInNamespaceMapping(namespaceMap map[string]string, namespaces []string) bool {
+	for _, namespace := range namespaces {
+		if _, ok := namespaceMap[namespace]; !ok {
+			fmt.Printf("%s is not a present in namespaces %v", namespace, namespaces)
+			return false
+		}
+	}
+	return true
+}
+
+// RemoveNamespaceLabelForMultipleNamespaces removes labels from multiple namespace
+func RemoveNamespaceLabelForMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func AddSourceCluster(ctx context.Context) error {
 	err := RegisterCluster(SourceClusterName, "", orgID, ctx)
 	if err != nil {
@@ -2954,4 +2976,15 @@ func AddDestinationCluster(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// GenerateRandomLabelsWithMaxChar creates random label with max characters
+func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]string {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := RandomString(charLimit)
+		value := uuid.New()
+		labels[key] = value
+	}
+	return labels
 }
