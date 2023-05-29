@@ -3238,17 +3238,41 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	}
 	_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
-	// TODO replace when sdk supports node removal
-	if err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, true); err != nil {
-		if !strings.Contains(err.Error(), "Node remove is pending") {
-			return &ErrFailedToDecommissionNode{
-				Node:  n.Name,
-				Cause: err.Error(),
-			}
+	cmd := fmt.Sprintf("echo Y | %s cluster delete -f %s", d.getPxctlPath(*n), nodeResp.Node.Id)
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
+
+	var cmdNode node.Node
+	for _, cn := range node.GetStorageDriverNodes() {
+		if cn.Name != n.Name {
+			cmdNode = cn
+			break
 		}
 	}
 
-	log.Infof("Node [%s] remove is pending. Waiting for it to complete", nodeResp.Node.Id)
+	t = func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(cmdNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil && strings.Contains(err.Error(), "Node remove is pending") {
+
+			return out, false, nil
+
+		}
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+
+	if err != nil {
+		return err
+	}
+	outLines := strings.Split(out.(string), "\n")
+
+	log.Infof("Node [%s] remove is pending. Waiting for it to complete,output: %s", nodeResp.Node.Id, outLines)
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
