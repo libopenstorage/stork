@@ -1959,7 +1959,6 @@ github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e/go.mod h1:Tj
 github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de h1:OPjzuK6NdJIhHNP+PeHMgZkfqypqC6k1ECAezCKxYi4=
 github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de/go.mod h1:hbTXxljzyn/ACskVxE/dMsO7Ta49XT6FXlCyoAbFG10=
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
-github.com/libopenstorage/operator v0.0.0-20230112002659-7e73437e61d4/go.mod h1:/sGycOMcavuKLWm3Vd907luRXZA/mcqFs1AdEbbT5k4=
 github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
 github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594 h1:pVtnM9o5BlvWSrRphA7qJsV32bXW98cmxhHlA2xrA9E=
 github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594/go.mod h1:0S4k1ouTScuVS3rxPukfEFvc5bMasmI1wpAAM0NejWQ=
@@ -1967,8 +1966,8 @@ github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9 h1:pZQ5uaWky7KerHX2saBO971ti+IBDJRorHwcHwc+0aM=
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
-github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973/go.mod h1:/EFTTQyBxNzul96urrYPdjNEYeDzVgZzK88gRQjoVmk=
 github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a/go.mod h1:9ZIMQaePJPyVsx85zoWn6W+uhjTv/A+7JLoG8j58xgI=
+github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81/go.mod h1:9ZIMQaePJPyVsx85zoWn6W+uhjTv/A+7JLoG8j58xgI=
 github.com/libopenstorage/stork v1.4.1-0.20230519043154-cbc10dffaf19/go.mod h1:Xm4DHoViynFXMQKBXGj3IkA77LY2RBFkNtv6vbo3wNw=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 h1:5vqfYYWm4b+lbkMtvvWtWBiqLbmLN6dNvWaa7wVsz/Q=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1/go.mod h1:xwNGC7xiz/BQ/wbMkvHujL8Gjgseg+x41xMek7sKRRQ=
@@ -2366,8 +2365,8 @@ github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba/go.mod h1
 github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987 h1:VNBTmIPjJRZ2QP64zdsrif3ELDHiMzoyNNX74VNHgZ8=
 github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987/go.mod h1:g3pw2lI2AjqAixUCRhaBdKTY98znsCPR7NGRrlpimVU=
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20230330091134-421296e5f8d0 h1:58JTPb+aO4upD+7sO0g1Uq3g0sJgYGHZ2zXOkepy3Tg=
-github.com/portworx/sched-ops v1.20.4-rc1.0.20230330091134-421296e5f8d0/go.mod h1:4Tm81DwlMhF4kNT+6toXeLnxGrqacMHtgz6x2FfFUnQ=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721 h1:eBrcKqcX07KeEGQoUpR12SMUxF8oGT6TvROYx2DM/qE=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721/go.mod h1:9/NfDKVSG/V0+0801i7vHDkBuZLYBaKUbVOhjldSpvI=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/talisman v1.1.3/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670 h1:dvMA2uZo8BKC+NC1IL6GIe58GCrmS6pim5QAMlh3a5g=
@@ -2470,7 +2469,6 @@ github.com/rancher/apiserver v0.0.0-20221205175736-7c507bd5c076/go.mod h1:xwQhXv
 github.com/rancher/lasso v0.0.0-20221202205459-e7138f16489c/go.mod h1:Qewwr/xGzhtG7WCxhubrKZrdAobv5yqAIuHbDoxThZQ=
 github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc/go.mod h1:dEfC9eFQigj95lv/JQ8K5e7+qQCacWs1aIA6nLxKzT8=
 github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99/go.mod h1:zpv7z4ySYL5LlEBKEPf/xf3cjx837/J2i/wHpT43viE=
-github.com/rancher/norman v0.0.0-20230110004459-34230bb2787c/go.mod h1:zpv7z4ySYL5LlEBKEPf/xf3cjx837/J2i/wHpT43viE=
 github.com/rancher/norman v0.0.0-20230222213531-275a3e921940 h1:fwAzRl0oF0kdHS1YWqCl/Xk59rjbXNpZcWMfknqeeH8=
 github.com/rancher/norman v0.0.0-20230222213531-275a3e921940/go.mod h1:7MyWxfCmPl6N/UFLu4neLH6nwTFgQQF5rxtUGyZvPFE=
 github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525 h1:6s3o1mPHTPuH8vWKTlmhrXux83RvNDDJruFG3n9Wx4o=
