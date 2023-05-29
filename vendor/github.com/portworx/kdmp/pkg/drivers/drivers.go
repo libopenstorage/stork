@@ -99,8 +99,8 @@ const (
 	DefaultKopiaExecutorLimitMemory    = "1Gi"
 	DefaultNFSExecutorRequestCPU       = "0.1"
 	DefaultNFSExecutorRequestMemory    = "700Mi"
-	DefaultNFSExecutorLimitCPU         = "0.2"
-	DefaultNFSExecutorLimitMemory      = "1Gi"
+	DefaultNFSExecutorLimitCPU         = "0.5"
+	DefaultNFSExecutorLimitMemory      = "1.5Gi"
 )
 
 var (
