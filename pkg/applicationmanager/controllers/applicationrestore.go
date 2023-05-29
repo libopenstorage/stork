@@ -1875,6 +1875,11 @@ func (a *ApplicationRestoreController) restoreResources(
 					string(resourceExport.Status.ResourceExportResourceApplyStage))
 				restore.Status.LastUpdateTimestamp = metav1.Now()
 				doCleanup = false
+			default:
+				doCleanup = false
+				if len(resourceExport.Status.Status) != 0 {
+					log.ApplicationRestoreLog(restore).Errorf("%v: invalid status for resource export: %s, status: %s", fn, resourceExport.Name, resourceExport.Status.Status)
+				}
 			}
 			restore.Status.LastUpdateTimestamp = metav1.Now()
 			err = a.client.Update(context.TODO(), restore)
