@@ -242,15 +242,15 @@ func (mr *MockDriverMockRecorder) UpdateStorageClusterStatus(arg0, arg1 interfac
 }
 
 // Validate mocks base method.
-func (m *MockDriver) Validate() error {
+func (m *MockDriver) Validate(arg0 *v1.StorageCluster) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validate")
+	ret := m.ctrl.Call(m, "Validate", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Validate indicates an expected call of Validate.
-func (mr *MockDriverMockRecorder) Validate() *gomock.Call {
+func (mr *MockDriverMockRecorder) Validate(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockDriver)(nil).Validate))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockDriver)(nil).Validate), arg0)
 }
