@@ -5422,7 +5422,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 			}, false)
 
 			if err != nil {
-				if strings.Contains(err.Error(), "Device already exists") {
+				if strings.Contains(err.Error(), "Device already exists") || strings.Contains(err.Error(), "Drive already in use") {
 					return "", false, nil
 				}
 				return "", true, err
@@ -6130,7 +6130,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 
 	// Delete all the pools present on the Node
 	for i := 0; i < lenPools; i++ {
-		err := Inst().V.DeletePool(n, strconv.Itoa(i))
+		err := Inst().V.DeletePool(n, strconv.Itoa(i), true)
 		if err != nil {
 			return err
 		}
@@ -6417,7 +6417,7 @@ func RandomString(length int) string {
 }
 
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
-func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
 
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
 	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
@@ -6475,7 +6475,7 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 		}
 
 	}()
-	err = Inst().V.DeletePool(stNode, poolIDToDelete)
+	err = Inst().V.DeletePool(stNode, poolIDToDelete, retry)
 	return err
 }
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {

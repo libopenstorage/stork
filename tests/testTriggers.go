@@ -2158,37 +2158,42 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					}
 				})
 				log.Infof("Got volume count : %v", len(appVolumes))
-
-				for _, v := range appVolumes {
-					// Skip cloud snapshot trigger for Pure DA volumes
-					isPureVol, err := Inst().V.IsPureVolume(v)
-					if err != nil {
+				scaleFactor := time.Duration(Inst().GlobalScaleFactor * len(appVolumes))
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+				if err != nil {
+					UpdateOutcome(event, err)
+				} else {
+					for _, v := range appVolumes {
+						// Skip cloud snapshot trigger for Pure DA volumes
+						isPureVol, err := Inst().V.IsPureVolume(v)
+						if err != nil {
+							UpdateOutcome(event, err)
+						}
+						if isPureVol {
+							log.Warnf(
+								"Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name,
+							)
+							continue
+						}
+						snapshotScheduleName := v.Name + "-interval-schedule"
+						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+						snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+							appNamespace,
+							snapshotScheduleRetryTimeout,
+							snapshotScheduleRetryInterval)
+						if err == nil {
+							for k, v := range snapStatuses {
+								log.InfoD("Policy Type: %v", k)
+								for _, e := range v {
+									log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
+									log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
+								}
+							}
+						} else {
+							log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
+						}
 						UpdateOutcome(event, err)
 					}
-					if isPureVol {
-						log.Warnf(
-							"Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name,
-						)
-						continue
-					}
-					snapshotScheduleName := v.Name + "-interval-schedule"
-					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
-						appNamespace,
-						snapshotScheduleRetryTimeout,
-						snapshotScheduleRetryInterval)
-					if err == nil {
-						for k, v := range snapStatuses {
-							log.InfoD("Policy Type: %v", k)
-							for _, e := range v {
-								log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
-								log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
-							}
-						}
-					} else {
-						log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
-					}
-					UpdateOutcome(event, err)
 				}
 
 			}

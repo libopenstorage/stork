@@ -982,7 +982,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				err = WaitForPoolStatusToUpdate(selectedNode, expectedStatus)
 				log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
 
-				err = Inst().V.DeletePool(selectedNode, "0")
+				err = Inst().V.DeletePool(selectedNode, "0", true)
 				log.FailOnError(err, "failed to delete poolID 0 on node %s", selectedNode.Name)
 
 				err = Inst().V.ExitPoolMaintenance(selectedNode)
