@@ -529,7 +529,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{}", func() {
+var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 	var testrailID = 0
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
@@ -578,23 +578,29 @@ var _ = Describe("{}", func() {
 					wg.Done()
 					return
 				default:
-					// Wait for KVDB Members to be online
-					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+					allKvdbmembers, err := GetAllKvdbNodes()
+					if err != nil {
+						log.FailOnError(fmt.Errorf("Failed to list all KVDB members"), "listing kvdb failed")
+					}
+					if len(allKvdbmembers) == 3 {
+						// Wait for KVDB Members to be healthy
+						log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
-					// Kill KVDB Master Node
-					masterNode, err := GetKvdbMasterNode()
-					log.FailOnError(err, "failed getting details of KVDB master node")
+						// Kill KVDB Master Node
+						masterNode, err := GetKvdbMasterNode()
+						log.FailOnError(err, "failed getting details of KVDB master node")
 
-					// Get KVDB Master PID
-					pid, err := GetKvdbMasterPID(*masterNode)
-					log.FailOnError(err, "failed getting PID of KVDB master node")
-					log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+						// Get KVDB Master PID
+						pid, err := GetKvdbMasterPID(*masterNode)
+						log.FailOnError(err, "failed getting PID of KVDB master node")
+						log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
 
-					// Kill kvdb master PID for regular intervals
-					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+						// Kill kvdb master PID for regular intervals
+						log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
 
-					// Wait for some time after killing kvdb master Node
-					time.Sleep(5 * time.Minute)
+						// Wait for some time after killing kvdb master Node
+						time.Sleep(5 * time.Minute)
+					}
 				}
 			}
 		}()
@@ -609,6 +615,7 @@ var _ = Describe("{}", func() {
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
+				terminate = true
 			}
 		}
 		defer stopRoutine()
@@ -668,11 +675,9 @@ var _ = Describe("{}", func() {
 		select {
 		case <-timeout:
 			stopRoutine()
-			terminate = true
 		case err := <-errChan:
 			stopRoutine()
 			log.FailOnError(err, "error seen during go routine")
-
 		}
 		// Wait for GO Routine to complete
 		wg.Wait()
