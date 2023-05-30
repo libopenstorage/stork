@@ -8889,16 +8889,10 @@ var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 
 			log.InfoD("Initiate add cloud drive and validate")
 			err := addCloudDrive(*selectedNode, selectedPool.ID)
-			//err = Inst().V.AddCloudDrive(&stNode, deviceSpec, selectedPool.ID)
 			if err != nil {
 				err1 := fmt.Sprintf("add cloud drive failed on node %s, err: %v", selectedNode.Name, err)
 				dash.VerifyFatal(err, nil, err1)
-				//return fmt.Errorf("add cloud drive failed on node %s, err: %v", selectedNode.Name, err)
 			}
-
-			//log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
-			//err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, true)
-			//dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 		})
 		stepLog = fmt.Sprintf("Ensure that pool %s expansion is successful", selectedPool.Uuid)
 		Step(stepLog, func() {
