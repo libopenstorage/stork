@@ -8903,11 +8903,11 @@ var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 			status, err = Inst().V.GetNodePoolsStatus(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", selectedNode.Name))
 			log.InfoD(fmt.Sprintf("Pool %s has status %s", selectedNode.Name, status[selectedPool.Uuid]))
-			//if status[selectedPool.Uuid] == "In Maintenance" {
-			log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
-			err = Inst().V.ExitPoolMaintenance(*selectedNode)
-			log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
-			//}
+			if status[selectedPool.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
+			}
 
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", selectedPool.Uuid))
