@@ -1853,6 +1853,10 @@ func (a *ApplicationRestoreController) restoreResources(
 						resource.Reason)
 				}
 				restore.Status.LargeResourceEnabled = resourceExport.Status.LargeResourceEnabled
+				restore.Status.ResourceCount = int(resourceExport.Status.TotalResourceCount)
+				restore.Status.RestoredResourceCount = int(resourceExport.Status.RestoredResourceCount)
+				log.ApplicationRestoreLog(restore).Tracef("%v: resource export CR successful with total resource count %v and restored resource count %v",
+					fn, restore.Status.ResourceCount, restore.Status.RestoredResourceCount)
 			case kdmpapi.ResourceExportStatusInitial:
 				doCleanup = false
 			case kdmpapi.ResourceExportStatusPending:
@@ -1899,7 +1903,14 @@ func (a *ApplicationRestoreController) restoreResources(
 		return err
 	}
 
-	restore.Status.ResourceCount = len(restore.Status.Resources)
+	if nfs && restore.Status.LargeResourceEnabled {
+		// For NFS & large Resource Enabled we would have got resource count from RE CR in success path
+		// just add PV & PVC count which is copied to restore CR in the addCSIVolumeResources() function.
+		restore.Status.ResourceCount += len(restore.Status.Resources)
+	} else {
+		restore.Status.ResourceCount = len(restore.Status.Resources)
+	}
+
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
