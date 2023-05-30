@@ -8832,16 +8832,11 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 
 	//step1: feed p1 size GB I/O on the volume
-	//step2: After I/O done p1 should be offline and full, expand the pool p1 using add-disk
+	//step2: After I/O done p1 should be offline and full, expand the pool p1 using legacy add-disk
 	//step4: validate the pool and the data
 
-	var testrailID = 50631
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50631
-	var runID int
-
 	JustBeforeEach(func() {
-		StartTorpedoTest("StorageFullPoolLegacyAddDisk", "Feed a pool full, then expand the pool using legacy add-disk", nil, testrailID)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("StorageFullPoolLegacyAddDisk", "Feed a pool full, then expand the pool using legacy add-disk", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
@@ -8967,7 +8962,7 @@ var _ = Describe("{StorageFullPoolLegacyAddDisk}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		AfterEachTest(contexts, testrailID, runID)
+		AfterEachTest(contexts)
 	})
 
 })
