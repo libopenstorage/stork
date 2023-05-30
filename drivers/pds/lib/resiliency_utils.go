@@ -24,6 +24,7 @@ import (
 const (
 	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
 	PdsAgentPod                       = "pds-agent"
+	PdsTeleportPod                    = "pds-teleport"
 	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
 	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
@@ -32,6 +33,7 @@ const (
 	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
 	UpdateTemplate                    = "medium"
 	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
+	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
 )
 
 // PDS vars
@@ -165,6 +167,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		}
 		ExecuteInParallel(func1, func2)
 	case KillAgentPodDuringDeployment:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the Agent Pod.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case KillTeleportPodDuringDeployment:
 		checkTillReplica = CheckTillReplica
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the Agent Pod.", checkTillReplica)
 		func1 := func() {
@@ -446,14 +458,14 @@ func KillPodsInNamespace(ns string, podName string) error {
 		CapturedErrors <- testError
 		return testError
 	}
-	// Get List of All Pods matching with the name : deployment controller manager pod
+	// Get List of All Pods matching with the name : podName
 	for _, pod := range podList.Items {
 		if strings.Contains(pod.Name, podName) {
 			log.Infof("Pod Name is : %v", pod.Name)
 			Pods = append(Pods, pod)
 		}
 	}
-	// Kill All Deployment Controller Pods
+	// Kill All Pods matching with podName
 	for _, pod := range Pods {
 		log.InfoD("Deleting Pod: %s", pod.Name)
 		testError = DeleteK8sPods(pod.Name, ns)

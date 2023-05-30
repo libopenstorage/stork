@@ -24,7 +24,6 @@ import (
 var (
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
-	apiClient     *pds.APIClient
 	targetCluster *targetcluster.TargetCluster
 
 	k8sCore = core.Instance()
@@ -180,7 +179,6 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 	}
 
 	log.Infof("VersionID %v ImageID %v", versionID, imageID)
-	components = pdsapi.NewComponents(apiClient)
 	deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
 		deploymentTargetID,
 		dnsZone,

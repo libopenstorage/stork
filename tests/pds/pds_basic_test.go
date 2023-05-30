@@ -1,7 +1,6 @@
 package tests
 
 import (
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
@@ -37,7 +36,6 @@ var (
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
 	components    *api.Components
-	apiClient     *pds.APIClient
 )
 
 var _ = BeforeSuite(func() {
