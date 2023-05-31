@@ -5017,6 +5017,8 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		if poolID != -1 {
 			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
 		}
+	} else if poolID == -1 {
+		driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
 	}
 
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
