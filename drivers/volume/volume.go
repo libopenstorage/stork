@@ -199,7 +199,7 @@ type MigratePluginInterface interface {
 	CancelMigration(*storkapi.Migration) error
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
-	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string) (*v1.PersistentVolume, error)
+	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string, string, string) (*v1.PersistentVolume, error)
 }
 
 type ActionPluginInterface interface {
