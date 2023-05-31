@@ -19,6 +19,16 @@ import (
 )
 
 func TestCommandExecutor(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	t.Run("cmdExecutorTest", cmdExecutorTest)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
+}
+
+func cmdExecutorTest(t *testing.T) {
 	var testrailID, testResult = 86261, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
