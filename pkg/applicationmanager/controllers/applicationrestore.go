@@ -668,6 +668,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 							restore.Spec.IncludeOptionalResourceTypes,
 							nil,
 							&opts,
+							restore.Spec.BackupLocation,
+							restore.Namespace,
 						)
 						if err != nil {
 							return err
@@ -1576,6 +1578,8 @@ func (a *ApplicationRestoreController) applyResources(
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,
 			&opts,
+			restore.Spec.BackupLocation,
+			restore.Namespace,
 		)
 		if err != nil {
 			return err

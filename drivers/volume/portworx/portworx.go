@@ -2712,6 +2712,8 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 	// Get the pv storageclass and get the provision detail and decide on csi section.
 	if len(pv.Spec.StorageClassName) != 0 {
