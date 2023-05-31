@@ -578,29 +578,25 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 					wg.Done()
 					return
 				default:
-					allKvdbmembers, err := GetAllKvdbNodes()
-					if err != nil {
-						log.FailOnError(fmt.Errorf("Failed to list all KVDB members"), "listing kvdb failed")
-					}
-					if len(allKvdbmembers) == 3 {
-						// Wait for KVDB Members to be healthy
-						log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
-						// Kill KVDB Master Node
-						masterNode, err := GetKvdbMasterNode()
-						log.FailOnError(err, "failed getting details of KVDB master node")
+					// Wait for KVDB Members to be online
+					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
-						// Get KVDB Master PID
-						pid, err := GetKvdbMasterPID(*masterNode)
-						log.FailOnError(err, "failed getting PID of KVDB master node")
-						log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+					// Kill KVDB Master Node
+					masterNode, err := GetKvdbMasterNode()
+					log.FailOnError(err, "failed getting details of KVDB master node")
 
-						// Kill kvdb master PID for regular intervals
-						log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+					// Get KVDB Master PID
+					pid, err := GetKvdbMasterPID(*masterNode)
+					log.FailOnError(err, "failed getting PID of KVDB master node")
+					log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
 
-						// Wait for some time after killing kvdb master Node
-						time.Sleep(5 * time.Minute)
-					}
+					// Kill kvdb master PID for regular intervals
+					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+
+					// Wait for some time after killing kvdb master Node
+					time.Sleep(5 * time.Minute)
+
 				}
 			}
 		}()
