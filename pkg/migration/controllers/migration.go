@@ -1394,7 +1394,7 @@ func (m *MigrationController) preparePVResource(
 	}
 	pv.Annotations[PVReclaimAnnotation] = string(pv.Spec.PersistentVolumeReclaimPolicy)
 	pv.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
-	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil)
+	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil, "", "")
 	if err != nil {
 		return err
 	}
