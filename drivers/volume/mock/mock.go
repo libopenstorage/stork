@@ -323,6 +323,8 @@ func (m *Driver) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 
 	return pv, nil
