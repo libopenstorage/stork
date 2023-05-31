@@ -1201,11 +1201,13 @@ func scaleDownApps(
 func validateMigrationOnSrc(
 	t *testing.T,
 	migrationName string,
-	namespace string,
+	namespaces []string,
 ) {
-	err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error validating migration")
-	logrus.Infof("Validated migration on src: %v", migrationName)
+	for _, namespace := range namespaces {
+		err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error validating migration")
+		logrus.Infof("Validated migration on src: %v", migrationName)
+	}
 }
 
 func changePxServiceToLoadBalancer(internalLB bool) error {

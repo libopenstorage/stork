@@ -55,9 +55,7 @@ func testFailoverBasic(t *testing.T) {
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	validateMigrationOnSrcAndDest(
-		t, migrationName, namespaces[0], preMigrationCtxs[0],
-		startAppsOnMigration, uint64(4), uint64(0))
+	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	deactivateClusterDomainAndTriggerFailover(
 		t, actionName, namespaces, preMigrationCtxs, true)
@@ -100,11 +98,7 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	for idx, namespace := range namespaces {
-		validateMigrationOnSrcAndDest(
-			t, migrationName, namespace, preMigrationCtxs[idx],
-			startAppsOnMigration, uint64(4), uint64(0))
-	}
+	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	deactivateClusterDomainAndTriggerFailover(
 		t, actionName, namespaces, preMigrationCtxs, true)
@@ -128,11 +122,7 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	for idx, namespace := range namespaces {
-		validateMigrationOnSrcAndDest(
-			t, migrationName, namespace, preMigrationCtxs[idx],
-			startAppsOnMigration, uint64(4), uint64(0))
-	}
+	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	deactivateClusterDomainAndTriggerFailover(
 		t, actionName, namespaces, preMigrationCtxs, true)
@@ -177,11 +167,7 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
-	for idx, namespace := range namespaces {
-		validateMigrationOnSrcAndDest(
-			t, migrationName, namespace, preMigrationCtxs[idx],
-			startAppsOnMigration, uint64(4), uint64(0))
-	}
+	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	scaleFactor := scaleDownApps(t, ctxs)
 	logrus.Infof("scaleFactor: %v", scaleFactor)

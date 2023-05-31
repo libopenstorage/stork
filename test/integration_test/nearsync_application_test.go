@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -85,9 +84,7 @@ func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
 	startAppsOnMigration := false
 	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
-	validateMigrationOnSrcAndDest(
-		t, migrationName, namespaces[0], preMigrationCtxs[0],
-		startAppsOnMigration, uint64(4), uint64(0))
+	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	// start the stress tool
 	setSourceKubeConfig()
@@ -100,27 +97,6 @@ func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
 	logrus.Infof("wait for some data to load in db")
 	time.Sleep(time.Minute * 5)
 
-	// disable cluster domain for src, then
-	// start and validate failover on dest
-	executeOnDestination(t, func() {
-		updateClusterDomain(t, false)
-		defer func() {
-			executeOnDestination(t, func() { updateClusterDomain(t, true) })
-		}()
-		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
-	})
-}
-
-func updateClusterDomain(t *testing.T, activate bool) {
-	storageNode := node.GetStorageDriverNodes()[0]
-	var cmd string
-	if activate {
-		cmd = "cluster domains activate --name dc1"
-	} else {
-		cmd = "cluster domains deactivate --name dc1"
-	}
-	out, err := volumeDriver.GetPxctlCmdOutput(storageNode, cmd)
-	require.NoError(t, err)
-	logrus.Infof("Pxctl output: %v", out)
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
 }
