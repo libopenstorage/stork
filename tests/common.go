@@ -3632,7 +3632,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	return nil
 }
 
-// CreateS3BackupLocation creates backuplocation for S3
+// CreateS3BackupLocation creates backup location for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
@@ -4324,6 +4324,37 @@ func CreateBucket(provider string, bucketName string) {
 			CreateAzureBucket(bucketName)
 		}
 	})
+}
+
+// IsS3BucketEmpty returns true if bucket empty else false
+func IsS3BucketEmpty(bucketName string) (bool, error) {
+	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get S3 session to create bucket with %s", err)
+	}
+
+	S3Client := s3.New(sess)
+	input := &s3.ListObjectsInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	result, err := S3Client.ListObjects(input)
+	if err != nil {
+		return false, fmt.Errorf("unable to fetch cotents from s3 failing with %s", err)
+	}
+
+	log.Info(fmt.Sprintf("Result content %d", len(result.Contents)))
+	if len(result.Contents) > 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 // CreateS3Bucket creates bucket in S3
