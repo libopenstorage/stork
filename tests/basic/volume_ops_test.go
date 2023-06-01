@@ -550,8 +550,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
 		terminate := false
 
-		errChan := make(chan error)
-
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
 		}
@@ -561,17 +559,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		log.FailOnError(err, "Getting KVDB Master Node details failed")
 		log.InfoD("KVDB Master Node is [%v]", kvdbMaster.Name)
 
-		// handle panic inside go routine
-		handlePanic := func() {
-			if r := recover(); r != nil {
-				fmt.Printf("panic occured .. handling panic.[%v]", r)
-				errChan <- fmt.Errorf("panic occurred: %v", r)
-			}
-		}
-
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
-			defer handlePanic()
+			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
@@ -617,7 +607,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		defer stopRoutine()
 
 		go func() {
-			defer handlePanic()
+			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
@@ -640,7 +630,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go Routine to delete volume continuously in parallel to volume create
 		go func() {
-			defer handlePanic()
+			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
@@ -671,9 +661,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		select {
 		case <-timeout:
 			stopRoutine()
-		case err := <-errChan:
-			stopRoutine()
-			log.FailOnError(err, "error seen during go routine")
 		}
 		// Wait for GO Routine to complete
 		wg.Wait()

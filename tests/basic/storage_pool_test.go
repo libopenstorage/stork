@@ -6219,7 +6219,6 @@ outer:
 		for k, v := range labels {
 			if k == "pxpool" && v == fmt.Sprintf("%d", poolToBeResized.ID) {
 				drvSize = drv.Size
-				fmt.Println(drvSize)
 				sizeString := []string{"G", "T"}
 				indexChecked := false
 				for _, eachString := range sizeString {
@@ -8804,11 +8803,10 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 	stepLog := "has to schedule apps and update replication factor for attached node"
 	It(stepLog, func() {
 		var wg sync.WaitGroup
-		numGoroutines := 3
+		numGoroutines := 2
 
 		wg.Add(numGoroutines)
 		done := make(chan bool)
-		errChan := make(chan error)
 
 		volumesCreated := []string{}
 
@@ -8835,22 +8833,13 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				terminate = true
 			}
 		}
-		// handle panic inside go routine
-		handlePanic := func() {
-			if r := recover(); r != nil {
-				fmt.Printf("Panic occured handling panic")
-				stopRoutine()
-				wg.Wait()
-				errChan <- fmt.Errorf("panic occurred: %v", r)
-			}
-		}
 
 		defer stopRoutine()
 
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
-			defer handlePanic()
+			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
@@ -8900,7 +8889,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		}
 
 		doVolumeOperations := func() {
-			defer handlePanic()
+			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
@@ -8949,8 +8938,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		}
 
 		select {
-		case err := <-errChan:
-			log.FailOnError(err, "error seen during go routine")
+		case <-done:
+			stopRoutine()
+			wg.Wait()
 		default:
 			go doVolumeOperations()
 			// Do pool resize continuously for 20 times when volume operation in progress
@@ -9023,23 +9013,27 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 				if err != nil {
 					return err
 				}
-			}
 
-			isjournal, err := isJournalEnabled()
-			if err != nil {
-				return err
-			}
+				err = WaitForExpansionToStart(poolUUID)
+				if err != nil {
+					return err
+				}
 
-			err = KillKvdbMasterNodeAndFailover()
-			if err != nil {
-				return err
-			}
+				isjournal, err := isJournalEnabled()
+				if err != nil {
+					return err
+				}
 
-			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-			if resizeErr != nil {
-				return resizeErr
-			}
+				err = KillKvdbMasterNodeAndFailover()
+				if err != nil {
+					return err
+				}
 
+				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+				if resizeErr != nil {
+					return resizeErr
+				}
+			}
 			return nil
 		}
 		log.FailOnError(expandPoolWithKVDBFailover(poolUUID), "pool expand with kvdb failover failed")
