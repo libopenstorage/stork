@@ -1239,7 +1239,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			}
 			finalPoolCount = len(pools)
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-			dash.VerifyFatal(initialPoolCount == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
+			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
 		})
 
 	})
@@ -4973,7 +4973,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			if status[selectedPool.Uuid] == "In Maintenance" {
 				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
 				err = Inst().V.ExitPoolMaintenance(*selectedNode)
-				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
 			}
 
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
@@ -8885,7 +8885,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			if err != nil {
 				return err
 			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			isjournal, err := isJournalEnabled()
 			if err != nil {
@@ -8967,6 +8966,84 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				}
 			}
 		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+// Volume replication change
+var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
+	var testrailID = 0
+	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("KvdbFailoverDuringPoolExpand",
+			"KVDB failover during pool expand", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "KVDB failover during pool expand"
+	It(stepLog, func() {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumepooloperations-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get a pool with running IO
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
+			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+
+		expandPoolWithKVDBFailover := func(poolUUID string) error {
+
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			if err != nil {
+				return err
+			}
+
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			for _, eachType := range poolResizeType {
+				err = Inst().V.ExpandPool(poolUUID, eachType, expectedSize, true)
+				if err != nil {
+					return err
+				}
+			}
+
+			isjournal, err := isJournalEnabled()
+			if err != nil {
+				return err
+			}
+
+			err = KillKvdbMasterNodeAndFailover()
+			if err != nil {
+				return err
+			}
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			if resizeErr != nil {
+				return resizeErr
+			}
+
+			return nil
+		}
+		log.FailOnError(expandPoolWithKVDBFailover(poolUUID), "pool expand with kvdb failover failed")
+
 	})
 
 	JustAfterEach(func() {

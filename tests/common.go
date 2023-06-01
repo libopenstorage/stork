@@ -6762,6 +6762,23 @@ func GetKvdbMasterNode() (*node.Node, error) {
 	return &getKvdbLeaderNode, nil
 }
 
+// KillKvdbMasterNodeAndFailover kills kvdb master node and returns after failover is complete
+func KillKvdbMasterNodeAndFailover() error {
+	kvdbMaster, err := GetKvdbMasterNode()
+	if err != nil {
+		return err
+	}
+	err = KillKvdbMemberUsingPid(*kvdbMaster)
+	if err != nil {
+		return err
+	}
+	err = WaitForKVDBMembers()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetKvdbMasterPID returns the PID of KVDB master node
 func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	var processPid string
