@@ -148,8 +148,16 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		Step("Upgrade the stork version", func() {
 			log.InfoD("Upgrade the stork version")
 			upgradeStorkImageStr = getEnv(upgradeStorkImage, latestStorkImage)
+			log.Infof("Upgrading stork version on source cluster to %s ", upgradeStorkImageStr)
 			err := upgradeStorkVersion(upgradeStorkImageStr)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s", upgradeStorkImageStr))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on source cluster", upgradeStorkImageStr))
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.Infof("Upgrading stork version on destination cluster to %s ", upgradeStorkImageStr)
+			err = upgradeStorkVersion(upgradeStorkImageStr)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on destination cluster", upgradeStorkImageStr))
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 
 		Step("Verifying scheduled backup after stork version upgrade", func() {
@@ -184,6 +192,8 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 	})
 
 	JustAfterEach(func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -240,7 +250,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 0)
+		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 58021)
 		log.Infof("Scheduling applications")
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
@@ -459,6 +469,21 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			log.InfoD("Upgrading px-backup to latest version [%s]", latestPxBackupVersionFromEnv)
 			err := UpgradePxBackup(latestPxBackupVersionFromEnv)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying completion of px-backup upgrade to latest version [%s]", latestPxBackupVersionFromEnv))
+			// Stork Version will be upgraded on both source and destination if env variable TARGET_STORK_VERSION is defined.
+			targetStorkVersion := os.Getenv("TARGET_STORK_VERSION")
+			if targetStorkVersion != "" {
+				log.InfoD("Upgrade the stork version post backup upgrade")
+				log.Infof("Upgrading stork version on source cluster to %s ", targetStorkVersion)
+				err := upgradeStorkVersion(targetStorkVersion)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on source cluster", targetStorkVersion))
+				err = SetDestinationKubeConfig()
+				log.FailOnError(err, "Switching context to destination cluster failed")
+				log.Infof("Upgrading stork version on destination cluster to %s ", targetStorkVersion)
+				err = upgradeStorkVersion(targetStorkVersion)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on destination cluster", targetStorkVersion))
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Switching context to source cluster failed")
+			}
 		})
 		Step("Create backups after px-backup upgrade with and without pre and post exec rules", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()

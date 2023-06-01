@@ -11,7 +11,7 @@ import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
-option go_package = "v1";
+option go_package = "github.com/openshift/api/apps/v1";
 
 // CustomDeploymentStrategyParams are the input to the Custom deployment strategy.
 message CustomDeploymentStrategyParams {
@@ -72,7 +72,12 @@ message DeploymentCondition {
 // Triggers can be disabled to allow manual control over a deployment. The "strategy" determines how the deployment
 // is carried out and may be changed at any time. The `latestVersion` field is updated when a new deployment
 // is triggered by any means.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message DeploymentConfig {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // Spec represents a desired deployment state and how to deploy to it.
@@ -84,7 +89,12 @@ message DeploymentConfig {
 }
 
 // DeploymentConfigList is a collection of deployment configs.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message DeploymentConfigList {
+  // metadata is the standard list's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   // Items is a list of deployment configs
@@ -92,6 +102,9 @@ message DeploymentConfigList {
 }
 
 // DeploymentConfigRollback provides the input to rollback generation.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message DeploymentConfigRollback {
   // Name of the deployment config that will be rolled back.
   optional string name = 1;
@@ -213,10 +226,16 @@ message DeploymentDetails {
 }
 
 // DeploymentLog represents the logs for a deployment
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message DeploymentLog {
 }
 
 // DeploymentLogOptions is the REST options for a deployment log
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message DeploymentLogOptions {
   // The container for which to stream logs. Defaults to only container if there is one container in the pod.
   optional string container = 1;
@@ -263,6 +282,9 @@ message DeploymentLogOptions {
 }
 
 // DeploymentRequest is a request to a deployment config for a new deployment.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message DeploymentRequest {
   // Name of the deployment config for requesting a new deployment.
   optional string name = 1;

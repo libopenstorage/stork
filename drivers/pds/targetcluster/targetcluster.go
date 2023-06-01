@@ -2,8 +2,8 @@ package targetcluster
 
 import (
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
 	"strings"
@@ -34,23 +34,121 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 10 * time.Minute
 	MaxTimeout     = 30 * time.Minute
+	timeOut        = 30 * time.Minute
+	timeInterval   = 10 * time.Second
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
 	PDSChartRepo = "https://portworx.github.io/pds-charts"
+	pxLabel      = "pds.portworx.com/available"
 )
 
 var (
 	pdsLabel = map[string]string{
 		"pds.portworx.com/available": "true",
 	}
-	k8sCore = core.Instance()
-	k8sApps = apps.Instance()
+)
+
+var (
+	isavailable bool
+
+	components         *pdsapi.Components
+	ns                 *corev1.Namespace
+	k8sCore            = core.Instance()
+	k8sApps            = apps.Instance()
+	namespaceNameIDMap = make(map[string]string)
+	err                error
+	deploymentTargetID string
 )
 
 // TargetCluster struct
 type TargetCluster struct {
 	kubeconfig string
+}
+
+func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
+	log.InfoD("Get the Target cluster details")
+	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	if err != nil {
+		return "", fmt.Errorf("error while listing deployments: %v", err)
+	}
+	if targetClusters == nil {
+		return "", fmt.Errorf("target cluster passed is not available to the account/tenant %v", err)
+	}
+	for i := 0; i < len(targetClusters); i++ {
+		if targetClusters[i].GetClusterId() == clusterID {
+			deploymentTargetID = targetClusters[i].GetId()
+			log.Infof("deploymentTargetID %v", deploymentTargetID)
+			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+		}
+	}
+	return deploymentTargetID, nil
+}
+
+// CreatePDSNamespace checks if the namespace is available in the cluster and pds is enabled on it
+func (tc *TargetCluster) CreatePDSNamespace(namespace string) (*corev1.Namespace, bool, error) {
+	ns, err = k8sCore.GetNamespace(namespace)
+	isavailable = false
+	if err != nil {
+		log.Warnf("Namespace not found %v", err)
+		if strings.Contains(err.Error(), "not found") {
+			nsName := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   namespace,
+					Labels: map[string]string{pxLabel: "true"},
+				},
+			}
+			log.InfoD("Creating namespace %v", namespace)
+			ns, err = k8sCore.CreateNamespace(nsName)
+			if err != nil {
+				log.Errorf("Error while creating namespace %v", err)
+				return nil, false, err
+			}
+			isavailable = true
+		}
+		if !isavailable {
+			return nil, false, err
+		}
+	}
+	isavailable = false
+	for key, value := range ns.Labels {
+		log.Infof("key: %v values: %v", key, value)
+		if key == pxLabel && value == "true" {
+			log.InfoD("key: %v values: %v", key, value)
+			isavailable = true
+			break
+		}
+	}
+	if !isavailable {
+		return nil, false, nil
+	}
+	return ns, true, nil
+}
+
+// GetnameSpaceID returns the namespace ID
+func (tc *TargetCluster) GetnameSpaceID(namespace string, deploymentTargetID string) (string, error) {
+	var namespaceID string
+
+	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
+
+		namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
+		for i := 0; i < len(namespaces); i++ {
+			if namespaces[i].GetName() == namespace {
+				if namespaces[i].GetStatus() == "available" {
+					namespaceID = namespaces[i].GetId()
+					namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
+					log.InfoD("Namespace Status - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
+					return true, nil
+				}
+			}
+		}
+		if err != nil {
+			log.Errorf("An Error Occured while listing namespaces %v", err)
+			return false, err
+		}
+		return false, nil
+	})
+	return namespaceID, nil
 }
 
 func (targetCluster *TargetCluster) IsLatestPDSHelm(helmChartversion string) (bool, error) {
@@ -147,18 +245,11 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	log.Infof("Terminal output: %v", output)
 
-	log.InfoD("Verify the health of all the pods in %s namespace", PDSNamespace)
+	log.InfoD("Verify the health of all the deployments in %s namespace", PDSNamespace)
 	err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
-		pods, err := k8sCore.GetPods(PDSNamespace, nil)
+		err := targetCluster.ValidatePDSComponents()
 		if err != nil {
 			return false, nil
-		}
-		log.Infof("There are %d pods present in the namespace %s", len(pods.Items), PDSNamespace)
-		for _, pod := range pods.Items {
-			err = k8sCore.ValidatePod(&pod, 10*time.Second, 5*time.Second)
-			if err != nil {
-				return false, nil
-			}
 		}
 		return true, nil
 	})
@@ -183,18 +274,18 @@ func (targetCluster *TargetCluster) IsReachable(url string) (bool, error) {
 
 // ValidatePDSComponents used to validate all k8s object in pds-system namespace
 func (targetCluster *TargetCluster) ValidatePDSComponents() error {
-	pods, err := k8sCore.GetPods(PDSNamespace, nil)
+	var options metav1.ListOptions
+	deploymentList, err := apps.Instance().ListDeployments(PDSNamespace, options)
 	if err != nil {
 		return err
 	}
-
-	for _, pod := range pods.Items {
-		err = k8sCore.ValidatePod(&pod, DefaultTimeout, DefaultRetryInterval)
+	log.Infof("There are %d deployments present in the namespace %s", len(deploymentList.Items), PDSNamespace)
+	for _, deployment := range deploymentList.Items {
+		err = apps.Instance().ValidateDeployment(&deployment, DefaultTimeout, DefaultRetryInterval)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -254,13 +345,12 @@ func (targetCluster *TargetCluster) SetConfig() error {
 func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.Parameter, tenantId string, installOldVersion bool) error {
 	log.InfoD("Test control plane url connectivity.")
 	var helmChartversion string
-	var components *pdsapi.Components
 	var serviceAccId string
 
 	controlPlaneUrl := infraParams.InfraToTest.ControlPlaneURL
 	clusterType := infraParams.InfraToTest.ClusterType
 
-	_, components, _, err := pdslib.InitializeApiComponents(controlPlaneUrl)
+	components, _, err = pdsdriver.InitPdsApiComponents(controlPlaneUrl)
 	if err != nil {
 		return fmt.Errorf("error while initializing api components - %v", err)
 	}
@@ -278,7 +368,7 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 		helmChartversion, err = components.APIVersion.GetHelmChartVersion()
 		log.Debugf("helm chart version %v", helmChartversion)
 		if err != nil {
-			return fmt.Errorf("error while getting helm version - %v", helmChartversion)
+			return fmt.Errorf("error while getting helm version - %v", err)
 		}
 	}
 
@@ -302,9 +392,7 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 	}
 	bearerToken := *serviceAccToken.Token
 
-	ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
-	target := NewTargetCluster(ctx)
-	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
+	err = tc.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
 	if err != nil {
 		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
 	}

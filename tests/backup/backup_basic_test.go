@@ -64,6 +64,7 @@ func TestBasic(t *testing.T) {
 func BackupInitInstance() {
 	var err error
 	var token string
+	var commitID string
 	log.Infof("Inside BackupInitInstance")
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:            Inst().SpecDir,
@@ -89,7 +90,11 @@ func BackupInitInstance() {
 	// Getting Px version info
 	pxVersion, err := Inst().V.GetDriverVersion()
 	log.FailOnError(err, "Error occurred while getting PX version")
-	commitID := strings.Split(pxVersion, "-")[1]
+	if len(strings.Split(pxVersion, "-")) > 1 {
+		commitID = strings.Split(pxVersion, "-")[1]
+	} else {
+		commitID = "NA"
+	}
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
 	if pxVersion != "" {

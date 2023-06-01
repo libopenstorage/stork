@@ -874,6 +874,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			dash.VerifyFatal(err, nil, "Getting backup namespace")
 			log.InfoD("Getting the replica factor of mongodb statefulset in backup namespace [%s] before taking backup", pxBackupNS)
 			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			originalReplicaCount = *statefulSet.Spec.Replicas
 			log.Infof("Number of replica for mongodb pod before backup is %v", originalReplicaCount)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting mongodb statefulset replica in backup namespace %s", pxBackupNS))
@@ -907,17 +908,18 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			log.InfoD("Scaling MongoDB statefulset replica to 0 while backup is in progress")
 			*statefulSet.Spec.Replicas = scaledDownReplica
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
 			log.Infof("mongodb replica after scaling to 0 is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling down MongoDB statefulset replica to 0"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == scaledDownReplica, true, "Verify mongodb statefulset replica after scaling down")
 			log.InfoD("Sleeping for 1 minute so that at least one request is hit to mongodb for the created backups")
 			time.Sleep(1 * time.Minute)
 			log.InfoD("Scaling MongoDB statefulset to original replica while backup is in progress")
 			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			*statefulSet.Spec.Replicas = originalReplicaCount
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling backup MongoDB statefulset replica to original count")
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling MongoDB statefulset back to original replica"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
 			log.Infof("Verify that at least one mongodb pod is in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
@@ -973,17 +975,18 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			log.InfoD("Scaling MongoDB statefulset replica to 0 while restore is in progress")
 			*statefulSet.Spec.Replicas = scaledDownReplica
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
 			log.Infof("mongodb replica after scaling to 0 is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling down MongoDB statefulset replica to 0"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == scaledDownReplica, true, "Getting mongodb statefulset replica after scaling down")
 			log.InfoD("Sleeping for 1 minute so that at least one request is hit to mongodb for the restores taken")
 			time.Sleep(1 * time.Minute)
 			log.InfoD("Scaling MongoDB statefulset to original replica while restore is in progress")
 			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			*statefulSet.Spec.Replicas = originalReplicaCount
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifyFatal(err, nil, "Scaling back MongoDB statefulset replica to original count")
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling MongoDB statefulset back to original replica"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
 			log.Infof("Verify that at least one mongodb pod is in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
@@ -1022,9 +1025,11 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
 		statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+		dash.VerifySafely(err, nil, "Getting mongodb statefulset details")
 		if *statefulSet.Spec.Replicas != originalReplicaCount {
 			*statefulSet.Spec.Replicas = originalReplicaCount
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+			dash.VerifySafely(err, nil, "Scaling back MongoDB statefulset replica to original count")
 		}
 		log.Infof("Verify that all the mongodb pod are in Ready state at the end of the testcase")
 		mongoDBPodStatus := func() (interface{}, bool, error) {
@@ -1066,19 +1071,19 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 // source cluster is backup cluster and destination cluster is application cluster for this testcase
 var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	var (
-		scheduledAppContexts []*scheduler.Context
-		appNamespaces        []string
-		cloudCredName        string
-		cloudCredUID         string
-		bkpLocationName      string
-		backupLocationUID    string
-		destClusterUid       string
-		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
-		destClusterStatus    api.ClusterInfo_StatusInfo_Status
-		backupNames          []string
-		newBackupNames       []string
-		listOfWorkerNodes    []node.Node
-		ctx                  context.Context
+		scheduledAppContexts     []*scheduler.Context
+		appNamespaces            []string
+		cloudCredName            string
+		cloudCredUID             string
+		bkpLocationName          string
+		backupLocationUID        string
+		destClusterUid           string
+		srcClusterStatus         api.ClusterInfo_StatusInfo_Status
+		destClusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupNames              []string
+		newBackupNames           []string
+		listOfStorageDriverNodes []node.Node
+		ctx                      context.Context
 	)
 	labelSelectors := make(map[string]string)
 	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "2"))
@@ -1089,12 +1094,10 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
 			"Reboots node when backup is in progress", nil, 55817)
-		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
-
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-
+		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.InfoD("Deploying applications required for the testcase on application cluster")
@@ -1119,10 +1122,9 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications on destination cluster")
 			ValidateApplications(scheduledAppContexts)
-
 			log.InfoD("Switching cluster context back to source[backup] cluster")
 			err := SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster")
+			log.FailOnError(err, "Switching context to source cluster required for creating backup location")
 		})
 
 		Step("Adding cloud credential and backup location", func() {
@@ -1179,15 +1181,15 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 			log.InfoD("Switching cluster context to application[destination] cluster")
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
-			listOfWorkerNodes = node.GetWorkerNodes()
-			err = Inst().N.RebootNode(listOfWorkerNodes[0], node.RebootNodeOpts{
+			listOfStorageDriverNodes = node.GetStorageDriverNodes()
+			err = Inst().N.RebootNode(listOfStorageDriverNodes[0], node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         rebootNodeTimeout,
 					TimeBeforeRetry: rebootNodeTimeBeforeRetry,
 				},
 			})
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfStorageDriverNodes[0].Name))
 		})
 		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
 			log.InfoD("Check if backup is successful after one worker node on application cluster is rebooted")
@@ -1198,18 +1200,22 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Check if the rebooted node on application cluster is up now", func() {
 			log.InfoD("Check if the rebooted node on application cluster is up now")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfStorageDriverNodes = node.GetStorageDriverNodes()
 			nodeReadyStatus := func() (interface{}, bool, error) {
-				err := Inst().S.IsNodeReady(listOfWorkerNodes[0])
+				err := Inst().S.IsNodeReady(listOfStorageDriverNodes[0])
 				if err != nil {
 					return "", true, err
 				}
 				return "", false, nil
 			}
 			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[0].Name))
-			err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[0], Inst().DriverStartTimeout)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfStorageDriverNodes[0].Name))
+			err = Inst().V.WaitDriverUpOnNode(listOfStorageDriverNodes[0], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfStorageDriverNodes[0].Name))
+		})
+		Step("Validating the deployed applications after node reboot", func() {
+			log.InfoD("Validating the deployed applications on destination cluster after node reboot")
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Taking new backup of applications", func() {
 			log.InfoD("Taking new backup of applications")
@@ -1234,16 +1240,16 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
 			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfStorageDriverNodes = node.GetStorageDriverNodes()
 			for i := 0; i < 2; i++ {
-				err := Inst().N.RebootNode(listOfWorkerNodes[i], node.RebootNodeOpts{
+				err := Inst().N.RebootNode(listOfStorageDriverNodes[i], node.RebootNodeOpts{
 					Force: true,
 					ConnectionOpts: node.ConnectionOpts{
 						Timeout:         rebootNodeTimeout,
 						TimeBeforeRetry: rebootNodeTimeBeforeRetry,
 					},
 				})
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[i].Name))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfStorageDriverNodes[i].Name))
 			}
 		})
 		Step("Check if backup is successful after two worker nodes are rebooted", func() {
@@ -1255,20 +1261,24 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Check if the rebooted nodes on application cluster are up now", func() {
 			log.InfoD("Check if the rebooted nodes on application cluster are up now")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfStorageDriverNodes = node.GetStorageDriverNodes()
 			for i := 0; i < 2; i++ {
 				nodeReadyStatus := func() (interface{}, bool, error) {
-					err := Inst().S.IsNodeReady(listOfWorkerNodes[i])
+					err := Inst().S.IsNodeReady(listOfStorageDriverNodes[i])
 					if err != nil {
 						return "", true, err
 					}
 					return "", false, nil
 				}
 				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[i].Name))
-				err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[i], Inst().DriverStartTimeout)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[i].Name))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfStorageDriverNodes[i].Name))
+				err = Inst().V.WaitDriverUpOnNode(listOfStorageDriverNodes[i], Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfStorageDriverNodes[i].Name))
 			}
+		})
+		Step("Validating the deployed applications after node reboot", func() {
+			log.InfoD("Validating the deployed applications on destination cluster after node reboot")
+			ValidateApplications(scheduledAppContexts)
 		})
 	})
 
@@ -1282,8 +1292,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.Infof("Switching cluster context to destination cluster")
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
-		listOfWorkerNodes = node.GetWorkerNodes()
-		for _, node := range listOfWorkerNodes {
+		listOfStorageDriverNodes = node.GetStorageDriverNodes()
+		for _, node := range listOfStorageDriverNodes {
 			nodeReadyStatus := func() (interface{}, bool, error) {
 				err := Inst().S.IsNodeReady(node)
 				if err != nil {

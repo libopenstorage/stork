@@ -107,6 +107,13 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 
 }
 
+func (d *DefaultDriver) ListAllVolumes() ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListAllVolumes()",
+	}
+}
+
 // CreateVolume creates a volume with the given setting
 // returns volume_id of the new volume
 func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
@@ -265,7 +272,7 @@ func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
 }
 
 // DeletePool deletes the pool with given poolID
-func (d *DefaultDriver) DeletePool(n node.Node, poolID string) error {
+func (d *DefaultDriver) DeletePool(n node.Node, poolID string, retry bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeletePool()",
@@ -1093,4 +1100,13 @@ func (d *DefaultDriver) GetAlertsUsingResourceTypeBySeverity(resourceType api.Re
 		Type:      "Function",
 		Operation: "GetAlertsUsingResourceTypeBySeverity()",
 	}
+}
+
+// GetJournalDevicePath returns journal device path in the given node
+func (d *DefaultDriver) GetJournalDevicePath(n *node.Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetJournalDevicePath()",
+	}
+
 }

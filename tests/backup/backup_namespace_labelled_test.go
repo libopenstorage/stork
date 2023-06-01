@@ -9,10 +9,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NamespaceLabelledBackupSharedWithDifferentAccessMode takes namespace labelled backup and share with users having different access mode
@@ -200,5 +202,231 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		}
 		wg.Wait()
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// BackupScheduleForOldAndNewNS Schedule backup using namespace label for old namespace and new namespace
+var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
+	var (
+		initialNSCount         int
+		newNSCount             int
+		scheduleInterval       int64
+		err                    error
+		backupLocationUID      string
+		cloudCredUID           string
+		clusterUid             string
+		credName               string
+		backupLocationName     string
+		restoreName            string
+		periodicSchPolicyName  string
+		periodicSchPolicyUid   string
+		scheduleName           string
+		nsLabelString          string
+		schBackupAfterAddingNS string
+		bkpNamespaces          []string
+		newNamespaces          []string
+		cloudCredUidList       []string
+		allScheduleBackupNames []string
+		restoreNames           []string
+		nsLabelsMap            map[string]string
+		contexts               []*scheduler.Context
+		appContexts            []*scheduler.Context
+	)
+	labelSelectors := make(map[string]string)
+	backupLocationMap := make(map[string]string)
+	namespaceMapping := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	initialNSCount = 3
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupScheduleForOldAndNewNS", "Schedule backup with old and new namespace using namespace label", nil, 84852)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < initialNSCount; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+		log.InfoD("Created namespaces %v", bkpNamespaces)
+	})
+	It("Schedule backup using namespace label for old and new namespaces", func() {
+		providers := getProviders()
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(contexts)
+		})
+		Step("Adding labels to namespaces", func() {
+			log.InfoD("Adding labels to namespaces")
+			nsLabelsMap = GenerateRandomLabels(20)
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
+		})
+		Step("Generating namespace label string from label map for namespaces", func() {
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelString = MapToKeyValueString(nsLabelsMap)
+			log.Infof("label string for namespaces %s", nsLabelString)
+		})
+		Step("Adding labels to resources", func() {
+			log.InfoD("Adding labels to resources")
+			labelKey := uuid.New()
+			labelValue := uuid.New()
+			labelSelectors[labelKey] = labelValue
+			for _, namespace := range bkpNamespaces {
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching pvc list [%v] from namespace [%s]", pvcList, namespace))
+				for _, pvc := range pvcList.Items {
+					pvcItem, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, namespace)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching pvc pointer %v for pvc %v", pvcItem, pvc))
+					err = AddLabelToResource(pvcItem, labelKey, labelValue)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, pvcItem))
+				}
+				cmList, err := core.Instance().ListConfigMap(namespace, meta_v1.ListOptions{})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap list [%v] from namespace [%s]", cmList, namespace))
+				for _, cm := range cmList.Items {
+					cmItem, err := core.Instance().GetConfigMap(cm.Name, namespace)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap pointer %v from namespace %s", cmItem, namespace))
+					err = AddLabelToResource(cmItem, labelKey, labelValue)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, cmItem))
+				}
+			}
+		})
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and registering backup location")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
+				backupLocationUID = uuid.New()
+				credName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
+				err := CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating cloud credentials %s with provider %s", credName, provider))
+				log.InfoD("Created cloud credentials with name - %s", credName)
+				backupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
+			}
+		})
+		Step("Add source and destination clusters with px-central-admin ctx", func() {
+			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName))
+			appClusterName := destinationClusterName
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, appClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", appClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", appClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, appClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", appClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", appClusterName, clusterUid)
+		})
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating a schedule policy")
+			scheduleInterval = 15
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
+			periodicSchPolicyUid = uuid.New()
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, scheduleInterval, 5)
+			err = Inst().Backup.BackupSchedulePolicy(periodicSchPolicyName, periodicSchPolicyUid, orgID, periodicSchedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchPolicyName))
+			periodicSchPolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchPolicyName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchPolicyName))
+		})
+		Step("Creating a schedule backup using namespace label and resource label", func() {
+			log.InfoD("Creating a schedule backup using namespace label and resource label")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateScheduleBackupWithNamespaceLabel(scheduleName, SourceClusterName, backupLocationName, backupLocationUID,
+				labelSelectors, orgID, "", "", "", "", nsLabelString, periodicSchPolicyName, periodicSchPolicyUid, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+			firstSchBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstSchBackupName))
+			err = NamespaceLabelBackupSuccessCheck(firstSchBackupName, ctx, bkpNamespaces, nsLabelString)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the labeled namespaces [%v] are backed up and checks for labels [%s] applied to the backup [%s]", bkpNamespaces, nsLabelString, firstSchBackupName))
+			log.InfoD("Waiting for %v minutes for the next schedule backup to be triggered", scheduleInterval)
+			time.Sleep(time.Duration(scheduleInterval) * time.Minute)
+			secondSchBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the second schedule backup [%s]", secondSchBackupName))
+			err = NamespaceLabelBackupSuccessCheck(secondSchBackupName, ctx, bkpNamespaces, nsLabelString)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the labeled namespace [%v] is backed up and checks for labels [%s] applied to the backup [%s]", bkpNamespaces, nsLabelString, secondSchBackupName))
+		})
+		Step("Schedule applications to create new namespaces", func() {
+			log.InfoD("Scheduling applications to create new namespaces")
+			contexts = make([]*scheduler.Context, 0)
+			newNSCount = 2
+			for i := 0; i < newNSCount; i++ {
+				taskName := fmt.Sprintf("%s-%d", "new-namespace", i)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					log.InfoD("Scheduled application with namespace [%s]", namespace)
+					newNamespaces = append(newNamespaces, namespace)
+				}
+			}
+		})
+		Step("Validate new namespaces", func() {
+			log.InfoD("Validating new namespaces")
+			ValidateApplications(contexts)
+		})
+		Step("Apply same namespace labels to new namespaces", func() {
+			log.InfoD("Apply same namespace labels to new namespaces")
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, newNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Applying same namespace labels %v to new namespace %v", nsLabelsMap, newNamespaces))
+		})
+		Step("Verify new application namespaces with same namespace label are included in next schedule backup", func() {
+			log.InfoD("Verifying new applications namespace new application namespaces with same namespace label are included in next schedule backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			schBackupAfterAddingNS, err = GetNextPeriodicScheduleBackupName(scheduleName, time.Duration(scheduleInterval), ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup", schBackupAfterAddingNS))
+			bkpNamespaces = append(bkpNamespaces, newNamespaces...)
+			log.InfoD("Total namespaces are [%v]", bkpNamespaces)
+			err = NamespaceLabelBackupSuccessCheck(schBackupAfterAddingNS, ctx, bkpNamespaces, nsLabelString)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the labeled namespace [%v] is backed up and checks for labels [%s] applied to the backup [%s]", bkpNamespaces, nsLabelString, schBackupAfterAddingNS))
+		})
+		Step("Restoring scheduled backups", func() {
+			log.InfoD("Restoring scheduled backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			allScheduleBackupNames, err = Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching names of all schedule backups of schedule named [%s]", scheduleName))
+			for _, backupName := range allScheduleBackupNames {
+				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, scheduleName, time.Now().Unix())
+				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchPolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchPolicyName}))
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+		log.InfoD("Deleting labels from namespaces- %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
+		DestroyApps(contexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })

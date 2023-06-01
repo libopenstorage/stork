@@ -1000,6 +1000,16 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 
 }
 
+// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
+func (d *dcos) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
+	// GetAllSnapshotClasses is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAllSnapshotClasses()",
+	}
+
+}
+
 func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error) {
 	// GetPodsRestartCount is not supported
 	return nil, &errors.ErrNotSupported{
