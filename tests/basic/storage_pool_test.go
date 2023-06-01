@@ -1239,7 +1239,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			}
 			finalPoolCount = len(pools)
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-			dash.VerifyFatal(initialPoolCount == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
+			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
 		})
 
 	})
@@ -4973,7 +4973,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			if status[selectedPool.Uuid] == "In Maintenance" {
 				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
 				err = Inst().V.ExitPoolMaintenance(*selectedNode)
-				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
 			}
 
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
