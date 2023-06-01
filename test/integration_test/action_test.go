@@ -42,7 +42,7 @@ func setupOnce(t *testing.T) {
 // Simple failover with one namespace and one app
 func testFailoverBasic(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-basic"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -59,19 +59,14 @@ func testFailoverBasic(t *testing.T) {
 		t, migrationName, namespaces[0], preMigrationCtxs[0],
 		startAppsOnMigration, uint64(4), uint64(0))
 
-	scaleFactor := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactor: %v", scaleFactor)
-
-	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
-	})
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
 }
 
 // Failover namespace without a migration on the destination
 func testFailoverWithoutMigration(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-without-migration"}
 	storageClass := "px-sc"
 	actionName := "failover-action"
 	namespaces := getNamespaces(instanceIDs, appKey)
@@ -90,7 +85,7 @@ func testFailoverWithoutMigration(t *testing.T) {
 // Failover multiple namespaces simultaneously
 func testFailoverForMultipleNamespaces(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover-1", "failover-2"}
+	instanceIDs := []string{"failover-multiple-namespaces-1", "failover-multiple-namespaces-2"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -111,20 +106,15 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
-	scaleFactors := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactors: %v", scaleFactors)
-
-	executeOnDestination(t, func() {
-		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
-	})
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
 }
 
 // Failover a namespace with multiple running applications
 func testFailoverWithMultipleApplications(t *testing.T) {
 	appKey := "mysql-nearsync"
 	additionalAppKeys := []string{"cassandra"}
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-multiple-applications"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -144,12 +134,27 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 			startAppsOnMigration, uint64(4), uint64(0))
 	}
 
-	scaleFactors := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactors: %v", scaleFactors)
+	deactivateClusterDomainAndTriggerFailover(
+		t, actionName, namespaces, preMigrationCtxs, true)
+}
 
+// assumes it will be executed with source config set
+func deactivateClusterDomainAndTriggerFailover(
+	t *testing.T,
+	actionName string,
+	namespaces []string,
+	preMigrationCtxs []*scheduler.Context,
+	isFailoverSuccessful bool,
+) {
+	clusterDomains, err := storkVolumeDriver.GetClusterDomains()
+	require.NoError(t, err)
+	updateClusterDomain(t, clusterDomains, false, true)
+	defer func() {
+		updateClusterDomain(t, clusterDomains, true, true)
+	}()
 	executeOnDestination(t, func() {
 		startFailover(t, actionName, namespaces)
-		validateFailover(t, actionName, namespaces, preMigrationCtxs, true)
+		validateFailover(t, actionName, namespaces, preMigrationCtxs, isFailoverSuccessful)
 	})
 }
 
@@ -159,7 +164,7 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 // through if PX is down on the nearsync node for a volume
 func testFailoverForFailedPromoteVolume(t *testing.T) {
 	appKey := "mysql-nearsync"
-	instanceIDs := []string{"failover"}
+	instanceIDs := []string{"failover-failed-promote-volume"}
 	storageClass := "px-sc"
 	migrationName := "failover-migration"
 	actionName := "failover-action"
@@ -233,6 +238,7 @@ func startFailover(
 	for _, namespace := range namespaces {
 		_, err := createActionCR(t, actionName, namespace)
 		require.NoError(t, err, "error creating Action CR")
+		logrus.Infof("Created Action CR")
 	}
 }
 

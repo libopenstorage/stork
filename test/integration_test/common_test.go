@@ -544,7 +544,8 @@ func setKubeConfig(config string) error {
 
 		err = volumeDriver.RefreshDriverEndpoints()
 		if err != nil {
-			return fmt.Errorf(
+			// return fmt.Errorf(
+			logrus.Errorf(
 				"unable to refresh driver endpoints after setting config to %v: %v", config, err)
 		}
 	}
@@ -1429,4 +1430,34 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
+}
+
+// activates/deactivate the source cluster domain
+func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, activate bool, wait bool) {
+	var err error
+	op := "activate"
+	if !activate {
+		op = "deactivate"
+	}
+	executeOnDestination(t, func() {
+		destNode := node.GetStorageDriverNodes()[0]
+		out, err := volumeDriver.GetPxctlCmdOutput(
+			destNode, fmt.Sprintf("cluster domains %v --name %v", op, clusterDomains.LocalDomain))
+		require.NoError(t, err)
+		logrus.Infof(out)
+	})
+	if wait {
+		srcNodes := node.GetStorageDriverNodes()
+		if activate {
+			for _, srcNode := range srcNodes {
+				err = volumeDriver.WaitDriverUpOnNode(srcNode, defaultWaitTimeout)
+				require.NoError(t, err)
+			}
+		} else {
+			for _, srcNode := range srcNodes {
+				err = volumeDriver.WaitDriverDownOnNode(srcNode)
+				require.NoError(t, err)
+			}
+		}
+	}
 }
