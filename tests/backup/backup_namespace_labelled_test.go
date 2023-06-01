@@ -420,6 +420,9 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
+		log.InfoD("Deleting labels from namespaces- %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
