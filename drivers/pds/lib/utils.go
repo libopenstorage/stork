@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -271,25 +271,6 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 	return varBoolValue, err
 }
 
-func GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
-	log.InfoD("Get the Target cluster details")
-	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
-	if err != nil {
-		return "", fmt.Errorf("error while listing deployments: %v", err)
-	}
-	if targetClusters == nil {
-		return "", fmt.Errorf("target cluster passed is not available to the account/tenant %v", err)
-	}
-	for i := 0; i < len(targetClusters); i++ {
-		if targetClusters[i].GetClusterId() == clusterID {
-			deploymentTargetID = targetClusters[i].GetId()
-			log.Infof("deploymentTargetID %v", deploymentTargetID)
-			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
-		}
-	}
-	return deploymentTargetID, nil
-}
-
 // ValidateNamespaces validates the namespace is available for pds
 func ValidateNamespaces(deploymentTargetID string, ns string, status string) error {
 	isavailable = false
@@ -336,46 +317,6 @@ func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespa
 		return nil, err
 	}
 	return ns, nil
-}
-
-// CreatePDSNamespace checks if the namespace is available in the cluster and pds is enabled on it
-func CreatePDSNamespace(namespace string) (*corev1.Namespace, bool, error) {
-	ns, err = k8sCore.GetNamespace(namespace)
-	isavailable = false
-	if err != nil {
-		log.Warnf("Namespace not found %v", err)
-		if strings.Contains(err.Error(), "not found") {
-			nsName := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   namespace,
-					Labels: map[string]string{pxLabel: "true"},
-				},
-			}
-			log.InfoD("Creating namespace %v", namespace)
-			ns, err = k8sCore.CreateNamespace(nsName)
-			if err != nil {
-				log.Errorf("Error while creating namespace %v", err)
-				return nil, false, err
-			}
-			isavailable = true
-		}
-		if !isavailable {
-			return nil, false, err
-		}
-	}
-	isavailable = false
-	for key, value := range ns.Labels {
-		log.Infof("key: %v values: %v", key, value)
-		if key == pxLabel && value == "true" {
-			log.InfoD("key: %v values: %v", key, value)
-			isavailable = true
-			break
-		}
-	}
-	if !isavailable {
-		return nil, false, nil
-	}
-	return ns, true, nil
 }
 
 // ReadParams reads the params from given or default json
@@ -469,67 +410,6 @@ func DeletePods(podList []corev1.Pod) error {
 	return nil
 }
 
-// GetStorageTemplate return the storage template id
-func GetStorageTemplate(tenantID string) (string, error) {
-	log.InfoD("Get the storage template")
-	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isStorageTemplateAvailable = false
-	for i := 0; i < len(storageTemplates); i++ {
-		if storageTemplates[i].GetName() == storageTemplateName {
-			isStorageTemplateAvailable = true
-			log.InfoD("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
-				storageTemplates[i].GetName(),
-				storageTemplates[i].GetRepl(),
-				storageTemplates[i].GetFg(),
-				storageTemplates[i].GetFs())
-			storageTemplateID = storageTemplates[i].GetId()
-		}
-	}
-	if !isStorageTemplateAvailable {
-		log.Fatalf("storage template %v is not available ", storageTemplateName)
-	}
-	return storageTemplateID, nil
-}
-
-// GetResourceTemplate get the resource template id
-func GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
-	log.Infof("Get the resource template for each data services")
-	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isavailable = false
-	isTemplateavailable = false
-	for i := 0; i < len(resourceTemplates); i++ {
-		if resourceTemplates[i].GetName() == resourceTemplateName {
-			isTemplateavailable = true
-			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
-			if err != nil {
-				return "", err
-			}
-			if dataService.GetName() == supportedDataService {
-				log.Infof("Data service name: %v", dataService.GetName())
-				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
-					resourceTemplates[i].GetName(),
-					resourceTemplates[i].GetId(),
-					resourceTemplates[i].GetDataServiceId(),
-					resourceTemplates[i].GetStorageRequest(),
-					resourceTemplates[i].GetMemoryRequest())
-
-				isavailable = true
-				resourceTemplateID = resourceTemplates[i].GetId()
-			}
-		}
-	}
-	if !(isavailable && isTemplateavailable) {
-		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
-	}
-	return resourceTemplateID, nil
-}
-
 // GetAllDataserviceResourceTemplate get the resource template id's of supported dataservices and forms supported dataserviceNameIdMap
 func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string, error) {
 	log.Infof("Get the resource template for each data services")
@@ -570,30 +450,6 @@ func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []
 	return dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, nil
 }
 
-// GetAppConfTemplate returns the app config template id
-func GetAppConfTemplate(tenantID string, supportedDataService string) (string, error) {
-	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isavailable = false
-	isTemplateavailable = false
-	dataServiceId := GetDataServiceID(supportedDataService)
-	for i := 0; i < len(appConfigs); i++ {
-		if appConfigs[i].GetName() == appConfigTemplateName {
-			isTemplateavailable = true
-			if dataServiceId == appConfigs[i].GetDataServiceId() {
-				appConfigTemplateID = appConfigs[i].GetId()
-				isavailable = true
-			}
-		}
-	}
-	if !(isavailable && isTemplateavailable) {
-		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
-	}
-	return appConfigTemplateID, nil
-}
-
 // GetAllDataServiceAppConfTemplate returns the supported app config templates
 func GetAllDataServiceAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string) (map[string]string, error) {
 	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
@@ -617,31 +473,6 @@ func GetAllDataServiceAppConfTemplate(tenantID string, dataServiceNameIDMap map[
 		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return dataServiceNameDefaultAppConfigMap, nil
-}
-
-// GetnameSpaceID returns the namespace ID
-func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error) {
-	var namespaceID string
-
-	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
-		namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
-		for i := 0; i < len(namespaces); i++ {
-			if namespaces[i].GetName() == namespace {
-				if namespaces[i].GetStatus() == "available" {
-					namespaceID = namespaces[i].GetId()
-					namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
-					log.InfoD("Namespace Status - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
-					return true, nil
-				}
-			}
-		}
-		if err != nil {
-			log.Errorf("An Error Occured while listing namespaces %v", err)
-			return false, err
-		}
-		return false, nil
-	})
-	return namespaceID, nil
 }
 
 // GetVersionsImage returns the required Image of dataservice version
@@ -756,71 +587,6 @@ func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterva
 			return false, nil
 		}
 
-	})
-	return err
-}
-
-func InitializeApiComponents(ControlPlaneURL string) (*pds.APIClient, *pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
-	log.InfoD("Initializing Api components")
-	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(ControlPlaneURL)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
-
-	apiClient = pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
-	controlplane = pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
-
-	return apiClient, components, controlplane, nil
-}
-
-// ValidateDataServiceDeployment checks if deployment is healthy and running
-// TODO: Add explicit timeout param and update the relevant tests implementing ValidateDataServiceDeployment func.
-// JIRA: PA-401
-func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error {
-	var ss *v1.StatefulSet
-
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
-		if err != nil {
-			log.Warnf("An Error Occured while getting statefulsets %v", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		log.Errorf("An Error Occured while getting statefulsets %v", err)
-		return err
-	}
-
-	//validate the statefulset deployed in the k8s namespace
-	err = k8sApps.ValidateStatefulSet(ss, timeOut)
-	if err != nil {
-		log.Errorf("An Error Occured while validating statefulsets %v", err)
-		return err
-	}
-
-	//validate the deployments in pds
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
-		log.Infof("Health status -  %v", status.GetHealth())
-		if err != nil {
-			log.Errorf("Error occured while getting deployment status %v", err)
-			return false, nil
-		}
-		if res.StatusCode != state.StatusOK {
-			log.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
-			log.Errorf("Full HTTP response: %v\n", res)
-			return false, err
-		}
-		if status.GetHealth() != "Healthy" {
-			return false, nil
-		}
-		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
-		return true, nil
 	})
 	return err
 }
@@ -1348,77 +1114,12 @@ func IsReachable(url string) (bool, error) {
 	return true, nil
 }
 
-// SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
-	var err error
-
-	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
-		serviceType = "ClusterIP"
-	}
-	log.InfoD("Deployment service type %s", serviceType)
-
-	_, _, _, err = InitializeApiComponents(ControlPlaneURL)
+func InitPdsComponents(ControlPlaneURL string) error {
+	components, controlplane, err = pdsdriver.InitPdsApiComponents(ControlPlaneURL)
 	if err != nil {
-		return "", "", "", "", "", "", err
+		return err
 	}
-
-	acc := components.Account
-	accounts, err := acc.GetAccountsList()
-	if err != nil {
-		return "", "", "", "", "", "", err
-	}
-
-	isAccountAvailable = false
-	for i := 0; i < len(accounts); i++ {
-		log.InfoD("Account Name: %v", accounts[i].GetName())
-		if accounts[i].GetName() == AccountName {
-			isAccountAvailable = true
-			accountID = accounts[i].GetId()
-			break
-		}
-	}
-	if !isAccountAvailable {
-		return "", "", "", "", "", "", fmt.Errorf("account %v is not available", AccountName)
-	}
-	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
-	tnts := components.Tenant
-	tenants, _ := tnts.GetTenantsList(accountID)
-	for _, tenant := range tenants {
-		if tenant.GetName() == TenantName {
-			tenantID = tenant.GetId()
-			break
-		}
-
-	}
-	log.InfoD("Tenant Details- Name: %s, UUID: %s ", TenantName, tenantID)
-	dnsZone, err := controlplane.GetDNSZone(tenantID)
-	if err != nil {
-		return "", "", "", "", "", "", err
-	}
-	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, TenantName, AccountName)
-	projcts := components.Project
-	projects, _ := projcts.GetprojectsList(tenantID)
-	for _, project := range projects {
-		if project.GetName() == ProjectName {
-			projectID = project.GetId()
-			break
-		}
-	}
-	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
-
-	ns, err = k8sCore.GetNamespace("kube-system")
-	log.Infof("kube-system ns-> %v", ns)
-	if err != nil {
-		return "", "", "", "", "", "", fmt.Errorf("error Get kube-system ns-> %v", err)
-	}
-	clusterID := string(ns.GetObjectMeta().GetUID())
-	if len(clusterID) > 0 {
-		log.InfoD("clusterID %v", clusterID)
-	} else {
-		return "", "", "", "", "", "", fmt.Errorf("unable to get the clusterID")
-	}
-
-	return accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err
+	return nil
 }
 
 func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus string) (*pds.ModelsDeploymentTarget, error) {
@@ -2177,10 +1878,6 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 
 				if err != nil {
 					log.Warnf("An Error Occured while creating deployment %v", err)
-					return nil, nil, nil, err
-				}
-				err = ValidateDataServiceDeployment(deployment, namespace)
-				if err != nil {
 					return nil, nil, nil, err
 				}
 				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)

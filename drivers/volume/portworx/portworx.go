@@ -284,16 +284,29 @@ func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operati
 }
 
 // DeletePool deletes the pool with given poolID
-func (d *portworx) DeletePool(n node.Node, poolID string) error {
+func (d *portworx) DeletePool(n node.Node, poolID string, retry bool) error {
 	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
 	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
-	out, err := d.nodeDriver.RunCommand(
-		n,
-		cmd,
-		node.ConnectionOpts{
-			Timeout:         maintenanceWaitTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		})
+	var out string
+	var err error
+	if retry {
+		out, err = d.nodeDriver.RunCommand(
+			n,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         maintenanceWaitTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+	} else {
+		out, err = d.nodeDriver.RunCommandWithNoRetry(
+			n,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         maintenanceWaitTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+	}
+
 	if err != nil {
 		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
 	}
@@ -873,10 +886,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
-	defer cancel()
-
-	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
 	}
@@ -3225,17 +3235,41 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	}
 	_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
-	// TODO replace when sdk supports node removal
-	if err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, true); err != nil {
-		if !strings.Contains(err.Error(), "Node remove is pending") {
-			return &ErrFailedToDecommissionNode{
-				Node:  n.Name,
-				Cause: err.Error(),
-			}
+	cmd := fmt.Sprintf("echo Y | %s cluster delete -f %s", d.getPxctlPath(*n), nodeResp.Node.Id)
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
+
+	var cmdNode node.Node
+	for _, cn := range node.GetStorageDriverNodes() {
+		if cn.Name != n.Name {
+			cmdNode = cn
+			break
 		}
 	}
 
-	log.Infof("Node [%s] remove is pending. Waiting for it to complete", nodeResp.Node.Id)
+	t = func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(cmdNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil && strings.Contains(err.Error(), "Node remove is pending") {
+
+			return out, false, nil
+
+		}
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+
+	if err != nil {
+		return err
+	}
+	outLines := strings.Split(out.(string), "\n")
+
+	log.Infof("Node [%s] remove is pending. Waiting for it to complete,output: %s", nodeResp.Node.Id, outLines)
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
@@ -4983,7 +5017,6 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 			driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
 		}
 	}
-
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -5098,6 +5131,35 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 		}
 	}
 	return poolsData, nil
+}
+
+// GetJournalDevicePath returns journal device path in the given node
+func (d *portworx) GetJournalDevicePath(n *node.Node) (string, error) {
+	for _, addr := range n.Addresses {
+		if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
+			log.Warnf("testAndSetEndpoint failed for %v: %v", addr, err)
+			continue
+		}
+	}
+
+	t := func() (interface{}, bool, error) {
+		storageSpec, err := d.GetStorageSpec()
+		if err != nil {
+			return "", true, err
+		}
+		if storageSpec.GetJournalDev() == "auto" {
+			return "", true, fmt.Errorf("journalDev not yet updated")
+		}
+
+		return storageSpec.GetJournalDev(), false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, upgradeTimeout, defaultRetryInterval)
+	if err != nil {
+		return "", err
+	}
+	return out.(string), nil
+
 }
 
 // IsIOsInProgressForTheVolume checks if IOs are happening in the given volume

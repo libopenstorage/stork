@@ -223,7 +223,7 @@ type Driver interface {
 	GetNodePoolsStatus(n node.Node) (map[string]string, error)
 
 	//DeletePool deletes the pool with given poolID
-	DeletePool(n node.Node, poolID string) error
+	DeletePool(n node.Node, poolID string, retry bool) error
 
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
@@ -458,6 +458,9 @@ type Driver interface {
 
 	// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
 	GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
+
+	// GetJournalDevicePath returns journal device path in the given node
+	GetJournalDevicePath(n *node.Node) (string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

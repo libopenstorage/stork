@@ -9,13 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/pds"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
 
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
@@ -125,6 +125,9 @@ import (
 
 	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+
+	// import driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
@@ -443,10 +446,6 @@ func InitInstance() {
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	log.FailOnError(err, "Error occured while monitor Initialization")
-
-	if Inst().Pds != nil {
-		log.Infof("PDS Dataservice Initialised")
-	}
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
@@ -3633,7 +3632,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	return nil
 }
 
-// CreateS3BackupLocation creates backuplocation for S3
+// CreateS3BackupLocation creates backup location for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
@@ -4327,6 +4326,37 @@ func CreateBucket(provider string, bucketName string) {
 	})
 }
 
+// IsS3BucketEmpty returns true if bucket empty else false
+func IsS3BucketEmpty(bucketName string) (bool, error) {
+	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get S3 session to create bucket with %s", err)
+	}
+
+	S3Client := s3.New(sess)
+	input := &s3.ListObjectsInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	result, err := S3Client.ListObjects(input)
+	if err != nil {
+		return false, fmt.Errorf("unable to fetch cotents from s3 failing with %s", err)
+	}
+
+	log.Info(fmt.Sprintf("Result content %d", len(result.Contents)))
+	if len(result.Contents) > 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
 // CreateS3Bucket creates bucket in S3
 func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objectLockMode string) error {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -4705,7 +4735,7 @@ func ParseFlags() {
 			if pdsDriver, err = pds.Get(pdsDriverName); err != nil {
 				log.Fatalf("cannot find pds driver for %s. Err: %v\n", pdsDriverName, err)
 			} else {
-				log.Infof("Pds driver found")
+				log.Infof("Pds driver found %v", pdsDriver)
 			}
 		}
 
@@ -5423,7 +5453,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 			}, false)
 
 			if err != nil {
-				if strings.Contains(err.Error(), "Device already exists") {
+				if strings.Contains(err.Error(), "Device already exists") || strings.Contains(err.Error(), "Drive already in use") {
 					return "", false, nil
 				}
 				return "", true, err
@@ -6131,7 +6161,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 
 	// Delete all the pools present on the Node
 	for i := 0; i < lenPools; i++ {
-		err := Inst().V.DeletePool(n, strconv.Itoa(i))
+		err := Inst().V.DeletePool(n, strconv.Itoa(i), true)
 		if err != nil {
 			return err
 		}
@@ -6418,7 +6448,7 @@ func RandomString(length int) string {
 }
 
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
-func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
 
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
 	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
@@ -6476,7 +6506,7 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 		}
 
 	}()
-	err = Inst().V.DeletePool(stNode, poolIDToDelete)
+	err = Inst().V.DeletePool(stNode, poolIDToDelete, retry)
 	return err
 }
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {

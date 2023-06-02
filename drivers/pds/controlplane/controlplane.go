@@ -1,14 +1,233 @@
 package controlplane
 
 import (
+	"fmt"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/api"
+	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"net/url"
+	"strings"
 )
 
 // ControlPlane PDS
 type ControlPlane struct {
 	ControlPlaneURL string
 	components      *api.Components
+}
+
+var (
+	isavailable                bool
+	isTemplateavailable        bool
+	isStorageTemplateAvailable bool
+
+	resourceTemplateID  string
+	appConfigTemplateID string
+	storageTemplateID   string
+)
+
+const (
+	resourceTemplateName  = "Small"
+	appConfigTemplateName = "QaDefault"
+	storageTemplateName   = "QaDefault"
+)
+
+var (
+	accountID          string
+	tenantID           string
+	projectID          string
+	isAccountAvailable bool
+	serviceType        = "LoadBalancer"
+)
+
+// K8s Instances
+var (
+	k8sCore = core.Instance()
+	k8sApps = apps.Instance()
+)
+
+func GetApiComponents(ControlPlaneURL string) (*api.Components, error) {
+	apiConf := pds.NewConfiguration()
+	endpointURL, err := url.Parse(ControlPlaneURL)
+	if err != nil {
+		return nil, err
+	}
+	apiConf.Host = endpointURL.Host
+	apiConf.Scheme = endpointURL.Scheme
+	apiClient := pds.NewAPIClient(apiConf)
+	components := pdsapi.NewComponents(apiClient)
+	return components, nil
+}
+
+// SetupPDSTest returns few params required to run the test
+func (cp *ControlPlane) SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
+	var err error
+
+	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
+		serviceType = "ClusterIP"
+	}
+	log.InfoD("Deployment service type %s", serviceType)
+
+	components, err := GetApiComponents(ControlPlaneURL)
+	if err != nil {
+		return "", "", "", "", "", "", err
+	}
+	acc := components.Account
+	accounts, err := acc.GetAccountsList()
+	if err != nil {
+		return "", "", "", "", "", "", err
+	}
+
+	isAccountAvailable = false
+	for i := 0; i < len(accounts); i++ {
+		log.InfoD("Account Name: %v", accounts[i].GetName())
+		if accounts[i].GetName() == AccountName {
+			isAccountAvailable = true
+			accountID = accounts[i].GetId()
+			break
+		}
+	}
+	if !isAccountAvailable {
+		return "", "", "", "", "", "", fmt.Errorf("account %v is not available", AccountName)
+	}
+	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
+	tnts := components.Tenant
+	tenants, _ := tnts.GetTenantsList(accountID)
+	for _, tenant := range tenants {
+		if tenant.GetName() == TenantName {
+			tenantID = tenant.GetId()
+			break
+		}
+
+	}
+	log.InfoD("Tenant Details- Name: %s, UUID: %s ", TenantName, tenantID)
+	dnsZone, err := cp.GetDNSZone(tenantID)
+	if err != nil {
+		return "", "", "", "", "", "", err
+	}
+	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, TenantName, AccountName)
+	projcts := components.Project
+	projects, _ := projcts.GetprojectsList(tenantID)
+	for _, project := range projects {
+		if project.GetName() == ProjectName {
+			projectID = project.GetId()
+			break
+		}
+	}
+	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
+
+	ns, err := k8sCore.GetNamespace("kube-system")
+	log.Infof("kube-system ns-> %v", ns)
+	if err != nil {
+		return "", "", "", "", "", "", fmt.Errorf("error Get kube-system ns-> %v", err)
+	}
+	clusterID := string(ns.GetObjectMeta().GetUID())
+	if len(clusterID) > 0 {
+		log.InfoD("clusterID %v", clusterID)
+	} else {
+		return "", "", "", "", "", "", fmt.Errorf("unable to get the clusterID")
+	}
+
+	return accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err
+}
+
+// GetStorageTemplate return the storage template id
+func (cp *ControlPlane) GetStorageTemplate(tenantID string) (string, error) {
+	log.InfoD("Get the storage template")
+	storageTemplates, err := cp.components.StorageSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return "", err
+	}
+	isStorageTemplateAvailable = false
+	for i := 0; i < len(storageTemplates); i++ {
+		if storageTemplates[i].GetName() == storageTemplateName {
+			isStorageTemplateAvailable = true
+			log.InfoD("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
+				storageTemplates[i].GetName(),
+				storageTemplates[i].GetRepl(),
+				storageTemplates[i].GetFg(),
+				storageTemplates[i].GetFs())
+			storageTemplateID = storageTemplates[i].GetId()
+		}
+	}
+	if !isStorageTemplateAvailable {
+		log.Fatalf("storage template %v is not available ", storageTemplateName)
+	}
+	return storageTemplateID, nil
+}
+
+// GetAppConfTemplate returns the app config template id
+func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, error) {
+	appConfigs, err := cp.components.AppConfigTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return "", err
+	}
+	isavailable = false
+	isTemplateavailable = false
+	var dataServiceId string
+
+	dsModel, err := cp.components.DataService.ListDataServices()
+	if err != nil {
+		return "", fmt.Errorf("An Error Occured while listing dataservices %v", err)
+
+	}
+	for _, v := range dsModel {
+		if *v.Name == ds {
+			dataServiceId = *v.Id
+		}
+	}
+
+	for i := 0; i < len(appConfigs); i++ {
+		if appConfigs[i].GetName() == appConfigTemplateName {
+			isTemplateavailable = true
+			if dataServiceId == appConfigs[i].GetDataServiceId() {
+				appConfigTemplateID = appConfigs[i].GetId()
+				isavailable = true
+			}
+		}
+	}
+	if !(isavailable && isTemplateavailable) {
+		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
+	}
+	return appConfigTemplateID, nil
+}
+
+// GetResourceTemplate get the resource template id
+func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
+	log.Infof("Get the resource template for each data services")
+	resourceTemplates, err := cp.components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return "", err
+	}
+	isavailable = false
+	isTemplateavailable = false
+	for i := 0; i < len(resourceTemplates); i++ {
+		if resourceTemplates[i].GetName() == resourceTemplateName {
+			isTemplateavailable = true
+			dataService, err := cp.components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			if err != nil {
+				return "", err
+			}
+			if dataService.GetName() == supportedDataService {
+				log.Infof("Data service name: %v", dataService.GetName())
+				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
+					resourceTemplates[i].GetName(),
+					resourceTemplates[i].GetId(),
+					resourceTemplates[i].GetDataServiceId(),
+					resourceTemplates[i].GetStorageRequest(),
+					resourceTemplates[i].GetMemoryRequest())
+
+				isavailable = true
+				resourceTemplateID = resourceTemplates[i].GetId()
+			}
+		}
+	}
+	if !(isavailable && isTemplateavailable) {
+		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
+	}
+	return resourceTemplateID, nil
 }
 
 // GetRegistrationToken return token to register a target cluster.

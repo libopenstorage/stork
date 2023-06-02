@@ -93,6 +93,8 @@ const (
 	storkPodReadyTimeout                      = 15 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
+	clusterCreationTimeout                    = 5 * time.Minute
+	clusterCreationRetryTime                  = 10 * time.Second
 )
 
 var (
@@ -338,8 +340,8 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	return nil
 }
 
-// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, and validates that backup
-func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) error {
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -349,15 +351,15 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	}
 	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
@@ -2352,19 +2354,19 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 	return resp, nil
 }
 
-// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success, and validates the backup.
-func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) error {
+// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) (string, error) {
 	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // suspendBackupSchedule will suspend backup schedule
@@ -2882,6 +2884,66 @@ func DeleteAppNamespace(namespace string) error {
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RegisterCluster adds the cluster with the given name
+func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx context.Context) error {
+	var kubeconfigPath string
+	var err error
+	kubeConfigs := os.Getenv("KUBECONFIGS")
+	if kubeConfigs == "" {
+		return fmt.Errorf("unable to get KUBECONFIGS from Environment variable")
+	}
+	kubeconfigList := strings.Split(kubeConfigs, ",")
+	DumpKubeconfigs(kubeconfigList)
+	// Register cluster with backup driver
+	log.InfoD("Create cluster [%s] in org [%s]", clusterName, orgID)
+	if clusterName == SourceClusterName {
+		kubeconfigPath, err = GetSourceClusterConfigPath()
+	} else if clusterName == destinationClusterName {
+		kubeconfigPath, err = GetDestinationClusterConfigPath()
+	} else {
+		return fmt.Errorf("registering %s cluster not implemented", clusterName)
+	}
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", clusterName, kubeconfigPath)
+	clusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(clusterName, kubeconfigPath, orgID, cloudCredName, "", ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		createClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
+		if err != nil {
+			return "", true, err
+		}
+		if createClusterStatus == api.ClusterInfo_StatusInfo_Online {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("the %s cluster state is not Online yet", clusterName)
+	}
+	_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AddSourceCluster(ctx context.Context) error {
+	err := RegisterCluster(SourceClusterName, "", orgID, ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AddDestinationCluster(ctx context.Context) error {
+	err := RegisterCluster(destinationClusterName, "", orgID, ctx)
 	if err != nil {
 		return err
 	}
