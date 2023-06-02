@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -194,7 +194,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
 func GetCsiSnapshotClassName() (string, error) {
-	var snapShotClasses *v1beta1.VolumeSnapshotClassList
+	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapShotClasses, err = Inst().S.GetAllSnapshotClasses(); err != nil {
 		return "", err
