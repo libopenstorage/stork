@@ -797,17 +797,15 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Checking size of volume after resize", func() {
 					log.InfoD("Checking size of volume after resize")
-					pods, err := core.Instance().GetPods(namespace, labelSelectors)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-					for _, pod := range pods.Items {
-						afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, pod.GetName()))
-						podListAfterSizeMap[pod.Name] = afterSize
+					for podName := range podListBeforeSizeMap {
+						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
+						podListAfterSizeMap[podName] = afterSize
 					}
-					for _, pod := range pods.Items {
-						dash.VerifyFatal(podListAfterSizeMap[pod.Name] > podListBeforeSizeMap[pod.Name], true, fmt.Sprintf("Verifying volume size has increased for pod %s", pod.Name))
+					for podName := range podListBeforeSizeMap {
+						dash.VerifyFatal(podListAfterSizeMap[podName] > podListBeforeSizeMap[podName], true, fmt.Sprintf("Verifying volume size has increased for pod %s", podName))
 					}
 				})
 				Step("Verifying backup success after initializing volume resize", func() {
