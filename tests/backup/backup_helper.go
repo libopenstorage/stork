@@ -71,6 +71,7 @@ const (
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
 	globalGCPBucketPrefix                     = "global-gcp"
+	globalNFSBucketPrefix                     = "global-nfs"
 	globalAWSLockedBucketPrefix               = "global-aws-locked"
 	globalAzureLockedBucketPrefix             = "global-azure-locked"
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
@@ -109,6 +110,7 @@ var (
 	globalAWSBucketName         string
 	globalAzureBucketName       string
 	globalGCPBucketName         string
+	globalNFSBucketName         string
 	globalAWSLockedBucketName   string
 	globalAzureLockedBucketName string
 	globalGCPLockedBucketName   string
@@ -344,8 +346,8 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	return nil
 }
 
-// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, and validates that backup
-func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) error {
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -355,15 +357,15 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	}
 	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
@@ -953,20 +955,24 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
-		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
-		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
-		cloudCredDeleteStatus := func() (interface{}, bool, error) {
-			status, err := IsCloudCredPresent(credName, ctx, orgID)
-			if err != nil {
-				return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err)
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cloud cred [%s] is present", credName))
+		if status {
+			err = DeleteCloudCredential(credName, orgID, cloudCredUID)
+			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
+			cloudCredDeleteStatus := func() (interface{}, bool, error) {
+				status, err = IsCloudCredPresent(credName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err)
+				}
+				if status {
+					return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
+				}
+				return "", false, nil
 			}
-			if status {
-				return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
-			}
-			return "", false, nil
+			_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		}
-		_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
 	err := DeleteCluster(SourceClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
@@ -2696,19 +2702,19 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 	return resp, nil
 }
 
-// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success, and validates the backup.
-func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) error {
+// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) (string, error) {
 	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // suspendBackupSchedule will suspend backup schedule

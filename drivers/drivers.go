@@ -9,6 +9,8 @@ const (
 	ProviderGke = "gke"
 	// ProviderPortworx for portworx provider
 	ProviderPortworx = "pxd"
+	// ProviderNfs for nfs provider
+	ProviderNfs = "nfs"
 )
 
 // Driver specifies the most basic methods to be implemented by a Torpedo driver.

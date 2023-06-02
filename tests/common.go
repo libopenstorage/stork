@@ -3529,6 +3529,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+	case drivers.ProviderNfs:
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, true)
 	}
 	return err
 }
@@ -3625,6 +3627,9 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+	case drivers.ProviderNfs:
+		log.Warnf("provider [%s] does not require creating cloud credential", provider)
+		return nil
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -3742,6 +3747,82 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// WaitForBackupLocationAddition waits for backup location to be added successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func WaitForBackupLocationAddition(
+	ctx context1.Context,
+	backupLocationName,
+	UID,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.BackupLocationInspectRequest{
+		Name:  backupLocationName,
+		Uid:   UID,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectBlResp, err := Inst().Backup.InspectBackupLocation(ctx, req)
+		if err != nil {
+			return "", true, err
+		}
+		actual := inspectBlResp.GetBackupLocation().GetBackupLocationInfo().GetStatus().GetStatus()
+		if actual == api.BackupLocationInfo_StatusInfo_Valid {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("backup location status for [%s] expected was [%s] but got [%s]", backupLocationName, api.BackupLocationInfo_StatusInfo_Valid, actual)
+	}
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for backup location addition. Error:[%v]", err)
+	}
+	return nil
+}
+
+// CreateNFSBackupLocation creates backup location for nfs
+func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, validate bool) error {
+	serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	subPath := os.Getenv("NFS_SUB_PATH")
+	mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	path := os.Getenv("NFS_PATH")
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Config: &api.BackupLocationInfo_NfsConfig{
+				NfsConfig: &api.NFSConfig{
+					ServerAddr:  serverAddr,
+					SubPath:     subPath,
+					MountOption: mountOption,
+				},
+			},
+			Path:          path,
+			Type:          api.BackupLocationInfo_NFS,
+			EncryptionKey: encryptionKey,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	if validate {
+		err = WaitForBackupLocationAddition(ctx, name, uid, orgID, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

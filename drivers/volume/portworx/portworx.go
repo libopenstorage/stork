@@ -886,10 +886,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
-	defer cancel()
-
-	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
 	}

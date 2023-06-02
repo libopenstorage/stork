@@ -789,11 +789,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 
-					err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
-
-					firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 				})
 				Step("Checking size of volume after resize", func() {
 					log.InfoD("Checking size of volume after resize")
@@ -812,9 +809,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-
-					firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					err = backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
