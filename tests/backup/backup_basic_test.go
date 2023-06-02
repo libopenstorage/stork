@@ -36,6 +36,8 @@ func getGlobalBucketName(provider string) string {
 		return globalAzureBucketName
 	case drivers.ProviderGke:
 		return globalGCPBucketName
+	case drivers.ProviderNfs:
+		return globalNFSBucketName
 	default:
 		return globalAWSBucketName
 	}
@@ -147,6 +149,8 @@ var _ = BeforeSuite(func() {
 			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
+		case drivers.ProviderNfs:
+			globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, bucketNameSuffix)
 		}
 	}
 	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")
