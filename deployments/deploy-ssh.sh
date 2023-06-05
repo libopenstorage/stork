@@ -659,6 +659,14 @@ spec:
       value: "${PX_BACKUP_HELM_REPO_BRANCH}"
     - name: BACKUP_TYPE
       value: "${BACKUP_TYPE}"
+    - name: NFS_SERVER_ADDR
+      value: "${NFS_SERVER_ADDR}"
+    - name: NFS_SUB_PATH
+      value: "${NFS_SUB_PATH}"
+    - name: NFS_MOUNT_OPTION
+      value: "${NFS_MOUNT_OPTION}"
+    - name: NFS_PATH
+      value: "${NFS_PATH}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

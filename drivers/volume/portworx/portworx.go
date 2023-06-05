@@ -886,10 +886,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
-	defer cancel()
-
-	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
 	}
@@ -5016,9 +5013,10 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
 		if poolID != -1 {
 			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+		} else {
+			driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
 		}
 	}
-
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,

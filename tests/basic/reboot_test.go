@@ -39,8 +39,7 @@ func updateSharedV4Map(context *scheduler.Context) error {
 	volMountedMap = map[string][]*volume.Volume{}
 	for _, vol := range listOfVolumes {
 		appVol, _ := Inst().V.InspectVolume(vol.ID)
-		// appVol.Spec.Sharedv4ServiceSpec.Type = 2 denotes CLUSTER IP
-		if appVol.Spec.Sharedv4 == true &&  appVol.Spec.Sharedv4ServiceSpec.Type ==  2 {
+		if appVol.Spec.Sharedv4 && appVol.Spec.Sharedv4ServiceSpec != nil && appVol.Spec.Sharedv4ServiceSpec.Type ==  2 {
 			volMountedMap[appVol.AttachedOn] = append(volMountedMap[appVol.AttachedOn], vol)
 		}
 	}

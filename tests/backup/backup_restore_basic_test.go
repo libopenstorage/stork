@@ -502,18 +502,18 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 // This testcase verifies schedule backup creation with a single namespace.
 var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	var (
-		scheduledAppContexts []*scheduler.Context
-		backupLocationName   string
-		backupLocationUID    string
-		cloudCredUID         string
-		bkpNamespaces        []string
-		scheduleNames        []string
-		cloudAccountName     string
-		backupName           string
-		schBackupName        string
-		schPolicyUid         string
-		restoreName          string
-		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		scheduledAppContexts    []*scheduler.Context
+		backupLocationName      string
+		backupLocationUID       string
+		cloudCredUID            string
+		bkpNamespaces           []string
+		scheduleNames           []string
+		cloudAccountName        string
+		backupName              string
+		firstScheduleBackupName string
+		schPolicyUid            string
+		restoreName             string
+		clusterStatus           api.ClusterInfo_StatusInfo_Status
 	)
 	var testrailID = 58014 // testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58014
 	namespaceMapping := make(map[string]string)
@@ -597,10 +597,8 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+				firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", backupName))
-				schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 				scheduleNames = append(scheduleNames, backupName)
 			}
 		})
@@ -609,8 +607,8 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			log.InfoD("Restoring scheduled backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, schBackupName)
-			err = CreateRestore(restoreName, schBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
+			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, firstScheduleBackupName)
+			err = CreateRestore(restoreName, firstScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
 		})
 	})
@@ -644,18 +642,18 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 // This testcase verifies schedule backup creation with all namespaces.
 var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	var (
-		scheduledAppContexts []*scheduler.Context
-		backupLocationName   string
-		backupLocationUID    string
-		cloudCredUID         string
-		bkpNamespaces        []string
-		scheduleNames        []string
-		cloudAccountName     string
-		backupName           string
-		schBackupName        string
-		schPolicyUid         string
-		restoreName          string
-		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		scheduledAppContexts    []*scheduler.Context
+		backupLocationName      string
+		backupLocationUID       string
+		cloudCredUID            string
+		bkpNamespaces           []string
+		scheduleNames           []string
+		cloudAccountName        string
+		backupName              string
+		firstScheduleBackupName string
+		schPolicyUid            string
+		restoreName             string
+		clusterStatus           api.ClusterInfo_StatusInfo_Status
 	)
 	var testrailID = 58015 // testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58015
 	namespaceMapping := make(map[string]string)
@@ -736,10 +734,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
 			backupName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, timeStamp)
-			err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+			firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", backupName))
-			schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 			scheduleNames = append(scheduleNames, backupName)
 		})
 
@@ -747,8 +743,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			log.InfoD("Restoring scheduled backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, schBackupName)
-			err = CreateRestore(restoreName, schBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
+			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, firstScheduleBackupName)
+			err = CreateRestore(restoreName, firstScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
 		})
 	})
@@ -1737,11 +1733,9 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[0:1])
-			err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled schedule backup [%s] with label [%s]", scheduleName, namespaceLabel))
 
-			firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupName, ctx, bkpNamespaces, namespaceLabel)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, namespaceLabel, firstScheduleBackupName))
 		})
@@ -1947,14 +1941,12 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 
 			scheduleBkpSingleNs = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, singleNamespace)
-			err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleBkpSingleNs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", labelForSingleNamespace, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleBkpSingleNs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", labelForSingleNamespace, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled schedule backup [%s] with label [%s]", scheduleBkpSingleNs, labelForSingleNamespace))
+			scheduleNames = append(scheduleNames, scheduleBkpSingleNs)
 
-			firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleBkpSingleNs, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupName, ctx, singleNamespace, labelForSingleNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", singleNamespace, labelForSingleNamespace, firstScheduleBackupName))
-			scheduleNames = append(scheduleNames, scheduleBkpSingleNs)
 		})
 		Step("Creating a schedule backup for multiple applications with namespace label filter", func() {
 			log.InfoD("Creating a schedule backup for multiple applications with namespace label filter")
@@ -1963,14 +1955,12 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 
 			scheduleBkpMultipleNs = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, multipleNamespace)
-			err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleBkpMultipleNs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", labelForMultipleNamespace, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			firstScheduleBackupForMultipleNs, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleBkpMultipleNs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, orgID, "", "", "", "", labelForMultipleNamespace, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of namespace labelled schedule backup [%s] with label [%s]", scheduleBkpMultipleNs, labelForMultipleNamespace))
+			scheduleNames = append(scheduleNames, scheduleBkpMultipleNs)
 
-			firstScheduleBackupForMultipleNs, err = GetFirstScheduleBackupName(ctx, scheduleBkpMultipleNs, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupForMultipleNs))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupForMultipleNs, ctx, multipleNamespace, labelForMultipleNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespaces [%v] are backed up and check for labels [%s] applied to backups [%s]", multipleNamespace, labelForMultipleNamespace, firstScheduleBackupForMultipleNs))
-			scheduleNames = append(scheduleNames, scheduleBkpMultipleNs)
 		})
 		Step("Restoring manual backup of single application", func() {
 			log.InfoD("Restoring backup of single application")
@@ -2572,11 +2562,9 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			firstScheduleBackupName, err := CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with namespace labels, having schedule name [%s]", scheduleName))
 
-			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupName, ctx, bkpNamespaces, nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", bkpNamespaces, nsLabelString, firstScheduleBackupName))
 
@@ -3265,7 +3253,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
-			err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid)
+			_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 		})
 		Step("Delete the App namespaces created", func() {
