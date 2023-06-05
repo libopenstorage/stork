@@ -973,6 +973,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		})
 		Step("Scaling MongoDB statefulset replica to 0 and back to original replica while restore is in progress", func() {
 			log.InfoD("Scaling MongoDB statefulset replica to 0 while restore is in progress")
+			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+			dash.VerifyFatal(err, nil, "Getting mongodb statefulset details")
 			*statefulSet.Spec.Replicas = scaledDownReplica
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
 			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
@@ -1418,6 +1420,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
+					time.Sleep(5 * time.Second)
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
