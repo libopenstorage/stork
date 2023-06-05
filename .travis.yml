@@ -12,10 +12,10 @@ cache:
     - $HOME/.cache/go-build
 script:
   - |
-    if [ "${TRAVIS_BRANCH}" == "2.5.0-nfs-final" ]; then
-      export DOCKER_HUB_STORK_TAG="23.5.0-nfs"-dev
-      export DOCKER_HUB_STORK_TEST_TAG="23.5.0-nfs"-dev
-      export DOCKER_HUB_CMD_EXECUTOR_TAG="23.5.0-nfs"-dev
+    if [ "${TRAVIS_BRANCH}" == "2.5.0-ea" ]; then
+      export DOCKER_HUB_STORK_TAG="23.5.0-nfs"-ea
+      export DOCKER_HUB_STORK_TEST_TAG="23.5.0-nfs"-ea
+      export DOCKER_HUB_CMD_EXECUTOR_TAG="23.5.0-nfs"-ea
     else
       export DOCKER_HUB_STORK_TAG=`git rev-parse --short HEAD`
       export DOCKER_HUB_STORK_TEST_TAG=`git rev-parse --short HEAD`
