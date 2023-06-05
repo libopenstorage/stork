@@ -870,7 +870,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	}()
 	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
-		expectedRestoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
 		if err != nil {
 			log.Errorf("TransformAppContextWithMappings: %v", err)
 			continue
@@ -1875,8 +1875,8 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	}
 }
 
-// TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided. When `forRestore` is true, VolumeSnapshots and StorageClasses are ignored. To be used after switching k8s context (cluster) which has the namespace
-func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, forRestore bool) (*scheduler.Context, error) {
+// CloneAppContextAndTransformWithMappings clones an appContext and transforms it according to the maps provided. Set `forRestore` to true when the transformation is for namespaces restored by px-backup. To be used after switching to k8s context (cluster) which has the restored namespace.
+func CloneAppContextAndTransformWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, forRestore bool) (*scheduler.Context, error) {
 	appContextNamespace := appContext.ScheduleOptions.Namespace
 	log.Infof("TransformAppContextWithMappings of appContext [%s] with namespace mapping [%v] and storage Class Mapping [%v]", appContextNamespace, namespaceMapping, storageClassMapping)
 
@@ -1889,7 +1889,7 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	specObjects := make([]interface{}, 0)
 	for _, appSpecOrig := range appContext.App.SpecList {
 		if forRestore {
-			// if we can transforming to obtain a restored specs, VolumeSnapshot should be ignored
+			// if we are transforming to obtain a restored specs, VolumeSnapshot should be ignored
 			if obj, ok := appSpecOrig.(*snapv1.VolumeSnapshot); ok {
 				log.Infof("TransformAppContextWithMappings is for restore contexts, ignoring transformation of 'VolumeSnapshot' [%s] in appContext [%s]", obj.Metadata.Name, appContextNamespace)
 				continue
@@ -1905,11 +1905,13 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 			errors = append(errors, err)
 			continue
 		}
-		err = TransformToRestoredSpec(appSpec, storageClassMapping)
-		if err != nil {
-			err := fmt.Errorf("failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
-			errors = append(errors, err)
-			continue
+		if forRestore {
+			err = TransformToRestoredSpec(appSpec, storageClassMapping)
+			if err != nil {
+				err := fmt.Errorf("failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
+				errors = append(errors, err)
+				continue
+			}
 		}
 		err = UpdateNamespace(appSpec, namespaceMapping)
 		if err != nil {
@@ -1942,12 +1944,12 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	app.SpecList = specObjects
 	restoreAppContext.App = &app
 
-	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
-	options := CreateScheduleOptions("")
+	// `CreateScheduleOptions` must be used in order to make it appear as though we scheduled it (rather than it being restored) in order to prove equivalency between scheduling and restoration.
+	var options scheduler.ScheduleOptions
 	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
-		options.Namespace = namespace
+		options = CreateScheduleOptions(namespace)
 	} else {
-		options.Namespace = appContextNamespace
+		options = CreateScheduleOptions(appContextNamespace)
 	}
 	restoreAppContext.ScheduleOptions = options
 
@@ -1959,7 +1961,7 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	return &restoreAppContext, nil
 }
 
-// CloneSpec clones a given spec and returns it. It returns an error if the object (spec) provided is not supported by this function
+// TransformToRestoredSpec transforms a given spec to one expected in case of restoration by px-backup. An error is retuned if any transformation fails. specs with no need for transformation are ignored.
 func TransformToRestoredSpec(spec interface{}, storageClassMapping map[string]string) error {
 	if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if sc, ok := storageClassMapping[*specObj.Spec.StorageClassName]; ok {
