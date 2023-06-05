@@ -270,6 +270,9 @@ var _ = AfterSuite(func() {
 		case drivers.ProviderGke:
 			DeleteBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
+		case drivers.ProviderNfs:
+			DeleteNfsSubPath()
+			log.Infof("NFS subpath deleted - %s", os.Getenv("NFS_SUB_PATH"))
 		}
 	}
 
