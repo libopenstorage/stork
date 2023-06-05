@@ -336,8 +336,11 @@ type Driver interface {
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 
-	//validate mount options by executing mount command
+	//ValidatePureFaFbMountOptions validates mount options by executing mount command
 	ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
+
+	//ValidatePureFaCreateOptions validates create options using xfs_info and tune2fs commands
+	ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
@@ -355,10 +358,10 @@ type Driver interface {
 	ValidateDriver(endpointVersion string, autoUpdateComponents bool) error
 
 	// ExpandPool resizes a pool of a given ID
-	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error
 
 	// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
-	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)

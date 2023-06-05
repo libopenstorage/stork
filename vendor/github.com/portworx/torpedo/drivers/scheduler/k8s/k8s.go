@@ -35,6 +35,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -133,11 +134,11 @@ const (
 	k8sDestroyTimeout      = 10 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
-	deleteTasksWaitTimeout   = 3 * time.Minute
+	deleteTasksWaitTimeout   = 5 * time.Minute
 	// DefaultRetryInterval  Default retry interval
 	DefaultRetryInterval = 10 * time.Second
 	// DefaultTimeout default timeout
-	DefaultTimeout = 3 * time.Minute
+	DefaultTimeout = 5 * time.Minute
 	// SnapshotReadyTimeout timeout for snapshot to be ready
 	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
@@ -204,12 +205,21 @@ var (
 	k8sMonitoring            = prometheus.Instance()
 	k8sPolicy                = policy.Instance()
 	k8sAdmissionRegistration = admissionregistration.Instance()
+	k8sApiExtensions         = apiextensions.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
 	// SnapshotAPIGroup is the group for the resource being referenced.
 	SnapshotAPIGroup = "snapshot.storage.k8s.io"
 )
+
+// CustomResourceObjectYAML	Used as spec object for all CRs
+type CustomResourceObjectYAML struct {
+	Path string
+	// Namespace will only be assigned DURING creation
+	Namespace string
+	Name      string
+}
 
 // K8s  The kubernetes structure
 type K8s struct {
@@ -349,7 +359,11 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sRbac.SetConfig(config)
 	k8sMonitoring.SetConfig(config)
 	k8sPolicy.SetConfig(config)
+	k8sBatch.SetConfig(config)
+	k8sMonitoring.SetConfig(config)
 	k8sAdmissionRegistration.SetConfig(config)
+	k8sExternalsnap.SetConfig(config)
+	k8sApiExtensions.SetConfig(config)
 
 	return nil
 }
@@ -411,7 +425,16 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 		if err != nil {
 			return nil, err
 		}
-		if !isHelmChart {
+
+		splitPath := strings.Split(fileName, "/")
+		if strings.HasPrefix(splitPath[len(splitPath)-1], "cr-") {
+			// TODO: process with templates
+			specObj := &CustomResourceObjectYAML{
+				Path: fileName,
+			}
+			specs = append(specs, specObj)
+			log.Warnf("custom res: %v", specObj) //TODO: remove
+		} else if !isHelmChart {
 			file, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				return nil, err
@@ -845,6 +868,50 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
+// ScheduleWithCustomAppSpecs Schedules the application with custom app specs
+func (k *K8s) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+	var contexts []*scheduler.Context
+	oldOptionsNamespace := options.Namespace
+	for _, app := range apps {
+
+		appNamespace := app.GetID(instanceID)
+		if options.Namespace != "" {
+			appNamespace = options.Namespace
+		} else {
+			options.Namespace = appNamespace
+		}
+		if len(options.TopologyLabels) > 1 {
+			rotateTopologyArray(&options)
+		}
+
+		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		specObjects = append(specObjects, helmSpecObjects...)
+		ctx := &scheduler.Context{
+			UID: instanceID,
+			App: &spec.AppSpec{
+				Key:      app.Key,
+				SpecList: specObjects,
+				Enabled:  app.Enabled,
+			},
+			ScheduleOptions: options,
+		}
+
+		contexts = append(contexts, ctx)
+		options.Namespace = oldOptionsNamespace
+	}
+
+	return contexts, nil
+}
+
 // CreateSpecObjects Create application
 func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
 	var specObjects []interface{}
@@ -856,6 +923,23 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createMigrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCRDObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -1041,6 +1125,25 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	// creation of CustomResourceObjects must most likely be done *last*,
+	// as it may have resources that depend on other resources, which should be create *before* this
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCustomResourceObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -1261,6 +1364,25 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
+// GetUpdatedSpec takes a spec and returns the latest version of it by `GET`-ing it
+func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
+	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		pvc.Kind = "PersistentVolumeClaim"
+
+		return pvc, nil
+	}
+
+	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
+}
+
 func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) (*corev1.Namespace, error) {
 	k8sOps := k8sCore
 
@@ -1375,6 +1497,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
 				log.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				sc.Kind = "StorageClass"
+
 				return sc, nil
 			}
 		}
@@ -1384,6 +1511,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
 		return sc, nil
@@ -1432,6 +1563,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if k8serrors.IsAlreadyExists(err) {
 			if pvc, err = k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace); err == nil {
 				log.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				pvc.Kind = "PersistentVolumeClaim"
+
 				return pvc, nil
 			}
 		}
@@ -1441,6 +1577,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", newPvcObj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		pvc.Kind = "PersistentVolumeClaim"
 
 		log.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 
@@ -1470,6 +1610,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if k8serrors.IsAlreadyExists(err) {
 			if snap, err = k8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
 				log.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				snap.Kind = "VolumeSnapshot"
+
 				return snap, nil
 			}
 		}
@@ -1479,6 +1624,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", obj.Metadata.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		snap.Kind = "VolumeSnapshot"
 
 		log.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
 		return snap, nil
@@ -1762,6 +1911,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				dep.Kind = "Deployment"
 				return dep, nil
 			}
 		}
@@ -1771,6 +1923,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		dep.Kind = "Deployment"
 
 		log.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
 		return dep, nil
@@ -1852,6 +2008,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if svc, err = k8sCore.GetService(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Service: %v", app.Key, svc.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				svc.Kind = "Service"
+
 				return svc, nil
 			}
 		}
@@ -1861,6 +2022,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		svc.Kind = "Service"
 
 		log.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
@@ -1876,6 +2041,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Secret: %v", app.Key, secret.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				secret.Kind = "Secret"
+
 				return secret, nil
 			}
 		}
@@ -1885,6 +2055,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", obj.Name, err),
 			}
 		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		secret.Kind = "Secret"
 
 		log.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
@@ -2144,6 +2318,36 @@ func (k *K8s) destroyAdmissionRegistrationObjects(spec interface{}, app *spec.Ap
 			}
 		} else {
 			log.Infof("[%v] Destroyed ValidatingWebhookConfigurationV1beta1: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// destroyCRDObjects is used to destroy Resources in the group `apiextensions` (like CRDs)
+func (k *K8s) destroyCRDObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
+		err := k8sApiExtensions.DeleteCRD(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy CRD: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed CRD: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		err := k8sApiExtensions.DeleteCRDV1beta1(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy CRDV1beta1: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed CRDV1beta1: %v", app.Key, obj.Name)
 			return nil
 		}
 	}
@@ -2470,6 +2674,22 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
 
+	// destruction of CustomResourceObjects must most likely be done *first*,
+	// as it may have resources that depend on other resources, which should be deleted *after* this
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyCustomResourceObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
 	var removeSpecs []interface{}
 	for _, appSpec := range ctx.App.SpecList {
 		if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
@@ -2495,9 +2715,24 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 		}
 	}
+
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyAdmissionRegistrationObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyRbacObjects(appSpec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			} else {
@@ -2596,6 +2831,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			return nil, false, nil
 		}
 
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyCRDObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
 		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
 			return err
 		}
@@ -4222,6 +4471,132 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	return nil, nil
 }
 
+// createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library
+func (k *K8s) createCustomResourceObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+
+	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
+		log.Warn("applying custom resources")
+		cryaml := obj.Path
+		if _, err := os.Stat(cryaml); baseErrors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("Cannot find yaml in path %s", cryaml)
+		}
+		cmdArgs := []string{"apply", "-f", cryaml, "-n", ns.Name}
+		err := osutils.Kubectl(cmdArgs)
+		if err != nil {
+			return nil, fmt.Errorf("Error applying spec [%s], Error: %s", cryaml, err)
+		}
+		obj.Namespace = ns.Name
+		obj.Name = "placeholder" //TODO1
+		return obj, nil
+	}
+
+	return nil, nil
+}
+
+// destroyCustomResourceObjects is used to delete objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl delete -f` command instead of the conventional method of using an api library
+func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
+		cryaml := obj.Path
+		if _, err := os.Stat(cryaml); baseErrors.Is(err, os.ErrNotExist) {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Custom Resource Object: %v. Err: Cannot find yaml in path: %v", obj.Name, cryaml),
+			}
+		}
+
+		cmdArgs := []string{"delete", "-f", cryaml, "-n", obj.Namespace}
+		err := osutils.Kubectl(cmdArgs)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Custom Resource Object: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed CustomResourceObject: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// createCRDObjects is used to create Resources in the group `apiextensions` group (like CRDs)
+func (k *K8s) createCRDObjects(
+	specObj interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+
+	if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
+		obj.Namespace = ns.Name
+		err := k8sApiExtensions.RegisterCRD(obj)
+
+		if k8serrors.IsAlreadyExists(err) {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
+				log.Infof("[%v] Found existing CRD: %v", app.Key, crd.Name)
+				return crd, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Register CRD: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
+				log.Infof("[%v] Registered CRD: %v", app.Key, crd.Name)
+				return crd, nil
+			} else {
+				// if it fails, then you need to `validate` before `get`
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to Get CRD after Registration: %v. Err: %v", obj.Name, err),
+				}
+			}
+		}
+	} else if obj, ok := specObj.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		obj.Namespace = ns.Name
+		err := k8sApiExtensions.RegisterCRDV1beta1(obj)
+
+		if k8serrors.IsAlreadyExists(err) {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
+				log.Infof("[%v] Found existing CRDV1beta1: %v", app.Key, crd.Name)
+				return crd, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Register CRDV1beta1: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			options := metav1.GetOptions{}
+			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
+				log.Infof("[%v] Registered CRDV1beta1: %v", app.Key, crd.Name)
+				return crd, nil
+			} else {
+				// if it fails, then you need to `validate` before `get`
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to Get CRDV1beta1 after Registration: %v. Err: %v", obj.Name, err),
+				}
+			}
+		}
+	}
+
+	return nil, nil
+}
+
 func (k *K8s) createMigrationObjects(
 	specObj interface{},
 	ns *corev1.Namespace,
@@ -4644,6 +5019,12 @@ func (k *K8s) createRbacObjects(
 		return clusterrole, nil
 	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
 		obj.Namespace = ns.Name
+		for i := range obj.Subjects {
+			// since everything in a spec is in the same namespace in cluster, we can set here ONLY for namespaced object:
+			if obj.Subjects[i].Kind == "ServiceAccount" {
+				obj.Subjects[i].Namespace = ns.Name
+			}
+		}
 		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if clusterrolebinding, err = k8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
@@ -4681,6 +5062,47 @@ func (k *K8s) createRbacObjects(
 	}
 
 	return nil, nil
+}
+
+// destroyRbacObjects destroys objects in the `Rbac.authorization` group (like ClusterRole, ClusterRoleBinding, ServiceAccount)
+func (k *K8s) destroyRbacObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*rbacv1.ClusterRole); ok {
+		err := k8sRbac.DeleteClusterRole(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ClusterRole: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ClusterRole: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+		err := k8sRbac.DeleteClusterRoleBinding(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ClusterRoleBinding: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ClusterRoleBinding: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(*corev1.ServiceAccount); ok {
+		err := k8sCore.DeleteServiceAccount(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ServiceAccount: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ServiceAccount: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
 }
 
 func (k *K8s) createNetworkingObjects(
@@ -6552,4 +6974,13 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 func init() {
 	k := &K8s{}
 	scheduler.Register(SchedName, k)
+}
+
+// ClusterVersion returns the cluster version of the kubernetes cluster as a string (like "1.23.0")
+func ClusterVersion() (string, error) {
+	ver, err := k8sCore.GetVersion()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimLeft(ver.String(), "v"), nil
 }

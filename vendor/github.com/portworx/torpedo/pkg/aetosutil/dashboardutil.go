@@ -3,6 +3,8 @@ package aetosutil
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
+
 	"net/http"
 	"os"
 	"reflect"
@@ -15,7 +17,6 @@ import (
 
 	"github.com/onsi/gomega"
 	rest "github.com/portworx/torpedo/pkg/restutil"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -31,8 +32,8 @@ var (
 
 const (
 	//DashBoardBaseURL for posting logs
-	DashBoardBaseURL = "http://aetos.pwx.purestorage.com/dashboard" //"http://aetos-dm.pwx.purestorage.com:3939/dashboard"
-	AetosBaseURL     = "http://aetos.pwx.purestorage.com"
+	DashBoardBaseURL = "https://aetos.pwx.purestorage.com/dashboard" //"http://aetos-dm.pwx.purestorage.com:3939/dashboard"
+	AetosBaseURL     = "https://aetos.pwx.purestorage.com"
 )
 
 const (
@@ -163,11 +164,13 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 			if err != nil {
 				logrus.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
-			os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 		}
 	}
-	logrus.Info(dashURL)
+	if d.TestSetID != 0 {
+		dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
+		os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
+	}
+	logrus.Infof(dashURL)
 }
 
 // TestSetEnd  end testset and update  to dashboard DB
@@ -260,7 +263,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, testSet, nil, nil)
 
 		if err != nil {
-			logrus.Errorf("Error in updating TestSet, Caose: %v", err)
+			logrus.Errorf("Error in updating TestSet, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Failed to update TestSet, Resp : %s", string(resp))
 		}

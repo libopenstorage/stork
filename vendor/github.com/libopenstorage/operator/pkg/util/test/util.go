@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/operator/pkg/apis"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/mock"
 	"github.com/libopenstorage/operator/pkg/util"
@@ -129,8 +130,9 @@ var TestSpecPath = "testspec"
 
 var (
 	pxVer2_12, _                      = version.NewVersion("2.12.0-")
-	opVer1_10, _                      = version.NewVersion("1.10.0-")
 	opVer1_9_1, _                     = version.NewVersion("1.9.1-")
+	opVer1_10, _                      = version.NewVersion("1.10.0-")
+	opVer23_5, _                      = version.NewVersion("23.5.0-")
 	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
 )
 
@@ -143,7 +145,7 @@ func MockDriver(mockCtrl *gomock.Controller) *mock.MockDriver {
 // adds the CRDs defined in this repository to the scheme
 func FakeK8sClient(initObjects ...runtime.Object) client.Client {
 	s := scheme.Scheme
-	if err := corev1.AddToScheme(s); err != nil {
+	if err := apis.AddToScheme(s); err != nil {
 		logrus.Error(err)
 	}
 	if err := monitoringv1.AddToScheme(s); err != nil {
@@ -3178,10 +3180,6 @@ func ValidateAlertManagerEnabled(pxImageList map[string]string, cluster *corev1.
 		return fmt.Errorf("failed to get service alertmanager-portworx")
 	}
 
-	if _, err := coreops.Instance().GetService("alertmanager-operated", cluster.Namespace); err != nil {
-		return fmt.Errorf("failed to get service alertmanager-operated")
-	}
-
 	logrus.Infof("Alert manager is enabled and deployed")
 	return nil
 }
@@ -3198,10 +3196,6 @@ func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1
 			if !cluster.Spec.Monitoring.Prometheus.AlertManager.Enabled && !errors.IsNotFound(err) {
 				return "", true, fmt.Errorf("wait for service alertmanager-portworx deletion, err %v", err)
 			}
-		}
-
-		if _, err := coreops.Instance().GetService("alertmanager-operated", cluster.Namespace); !errors.IsNotFound(err) {
-			return "", true, fmt.Errorf("wait for service alertmanager-operated deletion, err %v", err)
 		}
 
 		return "", false, nil
@@ -4009,9 +4003,8 @@ func validateAllStorageNodesInState(namespace string, status corev1.NodeConditio
 func ValidateStorageClusterIsOnline(cluster *corev1.StorageCluster, timeout, interval time.Duration) (*corev1.StorageCluster, error) {
 	state := string(corev1.ClusterConditionStatusOnline)
 	var conditions []corev1.ClusterCondition
-	masterOpVersion, _ := version.NewVersion(PxOperatorMasterVersion)
 	opVersion, _ := GetPxOperatorVersion()
-	if opVersion.GreaterThanOrEqual(masterOpVersion) {
+	if opVersion.GreaterThanOrEqual(opVer23_5) {
 		state = string(corev1.ClusterStateRunning)
 		conditions = append(conditions, corev1.ClusterCondition{
 			Source: "Portworx",
@@ -4172,6 +4165,7 @@ func CreateClusterWithTLS(caCertFileName, serverCertFileName, serverKeyFileName 
 			Namespace: "kube-system",
 		},
 		Spec: corev1.StorageClusterSpec{
+			Monitoring: &corev1.MonitoringSpec{Telemetry: &corev1.TelemetrySpec{}},
 			Security: &corev1.SecuritySpec{
 				Enabled: true,
 				Auth: &corev1.AuthSpec{

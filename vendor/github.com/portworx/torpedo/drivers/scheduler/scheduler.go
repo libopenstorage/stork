@@ -113,6 +113,10 @@ type InitOptions struct {
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
 	SecureApps []string
+	// AnthosAdminWorkStationNodeIP needed for anthos scheduler
+	AnthosAdminWorkStationNodeIP string
+	// AnthosInstancePath needed for anthos scheduler
+	AnthosInstancePath string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -161,6 +165,9 @@ type Driver interface {
 
 	// Schedule starts applications and returns a context for each one of them
 	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
+
+	// ScheduleWithCustomAppSpecs starts applications with custom app specs and returns a context for each one of them
+	ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options ScheduleOptions) ([]*Context, error)
 
 	// WaitForRunning waits for application to start running.
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
