@@ -5014,9 +5014,12 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		if poolID != -1 {
 			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
 		} else {
-			driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+			if !strings.Contains(drivePath, "journal") {
+				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+			}
 		}
 	}
+	log.Infof("adding cloud drive with params [%v]", driveAddFlag)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,

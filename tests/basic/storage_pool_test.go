@@ -8645,6 +8645,11 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 			log.FailOnError(err, "Exiting maintenance mode failed")
 			log.InfoD("Exiting pool Maintenance mode successful")
+
+			expectedStatus := "Online"
+			err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
+			log.FailOnError(err,
+				fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 		}
 
 		dmthinEnabled, err := IsDMthin()
@@ -8687,7 +8692,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 						"adding cloud drive with journal failed ?")
 				}
 
-				log.InfoD("Failed adding cloud drive with Journal error [%v]", err)
+				log.InfoD("Failed adding cloud drive with Journal [%v]", err)
 
 				re := regexp.MustCompile(".*journal exists*")
 				re1 := regexp.MustCompile(".*Journal device.*is alredy configured*")

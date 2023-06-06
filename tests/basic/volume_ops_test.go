@@ -451,6 +451,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		// Run inspect continuously in the background
 		log.InfoD("start attach volume in the backend while more than 100 volumes got created")
 		go func(volumeIds []string) {
+			defer GinkgoRecover()
 			attachedCount := 0
 			for {
 				select {
@@ -459,7 +460,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 				default:
 					if len(newVolumeIDs) > 100 {
 						for _, each := range newVolumeIDs {
-							if attachedCount <= 100 {
+							if attachedCount < 100 {
 								_, err := Inst().V.AttachVolume(each)
 								log.FailOnError(err, "attaching volume failed")
 								attachedCount += 1
