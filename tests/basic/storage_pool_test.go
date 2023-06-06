@@ -9086,3 +9086,114 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 	})
 
 })
+var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
+	/*
+		PTX-15696 -> PWX-26967
+		Deploy IO aggressive application using repl-2 volumes
+		Identify the pools of this volume
+		Invoke pool expand is one pool of this volume and wait for pool expand to be completed
+		Volume status will be degraded when pool expand is going on for one of the pool
+		Volume repl resync should not fail after pool expand is done (This behavior after fix)
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("KvdbRestartNewNodeAcquired",
+			"Shutdown the KVDB leader node and wait for third copy to be created",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Resync volume after rebalance"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbrestartnewnodeacquired-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		killType := []string{"reboot", "kill"}
+
+		if len(node.GetStorageNodes()) <= 3 {
+			log.FailOnError(fmt.Errorf("test needs minimum of 4 storage nodes for kvdb failover"), "required nodes present?")
+		}
+
+		for _, eachType := range killType {
+			allKvdbNodes, err := GetAllKvdbNodes()
+			if err != nil {
+				log.FailOnError(err, "failed to get list of kvdb nodes")
+			}
+			dash.VerifyFatal(len(allKvdbNodes) == 3, true,
+				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
+
+			masterNode, err := GetKvdbMasterNode()
+			if err != nil {
+				log.FailOnError(err, "failed to get the master node ip")
+			}
+			log.Infof("kvdb master node is [%v]", masterNode.Name)
+
+			if eachType == "kill" {
+				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill kvdb master node")
+			} else {
+				err = RebootNodeAndWait(*masterNode)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			}
+			masterNodeAfterKill, err := GetKvdbMasterNode()
+			if err != nil {
+				log.FailOnError(err, "failed to get the master node ip")
+			}
+			log.Infof("kvdb master node is [%v]", masterNodeAfterKill.Name)
+			dash.VerifyFatal(masterNode.Name == masterNodeAfterKill.Name, false,
+				"master node ip is same before and after masternode kill?")
+
+			allKvdbNodes, err = GetAllKvdbNodes()
+			if err != nil {
+				log.FailOnError(err, "failed to get list of kvdb nodes")
+			}
+			dash.VerifyFatal(len(allKvdbNodes) == 3, true,
+				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64) error {
+	defer GinkgoRecover()
+	var wg sync.WaitGroup
+	numGoroutines := len(poolIds)
+
+	wg.Add(numGoroutines)
+	for _, eachPool := range poolIds {
+		poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
+			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+
+		randomIndex := rand.Intn(len(poolResizeType))
+		pickType := poolResizeType[randomIndex]
+		go func(poolUUID string, expandSize uint64) {
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + expandSize
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+
+		}(eachPool, expandSize)
+		wg.Done()
+	}
+
+	wg.Wait()
+	return nil
+}
