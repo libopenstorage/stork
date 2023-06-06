@@ -8584,6 +8584,23 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	})
 })
 
+// Checks if journal device present on the node
+func isJournalPresentOnNode(n *node.Node) (bool, error) {
+	cmd := "pxctl sv pool show -j | jq .datapools[].Info.ResourceJournalUUID"
+	// Execute the command and check the alerts of type POOL
+	out, err := Inst().N.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return false, err
+	}
+	if out == "" {
+		return false, nil
+	}
+	return true, nil
+}
+
 var _ = Describe("{DriveAddAsJournal}", func() {
 	/*
 		Add drive when as journal
@@ -8624,6 +8641,12 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
+		exitPoolMaintenance := func() {
+			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
+			log.FailOnError(err, "Exiting maintenance mode failed")
+			log.InfoD("Exiting pool Maintenance mode successful")
+		}
+
 		dmthinEnabled, err := IsDMthin()
 		log.FailOnError(err, "error checking if set up is DMTHIN enabled")
 
@@ -8641,24 +8664,33 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				true,
 				fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 		} else {
+
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			log.FailOnError(err, "Error Entering Maintenance mode on Node[%v]", nodeDetail.Name)
 			log.InfoD("Enter pool Maintenance mode ")
 			expectedStatus := "In Maintenance"
+
+			defer exitPoolMaintenance()
 
 			log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 				fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 
 			//Wait for 7 min to bring up the portworx daemon before trying cloud drive add
 			time.Sleep(7 * time.Minute)
-			isjournal, err := isJournalEnabled()
+			isjournal, err := isJournalPresentOnNode(nodeDetail)
 			log.FailOnError(err, "Error getting journal status")
-			if isjournal {
+			if isjournal == true {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
-				dash.VerifyFatal(err != nil, true, "Did not Error out when adding cloud drive as expected")
+				if err == nil {
+					log.FailOnError(fmt.Errorf("adding cloud drive with journal expected ? Error: [%v]", err),
+						"adding cloud drive with journal failed ?")
+				}
+
+				log.InfoD("Failed adding cloud drive with Journal error [%v]", err)
+
 				re := regexp.MustCompile(".*journal exists*")
-				re1 := regexp.MustCompile(".*is alredy configured*")
+				re1 := regexp.MustCompile(".*Journal device.*is alredy configured*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)) || re1.MatchString(fmt.Sprintf("%v", err)),
 					true,
 					fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
@@ -8684,9 +8716,6 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				log.FailOnError(err, "Error getting journal status")
 				dash.VerifyFatal(isjournal, true, "journal device added successfully")
 			}
-			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
-			log.FailOnError(err, "Exiting maintenance mode failed")
-			log.InfoD("Exiting pool Maintenance mode successful")
 		}
 	})
 
@@ -9040,15 +9069,15 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 
 		expandPoolWithKVDBFailover := func(poolUUID string) error {
 
-			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-			if err != nil {
-				return err
-			}
-
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
-			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-
 			for _, eachType := range poolResizeType {
+				poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+				if err != nil {
+					return err
+				}
+
+				expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+				log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
 				err = Inst().V.ExpandPool(poolUUID, eachType, expectedSize, true)
 				if err != nil {
 					return err
