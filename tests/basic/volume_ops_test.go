@@ -548,8 +548,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		wg.Add(numGoroutines)
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
-		doneVolCreate := make(chan bool)
-		doneVolDelete := make(chan bool)
+		terminate := false
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
@@ -562,12 +561,14 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			defer GinkgoRecover()
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
+
 					// Wait for KVDB Members to be online
 					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
@@ -585,6 +586,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 					// Wait for some time after killing kvdb master Node
 					time.Sleep(5 * time.Minute)
+
 				}
 			}
 		}()
@@ -593,23 +595,25 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		volumesCreated := []string{}
 
 		stopRoutine := func() {
-			done <- true
-			doneVolCreate <- true
-			doneVolDelete <- true
-
-			for _, each := range volumesCreated {
-				log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+			if !terminate {
+				done <- true
+				close(done)
+				for _, each := range volumesCreated {
+					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+				}
+				terminate = true
 			}
 		}
 		defer stopRoutine()
 
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			defer GinkgoRecover()
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
 					// Volume create continuously
 					uuidObj := uuid.New()
 					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
@@ -619,18 +623,20 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 					volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
 					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 					volumesCreated = append(volumesCreated, volId)
+
 				}
 			}
 		}()
 
 		// Go Routine to delete volume continuously in parallel to volume create
 		go func() {
-			select {
-			case <-done:
-				wg.Done()
-				return
-			default:
-				for {
+			defer GinkgoRecover()
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
 					if len(volumesCreated) > 5 {
 						deleteVolume := volumesCreated[0]
 						log.FailOnError(Inst().V.DeleteVolume(deleteVolume),
@@ -642,9 +648,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 						}
 						// Resize the array by truncating the last element
 						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+
 					}
 				}
 			}
+
 		}()
 
 		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for latest one hour
@@ -652,15 +660,10 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		timeout := time.After(duration)
 		select {
 		case <-timeout:
-			// Timeout reached terminate all go routines
-			done <- true
-			doneVolCreate <- true
-			doneVolDelete <- true
-
-			// Wait for GO Routine to complete
-			wg.Wait()
-
+			stopRoutine()
 		}
+		// Wait for GO Routine to complete
+		wg.Wait()
 	})
 
 	JustAfterEach(func() {

@@ -6953,6 +6953,23 @@ func GetKvdbMasterNode() (*node.Node, error) {
 	return &getKvdbLeaderNode, nil
 }
 
+// KillKvdbMasterNodeAndFailover kills kvdb master node and returns after failover is complete
+func KillKvdbMasterNodeAndFailover() error {
+	kvdbMaster, err := GetKvdbMasterNode()
+	if err != nil {
+		return err
+	}
+	err = KillKvdbMemberUsingPid(*kvdbMaster)
+	if err != nil {
+		return err
+	}
+	err = WaitForKVDBMembers()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetKvdbMasterPID returns the PID of KVDB master node
 func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	var processPid string
@@ -6980,14 +6997,19 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 // WaitForKVDBMembers waits till all kvdb members comes up online and healthy
 func WaitForKVDBMembers() error {
 	t := func() (interface{}, bool, error) {
+		isHealthy := 0
 		allKvdbNodes, err := GetAllKvdbNodes()
 		if len(allKvdbNodes) != 3 {
 			return "", true, err
 		}
 		for _, each := range allKvdbNodes {
 			if each.IsHealthy {
-				return "", false, nil
+				isHealthy += 1
 			}
+		}
+		if isHealthy == 3 {
+			log.InfoD("all 3 kvdb nodes are online and healthy, exiting.")
+			return "", false, nil
 		}
 		return "", true, err
 	}
