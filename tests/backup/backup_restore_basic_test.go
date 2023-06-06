@@ -1634,7 +1634,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		desiredNumLabels = 1000
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			taskName := fmt.Sprintf("%s-%d-85583", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
@@ -1782,6 +1782,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
 		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
 
@@ -2007,8 +2008,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Waiting for the incremental scheduled backup for single namespace to be triggered")
-			time.Sleep(2 * time.Minute)
-			secondScheduleBackupName, err = GetOrdinalScheduleBackupName(ctx, scheduleBkpSingleNs, 2, orgID)
+			secondScheduleBackupName, err = GetNextScheduleBackupName(scheduleBkpSingleNs, time.Duration(15), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the second schedule backup [%s]", secondScheduleBackupName))
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, singleNamespace)
 			err = backupSuccessCheckWithValidation(ctx, secondScheduleBackupName, scheduledAppContextsExpectedToBeInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
@@ -2034,7 +2034,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 			scheduleMultipleRestoreMapping = make(map[string]string)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			secondScheduleBackupForMultipleNs, err = GetOrdinalScheduleBackupName(ctx, scheduleBkpMultipleNs, 2, orgID)
+			secondScheduleBackupForMultipleNs, err = GetNextScheduleBackupName(scheduleBkpMultipleNs, time.Duration(15), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the second schedule backup [%s]", secondScheduleBackupForMultipleNs))
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, multipleNamespace)
 			err = backupSuccessCheckWithValidation(ctx, secondScheduleBackupForMultipleNs, scheduledAppContextsExpectedToBeInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
@@ -2072,6 +2072,13 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 			err := DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
 		}
+		log.InfoD("Deleting labels from namespaces- %v", multipleNamespace)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsGroup1, multipleNamespace)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsGroup1, multipleNamespace))
+		log.InfoD("Deleting labels from namespaces- %v", singleNamespace)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsGroup2, singleNamespace)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsGroup2, singleNamespace))
+
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)

@@ -110,6 +110,9 @@ func BackupInitInstance() {
 	log.FailOnError(err, "Error getting Px Backup build date")
 	t.Tags["px-backup-version"] = PxBackupVersion
 	t.Tags["px-backup-build-date"] = PxBackupBuildDate
+	t.Tags["storageProvisioner"] = Inst().Provisioner
+	t.Tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
+	t.Tags["pureSANType"] = Inst().PureSANType
 
 	Inst().Dash.TestSetUpdate(t)
 
@@ -270,6 +273,9 @@ var _ = AfterSuite(func() {
 		case drivers.ProviderGke:
 			DeleteBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
+		case drivers.ProviderNfs:
+			DeleteNfsSubPath()
+			log.Infof("NFS subpath deleted - %s", os.Getenv("NFS_SUB_PATH"))
 		}
 	}
 

@@ -98,23 +98,27 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		cloudCredUID         string
 		backupLocationUID    string
 		backupLocationName   string
-	)
-
-	var (
-		appList           = Inst().AppList
-		backupLocationMap = make(map[string]string)
-		labelSelectors    = make(map[string]string)
-		providers         = getProviders()
-		intervalName      = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
-		dailyName         = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
-		weeklyName        = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
-		monthlyName       = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
+		appList              []string
+		backupLocationMap    map[string]string
+		labelSelectors       map[string]string
+		providers            []string
+		intervalName         string
+		dailyName            string
+		weeklyName           string
+		monthlyName          string
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 
-		log.InfoD("assuming that current context is set to source cluster.")
+		appList = Inst().AppList
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = getProviders()
+		intervalName = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
+		dailyName = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
+		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
+		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -232,7 +236,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%v", "backup", time.Now().Unix())
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, scheduledNamespace, backupLocationName)
-				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContexts[i]}, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
@@ -249,8 +253,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
 				}
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
@@ -285,8 +289,28 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
-		log.Info("Deleting scheduled namespaces on source cluster")
+		log.Info("Destroying scheduled apps on source cluster")
 		DestroyApps(scheduledAppContexts, opts)
+
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		log.InfoD("Destroying restored apps on destination clusters")
+		restoredAppContexts := make([]*scheduler.Context, 0)
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		DestroyApps(restoredAppContexts, opts)
+
+		log.InfoD("switching to default context")
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 
 		backupDriver := Inst().Backup
 		log.Info("Deleting backed up namespaces")
