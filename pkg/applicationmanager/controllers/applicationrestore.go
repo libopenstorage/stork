@@ -1921,6 +1921,9 @@ func (a *ApplicationRestoreController) restoreResources(
 		restore.Status.ResourceCount = len(restore.Status.Resources)
 	}
 
+	// Let's accomodate the PV-PVC counts in RestoredResourceCount, specifically for CSI & kdmp case.
+	restore.Status.RestoredResourceCount = restore.Status.ResourceCount
+
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
