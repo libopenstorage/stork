@@ -4495,7 +4495,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			err = Inst().V.StartDriver(*storageNode2)
