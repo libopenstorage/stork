@@ -663,8 +663,10 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 		log.InfoD("Delete the local bucket created")
 		for _, provider := range providers {
-			DeleteBucket(provider, localBucketNameMap[provider])
-			log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			if provider != "nfs" {
+				DeleteBucket(provider, localBucketNameMap[provider])
+				log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			}
 		}
 	})
 })

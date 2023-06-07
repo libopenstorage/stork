@@ -998,7 +998,7 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 				return nil, false, fmt.Errorf("pool %s expansion has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
 			}
 			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_PENDING {
-				return nil, true, fmt.Errorf("pool %s is in pending state, waiting to to start", poolIDToResize)
+				return nil, true, fmt.Errorf("pool %s is in pending state, waiting to start", poolIDToResize)
 			}
 			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
 				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
@@ -8827,4 +8827,262 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+
+// Volume replication change
+var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
+	var testrailID = 0
+	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeHAPoolOpsNoKVDBleaderDown",
+			"Test Volume HA Pool Operations should not make KVDB node down", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "has to schedule apps and update replication factor for attached node"
+	It(stepLog, func() {
+		var wg sync.WaitGroup
+		numGoroutines := 2
+
+		wg.Add(numGoroutines)
+		done := make(chan bool)
+
+		volumesCreated := []string{}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumepooloperations-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		terminate := false
+		stopRoutine := func() {
+			if !terminate {
+				done <- true
+				wg.Done()
+				close(done)
+				for _, each := range volumesCreated {
+					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+				}
+				terminate = true
+			}
+		}
+
+		defer stopRoutine()
+
+		// Wait for KVDB Nodes up and running and in healthy state
+		// Go routine to kill kvdb master in regular intervals
+		go func() {
+			defer GinkgoRecover()
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
+					log.FailOnError(WaitForKVDBMembers(), "not all kvdb members in healthy state")
+					// Wait for some time after killing kvdb master Node
+					time.Sleep(5 * time.Minute)
+				}
+			}
+		}()
+
+		doPoolOperations := func() error {
+
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			if err != nil {
+				return err
+			}
+
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 10
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
+				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+			randomIndex := rand.Intn(len(poolResizeType))
+			pickType := poolResizeType[randomIndex]
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			log.InfoD("Expanding Pool [%v] using resize type [%v]", poolUUID, pickType)
+			err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
+			if err != nil {
+				return err
+			}
+
+			isjournal, err := isJournalEnabled()
+			if err != nil {
+				return err
+			}
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			if resizeErr != nil {
+				return resizeErr
+			}
+
+			return nil
+		}
+
+		doVolumeOperations := func() {
+			defer GinkgoRecover()
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				default:
+					uuidObj := uuid.New()
+					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+					Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
+					haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+
+					volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
+					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+					log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+
+					volumesCreated = append(volumesCreated, volId)
+
+					// HA Update on the volume
+					_, err = Inst().V.InspectVolume(volId)
+					log.FailOnError(err, "Failed to inspect volume [%s]", VolName)
+
+					for _, eachVol := range volumesCreated {
+						if len(volumesCreated) > 5 {
+							_, err = Inst().V.AttachVolume(eachVol)
+							log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
+
+							err = Inst().V.DetachVolume(eachVol)
+							log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+
+							time.Sleep(5 * time.Second)
+							// Delete the Volume
+							err = Inst().V.DeleteVolume(eachVol)
+							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+
+							// Remove the first element
+							for i := 0; i < len(volumesCreated)-1; i++ {
+								volumesCreated[i] = volumesCreated[i+1]
+							}
+							// Resize the array by truncating the last element
+							volumesCreated = volumesCreated[:len(volumesCreated)-1]
+						}
+					}
+
+				}
+			}
+		}
+
+		select {
+		case <-done:
+			stopRoutine()
+			wg.Wait()
+		default:
+			go doVolumeOperations()
+			// Do pool resize continuously for 20 times when volume operation in progress
+			for iteration := 0; iteration <= 5; iteration++ {
+				err := doPoolOperations()
+				if err != nil {
+					stopRoutine()
+					wg.Wait()
+					log.FailOnError(err, "error seen during pool operations")
+				}
+				if terminate {
+					break
+				}
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+// Volume replication change
+var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
+	var testrailID = 0
+	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("KvdbFailoverDuringPoolExpand",
+			"KVDB failover during pool expand", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "KVDB failover during pool expand"
+	It(stepLog, func() {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumepooloperations-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get a pool with running IO
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
+			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+
+		expandPoolWithKVDBFailover := func(poolUUID string) error {
+
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			if err != nil {
+				return err
+			}
+
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			for _, eachType := range poolResizeType {
+				err = Inst().V.ExpandPool(poolUUID, eachType, expectedSize, true)
+				if err != nil {
+					return err
+				}
+
+				err = WaitForExpansionToStart(poolUUID)
+				if err != nil {
+					return err
+				}
+
+				isjournal, err := isJournalEnabled()
+				if err != nil {
+					return err
+				}
+
+				err = KillKvdbMasterNodeAndFailover()
+				if err != nil {
+					return err
+				}
+
+				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+				if resizeErr != nil {
+					return resizeErr
+				}
+			}
+			return nil
+		}
+		log.FailOnError(expandPoolWithKVDBFailover(poolUUID), "pool expand with kvdb failover failed")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
 })
