@@ -1226,62 +1226,7 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 		return false, c.updateStatus(dataExport, data)
 	}
 
-	if bl.Location.Type != storkapi.BackupLocationNFS {
-		snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
-		if err != nil {
-			msg := fmt.Sprintf("failed to get snapshot driver name: %v", err)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: msg,
-			}
-			return false, c.updateStatus(dataExport, data)
-		}
-
-		snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
-		if err != nil {
-			msg := fmt.Sprintf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: msg,
-			}
-			return false, c.updateStatus(dataExport, data)
-		}
-
-		restoreInfo, err := snapshotDriver.RestoreStatus(dataExport.Status.RestorePVC.Name, dataExport.Namespace)
-		if err != nil {
-			msg := fmt.Sprintf("failed to get a snapshot restore status: %s", err)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: msg,
-			}
-			return false, c.updateStatus(dataExport, data)
-		}
-
-		if restoreInfo.Status == snapshotter.StatusFailed {
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: restoreInfo.Reason,
-			}
-			return false, c.updateStatus(dataExport, data)
-		}
-
-		if restoreInfo.Status != snapshotter.StatusReady {
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusInProgress,
-				reason: restoreInfo.Reason,
-			}
-			return false, c.updateStatus(dataExport, data)
-		}
-
-		msg := fmt.Sprintf("Volume restore from local snapshot for volumebackup %s in namespace %s is successful", dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
-		logrus.Debugf(msg)
-		data := updateDataExportDetail{
-			status: kdmpapi.DataExportStatusSuccessful,
-			reason: msg,
-			size:   restoreInfo.Size,
-		}
-		return true, c.updateStatus(dataExport, data)
-	} else {
+	if bl.Location.Type == storkapi.BackupLocationNFS {
 		// Find job status
 		// If job is in completed state and failed, then lets
 		// get transfer job status
@@ -1331,18 +1276,69 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 			}
 			return true, c.updateStatus(dataExport, data)
 		case drivers.JobStateCompleted:
+			logrus.Infof("NFS job [%v] to trigger the local snapshot completed successfully", dataExport.Status.TransferID)
+		default:
 			data := updateDataExportDetail{
-				status:             kdmpapi.DataExportStatusSuccessful,
-				progressPercentage: int(progress.ProgressPercents),
+				status: kdmpapi.DataExportStatusInProgress,
 			}
-
 			return false, c.updateStatus(dataExport, data)
 		}
+	}
+
+	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get snapshot driver name: %v", err)
 		data := updateDataExportDetail{
-			status: kdmpapi.DataExportStatusInProgress,
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
 		}
 		return false, c.updateStatus(dataExport, data)
 	}
+
+	snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+
+	restoreInfo, err := snapshotDriver.RestoreStatus(dataExport.Status.RestorePVC.Name, dataExport.Namespace)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get a snapshot restore status: %s", err)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+
+	if restoreInfo.Status == snapshotter.StatusFailed {
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: restoreInfo.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+
+	if restoreInfo.Status != snapshotter.StatusReady {
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusInProgress,
+			reason: restoreInfo.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+
+	msg := fmt.Sprintf("Volume restore from local snapshot for volumebackup %s in namespace %s is successful", dataExport.Spec.Source.Name, dataExport.Spec.Source.Namespace)
+	logrus.Debugf(msg)
+	data := updateDataExportDetail{
+		status: kdmpapi.DataExportStatusSuccessful,
+		reason: msg,
+		size:   restoreInfo.Size,
+	}
+	return true, c.updateStatus(dataExport, data)
 
 }
 
