@@ -23,7 +23,8 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"container/ring"
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/onsi/ginkgo"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
@@ -164,7 +165,7 @@ var isRelaxedReclaimEnabled = false
 var isTrashcanEnabled = false
 
 // volSnapshotClass is snapshot class for FA volumes
-var volSnapshotClass *v1beta1.VolumeSnapshotClass
+var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 
 // pureStorageClassMap is map of pure storage class
 var pureStorageClassMap map[string]*storageapi.StorageClass
@@ -5192,7 +5193,7 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			log.InfoD("Cluster is having: [%v] license. Setting snap retain count to: [%v]", summary.SKU, retainSnapCount)
 		}
 		for _, ctx := range *contexts {
-			var volumeSnapshotMap map[string]*v1beta1.VolumeSnapshot
+			var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 			var err error
 			stepLog = fmt.Sprintf("Deleting snapshots when retention count limit got exceeded for %s app", ctx.App.Key)
 			Step(stepLog, func() {

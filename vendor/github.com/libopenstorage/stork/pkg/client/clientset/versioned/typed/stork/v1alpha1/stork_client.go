@@ -28,6 +28,7 @@ import (
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ActionsGetter
 	ApplicationBackupsGetter
 	ApplicationBackupSchedulesGetter
 	ApplicationClonesGetter
@@ -53,6 +54,10 @@ type StorkV1alpha1Interface interface {
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *StorkV1alpha1Client) Actions(namespace string) ActionInterface {
+	return newActions(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ApplicationBackups(namespace string) ApplicationBackupInterface {

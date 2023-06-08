@@ -27,19 +27,19 @@ const (
 
 var (
 	volMountedMap = make(map[string][]*volume.Volume)
-	RebootTime = time.Time{}
+	RebootTime    = time.Time{}
 )
 
 func updateSharedV4Map(context *scheduler.Context) error {
 	listOfVolumes, err := Inst().S.GetVolumes(context)
-	if err != nil{
-		return  err
+	if err != nil {
+		return err
 	}
 	// Need to reset the map to get new values
 	volMountedMap = map[string][]*volume.Volume{}
 	for _, vol := range listOfVolumes {
 		appVol, _ := Inst().V.InspectVolume(vol.ID)
-		if appVol.Spec.Sharedv4 && appVol.Spec.Sharedv4ServiceSpec != nil && appVol.Spec.Sharedv4ServiceSpec.Type ==  2 {
+		if appVol.Spec.Sharedv4 && appVol.Spec.Sharedv4ServiceSpec != nil && appVol.Spec.Sharedv4ServiceSpec.Type == 2 {
 			volMountedMap[appVol.AttachedOn] = append(volMountedMap[appVol.AttachedOn], vol)
 		}
 	}
@@ -52,8 +52,8 @@ func nodeContainsSharedv4Vol(nodeIp string) bool {
 	return ok
 }
 
-func validateVolumeTime(volumes []*volume.Volume) error{
-	for _, vol := range volumes{
+func validateVolumeTime(volumes []*volume.Volume) error {
+	for _, vol := range volumes {
 		log.Info("Validating %s volume now", vol.ID)
 		appVol, err := Inst().V.InspectVolume(vol.ID)
 		if err != nil {
@@ -95,13 +95,13 @@ var _ = Describe("{RebootOneNode}", func() {
 				log.InfoD("reboot node one at a time from the node(s): %v", nodesToReboot)
 				for _, n := range nodesToReboot {
 					err := updateSharedV4Map(contexts[0])
-					if err != nil{
+					if err != nil {
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Error getting sharedv4 svc vols %v", err))
 					}
 					if n.IsStorageDriverInstalled {
 						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
 							log.InfoD("reboot node: %s", n.Name)
-							rebootTime, err := Inst().N.RunCommand(n, "date",node.ConnectionOpts{
+							rebootTime, err := Inst().N.RunCommand(n, "date", node.ConnectionOpts{
 								Timeout:         defaultCommandTimeout,
 								TimeBeforeRetry: defaultCommandRetry,
 								IgnoreError:     false,
@@ -154,7 +154,7 @@ var _ = Describe("{RebootOneNode}", func() {
 
 						})
 
-						Step(fmt.Sprintf("Validate volume got migrated on time"), func(){
+						Step(fmt.Sprintf("Validate volume got migrated on time"), func() {
 							// If the volume was mounted on this node
 							if nodeContainsSharedv4Vol(n.MgmtIp) {
 								log.InfoD("Checking node %s to see volume got migrated in <2 mins", n.MgmtIp)
