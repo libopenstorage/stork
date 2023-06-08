@@ -137,6 +137,8 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				var dsVersionBuildMap = make(map[string][]string)
+				var num_reboots int
+				num_reboots = 1
 				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
@@ -151,7 +153,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					failuretype := pdslib.TypeOfFailure{
 						Type: ActiveNodeRebootDuringDeployment,
 						Method: func() error {
-							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment)
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment, num_reboots)
 						},
 					}
 					pdslib.DefineFailureType(failuretype)
@@ -557,6 +559,62 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
+	})
+})
+
+var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootActiveNodeMultipleTimesDuringDeployment", "Reboots a Node multiple times onto which a pod is coming up", pdsLabels, 0)
+	})
+
+	It("deploy Dataservices", func() {
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				var dsVersionBuildMap = make(map[string][]string)
+				var num_reboots int
+				num_reboots = 3
+				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
+					isDeploymentsDeleted = false
+					// Global Resiliency TC marker
+					pdslib.MarkResiliencyTC(true, true)
+
+					// Deploy and Validate this Data service after injecting the type of failure we want to catch
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+					log.FailOnError(err, "Error while deploying data services")
+
+					// Type of failure that this TC needs to cover
+					failuretype := pdslib.TypeOfFailure{
+						Type: ActiveNodeRebootDuringDeployment,
+						Method: func() error {
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment, num_reboots)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+
+					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
+					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource setting template")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
 				})
 			}
