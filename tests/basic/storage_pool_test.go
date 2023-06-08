@@ -5416,9 +5416,12 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "Failed to get replication factor on the volume")
 				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, currRepFactor)
+				opts := volume.Options{
+					ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+				}
 				if currRepFactor == 3 {
 					newRepl := currRepFactor - 1
-					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
+					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true, opts)
 					if err != nil {
 						return err
 					}
@@ -5433,7 +5436,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				nodesToBeUpdated = nil
 				poolsToBeUpdated = nil
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true)
+					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
 					return err
 				}
