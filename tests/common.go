@@ -3536,6 +3536,20 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	return err
 }
 
+// CreateBackupLocationWithContext creates backup location using the given context
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, subPath string, ctx context1.Context) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderAzure:
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderNfs:
+		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
+	}
+	return err
+}
+
 // CreateCluster creates/registers cluster with px-backup
 func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	var clusterCreateReq *api.ClusterCreateRequest
@@ -3686,8 +3700,8 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// CreateS3BackupLocationNonAdminUser creates backuplocation for S3
-func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+// CreateS3BackupLocationWithContext creates backup location for S3 using the given context
+func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -3721,7 +3735,7 @@ func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, clou
 	return nil
 }
 
-// CreateAzureBackupLocation creates backuplocation for Azure
+// CreateAzureBackupLocation creates backup location for Azure
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
@@ -3746,6 +3760,32 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 		return err
 	}
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
+func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Azure,
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -3816,6 +3856,44 @@ func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKe
 		return err
 	}
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	if validate {
+		err = WaitForBackupLocationAddition(ctx, name, uid, orgID, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateNFSBackupLocationWithContext creates backup location using the given context
+func CreateNFSBackupLocationWithContext(name string, uid string, subPath string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
+	serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	path := os.Getenv("NFS_PATH")
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Config: &api.BackupLocationInfo_NfsConfig{
+				NfsConfig: &api.NFSConfig{
+					ServerAddr:  serverAddr,
+					SubPath:     subPath,
+					MountOption: mountOption,
+				},
+			},
+			Path:          path,
+			Type:          api.BackupLocationInfo_NFS,
+			EncryptionKey: encryptionKey,
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
