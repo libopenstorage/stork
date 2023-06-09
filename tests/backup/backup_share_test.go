@@ -2433,7 +2433,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ShareBackupsAndClusterWithUser",
 			"Share backup to user with full access and try to duplicate the backup from the shared user", nil, 82943)
-		log.InfoD("Deploy applications need fot taking backup")
+		log.InfoD("Deploy applications need for taking backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)

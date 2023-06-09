@@ -626,7 +626,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 	var (
 		err                      error
-		schPolicyInterval        int64
+		schPolicyInterval        int
 		backupLocationUID        string
 		cloudCredUID             string
 		srcClusterUid            string
@@ -725,7 +725,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchPolicyUid = uuid.New()
 			schPolicyInterval = 15
-			periodicSchPolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, schPolicyInterval, 5)
+			periodicSchPolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(schPolicyInterval), 5)
 			err = Inst().Backup.BackupSchedulePolicy(periodicSchPolicyName, periodicSchPolicyUid, orgID, periodicSchPolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", schPolicyInterval, periodicSchPolicyName))
 			periodicSchPolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchPolicyName)
@@ -740,9 +740,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
 				nil, orgID, "", "", "", "", namespaceLabel, periodicSchPolicyName, periodicSchPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first schedule backup [%s]", firstScheduleBackupName))
-			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
-			time.Sleep(2 * time.Minute)
-			secondScheduleBackupName, err = GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
+			log.InfoD("Waiting for %d minutes for the next schedule backup to be triggered", schPolicyInterval)
+			secondScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of second schedule backup [%s]", secondScheduleBackupName))
 		})
 		Step("Remove namespace label from namespace and check backup success of next schedule backup", func() {
@@ -752,7 +751,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			removedNamespace = bkpNamespaces[:3]
 			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, removedNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Removing labels [%v] from namespaces [%v]", nsLabelsMap, removedNamespace))
-			schBackupAfterNSRemoval, err = GetNextScheduleBackupName(scheduleName, 2, ctx)
+			schBackupAfterNSRemoval, err = GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup after nmaespace removal %v", schBackupAfterNSRemoval, removedNamespace))
 		})
 		Step("Restore the backup which was taken before the namespace removal and the namespace should be recovered", func() {
@@ -801,11 +800,9 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			log.InfoD("Continue next schedule backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			scheduleBkpAfterNSRemovalTwo, err := GetNextScheduleBackupName(scheduleName, 2, ctx)
+			scheduleBkpAfterNSRemovalTwo, err := GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalTwo, scheduleName))
-			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
-			time.Sleep(2 * time.Minute)
-			scheduleBkpAfterNSRemovalThree, err := GetNextScheduleBackupName(scheduleName, 2, ctx)
+			scheduleBkpAfterNSRemovalThree, err := GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalThree, scheduleName))
 		})
 		Step("Restore the backup which was taken with less namespaces", func() {
