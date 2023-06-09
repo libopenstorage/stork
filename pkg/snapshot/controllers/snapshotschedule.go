@@ -381,6 +381,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 }
 
 func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stork_api.VolumeSnapshotSchedule) error {
+	snapshotScheduleUpdateRequired := false
 	for policyType, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		numVolumeSnapshots := len(policyVolumeSnapshot)
 		deleteBefore := 0
@@ -394,6 +395,7 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 		// Keep up to retainNum successful snapshot statuses and all failed snapshots
 		// until there is a successful one
 		if numVolumeSnapshots > int(retainNum) {
+			snapshotScheduleUpdateRequired = true
 			// Start from the end and find the retainNum successful snapshots
 			for i := range policyVolumeSnapshot {
 				if policyVolumeSnapshot[(numVolumeSnapshots-1-i)].Status == snapv1.VolumeSnapshotConditionReady {
@@ -455,7 +457,10 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 			}
 		}
 	}
-	return s.client.Update(context.TODO(), snapshotSchedule)
+	if snapshotScheduleUpdateRequired {
+		return s.client.Update(context.TODO(), snapshotSchedule)
+	}
+	return nil
 }
 
 func (s *SnapshotScheduleController) createCRD() error {

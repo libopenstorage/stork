@@ -173,6 +173,7 @@ func TestStorkCbt(t *testing.T) {
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
+	t.Run("cmdExecutorTest", cmdExecutorTest)
 }
 
 func TestStorkCbtBackup(t *testing.T) {
@@ -1308,7 +1309,7 @@ func SetupTestRail() {
 		logrus.Infof("Testrail Host: %s", testrailUsername)
 	}
 	if testrailPassword = os.Getenv(testrailPasswordVar); testrailPassword != "" {
-		logrus.Infof("Testrail run name: %s", testrailPassword)
+		logrus.Infof("Testrail Password: %s", testrailPassword)
 	}
 	if testrailHostname != "" && testrailUsername != "" && testrailPassword != "" {
 		err := testrailutils.Init(testrailHostname, testrailUsername, testrailPassword)
