@@ -87,7 +87,9 @@ func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
 	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	// start the stress tool
-	setSourceKubeConfig()
+	err = setSourceKubeConfig()
+	require.NoError(t, err)
+
 	err = schedulerDriver.AddTasks(
 		ctxs[0],
 		scheduler.ScheduleOptions{
