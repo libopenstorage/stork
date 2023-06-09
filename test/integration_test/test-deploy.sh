@@ -308,8 +308,8 @@ sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-t
 # testrail params
 sed -i 's/testrail_run_name/'"$TESTRAIL_RUN_NAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_run_id/'"\"$TESTRAIL_RUN_ID\""'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/testrail_jenkins_build_url/'"$TESTRAIL_JENKINS_BUILD_URL"'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/testrail_host/'"$TESTRAIL_HOST"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's|testrail_jenkins_build_url|'"$TESTRAIL_JENKINS_BUILD_URL"'|g' /testspecs/stork-test-pod.yaml
+sed -i 's|testrail_host|'"$TESTRAIL_HOST"'|g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_uame/'"$TESTRAIL_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_pwd/'"$TESTRAIL_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_milestone/'"$TESTRAIL_MILESTONE"'/g' /testspecs/stork-test-pod.yaml

@@ -1309,7 +1309,7 @@ func SetupTestRail() {
 		logrus.Infof("Testrail Host: %s", testrailUsername)
 	}
 	if testrailPassword = os.Getenv(testrailPasswordVar); testrailPassword != "" {
-		logrus.Infof("Testrail run name: %s", testrailPassword)
+		logrus.Infof("Testrail Password: %s", testrailPassword)
 	}
 	if testrailHostname != "" && testrailUsername != "" && testrailPassword != "" {
 		err := testrailutils.Init(testrailHostname, testrailUsername, testrailPassword)
