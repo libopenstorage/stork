@@ -2,6 +2,10 @@ package dataservice
 
 import (
 	"fmt"
+	state "net/http"
+	"os"
+	"time"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -15,9 +19,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	state "net/http"
-	"os"
-	"time"
 )
 
 // PDS vars
@@ -32,6 +33,7 @@ var (
 	err                                  error
 	isVersionAvailable                   bool
 	isBuildAvailable                     bool
+	forceImageID                         bool
 	currentReplicas                      int32
 	deploymentTargetID                   string
 	storageTemplateID                    string
@@ -115,6 +117,63 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	if !(isVersionAvailable && isBuildAvailable) {
 		return "", "", nil, fmt.Errorf("version/build passed is not available")
 	}
+	log.Debugf("Deploying Data Service version %s and image %s", dsVersion, dsBuild)
+	return versionID, imageID, dataServiceVersionBuildMap, nil
+}
+
+// GetLatestVersionsImage returns the Latest Image of dataservice version
+func GetLatestVersionsImage(dsVersion string, dataServiceID string) (string, string, map[string][]string, error) {
+	var versions []pds.ModelsVersion
+	var images []pds.ModelsImage
+
+	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	if err != nil {
+		return "", "", nil, err
+	}
+	isVersionAvailable = false
+	isBuildAvailable = false
+	imageID = ""
+	imageBuild := ""
+	for index1 := 0; index1 < len(versions); index1++ {
+		log.Debugf("version name %s and is enabled=%t", *versions[index1].Name, *versions[index1].Enabled)
+		if *versions[index1].Name == dsVersion {
+			log.Debugf("DS Version %s is enabled in the control plane", dsVersion)
+			images, _ = components.Image.ListImages(versions[index1].GetId())
+			now := time.Now()
+			var latestCreated time.Time
+			for index2 := 0; index2 < len(images); index2++ {
+				createdTime, err := time.Parse(time.RFC3339, *images[index2].CreatedAt)
+				if err != nil {
+					return "", "", nil, err
+				}
+				if index2 > 0 {
+					diff1 := now.Sub(createdTime)
+					diff2 := now.Sub(latestCreated)
+					if diff2 > diff1 {
+						latestCreated = createdTime
+						imageID = images[index2].GetId()
+						imageBuild = images[index2].GetBuild()
+						versionID = versions[index1].GetId()
+					}
+				} else {
+					latestCreated = createdTime
+					imageID = images[index2].GetId()
+					imageBuild = images[index2].GetBuild()
+					versionID = versions[index1].GetId()
+				}
+			}
+			if imageID != "" {
+				isBuildAvailable = true
+			}
+			isVersionAvailable = true
+			break
+		}
+	}
+	if !(isVersionAvailable && isBuildAvailable) {
+		return "", "", nil, fmt.Errorf("version/build passed is not available")
+	}
+
+	log.Debugf("Deploying Data Service version %s and image %s", dsVersion, imageBuild)
 	return versionID, imageID, dataServiceVersionBuildMap, nil
 }
 
@@ -172,12 +231,17 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 		delete(dataServiceVersionBuildMap, version)
 	}
 
-	log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-	versionID, imageID, dataServiceVersionBuildMap, err = GetVersionsImage(dsVersion, dsBuild, id)
+	if forceImageID {
+		log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+		versionID, imageID, dataServiceVersionBuildMap, err = GetVersionsImage(dsVersion, dsBuild, id)
+	} else {
+		log.Infof("Getting Latest versionID and ImageID for Data service version %s ", dsVersion)
+		versionID, imageID, dataServiceVersionBuildMap, err = GetLatestVersionsImage(dsVersion, id)
+	}
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	log.Infof("VersionID %v ImageID %v", versionID, imageID)
 	deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
 		deploymentTargetID,
@@ -204,6 +268,16 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	var dsVersion string
 	var dsImage string
 
+	pdsParams := GetAndExpectStringEnvVar("PDS_PARAM_CM")
+	params, err := customparams.ReadParams(pdsParams)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read pds params %v", err)
+	}
+
+	if params.ForceImageID || deployOldVersion {
+		forceImageID = true
+	}
+
 	if deployOldVersion {
 		dsVersion = ds.OldVersion
 		dsImage = ds.OldImage
@@ -211,7 +285,6 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	} else {
 		dsVersion = ds.Version
 		dsImage = ds.Image
-		log.Debugf("Deploying latest version %s and image %s", dsVersion, dsImage)
 	}
 
 	log.InfoD("Getting Resource Template ID")
@@ -275,6 +348,7 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 	}
 	infraParams := params.InfraToTest
 	namespace := params.InfraToTest.Namespace
+	forceImageID = params.ForceImageID
 
 	_, isAvailable, err := targetCluster.CreatePDSNamespace(namespace)
 	if err != nil {

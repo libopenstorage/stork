@@ -2,10 +2,11 @@ package parameters
 
 import (
 	"encoding/json"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 type Parameter struct {
@@ -18,7 +19,8 @@ type Parameter struct {
 		OldVersion    string `json:"OldVersion"`
 		OldImage      string `json:"OldImage"`
 	} `json:"DataServiceToTest"`
-	InfraToTest struct {
+	ForceImageID bool
+	InfraToTest  struct {
 		ControlPlaneURL string `json:"ControlPlaneURL"`
 		AccountName     string `json:"AccountName"`
 		TenantName      string `json:"TenantName"`
