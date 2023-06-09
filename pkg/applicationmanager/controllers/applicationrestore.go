@@ -537,7 +537,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		namespacedName,
 		storkapi.ApplicationRestoreStatusInProgress,
 		storkapi.ApplicationRestoreStageVolumes,
-		"Volume or Resource(kdmp) restores are in progress",
+		"Volume or Resource restores are in progress",
 		nil,
 	)
 	if err != nil {
