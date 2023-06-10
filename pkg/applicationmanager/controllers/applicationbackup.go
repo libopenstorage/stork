@@ -993,7 +993,7 @@ func (a *ApplicationBackupController) prepareResources(
 	return nil
 }
 
-func (a *ApplicationBackupController) updateRancherProjectDetails(
+func UpdateRancherProjectDetails(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
@@ -1005,14 +1005,14 @@ func (a *ApplicationBackupController) updateRancherProjectDetails(
 		return err
 	}
 	if platformCredential.Spec.Type == stork_api.PlatformCredentialRancher {
-		if err = updateRancherProjects(platformCredential, backup, objects); err != nil {
+		if err = UpdateRancherProjects(platformCredential, backup, objects); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func updateRancherProjects(
+func UpdateRancherProjects(
 	platformCredential *stork_api.PlatformCredential,
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
@@ -1671,7 +1671,7 @@ func (a *ApplicationBackupController) backupResources(
 
 	// get and update rancher project details
 	if len(backup.Spec.PlatformCredential) != 0 {
-		if err = a.updateRancherProjectDetails(backup, allObjects); err != nil {
+		if err = UpdateRancherProjectDetails(backup, allObjects); err != nil {
 			message := fmt.Sprintf("Error updating rancher project details for backup: %v", err)
 			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
