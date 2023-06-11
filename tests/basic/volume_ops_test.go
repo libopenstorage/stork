@@ -766,7 +766,10 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 					return
 				default:
 					// resize all volumes present
-					log.FailOnError(volumeResize(vol), "resize volume failed ?")
+					err := volumeResize(vol)
+					if err != nil {
+						errHandle <- fmt.Errorf("error while resizing volume [%v]", err)
+					}
 
 					// Change replication factor of the volume continuously once volume is resized
 					for _, each := range vol {
@@ -808,6 +811,7 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 				done <- true
 			case <-errHandle:
 				done <- true
+				log.FailOnError(fmt.Errorf("[%v]", errHandle), fmt.Sprintf("error occured terminating test"))
 			default:
 				// Pick a random volume
 				randomIndex := rand.Intn(len(volumes))
@@ -832,7 +836,6 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 
 				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
 				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
-
 			}
 		}
 
