@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -598,6 +599,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		stopRoutine := func() {
 			if !terminate {
 				done <- true
+				time.Sleep(5 * time.Second)
 				close(done)
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
@@ -672,4 +674,171 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 
+})
+
+var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
+	var testrailID = 0
+	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeShareV4MultipleHAIncreaseVolResize",
+			"Px crashes when we perform multiple HAUpdate in a loop", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Px crashes when we perform multiple HAUpdate in a loop"
+	It(stepLog, func() {
+		var wg sync.WaitGroup
+
+		contexts = make([]*scheduler.Context, 0)
+		Inst().AppList = []string{}
+		var ioIntensiveApp = []string{"vdbench-heavyload"}
+
+		for _, eachApp := range ioIntensiveApp {
+			Inst().AppList = append(Inst().AppList, eachApp)
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("vshrdv4mulhaupvolr-%d", i))...)
+		}
+		//ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get a pool with running IO
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		// Get All Volumes from the pool
+		volumes, err := GetVolumesFromPoolID(contexts, poolUUID)
+		log.FailOnError(err, "Failed to get list of volumes from the poolIDs")
+
+		numGoroutines := len(volumes) * 2
+		wg.Add(numGoroutines)
+
+		done := make(chan bool)
+		errHandle := make(chan error)
+
+		log.InfoD("Initiate Volume resize continuously")
+		volumeResize := func(vol []*volume.Volume) error {
+
+			for _, eachVolume := range vol {
+				curSize := eachVolume.Size
+				newSize := (curSize / units.GiB) + uint64(1)
+				log.Infof("Initiating volume size increase on volume [%v] by size [%v] from [%v]", eachVolume, newSize, curSize)
+				err := Inst().V.ResizeVolume(eachVolume.Name, newSize)
+				if err != nil {
+					return err
+				}
+
+				// Wait for 2 seconds for Volume to update stats
+				time.Sleep(2 * time.Second)
+				volumeInspect, err := Inst().V.InspectVolume(eachVolume.Name)
+				if err != nil {
+					return err
+				}
+				updatedSize := volumeInspect.Spec.Size
+				if updatedSize != newSize {
+					return fmt.Errorf("volume did not update from [%v] to [%v] ", curSize, newSize)
+				}
+
+			}
+			return nil
+		}
+
+		log.InfoD("Trigger test to change replication factor of the volume continuously")
+		previousReplFactor := int64(1)
+		go func(vol []*volume.Volume) {
+			defer GinkgoRecover()
+			for {
+				select {
+				case <-done:
+					wg.Done()
+					return
+				case <-errHandle:
+					done <- true
+					return
+				default:
+					// resize all volumes present
+					log.FailOnError(volumeResize(vol), "resize volume failed ?")
+
+					// Change replication factor of the volume continuously once volume is resized
+					for _, each := range vol {
+						log.Infof("Changing replication factor of volume [%v]", each.Name)
+						setReplFactor := int64(1)
+						currRepFactor, err := Inst().V.GetReplicationFactor(each)
+						if err != nil {
+							errHandle <- fmt.Errorf("error while getting replication factor [%v]", err)
+						}
+						// Do HA Update based on current replication factor for the node
+						// if repl factor is 3 reduce it by 1
+						// if previous repl factor is 3 and current repl factor is 2 reduce it by 1
+						// else increase repl factor by 1
+						if currRepFactor == 3 {
+							setReplFactor = currRepFactor - 1
+						} else if currRepFactor == 2 || previousReplFactor == 3 {
+							setReplFactor = setReplFactor
+						} else {
+							setReplFactor = currRepFactor + 1
+						}
+						previousReplFactor = currRepFactor
+
+						log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", each.Name, currRepFactor, setReplFactor)
+						err = Inst().V.SetReplicationFactor(each, setReplFactor, nil, nil, true)
+						if err != nil {
+							errHandle <- err
+						}
+					}
+				}
+				wg.Wait()
+			}
+		}(volumes)
+
+		duration := 2 * time.Hour
+		timeout := time.After(duration)
+		for {
+			select {
+			case <-timeout:
+				done <- true
+			case <-errHandle:
+				done <- true
+			default:
+				// Pick a random volume
+				randomIndex := rand.Intn(len(volumes))
+				volPicked := volumes[randomIndex]
+
+				// Pick a Node on which volume is placed and start rebooting the node
+				poolIds, err := GetPoolIDsFromVolName(volPicked.Name)
+				if err != nil {
+					done <- true
+					log.FailOnError(err, "failed to get pool details from the volume")
+				}
+
+				// select random pool and get the node associated with that pool
+				randomIndex = rand.Intn(len(poolIds))
+				poolPicked := poolIds[randomIndex]
+
+				nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
+				log.InfoD("Rebooting node [%v] and waiting for the node to come back online", nodeDetail.Name)
+
+				err = Inst().V.RestartDriver(*nodeDetail, nil)
+				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+
+				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+
+			}
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
 })

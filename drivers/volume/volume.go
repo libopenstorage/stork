@@ -87,6 +87,9 @@ type Driver interface {
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
 
+	// ResizeVolume resizes Volume to specific size provided
+	ResizeVolume(volName string, size uint64) error
+
 	// CreateVolumeUsingRequest creates a volume with the given volume request
 	// returns volume_id of the new volume
 	CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error)

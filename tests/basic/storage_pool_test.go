@@ -5413,16 +5413,16 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			log.InfoD("setting replication on the volumes")
 			setRepl := func(vol *volume.Volume) error {
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
-				getReplicaSets, err := Inst().V.GetReplicaSets(vol)
+				getReplicaSets, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "Failed to get replication factor on the volume")
-				if len(getReplicaSets) == 3 {
-					newRepl := int64(len(getReplicaSets) - 1)
+				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, getReplicaSets)
+				if getReplicaSets == 3 {
+					newRepl := getReplicaSets - 1
 					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
 					if err != nil {
 						return err
 					}
 				}
-
 				// Change Replica sets of each volumes created to 3
 				var (
 					maxReplicaFactor int64
@@ -5437,6 +5437,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				if err != nil {
 					return err
 				}
+
 				return nil
 			}
 
@@ -7292,7 +7293,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		// Expand Pool using Add Drive and verify if the Pool is expanded successfully
 		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
 			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
-			expectedSize, false)
+			expectedSize, true)
 		dash.VerifyFatal(err,
 			nil,
 			"Pool expansion init successful?")
@@ -8838,7 +8839,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
 		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		isjournal, err := isJournalEnabled()
@@ -9195,16 +9196,21 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
 	})
 })
 
-func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64) error {
+// ExpandMultiplePoolsInParallel expands provided poolIDs in parallel based on the expandType provided
+// E.x : poolIds := [f724fb7f-9a43-4df2-bc38-550841fc3bfc, 492a3d03-cc47-4a8c-a8f0-d1d92dfdf25f]
+//
+//	size := 10
+//	expandType := [api.SdkStoragePool_RESIZE_TYPE_AUTO]
+//			     or  [api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
+//			     or  [api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
+func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandType []api.SdkStoragePool_ResizeOperationType) error {
 	defer GinkgoRecover()
 	var wg sync.WaitGroup
 	numGoroutines := len(poolIds)
 
 	wg.Add(numGoroutines)
 	for _, eachPool := range poolIds {
-		poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
-			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
-			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+		poolResizeType := expandType
 
 		randomIndex := rand.Intn(len(poolResizeType))
 		pickType := poolResizeType[randomIndex]

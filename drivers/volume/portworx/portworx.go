@@ -140,6 +140,7 @@ const (
 	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
+	volumeUpdateTimeout               = 2 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -797,6 +798,41 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 
 	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
 	return resp.VolumeId, nil
+}
+
+// ResizeVolume resizes Volume to specific size provided
+func (d *portworx) ResizeVolume(volName string, size uint64) error {
+
+	t := func() (interface{}, bool, error) {
+		volDriver := d.getVolDriver()
+		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volName})
+		if err != nil && errIsNotFound(err) {
+			return nil, false, err
+		} else if err != nil {
+			return nil, true, err
+		}
+
+		volumeSpecUpdate := &api.VolumeSpecUpdate{
+			SizeOpt: &api.VolumeSpecUpdate_Size{Size: size},
+		}
+		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+			VolumeId: volumeInspectResponse.Volume.Id,
+			Spec:     volumeSpecUpdate,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+
+		return 0, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, volumeUpdateTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToSetReplicationFactor{
+			ID:    volName,
+			Cause: err.Error(),
+		}
+	}
+	return nil
 }
 
 func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
