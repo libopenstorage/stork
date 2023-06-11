@@ -19,8 +19,8 @@ import (
 
 const (
 	kopiaMaintenanceJobPrefix         = "repo-maintenance"
-	defaultFullSchedule               = "0 */24 * * *"
-	defaultQuickSchedule              = "0 */2 * * *"
+	defaultFullSchedule               = "1 */23 * * *"
+	defaultQuickSchedule              = "1 */3 * * *"
 	fullMaintenanceType               = "full"
 	quickMaintenaceTye                = "quick"
 	defaultFailedJobsHistoryLimit     = 1
@@ -68,6 +68,14 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		errMsg := fmt.Sprintf("building maintenance job [%s] for backuplocation [%v] failed: %v", jobName, o.BackupLocationName, err)
 		logrus.Errorf("%s %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
+	}
+
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(jobName, o.JobNamespace, o)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if requiresV1 {
@@ -196,19 +204,22 @@ func jobFor(
 		jobOption.MaintenanceType,
 	}, " ")
 
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during maintenance: %v", err)
-		return nil, err
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+
+	tolerations, err := utils.GetTolerationsFromDeployment(jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the toleration details: %v", err)
+		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobName)
 	}
 
 	jobObjectMeta := metav1.ObjectMeta{
@@ -223,7 +234,6 @@ func jobFor(
 	jobSpec := corev1.PodSpec{
 		RestartPolicy:      corev1.RestartPolicyOnFailure,
 		ServiceAccountName: jobOption.ServiceAccountName,
-		ImagePullSecrets:   utils.ToImagePullSecret(imageRegistrySecret),
 		Containers: []corev1.Container{
 			{
 				Name:  "kopiaexecutor",
@@ -246,6 +256,7 @@ func jobFor(
 				},
 			},
 		},
+		Tolerations: tolerations,
 		Volumes: []corev1.Volume{
 			{
 				Name: "cred-secret",
@@ -257,10 +268,34 @@ func jobFor(
 			},
 		},
 	}
-
+	// Add the image secret in job spec only if it is present in the stork deployment.
+	if len(imageRegistrySecret) != 0 {
+		jobSpec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
+	}
 	var volumeMount corev1.VolumeMount
 	var volume corev1.Volume
 	var env []corev1.EnvVar
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount = corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		jobSpec.Containers[0].VolumeMounts = append(
+			jobSpec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume = corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: utils.GetPvcNameForJob(jobName),
+				},
+			},
+		}
+		jobSpec.Volumes = append(jobSpec.Volumes, volume)
+	}
+
 	if drivers.CertFilePath != "" {
 		volumeMount = corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,
@@ -308,6 +343,16 @@ func jobFor(
 					},
 				},
 			},
+		}
+	} else {
+		nodeAffinity, err := utils.GetNodeAffinityFromDeployment(jobOption.KopiaImageExecutorSource,
+			jobOption.KopiaImageExecutorSourceNs)
+		if err != nil {
+			logrus.Errorf("failed to get the node affinity details: %v", err)
+			return nil, fmt.Errorf("failed to get the node affinity details for job [%s/%s]", jobOption.Namespace, jobName)
+		}
+		jobSpec.Affinity = &corev1.Affinity{
+			NodeAffinity: nodeAffinity,
 		}
 	}
 
