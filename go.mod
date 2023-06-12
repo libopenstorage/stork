@@ -62,7 +62,7 @@ require (
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
 
-require github.com/portworx/kdmp v0.4.1-0.20230612162050-cd6ad3823814
+require github.com/portworx/kdmp v0.4.1-0.20230612171824-b111d7406a34
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -300,7 +300,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230324214216-7f88436db3de
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230612162050-cd6ad3823814
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230612171824-b111d7406a34
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
