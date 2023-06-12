@@ -85,8 +85,6 @@ type Driver interface {
 	DeleteSnapshotObject(backupLocation *storkapi.BackupLocation, objectPath string) error
 	// Recreate snapshot resources before doing snapshot restore
 	RecreateSnapshotResources(snapshotInfo SnapshotInfo, snapshotDriverName, namespace string, retain bool) (SnapshotInfo, error)
-	// Retain local snapshots if required
-	RetainLocalSnapshots(backupLocation *storkapi.BackupLocation, snapshotDriverName, snapshotClassName, namespace, pvcUID, objectPath string, retain bool) error
 	// Restore from local snapshot if present
 	RestoreFromLocalSnapshot(backupLocation *storkapi.BackupLocation, pvc *v1.PersistentVolumeClaim, snapshotDriverName, pvcUID, backupUID, objectPath, namespace string) (bool, error)
 	// Cleanup resources if restore from localsnapshot fails

@@ -22,11 +22,11 @@ type ActionOps interface {
 }
 
 // CreateAction creates a Action
-func (c *Client) CreateAction(Action *storkv1alpha1.Action) (*storkv1alpha1.Action, error) {
+func (c *Client) CreateAction(action *storkv1alpha1.Action) (*storkv1alpha1.Action, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().Actions(Action.Namespace).Create(context.TODO(), Action, metav1.CreateOptions{})
+	return c.stork.StorkV1alpha1().Actions(action.Namespace).Create(context.TODO(), action, metav1.CreateOptions{})
 }
 
 // GetAction gets the Action
@@ -46,11 +46,11 @@ func (c *Client) ListActions(namespace string) (*storkv1alpha1.ActionList, error
 }
 
 // UpdateAction updates the Action
-func (c *Client) UpdateAction(Action *storkv1alpha1.Action) (*storkv1alpha1.Action, error) {
+func (c *Client) UpdateAction(action *storkv1alpha1.Action) (*storkv1alpha1.Action, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().Actions(Action.Namespace).Update(context.TODO(), Action, metav1.UpdateOptions{})
+	return c.stork.StorkV1alpha1().Actions(action.Namespace).Update(context.TODO(), action, metav1.UpdateOptions{})
 }
 
 // DeleteAction deletes the Action
