@@ -948,7 +948,17 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
 				}
 				if status {
-					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					backupLocationInspectRequest := api.BackupLocationInspectRequest{
+						Name:  bkpLocationName,
+						Uid:   backupLocationUID,
+						OrgId: orgID,
+					}
+					backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
+					if err != nil {
+						return "", true, fmt.Errorf("inspect backup location - backup location %s still present with error %v", bkpLocationName, err)
+					}
+					backupLocationStatus := backupLocationObject.BackupLocation.BackupLocationInfo.GetStatus()
+					return "", true, fmt.Errorf("backup location %s is not deleted yet. Status - [%s]", bkpLocationName, backupLocationStatus)
 				}
 				return "", false, nil
 			}
