@@ -730,7 +730,7 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 
 			for _, eachVolume := range vol {
 				curSize := eachVolume.Size
-				newSize := (curSize / units.GiB) + uint64(1)
+				newSize := curSize + (uint64(1) * units.GB)
 				log.Infof("Initiating volume size increase on volume [%v] by size [%v] from [%v]", eachVolume, newSize, curSize)
 				err := Inst().V.ResizeVolume(eachVolume.Name, newSize)
 				if err != nil {
@@ -806,6 +806,7 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		duration := 2 * time.Hour
 		timeout := time.After(duration)
 		for {
+			defer GinkgoRecover()
 			select {
 			case <-timeout:
 				done <- true
@@ -820,7 +821,6 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 				// Pick a Node on which volume is placed and start rebooting the node
 				poolIds, err := GetPoolIDsFromVolName(volPicked.Name)
 				if err != nil {
-					done <- true
 					log.FailOnError(err, "failed to get pool details from the volume")
 				}
 

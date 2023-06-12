@@ -802,35 +802,20 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 
 // ResizeVolume resizes Volume to specific size provided
 func (d *portworx) ResizeVolume(volName string, size uint64) error {
-
-	t := func() (interface{}, bool, error) {
-		volDriver := d.getVolDriver()
-		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volName})
-		if err != nil && errIsNotFound(err) {
-			return nil, false, err
-		} else if err != nil {
-			return nil, true, err
-		}
-
-		volumeSpecUpdate := &api.VolumeSpecUpdate{
-			SizeOpt: &api.VolumeSpecUpdate_Size{Size: size},
-		}
-		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
-			VolumeId: volumeInspectResponse.Volume.Id,
-			Spec:     volumeSpecUpdate,
-		})
-		if err != nil {
-			return nil, false, err
-		}
-
-		return 0, false, nil
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volName})
+	if err != nil {
+		return fmt.Errorf("failed to find volume %v due to %v", volName, err)
 	}
-
-	if _, err := task.DoRetryWithTimeout(t, volumeUpdateTimeout, defaultRetryInterval); err != nil {
-		return &ErrFailedToSetReplicationFactor{
-			ID:    volName,
-			Cause: err.Error(),
-		}
+	volumeSpecUpdate := &api.VolumeSpecUpdate{
+		SizeOpt: &api.VolumeSpecUpdate_Size{Size: size},
+	}
+	_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+		VolumeId: volumeInspectResponse.Volume.Id,
+		Spec:     volumeSpecUpdate,
+	})
+	if err != nil {
+		return err
 	}
 	return nil
 }
