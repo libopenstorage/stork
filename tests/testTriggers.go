@@ -291,6 +291,8 @@ func ProcessErrorWithMessage(event *EventRecord, err error, desc string) {
 const (
 	// DeployApps installs new apps
 	DeployApps = "deployApps"
+	// ValidatePds Apps checks the healthstate of the pds apps
+	ValidatePdsApps = "validatePdsApps"
 	// HAIncrease performs repl-add
 	HAIncrease = "haIncrease"
 	// HADecrease performs repl-reduce
@@ -1346,6 +1348,38 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			}
 		}
 		updateMetrics(*event)
+	})
+}
+
+func TriggerValidatePdsApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ValidatePdsApps)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ValidatePdsApps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("validate pds-apps", func() {
+		for _, ctx := range *contexts {
+			stepLog := fmt.Sprintf("RebootNode: validating pds app [%s]", ctx.App.Key)
+			Step(stepLog, func() {
+				errorChan := make(chan error, errorChannelSize)
+				ValidatePDSDataServices(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
 	})
 }
 

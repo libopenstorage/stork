@@ -40,6 +40,7 @@ var (
 	projectID          string
 	isAccountAvailable bool
 	serviceType        = "LoadBalancer"
+	components         *api.Components
 )
 
 // K8s Instances
@@ -70,7 +71,7 @@ func (cp *ControlPlane) SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, 
 	}
 	log.InfoD("Deployment service type %s", serviceType)
 
-	components, err := GetApiComponents(ControlPlaneURL)
+	components, err = GetApiComponents(ControlPlaneURL)
 	if err != nil {
 		return "", "", "", "", "", "", err
 	}
@@ -136,7 +137,7 @@ func (cp *ControlPlane) SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, 
 // GetStorageTemplate return the storage template id
 func (cp *ControlPlane) GetStorageTemplate(tenantID string) (string, error) {
 	log.InfoD("Get the storage template")
-	storageTemplates, err := cp.components.StorageSettingsTemplate.ListTemplates(tenantID)
+	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +161,7 @@ func (cp *ControlPlane) GetStorageTemplate(tenantID string) (string, error) {
 
 // GetAppConfTemplate returns the app config template id
 func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, error) {
-	appConfigs, err := cp.components.AppConfigTemplate.ListTemplates(tenantID)
+	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +169,7 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 	isTemplateavailable = false
 	var dataServiceId string
 
-	dsModel, err := cp.components.DataService.ListDataServices()
+	dsModel, err := components.DataService.ListDataServices()
 	if err != nil {
 		return "", fmt.Errorf("An Error Occured while listing dataservices %v", err)
 
@@ -197,7 +198,7 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 // GetResourceTemplate get the resource template id
 func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
 	log.Infof("Get the resource template for each data services")
-	resourceTemplates, err := cp.components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
 	}
@@ -206,7 +207,7 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 	for i := 0; i < len(resourceTemplates); i++ {
 		if resourceTemplates[i].GetName() == resourceTemplateName {
 			isTemplateavailable = true
-			dataService, err := cp.components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
 			if err != nil {
 				return "", err
 			}
@@ -234,7 +235,7 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	log.Info("Fetch the registration token.")
 
-	saClient := cp.components.ServiceAccount
+	saClient := components.ServiceAccount
 	serviceAccounts, _ := saClient.ListServiceAccounts(tenantID)
 	var agentWriterID string
 	for _, sa := range serviceAccounts {
@@ -251,7 +252,9 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 
 // GetDNSZone fetches DNS zone for deployment.
 func (cp *ControlPlane) GetDNSZone(tenantID string) (string, error) {
-	tenantComp := cp.components.Tenant
+	log.Debugf("Inside the GetDNSZone function... ")
+	tenantComp := components.Tenant
+	log.Debugf("tenantComp is initialized...")
 	tenant, err := tenantComp.GetTenant(tenantID)
 	if err != nil {
 		log.Panicf("Unable to fetch the tenant info.\n Error - %v", err)

@@ -57,6 +57,7 @@ var _ = Describe("{Longevity}", func() {
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		DeployApps:       TriggerDeployNewApps,
 		RebootNode:       TriggerRebootNodes,
+		ValidatePdsApps:  TriggerValidatePdsApps,
 		CrashNode:        TriggerCrashNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
@@ -576,6 +577,7 @@ func deletePXPods(nameSpace string) error {
 
 func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
+	triggerInterval[ValidatePdsApps] = map[int]time.Duration{}
 	triggerInterval[RebootNode] = map[int]time.Duration{}
 	triggerInterval[CrashNode] = map[int]time.Duration{}
 	triggerInterval[CrashVolDriver] = map[int]time.Duration{}
@@ -1090,6 +1092,17 @@ func populateIntervals() {
 	triggerInterval[CoreChecker][2] = 9 * baseInterval
 	triggerInterval[CoreChecker][1] = 10 * baseInterval
 
+	triggerInterval[ValidatePdsApps][10] = 1 * baseInterval
+	triggerInterval[ValidatePdsApps][9] = 2 * baseInterval
+	triggerInterval[ValidatePdsApps][8] = 3 * baseInterval
+	triggerInterval[ValidatePdsApps][7] = 4 * baseInterval
+	triggerInterval[ValidatePdsApps][6] = 5 * baseInterval
+	triggerInterval[ValidatePdsApps][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ValidatePdsApps][4] = 7 * baseInterval
+	triggerInterval[ValidatePdsApps][3] = 8 * baseInterval
+	triggerInterval[ValidatePdsApps][2] = 9 * baseInterval
+	triggerInterval[ValidatePdsApps][1] = 10 * baseInterval
+
 	triggerInterval[DeployApps][10] = 1 * baseInterval
 	triggerInterval[DeployApps][9] = 2 * baseInterval
 	triggerInterval[DeployApps][8] = 3 * baseInterval
@@ -1321,6 +1334,7 @@ func populateIntervals() {
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
+	triggerInterval[ValidatePdsApps][0] = 0
 	triggerInterval[CrashNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
 	triggerInterval[HAIncrease][0] = 0

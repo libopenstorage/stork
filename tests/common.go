@@ -14,6 +14,7 @@ import (
 	"regexp"
 
 	"github.com/portworx/torpedo/drivers/pds"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -514,6 +515,32 @@ func updateChannel(err error, errChan ...*chan error) {
 		log.Errorf(fmt.Sprintf("%v", err))
 		*errChan[0] <- err
 	}
+}
+
+func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		stepLog := fmt.Sprintf("check health status of %s app", ctx.App.Key)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, specObj := range ctx.App.SpecList {
+				if pdsobj, ok := specObj.(*pdsv1.ModelsDeployment); ok {
+					err := Inst().Pds.ValidateDataServiceDeployment(pdsobj, *pdsobj.Namespace.Name)
+					if err != nil {
+						PrintDescribeContext(ctx)
+						processError(err, errChan...)
+						return
+					}
+				}
+			}
+		})
+	})
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
@@ -1633,7 +1660,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			if err != nil {
 				processError(err, errChan...)
 			}
-			contexts = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+			contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+			if err != nil {
+				processError(err, errChan...)
+			}
 		} else {
 			options := CreateScheduleOptions("", errChan...)
 			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
