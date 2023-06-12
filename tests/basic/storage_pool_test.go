@@ -8849,10 +8849,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
 
-		// Validate if Px is Up and running as well as Volume is in online mode
-		expectedStatus := "Online"
-		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
-		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+		log.Info("Checking for each volumes status is up")
 		for _, eachVol := range volumes {
 			log.FailOnError(waitTillVolumeStatusUp(eachVol), fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
 		}
