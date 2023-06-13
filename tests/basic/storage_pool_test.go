@@ -5414,11 +5414,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			log.InfoD("setting replication on the volumes")
 			setRepl := func(vol *volume.Volume) error {
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
-				getReplicaSets, err := Inst().V.GetReplicationFactor(vol)
+				curReplSet, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "Failed to get replication factor on the volume")
-				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, getReplicaSets)
-				if getReplicaSets == 3 {
-					newRepl := getReplicaSets - 1
+				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, curReplSet)
+				if curReplSet == 3 {
+					newRepl := curReplSet - 1
 					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
 					if err != nil {
 						return err
@@ -8287,7 +8287,7 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			log.FailOnError(err, "Failed to get volumes from context")
 			for _, eachVol := range vols {
-				getReplicaSets, err := Inst().V.GetReplicationFactor(eachVol)
+				curReplSet, err := Inst().V.GetReplicationFactor(eachVol)
 				log.FailOnError(err, "failed to get replication factor of the volume")
 
 				var poolID []string
@@ -8297,8 +8297,8 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 				for _, eachPoolUUID := range poolID {
 					if eachPoolUUID == poolUUID {
 						// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 3
-						if getReplicaSets == 3 {
-							newRepl := int64(getReplicaSets - 1)
+						if curReplSet == 3 {
+							newRepl := int64(curReplSet - 1)
 							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
 								nil, nil, true),
 								"Failed to set Replicaiton factor")
