@@ -2285,7 +2285,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudCredUID, cloudCredName, provider)
 				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
-				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
 				bucketName := getGlobalBucketName(provider)
