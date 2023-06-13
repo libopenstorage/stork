@@ -691,6 +691,9 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 	It(stepLog, func() {
 		var wg sync.WaitGroup
 
+		var driverNode *node.Node
+		driverNode = nil
+
 		contexts = make([]*scheduler.Context, 0)
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"vdbench-heavyload"}
@@ -702,7 +705,7 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("vshrdv4mulhaupvolr-%d", i))...)
 		}
-		//ValidateApplications(contexts)
+		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
 		// Get a pool with running IO
@@ -719,109 +722,158 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		volumes, err := GetVolumesFromPoolID(contexts, poolUUID)
 		log.FailOnError(err, "Failed to get list of volumes from the poolIDs")
 
-		numGoroutines := len(volumes) * 2
+		numGoroutines := len(volumes)
 		wg.Add(numGoroutines)
 
 		done := make(chan bool)
-		errHandle := make(chan error)
+		terminate := false
+
+		terminateflow := func() {
+			terminate = true
+		}
+
+		waitTillDriverUp := func() {
+			if driverNode != nil {
+				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+				}
+			}
+		}
+
+		defer waitTillDriverUp()
 
 		log.InfoD("Initiate Volume resize continuously")
-		volumeResize := func(vol []*volume.Volume) error {
+		volumeResize := func(vol *volume.Volume) error {
 
-			for _, eachVolume := range vol {
-				curSize := eachVolume.Size
-				newSize := curSize + (uint64(1) * units.GB)
-				log.Infof("Initiating volume size increase on volume [%v] by size [%v] from [%v]", eachVolume, newSize, curSize)
-				err := Inst().V.ResizeVolume(eachVolume.Name, newSize)
-				if err != nil {
-					return err
-				}
+			apiVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				terminateflow()
+				return err
+			}
 
-				// Wait for 2 seconds for Volume to update stats
-				time.Sleep(2 * time.Second)
-				volumeInspect, err := Inst().V.InspectVolume(eachVolume.Name)
-				if err != nil {
-					return err
-				}
-				updatedSize := volumeInspect.Spec.Size
-				if updatedSize != newSize {
-					return fmt.Errorf("volume did not update from [%v] to [%v] ", curSize, newSize)
-				}
+			curSize := apiVol.Spec.Size
+			newSize := curSize + (uint64(5) * units.GiB)
+			log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
+				vol.ID, curSize/units.GiB, newSize/units.GiB)
 
+			err = Inst().V.ResizeVolume(vol.ID, newSize)
+			if err != nil {
+				terminateflow()
+				return err
+			}
+
+			// Wait for 2 seconds for Volume to update stats
+			time.Sleep(2 * time.Second)
+			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				terminateflow()
+				return err
+			}
+
+			updatedSize := volumeInspect.Spec.Size
+			if updatedSize <= curSize {
+				terminateflow()
+				return fmt.Errorf("volume did not update from [%v] to [%v] ",
+					curSize/units.GiB, updatedSize/units.GiB)
+			}
+
+			if terminate {
+				return nil
 			}
 			return nil
 		}
+
+		go func() {
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					return
+				}
+				for _, eachVol := range volumes {
+					err := volumeResize(eachVol)
+					if err != nil {
+						terminateflow()
+						log.FailOnError(err, "failed to resize Volume  [%v]", eachVol.Name)
+					}
+				}
+
+			}
+		}()
 
 		log.InfoD("Trigger test to change replication factor of the volume continuously")
 		previousReplFactor := int64(1)
 		go func(vol []*volume.Volume) {
 			defer GinkgoRecover()
 			for {
-				select {
-				case <-done:
+				if terminate {
 					wg.Done()
-					return
-				case <-errHandle:
-					done <- true
-					return
-				default:
-					// resize all volumes present
-					err := volumeResize(vol)
+					break
+				}
+
+				// Change replication factor of the volume continuously once volume is resized
+				for _, each := range vol {
+					log.Infof("Changing replication factor of volume [%v]", each.Name)
+					setReplFactor := int64(1)
+					currRepFactor, err := Inst().V.GetReplicationFactor(each)
 					if err != nil {
-						errHandle <- fmt.Errorf("error while resizing volume [%v]", err)
+						terminateflow()
+						log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
 					}
+					// Do HA Update based on current replication factor for the node
+					// if repl factor is 3 reduce it by 1
+					// if previous repl factor is 3 and current repl factor is 2 reduce it by 1
+					// else increase repl factor by 1
+					if currRepFactor == 3 {
+						setReplFactor = currRepFactor - 1
+					} else if currRepFactor == 2 || previousReplFactor == 3 {
+						setReplFactor = setReplFactor
+					} else {
+						setReplFactor = currRepFactor + 1
+					}
+					previousReplFactor = currRepFactor
 
-					// Change replication factor of the volume continuously once volume is resized
-					for _, each := range vol {
-						log.Infof("Changing replication factor of volume [%v]", each.Name)
-						setReplFactor := int64(1)
-						currRepFactor, err := Inst().V.GetReplicationFactor(each)
-						if err != nil {
-							errHandle <- fmt.Errorf("error while getting replication factor [%v]", err)
-						}
-						// Do HA Update based on current replication factor for the node
-						// if repl factor is 3 reduce it by 1
-						// if previous repl factor is 3 and current repl factor is 2 reduce it by 1
-						// else increase repl factor by 1
-						if currRepFactor == 3 {
-							setReplFactor = currRepFactor - 1
-						} else if currRepFactor == 2 || previousReplFactor == 3 {
-							setReplFactor = setReplFactor
-						} else {
-							setReplFactor = currRepFactor + 1
-						}
-						previousReplFactor = currRepFactor
+					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", each.Name, currRepFactor, setReplFactor)
+					err = Inst().V.SetReplicationFactor(each, setReplFactor, nil, nil, true)
+					if err != nil {
+						terminateflow()
+						log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
+					}
+					if terminate {
+						return
 
-						log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", each.Name, currRepFactor, setReplFactor)
-						err = Inst().V.SetReplicationFactor(each, setReplFactor, nil, nil, true)
-						if err != nil {
-							errHandle <- err
-						}
 					}
 				}
-				wg.Wait()
 			}
 		}(volumes)
 
 		duration := 2 * time.Hour
 		timeout := time.After(duration)
 		for {
+			if terminate {
+				break
+			}
 			defer GinkgoRecover()
 			select {
 			case <-timeout:
+				terminateflow()
 				done <- true
-			case <-errHandle:
-				done <- true
-				log.FailOnError(fmt.Errorf("[%v]", errHandle), fmt.Sprintf("error occured terminating test"))
 			default:
 				// Pick a random volume
 				randomIndex := rand.Intn(len(volumes))
 				volPicked := volumes[randomIndex]
 
 				// Pick a Node on which volume is placed and start rebooting the node
-				poolIds, err := GetPoolIDsFromVolName(volPicked.Name)
+				poolIds, err := GetPoolIDsFromVolName(volPicked.ID)
 				if err != nil {
 					log.FailOnError(err, "failed to get pool details from the volume")
+				}
+
+				// resize all volumes present
+				err = volumeResize(volPicked)
+				if err != nil {
+					log.FailOnError(err, "error while resizing volume")
 				}
 
 				// select random pool and get the node associated with that pool
@@ -831,12 +883,27 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 				nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
 				log.InfoD("Rebooting node [%v] and waiting for the node to come back online", nodeDetail.Name)
 
+				driverNode = nodeDetail
+
 				err = Inst().V.RestartDriver(*nodeDetail, nil)
-				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+				}
 
 				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+				}
+
+				// flag is to make sure to wait for driver to be up and running when because
+				// of some other process test terminates in middle
+				driverNode = nil
 			}
+		}
+		if !terminate {
+			wg.Wait()
 		}
 
 	})
