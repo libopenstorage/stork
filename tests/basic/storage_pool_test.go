@@ -9187,7 +9187,7 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
 //	expandType := [api.SdkStoragePool_RESIZE_TYPE_AUTO]
 //			     or  [api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
 //			     or  [api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
-func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandType []api.SdkStoragePool_ResizeOperationType) error {
+func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandType []api.SdkStoragePool_ResizeOperationType) (*sync.WaitGroup, error) {
 	defer GinkgoRecover()
 	var wg sync.WaitGroup
 	numGoroutines := len(poolIds)
@@ -9218,8 +9218,7 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 		wg.Done()
 	}
 
-	wg.Wait()
-	return nil
+	return &wg, nil
 }
 
 var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
@@ -9253,9 +9252,11 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 			fmt.Sprintf("No pools with IO present ?"))
 
 		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
-		err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
 
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
 
 	})
 	JustAfterEach(func() {
