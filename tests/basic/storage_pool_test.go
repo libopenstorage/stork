@@ -8586,23 +8586,6 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	})
 })
 
-// Checks if journal device present on the node
-func isJournalPresentOnNode(n *node.Node) (bool, error) {
-	cmd := "pxctl sv pool show -j | jq .datapools[].Info.ResourceJournalUUID"
-	// Execute the command and check the alerts of type POOL
-	out, err := Inst().N.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
-		Timeout:         2 * time.Minute,
-		TimeBeforeRetry: 10 * time.Second,
-	})
-	if err != nil {
-		return false, err
-	}
-	if out == "" {
-		return false, nil
-	}
-	return true, nil
-}
-
 var _ = Describe("{DriveAddAsJournal}", func() {
 	/*
 		Add drive when as journal
@@ -8840,7 +8823,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
 		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		isjournal, err := isJournalEnabled()
