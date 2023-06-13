@@ -39,6 +39,8 @@ const (
 	UpdateRestoreCrTimestampInApplyResourcePath = 19
 	// duration in which the restore CR to be updated with timestamp
 	TimeoutUpdateRestoreCrTimestamp = 15 * time.Minute
+	// duration in which the backup CR to be updated with timestamp
+	TimeoutUpdateBackupCrTimestamp = 15 * time.Minute
 	// duration in which the restore CR to be updated for resource Count progress
 	TimeoutUpdateRestoreCrProgress = 5 * time.Minute
 	// sleep interval for restore time stamp update go-routine to check channel for any data
