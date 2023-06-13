@@ -2,14 +2,15 @@ package controlplane
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
-	"net/url"
-	"strings"
 )
 
 // ControlPlane PDS
@@ -23,13 +24,13 @@ var (
 	isTemplateavailable        bool
 	isStorageTemplateAvailable bool
 
-	resourceTemplateID  string
-	appConfigTemplateID string
-	storageTemplateID   string
+	resourceTemplateID   string
+	appConfigTemplateID  string
+	storageTemplateID    string
+	resourceTemplateName = "Small"
 )
 
 const (
-	resourceTemplateName  = "Small"
 	appConfigTemplateName = "QaDefault"
 	storageTemplateName   = "QaDefault"
 )
@@ -193,6 +194,13 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return appConfigTemplateID, nil
+}
+
+// update template name with custom name
+func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
+	log.Infof("Updating the resource template name with : %v", TemplateName)
+	resourceTemplateName = TemplateName
+	return resourceTemplateName
 }
 
 // GetResourceTemplate get the resource template id

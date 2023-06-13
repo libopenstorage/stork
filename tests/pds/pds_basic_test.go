@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"os"
+	"testing"
+
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
@@ -8,8 +11,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/pds/targetcluster"
-	"os"
-	"testing"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -43,6 +44,7 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD(steplog)
+		InitInstance()
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
