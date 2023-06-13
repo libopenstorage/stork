@@ -5035,9 +5035,19 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		if poolID != -1 {
 			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
 		} else {
-			if !strings.Contains(drivePath, "journal") {
+			stringMatch := false
+			matchType := []string{"metadata", "journal"}
+			for _, word := range matchType {
+				re := regexp.MustCompile(fmt.Sprintf(".*--%s", word))
+				match := re.MatchString(drivePath)
+				if match {
+					stringMatch = true
+				}
+			}
+			if !stringMatch {
 				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
 			}
+			
 		}
 	}
 	log.Infof("adding cloud drive with params [%v]", driveAddFlag)
