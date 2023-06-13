@@ -4495,7 +4495,8 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			err = Inst().V.StartDriver(*storageNode2)
@@ -8286,7 +8287,7 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			log.FailOnError(err, "Failed to get volumes from context")
 			for _, eachVol := range vols {
-				getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
+				getReplicaSets, err := Inst().V.GetReplicationFactor(eachVol)
 				log.FailOnError(err, "failed to get replication factor of the volume")
 
 				var poolID []string
@@ -8296,8 +8297,8 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 				for _, eachPoolUUID := range poolID {
 					if eachPoolUUID == poolUUID {
 						// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 3
-						if len(getReplicaSets) == 3 {
-							newRepl := int64(len(getReplicaSets) - 1)
+						if getReplicaSets == 3 {
+							newRepl := int64(getReplicaSets - 1)
 							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
 								nil, nil, true),
 								"Failed to set Replicaiton factor")
@@ -8683,9 +8684,9 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 
 			//Wait for 7 min to bring up the portworx daemon before trying cloud drive add
 			time.Sleep(7 * time.Minute)
-			isjournal, err := isJournalPresentOnNode(nodeDetail)
+			isjournal, err := Inst().V.GetJournalDevicePath(nodeDetail)
 			log.FailOnError(err, "Error getting journal status")
-			if isjournal == true {
+			if isjournal == "" {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
 				if err == nil {
@@ -9234,3 +9235,45 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 	wg.Wait()
 	return nil
 }
+
+var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
+	/*
+		test to expand multiple pool at once in parallel
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandMultiplePoolWithIOsInClusterAtOnce",
+			"Expand multiple pool in the cluster at once in parallel",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Resync volume after rebalance"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		poolIdsToExpand := []string{}
+		for _, eachNodes := range node.GetStorageNodes() {
+			poolsPresent, err := GetPoolWithIOsInGivenNode(eachNodes, contexts)
+			if err == nil {
+				poolIdsToExpand = append(poolIdsToExpand, poolsPresent.Uuid)
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+			fmt.Sprintf("No pools with IO present ?"))
+
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
