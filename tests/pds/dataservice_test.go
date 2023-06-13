@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
@@ -1664,5 +1665,100 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{GetPvcToFullCondition}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+		var generateWorkloads = make(map[string]string)
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
+		var depList []*pds.ModelsDeployment
+		var dsName string
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name == postgresql {
+					Step("Deploy and validate data service", func() {
+						isDeploymentsDeleted = false
+						controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
+						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+						dsVersions[ds.Name] = dataServiceVersionBuildMap
+						depList = append(depList, deployment)
+						dsName = ds.Name
+
+					})
+				}
+			}
+			defer func() {
+				for _, newDeployment := range deployments {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				}
+			}()
+
+			// This testcase is currently applicable only for postgresql ds deployments
+			if dsName == postgresql {
+				Step("Running Workloads before scaling up PVC ", func() {
+					for ds, deployment := range deployments {
+						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+							log.InfoD("Running Workloads on DataService %v ", ds.Name)
+							var params pdslib.WorkloadGenerationParams
+							pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+							log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+							generateWorkloads[ds.Name] = dep.Name
+							for dsName, workloadContainer := range generateWorkloads {
+								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+							}
+						}
+					}
+				})
+
+				defer func() {
+					for dsName, workloadContainer := range generateWorkloads {
+						Step("Delete the workload generating deployments", func() {
+							if Contains(dataServiceDeploymentWorkloads, dsName) {
+								log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+								err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+							} else if Contains(dataServicePodWorkloads, dsName) {
+								log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+								err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+							}
+							log.FailOnError(err, "error deleting workload generating pods")
+						})
+					}
+				}()
+
+				Step("Checking the PVC usage", func() {
+					ctx, err := dsTest.CreateSchedulerContextForPDSApps(depList)
+					log.FailOnError(err, "Unable to create scheduler context")
+					err = CheckPVCtoFullCondition(ctx)
+					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
+					err = IncreasePVCby1Gig(ctx)
+					log.FailOnError(err, "Failing while Increasing the PVC name...")
+				})
+
+				Step("Validate Deployments after PVC Resize", func() {
+					for ds, deployment := range deployments {
+						err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+						log.FailOnError(err, "Error while validating dataservices")
+						log.InfoD("Data-service: %v is up and healthy", ds.Name)
+					}
+				})
+			}
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })

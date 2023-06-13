@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -4145,6 +4146,36 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 
+			for _, pvc := range pvcList.Items {
+				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if shouldResize {
+					vol, err := k.resizePVCBy1GB(ctx, &pvc)
+					if err != nil {
+						return nil, err
+					}
+					vols = append(vols, vol)
+				}
+			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			pdsNs := *obj.Namespace.Name
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNs)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.GetClusterResourceName(), pdsNs, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
 			for _, pvc := range pvcList.Items {
 				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
 				if err != nil {
