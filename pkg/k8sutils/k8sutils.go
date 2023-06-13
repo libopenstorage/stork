@@ -63,8 +63,6 @@ const (
 	DefaultRestoreVolumeBatchSleepInterval = "20s"
 	// RestoreVolumeBatchSleepIntervalKey - restore volume batch sleep interval key
 	RestoreVolumeBatchSleepIntervalKey = "restore-volume-sleep-interval"
-	// RestoreVolumeBatchSleepInterval - restore volume batch sleep interval
-	RestoreVolumeBatchSleepInterval = 20 * time.Second
 	// PxServiceEnvName - PX service ENV name
 	PxServiceEnvName = "PX_SERVICE_NAME"
 	// PxNamespaceEnvName - PX namespace ENV name
