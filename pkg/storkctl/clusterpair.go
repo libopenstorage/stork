@@ -238,7 +238,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 }
 
 func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	var sIP, dIP, sPort, dPort, srcToken, destToken, projectMappingsStr string
+	var sIP, dIP, sEP, sPort, dPort, dEP, srcToken, destToken, projectMappingsStr string
 	var sFile, dFile string
 	var provider, bucket, encryptionKey string
 	var s3AccessKey, s3SecretKey, s3Region, s3EndPoint, s3StorageClass string
@@ -264,6 +264,20 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			if errors := validation.ValidateNamespaceName(cmdFactory.GetNamespace(), false); len(errors) != 0 {
 				err := fmt.Errorf("the Namespace \"%v\" is not valid: %v", cmdFactory.GetNamespace(), errors)
 				util.CheckErr(err)
+				return
+			}
+
+			if len(sIP) > 0 || len(sPort) > 0 || len(dIP) > 0 || len(dPort) > 0 {
+				return
+			}
+
+			if len(sFile) == 0 {
+				util.CheckErr(getMissingParameterError("src-kube-file", "Kubeconfig file missing for source cluster"))
+				return
+			}
+
+			if len(dFile) == 0 {
+				util.CheckErr(getMissingParameterError("dest-kube-file", "Kubeconfig file missing for destination cluster"))
 				return
 			}
 
@@ -344,17 +358,39 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			credentialData["type"] = []byte(provider)
 			credentialData["encryptionKey"] = []byte(encryptionKey)
 
-			ip, port, token, err := getClusterPairParams(dFile, dIP, dPort)
-			if err != nil {
-				err := fmt.Errorf("unable to create clusterpair from source to DR cluster. Err: %v", err)
-				util.CheckErr(err)
-				return
+			// Bail out if portworx-api service type is not loadbalancer type and the endpoints are not provided.
+			var err error
+			if len(sEP) == 0 {
+				srcPXEndpoint, err := getPXEndPointDetails(sFile)
+				if err != nil {
+					err = fmt.Errorf("unable to get portworx endpoint in source cluster. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Source portworx endpoint is %s", srcPXEndpoint), ioStreams.Out)
+				sEP = srcPXEndpoint
 			}
-			dIP = ip
-			if dPort == "" {
-				dPort = port
+
+			if len(dEP) == 0 {
+				destPXEndpoint, err := getPXEndPointDetails(dFile)
+				if err != nil {
+					err = fmt.Errorf("unable to get portworx endpoint in destination cluster. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Destination portworx endpoint is %s", destPXEndpoint), ioStreams.Out)
+				dEP = destPXEndpoint
 			}
-			if destToken == "" {
+
+			dIP, dPort := getHostPortFromEndPoint(dEP, ioStreams)
+
+			if len(destToken) == 0 {
+				token, err := getPXToken(dFile, dEP)
+				if err != nil {
+					err := fmt.Errorf("unable to get px token from destination %s. Err: %v", dEP, err)
+					util.CheckErr(err)
+					return
+				}
 				destToken = token
 			}
 
@@ -410,21 +446,16 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 			printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
-			if sFile == "" {
-				return
-			}
 
-			ip, port, token, err = getClusterPairParams(sFile, sIP, sPort)
-			if err != nil {
-				err := fmt.Errorf("unable to create clusterpair from DR to source cluster. Err: %v", err)
-				util.CheckErr(err)
-				return
-			}
-			sIP = ip
-			if sPort == "" {
-				sPort = port
-			}
-			if srcToken == "" {
+			sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
+
+			if len(srcToken) == 0 {
+				token, err := getPXToken(sFile, sEP)
+				if err != nil {
+					err := fmt.Errorf("unable to get px token from source %s. Err: %v", sEP, err)
+					util.CheckErr(err)
+					return
+				}
 				srcToken = token
 			}
 			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true)
@@ -467,10 +498,16 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	}
 
 	createClusterPairCommand.Flags().StringVarP(&sIP, "src-ip", "", "", "IP of storage node from source cluster")
-	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9001", "Port of storage node from source cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("src-ip", "instead provide --src-ep")
+	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "", "Port of storage node from source cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("src-port", "instead provide --src-ep")
+	createClusterPairCommand.Flags().StringVarP(&sEP, "src-ep", "", "", "Endpoint of portworx-api service in source cluster")
 	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "Path to the kubeconfig of source cluster")
 	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "IP of storage node from destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "Port of storage node from destination cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("dest-ip", "instead provide --dest-ep")
+	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "", "Port of storage node from destination cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("dest-port", "instead provide --dest-ep")
+	createClusterPairCommand.Flags().StringVarP(&dEP, "dest-ep", "", "", "Endpoint of portworx-api service in destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "Path to the kubeconfig of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
@@ -629,53 +666,88 @@ func getConfig(configFile string) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
 }
 
-func getClusterPairParams(config, endpoint string, customPort string) (string, string, string, error) {
-	var ip, port, token string
+func getPXEndPointDetails(config string) (string, error) {
+	var ep string
 	client, err := core.NewInstanceFromConfigFile(config)
 	if err != nil {
-		return ip, port, token, err
+		return ep, err
 	}
 
 	services, err := client.ListServices("", meta.ListOptions{LabelSelector: "name=portworx-api"})
 	if err != nil || len(services.Items) == 0 {
-		err := fmt.Errorf("unable to retrieve portworx-api service from DR cluster. Err: %v", err)
-		return ip, port, token, err
+		err := fmt.Errorf("unable to retrieve portworx-api service. Err: %v", err)
+		return ep, err
 	}
-	// TODO: in case of setting up aync-dr over cloud,
-	// users set up different service as load-balancer over px apis
-	// accept px-service name as env variable
+
+	// Currently we are handling only the cases where portworx-api service is either of type LoadBalancer or clusterIP.
+	// For custom upstream network objects like route and ingress, User has to provide the endpoints.
 	svc := services.Items[0]
-	ip = endpoint
-	if ip == "" {
-		// this works only if px service is converted as load balancer type
-		// TODO: for 2 cluster where worker nodes are reachable, figure out
-		// any one worker ip by looking at px/enabled label
-		ip = svc.Spec.LoadBalancerIP
-	}
-	pxToken := os.Getenv("PX_AUTH_TOKEN")
-	if len(customPort) > 0 {
-		port = customPort
-	} else {
+	// Only if px svc is load balancer type get the IP or Host details
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+		if len(svc.Status.LoadBalancer.Ingress) > 0 {
+			if len(svc.Status.LoadBalancer.Ingress[0].Hostname) > 0 {
+				ep = svc.Status.LoadBalancer.Ingress[0].Hostname
+			} else if len(svc.Status.LoadBalancer.Ingress[0].IP) > 0 {
+				ep = svc.Status.LoadBalancer.Ingress[0].IP
+			}
+		}
+
 		for _, svcPort := range svc.Spec.Ports {
 			if svcPort.Name == "px-api" {
-				port = strconv.Itoa(int(svcPort.Port))
+				port := strconv.Itoa(int(svcPort.Port))
+				ep = net.JoinHostPort(ep, port)
 				break
 			}
 		}
+	} else if svc.Spec.Type == v1.ServiceTypeClusterIP {
+		endPoints, err := client.GetEndpoints("portworx-api", svc.Namespace)
+		if err != nil {
+			return ep, fmt.Errorf("unable to retrieve portworx-api endpoint. Err: %v", err)
+		}
+		if len(endPoints.Subsets) > 0 && len(endPoints.Subsets[0].Addresses) > 0 {
+			ip := endPoints.Subsets[0].Addresses[0].IP
+			for _, epPort := range endPoints.Subsets[0].Ports {
+				if epPort.Name == "px-api" {
+					port := strconv.Itoa(int(epPort.Port))
+					ep = net.JoinHostPort(ip, port)
+				}
+			}
+		}
+	} else {
+		return ep, fmt.Errorf("an explicit portworx endpoint is required when portworx-api service type is %s", svc.Spec.Type)
 	}
-	pxEndpoint := net.JoinHostPort(ip, port)
+	return ep, nil
+}
+
+func getPXToken(config, pxEndpoint string) (string, error) {
+	var token string
+
+	net.SplitHostPort(pxEndpoint)
+
+	pxToken := os.Getenv("PX_AUTH_TOKEN")
 	// TODO: support https as well
 	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
 	if err != nil {
-		return ip, port, token, err
+		return token, err
 	}
 	mgr := clusterclient.ClusterManager(clnt)
 	resp, err := mgr.GetPairToken(false)
 	if err != nil {
-		return ip, port, token, err
+		return token, err
 	}
 	token = resp.GetToken()
-	return ip, port, token, nil
+
+	return token, nil
+}
+
+func getHostPortFromEndPoint(ep string, ioStreams genericclioptions.IOStreams) (string, string) {
+	host, port, err := net.SplitHostPort(ep)
+	if err != nil {
+		// In case of error consider ep as the host
+		printMsg(fmt.Sprintf("unable to parse the endpoint %s to get host/ip and port. Err: %v", ep, err), ioStreams.Out)
+		host = ep
+	}
+	return host, port
 }
 
 func getMissingParameterError(param string, desc string) error {
