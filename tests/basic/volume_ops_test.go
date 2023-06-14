@@ -563,11 +563,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
-					wg.Done()
 					return
 				default:
 
@@ -610,11 +610,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		defer stopRoutine()
 
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
-					wg.Done()
 					return
 				default:
 					// Volume create continuously
@@ -633,11 +633,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go Routine to delete volume continuously in parallel to volume create
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				select {
 				case <-done:
-					wg.Done()
 					return
 				default:
 					if len(volumesCreated) > 5 {
@@ -786,6 +786,7 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		}
 
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				if terminate {
@@ -805,10 +806,10 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		log.InfoD("Trigger test to change replication factor of the volume continuously")
 		previousReplFactor := int64(1)
 		go func(vol []*volume.Volume) {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				if terminate {
-					wg.Done()
 					break
 				}
 

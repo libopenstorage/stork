@@ -9199,6 +9199,7 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 		randomIndex := rand.Intn(len(poolResizeType))
 		pickType := poolResizeType[randomIndex]
 		go func(poolUUID string, expandSize uint64) {
+			defer wg.Done()
 			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
 
@@ -9217,7 +9218,6 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 		}(eachPool, expandSize)
 
 	}
-	wg.Done()
 	return &wg, nil
 }
 
@@ -9253,7 +9253,6 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 
 		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
 		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
-
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
 		wg.Wait()
