@@ -311,6 +311,10 @@ func setup() error {
 		return fmt.Errorf("at the end of setup, setting kubeconfig to source failed in setup: %v", err)
 	}
 
+	err = addTestModeEnvironmentVar()
+	if err != nil {
+		return fmt.Errorf("TEST_MODE environment variable not set for stork: %v", err)
+	}
 	SetupTestRail()
 
 	return nil
@@ -1272,6 +1276,33 @@ func changePxServiceToLoadBalancer(internalLB bool) error {
 			return fmt.Errorf("failed to set portworx service to type %s", v1.ServiceTypeLoadBalancer)
 		}
 
+	}
+	return nil
+}
+
+// Set environment variable for TEST_MODE=true required for running some stork integration tests
+func addTestModeEnvironmentVar() error {
+	stc, err := operator.Instance().ListStorageClusters(pxNamespace)
+	if err != nil {
+		logrus.Infof("failed to list PX storage cluster: %v, won't add TEST_MODE environment variable to stork", err)
+		return nil
+	}
+	if len(stc.Items) > 0 {
+		pxStc := (*stc).Items[0]
+		storkEnvVars := v1.EnvVar{
+			Name:  "TEST_MODE",
+			Value: "true",
+		}
+		if len(pxStc.Spec.Stork.Env) == 0 {
+			pxStc.Spec.Stork.Env = []v1.EnvVar{storkEnvVars}
+		} else {
+			pxStc.Spec.Stork.Env = append(pxStc.Spec.Stork.Env, storkEnvVars)
+		}
+		_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+		if err != nil {
+			return fmt.Errorf("failed to update PX service type to LoadBalancer on EKS: %v", err)
+		}
+		logrus.Infof("Successfully added TEST_MODE environment variable to stork spec in storage cluster")
 	}
 	return nil
 }
