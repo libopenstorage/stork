@@ -144,6 +144,8 @@ const (
 	AnnotationDisableCSRAutoApprove = pxAnnotationPrefix + "/disable-csr-approve"
 	// AnnotationDisableCSRAutoApprove annotation to set priority for SCCs.
 	AnnotationSCCPriority = pxAnnotationPrefix + "/scc-priority"
+	// AnnotationFACDTopology is added when FACD topology was successfully installed on a *new* cluster (it's blocked for existing clusters)
+	AnnotationFACDTopology = pxAnnotationPrefix + "/facd-topology"
 
 	// EnvKeyPXImage key for the environment variable that specifies Portworx image
 	EnvKeyPXImage = "PX_IMAGE"
@@ -516,7 +518,7 @@ func GetPortworxVersion(cluster *corev1.StorageCluster) *version.Version {
 		pxVersion *version.Version
 	)
 
-	pxImage := cluster.Spec.Image
+	pxImage := strings.TrimSpace(cluster.Spec.Image)
 	var manifestURL string
 	for _, env := range cluster.Spec.Env {
 		if env.Name == EnvKeyPXImage {
@@ -1110,37 +1112,6 @@ func IsTelemetryEnabled(spec corev1.StorageClusterSpec) bool {
 // IsCCMGoSupported returns true if px version is higher than 2.12
 func IsCCMGoSupported(pxVersion *version.Version) bool {
 	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCCMGO)
-}
-
-// ValidateTelemetry validates if telemetry is enabled correctly
-func ValidateTelemetry(cluster *corev1.StorageCluster) error {
-	if !IsTelemetryEnabled(cluster.Spec) {
-		return nil
-	}
-
-	pxVersion := GetPortworxVersion(cluster)
-	if pxVersion.LessThan(MinimumPxVersionCCM) {
-		// PX version is lower than 2.8
-		return fmt.Errorf("telemetry is not supported on Portworx version: %s", pxVersion)
-	} else if IsCCMGoSupported(pxVersion) {
-		proxyType, proxy := GetPxProxyEnvVarValue(cluster)
-		if proxy == "" {
-			return nil
-		} else if proxyType == EnvKeyPortworxHTTPProxy {
-			// CCM Go is enabled with http proxy, but it cannot be split into host and port
-			if _, _, err := SplitPxProxyHostPort(proxy); err != nil {
-				return fmt.Errorf("telemetry is not supported with proxy in a format of: %s", proxy)
-			}
-		} else if proxyType == EnvKeyPortworxHTTPSProxy {
-			// CCM Go is enabled with https proxy
-			// TODO: remove when custom proxy is supported
-			return fmt.Errorf("telemetry is not supported with secure proxy: %s", proxy)
-		}
-	}
-
-	// NOTE: don't check if air-gapped here when telemetry is specified enabled or disabled explicitly,
-	// as it will ping the registration endpoint periodically
-	return nil
 }
 
 // IsPxRepoEnabled returns true is pxRepo is enabled
