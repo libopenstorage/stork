@@ -9257,7 +9257,6 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
 		wg.Wait()
-		fmt.Printf("waiting completed successfully ... exiting...")
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
