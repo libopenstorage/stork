@@ -9215,9 +9215,9 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 				fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
 
 		}(eachPool, expandSize)
-		wg.Done()
-	}
 
+	}
+	wg.Done()
 	return &wg, nil
 }
 
@@ -9257,7 +9257,7 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
 		wg.Wait()
-
+		fmt.Printf("waiting completed successfully ... exiting...")
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
