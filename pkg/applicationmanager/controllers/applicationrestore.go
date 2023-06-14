@@ -1498,7 +1498,7 @@ func (a *ApplicationRestoreController) restoreCrTimestampUpdate(
 		namespacedName := types.NamespacedName{}
 		namespacedName.Namespace = restore.Namespace
 		namespacedName.Name = restore.Name
-		log.ApplicationRestoreLog(restore).Infof("%v: waiting to receive data from channel...", fn)
+		log.ApplicationRestoreLog(restore).Tracef("%v: waiting to receive data from channel...", fn)
 		x := <-updateCr
 		if x == utils.UpdateRestoreCrTimestampInPrepareResourcePath ||
 			x == utils.UpdateRestoreCrTimestampInDeleteResourcePath {
@@ -1513,10 +1513,10 @@ func (a *ApplicationRestoreController) restoreCrTimestampUpdate(
 				}
 				if x == utils.UpdateRestoreCrTimestampInPrepareResourcePath {
 					restore.Status.ResourceRestoreState = storkapi.ApplicationRestoreResourcePreparing
-					log.ApplicationRestoreLog(restore).Infof("%v: obtained signal to update restore cr timestamp from prepare resource path", fn)
+					log.ApplicationRestoreLog(restore).Tracef("%v: obtained signal to update restore cr timestamp from prepare resource path", fn)
 				} else if x == utils.UpdateRestoreCrTimestampInDeleteResourcePath {
 					restore.Status.ResourceRestoreState = storkapi.ApplicationRestoreResourceDeleting
-					log.ApplicationRestoreLog(restore).Infof("%v: obtained signal to update restore cr timestamp from delete resource path", fn)
+					log.ApplicationRestoreLog(restore).Tracef("%v: obtained signal to update restore cr timestamp from delete resource path", fn)
 				}
 				restore.Status.LastUpdateTimestamp = metav1.Now()
 				err = a.client.Update(context.TODO(), restore)
@@ -1528,7 +1528,7 @@ func (a *ApplicationRestoreController) restoreCrTimestampUpdate(
 				break
 			}
 		} else if x == utils.QuitRestoreCrTimestampUpdate {
-			log.ApplicationRestoreLog(restore).Infof("%v: exiting the go-routine that updates the restore CR timestamp", fn)
+			log.ApplicationRestoreLog(restore).Tracef("%v: exiting the go-routine that updates the restore CR timestamp", fn)
 			return
 		}
 		time.Sleep(utils.SleepIntervalForCheckingChannel)
@@ -1637,7 +1637,7 @@ func (a *ApplicationRestoreController) applyResources(
 				// no need to return error lets wait for next turn to write timestamp.
 				log.ApplicationRestoreLog(restore).Errorf("%v: failed to update timestamp and restored resource count", fn)
 			}
-			log.ApplicationRestoreLog(restore).Infof("%v: Total resource Count: %v, Applied Resource Count %v, Current Resource State: %v",
+			log.ApplicationRestoreLog(restore).Tracef("%v: Total resource Count: %v, Applied Resource Count %v, Current Resource State: %v",
 				fn, restore.Status.ResourceCount,
 				len(tempResourceList),
 				restore.Status.ResourceRestoreState)
@@ -1743,8 +1743,8 @@ func (a *ApplicationRestoreController) UpdateRestoreCR(
 	if err != nil {
 		return nil, err
 	}
-	log.ApplicationRestoreLog(restore).Infof("%v updated the restore CR with restoredResourceCount: %v restore resource state: %v ",
-		fn, restore.Status.RestoredResourceCount, restore.Status.ResourceRestoreState)
+	log.ApplicationRestoreLog(restore).Infof("%v updated the restore CR with TotalResourceCount: %v, RestoredResourceCount: %v, ResourceRestoreState: %v ",
+		fn, restore.Status.ResourceCount, restore.Status.RestoredResourceCount, restore.Status.ResourceRestoreState)
 	return restore, nil
 }
 
@@ -1893,7 +1893,7 @@ func (a *ApplicationRestoreController) restoreResources(
 					// no need to return error lets wait for next turn to write timestamp.
 					log.ApplicationRestoreLog(restore).Errorf("%v: failed to update timestamp and restored resource count", fn)
 				}
-				log.ApplicationRestoreLog(restore).Infof("%v: Total resource Count: %v, Applied Resource Count %v, Current Resource State: %v",
+				log.ApplicationRestoreLog(restore).Tracef("%v: Total resource Count: %v, Applied Resource Count %v, Current Resource State: %v",
 					fn, resourceExport.Status.TotalResourceCount,
 					resourceExport.Status.RestoredResourceCount,
 					string(resourceExport.Status.ResourceExportResourceApplyStage))
