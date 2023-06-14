@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	corev1 "github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/core/v1"
+	portworxv1 "github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/portworx/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -31,18 +32,25 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	CoreV1() corev1.CoreV1Interface
+	PortworxV1() portworxv1.PortworxV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	coreV1 *corev1.CoreV1Client
+	coreV1     *corev1.CoreV1Client
+	portworxV1 *portworxv1.PortworxV1Client
 }
 
 // CoreV1 retrieves the CoreV1Client
 func (c *Clientset) CoreV1() corev1.CoreV1Interface {
 	return c.coreV1
+}
+
+// PortworxV1 retrieves the PortworxV1Client
+func (c *Clientset) PortworxV1() portworxv1.PortworxV1Interface {
+	return c.portworxV1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -93,6 +101,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.portworxV1, err = portworxv1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
@@ -115,6 +127,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.coreV1 = corev1.New(c)
+	cs.portworxV1 = portworxv1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
