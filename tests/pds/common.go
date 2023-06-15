@@ -77,6 +77,7 @@ var (
 	dataServiceDefaultResourceTemplateIDMap map[string]string
 	dataServiceNameIDMap                    map[string]string
 	supportedDataServicesNameIDMap          map[string]string
+	backupSupportedDataServiceNameIDMap     map[string]string
 	DeployAllVersions                       bool
 	DataService                             string
 	DeployAllImages                         bool
