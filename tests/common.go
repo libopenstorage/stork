@@ -5382,8 +5382,8 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	}
 }
 
-// collectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
-func collectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+// CollectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
+func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
 	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
 	podList, err := core.Instance().GetPods(namespace, podLabel)
 	if err != nil {
@@ -5412,7 +5412,7 @@ func collectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 	}
 }
 
-// collectStorkLogs collects Stork logs and stores them using the collectLogsFromPods function
+// collectStorkLogs collects Stork logs and stores them using the CollectLogsFromPods function
 func collectStorkLogs(testCaseName string) {
 	storkLabel := make(map[string]string)
 	storkLabel["name"] = "stork"
@@ -5421,10 +5421,10 @@ func collectStorkLogs(testCaseName string) {
 		log.Errorf("Error in getting portworx namespace. Err: %v", err.Error())
 		return
 	}
-	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
+	CollectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
 }
 
-// CollectMongoDBLogs collects MongoDB logs and stores them using the collectLogsFromPods function
+// CollectMongoDBLogs collects MongoDB logs and stores them using the CollectLogsFromPods function
 func CollectMongoDBLogs(testCaseName string) {
 	pxbLabel := make(map[string]string)
 	pxbLabel["app.kubernetes.io/component"] = mongodbStatefulset
@@ -5433,10 +5433,10 @@ func CollectMongoDBLogs(testCaseName string) {
 		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
 		return
 	}
-	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "mongodb")
+	CollectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "mongodb")
 }
 
-// collectPxBackupLogs collects Px-Backup logs and stores them using the collectLogsFromPods function
+// collectPxBackupLogs collects Px-Backup logs and stores them using the CollectLogsFromPods function
 func collectPxBackupLogs(testCaseName string) {
 	pxbLabel := make(map[string]string)
 	pxbLabel["app"] = "px-backup"
@@ -5445,7 +5445,7 @@ func collectPxBackupLogs(testCaseName string) {
 		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
 		return
 	}
-	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "px-backup")
+	CollectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "px-backup")
 }
 
 // compressSubDirectories compresses all subdirectories within the specified directory on the master node
