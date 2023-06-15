@@ -481,11 +481,11 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 }
 
 func init() {
+	log.Infof("Registering pds driver")
 	err = pdsdriver.Register(driverName, &DataserviceType{})
 	if err != nil {
 		log.Errorf("Error while Registering pds dataservice type driver: %v", err)
 	}
-	log.Infof("pds data services drivers got registerd...")
 }
 
 func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {

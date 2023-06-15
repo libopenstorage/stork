@@ -13,8 +13,8 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/portworx/torpedo/drivers/pds"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/pds"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/portworx/sched-ops/k8s/apps"

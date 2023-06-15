@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -258,9 +259,21 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	return token.GetToken(), nil
 }
 
+// ValidateDNSEndpoint
+func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
+	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	_, err := net.Dial("tcp", dnsEndPoint)
+	if err != nil {
+		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
+		return err
+	} else {
+		log.Infof("DNS endpoint is reachable and ready to accept connections")
+	}
+	return nil
+}
+
 // GetDNSZone fetches DNS zone for deployment.
 func (cp *ControlPlane) GetDNSZone(tenantID string) (string, error) {
-	log.Debugf("Inside the GetDNSZone function... ")
 	tenantComp := components.Tenant
 	log.Debugf("tenantComp is initialized...")
 	tenant, err := tenantComp.GetTenant(tenantID)

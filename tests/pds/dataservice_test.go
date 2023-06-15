@@ -32,6 +32,56 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
+var _ = Describe("{ValidateDNSEndpoint}", func() {
+	steplog := "Deploy dataservice, delete and validate pds pods"
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateDNSEndpoint", "validate dns endpoitns", pdsLabels, 0)
+	})
+
+	Step(steplog, func() {
+		log.InfoD(steplog)
+		It("validate dns endpoints", func() {
+			var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+			var dsVersions = make(map[string]map[string][]string)
+
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+				})
+			}
+
+			defer func() {
+				for _, newDeployment := range deployments {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				}
+			}()
+
+			steplog = "Validate Dns Endpoints of Data services"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				for ds, deployment := range deployments {
+					dnsEndpoint, port, err := pdslib.GetDeploymentConnectionInfo(deployment.GetId(), ds.Name)
+					log.FailOnError(err, "Failed Getting DNS endpoints")
+					err = controlPlane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
+					log.FailOnError(err, "Failed Validating DNS endpoints")
+					log.InfoD("DNS endpoint is reachable and ready to accept connections")
+				}
+			})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
