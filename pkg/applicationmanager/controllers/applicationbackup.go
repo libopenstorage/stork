@@ -122,6 +122,7 @@ type ApplicationBackupController struct {
 	recorder             record.EventRecorder
 	resourceCollector    resourcecollector.ResourceCollector
 	backupAdminNamespace string
+	terminationChannels  map[string][]chan bool
 	reconcileTime        time.Duration
 }
 
@@ -138,6 +139,7 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 		return err
 	}
 	a.reconcileTime = time.Duration(syncTime) * time.Second
+	a.terminationChannels = make(map[string][]chan bool)
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
 
@@ -308,7 +310,6 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		return nil
 	}
 
-	var terminationChannels []chan bool
 	var err error
 
 	if a.setDefaults(backup) {
@@ -391,7 +392,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		fallthrough
 	case stork_api.ApplicationBackupStagePreExecRule:
 		var inProgress bool
-		terminationChannels, inProgress, err = a.runPreExecRule(backup)
+		a.terminationChannels[string(backup.UID)], inProgress, err = a.runPreExecRule(backup)
 		if err != nil {
 			message := fmt.Sprintf("Error running PreExecRule: %v", err)
 			log.ApplicationBackupLog(backup).Errorf(message)
@@ -419,7 +420,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 		fallthrough
 	case stork_api.ApplicationBackupStageVolumes:
-		err := a.backupVolumes(backup, terminationChannels)
+		err := a.backupVolumes(backup, a.terminationChannels[string(backup.UID)])
 		if err != nil {
 			message := fmt.Sprintf("Error backing up volumes: %v", err)
 			log.ApplicationBackupLog(backup).Errorf(message)
@@ -537,11 +538,6 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 }
 
 func (a *ApplicationBackupController) backupVolumes(backup *stork_api.ApplicationBackup, terminationChannels []chan bool) error {
-	defer func() {
-		for _, channel := range terminationChannels {
-			channel <- true
-		}
-	}()
 	var err error
 	// Start backup of the volumes if we don't have any status stored
 	pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
@@ -705,37 +701,81 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					if err != nil {
 						return err
 					}
+					// In case Portworx if the snapshot ID is populated for every volume then the snapshot
+					// process is considered to be completed successfully.
+					// This ensures we don't execute the post-exec before all volume's snapshot is completed
+					if driverName == volume.PortworxDriverName {
+						startTime := time.Now()
+						for {
+							// In case below logic genuinely takes long time for many volumes
+							// the CR timestamp need to be updated. This prevents backup timeout error.
+							elapsedTime := time.Since(startTime)
+							if elapsedTime > utils.TimeoutUpdateBackupCrTimestamp {
+								backup, err = a.updateBackupCRInVolumeStage(
+									namespacedName,
+									stork_api.ApplicationBackupStatusInProgress,
+									backup.Status.Stage,
+									"Volume backups are in progress",
+									volumeInfos,
+								)
+								if err != nil {
+									return err
+								}
+								startTime = time.Now()
+							}
+							// Get fresh stock of the status for all volumes.
+							snapshotNotCompleted := false
+							volumeInfos, err = driver.GetBackupStatus(backup)
+							if err != nil {
+								log.ApplicationBackupLog(backup).Errorf("error getting backup status for driver %v: %v", driverName, err)
+								return fmt.Errorf("error getting backup status for driver %v: %v", driverName, err)
+							}
+							for _, volInfo := range volumeInfos {
+								if volInfo.BackupID == "" {
+									log.ApplicationBackupLog(backup).Tracef("Snapshot of volume %v is not done yet, need to loop till snapshot is done...", volInfo.PersistentVolumeClaim)
+									snapshotNotCompleted = true
+								}
+							}
+							if !snapshotNotCompleted {
+								break
+							}
+						}
+					}
 				}
 			}
-			// Terminate any background rules that were started
-			for _, channel := range terminationChannels {
-				channel <- true
-			}
-			terminationChannels = nil
 
 			// Run any post exec rules once backup is triggered
 			driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 			// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
-			if driverCombo == nonKdmpDriverOnly && backup.Spec.PostExecRule != "" {
-				err = a.runPostExecRule(backup)
-				if err != nil {
-					message := fmt.Sprintf("Error running PostExecRule: %v", err)
-					log.ApplicationBackupLog(backup).Errorf(message)
-					a.recorder.Event(backup,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationBackupStatusFailed),
-						message)
-
-					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-					backup.Status.FinishTimestamp = metav1.Now()
-					backup.Status.LastUpdateTimestamp = metav1.Now()
-					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-					backup.Status.Reason = message
-					err = a.client.Update(context.TODO(), backup)
+			if driverCombo == nonKdmpDriverOnly {
+				// Let's kill the pre-exec rule pod here so that application specific
+				// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
+				// For detail refer pb-3823
+				for _, channel := range terminationChannels {
+					logrus.Infof("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
+					channel <- true
+				}
+				if backup.Spec.PostExecRule != "" {
+					err = a.runPostExecRule(backup)
 					if err != nil {
-						return err
+						message := fmt.Sprintf("Error running PostExecRule: %v", err)
+						log.ApplicationBackupLog(backup).Errorf(message)
+						a.recorder.Event(backup,
+							v1.EventTypeWarning,
+							string(stork_api.ApplicationBackupStatusFailed),
+							message)
+
+						backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+						backup.Status.FinishTimestamp = metav1.Now()
+						backup.Status.LastUpdateTimestamp = metav1.Now()
+						backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+						backup.Status.Reason = message
+						err = a.client.Update(context.TODO(), backup)
+						if err != nil {
+							return err
+						}
+						return fmt.Errorf("%v", message)
 					}
-					return fmt.Errorf("%v", message)
 				}
 			}
 		}
@@ -825,26 +865,38 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 	// If the driver combination of volumes onlykdmp or mixed of both kdmp and non-kdmp, call post exec rule
 	// backup of volume is success.
-	if (driverCombo == kdmpDriverOnly || driverCombo == mixedDriver) && backup.Spec.PostExecRule != "" {
-		err = a.runPostExecRule(backup)
-		if err != nil {
-			message := fmt.Sprintf("Error running PostExecRule: %v", err)
-			log.ApplicationBackupLog(backup).Errorf(message)
-			a.recorder.Event(backup,
-				v1.EventTypeWarning,
-				string(stork_api.ApplicationBackupStatusFailed),
-				message)
-
-			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-			backup.Status.FinishTimestamp = metav1.Now()
-			backup.Status.LastUpdateTimestamp = metav1.Now()
-			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-			backup.Status.Reason = message
-			err = a.client.Update(context.TODO(), backup)
+	if driverCombo == kdmpDriverOnly || driverCombo == mixedDriver {
+		// Let's kill the pre-exec rule pod here so that application specific
+		// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
+		// At this point we are dead sure that volume snapshot for all PVCs in the APP is done.. if not then
+		// there is issue...
+		// For detail refer pb-3823
+		for _, channel := range terminationChannels {
+			logrus.Infof("Sending termination commands to kill pre-exec pod in kdmp or mixed driver path")
+			channel <- true
+		}
+		//terminationChannels = nil
+		if backup.Spec.PostExecRule != "" {
+			err = a.runPostExecRule(backup)
 			if err != nil {
-				return err
+				message := fmt.Sprintf("Error running PostExecRule: %v", err)
+				log.ApplicationBackupLog(backup).Errorf(message)
+				a.recorder.Event(backup,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationBackupStatusFailed),
+					message)
+
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Status.FinishTimestamp = metav1.Now()
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Reason = message
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("%v", message)
 			}
-			return fmt.Errorf("%v", message)
 		}
 	}
 	// If the backup hasn't failed move on to the next stage.
@@ -993,7 +1045,7 @@ func (a *ApplicationBackupController) prepareResources(
 	return nil
 }
 
-func (a *ApplicationBackupController) updateRancherProjectDetails(
+func UpdateRancherProjectDetails(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
@@ -1005,14 +1057,14 @@ func (a *ApplicationBackupController) updateRancherProjectDetails(
 		return err
 	}
 	if platformCredential.Spec.Type == stork_api.PlatformCredentialRancher {
-		if err = updateRancherProjects(platformCredential, backup, objects); err != nil {
+		if err = UpdateRancherProjects(platformCredential, backup, objects); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func updateRancherProjects(
+func UpdateRancherProjects(
 	platformCredential *stork_api.PlatformCredential,
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
@@ -1671,7 +1723,7 @@ func (a *ApplicationBackupController) backupResources(
 
 	// get and update rancher project details
 	if len(backup.Spec.PlatformCredential) != 0 {
-		if err = a.updateRancherProjectDetails(backup, allObjects); err != nil {
+		if err = UpdateRancherProjectDetails(backup, allObjects); err != nil {
 			message := fmt.Sprintf("Error updating rancher project details for backup: %v", err)
 			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
@@ -1693,7 +1745,7 @@ func (a *ApplicationBackupController) backupResources(
 	if nfs {
 		// Check whether ResourceExport is present or not
 		crName := getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
-		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, a.backupAdminNamespace)
+		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, backup.Namespace)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				// create resource export CR
@@ -1713,7 +1765,7 @@ func (a *ApplicationBackupController) backupResources(
 				resourceExport.Annotations = make(map[string]string)
 				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
 				resourceExport.Name = getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
-				resourceExport.Namespace = a.backupAdminNamespace
+				resourceExport.Namespace = backup.Namespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
 				source := &kdmpapi.ResourceExportObjectReference{
 					APIVersion: backup.APIVersion,
@@ -2004,7 +2056,7 @@ func (a *ApplicationBackupController) cleanupResources(
 	// Directly calling DeleteResourceExport with out checking backuplocation type.
 	// For other backuplocation type, expecting Notfound
 	crName := getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
-	err := kdmpShedOps.Instance().DeleteResourceExport(crName, a.backupAdminNamespace)
+	err := kdmpShedOps.Instance().DeleteResourceExport(crName, backup.Namespace)
 	if err != nil && !k8s_errors.IsNotFound(err) {
 		errMsg := fmt.Sprintf("failed to delete data export CR [%v]: %v", crName, err)
 		log.ApplicationBackupLog(backup).Errorf("%v", errMsg)

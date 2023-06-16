@@ -758,7 +758,7 @@ func (c *csi) cleanupSnapshots(
 			}
 		}
 		for _, vsc := range vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent) {
-			err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Delete(context.TODO(), vsc.Name, metav1.DeleteOptions{})
+			err := c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Delete(context.TODO(), vsc.Name, metav1.DeleteOptions{})
 			if k8s_errors.IsNotFound(err) {
 				continue
 			} else if err != nil {
@@ -1201,6 +1201,8 @@ func (c *csi) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 	return pv, nil
 }

@@ -537,7 +537,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		namespacedName,
 		storkapi.ApplicationRestoreStatusInProgress,
 		storkapi.ApplicationRestoreStageVolumes,
-		"Volume or Resource(kdmp) restores are in progress",
+		"Volume or Resource restores are in progress",
 		nil,
 	)
 	if err != nil {
@@ -668,6 +668,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 							restore.Spec.IncludeOptionalResourceTypes,
 							nil,
 							&opts,
+							restore.Spec.BackupLocation,
+							restore.Namespace,
 						)
 						if err != nil {
 							return err
@@ -722,6 +724,22 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						}
 					}
 				}
+				// Get restore volume batch sleep interval
+				volumeBatchSleepInterval, err := time.ParseDuration(k8sutils.DefaultRestoreVolumeBatchSleepInterval)
+				if err != nil {
+					logrus.Infof("error in parsing default restore volume sleep interval %s", k8sutils.DefaultRestoreVolumeBatchSleepInterval)
+				}
+				RestoreVolumeBatchSleepInterval, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.RestoreVolumeBatchSleepIntervalKey)
+				if err != nil {
+					logrus.Infof("error in reading %v cm, switching to default restore volume sleep interval", k8sutils.StorkControllerConfigMapName)
+				} else {
+					if len(RestoreVolumeBatchSleepInterval) != 0 {
+						volumeBatchSleepInterval, err = time.ParseDuration(RestoreVolumeBatchSleepInterval)
+						if err != nil {
+							logrus.Infof("error in conversion of volumeBatchSleepInterval: %v", err)
+						}
+					}
+				}
 				for i := 0; i < len(backupVolInfos); i += batchCount {
 					batchVolInfo := backupVolInfos[i:min(i+batchCount, len(backupVolInfos))]
 					restoreVolumeInfos, err := driver.StartRestore(restore, batchVolInfo, preRestoreObjects)
@@ -757,6 +775,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
 						return err
 					}
+					time.Sleep(volumeBatchSleepInterval)
 					restore, err = a.updateRestoreCRInVolumeStage(
 						namespacedName,
 						storkapi.ApplicationRestoreStatusInProgress,
@@ -1575,6 +1594,8 @@ func (a *ApplicationRestoreController) applyResources(
 			restore.Spec.IncludeOptionalResourceTypes,
 			restore.Status.Volumes,
 			&opts,
+			restore.Spec.BackupLocation,
+			restore.Namespace,
 		)
 		if err != nil {
 			return err
@@ -1853,6 +1874,10 @@ func (a *ApplicationRestoreController) restoreResources(
 						resource.Reason)
 				}
 				restore.Status.LargeResourceEnabled = resourceExport.Status.LargeResourceEnabled
+				restore.Status.ResourceCount = int(resourceExport.Status.TotalResourceCount)
+				restore.Status.RestoredResourceCount = int(resourceExport.Status.RestoredResourceCount)
+				log.ApplicationRestoreLog(restore).Tracef("%v: resource export CR successful with total resource count %v and restored resource count %v",
+					fn, restore.Status.ResourceCount, restore.Status.RestoredResourceCount)
 			case kdmpapi.ResourceExportStatusInitial:
 				doCleanup = false
 			case kdmpapi.ResourceExportStatusPending:
@@ -1874,6 +1899,11 @@ func (a *ApplicationRestoreController) restoreResources(
 					string(resourceExport.Status.ResourceExportResourceApplyStage))
 				restore.Status.LastUpdateTimestamp = metav1.Now()
 				doCleanup = false
+			default:
+				doCleanup = false
+				if len(resourceExport.Status.Status) != 0 {
+					log.ApplicationRestoreLog(restore).Errorf("%v: invalid status for resource export: %s, status: %s", fn, resourceExport.Name, resourceExport.Status.Status)
+				}
 			}
 			restore.Status.LastUpdateTimestamp = metav1.Now()
 			err = a.client.Update(context.TODO(), restore)
@@ -1898,6 +1928,17 @@ func (a *ApplicationRestoreController) restoreResources(
 	if err := a.addCSIVolumeResources(restore); err != nil {
 		return err
 	}
+
+	if nfs && restore.Status.LargeResourceEnabled {
+		// For NFS & large Resource Enabled we would have got resource count from RE CR in success path
+		// just add PV & PVC count which is copied to restore CR in the addCSIVolumeResources() function.
+		restore.Status.ResourceCount += len(restore.Status.Resources)
+	} else {
+		restore.Status.ResourceCount = len(restore.Status.Resources)
+	}
+
+	// Let's accomodate the PV-PVC counts in RestoredResourceCount, specifically for CSI & kdmp case.
+	restore.Status.RestoredResourceCount = restore.Status.ResourceCount
 
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()

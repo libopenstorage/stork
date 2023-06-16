@@ -547,6 +547,7 @@ func (a *ApplicationCloneController) prepareResources(
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
 			&opts,
+			"", "",
 		)
 		if err != nil {
 			return nil, err
@@ -590,7 +591,7 @@ func (a *ApplicationCloneController) preparePVResource(
 		return err
 	}
 
-	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil)
+	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil, "", "")
 	if err != nil {
 		return err
 	}
