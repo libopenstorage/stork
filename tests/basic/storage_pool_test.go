@@ -8672,16 +8672,14 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 			time.Sleep(7 * time.Minute)
 			isjournal, err := Inst().V.GetJournalDevicePath(nodeDetail)
 			log.FailOnError(err, "Error getting journal status")
-			if isjournal == "" {
+			if isjournal != "" {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
 				if err == nil {
 					log.FailOnError(fmt.Errorf("adding cloud drive with journal expected ? Error: [%v]", err),
 						"adding cloud drive with journal failed ?")
 				}
-
-				log.InfoD("Failed adding cloud drive with Journal [%v]", err)
-
+				log.InfoD("adding journal failed as expected. verifying the error")
 				re := regexp.MustCompile(".*journal exists*")
 				re1 := regexp.MustCompile(".*Journal device.*is alredy configured*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)) || re1.MatchString(fmt.Sprintf("%v", err)),
@@ -9157,17 +9155,14 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
 				log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			}
 			masterNodeAfterKill, err := GetKvdbMasterNode()
-			if err != nil {
-				log.FailOnError(err, "failed to get the master node ip")
-			}
+			log.FailOnError(err, "failed to get the master node ip")
+
 			log.Infof("kvdb master node is [%v]", masterNodeAfterKill.Name)
 			dash.VerifyFatal(masterNode.Name == masterNodeAfterKill.Name, false,
 				"master node ip is same before and after masternode kill?")
 
 			allKvdbNodes, err = GetAllKvdbNodes()
-			if err != nil {
-				log.FailOnError(err, "failed to get list of kvdb nodes")
-			}
+			log.FailOnError(err, "failed to get list of kvdb nodes")
 			dash.VerifyFatal(len(allKvdbNodes) == 3, true,
 				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
 
@@ -9232,7 +9227,7 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "Resync volume after rebalance"
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
 	It(stepLog, func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -9246,6 +9241,8 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 			poolsPresent, err := GetPoolWithIOsInGivenNode(eachNodes, contexts)
 			if err == nil {
 				poolIdsToExpand = append(poolIdsToExpand, poolsPresent.Uuid)
+			} else {
+				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
 			}
 		}
 		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
@@ -9257,6 +9254,40 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 
 		wg.Wait()
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{VerifyMetaDriveResize}", func() {
+	/*
+		https://portworx.atlassian.net/browse/PTX-17611
+		https://portworx.atlassian.net/browse/PWX-2988
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyMetaDriveResize",
+			"The large pools is giving too much to reserve vol",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "The large pools is giving too much to reserve vol"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "supports only DMThin configuration")
+		if !isDmthin {
+			dash.VerifyFatal(fmt.Errorf("Supports only DMThin configuration"), nil, "is DMThin selected?")
+		}
+
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
