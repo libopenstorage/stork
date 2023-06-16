@@ -212,8 +212,11 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 						if annotations == nil {
 							annotations = make(map[string]string)
 						}
+						// Add all annotations from Namespace.json except project annotations when not found in the namespace which is not created by px-backup.
+						// With retain policy, project annotations should not be applied to the namespace with no projects. Applies to a scenario where project association
+						// is removed by the user after taking the backup with project on a namespace
 						for k, v := range ns.GetAnnotations() {
-							if _, ok := annotations[k]; !ok && !strings.Contains(k, utils.CattleProjectPrefix) {
+							if _, ok := annotations[k]; !ok && (!strings.Contains(k, utils.CattleProjectPrefix) || annotations[utils.PxbackupAnnotationCreateByKey] != "") {
 								annotations[k] = v
 							}
 						}
@@ -221,14 +224,19 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 						if labels == nil {
 							labels = make(map[string]string)
 						}
+						// Add all labels from Namespace.json except project labels when not found in the namespace which is not created by px-backup.
+						// With retain policy, project labels should not be applied to the namespace with no projects. Applies to a scenario where project association
+						// is removed by the user after taking the backup with project on a namespace
 						for k, v := range ns.GetLabels() {
-							if _, ok := labels[k]; !ok && !strings.Contains(k, utils.CattleProjectPrefix) {
+							if _, ok := labels[k]; !ok && (!strings.Contains(k, utils.CattleProjectPrefix) || annotations[utils.PxbackupAnnotationCreateByKey] != "") {
 								labels[k] = v
 							}
 						}
 						utils.ParseRancherProjectMapping(annotations, rancherProjectMapping)
 						utils.ParseRancherProjectMapping(labels, rancherProjectMapping)
 					}
+					// delete the px backup CreateByKey Annotation
+					delete(annotations, utils.PxbackupAnnotationCreateByKey)
 					log.ApplicationRestoreLog(restore).Tracef("Namespace already exists, updating dest namespace %v", ns.Name)
 					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
