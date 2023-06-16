@@ -92,6 +92,7 @@ type updateDataExportDetail struct {
 	snapshotNamespace    string
 	removeFinalizer      bool
 	volumeSnapshot       string
+	resetLocalSnapshotRestore bool
 }
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
@@ -1046,6 +1047,7 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 			stage:  kdmpapi.DataExportStageTransferScheduled,
 			status: kdmpapi.DataExportStatusInitial,
 			reason: "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
+			resetLocalSnapshotRestore: true,
 		}
 		return false, c.updateStatus(dataExport, data)
 	}
@@ -1198,6 +1200,7 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 			status:     kdmpapi.DataExportStatusInitial,
 			reason:     "",
 			transferID: "", // Resetting transfer id if it has been set with nfs backuplocation job
+			resetLocalSnapshotRestore: true,
 		}
 		return false, c.updateStatus(dataExport, data)
 	}
@@ -1435,6 +1438,16 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		if err := core.Instance().DeletePersistentVolume(pvName); err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("delete %s pv: %s", pvName, err)
 		}
+		if err := utils.CleanServiceAccount(jobName, namespace); err != nil {
+			errMsg := fmt.Sprintf("deletion of service account %s/%s failed: %v", namespace, jobName, err)
+			logrus.Errorf("%s: %v", "cleanUp", errMsg)
+			return fmt.Errorf(errMsg)
+		}
+		if err := core.Instance().DeleteSecret(utils.GetCredSecretName(jobName), namespace); err != nil && !k8sErrors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("deletion of backup credential secret %s failed: %v", jobName, err)
+			logrus.Errorf(errMsg)
+			return fmt.Errorf(errMsg)
+		}
 	}
 
 	if err := core.Instance().DeleteSecret(utils.GetCredSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
@@ -1472,27 +1485,32 @@ func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExpor
 			return nil, false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, cleanupErr)
 		}
 
-		pvcSpec := &corev1.PersistentVolumeClaim{}
+		// Get the Restore pvc spec.
+                rpvc, err := core.Instance().GetPersistentVolumeClaim(de.Status.RestorePVC.Name, de.Namespace)
+                if err != nil {
+                        if k8sErrors.IsNotFound(err) {
+                                return nil, false, nil;
+                        }
+                        logrus.Errorf("cleanupLocalRestoredSnapshotResources: failed to get restore pvc [%v] err: %v", de.Status.RestorePVC.Name, err)
+                        return nil, false, err
+                }
+		if rpvc.Spec.DataSource != nil {
+			err = snapshotDriver.DeleteSnapshot(rpvc.Spec.DataSource.Name, de.Namespace, true)
+			if err != nil {
+				logrus.Errorf("cleanupLocalRestoredSnapshotResources: snapshotDriver.DeleteSnapshot failed with err: %v", err)
+				return nil, false, err
+			}
+		}
 
 		if !ignorePVC {
-			pvcSpec = de.Status.RestorePVC
+			pvcSpec := de.Status.RestorePVC
 			if err := cleanupJobBoundResources(pvcSpec.Name, de.Namespace); err != nil {
 				return nil, false, fmt.Errorf("cleaning up of bound job resources failed: %v", err)
 			}
-		}
-
-		if de.Status.SnapshotPVCName != "" && de.Status.SnapshotPVCNamespace != "" {
 			if err := core.Instance().DeletePersistentVolumeClaim(pvcSpec.Name, de.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
 				return nil, false, fmt.Errorf("delete %s/%s pvc: %s", de.Namespace, pvcSpec.Name, err)
 			}
-			err := snapshotDriver.DeleteSnapshot(de.Status.VolumeSnapshot, de.Status.SnapshotPVCNamespace, true)
-			msg := fmt.Sprintf("failed in removing local volume snapshot CRs for %s/%s: %v", de.Status.VolumeSnapshot, de.Status.SnapshotPVCName, err)
-			if err != nil {
-				logrus.Errorf(msg)
-				return nil, false, fmt.Errorf(msg)
-			}
 		}
-
 		return nil, false, nil
 	}
 
@@ -1555,6 +1573,9 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportD
 		}
 		if data.volumeSnapshot != "" {
 			de.Status.VolumeSnapshot = data.volumeSnapshot
+		}
+		if data.resetLocalSnapshotRestore {
+			de.Status.LocalSnapshotRestore = false
 		}
 
 		actualErr = c.client.Update(context.TODO(), de)
@@ -2187,7 +2208,8 @@ func startNfsCSIRestoreVolumeJob(
 	bl *storkapi.BackupLocation,
 ) (string, error) {
 
-	err := utils.CreateNfsSecret(utils.GetCredSecretName(de.Name), bl, de.Namespace, nil)
+	jobName := utils.GetCsiRestoreJobName(drivers.NFSCSIRestore, de.Name)
+	err := utils.CreateNfsSecret(utils.GetCredSecretName(jobName), bl, de.Namespace, nil)
 	if err != nil {
 		logrus.Errorf("failed to create NFS cred secret: %v", err)
 		return "", fmt.Errorf("failed to create NFS cred secret: %v", err)
