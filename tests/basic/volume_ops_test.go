@@ -700,7 +700,7 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 			Inst().AppList = currAppList
 		}
 		defer revertAppList()
-		
+
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"vdbench-heavyload"}
 

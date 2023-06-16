@@ -9055,15 +9055,16 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
 			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
 
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		if err != nil {
+			log.FailOnError(err, "Failed to pool details to be resized from pool uuid [%s]", poolUUID)
+		}
+
 		expandPoolWithKVDBFailover := func(poolUUID string) error {
-
+			incrementSize := uint64(200)
 			for _, eachType := range poolResizeType {
-				poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-				if err != nil {
-					return err
-				}
 
-				expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+				expectedSize := (poolToBeResized.TotalSize / units.GiB) + incrementSize
 				log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 				err = Inst().V.ExpandPool(poolUUID, eachType, expectedSize, true)
@@ -9090,6 +9091,9 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 				if resizeErr != nil {
 					return resizeErr
 				}
+
+				// Resize Pool by 500 GiB Every time
+				incrementSize = incrementSize + uint64(200)
 			}
 			return nil
 		}
