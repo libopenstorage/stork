@@ -66,47 +66,48 @@ var _ = Describe("{Longevity}", func() {
 		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:            TriggerAppTaskDown,
-		AppTasksDown:           TriggerAppTasksDown,
-		AddDrive:               TriggerAddDrive,
-		CoreChecker:            TriggerCoreChecker,
-		CloudSnapShot:          TriggerCloudSnapShot,
-		LocalSnapShot:          TriggerLocalSnapShot,
-		DeleteLocalSnapShot:    TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:         TriggerPoolResizeDisk,
-		PoolAddDisk:            TriggerPoolAddDisk,
-		UpgradeStork:           TriggerUpgradeStork,
-		VolumesDelete:          TriggerVolumeDelete,
-		UpgradeVolumeDriver:    TriggerUpgradeVolumeDriver,
-		AutoFsTrim:             TriggerAutoFsTrim,
-		UpdateVolume:           TriggerVolumeUpdate,
-		RestartManyVolDriver:   TriggerRestartManyVolDriver,
-		RebootManyNodes:        TriggerRebootManyNodes,
-		NodeDecommission:       TriggerNodeDecommission,
-		NodeRejoin:             TriggerNodeRejoin,
-		CsiSnapShot:            TriggerCsiSnapShot,
-		CsiSnapRestore:         TriggerCsiSnapRestore,
-		RelaxedReclaim:         TriggerRelaxedReclaim,
-		Trashcan:               TriggerTrashcan,
-		KVDBFailover:           TriggerKVDBFailover,
-		ValidateDeviceMapper:   TriggerValidateDeviceMapperCleanup,
-		MetroDR:                TriggerMetroDR,
-		AsyncDR:                TriggerAsyncDR,
-		ConfluentAsyncDR:       TriggerConfluentAsyncDR,
-		AsyncDRVolumeOnly:      TriggerAsyncDRVolumeOnly,
-		AutoFsTrimAsyncDR:      TriggerAutoFsTrimAsyncDR,
-		IopsBwAsyncDR:          TriggerIopsBwAsyncDR,
-		StorkApplicationBackup: TriggerStorkApplicationBackup,
-		StorkAppBkpVolResize:   TriggerStorkAppBkpVolResize,
-		StorkAppBkpHaUpdate:    TriggerStorkAppBkpHaUpdate,
-		StorkAppBkpPxRestart:   TriggerStorkAppBkpPxRestart,
-		StorkAppBkpPoolResize:  TriggerStorkAppBkpPoolResize,
-		RestartKvdbVolDriver:   TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:    TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:       TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:    TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:     TriggerAutopilotPoolRebalance,
-		VolumeCreatePxRestart:  TriggerVolumeCreatePXRestart,
+		AppTaskDown:              TriggerAppTaskDown,
+		AppTasksDown:             TriggerAppTasksDown,
+		AddDrive:                 TriggerAddDrive,
+		CoreChecker:              TriggerCoreChecker,
+		CloudSnapShot:            TriggerCloudSnapShot,
+		LocalSnapShot:            TriggerLocalSnapShot,
+		DeleteLocalSnapShot:      TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:           TriggerPoolResizeDisk,
+		PoolAddDisk:              TriggerPoolAddDisk,
+		UpgradeStork:             TriggerUpgradeStork,
+		VolumesDelete:            TriggerVolumeDelete,
+		UpgradeVolumeDriver:      TriggerUpgradeVolumeDriver,
+		AutoFsTrim:               TriggerAutoFsTrim,
+		UpdateVolume:             TriggerVolumeUpdate,
+		RestartManyVolDriver:     TriggerRestartManyVolDriver,
+		RebootManyNodes:          TriggerRebootManyNodes,
+		NodeDecommission:         TriggerNodeDecommission,
+		NodeRejoin:               TriggerNodeRejoin,
+		CsiSnapShot:              TriggerCsiSnapShot,
+		CsiSnapRestore:           TriggerCsiSnapRestore,
+		RelaxedReclaim:           TriggerRelaxedReclaim,
+		Trashcan:                 TriggerTrashcan,
+		KVDBFailover:             TriggerKVDBFailover,
+		ValidateDeviceMapper:     TriggerValidateDeviceMapperCleanup,
+		MetroDR:                  TriggerMetroDR,
+		AsyncDR:                  TriggerAsyncDR,
+		AsyncDRMigrationSchedule: TriggerAsyncDRMigrationSchedule,
+		ConfluentAsyncDR:         TriggerConfluentAsyncDR,
+		AsyncDRVolumeOnly:        TriggerAsyncDRVolumeOnly,
+		AutoFsTrimAsyncDR:        TriggerAutoFsTrimAsyncDR,
+		IopsBwAsyncDR:            TriggerIopsBwAsyncDR,
+		StorkApplicationBackup:   TriggerStorkApplicationBackup,
+		StorkAppBkpVolResize:     TriggerStorkAppBkpVolResize,
+		StorkAppBkpHaUpdate:      TriggerStorkAppBkpHaUpdate,
+		StorkAppBkpPxRestart:     TriggerStorkAppBkpPxRestart,
+		StorkAppBkpPoolResize:    TriggerStorkAppBkpPoolResize,
+		RestartKvdbVolDriver:     TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:      TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:         TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:      TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:       TriggerAutopilotPoolRebalance,
+		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -376,6 +377,8 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setEmailSubject(configData)
 	setPureTopology(configData)
 	setHyperConvergedType(configData)
+	setMigrationInterval(configData)
+	setMigrationsCount(configData)
 	err := setSendGridEmailAPIKey(configData)
 	if err != nil {
 		return err
@@ -417,6 +420,30 @@ func setEmailSubject(configData *map[string]string) {
 		delete(*configData, EmailSubjectField)
 	} else {
 		EmailSubject = "Torpedo Longevity Report"
+	}
+}
+
+func setMigrationInterval(configData *map[string]string) {
+	var err error
+	if migInt, ok := (*configData)[MigrationIntervalField]; ok {
+		MigrationInterval, err = strconv.Atoi(migInt)
+		if err != nil {
+			log.Errorf("Cannot set Migration interval value, getting error: %v", err)
+		}
+	} else {
+		MigrationInterval = 3
+	}
+}
+
+func setMigrationsCount(configData *map[string]string) {
+	var err error
+	if migCount, ok := (*configData)[MigrationsCountField]; ok {
+		MigrationsCount, err = strconv.Atoi(migCount)
+		if err != nil {
+			log.Errorf("Cannot set Migration Count value, getting error: %v", err)
+		}
+	} else {
+		MigrationsCount = 5
 	}
 }
 
@@ -628,6 +655,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrimAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[IopsBwAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[ConfluentAsyncDR] = make(map[int]time.Duration)
@@ -785,6 +813,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][3] = 21 * baseInterval
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRMigrationSchedule][10] = 1 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][9] = 3 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][8] = 6 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][7] = 9 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][6] = 12 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][5] = 15 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][4] = 18 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][3] = 21 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][2] = 24 * baseInterval
+	triggerInterval[AsyncDRMigrationSchedule][1] = 27 * baseInterval
 
 	triggerInterval[AutoFsTrimAsyncDR][10] = 1 * baseInterval
 	triggerInterval[AutoFsTrimAsyncDR][9] = 3 * baseInterval
@@ -1376,6 +1415,7 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[AsyncDRMigrationSchedule][0] = 0
 	triggerInterval[AutoFsTrimAsyncDR][0] = 0
 	triggerInterval[IopsBwAsyncDR][0] = 0
 	triggerInterval[ConfluentAsyncDR][0] = 0
