@@ -695,6 +695,12 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		driverNode = nil
 
 		contexts = make([]*scheduler.Context, 0)
+		currAppList := Inst().AppList
+		revertAppList := func() {
+			Inst().AppList = currAppList
+		}
+		defer revertAppList()
+		
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"vdbench-heavyload"}
 
