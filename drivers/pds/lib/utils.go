@@ -700,6 +700,16 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
+
+	if dsName == mysql {
+		ports := deploymentConnectionDetails.GetPorts()
+		for key, value := range ports {
+			if key == "mysql-router" {
+				port = fmt.Sprint(value)
+			}
+		}
+	}
+
 	//TODO: Validate vip endpoints as well
 	for key, value := range clusterDetails {
 		log.Infof("host details key: [%v] value: [%v]", key, value)
@@ -729,7 +739,7 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			if strings.Contains(key, "httpPort") {
 				port = fmt.Sprint(value)
 			}
-		case elasticSearch, mysql, mssql, redis, kafka, zookeeper:
+		case elasticSearch, mssql, redis, kafka, zookeeper:
 			if strings.Contains(key, "Port") {
 				port = fmt.Sprint(value)
 			}

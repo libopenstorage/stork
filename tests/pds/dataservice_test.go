@@ -842,15 +842,6 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
 		defer EndTorpedoTest()
 	})
 })
@@ -1789,7 +1780,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				}()
 
 				Step("Checking the PVC usage", func() {
-					ctx, err := dsTest.CreateSchedulerContextForPDSApps(depList)
+					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 					log.FailOnError(err, "Unable to create scheduler context")
 					err = CheckPVCtoFullCondition(ctx)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")

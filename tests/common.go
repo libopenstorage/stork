@@ -267,6 +267,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
+	defaultPdsDriver                      = "pds"
 	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
@@ -4914,7 +4915,7 @@ func ParseFlags() {
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
-	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
+	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.Parse()
