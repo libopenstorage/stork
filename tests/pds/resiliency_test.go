@@ -631,3 +631,82 @@ var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
 		}
 	})
 })
+
+var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillPdsAgentDuringWorkloadRun", "Kill Pds Agent Pods while Workload is running", pdsLabels, 0)
+	})
+	It("Deploy Dataservices and Restart PX During App scaleup", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var generateWorkloads = make(map[string]string)
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name != postgresql {
+					continue
+				}
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+		Step("Running Workloads", func() {
+			for ds, deployment := range deployments {
+				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while generating workloads for dataservice [%s]", ds.Name))
+					if dep == nil {
+						generateWorkloads[ds.Name] = pod.Name
+					} else {
+						generateWorkloads[ds.Name] = dep.Name
+					}
+					for dsName, workloadContainer := range generateWorkloads {
+						log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					}
+				} else {
+					log.InfoD("Workload script not available for ds %v", ds.Name)
+				}
+			}
+		})
+		defer func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		}()
+
+		Step("Killing PDS Agent Pods", func() {
+			err = pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
+			log.FailOnError(err, "Failed while deleting PDS Agent Pods")
+		})
+
+		// TODO : Once Workload Validation Module is ready, we will add that here. AI: @jyoti
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
