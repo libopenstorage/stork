@@ -2017,8 +2017,7 @@ func ValidateClusterSize(count int64) {
 	} else {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
-	storageNodes, err := GetStorageNodes()
-	log.FailOnError(err, "Storage nodes are empty")
+	storageNodes := node.GetStorageNodes()
 
 	log.Infof("List of storage nodes:[%v]", storageNodes)
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
@@ -4782,6 +4781,7 @@ type Torpedo struct {
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
+	MigrationHops                       string
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
@@ -4838,6 +4838,7 @@ func ParseFlags() {
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
+	var migrationHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
 	//dashboard fields
@@ -4888,6 +4889,7 @@ func ParseFlags() {
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
+	flag.StringVar(&migrationHops, "migration-hops", "", "Comma separated list of versions for migration pool")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
 	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone name")
@@ -5122,6 +5124,7 @@ func ParseFlags() {
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
+				MigrationHops:                       migrationHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,

@@ -46,7 +46,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
 	github.com/trivago/tgo v1.0.7
-	github.com/vmware/govmomi v0.22.2
+	github.com/vmware/govmomi v0.30.4
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.8.0
