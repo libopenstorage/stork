@@ -566,6 +566,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					return
+				}
 				select {
 				case <-done:
 					return
@@ -599,8 +602,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		stopRoutine := func() {
 			if !terminate {
 				done <- true
-				time.Sleep(5 * time.Second)
-				close(done)
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
@@ -613,6 +614,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					return
+				}
 				select {
 				case <-done:
 					return
@@ -636,6 +640,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					return
+				}
 				select {
 				case <-done:
 					return
@@ -665,8 +672,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		case <-timeout:
 			stopRoutine()
 		}
-		// Wait for GO Routine to complete
-		wg.Wait()
+		if !terminate {
+			wg.Wait()
+		}
 	})
 
 	JustAfterEach(func() {
@@ -700,7 +708,6 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 			Inst().AppList = currAppList
 		}
 		defer revertAppList()
-
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"vdbench-heavyload"}
 
@@ -861,7 +868,6 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 			if terminate {
 				break
 			}
-			defer GinkgoRecover()
 			select {
 			case <-timeout:
 				terminateflow()

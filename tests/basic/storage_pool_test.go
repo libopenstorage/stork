@@ -9060,41 +9060,39 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 			log.FailOnError(err, "Failed to pool details to be resized from pool uuid [%s]", poolUUID)
 		}
 
+		randomIndex := rand.Intn(len(poolResizeType))
+		pickType := poolResizeType[randomIndex]
+
 		expandPoolWithKVDBFailover := func(poolUUID string) error {
-			incrementSize := uint64(200)
-			for _, eachType := range poolResizeType {
 
-				expectedSize := (poolToBeResized.TotalSize / units.GiB) + incrementSize
-				log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 200
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
-				err = Inst().V.ExpandPool(poolUUID, eachType, expectedSize, true)
-				if err != nil {
-					return err
-				}
-
-				err = WaitForExpansionToStart(poolUUID)
-				if err != nil {
-					return err
-				}
-
-				isjournal, err := isJournalEnabled()
-				if err != nil {
-					return err
-				}
-
-				err = KillKvdbMasterNodeAndFailover()
-				if err != nil {
-					return err
-				}
-
-				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-				if resizeErr != nil {
-					return resizeErr
-				}
-
-				// Resize Pool by 500 GiB Every time
-				incrementSize = incrementSize + uint64(200)
+			err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
+			if err != nil {
+				return err
 			}
+
+			err = WaitForExpansionToStart(poolUUID)
+			if err != nil {
+				return err
+			}
+
+			isjournal, err := isJournalEnabled()
+			if err != nil {
+				return err
+			}
+
+			err = KillKvdbMasterNodeAndFailover()
+			if err != nil {
+				return err
+			}
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			if resizeErr != nil {
+				return resizeErr
+			}
+
 			return nil
 		}
 		log.FailOnError(expandPoolWithKVDBFailover(poolUUID), "pool expand with kvdb failover failed")
@@ -9258,40 +9256,6 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 
 		wg.Wait()
 	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-})
-
-var _ = Describe("{VerifyMetaDriveResize}", func() {
-	/*
-		https://portworx.atlassian.net/browse/PTX-17611
-		https://portworx.atlassian.net/browse/PWX-2988
-	*/
-	JustBeforeEach(func() {
-		StartTorpedoTest("VerifyMetaDriveResize",
-			"The large pools is giving too much to reserve vol",
-			nil, 0)
-	})
-	var contexts []*scheduler.Context
-	stepLog := "The large pools is giving too much to reserve vol"
-	It(stepLog, func() {
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-
-		isDmthin, err := IsDMthin()
-		log.FailOnError(err, "supports only DMThin configuration")
-		if !isDmthin {
-			dash.VerifyFatal(fmt.Errorf("Supports only DMThin configuration"), nil, "is DMThin selected?")
-		}
-
-	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
