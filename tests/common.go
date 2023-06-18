@@ -2019,8 +2019,6 @@ func ValidateClusterSize(count int64) {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
 	storageNodes := node.GetStorageNodes()
-
-	log.Infof("List of storage nodes:[%v]", storageNodes)
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
 }
 
