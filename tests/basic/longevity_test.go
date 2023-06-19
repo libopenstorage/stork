@@ -108,7 +108,8 @@ var _ = Describe("{Longevity}", func() {
 		ResizeDiskAndReboot:      TriggerPoolResizeDiskAndReboot,
 		AutopilotRebalance:       TriggerAutopilotPoolRebalance,
 		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
-		DeleteOldNamespaces:    TriggerDeleteOldNamespaces,
+		DeleteOldNamespaces:      TriggerDeleteOldNamespaces,
+		MetroDRMigrationSchedule: TriggerMetroDRMigrationSchedule,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -668,6 +669,7 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
+	triggerInterval[MetroDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[DeleteOldNamespaces] = make(map[int]time.Duration)
@@ -817,6 +819,17 @@ func populateIntervals() {
 	triggerInterval[MetroDR][3] = 21 * baseInterval
 	triggerInterval[MetroDR][2] = 24 * baseInterval
 	triggerInterval[MetroDR][1] = 27 * baseInterval
+
+	triggerInterval[MetroDRMigrationSchedule][10] = 1 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][9] = 3 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][8] = 6 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][7] = 9 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][6] = 12 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][5] = 15 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][4] = 18 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][3] = 21 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][2] = 24 * baseInterval
+	triggerInterval[MetroDRMigrationSchedule][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
@@ -1433,6 +1446,8 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[MetroDR][0] = 0
+	triggerInterval[MetroDRMigrationSchedule][0] = 0
 	triggerInterval[AsyncDRMigrationSchedule][0] = 0
 	triggerInterval[AutoFsTrimAsyncDR][0] = 0
 	triggerInterval[IopsBwAsyncDR][0] = 0
