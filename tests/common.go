@@ -6997,19 +6997,14 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 // WaitForKVDBMembers waits till all kvdb members comes up online and healthy
 func WaitForKVDBMembers() error {
 	t := func() (interface{}, bool, error) {
-		isHealthy := 0
 		allKvdbNodes, err := GetAllKvdbNodes()
 		if len(allKvdbNodes) != 3 {
 			return "", true, err
 		}
 		for _, each := range allKvdbNodes {
-			if each.IsHealthy {
-				isHealthy += 1
+			if each.IsHealthy == false {
+				return "", true, err
 			}
-		}
-		if isHealthy == 3 {
-			log.InfoD("all 3 kvdb nodes are online and healthy, exiting.")
-			return "", false, nil
 		}
 		return "", true, err
 	}
