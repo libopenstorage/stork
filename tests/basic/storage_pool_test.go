@@ -8758,6 +8758,13 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
 		contexts = make([]*scheduler.Context, 0)
+		currAppList := Inst().AppList
+
+		revertAppList := func() {
+			Inst().AppList = currAppList
+		}
+		defer revertAppList()
+
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"fio", "fio-writes"}
 
@@ -9256,6 +9263,140 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 
 		wg.Wait()
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
+	/*
+		Restart Multiple Storage Nodes with one KVDB Master
+		https://portworx.atlassian.net/browse/PTX-17618
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartMultipleStorageNodeOneKVDBMaster",
+			"Restart Multiple Storage Nodes with one KVDB Master",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+
+		listOfStorageNodes := node.GetStorageNodes()
+		// Test Needs minimum of 3 nodes other than 3 KVDB Member nodes
+		// so that few storage nodes (except kvdb nodes ) can be restarted
+		dash.VerifyFatal(len(listOfStorageNodes) >= 6, true, "Test Needs minimum of 6 Storage Nodes")
+
+		// assuming that there are minimum number of 3 nodes minus kvdb member nodes , we pick atleast 50% of the nodes for restating
+		var nodesToReboot []node.Node
+		getKVDBNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+
+		// Verifying if we have kvdb quorum set
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes")
+
+		// Get 50 % of other nodes for restart
+		nodeCountsForRestart := (len(listOfStorageNodes) - len(getKVDBNodes)) / 2
+		log.InfoD("total nodes picked for rebooting [%v]", nodeCountsForRestart)
+
+		isKVDBNode := func(n node.Node) (bool, bool) {
+			for _, eachKvdb := range getKVDBNodes {
+				if n.Id == eachKvdb.ID {
+					if eachKvdb.Leader == true {
+						return true, true
+					} else {
+						return true, false
+					}
+				}
+			}
+			return false, false
+		}
+
+		count := 0
+		// Add one KVDB node to the List
+		for _, each := range listOfStorageNodes {
+			kvdbNode, master := isKVDBNode(each)
+			if kvdbNode == true && master == true {
+				nodesToReboot = append(nodesToReboot, each)
+				count = count + 1
+			}
+		}
+		// Add nodes which are not KVDB Nodes
+		for _, each := range listOfStorageNodes {
+			kvdbNode, _ := isKVDBNode(each)
+			if kvdbNode == false {
+				if count <= nodeCountsForRestart {
+					nodesToReboot = append(nodesToReboot, each)
+					count = count + 1
+				}
+			}
+		}
+
+		for _, eachNode := range nodesToReboot {
+			log.InfoD("Selected Node [%v] for Restart", eachNode.Name)
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootmulparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Initiate all node reboot at once using Go Routines
+		wg.Add(len(nodesToReboot))
+
+		rebootNode := func(n node.Node) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			log.InfoD("Rebooting Node [%v]", n.Name)
+
+			err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				},
+			})
+			log.FailOnError(err, "failed to reboot Node [%v]", n.Name)
+
+		}
+
+		// Initiating Go Routing to reboot all the nodes at once
+		rebootAllNodes := func() {
+			for _, each := range nodesToReboot {
+				log.InfoD("Node to Reboot [%v]", each.Name)
+				go rebootNode(each)
+			}
+			wg.Wait()
+
+			// Wait for connection to come back online after reboot
+			for _, each := range nodesToReboot {
+				err = Inst().N.TestConnection(each, node.ConnectionOpts{
+					Timeout:         15 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+
+				err = Inst().S.IsNodeReady(each)
+				log.FailOnError(err, "Node [%v] is not in ready state", each.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(each, Inst().DriverStartTimeout)
+				log.FailOnError(err, "failed waiting for driver up on Node[%v]", each.Name)
+			}
+		}
+
+		// Reboot all the Nodes at once
+		rebootAllNodes()
+
+		// Verifications
+		getKVDBNodes, err = GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes after node reboot")
+
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)

@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -682,12 +683,12 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 })
 
-var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
+var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 	var testrailID = 0
 	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolumeShareV4MultipleHAIncreaseVolResize",
+		StartTorpedoTest("VolumeMultipleHAIncreaseVolResize",
 			"Px crashes when we perform multiple HAUpdate in a loop", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
@@ -696,25 +697,16 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 	stepLog := "Px crashes when we perform multiple HAUpdate in a loop"
 	It(stepLog, func() {
 		var wg sync.WaitGroup
-
 		var driverNode *node.Node
+
+		var volReplMap map[string]int64
+
 		driverNode = nil
 
 		contexts = make([]*scheduler.Context, 0)
-		currAppList := Inst().AppList
-		revertAppList := func() {
-			Inst().AppList = currAppList
-		}
-		defer revertAppList()
-		Inst().AppList = []string{}
-		var ioIntensiveApp = []string{"vdbench-heavyload"}
-
-		for _, eachApp := range ioIntensiveApp {
-			Inst().AppList = append(Inst().AppList, eachApp)
-		}
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("vshrdv4mulhaupvolr-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volmulhaupvolr-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
@@ -732,6 +724,35 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 		// Get All Volumes from the pool
 		volumes, err := GetVolumesFromPoolID(contexts, poolUUID)
 		log.FailOnError(err, "Failed to get list of volumes from the poolIDs")
+
+		for _, each := range volumes {
+			replFactor, err := Inst().V.GetReplicationFactor(each)
+			if err != nil {
+				log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
+			}
+			volReplMap[each.ID] = replFactor
+		}
+
+		revertReplica := func() {
+			for _, each := range volumes {
+				for vID, replCount := range volReplMap {
+					if each.ID == vID {
+						replFactor, err := Inst().V.GetReplicationFactor(each)
+						if err != nil {
+							log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
+						}
+						if replFactor != replCount {
+							err = Inst().V.SetReplicationFactor(each, replCount, nil, nil, true)
+							if err != nil {
+								log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		defer revertReplica()
 
 		numGoroutines := len(volumes)
 		wg.Add(numGoroutines)
@@ -806,11 +827,14 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 				for _, eachVol := range volumes {
 					err := volumeResize(eachVol)
 					if err != nil {
-						terminateflow()
-						log.FailOnError(err, "failed to resize Volume  [%v]", eachVol.Name)
+						if strings.Contains(fmt.Sprintf("%v", err), "Resource has not been initialized") {
+							waitTillDriverUp()
+						} else {
+							terminateflow()
+							log.FailOnError(err, "failed to resize Volume  [%v]", eachVol.Name)
+						}
 					}
 				}
-
 			}
 		}()
 
@@ -849,12 +873,12 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", each.Name, currRepFactor, setReplFactor)
 					err = Inst().V.SetReplicationFactor(each, setReplFactor, nil, nil, true)
 					if err != nil {
-						terminateflow()
-						log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
-					}
-					if terminate {
-						return
-
+						if strings.Contains(fmt.Sprintf("%v", err), "Another HA increase operation is in progress") {
+							continue
+						} else {
+							terminateflow()
+							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
+						}
 					}
 				}
 			}
@@ -878,13 +902,8 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 				// Pick a Node on which volume is placed and start rebooting the node
 				poolIds, err := GetPoolIDsFromVolName(volPicked.ID)
 				if err != nil {
+					terminateflow()
 					log.FailOnError(err, "failed to get pool details from the volume")
-				}
-
-				// resize all volumes present
-				err = volumeResize(volPicked)
-				if err != nil {
-					log.FailOnError(err, "error while resizing volume")
 				}
 
 				// select random pool and get the node associated with that pool
@@ -892,7 +911,11 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 				poolPicked := poolIds[randomIndex]
 
 				nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
-				log.InfoD("Rebooting node [%v] and waiting for the node to come back online", nodeDetail.Name)
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, "error while fetching node details from pool ID")
+				}
+				log.InfoD("Restarting Px on Node [%v] and waiting for the Px to come back online", nodeDetail.Name)
 
 				driverNode = nodeDetail
 
@@ -902,19 +925,12 @@ var _ = Describe("{VolumeShareV4MultipleHAIncreaseVolResize}", func() {
 					log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
 				}
 
-				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
-				if err != nil {
-					terminateflow()
-					log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
-				}
+				waitTillDriverUp()
 
 				// flag is to make sure to wait for driver to be up and running when because
 				// of some other process test terminates in middle
 				driverNode = nil
 			}
-		}
-		if !terminate {
-			wg.Wait()
 		}
 
 	})
