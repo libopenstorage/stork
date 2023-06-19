@@ -39,9 +39,10 @@ const (
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
 
-	appReadinessTimeout = 10 * time.Minute
-	migrationKey        = "async-dr-"
-	kubeconfigDirectory = "/tmp"
+	appReadinessTimeout    = 10 * time.Minute
+	DeleteNamespaceTimeout = 5 * time.Minute
+	migrationKey           = "async-dr-"
+	kubeconfigDirectory    = "/tmp"
 )
 
 var (
@@ -402,4 +403,40 @@ func WaitForPodToBeRunning(pods *v1.PodList) error {
 	}
 	_, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
 	return err
+}
+
+func CollectNsForDeletion(label map[string]string, createdBeforeTime time.Duration) []string {
+	var nsToBeDeleted []string
+	data, err := core.Instance().ListNamespaces(label)
+	if err == nil {
+		for _, val := range data.Items {
+			if time.Now().Sub(val.CreationTimestamp.Time) > createdBeforeTime*time.Hour {
+				nsToBeDeleted = append(nsToBeDeleted, val.Name)
+			}
+		}
+	}
+	return nsToBeDeleted
+}
+
+func WaitForNamespaceDeletion(namespaces []string) error {
+	for _, ns := range namespaces {
+		err := core.Instance().DeleteNamespace(ns)
+		if err != nil {
+			return fmt.Errorf("Failed to delete namespace: %v", ns)
+		}
+		log.InfoD("deleting ns: [%v] now", ns)
+		getNamespace := func() (interface{}, bool, error) {
+			_, err := core.Instance().GetNamespace(ns)
+			if err == nil {
+				msg := fmt.Sprintf("Namespace [%v] is not deleted yet, waiting for it to be deleted", ns)
+				log.InfoD(msg)
+				return "", true, fmt.Errorf(msg)
+			}
+			return nil, false, nil
+		}
+		if _, err := task.DoRetryWithTimeout(getNamespace, DeleteNamespaceTimeout, 10*time.Second); err != nil {
+			return err
+		}
+	}
+	return nil
 }

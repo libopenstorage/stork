@@ -108,6 +108,7 @@ var _ = Describe("{Longevity}", func() {
 		ResizeDiskAndReboot:      TriggerPoolResizeDiskAndReboot,
 		AutopilotRebalance:       TriggerAutopilotPoolRebalance,
 		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
+		DeleteOldNamespaces:    TriggerDeleteOldNamespaces,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -379,6 +380,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setHyperConvergedType(configData)
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
+	setCreatedBeforeTimeForNsDeletion(configData)
 	err := setSendGridEmailAPIKey(configData)
 	if err != nil {
 		return err
@@ -444,6 +446,18 @@ func setMigrationsCount(configData *map[string]string) {
 		}
 	} else {
 		MigrationsCount = 5
+	}
+}
+
+func setCreatedBeforeTimeForNsDeletion(configData *map[string]string) {
+	var err error
+	if createdbeforetimeforns, ok := (*configData)[CreatedBeforeTimeForNsField]; ok {
+		CreatedBeforeTimeforNS, err = strconv.Atoi(createdbeforetimeforns)
+		if err != nil {
+			log.Errorf("Cannot set createdbeforetimeforns value, getting error: %v", err)
+		}
+	} else {
+		CreatedBeforeTimeforNS = 0
 	}
 }
 
@@ -656,6 +670,7 @@ func populateIntervals() {
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRMigrationSchedule] = make(map[int]time.Duration)
+	triggerInterval[DeleteOldNamespaces] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrimAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[IopsBwAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[ConfluentAsyncDR] = make(map[int]time.Duration)
@@ -1370,6 +1385,9 @@ func populateIntervals() {
 	triggerInterval[AddDrive][6] = 5 * baseInterval
 	triggerInterval[AddDrive][5] = 6 * baseInterval
 
+	// DeleteOldNamespaces trigger will be triggered every 10 hours
+	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1425,6 +1443,7 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpHaUpdate][0] = 0
 	triggerInterval[StorkAppBkpPxRestart][0] = 0
 	triggerInterval[StorkAppBkpPoolResize][0] = 0
+	triggerInterval[DeleteOldNamespaces][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
