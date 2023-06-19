@@ -2112,6 +2112,18 @@ func runCmd(cmd string, n node.Node) error {
 
 }
 
+func runCmdGetOutput(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+	return output, err
+}
+
 func runCmdWithNoSudo(cmd string, n node.Node) error {
 	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         defaultCmdTimeout,
@@ -3559,7 +3571,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
 	}
 	return err
 }
@@ -3854,9 +3866,8 @@ func WaitForBackupLocationAddition(
 }
 
 // CreateNFSBackupLocation creates backup location for nfs
-func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, validate bool) error {
+func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, subPath string, validate bool) error {
 	serverAddr := os.Getenv("NFS_SERVER_ADDR")
-	subPath := os.Getenv("NFS_SUB_PATH")
 	mountOption := os.Getenv("NFS_MOUNT_OPTION")
 	path := os.Getenv("NFS_PATH")
 	backupDriver := Inst().Backup
@@ -4591,6 +4602,64 @@ func CreateBucket(provider string, bucketName string) {
 			CreateAzureBucket(bucketName)
 		}
 	})
+}
+
+// IsBackupLocationEmpty returns true if the bucket for a provider is empty
+func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
+	switch provider {
+	case drivers.ProviderAws:
+		result, err := IsS3BucketEmpty(bucketName)
+		return result, err
+	case drivers.ProviderNfs:
+		result, err := IsNFSSubPathEmpty(bucketName)
+		return result, err
+	default:
+		return false, fmt.Errorf("function does not support %s provider", provider)
+	}
+}
+
+func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	// Get NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+
+	// Mount the NFS share to the master node.
+	masterNode := node.GetMasterNodes()[0]
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+		fmt.Sprintf("find %s/%s -type f", mountDir, subPath),
+	}
+	for _, cmd := range mountCmds {
+		output, err := runCmdGetOutput(cmd, masterNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		log.Infof("Output from command [%s] -\n%s", cmd, output)
+	}
+
+	defer func() {
+		// Unmount the NFS share from the master node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			err := runCmd(cmd, masterNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		}
+	}()
+
+	// List the files in subpath from NFS share path.
+	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
+	fileCountCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
+	log.Infof("Running command - %s", fileCountCmd)
+	output, err := runCmdGetOutput(fileCountCmd, masterNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", fileCountCmd, masterNode, err))
+	log.Infof("Output of command [%s] - \n%s", fileCountCmd, output)
+	result, err := strconv.Atoi(strings.TrimSpace(output))
+	if result > 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 // IsS3BucketEmpty returns true if bucket empty else false

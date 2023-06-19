@@ -77,7 +77,7 @@ const (
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	pxBackupDeployment                        = "px-backup"
-	backupDeleteTimeout                       = 20 * time.Minute
+	backupDeleteTimeout                       = 60 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
@@ -940,6 +940,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
+			// Delete the backup location object
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
