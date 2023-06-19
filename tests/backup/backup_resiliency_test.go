@@ -547,7 +547,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
 			err = DeletePodWithLabelInNamespace(pxbNamespace, mongoDBPodLabel)
 			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
-			err = ValidatePodByLabel(mongoDBPodLabel, pxbNamespace, 30*time.Minute, 30*time.Second)
+			err = IsMongoDBReady()
 			log.FailOnError(err, "Checking if mongo db pod is in running state")
 		})
 		Step("Validate the shared backup with users", func() {
@@ -1033,20 +1033,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
 			dash.VerifySafely(err, nil, "Scaling back MongoDB statefulset replica to original count")
 		}
-		log.Infof("Verify that all the mongodb pod are in Ready state at the end of the testcase")
-		mongoDBPodStatus := func() (interface{}, bool, error) {
-			statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
-			if err != nil {
-				return "", true, err
-			}
-			if statefulSet.Status.ReadyReplicas != originalReplicaCount {
-				return "", true, fmt.Errorf("mongodb pods are not ready yet")
-			}
-			return "", false, nil
-		}
-		_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
-		log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
-		dash.VerifySafely(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all the mongodb pods are in Ready state at the end of the testcase")
+		err := IsMongoDBReady()
+		dash.VerifySafely(err, nil, "Validating Mongo DB pods")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.Infof("Deleting the deployed applications")

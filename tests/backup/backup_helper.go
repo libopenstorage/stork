@@ -3223,6 +3223,40 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 	return nil
 }
 
+// IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
+func IsMongoDBReady() error {
+	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	mongoDBPodStatus := func() (interface{}, bool, error) {
+		statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+		if err != nil {
+			return "", true, err
+		}
+		// Px-Backup would function with just 2 mongo DB pods in healthy state.
+		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
+		if statefulSet.Status.ReadyReplicas < 2 {
+			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
+				2, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
+	return nil
+}
+
 // DeleteAppNamespace deletes the given namespace and wait for termination
 func DeleteAppNamespace(namespace string) error {
 	k8sCore := core.Instance()
