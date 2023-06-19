@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pgbench
+spec:
+  template:
+    metadata:
+    spec:
+      containers:
+      - args:
+        - -T
+        - "300"
+        - -l
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          value: admin
+        - name: PGPASSWORD
+          value: admin
+        - name: PGDATABASE
+          value: benchdb
+        image: xridge/pgbench
+        imagePullPolicy: Always
+        name: pgbench
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - {}
+      initContainers:
+      - args:
+        - -s
+        - "10"
+        command:
+        - pgbench
+        - -i
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          value: admin
+        - name: PGPASSWORD
+          value: admin
+        - name: PGDATABASE
+          value: benchdb
+        image: xridge/pgbench
+        imagePullPolicy: Always
+        name: pgbench-init
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      restartPolicy: Never
+      securityContext: {}
+      terminationGracePeriodSeconds: 30

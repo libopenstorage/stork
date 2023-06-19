@@ -28,6 +28,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
@@ -56,7 +57,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
+	storage_v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -515,6 +516,9 @@ func setRemoteConfig(kubeConfig string) error {
 	operatorOps := operator.Instance()
 	operatorOps.SetConfig(config)
 
+	k8sBatchOps := batch.Instance()
+	k8sBatchOps.SetConfig(config)
+
 	return nil
 }
 
@@ -908,7 +912,7 @@ func addSecurityAnnotation(spec interface{}) error {
 	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
 		return fmt.Errorf("failed to get secret namespace from config map")
 	}
-	if obj, ok := spec.(*storageapi.StorageClass); ok {
+	if obj, ok := spec.(*storage_v1.StorageClass); ok {
 		if obj.Parameters == nil {
 			obj.Parameters = make(map[string]string)
 		}
@@ -1195,29 +1199,16 @@ func scaleDownApps(
 	return scaleFactors
 }
 
-func validateMigrationOnSrcAndDest(
+func validateMigrationOnSrc(
 	t *testing.T,
 	migrationName string,
-	namespace string,
-	preMigrationCtx *scheduler.Context,
-	startAppsOnMigration bool,
-	expectedResources uint64,
-	expectedVolumes uint64,
+	namespaces []string,
 ) {
-	err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error validating migration")
-	logrus.Infof("Validated migration: %v", migrationName)
-
-	funcValidateMigrationOnDestination := func() {
-		if startAppsOnMigration {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
-		} else {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
-			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
-		}
+	for _, namespace := range namespaces {
+		err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error validating migration")
+		logrus.Infof("Validated migration on src: %v", migrationName)
 	}
-	executeOnDestination(t, funcValidateMigrationOnDestination)
 }
 
 func changePxServiceToLoadBalancer(internalLB bool) error {
@@ -1397,6 +1388,37 @@ func getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
 	}
 
 	return pods, nil
+}
+
+type StorageClass struct {
+	name        string
+	provisioner string
+	// parameters
+	repl                          int
+	nearsync                      bool
+	nearsync_replication_strategy string
+}
+
+func createStorageClass(storageClass StorageClass) (*storage_v1.StorageClass, error) {
+	parameters := make(map[string]string)
+	if storageClass.repl != 0 {
+		parameters["repl"] = strconv.Itoa(storageClass.repl)
+	} else {
+		parameters["repl"] = "1"
+	}
+	if storageClass.nearsync {
+		parameters["nearsync"] = "true"
+	}
+	if storageClass.nearsync_replication_strategy != "" {
+		parameters["near_sync_replication_strategy"] = storageClass.nearsync_replication_strategy
+	}
+	return storage.Instance().CreateStorageClass(&storage_v1.StorageClass{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: storageClass.name,
+		},
+		Provisioner: storageClass.provisioner,
+		Parameters:  parameters,
+	})
 }
 
 func TestMain(m *testing.M) {
