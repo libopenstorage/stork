@@ -9471,39 +9471,18 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 			}
 		}()
 
-		go func() {
-			defer wg.Done()
-			defer GinkgoRecover()
-
-			// Create Snapshots on Volumes continuously
-			for {
-				if terminate {
-					break
-				}
-				if len(volumesCreated) > 10 {
-					for _, eachVol := range volumesCreated {
-						uuidCreated := uuid.New()
-						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol, uuidCreated.String())
-
-						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol, snapshotName)
-						log.FailOnError(err, "error Creating Snapshot [%s]", eachVol)
-
-						snapshotsCreated = append(snapshotsCreated, snapshotResponse.GetSnapshotId())
-						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
-					}
-				}
-			}
-		}()
-
 		inspectDeleteVolume := func(volumeId string) error {
+			defer GinkgoRecover()
 			// inspect volume
 			appVol, err := Inst().V.InspectVolume(volumeId)
 			if err != nil {
+				stopRoutine()
 				return err
 			}
 
 			err = Inst().V.DeleteVolume(appVol.Id)
 			if err != nil {
+				stopRoutine()
 				return err
 			}
 
@@ -9514,12 +9493,49 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 
+			// Create Snapshots on Volumes continuously
+			for {
+				if terminate {
+					break
+				}
+				if len(volumesCreated) > 5 {
+					for _, eachVol := range volumesCreated {
+						uuidCreated := uuid.New()
+						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol, uuidCreated.String())
+
+						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol, snapshotName)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err, "error Creating Snapshot [%s]", eachVol)
+						}
+
+						snapshotsCreated = append(snapshotsCreated, snapshotResponse.GetSnapshotId())
+						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+
+						err = inspectDeleteVolume(eachVol)
+						log.FailOnError(err, "Inspect and Delete Volume failed on cluster with Volume ID [%v]", eachVol)
+
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+					}
+				}
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
 			// Delete Snapshots on Volumes continuously
 			for {
 				if terminate {
 					break
 				}
-				if len(snapshotsCreated) > 20 {
+				if len(snapshotsCreated) > 5 {
 					for _, each := range snapshotsCreated {
 						err := inspectDeleteVolume(each)
 						log.FailOnError(err, "Inspect and Delete Snapshot failed on cluster with snapshot ID [%v]", each)
@@ -9530,32 +9546,6 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 						}
 						// Resize the array by truncating the last element
 						snapshotsCreated = snapshotsCreated[:len(snapshotsCreated)-1]
-					}
-				}
-			}
-		}()
-
-		go func() {
-			defer wg.Done()
-			defer GinkgoRecover()
-
-			// Delete Volumes continuously
-			for {
-				if terminate {
-					break
-				}
-				if len(volumesCreated) > 20 {
-					for _, each := range volumesCreated {
-						// inspect volume
-						err := inspectDeleteVolume(each)
-						log.FailOnError(err, "Inspect and Delete Volume failed on cluster with Volume ID [%v]", each)
-
-						// Remove the first element
-						for i := 0; i < len(volumesCreated)-1; i++ {
-							volumesCreated[i] = volumesCreated[i+1]
-						}
-						// Resize the array by truncating the last element
-						volumesCreated = volumesCreated[:len(volumesCreated)-1]
 					}
 				}
 			}
@@ -9572,20 +9562,34 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 				stopRoutine()
 			default:
 				// Wait for KVDB Members to be online
-				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+				err := WaitForKVDBMembers()
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed waiting for KVDB members to be active")
+				}
 
 				// Kill KVDB Master Node
 				masterNode, err := GetKvdbMasterNode()
-				log.FailOnError(err, "failed getting details of KVDB master node")
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed getting details of KVDB master node")
+				}
 
 				// Get KVDB Master PID
 				pid, err := GetKvdbMasterPID(*masterNode)
-				log.FailOnError(err, "failed getting PID of KVDB master node")
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed getting PID of KVDB master node")
+				}
 
 				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
 
 				// Kill kvdb master PID for regular intervals
-				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+				err = KillKvdbMemberUsingPid(*masterNode)
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed to kill KVDB Node")
+				}
 
 				// Wait for some time after killing kvdb master Node
 				time.Sleep(5 * time.Minute)
