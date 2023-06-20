@@ -39,9 +39,10 @@ const (
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
 
-	appReadinessTimeout = 10 * time.Minute
-	migrationKey        = "async-dr-"
-	kubeconfigDirectory = "/tmp"
+	appReadinessTimeout    = 10 * time.Minute
+	DeleteNamespaceTimeout = 5 * time.Minute
+	migrationKey           = "async-dr-"
+	kubeconfigDirectory    = "/tmp"
 )
 
 var (
@@ -95,6 +96,136 @@ func CreateMigration(
 
 	mig, err := storkops.Instance().CreateMigration(migration)
 	return mig, err
+}
+
+func CreateMigrationSchedule(
+	name string,
+	namespace string,
+	clusterPair string,
+	migrationNamespace string,
+	includeVolumes *bool,
+	includeResources *bool,
+	startApplications *bool,
+	sp string,
+	suspend *bool,
+	autoSuspend bool,
+	PurgeDeletedResources *bool,
+	SkipServiceUpdate *bool,
+	IncludeNetworkPolicyWithCIDR *bool,
+	Selectors map[string]string,
+	ExcludeSelectors map[string]string,
+	PreExecRule string,
+	PostExecRule string,
+	IncludeOptionalResourceTypes []string,
+	SkipDeletedNamespaces *bool,
+	TransformSpecs []string,
+) (*storkapi.MigrationSchedule, error) {
+
+	migrationSpec := storkapi.MigrationSpec{
+		ClusterPair:                  clusterPair,
+		IncludeVolumes:               includeVolumes,
+		IncludeResources:             includeResources,
+		StartApplications:            startApplications,
+		Namespaces:                   []string{migrationNamespace},
+		PurgeDeletedResources:        PurgeDeletedResources,
+		SkipServiceUpdate:            SkipServiceUpdate,
+		IncludeNetworkPolicyWithCIDR: IncludeNetworkPolicyWithCIDR,
+		Selectors:                    Selectors,
+		ExcludeSelectors:             ExcludeSelectors,
+		PreExecRule:                  PreExecRule,
+		PostExecRule:                 PostExecRule,
+		IncludeOptionalResourceTypes: IncludeOptionalResourceTypes,
+		SkipDeletedNamespaces:        SkipDeletedNamespaces,
+		TransformSpecs:               TransformSpecs,
+	}
+
+	TemplateSpec := storkapi.MigrationTemplateSpec{
+		Spec: migrationSpec,
+	}
+
+	migrationSchedule := &storkapi.MigrationSchedule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: storkapi.MigrationScheduleSpec{
+			Template:           TemplateSpec,
+			SchedulePolicyName: sp,
+			Suspend:            suspend,
+			AutoSuspend:        autoSuspend,
+		},
+	}
+	migSched, err := storkops.Instance().CreateMigrationSchedule(migrationSchedule)
+	return migSched, err
+}
+
+func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.SchedulePolicy, err error) {
+	schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+	if err != nil {
+		log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+		schedPolicy = &storkapi.SchedulePolicy{
+			ObjectMeta: meta_v1.ObjectMeta{
+				Name: policyName,
+			},
+			Policy: storkapi.SchedulePolicyItem{
+				Interval: &storkapi.IntervalPolicy{
+					IntervalMinutes: interval,
+				},
+			}}
+		schedPolicy, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	} else {
+		log.Infof("schedPolicy %v already exists", schedPolicy.Name)
+	}
+	return schedPolicy, err
+}
+
+// WaitForNumOfMigration waits for a certain number of migrations to complete.
+func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, error) {
+	migInterval := time.Minute * time.Duration(miginterval)
+	migTimeout := time.Minute * time.Duration(count*miginterval)
+	expectedMigrations := make(map[string]string)
+	checkNumOfMigrations := func() (interface{}, bool, error) {
+		migSchedule, err := storkops.Instance().GetMigrationSchedule(schedName, schedNamespace)
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get migrationschedule: %v", schedName)
+		}
+		migrations := migSchedule.Status.Items["Interval"]
+		for _, mig := range migrations {
+			migration, err := storkops.Instance().GetMigration(mig.Name, schedNamespace)
+			if err != nil {
+				return "", true, fmt.Errorf("failed to get migration: %v", mig.Name)
+			}
+			err = WaitForMigration([]*storkapi.Migration{migration})
+			if err != nil {
+				expectedMigrations[migration.Name] = fmt.Sprintf("Migration failed with error: %v", err)
+			}
+			expectedMigrations[migration.Name] = "Successful"
+		}
+		log.InfoD("Waiting to complete %v migrations in %v time, %v completed as of now", count, migTimeout, expectedMigrations)
+		if len(expectedMigrations) == count {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("some migrations are still pending")
+	}
+	_, err := task.DoRetryWithTimeout(checkNumOfMigrations, migTimeout, migInterval)
+	return expectedMigrations, err
+}
+
+func DeleteAndWaitForMigrationSchedDeletion(name, namespace string) error {
+	log.Infof("Deleting migration: %s in namespace: %s", name, namespace)
+	err := storkops.Instance().DeleteMigrationSchedule(name, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to delete migration schedule: %s in namespace: %s", name, namespace)
+	}
+	getMigrationSched := func() (interface{}, bool, error) {
+		migration, err := storkops.Instance().GetMigration(name, namespace)
+		if err == nil {
+			return "", true, fmt.Errorf("migration schedule %s in %s has not completed yet.Status: %s. Retrying ", name, namespace, migration.Status.Status)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(getMigrationSched, migrationRetryTimeout, migrationRetryInterval)
+	return err
 }
 
 func deleteMigrations(migrations []*storkapi.Migration) error {
@@ -272,4 +403,40 @@ func WaitForPodToBeRunning(pods *v1.PodList) error {
 	}
 	_, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
 	return err
+}
+
+func CollectNsForDeletion(label map[string]string, createdBeforeTime time.Duration) []string {
+	var nsToBeDeleted []string
+	data, err := core.Instance().ListNamespaces(label)
+	if err == nil {
+		for _, val := range data.Items {
+			if time.Now().Sub(val.CreationTimestamp.Time) > createdBeforeTime*time.Hour {
+				nsToBeDeleted = append(nsToBeDeleted, val.Name)
+			}
+		}
+	}
+	return nsToBeDeleted
+}
+
+func WaitForNamespaceDeletion(namespaces []string) error {
+	for _, ns := range namespaces {
+		err := core.Instance().DeleteNamespace(ns)
+		if err != nil {
+			return fmt.Errorf("Failed to delete namespace: %v", ns)
+		}
+		log.InfoD("deleting ns: [%v] now", ns)
+		getNamespace := func() (interface{}, bool, error) {
+			_, err := core.Instance().GetNamespace(ns)
+			if err == nil {
+				msg := fmt.Sprintf("Namespace [%v] is not deleted yet, waiting for it to be deleted", ns)
+				log.InfoD(msg)
+				return "", true, fmt.Errorf(msg)
+			}
+			return nil, false, nil
+		}
+		if _, err := task.DoRetryWithTimeout(getNamespace, DeleteNamespaceTimeout, 10*time.Second); err != nil {
+			return err
+		}
+	}
+	return nil
 }

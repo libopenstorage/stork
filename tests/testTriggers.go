@@ -71,6 +71,12 @@ const (
 	EmailHostServerField = "emailHostServer"
 	// EmailSubjectFiled is field in configmap which stores the subject(optional)
 	EmailSubjectField = "emailSubject"
+	// CreatedBeforeTimeForNsField is field which stores number of hours from now, used for deletion of old NS
+	CreatedBeforeTimeForNsField = "createdbeforetimefornsfield"
+	// MigrationIntervalField is a field in configmap which stores interval for schedule policy(optional)
+	MigrationIntervalField = "migrationinterval"
+	// MigrationsCountField is a field in configmap which stores no. of migrations to be run(optional)
+	MigrationsCountField = "migrationscount"
 )
 
 const (
@@ -120,6 +126,15 @@ var EmailServer string
 
 // EmailSubject to use for sending email
 var EmailSubject string
+
+// CreatedBeforeTimeforNS to use for number of hours elapsed to get age of NS
+var CreatedBeforeTimeforNS int
+
+// MigrationInterval to use for defining schedule policy for migrations
+var MigrationInterval int
+
+// MigrationsCount to use for number of migrations to be run
+var MigrationsCount int
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
@@ -392,6 +407,8 @@ const (
 	MetroDR = "metrodr"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// AsyncDRMigrationSchedule runs AsyncDR Migrationschedule between two clusters
+	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
 	ConfluentAsyncDR = "confluentasyncdr"
 	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
@@ -422,6 +439,8 @@ const (
 	AutopilotRebalance = "autopilotRebalance"
 	// VolumeCreatePxRestart performs  volume create and px restart parallel
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
+	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
+	DeleteOldNamespaces = "deleteoldnamespaces"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -7020,6 +7039,176 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
 	}
 	updateMetrics(*event)
+}
+
+func TriggerDeleteOldNamespaces(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(DeleteOldNamespaces)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("DeleteOldNamespaces triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeleteOldNamespaces,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	if CreatedBeforeTimeforNS != 0 {
+		Step("Collect and Delete Ns on source", func() {
+			nss := asyncdr.CollectNsForDeletion(map[string]string{"creator": "torpedo"}, time.Duration(CreatedBeforeTimeforNS))
+			log.InfoD("collected these namespaces %v, to be deleted on source cluster, they are created [%v Hours] ago", nss, CreatedBeforeTimeforNS)
+			asyncdr.WaitForNamespaceDeletion(nss)
+		})
+		Step("Collect and Delete Ns on destination", func() {
+			SetDestinationKubeConfig()
+			nsd := asyncdr.CollectNsForDeletion(map[string]string{"creator": "torpedo"}, time.Duration(CreatedBeforeTimeforNS))
+			log.InfoD("collected these namespaces %v, to be deleted on destination cluster, they are created [%v Hours] ago", nsd, CreatedBeforeTimeforNS)
+			asyncdr.WaitForNamespaceDeletion(nsd)
+		})
+	} else {
+		log.InfoD("Skipping deletion of old NS as CreatedBeforeTimeforNS is not set or set to 0")
+		return
+	}
+}
+
+func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRMigrationSchedule)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Async DR Migrationschedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRMigrationSchedule,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-mig-sched"
+		allMigrationsSched    = make(map[string]string)
+		includeResourcesFlag  = true
+		includeVolumesFlag    = true
+		startApplicationsFlag = false
+		scpolName             = "async-policy"
+		suspendSched          = false
+		autoSuspend           = false
+		schd_pol              *storkapi.SchedulePolicy
+		err                   error
+		makeSuspend           = true
+	)
+	chaosLevel := ChaosMap[AsyncDRMigrationSchedule]
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+		err = asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to write kubeconfig: %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to Set source kubeconfig: %v", err))
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			})
+		}
+		log.InfoD("Migration Namespaces: %v", migrationNamespaces)
+	})
+
+	Step("Create Schedule Policy", func() {
+		schd_pol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("schedule policy creation error: %v", err))
+			return
+		} else {
+			log.InfoD("schedule Policy created with %v mins of interval", MigrationInterval)
+		}
+	})
+
+	Step("Create Migration Schedule", func() {
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationScheduleName := migrationKey + "schedule-" + fmt.Sprintf("%d", i)
+			currMigSched, createMigSchedErr := asyncdr.CreateMigrationSchedule(
+				migrationScheduleName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag,
+				&includeResourcesFlag, &startApplicationsFlag, schd_pol.Name, &suspendSched, autoSuspend,
+				nil, nil, nil, nil, nil, "", "", nil, nil, nil)
+			if createMigSchedErr != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to create migrationschedule wit error %v", err))
+				return
+			}
+			allMigrationsSched[currMigNamespace] = currMigSched.Name
+			time.Sleep(30 * time.Second)
+			migSchedResp, err := storkops.Instance().GetMigrationSchedule(currMigSched.Name, currMigNamespace)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to get migrationschedule, error: %v", err))
+				return
+			}
+			if len(migSchedResp.Status.Items) == 0 {
+				UpdateOutcome(event, fmt.Errorf("0 migrations have yet run for the migration schedule"))
+				return
+			}
+			expectedMigs, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("couldn't complete %v migrations due to error: %v", MigrationsCount, err))
+				return
+			} else {
+				for mig, status := range expectedMigs {
+					if status != "Successful" {
+						UpdateOutcome(event, fmt.Errorf("migration [%v] did not complete successfully, All migrations with status are: %v",
+							mig, expectedMigs))
+					}
+				}
+			}
+			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
+		}
+	})
+
+	Step("Suspend Migration Schedule", func() {
+		log.InfoD("All of these migrationschedules need to be suspended: %v", allMigrationsSched)
+		for namespace, mig := range allMigrationsSched {
+			migrationSchedule, err := storkops.Instance().GetMigrationSchedule(mig, namespace)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to get migrationschedule"))
+			}
+			migrationSchedule.Spec.Suspend = &makeSuspend
+			_, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("couldn't suspend migration %v due to error %v", migrationSchedule.Name, err))
+			} else {
+				log.InfoD("migrationSchedule %v, suspended successfully", migrationSchedule.Name)
+			}
+		}
+	})
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {

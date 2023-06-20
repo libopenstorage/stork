@@ -231,7 +231,13 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 		delete(dataServiceVersionBuildMap, version)
 	}
 
-	if forceImageID {
+	pdsParams := GetAndExpectStringEnvVar("PDS_PARAM_CM")
+	params, err := customparams.ReadParams(pdsParams)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read pds params %v", err)
+	}
+
+	if params.ForceImageID {
 		log.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
 		versionID, imageID, dataServiceVersionBuildMap, err = GetVersionsImage(dsVersion, dsBuild, id)
 	} else {

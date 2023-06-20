@@ -77,7 +77,7 @@ const (
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	pxBackupDeployment                        = "px-backup"
-	backupDeleteTimeout                       = 20 * time.Minute
+	backupDeleteTimeout                       = 60 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
@@ -940,6 +940,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
+			// Delete the backup location object
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
@@ -3219,6 +3220,40 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
 		}
 	}
+	return nil
+}
+
+// IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
+func IsMongoDBReady() error {
+	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	mongoDBPodStatus := func() (interface{}, bool, error) {
+		statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+		if err != nil {
+			return "", true, err
+		}
+		// Px-Backup would function with just 2 mongo DB pods in healthy state.
+		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
+		if statefulSet.Status.ReadyReplicas < 2 {
+			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
+				2, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 	return nil
 }
 

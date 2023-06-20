@@ -502,6 +502,7 @@ spec:
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
+            "--migration-hops=$MIGRATION_HOPS",
             "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
             "--metering_interval_mins=$METERING_INTERVAL_MINS",
             "--testrail-milestone=$TESTRAIL_MILESTONE",
