@@ -7006,7 +7006,8 @@ func WaitForKVDBMembers() error {
 				return "", true, fmt.Errorf("all kvdb nodes are not healthy")
 			}
 		}
-		return "", true, nil
+		log.Info("all kvdb nodes are healthy")
+		return "", false, nil
 	}
 	_, err := task.DoRetryWithTimeout(t, defaultKvdbRetryInterval, 20*time.Second)
 	if err != nil {
