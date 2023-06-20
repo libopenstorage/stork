@@ -9145,16 +9145,13 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
 
 		for _, eachType := range killType {
 			allKvdbNodes, err := GetAllKvdbNodes()
-			if err != nil {
-				log.FailOnError(err, "failed to get list of kvdb nodes")
-			}
+			log.FailOnError(err, "failed to get list of kvdb nodes")
+
 			dash.VerifyFatal(len(allKvdbNodes) == 3, true,
 				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
 
 			masterNode, err := GetKvdbMasterNode()
-			if err != nil {
-				log.FailOnError(err, "failed to get the master node ip")
-			}
+			log.FailOnError(err, "failed to get the master node ip")
 			log.Infof("kvdb master node is [%v]", masterNode.Name)
 
 			if eachType == "kill" {
@@ -9192,7 +9189,6 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
 //			     or  [api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
 //			     or  [api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
 func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandType []api.SdkStoragePool_ResizeOperationType) (*sync.WaitGroup, error) {
-	defer GinkgoRecover()
 	var wg sync.WaitGroup
 	numGoroutines := len(poolIds)
 
@@ -9204,6 +9200,7 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 		pickType := poolResizeType[randomIndex]
 		go func(poolUUID string, expandSize uint64) {
 			defer wg.Done()
+			defer GinkgoRecover()
 			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
 
@@ -9227,7 +9224,8 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 
 var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 	/*
-		test to expand multiple pool at once in parallel
+			test to expand multiple pool at once in parallel
+		    Pick a Pool from each Storage Node and expand all the node in parallel
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("ExpandMultiplePoolWithIOsInClusterAtOnce",
@@ -9271,7 +9269,7 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 
 var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
 	/*
-		Restart Multiple Storage Nodes with one KVDB Master
+		Restart Multiple Storage Nodes with one KVDB Master in parallel and wait for the node to come back online
 		https://portworx.atlassian.net/browse/PTX-17618
 	*/
 	JustBeforeEach(func() {

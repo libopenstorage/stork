@@ -685,6 +685,12 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 	var testrailID = 0
+	/*  Try Volume resize to 5 GB every time
+	    Try HA Refactor of the volume
+	    Try one HA node Reboot
+
+		all the above 3 operations are done in parallel
+	*/
 	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
 	var runID int
 	JustBeforeEach(func() {
@@ -727,9 +733,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 
 		for _, each := range volumes {
 			replFactor, err := Inst().V.GetReplicationFactor(each)
-			if err != nil {
-				log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
-			}
+			log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
 			volReplMap[each.ID] = replFactor
 		}
 
@@ -738,14 +742,10 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 				for vID, replCount := range volReplMap {
 					if each.ID == vID {
 						replFactor, err := Inst().V.GetReplicationFactor(each)
-						if err != nil {
-							log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
-						}
+						log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
 						if replFactor != replCount {
 							err = Inst().V.SetReplicationFactor(each, replCount, nil, nil, true)
-							if err != nil {
-								log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
-							}
+							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
 						}
 					}
 				}
