@@ -653,7 +653,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 				stopRoutine()
 			default:
 				// Wait for KVDB Members to be online
-				err := WaitForKVDBMembers()
 				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
 				// Kill KVDB Master Node
