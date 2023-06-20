@@ -50,7 +50,7 @@ func (s *CloudBackupServer) Create(
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must supply a volume id")
 	}
-	if len(req.GetCredentialId()) == 0 {
+	if !req.NearSyncMigrate && len(req.GetCredentialId()) == 0 {
 		credId, err = s.defaultCloudBackupCreds(ctx)
 		if err != nil {
 			return nil, err
@@ -833,7 +833,5 @@ func (s *CloudBackupServer) Size(
 		return nil, status.Errorf(codes.Internal, "Failed to fetch backup size: %v", err)
 	}
 
-	return &api.SdkCloudBackupSizeResponse{
-		Size: r.GetSize(),
-	}, nil
+	return r, nil
 }
