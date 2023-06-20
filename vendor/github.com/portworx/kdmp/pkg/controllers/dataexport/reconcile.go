@@ -92,6 +92,7 @@ type updateDataExportDetail struct {
 	snapshotNamespace    string
 	removeFinalizer      bool
 	volumeSnapshot       string
+	resetLocalSnapshotRestore bool
 }
 
 func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, error) {
@@ -1046,6 +1047,7 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 			stage:  kdmpapi.DataExportStageTransferScheduled,
 			status: kdmpapi.DataExportStatusInitial,
 			reason: "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
+			resetLocalSnapshotRestore: true,
 		}
 		return false, c.updateStatus(dataExport, data)
 	}
@@ -1198,6 +1200,7 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 			status:     kdmpapi.DataExportStatusInitial,
 			reason:     "",
 			transferID: "", // Resetting transfer id if it has been set with nfs backuplocation job
+			resetLocalSnapshotRestore: true,
 		}
 		return false, c.updateStatus(dataExport, data)
 	}
@@ -1491,11 +1494,13 @@ func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExpor
                         logrus.Errorf("cleanupLocalRestoredSnapshotResources: failed to get restore pvc [%v] err: %v", de.Status.RestorePVC.Name, err)
                         return nil, false, err
                 }
-                err = snapshotDriver.DeleteSnapshot(rpvc.Spec.DataSource.Name, de.Namespace, true)
-                if err != nil {
-                        logrus.Errorf("cleanupLocalRestoredSnapshotResources: snapshotDriver.DeleteSnapshot failed with err: %v", err)
-                        return nil, false, err
-                }
+		if rpvc.Spec.DataSource != nil {
+			err = snapshotDriver.DeleteSnapshot(rpvc.Spec.DataSource.Name, de.Namespace, true)
+			if err != nil {
+				logrus.Errorf("cleanupLocalRestoredSnapshotResources: snapshotDriver.DeleteSnapshot failed with err: %v", err)
+				return nil, false, err
+			}
+		}
 
 		if !ignorePVC {
 			pvcSpec := de.Status.RestorePVC
@@ -1568,6 +1573,9 @@ func (c *Controller) updateStatus(de *kdmpapi.DataExport, data updateDataExportD
 		}
 		if data.volumeSnapshot != "" {
 			de.Status.VolumeSnapshot = data.volumeSnapshot
+		}
+		if data.resetLocalSnapshotRestore {
+			de.Status.LocalSnapshotRestore = false
 		}
 
 		actualErr = c.client.Update(context.TODO(), de)
