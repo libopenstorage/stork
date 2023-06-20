@@ -8856,6 +8856,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 // Volume replication change
 var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 	var testrailID = 0
+	// Do multiple pool operations on the pool and volume and make sure kvdb leader is up and running
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
 	JustBeforeEach(func() {
@@ -8888,13 +8889,14 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		terminate := false
 		stopRoutine := func() {
 			if !terminate {
+				terminate = true
 				done <- true
 				wg.Done()
 				close(done)
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
-				terminate = true
+
 			}
 		}
 
@@ -8905,6 +8907,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		go func() {
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					break
+				}
 				select {
 				case <-done:
 					wg.Done()
@@ -8955,6 +8960,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		doVolumeOperations := func() {
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					break
+				}
 				select {
 				case <-done:
 					wg.Done()
@@ -8978,15 +8986,24 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 					for _, eachVol := range volumesCreated {
 						if len(volumesCreated) > 5 {
 							_, err = Inst().V.AttachVolume(eachVol)
-							log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
+							}
 
 							err = Inst().V.DetachVolume(eachVol)
-							log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+							}
 
 							time.Sleep(5 * time.Second)
 							// Delete the Volume
 							err = Inst().V.DeleteVolume(eachVol)
-							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+							}
 
 							// Remove the first element
 							for i := 0; i < len(volumesCreated)-1; i++ {
