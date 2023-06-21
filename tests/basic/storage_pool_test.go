@@ -4770,7 +4770,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		log.InfoD(stepLog)
 		selectedNode := getNodeWithLeastSize()
 
-		stNodes := node.GetStorageDriverNodes()
+		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
 			if stNode.Name != selectedNode.Name {
