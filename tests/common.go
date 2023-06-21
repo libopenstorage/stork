@@ -7036,7 +7036,7 @@ func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume,
 				return nil, err
 			}
 			log.InfoD(fmt.Sprintf("Current Status of the volume [%v] is [%v]", vol.Name, appVol.Status))
-			if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_DEGRADED" {
+			if fmt.Sprintf("[%v]", appVol.Status.String()) != "VOLUME_STATUS_DEGRADED" {
 				volumes = append(volumes, vol)
 			}
 		}
@@ -7050,8 +7050,8 @@ func VerifyVolumeStatusOnline(vol *volume.Volume) error {
 	if err != nil {
 		return err
 	}
-	if fmt.Sprintf("%v", appVol.Status) != "VOLUME_STATUS_UP" {
-		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status)
+	if fmt.Sprintf("%v", appVol.Status.String()) == "VOLUME_STATUS_UP" {
+		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status.String())
 	}
 	return nil
 }
@@ -7176,21 +7176,21 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 // WaitForKVDBMembers waits till all kvdb members comes up online and healthy
 func WaitForKVDBMembers() error {
 	t := func() (interface{}, bool, error) {
-		isHealthy := 0
 		allKvdbNodes, err := GetAllKvdbNodes()
-		if len(allKvdbNodes) != 3 {
+		if err != nil {
 			return "", true, err
 		}
+		if len(allKvdbNodes) != 3 {
+			return "", true, fmt.Errorf("not all kvdb nodes are online")
+		}
+
 		for _, each := range allKvdbNodes {
-			if each.IsHealthy {
-				isHealthy += 1
+			if each.IsHealthy == false {
+				return "", true, fmt.Errorf("all kvdb nodes are not healthy")
 			}
 		}
-		if isHealthy == 3 {
-			log.InfoD("all 3 kvdb nodes are online and healthy, exiting.")
-			return "", false, nil
-		}
-		return "", true, err
+		log.Info("all kvdb nodes are healthy")
+		return "", false, nil
 	}
 	_, err := task.DoRetryWithTimeout(t, defaultKvdbRetryInterval, 20*time.Second)
 	if err != nil {

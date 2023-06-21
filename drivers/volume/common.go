@@ -123,6 +123,14 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	}
 }
 
+// ResizeVolume resizes Volume to specific size provided
+func (d *DefaultDriver) ResizeVolume(volName string, size uint64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizeVolume()",
+	}
+}
+
 // CreateVolumeUsingRequest creates a volume with the given create request
 // returns volume_id of the new volume
 func (d *DefaultDriver) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {

@@ -4496,6 +4496,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			err = Inst().V.StartDriver(*storageNode2)
@@ -7296,7 +7297,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		// Expand Pool using Add Drive and verify if the Pool is expanded successfully
 		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
 			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
-			expectedSize, false)
+			expectedSize, true)
 		dash.VerifyFatal(err,
 			nil,
 			"Pool expansion init successful?")
@@ -8289,7 +8290,7 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			log.FailOnError(err, "Failed to get volumes from context")
 			for _, eachVol := range vols {
-				getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
+				curReplSet, err := Inst().V.GetReplicationFactor(eachVol)
 				log.FailOnError(err, "failed to get replication factor of the volume")
 
 				var poolID []string
@@ -8299,8 +8300,8 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 				for _, eachPoolUUID := range poolID {
 					if eachPoolUUID == poolUUID {
 						// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 3
-						if len(getReplicaSets) == 3 {
-							newRepl := int64(len(getReplicaSets) - 1)
+						if curReplSet == 3 {
+							newRepl := int64(curReplSet - 1)
 							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
 								nil, nil, true),
 								"Failed to set Replicaiton factor")
@@ -8628,6 +8629,17 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
+		exitPoolMaintenance := func() {
+			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
+			log.FailOnError(err, "Exiting maintenance mode failed")
+			log.InfoD("Exiting pool Maintenance mode successful")
+
+			expectedStatus := "Online"
+			err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
+			log.FailOnError(err,
+				fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+		}
+
 		dmthinEnabled, err := IsDMthin()
 		log.FailOnError(err, "error checking if set up is DMTHIN enabled")
 
@@ -8645,24 +8657,31 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				true,
 				fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
 		} else {
+
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			log.FailOnError(err, "Error Entering Maintenance mode on Node[%v]", nodeDetail.Name)
 			log.InfoD("Enter pool Maintenance mode ")
 			expectedStatus := "In Maintenance"
+
+			defer exitPoolMaintenance()
 
 			log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 				fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 
 			//Wait for 7 min to bring up the portworx daemon before trying cloud drive add
 			time.Sleep(7 * time.Minute)
-			isjournal, err := isJournalEnabled()
+			isjournal, err := Inst().V.GetJournalDevicePath(nodeDetail)
 			log.FailOnError(err, "Error getting journal status")
-			if isjournal {
+			if isjournal != "" {
 				devicespecjournal := deviceSpec + " --journal"
 				err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
-				dash.VerifyFatal(err != nil, true, "Did not Error out when adding cloud drive as expected")
+				if err == nil {
+					log.FailOnError(fmt.Errorf("adding cloud drive with journal expected ? Error: [%v]", err),
+						"adding cloud drive with journal failed ?")
+				}
+				log.InfoD("adding journal failed as expected. verifying the error")
 				re := regexp.MustCompile(".*journal exists*")
-				re1 := regexp.MustCompile(".*is alredy configured*")
+				re1 := regexp.MustCompile(".*Journal device.*is alredy configured*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)) || re1.MatchString(fmt.Sprintf("%v", err)),
 					true,
 					fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
@@ -8688,9 +8707,6 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				log.FailOnError(err, "Error getting journal status")
 				dash.VerifyFatal(isjournal, true, "journal device added successfully")
 			}
-			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
-			log.FailOnError(err, "Exiting maintenance mode failed")
-			log.InfoD("Exiting pool Maintenance mode successful")
 		}
 	})
 
@@ -8704,21 +8720,23 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 })
 
 func waitTillVolumeStatusUp(vol *volume.Volume) error {
-	now := time.Now()
-	targetTime := now.Add(30 * time.Minute)
-
+	now := 30 * time.Minute
+	targetTime := time.After(now)
+	var err error
+	err = nil
 	for {
-		if now.After(targetTime) {
-			return fmt.Errorf("Failed to get volume status to UP")
-		} else {
-			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+		select {
+		case <-targetTime:
+			return err
+		default:
+			err = VerifyVolumeStatusOnline(vol)
 			if err != nil {
-				return err
-			}
-			if fmt.Sprintf("[%v]", volumeInspect.Status) == "VOLUME_STATUS_UP" {
+				log.InfoD("errored while waiting for volume state up, retrying.")
+				// wait for 5 seconds before retrying
+				time.Sleep(5 * time.Second)
+			} else {
 				return nil
 			}
-
 		}
 	}
 }
@@ -8741,7 +8759,15 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
+
 		contexts = make([]*scheduler.Context, 0)
+		currAppList := Inst().AppList
+
+		revertAppList := func() {
+			Inst().AppList = currAppList
+		}
+		defer revertAppList()
+
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"fio", "fio-writes"}
 
@@ -8808,7 +8834,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
 		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		isjournal, err := isJournalEnabled()
@@ -8818,12 +8844,12 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
 
-		// Validate if Px is Up and running as well as Volume is in online mode
-		expectedStatus := "Online"
-		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
-		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+		log.Info("Checking for each volumes status is up")
 		for _, eachVol := range volumes {
-			log.FailOnError(waitTillVolumeStatusUp(eachVol), fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
+			err = VerifyVolumeStatusOnline(eachVol)
+			if err != nil {
+				log.FailOnError(waitTillVolumeStatusUp(eachVol), "failed to get volume status UP")
+			}
 		}
 	})
 
@@ -8836,6 +8862,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 // Volume replication change
 var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 	var testrailID = 0
+	// Do multiple pool operations on the pool and volume and make sure kvdb leader is up and running
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
 	JustBeforeEach(func() {
@@ -8868,13 +8895,14 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		terminate := false
 		stopRoutine := func() {
 			if !terminate {
+				terminate = true
 				done <- true
 				wg.Done()
 				close(done)
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
-				terminate = true
+
 			}
 		}
 
@@ -8885,6 +8913,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		go func() {
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					break
+				}
 				select {
 				case <-done:
 					wg.Done()
@@ -8935,6 +8966,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		doVolumeOperations := func() {
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					break
+				}
 				select {
 				case <-done:
 					wg.Done()
@@ -8958,15 +8992,24 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 					for _, eachVol := range volumesCreated {
 						if len(volumesCreated) > 5 {
 							_, err = Inst().V.AttachVolume(eachVol)
-							log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
+							}
 
 							err = Inst().V.DetachVolume(eachVol)
-							log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+							}
 
 							time.Sleep(5 * time.Second)
 							// Delete the Volume
 							err = Inst().V.DeleteVolume(eachVol)
-							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+							}
 
 							// Remove the first element
 							for i := 0; i < len(volumesCreated)-1; i++ {
@@ -8981,25 +9024,20 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			}
 		}
 
-		select {
-		case <-done:
-			stopRoutine()
-			wg.Wait()
-		default:
-			go doVolumeOperations()
-			// Do pool resize continuously for 20 times when volume operation in progress
-			for iteration := 0; iteration <= 5; iteration++ {
-				err := doPoolOperations()
-				if err != nil {
-					stopRoutine()
-					wg.Wait()
-					log.FailOnError(err, "error seen during pool operations")
-				}
-				if terminate {
-					break
-				}
+		go doVolumeOperations()
+		// Do pool resize continuously for 20 times when volume operation in progress
+		for iteration := 0; iteration <= 5; iteration++ {
+			err := doPoolOperations()
+			if err != nil {
+				stopRoutine()
+				wg.Wait()
+				log.FailOnError(err, "error seen during pool operations")
+			}
+			if terminate {
+				break
 			}
 		}
+		stopRoutine()
 	})
 
 	JustAfterEach(func() {
@@ -9042,42 +9080,44 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
 			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
 
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		if err != nil {
+			log.FailOnError(err, "Failed to pool details to be resized from pool uuid [%s]", poolUUID)
+		}
+
+		randomIndex := rand.Intn(len(poolResizeType))
+		pickType := poolResizeType[randomIndex]
+
 		expandPoolWithKVDBFailover := func(poolUUID string) error {
 
-			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 200
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
 			if err != nil {
 				return err
 			}
 
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
-			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-
-			for _, eachType := range poolResizeType {
-				err = Inst().V.ExpandPool(poolUUID, eachType, expectedSize, true)
-				if err != nil {
-					return err
-				}
-
-				err = WaitForExpansionToStart(poolUUID)
-				if err != nil {
-					return err
-				}
-
-				isjournal, err := isJournalEnabled()
-				if err != nil {
-					return err
-				}
-
-				err = KillKvdbMasterNodeAndFailover()
-				if err != nil {
-					return err
-				}
-
-				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-				if resizeErr != nil {
-					return resizeErr
-				}
+			err = WaitForExpansionToStart(poolUUID)
+			if err != nil {
+				return err
 			}
+
+			isjournal, err := isJournalEnabled()
+			if err != nil {
+				return err
+			}
+
+			err = KillKvdbMasterNodeAndFailover()
+			if err != nil {
+				return err
+			}
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			if resizeErr != nil {
+				return resizeErr
+			}
+
 			return nil
 		}
 		log.FailOnError(expandPoolWithKVDBFailover(poolUUID), "pool expand with kvdb failover failed")
@@ -9089,4 +9129,483 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 
+})
+var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
+	/*
+		PTX-15696 -> PWX-26967
+		Deploy IO aggressive application using repl-2 volumes
+		Identify the pools of this volume
+		Invoke pool expand is one pool of this volume and wait for pool expand to be completed
+		Volume status will be degraded when pool expand is going on for one of the pool
+		Volume repl resync should not fail after pool expand is done (This behavior after fix)
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("KvdbRestartNewNodeAcquired",
+			"Shutdown the KVDB leader node and wait for third copy to be created",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Resync volume after rebalance"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbrestartnewnodeacquired-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		killType := []string{"reboot", "kill"}
+
+		if len(node.GetStorageNodes()) <= 3 {
+			log.FailOnError(fmt.Errorf("test needs minimum of 4 storage nodes for kvdb failover"), "required nodes present?")
+		}
+
+		for _, eachType := range killType {
+			allKvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "failed to get list of kvdb nodes")
+
+			dash.VerifyFatal(len(allKvdbNodes) == 3, true,
+				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
+
+			masterNode, err := GetKvdbMasterNode()
+			log.FailOnError(err, "failed to get the master node ip")
+			log.Infof("kvdb master node is [%v]", masterNode.Name)
+
+			if eachType == "kill" {
+				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill kvdb master node")
+			} else {
+				err = RebootNodeAndWait(*masterNode)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			}
+			masterNodeAfterKill, err := GetKvdbMasterNode()
+			log.FailOnError(err, "failed to get the master node ip")
+
+			log.Infof("kvdb master node is [%v]", masterNodeAfterKill.Name)
+			dash.VerifyFatal(masterNode.Name == masterNodeAfterKill.Name, false,
+				"master node ip is same before and after masternode kill?")
+
+			allKvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "failed to get list of kvdb nodes")
+			dash.VerifyFatal(len(allKvdbNodes) == 3, true,
+				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// ExpandMultiplePoolsInParallel expands provided poolIDs in parallel based on the expandType provided
+// E.x : poolIds := [f724fb7f-9a43-4df2-bc38-550841fc3bfc, 492a3d03-cc47-4a8c-a8f0-d1d92dfdf25f]
+//
+//	size := 10
+//	expandType := [api.SdkStoragePool_RESIZE_TYPE_AUTO]
+//			     or  [api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
+//			     or  [api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK]
+func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandType []api.SdkStoragePool_ResizeOperationType) (*sync.WaitGroup, error) {
+	var wg sync.WaitGroup
+	numGoroutines := len(poolIds)
+
+	wg.Add(numGoroutines)
+	for _, eachPool := range poolIds {
+		poolResizeType := expandType
+
+		randomIndex := rand.Intn(len(poolResizeType))
+		pickType := poolResizeType[randomIndex]
+		go func(poolUUID string, expandSize uint64) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
+
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + expandSize
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+
+		}(eachPool, expandSize)
+
+	}
+	return &wg, nil
+}
+
+var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
+	/*
+			test to expand multiple pool at once in parallel
+		    Pick a Pool from each Storage Node and expand all the node in parallel
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandMultiplePoolWithIOsInClusterAtOnce",
+			"Expand multiple pool in the cluster at once in parallel",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		poolIdsToExpand := []string{}
+		for _, eachNodes := range node.GetStorageNodes() {
+			poolsPresent, err := GetPoolWithIOsInGivenNode(eachNodes, contexts)
+			if err == nil {
+				poolIdsToExpand = append(poolIdsToExpand, poolsPresent.Uuid)
+			} else {
+				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+			fmt.Sprintf("No pools with IO present ?"))
+
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
+	/*
+		Restart Multiple Storage Nodes with one KVDB Master in parallel and wait for the node to come back online
+		https://portworx.atlassian.net/browse/PTX-17618
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartMultipleStorageNodeOneKVDBMaster",
+			"Restart Multiple Storage Nodes with one KVDB Master",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+
+		listOfStorageNodes := node.GetStorageNodes()
+		// Test Needs minimum of 3 nodes other than 3 KVDB Member nodes
+		// so that few storage nodes (except kvdb nodes ) can be restarted
+		dash.VerifyFatal(len(listOfStorageNodes) >= 6, true, "Test Needs minimum of 6 Storage Nodes")
+
+		// assuming that there are minimum number of 3 nodes minus kvdb member nodes , we pick atleast 50% of the nodes for restating
+		var nodesToReboot []node.Node
+		getKVDBNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+
+		// Verifying if we have kvdb quorum set
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes")
+
+		// Get 50 % of other nodes for restart
+		nodeCountsForRestart := (len(listOfStorageNodes) - len(getKVDBNodes)) / 2
+		log.InfoD("total nodes picked for rebooting [%v]", nodeCountsForRestart)
+
+		isKVDBNode := func(n node.Node) (bool, bool) {
+			for _, eachKvdb := range getKVDBNodes {
+				if n.Id == eachKvdb.ID {
+					if eachKvdb.Leader == true {
+						return true, true
+					} else {
+						return true, false
+					}
+				}
+			}
+			return false, false
+		}
+
+		count := 0
+		// Add one KVDB node to the List
+		for _, each := range listOfStorageNodes {
+			kvdbNode, master := isKVDBNode(each)
+			if kvdbNode == true && master == true {
+				nodesToReboot = append(nodesToReboot, each)
+				count = count + 1
+			}
+		}
+		// Add nodes which are not KVDB Nodes
+		for _, each := range listOfStorageNodes {
+			kvdbNode, _ := isKVDBNode(each)
+			if kvdbNode == false {
+				if count <= nodeCountsForRestart {
+					nodesToReboot = append(nodesToReboot, each)
+					count = count + 1
+				}
+			}
+		}
+
+		for _, eachNode := range nodesToReboot {
+			log.InfoD("Selected Node [%v] for Restart", eachNode.Name)
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootmulparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Initiate all node reboot at once using Go Routines
+		wg.Add(len(nodesToReboot))
+
+		rebootNode := func(n node.Node) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			log.InfoD("Rebooting Node [%v]", n.Name)
+
+			err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				},
+			})
+			log.FailOnError(err, "failed to reboot Node [%v]", n.Name)
+
+		}
+
+		// Initiating Go Routing to reboot all the nodes at once
+		rebootAllNodes := func() {
+			for _, each := range nodesToReboot {
+				log.InfoD("Node to Reboot [%v]", each.Name)
+				go rebootNode(each)
+			}
+			wg.Wait()
+
+			// Wait for connection to come back online after reboot
+			for _, each := range nodesToReboot {
+				err = Inst().N.TestConnection(each, node.ConnectionOpts{
+					Timeout:         15 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+
+				err = Inst().S.IsNodeReady(each)
+				log.FailOnError(err, "Node [%v] is not in ready state", each.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(each, Inst().DriverStartTimeout)
+				log.FailOnError(err, "failed waiting for driver up on Node[%v]", each.Name)
+			}
+		}
+
+		// Reboot all the Nodes at once
+		rebootAllNodes()
+
+		// Verifications
+		getKVDBNodes, err = GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes after node reboot")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
+	/*
+		KVDB failover when lots of snap create/delete, volume inspect requests are coming
+		https://portworx.atlassian.net/browse/PTX-17729
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("KvdbFailoverSnapVolCreateDelete",
+			"KVDB failover when lot of snap create/delete, volume inspect requests are coming",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		wg.Add(4)
+		var volumesCreated []string
+		var snapshotsCreated []string
+
+		terminate := false
+
+		stopRoutine := func() {
+			if !terminate {
+				terminate = true
+				wg.Done()
+				for _, each := range volumesCreated {
+					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+				}
+				for _, each := range snapshotsCreated {
+					log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+				}
+			}
+		}
+		defer stopRoutine()
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			// Volume Create continuously
+			for {
+				if terminate {
+					break
+				}
+				// Create Volume on the Cluster
+				uuidObj := uuid.New()
+				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+				Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
+				haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+
+				volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
+				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+				log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+
+				volumesCreated = append(volumesCreated, volId)
+			}
+		}()
+
+		inspectDeleteVolume := func(volumeId string) error {
+			defer GinkgoRecover()
+			// inspect volume
+			appVol, err := Inst().V.InspectVolume(volumeId)
+			if err != nil {
+				stopRoutine()
+				return err
+			}
+
+			err = Inst().V.DeleteVolume(appVol.Id)
+			if err != nil {
+				stopRoutine()
+				return err
+			}
+
+			return nil
+		}
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			// Create Snapshots on Volumes continuously
+			for {
+				if terminate {
+					break
+				}
+				if len(volumesCreated) > 5 {
+					for _, eachVol := range volumesCreated {
+						uuidCreated := uuid.New()
+						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol, uuidCreated.String())
+
+						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol, snapshotName)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err, "error Creating Snapshot [%s]", eachVol)
+						}
+
+						snapshotsCreated = append(snapshotsCreated, snapshotResponse.GetSnapshotId())
+						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+
+						err = inspectDeleteVolume(eachVol)
+						log.FailOnError(err, "Inspect and Delete Volume failed on cluster with Volume ID [%v]", eachVol)
+
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+					}
+				}
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			// Delete Snapshots on Volumes continuously
+			for {
+				if terminate {
+					break
+				}
+				if len(snapshotsCreated) > 5 {
+					for _, each := range snapshotsCreated {
+						err := inspectDeleteVolume(each)
+						log.FailOnError(err, "Inspect and Delete Snapshot failed on cluster with snapshot ID [%v]", each)
+
+						// Remove the first element
+						for i := 0; i < len(snapshotsCreated)-1; i++ {
+							snapshotsCreated[i] = snapshotsCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						snapshotsCreated = snapshotsCreated[:len(snapshotsCreated)-1]
+					}
+				}
+			}
+		}()
+
+		duration := 30 * time.Minute
+		timeout := time.After(duration)
+		for {
+			if terminate {
+				break
+			}
+			select {
+			case <-timeout:
+				stopRoutine()
+			default:
+				// Wait for KVDB Members to be online
+				err := WaitForKVDBMembers()
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed waiting for KVDB members to be active")
+				}
+
+				// Kill KVDB Master Node
+				masterNode, err := GetKvdbMasterNode()
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed getting details of KVDB master node")
+				}
+
+				// Get KVDB Master PID
+				pid, err := GetKvdbMasterPID(*masterNode)
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed getting PID of KVDB master node")
+				}
+
+				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+				// Kill kvdb master PID for regular intervals
+				err = KillKvdbMemberUsingPid(*masterNode)
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed to kill KVDB Node")
+				}
+
+				// Wait for some time after killing kvdb master Node
+				time.Sleep(5 * time.Minute)
+			}
+		}
+		wg.Wait()
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })
