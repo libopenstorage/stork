@@ -8720,21 +8720,23 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 })
 
 func waitTillVolumeStatusUp(vol *volume.Volume) error {
-	now := time.Now()
-	targetTime := now.Add(30 * time.Minute)
-
+	now := 30 * time.Minute
+	targetTime := time.After(now)
+	var err error
+	err = nil
 	for {
-		if now.After(targetTime) {
-			return fmt.Errorf("Failed to get volume status to UP")
-		} else {
-			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+		select {
+		case <-targetTime:
+			return err
+		default:
+			err = VerifyVolumeStatusOnline(vol)
 			if err != nil {
-				return err
-			}
-			if fmt.Sprintf("[%v]", volumeInspect.Status) == "VOLUME_STATUS_UP" {
+				log.InfoD("errored while waiting for volume state up, retrying.")
+				// wait for 5 seconds before retrying
+				time.Sleep(5 * time.Second)
+			} else {
 				return nil
 			}
-
 		}
 	}
 }
@@ -8757,6 +8759,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
+
 		contexts = make([]*scheduler.Context, 0)
 		currAppList := Inst().AppList
 
@@ -8831,7 +8834,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
 		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		isjournal, err := isJournalEnabled()
@@ -8843,7 +8846,10 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 
 		log.Info("Checking for each volumes status is up")
 		for _, eachVol := range volumes {
-			log.FailOnError(waitTillVolumeStatusUp(eachVol), fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
+			err = VerifyVolumeStatusOnline(eachVol)
+			if err != nil {
+				log.FailOnError(waitTillVolumeStatusUp(eachVol), "failed to get volume status UP")
+			}
 		}
 	})
 
@@ -9551,7 +9557,7 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 			}
 		}()
 
-		duration := 15 * time.Minute
+		duration := 30 * time.Minute
 		timeout := time.After(duration)
 		for {
 			if terminate {

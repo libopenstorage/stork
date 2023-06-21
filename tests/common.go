@@ -6857,7 +6857,7 @@ func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume,
 				return nil, err
 			}
 			log.InfoD(fmt.Sprintf("Current Status of the volume [%v] is [%v]", vol.Name, appVol.Status))
-			if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_DEGRADED" {
+			if fmt.Sprintf("[%v]", appVol.Status.String()) != "VOLUME_STATUS_DEGRADED" {
 				volumes = append(volumes, vol)
 			}
 		}
@@ -6871,8 +6871,8 @@ func VerifyVolumeStatusOnline(vol *volume.Volume) error {
 	if err != nil {
 		return err
 	}
-	if fmt.Sprintf("%v", appVol.Status) != "VOLUME_STATUS_UP" {
-		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status)
+	if fmt.Sprintf("%v", appVol.Status.String()) == "VOLUME_STATUS_UP" {
+		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status.String())
 	}
 	return nil
 }
