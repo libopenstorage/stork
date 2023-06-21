@@ -40,6 +40,8 @@ const (
 	DefaultsecretName = "pxc-backup-secret"
 	// Issuer - OIDC issuer
 	Issuer = "OIDC_ENDPOINT"
+	// KeycloakServiceName - Name of the keycloak service in px-backup namespace
+	KeycloakServiceName = "pxcentral-keycloak-http"
 )
 
 const (
@@ -211,18 +213,17 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 	}
 	url := string(secret.Data[Issuer])
 	// Expand the service name for K8S DNS resolution, for keycloak requests from different ns
-	splitURL := strings.Split(url, ":")
-	splitURL[1] = fmt.Sprintf("%s.%s.svc.cluster.local", splitURL[1], ns)
-	url = strings.Join(splitURL, ":")
-	// url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
+	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", KeycloakServiceName, ns)
+	newURL := strings.Replace(url, KeycloakServiceName, replacement, 1)
+	// url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
 	if admin {
-		// admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
-		// non-adming url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/admin/realms/master
-		split := strings.Split(url, "auth")
-		newURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
+		// admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
+		// non-admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
+		split := strings.Split(newURL, "auth")
+		newURL = fmt.Sprintf("%sauth/admin%s", split[0], split[1])
 		return newURL, nil
 	}
-	return string(url), nil
+	return string(newURL), nil
 
 }
 
@@ -829,7 +830,6 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	if token == "" {
 		return nil, fmt.Errorf("admin token is empty")
 	}
-	log.Debugf("Token from Admin secret: %v", token)
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil
@@ -855,7 +855,6 @@ func GetAdminTokenFromSecret() (string, error) {
 	if token == "" {
 		return "", fmt.Errorf("admin token is empty")
 	}
-	log.Debugf("Token from Admin secret: %v", token)
 
 	return token, nil
 }
@@ -1185,13 +1184,13 @@ func processHTTPRequest(
 		return nil, err
 	}
 	defer func() {
-		err := httpResponse.Body.Close()
+		err = httpResponse.Body.Close()
 		if err != nil {
 			log.Debugf("Error closing http response body: %v", err)
 		}
 	}()
-
-	return ioutil.ReadAll(httpResponse.Body)
+	responseBody, err := ioutil.ReadAll(httpResponse.Body)
+	return responseBody, err
 }
 
 func GetNonAdminCtx(username, password string) (context.Context, error) {

@@ -10,7 +10,7 @@ import (
 
 	docker "github.com/docker/docker/client"
 	marathon "github.com/gambol99/go-marathon"
-	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/sched-ops/task"
@@ -909,7 +909,7 @@ func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	}
 }
 
-func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
 	//CreateCsiSnapshotClass is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -917,7 +917,7 @@ func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string
 	}
 }
 
-func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -925,7 +925,7 @@ func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pv
 	}
 }
 
-func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	//CreateCsiSnapsForVolumes is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -957,7 +957,7 @@ func (d *dcos) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedul
 	}
 }
 
-func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
+func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.VolumeSnapshot, error) {
 	// GetCsiSnapshots is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -965,7 +965,7 @@ func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.Vol
 	}
 }
 
-func (d *dcos) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMa map[string]*v1beta1.VolumeSnapshot) error {
+func (d *dcos) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMa map[string]*volsnapv1.VolumeSnapshot) error {
 	// ValidateCsiSnapshots is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1001,7 +1001,7 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 }
 
 // GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
-func (d *dcos) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
+func (d *dcos) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error) {
 	// GetAllSnapshotClasses is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",

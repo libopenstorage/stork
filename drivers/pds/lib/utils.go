@@ -195,8 +195,11 @@ const (
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
 	couchbase                    = "Couchbase"
+	mongodb                      = "MongoDB Enterprise"
 	rabbitmq                     = "RabbitMQ"
 	mysql                        = "MySQL"
+	mssql                        = "MS SQL Server"
+	kafka                        = "Kafka"
 	pxLabel                      = "pds.portworx.com/available"
 	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap           = "pds-params"
@@ -682,33 +685,72 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 }
 
 // GetDeploymentConnectionInfo returns the dns endpoint
-func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
+func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, error) {
 	var isfound bool
 	var dnsEndpoint string
+	var port string
 
 	dataServiceDeployment := components.DataServiceDeployment
 	deploymentConnectionDetails, clusterDetails, err := dataServiceDeployment.GetConnectionDetails(deploymentID)
 	deploymentConnectionDetails.MarshalJSON()
 	if err != nil {
 		log.Errorf("An Error Occured %v", err)
-		return "", err
+		return "", "", err
 	}
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
+
+	if dsName == mysql {
+		ports := deploymentConnectionDetails.GetPorts()
+		for key, value := range ports {
+			if key == "mysql-router" {
+				port = fmt.Sprint(value)
+			}
+		}
+	}
+
+	//TODO: Validate vip endpoints as well
 	for key, value := range clusterDetails {
-		log.Infof("host details key %v value %v", key, value)
-		if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
-			dnsEndpoint = fmt.Sprint(value)
-			isfound = true
+		log.Infof("host details key: [%v] value: [%v]", key, value)
+		if dsName == consul {
+			if strings.Contains(key, "endpoints") {
+				dnsEndpoint = fmt.Sprint(value)
+				log.Infof("consul dns end point: %s", dnsEndpoint)
+				isfound = true
+			}
+		} else {
+			if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
+				dnsEndpoint = fmt.Sprint(value)
+				isfound = true
+			}
+		}
+
+		switch dsName {
+		case cassandra:
+			if strings.Contains(key, "cqlPort") {
+				port = fmt.Sprint(value)
+			}
+		case postgresql, couchbase, mongodb, rabbitmq:
+			if strings.Contains(key, "port") {
+				port = fmt.Sprint(value)
+			}
+		case consul:
+			if strings.Contains(key, "httpPort") {
+				port = fmt.Sprint(value)
+			}
+		case elasticSearch, mssql, redis, kafka, zookeeper:
+			if strings.Contains(key, "Port") {
+				port = fmt.Sprint(value)
+			}
 		}
 	}
 	if !isfound {
 		log.Errorf("No connection string found")
-		return "", err
+		return "", "", err
 	}
 
-	return dnsEndpoint, nil
+	return dnsEndpoint, port, nil
 }
 
 // GetDeploymentCredentials returns the password to connect to the dataservice
@@ -1667,11 +1709,16 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (bool, error) {
 	var dbUser, timeToRun, numOfCustomers, numOfThreads, numOfWarehouses string
 
-	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
+	dnsEndpoint, port, err := GetDeploymentConnectionInfo(deploymentID, dataServiceName)
 	if err != nil {
-		log.Errorf("An Error Occured while getting connection info %v", err)
 		return false, err
 	}
+	err = controlplane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("DNS endpoints are reachable...")
+
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
@@ -1725,11 +1772,16 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 	var dep *v1.Deployment
 	var pod *corev1.Pod
 
-	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
+	dnsEndpoint, port, err := GetDeploymentConnectionInfo(params.DeploymentID, params.DataServiceName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error occured while getting connection info, Err: %v", err)
 	}
-	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
+
+	err = controlplane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error occured while validating connection info, Err: %v", err)
+	}
+	log.Infof("DNS endpoints are reachable...")
 
 	pdsPassword, err := GetDeploymentCredentials(params.DeploymentID)
 	if err != nil {

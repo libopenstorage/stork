@@ -5437,7 +5437,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				nodesToBeUpdated = nil
 				poolsToBeUpdated = nil
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true)
+					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
 					return err
 				}

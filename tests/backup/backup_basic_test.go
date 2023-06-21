@@ -79,6 +79,7 @@ func BackupInitInstance() {
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
+	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 
@@ -153,7 +154,7 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:
-			globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, bucketNameSuffix)
+			globalNFSBucketName = fmt.Sprintf("%s", globalNFSBucketPrefix)
 		}
 	}
 	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")

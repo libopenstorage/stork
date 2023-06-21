@@ -74,6 +74,7 @@ func (a *aks) GetASGClusterSize() (int64, error) {
 func (a *aks) GetZones() ([]string, error) {
 	// For both Azure VMSS scalesets and availability sets,
 	// PX treats them as single zone.
+
 	return []string{""}, nil
 }
 

@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1beta1"
+	v1 "github.com/kubernetes-csi/external-snapshotter/client/v6/clientset/versioned/typed/volumesnapshot/v1"
 	"github.com/portworx/sched-ops/k8s/common"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -42,7 +42,7 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new client for the given config.
-func New(client v1beta1.SnapshotV1beta1Interface) *Client {
+func New(client v1.SnapshotV1Interface) *Client {
 	return &Client{
 		client: client,
 	}
@@ -50,7 +50,7 @@ func New(client v1beta1.SnapshotV1beta1Interface) *Client {
 
 // NewForConfig builds a new client for the given config.
 func NewForConfig(c *rest.Config) (*Client, error) {
-	client, err := v1beta1.NewForConfig(c)
+	client, err := v1.NewForConfig(c)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 type Client struct {
 	config *rest.Config
 
-	client v1beta1.SnapshotV1beta1Interface
+	client v1.SnapshotV1Interface
 }
 
 // SetConfig sets the config and resets the client
@@ -143,7 +143,7 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
-	c.client, err = v1beta1.NewForConfig(c.config)
+	c.client, err = v1.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}

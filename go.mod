@@ -17,18 +17,18 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
-	github.com/google/gnostic v0.5.7-v3refs
+	github.com/google/gnostic v0.6.9
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 	github.com/influxdata/influxdb-client-go v1.4.0
-	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
+	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
 	github.com/libopenstorage/operator v0.0.0-20230520011658-1e7a1349f832
-	github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a
+	github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.21.1
 	github.com/openshift/api v0.0.0-20230426193520-54a14470e5dc
@@ -37,7 +37,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9
 	github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.14.0
@@ -46,7 +46,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
 	github.com/trivago/tgo v1.0.7
-	github.com/vmware/govmomi v0.22.2
+	github.com/vmware/govmomi v0.30.4
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.8.0
@@ -127,7 +127,7 @@ require (
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
-	github.com/go-openapi/swag v0.19.14 // indirect
+	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -171,6 +171,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0 // indirect
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
@@ -178,7 +179,7 @@ require (
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
 	github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
-	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
@@ -286,8 +287,8 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
 
 	// Stork dependencies
-	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
+	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

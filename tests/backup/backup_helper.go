@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -77,7 +77,7 @@ const (
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	pxBackupDeployment                        = "px-backup"
-	backupDeleteTimeout                       = 20 * time.Minute
+	backupDeleteTimeout                       = 60 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
@@ -200,7 +200,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
 func GetCsiSnapshotClassName() (string, error) {
-	var snapShotClasses *v1beta1.VolumeSnapshotClassList
+	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapShotClasses, err = Inst().S.GetAllSnapshotClasses(); err != nil {
 		return "", err
@@ -940,6 +940,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
+			// Delete the backup location object
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
@@ -948,7 +949,17 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
 				}
 				if status {
-					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					backupLocationInspectRequest := api.BackupLocationInspectRequest{
+						Name:  bkpLocationName,
+						Uid:   backupLocationUID,
+						OrgId: orgID,
+					}
+					backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
+					if err != nil {
+						return "", true, fmt.Errorf("inspect backup location - backup location %s still present with error %v", bkpLocationName, err)
+					}
+					backupLocationStatus := backupLocationObject.BackupLocation.BackupLocationInfo.GetStatus()
+					return "", true, fmt.Errorf("backup location %s is not deleted yet. Status - [%s]", bkpLocationName, backupLocationStatus)
 				}
 				return "", false, nil
 			}
@@ -3209,6 +3220,40 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
 		}
 	}
+	return nil
+}
+
+// IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
+func IsMongoDBReady() error {
+	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	mongoDBPodStatus := func() (interface{}, bool, error) {
+		statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+		if err != nil {
+			return "", true, err
+		}
+		// Px-Backup would function with just 2 mongo DB pods in healthy state.
+		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
+		if statefulSet.Status.ReadyReplicas < 2 {
+			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
+				2, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 	return nil
 }
 

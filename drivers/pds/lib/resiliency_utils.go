@@ -320,7 +320,7 @@ func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment
 }
 
 // Reboot the Active Node onto which the application pod is coming up
-func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeployment) error {
+func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeployment, num_reboots int) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
 	var testError error
@@ -381,6 +381,30 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 			if testError != nil {
 				CapturedErrors <- testError
 				return testError
+			}
+			if num_reboots > 1 {
+				for index := 1; index <= num_reboots; index++ {
+					log.Infof("wait for node: %s to be back up", nodeToReboot.Name)
+					err = tests.Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
+						Timeout:         defaultTestConnectionTimeout,
+						TimeBeforeRetry: defaultWaitRebootRetry,
+					})
+					if err != nil {
+						CapturedErrors <- err
+						return err
+					}
+					testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         defaultCommandTimeout,
+							TimeBeforeRetry: defaultCommandRetry,
+						},
+					})
+					if testError != nil {
+						CapturedErrors <- testError
+						return testError
+					}
+				}
 			}
 			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
 		}

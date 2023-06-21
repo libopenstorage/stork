@@ -3,6 +3,7 @@ package vsphere
 import (
 	"context"
 	"fmt"
+	"github.com/vmware/govmomi/vim25/mo"
 	"net/url"
 	"os"
 	"time"
@@ -164,16 +165,29 @@ func (v *vsphere) connect() error {
 	vmMap = make(map[string]*object.VirtualMachine)
 	// Find virtual machines in datacenter
 	vms, err := f.VirtualMachineList(v.ctx, "*")
+
 	if err != nil {
 		return fmt.Errorf("Failed to find any virtual machines on %s: %v", v.vsphereHostIP, err)
 	}
 
 	nodes := node.GetNodes()
 	for _, vm := range vms {
+		var vmMo mo.VirtualMachine
+		err = vm.Properties(v.ctx, vm.Reference(), []string{"guest"}, &vmMo)
+		if err != nil {
+			return err
+		}
+
+		// Get the hostname
+		hostname := vmMo.Guest.HostName
+		log.Infof("hostname: %v", hostname)
+		if hostname == "" {
+			continue
+		}
 		for _, n := range nodes {
-			if vm.Name() == n.Name {
-				if _, ok := vmMap[vm.Name()]; !ok {
-					vmMap[vm.Name()] = vm
+			if hostname == n.Name {
+				if _, ok := vmMap[hostname]; !ok {
+					vmMap[hostname] = vm
 				}
 			}
 		}
@@ -197,7 +211,20 @@ func (v *vsphere) AddMachine(vmName string) error {
 		return err
 	}
 
-	vmMap[vm.Name()] = vm
+	var vmMo mo.VirtualMachine
+	err = vm.Properties(v.ctx, vm.Reference(), []string{"guest.hostName"}, &vmMo)
+	if err != nil {
+		return err
+	}
+
+	// Get the hostname
+	hostname := vmMo.Guest.HostName
+	log.Infof("hostname: %v", hostname)
+	if hostname == "" {
+		return fmt.Errorf("Failed to find hostname for  virtual machine on %s: %v", vm.Name(), err)
+	}
+
+	vmMap[hostname] = vm
 	return nil
 }
 

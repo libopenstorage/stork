@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"regexp"
 
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -266,6 +267,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
+	defaultPdsDriver                      = "pds"
 	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
@@ -514,6 +516,32 @@ func updateChannel(err error, errChan ...*chan error) {
 		log.Errorf(fmt.Sprintf("%v", err))
 		*errChan[0] <- err
 	}
+}
+
+func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		stepLog := fmt.Sprintf("check health status of %s app", ctx.App.Key)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, specObj := range ctx.App.SpecList {
+				if pdsobj, ok := specObj.(*pdsv1.ModelsDeployment); ok {
+					err := Inst().Pds.ValidateDataServiceDeployment(pdsobj, *pdsobj.Namespace.Name)
+					if err != nil {
+						PrintDescribeContext(ctx)
+						processError(err, errChan...)
+						return
+					}
+				}
+			}
+		})
+	})
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
@@ -1633,7 +1661,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			if err != nil {
 				processError(err, errChan...)
 			}
-			contexts = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+			contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+			if err != nil {
+				processError(err, errChan...)
+			}
 		} else {
 			options := CreateScheduleOptions("", errChan...)
 			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
@@ -1987,10 +2018,7 @@ func ValidateClusterSize(count int64) {
 	} else {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
-	storageNodes, err := GetStorageNodes()
-	log.FailOnError(err, "Storage nodes are empty")
-
-	log.Infof("List of storage nodes:[%v]", storageNodes)
+	storageNodes := node.GetStorageNodes()
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
 }
 
@@ -2082,6 +2110,18 @@ func runCmd(cmd string, n node.Node) error {
 
 	return err
 
+}
+
+func runCmdGetOutput(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+	return output, err
 }
 
 func runCmdWithNoSudo(cmd string, n node.Node) error {
@@ -3531,7 +3571,21 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
+	}
+	return err
+}
+
+// CreateBackupLocationWithContext creates backup location using the given context
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, subPath string, ctx context1.Context) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderAzure:
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderNfs:
+		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
 	}
 	return err
 }
@@ -3686,8 +3740,8 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// CreateS3BackupLocationNonAdminUser creates backuplocation for S3
-func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+// CreateS3BackupLocationWithContext creates backup location for S3 using the given context
+func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -3721,7 +3775,7 @@ func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, clou
 	return nil
 }
 
-// CreateAzureBackupLocation creates backuplocation for Azure
+// CreateAzureBackupLocation creates backup location for Azure
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
@@ -3746,6 +3800,32 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 		return err
 	}
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
+func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Azure,
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -3786,9 +3866,8 @@ func WaitForBackupLocationAddition(
 }
 
 // CreateNFSBackupLocation creates backup location for nfs
-func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, validate bool) error {
+func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, subPath string, validate bool) error {
 	serverAddr := os.Getenv("NFS_SERVER_ADDR")
-	subPath := os.Getenv("NFS_SUB_PATH")
 	mountOption := os.Getenv("NFS_MOUNT_OPTION")
 	path := os.Getenv("NFS_PATH")
 	backupDriver := Inst().Backup
@@ -3816,6 +3895,44 @@ func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKe
 		return err
 	}
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	if validate {
+		err = WaitForBackupLocationAddition(ctx, name, uid, orgID, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateNFSBackupLocationWithContext creates backup location using the given context
+func CreateNFSBackupLocationWithContext(name string, uid string, subPath string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
+	serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	path := os.Getenv("NFS_PATH")
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Config: &api.BackupLocationInfo_NfsConfig{
+				NfsConfig: &api.NFSConfig{
+					ServerAddr:  serverAddr,
+					SubPath:     subPath,
+					MountOption: mountOption,
+				},
+			},
+			Path:          path,
+			Type:          api.BackupLocationInfo_NFS,
+			EncryptionKey: encryptionKey,
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -4487,6 +4604,64 @@ func CreateBucket(provider string, bucketName string) {
 	})
 }
 
+// IsBackupLocationEmpty returns true if the bucket for a provider is empty
+func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
+	switch provider {
+	case drivers.ProviderAws:
+		result, err := IsS3BucketEmpty(bucketName)
+		return result, err
+	case drivers.ProviderNfs:
+		result, err := IsNFSSubPathEmpty(bucketName)
+		return result, err
+	default:
+		return false, fmt.Errorf("function does not support %s provider", provider)
+	}
+}
+
+func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	// Get NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+
+	// Mount the NFS share to the master node.
+	masterNode := node.GetMasterNodes()[0]
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+		fmt.Sprintf("find %s/%s -type f", mountDir, subPath),
+	}
+	for _, cmd := range mountCmds {
+		output, err := runCmdGetOutput(cmd, masterNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		log.Infof("Output from command [%s] -\n%s", cmd, output)
+	}
+
+	defer func() {
+		// Unmount the NFS share from the master node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			err := runCmd(cmd, masterNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		}
+	}()
+
+	// List the files in subpath from NFS share path.
+	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
+	fileCountCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
+	log.Infof("Running command - %s", fileCountCmd)
+	output, err := runCmdGetOutput(fileCountCmd, masterNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", fileCountCmd, masterNode, err))
+	log.Infof("Output of command [%s] - \n%s", fileCountCmd, output)
+	result, err := strconv.Atoi(strings.TrimSpace(output))
+	if result > 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
 // IsS3BucketEmpty returns true if bucket empty else false
 func IsS3BucketEmpty(bucketName string) (bool, error) {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -4674,6 +4849,7 @@ type Torpedo struct {
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
+	MigrationHops                       string
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
@@ -4730,6 +4906,7 @@ func ParseFlags() {
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
+	var migrationHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
 	//dashboard fields
@@ -4780,6 +4957,7 @@ func ParseFlags() {
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
+	flag.StringVar(&migrationHops, "migration-hops", "", "Comma separated list of versions for migration pool")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
 	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone name")
@@ -4804,7 +4982,7 @@ func ParseFlags() {
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
-	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
+	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.Parse()
@@ -5014,6 +5192,7 @@ func ParseFlags() {
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
+				MigrationHops:                       migrationHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,

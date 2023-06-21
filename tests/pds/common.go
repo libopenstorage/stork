@@ -1,16 +1,19 @@
 package tests
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/pds/parameters"
-
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -74,6 +77,7 @@ var (
 	dataServiceDefaultResourceTemplateIDMap map[string]string
 	dataServiceNameIDMap                    map[string]string
 	supportedDataServicesNameIDMap          map[string]string
+	backupSupportedDataServiceNameIDMap     map[string]string
 	DeployAllVersions                       bool
 	DataService                             string
 	DeployAllImages                         bool
@@ -161,4 +165,82 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 
 	return pod, dep, err
 
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckPVCtoFullCondition(context []*scheduler.Context) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		for _, ctx := range context {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return nil, true, err
+			}
+			for _, vol := range vols {
+				appVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return nil, true, err
+				}
+				pvcCapacity := appVol.Spec.Size / units.GiB
+				usedGiB := appVol.GetUsage() / units.GiB
+				threshold := pvcCapacity - 1
+				if usedGiB >= threshold {
+					log.Infof("The PVC capacity was %vGB , the consumed PVC is %vGB", pvcCapacity, usedGiB)
+					return nil, false, nil
+				}
+			}
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
+
+	return err
+}
+
+// Increase PVC by 1 gb
+func IncreasePVCby1Gig(context []*scheduler.Context) error {
+	log.Info("Resizing of the PVC begins")
+	initialCapacity, err := GetVolumeCapacityInGB(context)
+	log.Debugf("Initial volume storage size is : %v", initialCapacity)
+	if err != nil {
+		return err
+	}
+	for _, ctx := range context {
+		appVolumes, err := Inst().S.ResizeVolume(ctx, "")
+		log.FailOnError(err, "Volume resize successful ?")
+		log.InfoD(fmt.Sprintf("validating successful volume size increase on app %s's volumes: %v",
+			ctx.App.Key, appVolumes))
+	}
+	// wait for the resize to take effect
+	time.Sleep(30 * time.Second)
+	newcapacity, err := GetVolumeCapacityInGB(context)
+	log.Infof("Resized volume storage size is : %v", newcapacity)
+	if err != nil {
+		return err
+	}
+
+	if newcapacity > initialCapacity {
+		log.InfoD("Successfully resized the pvc by 1gb")
+		return nil
+	}
+	return nil
+}
+
+// Get volume capacity
+func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
+	var pvcCapacity uint64
+	for _, ctx := range context {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return 0, err
+		}
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return 0, err
+			}
+			pvcCapacity = appVol.Spec.Size / units.GiB
+		}
+	}
+	return pvcCapacity, err
 }

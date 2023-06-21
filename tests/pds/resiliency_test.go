@@ -137,6 +137,8 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				var dsVersionBuildMap = make(map[string][]string)
+				var num_reboots int
+				num_reboots = 1
 				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
@@ -151,7 +153,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					failuretype := pdslib.TypeOfFailure{
 						Type: ActiveNodeRebootDuringDeployment,
 						Method: func() error {
-							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment)
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment, num_reboots)
 						},
 					}
 					pdslib.DefineFailureType(failuretype)
@@ -571,5 +573,140 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 			log.FailOnError(err, "Error while deleting data services")
 			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 		}
+	})
+})
+
+var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootActiveNodeMultipleTimesDuringDeployment", "Reboots a Node multiple times onto which a pod is coming up", pdsLabels, 0)
+	})
+
+	It("deploy Dataservices", func() {
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				var dsVersionBuildMap = make(map[string][]string)
+				var num_reboots int
+				num_reboots = 3
+				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
+					isDeploymentsDeleted = false
+					// Global Resiliency TC marker
+					pdslib.MarkResiliencyTC(true, true)
+
+					// Deploy and Validate this Data service after injecting the type of failure we want to catch
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+					log.FailOnError(err, "Error while deploying data services")
+
+					// Type of failure that this TC needs to cover
+					failuretype := pdslib.TypeOfFailure{
+						Type: ActiveNodeRebootDuringDeployment,
+						Method: func() error {
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment, num_reboots)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+
+					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
+					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource setting template")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
+	})
+})
+
+var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillPdsAgentDuringWorkloadRun", "Kill Pds Agent Pods while Workload is running", pdsLabels, 0)
+	})
+	It("Deploy Dataservices and Restart PX During App scaleup", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var generateWorkloads = make(map[string]string)
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name != postgresql {
+					continue
+				}
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+		Step("Running Workloads", func() {
+			for ds, deployment := range deployments {
+				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while generating workloads for dataservice [%s]", ds.Name))
+					if dep == nil {
+						generateWorkloads[ds.Name] = pod.Name
+					} else {
+						generateWorkloads[ds.Name] = dep.Name
+					}
+					for dsName, workloadContainer := range generateWorkloads {
+						log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					}
+				} else {
+					log.InfoD("Workload script not available for ds %v", ds.Name)
+				}
+			}
+		})
+		defer func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		}()
+
+		Step("Killing PDS Agent Pods", func() {
+			err = pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
+			log.FailOnError(err, "Failed while deleting PDS Agent Pods")
+		})
+
+		// TODO : Once Workload Validation Module is ready, we will add that here. AI: @jyoti
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })

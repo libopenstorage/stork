@@ -8,7 +8,7 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/api"
@@ -355,13 +355,13 @@ type Driver interface {
 	RecycleNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
-	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
+	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
 	// to make the interface consistent
-	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
+	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error)
 
 	// CSISnapshotTest create csi snapshot and return a pvc using that snapshot
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
@@ -376,13 +376,13 @@ type Driver interface {
 	CSICloneTest(*Context, CSICloneRequest) error
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
-	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
+	CreateCsiSnapsForVolumes(*Context, string) (map[string]*volsnapv1.VolumeSnapshot, error)
 
 	// GetCsiSnapshots return snapshot lists for a volume
-	GetCsiSnapshots(string, string) ([]*v1beta1.VolumeSnapshot, error)
+	GetCsiSnapshots(string, string) ([]*volsnapv1.VolumeSnapshot, error)
 
 	// ValidateCsiSnapshots validate csi snapshots in the context
-	ValidateCsiSnapshots(*Context, map[string]*v1beta1.VolumeSnapshot) error
+	ValidateCsiSnapshots(*Context, map[string]*volsnapv1.VolumeSnapshot) error
 
 	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
 	RestoreCsiSnapAndValidate(*Context, map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error)
@@ -394,7 +394,7 @@ type Driver interface {
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
 
 	// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
-	GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error)
+	GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error)
 
 	// GetPodsRestartCount gets restart count maps for pods in given namespace
 	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
