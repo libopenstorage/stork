@@ -83,6 +83,10 @@ if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
     UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
 fi
 
+if [ -z "${SKIP_PX_OPERATOR_UPGRADE}" ]; then
+    SKIP_PX_OPERATOR_UPGRADE=false
+fi
+
 if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
     ENABLE_STORK_UPGRADE=false
 fi
@@ -668,6 +672,8 @@ spec:
       value: "${NFS_MOUNT_OPTION}"
     - name: NFS_PATH
       value: "${NFS_PATH}"
+    - name: SKIP_PX_OPERATOR_UPGRADE
+      value: "${SKIP_PX_OPERATOR_UPGRADE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
