@@ -458,7 +458,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			for {
 				select {
 				case <-done:
-					return
+					break
 				default:
 					if len(newVolumeIDs) > 100 {
 						for _, each := range newVolumeIDs {
@@ -581,11 +581,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			defer GinkgoRecover()
 			for {
 				if terminate {
-					return
+					break
 				}
 				select {
 				case <-done:
-					return
+					break
 				default:
 					// Volume create continuously
 					uuidObj := uuid.New()
@@ -611,11 +611,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			defer GinkgoRecover()
 			for {
 				if terminate {
-					return
+					break
 				}
 				select {
 				case <-done:
-					return
+					break
 				default:
 					if len(volumesCreated) > 5 {
 						deleteVolume := volumesCreated[0]
