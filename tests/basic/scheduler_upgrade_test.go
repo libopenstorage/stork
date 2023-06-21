@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/aks"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
@@ -74,6 +75,26 @@ var _ = Describe("{UpgradeScheduler}", func() {
 				})
 
 			}
+			if IsAksCluster() {
+
+				stepLog = fmt.Sprintf("Wait for AKS cluster upgrade to version %s", schedVersion)
+				Step(stepLog, func() {
+					err = aks.WaitForControlPlaneToUpgrade(schedVersion)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify  AKS cluster control plane upgrade to version %s", schedVersion))
+					aksCluster, err := aks.GetAKSCluster()
+					log.FailOnError(err, "error getting AKS cluister")
+					dash.VerifyFatal(aksCluster.KubernetesVersion == schedVersion, true, fmt.Sprintf("verify AKS schedular upgrade to %s", schedVersion))
+					stepLog = fmt.Sprintf("update AKS  cluster node pool upgrade to version %s", schedVersion)
+					Step(stepLog, func() {
+						err = aks.UpgradeNodePool(aks.AKSPXNodepool, schedVersion)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s init", schedVersion))
+						err = aks.WaitForAKSNodePoolToUpgrade(aks.AKSPXNodepool, schedVersion)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s succeded", schedVersion))
+					})
+
+				})
+			}
+
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
 				Inst().AutoStorageNodeRecoveryTimeout.String())
 			Step(stepLog, func() {
