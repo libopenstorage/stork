@@ -8897,7 +8897,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			if !terminate {
 				terminate = true
 				done <- true
-				wg.Done()
 				close(done)
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
@@ -8911,6 +8910,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		// Wait for KVDB Nodes up and running and in healthy state
 		// Go routine to kill kvdb master in regular intervals
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				if terminate {
@@ -8918,8 +8918,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				}
 				select {
 				case <-done:
-					wg.Done()
-					return
+					break
 				default:
 					log.FailOnError(WaitForKVDBMembers(), "not all kvdb members in healthy state")
 					// Wait for some time after killing kvdb master Node
@@ -8964,6 +8963,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		}
 
 		doVolumeOperations := func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
 				if terminate {
@@ -8971,8 +8971,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				}
 				select {
 				case <-done:
-					wg.Done()
-					return
+					break
 				default:
 					uuidObj := uuid.New()
 					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
