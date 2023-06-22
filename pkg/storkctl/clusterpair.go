@@ -239,12 +239,14 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 
 func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var sIP, dIP, sEP, sPort, dPort, dEP, srcToken, destToken, projectMappingsStr string
+	var mode string
 	var sFile, dFile string
 	var provider, bucket, encryptionKey string
 	var s3AccessKey, s3SecretKey, s3Region, s3EndPoint, s3StorageClass string
 	var disableSSL bool
 	var azureAccountName, azureAccountKey string
 	var googleProjectID, googleJSONKey string
+	var syncDR bool
 
 	createClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
@@ -271,6 +273,10 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
+			if mode == "sync-dr" {
+				syncDR = true
+			}
+
 			if len(sFile) == 0 {
 				util.CheckErr(getMissingParameterError("src-kube-file", "Kubeconfig file missing for source cluster"))
 				return
@@ -281,6 +287,54 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
+			// Handling the syncDR cases here
+			if syncDR {
+				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false, true)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				// Create cluster-pair on source cluster
+				conf, err := getConfig(sFile).ClientConfig()
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				storkops.Instance().SetConfig(conf)
+				core.Instance().SetConfig(conf)
+				_, err = storkops.Instance().CreateClusterPair(srcClusterPair)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
+
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true, true)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				// Create cluster-pair on dest cluster
+				conf, err = getConfig(dFile).ClientConfig()
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				storkops.Instance().SetConfig(conf)
+				core.Instance().SetConfig(conf)
+
+				_, err = storkops.Instance().CreateClusterPair(destClusterPair)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", clusterPairName), ioStreams.Out)
+				return
+			}
+
+			//Handling the asyncDR cases here onwards
 			// create backuplocation in source
 			backupLocation := &storkv1.BackupLocation{
 				ObjectMeta: meta.ObjectMeta{
@@ -394,7 +448,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				destToken = token
 			}
 
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false)
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -458,7 +512,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				}
 				srcToken = token
 			}
-			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true)
+			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -512,6 +566,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
+	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", "async-dr", "Mode of DR. [async-dr, sync-dr]")
 
 	// New parameters for creating backuplocation secret
 	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google]")
@@ -534,13 +589,14 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	return createClusterPairCommand
 }
 
-func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, reverse bool) (*storkv1.ClusterPair, error) {
+func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, reverse bool, ignoreStorageOptions bool) (*storkv1.ClusterPair, error) {
 	opts := make(map[string]string)
-	opts["ip"] = ip
-	opts["port"] = port
-	// extract token from px-endpoint command
-	opts["token"] = token
-
+	if !ignoreStorageOptions {
+		opts["ip"] = ip
+		opts["port"] = port
+		// extract token from px-endpoint command
+		opts["token"] = token
+	}
 	config, err := getConfig(configFile).RawConfig()
 	if err != nil {
 		return nil, err
@@ -744,7 +800,7 @@ func getHostPortFromEndPoint(ep string, ioStreams genericclioptions.IOStreams) (
 	host, port, err := net.SplitHostPort(ep)
 	if err != nil {
 		// In case of error consider ep as the host
-		printMsg(fmt.Sprintf("unable to parse the endpoint %s to get host/ip and port. Err: %v", ep, err), ioStreams.Out)
+		printMsg(fmt.Sprintf("Unable to parse the endpoint %s to get host/ip and port. Err: %v", ep, err), ioStreams.Out)
 		host = ep
 	}
 	return host, port
