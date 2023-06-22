@@ -46,7 +46,6 @@ var (
 	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
-	isInitDone                = false
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -73,12 +72,8 @@ func ExecuteInParallel(functions ...func()) {
 }
 
 // Function to enable Resiliency Test
-func MarkResiliencyTC(resiliency bool, node_ops bool) {
+func MarkResiliencyTC(resiliency bool) {
 	ResiliencyFlag = resiliency
-	if node_ops && !isInitDone {
-		tests.InitInstance()
-		isInitDone = true
-	}
 }
 
 // Function to wait for event to induce failure
