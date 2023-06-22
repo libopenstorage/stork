@@ -79,7 +79,7 @@ const (
 	pxBackupDeployment                        = "px-backup"
 	backupDeleteTimeout                       = 60 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
-	backupLocationDeleteTimeout               = 30 * time.Minute
+	backupLocationDeleteTimeout               = 60 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
@@ -963,7 +963,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
 		status, err := IsCloudCredPresent(credName, ctx, orgID)

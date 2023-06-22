@@ -251,6 +251,7 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
+	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
 	RetrySeconds                      = 10
@@ -3482,7 +3483,7 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	namespace := "*"
 	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
 		clusterObj,
-		BackupRestoreCompletionTimeoutMin*time.Minute,
+		backupLocationDeleteTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
 	if err != nil {
 		return err
@@ -4177,27 +4178,18 @@ type NfsInfo struct {
 // GetNfsInfoFromEnv get information for nfs share.
 func GetNfsInfoFromEnv() *NfsInfo {
 	creds := &NfsInfo{}
-
 	creds.NfsServerAddress = os.Getenv("NFS_SERVER_ADDR")
 	if creds.NfsServerAddress == "" {
 		err := fmt.Errorf("NFS_SERVER_ADDR environment variable should not be empty")
 		log.FailOnError(err, "Fetching NFS server address")
 	}
-
 	creds.NfsPath = os.Getenv("NFS_PATH")
 	if creds.NfsPath == "" {
 		err := fmt.Errorf("NFS_PATH environment variable should not be empty")
 		log.FailOnError(err, "Fetching NFS path")
 	}
-
 	creds.NfsSubPath = os.Getenv("NFS_SUB_PATH")
-	if creds.NfsSubPath == "" {
-		err := fmt.Errorf("NFS_PATH environment variable should not be empty")
-		log.FailOnError(err, "Fetching NFS sub path")
-	}
-
 	creds.NfsMountOptions = os.Getenv("NFS_MOUNT_OPTION")
-
 	return creds
 }
 
@@ -4276,7 +4268,7 @@ func DeleteAzureBucket(bucketName string) {
 }
 
 // DeleteNfsSubPath delete subpath from nfs shared path.
-func DeleteNfsSubPath() {
+func DeleteNfsSubPath(subPath string) {
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
@@ -4305,8 +4297,8 @@ func DeleteNfsSubPath() {
 	}()
 
 	// Remove subpath from NFS share path.
-	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", creds.NfsSubPath, creds.NfsPath, creds.NfsServerAddress)
-	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, creds.NfsSubPath)
+	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
+	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, subPath)
 	err := runCmd(rmCmd, masterNode)
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, masterNode, err))
 }
@@ -4321,7 +4313,7 @@ func DeleteBucket(provider string, bucketName string) {
 		case drivers.ProviderAzure:
 			DeleteAzureBucket(bucketName)
 		case drivers.ProviderNfs:
-			DeleteNfsSubPath()
+			DeleteNfsSubPath(bucketName)
 		}
 	})
 }
