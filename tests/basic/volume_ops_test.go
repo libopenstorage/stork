@@ -645,7 +645,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		timeout := time.After(duration)
 		for {
 			if terminate {
-				wg.Done()
 				wg.Wait()
 			}
 			select {
