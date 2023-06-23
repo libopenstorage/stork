@@ -433,16 +433,16 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 	var totalVolumesToCreate = 700
 	var newVolumeIDs []string
 	var attachedVolumes []string
+	terminate := false
 
 	stepLog := "has to schedule apps and update replication factor for attached node"
 	It(stepLog, func() {
-		done := make(chan bool)
 		log.InfoD(stepLog)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
 		}
 		deleteVolumes := func() {
-			done <- true
+			terminate = true
 			for _, each := range newVolumeIDs {
 				log.InfoD(fmt.Sprintf("delete volume [%v]", each))
 				log.FailOnError(Inst().V.DetachVolume(each), fmt.Sprintf("Failed to detach volume [%v]", each))
@@ -456,21 +456,18 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			defer GinkgoRecover()
 			attachedCount := 0
 			for {
-				select {
-				case <-done:
+				if terminate == true {
 					break
-				default:
-					if len(newVolumeIDs) > 100 {
-						for _, each := range newVolumeIDs {
-							if attachedCount < 100 {
-								_, err := Inst().V.AttachVolume(each)
-								log.FailOnError(err, "attaching volume failed")
-								attachedCount += 1
-								attachedVolumes = append(attachedVolumes, each)
-								time.Sleep(1 * time.Second)
-							}
+				}
+				if len(newVolumeIDs) > 100 {
+					for _, each := range newVolumeIDs {
+						if attachedCount < 100 {
+							_, err := Inst().V.AttachVolume(each)
+							log.FailOnError(err, "attaching volume failed")
+							attachedCount += 1
+							attachedVolumes = append(attachedVolumes, each)
+							time.Sleep(2 * time.Second)
 						}
-						done <- true
 					}
 				}
 			}
@@ -513,7 +510,9 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			log.InfoD("Volume Created with ID [%v]", volId)
 			newVolumeIDs = append(newVolumeIDs, volId)
 		}
-		done <- true
+		if len(attachedVolumes) >= 100 {
+			terminate = true
+		}
 
 		// Validate Volume Attached status
 		for _, eachVol := range attachedVolumes {

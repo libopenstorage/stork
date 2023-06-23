@@ -8720,21 +8720,19 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 })
 
 func waitTillVolumeStatusUp(vol *volume.Volume) error {
-	now := 30 * time.Minute
+	now := 20 * time.Minute
 	targetTime := time.After(now)
-	var err error
-	err = nil
 	for {
 		select {
 		case <-targetTime:
-			return err
+			return fmt.Errorf("timeout reached waiting for volume status")
 		default:
-			err = VerifyVolumeStatusOnline(vol)
+			log.InfoD("Validating Volume Status of Volume [%v]", vol.ID)
+			status, err := IsVolumeStatusUP(vol)
 			if err != nil {
-				log.InfoD("errored while waiting for volume state up, retrying.")
-				// wait for 5 seconds before retrying
-				time.Sleep(5 * time.Second)
-			} else {
+				return err
+			}
+			if status == true {
 				return nil
 			}
 		}
@@ -8846,10 +8844,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 
 		log.Info("Checking for each volumes status is up")
 		for _, eachVol := range volumes {
-			err = VerifyVolumeStatusOnline(eachVol)
-			if err != nil {
-				log.FailOnError(waitTillVolumeStatusUp(eachVol), "failed to get volume status UP")
-			}
+			log.FailOnError(waitTillVolumeStatusUp(eachVol), "failed to get volume status UP")
 		}
 	})
 
