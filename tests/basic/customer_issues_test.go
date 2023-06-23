@@ -374,7 +374,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 
 		for _, eachVol := range volumesPresent {
-			log.FailOnError(VerifyVolumeStatusOnline(eachVol), fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
+			status, err := IsVolumeStatusUP(eachVol)
+			log.FailOnError(err, fmt.Sprintf("Volume [%v] is not in expected state", eachVol.Name))
+			dash.VerifyFatal(status == true, true, "volume status is not up")
 		}
 
 	})
