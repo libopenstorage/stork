@@ -9560,6 +9560,7 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 			select {
 			case <-timeout:
 				stopRoutine()
+				break
 			default:
 				// Wait for KVDB Members to be online
 				err := WaitForKVDBMembers()

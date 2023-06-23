@@ -893,6 +893,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			case <-timeout:
 				terminateflow()
 				done <- true
+				break
 			default:
 				// Pick a random volume
 				randomIndex := rand.Intn(len(volumes))
