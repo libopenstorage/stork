@@ -446,6 +446,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			for _, each := range newVolumeIDs {
 				log.InfoD(fmt.Sprintf("delete volume [%v]", each))
 				log.FailOnError(Inst().V.DetachVolume(each), fmt.Sprintf("Failed to detach volume [%v]", each))
+				time.Sleep(500 * time.Millisecond)
 				log.FailOnError(Inst().V.DeleteVolume(each), fmt.Sprintf("Delete volume with ID [%v] failed", each))
 			}
 		}
@@ -506,12 +507,12 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			haUpdate := int64(rand.Intn(3-1) + 1)
 
 			volId, err := Inst().V.CreateVolume(volName, randSize, haUpdate)
-			log.FailOnError(err, fmt.Sprintf("Failed to create volume with vol Name [%v]", volName))
+			if err != nil {
+				terminate = true
+				log.FailOnError(err, fmt.Sprintf("Failed to create volume with vol Name [%v]", volName))
+			}
 			log.InfoD("Volume Created with ID [%v]", volId)
 			newVolumeIDs = append(newVolumeIDs, volId)
-		}
-		if len(attachedVolumes) >= 100 {
-			terminate = true
 		}
 
 		// Validate Volume Attached status
