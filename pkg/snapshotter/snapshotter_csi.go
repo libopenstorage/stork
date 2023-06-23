@@ -583,15 +583,18 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 			// Exhausted all retries, return error
 			return nil, fmt.Errorf("%v", errMsg)
 		}
-
 		// Make the pvc size  same as the restore size from the volumesnapshot
 		if snapshot.Status != nil && snapshot.Status.RestoreSize != nil && !snapshot.Status.RestoreSize.IsZero() {
-			quantity, err := resource.ParseQuantity(snapshot.Status.RestoreSize.String())
-			if err != nil {
-				return nil, err
+			// Update the pvc size only when the volumesnapshot size is greater than PVC size
+			if snapshot.Status.RestoreSize.Cmp(pvc.Spec.Resources.Requests[v1.ResourceStorage]) == 1 {
+				quantity, err := resource.ParseQuantity(snapshot.Status.RestoreSize.String())
+				if err != nil {
+					return nil, err
+				}
+				logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, quantity.String())
+				pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
 			}
-			logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, quantity.String())
-			pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
+
 		}
 	} else {
 		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(o.RestoreNamespace).Get(context.TODO(), o.RestoreSnapshotName, metav1.GetOptions{})
@@ -617,15 +620,18 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 			// Exhausted all retries, return error
 			return nil, fmt.Errorf("%v", errMsg)
 		}
-
 		// Make the pvc size  same as the restore size from the volumesnapshot
 		if snapshot.Status != nil && snapshot.Status.RestoreSize != nil && !snapshot.Status.RestoreSize.IsZero() {
-			quantity, err := resource.ParseQuantity(snapshot.Status.RestoreSize.String())
-			if err != nil {
-				return nil, err
+			// Update the pvc size only when the volumesnapshot size is greater than PVC size
+			if snapshot.Status.RestoreSize.Cmp(pvc.Spec.Resources.Requests[v1.ResourceStorage]) == 1 {
+				quantity, err := resource.ParseQuantity(snapshot.Status.RestoreSize.String())
+				if err != nil {
+					return nil, err
+				}
+				logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, quantity.String())
+				pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
 			}
-			logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, quantity.String())
-			pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
+
 		}
 	}
 
