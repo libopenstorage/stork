@@ -567,8 +567,8 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		stopRoutine := func() {
 			if !terminate {
-				done <- true
 				terminate = true
+				done <- true
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
@@ -644,12 +644,10 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		duration := 1 * time.Hour
 		timeout := time.After(duration)
 		for {
-			if terminate {
-				wg.Wait()
-			}
 			select {
 			case <-timeout:
 				stopRoutine()
+				break
 			default:
 				// Wait for KVDB Members to be online
 				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
@@ -669,6 +667,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 				// Wait for some time after killing kvdb master Node
 				time.Sleep(5 * time.Minute)
+				if terminate {
+					break
+				}
 			}
 		}
 
