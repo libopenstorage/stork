@@ -431,6 +431,8 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 	})
 	var contexts []*scheduler.Context
 	var totalVolumesToCreate = 700
+	var maxVolumesToAttach = 100
+	var volumesCurrentlyAttached = 0
 	var newVolumeIDs []string
 	var attachedVolumes []string
 	terminate := false
@@ -451,6 +453,31 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 			}
 		}
 
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		defer deleteVolumes()
+
+		// Get list of all volumes present in the cluster
+		log.InfoD("Listing all the volumes present in the cluster")
+		allVolumeIds, err := Inst().V.ListAllVolumes()
+
+		log.FailOnError(err, "failed to list all the volume")
+		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
+
+		if len(allVolumeIds) >= totalVolumesToCreate {
+			log.FailOnError(fmt.Errorf("exceeded total volume count limit.. exiting [%d]", len(allVolumeIds)),
+				"Total volume count exceeded ")
+		}
+
+		// Get Total number of already attached volumes
+		for _, each := range allVolumeIds {
+			vol, err := Inst().V.InspectVolume(each)
+			log.FailOnError(err, "inspect returned error ?")
+			if vol.State.String() == "VOLUME_STATE_ATTACHED" {
+				volumesCurrentlyAttached = volumesCurrentlyAttached + 1
+			}
+		}
+
 		// Run inspect continuously in the background
 		log.InfoD("start attach volume in the backend while more than 100 volumes got created")
 		go func(volumeIds []string) {
@@ -462,7 +489,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 				}
 				if len(newVolumeIDs) > 100 {
 					for _, each := range newVolumeIDs {
-						if attachedCount < 100 {
+						if attachedCount < (maxVolumesToAttach - volumesCurrentlyAttached) {
 							_, err := Inst().V.AttachVolume(each)
 							log.FailOnError(err, "attaching volume failed")
 							attachedCount += 1
@@ -473,21 +500,6 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 				}
 			}
 		}(newVolumeIDs)
-
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-		defer deleteVolumes()
-
-		// Get list of all volumes present in the cluster
-		log.InfoD("Listing all the volumes present in the cluster")
-		allVolumeIds, err := Inst().V.ListAllVolumes()
-		log.FailOnError(err, "failed to list all the volume")
-		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
-
-		if len(allVolumeIds) >= totalVolumesToCreate {
-			log.FailOnError(fmt.Errorf("exceeded total volume count limit.. exiting [%d]", len(allVolumeIds)),
-				"Total volume count exceeded ")
-		}
 
 		volumesToBeCreated := totalVolumesToCreate - len(allVolumeIds)
 		log.InfoD(fmt.Sprintf("Total number of new volumes to be created in the cluster [%v]", volumesToBeCreated))
@@ -519,7 +531,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		for _, eachVol := range attachedVolumes {
 			vol, err := Inst().V.InspectVolume(eachVol)
 			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume [%v]", eachVol))
-			dash.VerifyFatal(vol.State.String() == "attached", true,
+			dash.VerifyFatal(vol.State.String() == "VOLUME_STATE_ATTACHED", true,
 				fmt.Sprintf("failed due to volume [%v] state is not attahced, current state is [%v]", eachVol, vol.State.String()))
 		}
 	})
