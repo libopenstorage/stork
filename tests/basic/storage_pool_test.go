@@ -8872,7 +8872,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		numGoroutines := 2
 
 		wg.Add(numGoroutines)
-		done := make(chan bool)
 
 		volumesCreated := []string{}
 
@@ -8891,8 +8890,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		stopRoutine := func() {
 			if !terminate {
 				terminate = true
-				done <- true
-				close(done)
+				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
@@ -8911,14 +8909,13 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				if terminate {
 					break
 				}
-				select {
-				case <-done:
-					break
-				default:
-					log.FailOnError(WaitForKVDBMembers(), "not all kvdb members in healthy state")
-					// Wait for some time after killing kvdb master Node
-					time.Sleep(5 * time.Minute)
+				err := WaitForKVDBMembers()
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "not all kvdb members in healthy state")
 				}
+				// Wait for some time after killing kvdb master Node
+				time.Sleep(5 * time.Minute)
 			}
 		}()
 
@@ -8964,57 +8961,55 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				if terminate {
 					break
 				}
-				select {
-				case <-done:
-					break
-				default:
-					uuidObj := uuid.New()
-					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
-					Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
-					haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+				uuidObj := uuid.New()
+				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+				Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
+				haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
 
-					volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
-					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-					log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+				volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
+				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+				log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
 
-					volumesCreated = append(volumesCreated, volId)
+				volumesCreated = append(volumesCreated, volId)
 
-					// HA Update on the volume
-					_, err = Inst().V.InspectVolume(volId)
-					log.FailOnError(err, "Failed to inspect volume [%s]", VolName)
+				// HA Update on the volume
+				_, err = Inst().V.InspectVolume(volId)
+				log.FailOnError(err, "Failed to inspect volume [%s]", VolName)
 
-					for _, eachVol := range volumesCreated {
-						if len(volumesCreated) > 5 {
-							_, err = Inst().V.AttachVolume(eachVol)
-							if err != nil {
-								stopRoutine()
-								log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
-							}
-
-							err = Inst().V.DetachVolume(eachVol)
-							if err != nil {
-								stopRoutine()
-								log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
-							}
-
-							time.Sleep(5 * time.Second)
-							// Delete the Volume
-							err = Inst().V.DeleteVolume(eachVol)
-							if err != nil {
-								stopRoutine()
-								log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
-							}
-
-							// Remove the first element
-							for i := 0; i < len(volumesCreated)-1; i++ {
-								volumesCreated[i] = volumesCreated[i+1]
-							}
-							// Resize the array by truncating the last element
-							volumesCreated = volumesCreated[:len(volumesCreated)-1]
+				for _, eachVol := range volumesCreated {
+					if len(volumesCreated) > 5 {
+						_, err = Inst().V.AttachVolume(eachVol)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err, "attach volume with volume ID failed [%s]", eachVol)
 						}
-					}
 
+						err = Inst().V.DetachVolume(eachVol)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err, "detach volume with volume ID failed [%s]", eachVol)
+						}
+
+						time.Sleep(5 * time.Second)
+						// Delete the Volume
+						err = Inst().V.DeleteVolume(eachVol)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
+						}
+
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+					}
+					if terminate {
+						break
+					}
 				}
+
 			}
 		}
 
