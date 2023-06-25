@@ -569,7 +569,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
-		
+
 		// Kill KVDB Master in regular interval
 		kvdbMaster, err := GetKvdbMasterNode()
 		log.FailOnError(err, "Getting KVDB Master Node details failed")

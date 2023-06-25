@@ -4496,7 +4496,11 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
-
+			if err != nil {
+				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+					err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				}
+			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			err = Inst().V.StartDriver(*storageNode2)
@@ -6593,6 +6597,13 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			// Now trying to Expand Pool with Invalid Pool UUID
 			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID,
 				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
+			if err != nil {
+				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+					err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID,
+						api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+					log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
+				}
+			}
 
 			// Verify error on pool expansion failure
 			var errMatch error
@@ -6608,7 +6619,13 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			// Now trying to Expand Pool with Invalid Pool UUID
 			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
 				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
-			log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
+			if err != nil {
+				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+					err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
+						api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+					log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
+				}
+			}
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 			dash.VerifyFatal(resizeErr, nil,
