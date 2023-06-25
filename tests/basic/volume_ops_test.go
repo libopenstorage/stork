@@ -562,13 +562,14 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		numGoroutines := 2
 
 		wg.Add(numGoroutines)
-		done := make(chan bool) // done routine for kvdb kill on regular intervals
 		terminate := false
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmaxvolume-%d", i))...)
 		}
+		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+		
 		// Kill KVDB Master in regular interval
 		kvdbMaster, err := GetKvdbMasterNode()
 		log.FailOnError(err, "Getting KVDB Master Node details failed")
@@ -580,7 +581,6 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		stopRoutine := func() {
 			if !terminate {
 				terminate = true
-				done <- true
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
