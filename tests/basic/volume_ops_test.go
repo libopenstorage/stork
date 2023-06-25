@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -451,6 +453,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		// Run inspect continuously in the background
 		log.InfoD("start attach volume in the backend while more than 100 volumes got created")
 		go func(volumeIds []string) {
+			defer GinkgoRecover()
 			attachedCount := 0
 			for {
 				select {
@@ -459,7 +462,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 				default:
 					if len(newVolumeIDs) > 100 {
 						for _, each := range newVolumeIDs {
-							if attachedCount <= 100 {
+							if attachedCount < 100 {
 								_, err := Inst().V.AttachVolume(each)
 								log.FailOnError(err, "attaching volume failed")
 								attachedCount += 1
@@ -544,7 +547,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 	It(stepLog, func() {
 
 		var wg sync.WaitGroup
-		numGoroutines := 3
+		numGoroutines := 2
 
 		wg.Add(numGoroutines)
 		done := make(chan bool) // done routine for kvdb kill on regular intervals
@@ -559,59 +562,29 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		log.FailOnError(err, "Getting KVDB Master Node details failed")
 		log.InfoD("KVDB Master Node is [%v]", kvdbMaster.Name)
 
-		// Go routine to kill kvdb master in regular intervals
-		go func() {
-			defer GinkgoRecover()
-			for {
-				select {
-				case <-done:
-					wg.Done()
-					return
-				default:
-
-					// Wait for KVDB Members to be online
-					log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
-
-					// Kill KVDB Master Node
-					masterNode, err := GetKvdbMasterNode()
-					log.FailOnError(err, "failed getting details of KVDB master node")
-
-					// Get KVDB Master PID
-					pid, err := GetKvdbMasterPID(*masterNode)
-					log.FailOnError(err, "failed getting PID of KVDB master node")
-					log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
-
-					// Kill kvdb master PID for regular intervals
-					log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
-
-					// Wait for some time after killing kvdb master Node
-					time.Sleep(5 * time.Minute)
-
-				}
-			}
-		}()
-
 		// Go Routine to create volume continuously
 		volumesCreated := []string{}
 
 		stopRoutine := func() {
 			if !terminate {
 				done <- true
-				close(done)
+				terminate = true
 				for _, each := range volumesCreated {
 					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 				}
-				terminate = true
 			}
 		}
 		defer stopRoutine()
 
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					return
+				}
 				select {
 				case <-done:
-					wg.Done()
 					return
 				default:
 					// Volume create continuously
@@ -621,7 +594,11 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 					haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
 
 					volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
-					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+					if err != nil {
+						stopRoutine()
+						log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+					}
+
 					volumesCreated = append(volumesCreated, volId)
 
 				}
@@ -630,17 +607,25 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 		// Go Routine to delete volume continuously in parallel to volume create
 		go func() {
+			defer wg.Done()
 			defer GinkgoRecover()
 			for {
+				if terminate {
+					return
+				}
 				select {
 				case <-done:
-					wg.Done()
 					return
 				default:
 					if len(volumesCreated) > 5 {
 						deleteVolume := volumesCreated[0]
-						log.FailOnError(Inst().V.DeleteVolume(deleteVolume),
-							"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+
+						err := Inst().V.DeleteVolume(deleteVolume)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err,
+								"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+						}
 
 						// Remove the first element
 						for i := 0; i < len(volumesCreated)-1; i++ {
@@ -658,12 +643,36 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for latest one hour
 		duration := 1 * time.Hour
 		timeout := time.After(duration)
-		select {
-		case <-timeout:
-			stopRoutine()
+		for {
+			if terminate {
+				wg.Done()
+				wg.Wait()
+			}
+			select {
+			case <-timeout:
+				stopRoutine()
+			default:
+				// Wait for KVDB Members to be online
+				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+
+				// Kill KVDB Master Node
+				masterNode, err := GetKvdbMasterNode()
+				log.FailOnError(err, "failed getting details of KVDB master node")
+
+				// Get KVDB Master PID
+				pid, err := GetKvdbMasterPID(*masterNode)
+				log.FailOnError(err, "failed getting PID of KVDB master node")
+
+				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+				// Kill kvdb master PID for regular intervals
+				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+
+				// Wait for some time after killing kvdb master Node
+				time.Sleep(5 * time.Minute)
+			}
 		}
-		// Wait for GO Routine to complete
-		wg.Wait()
+
 	})
 
 	JustAfterEach(func() {
@@ -671,4 +680,261 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 
+})
+
+var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
+	var testrailID = 0
+	/*  Try Volume resize to 5 GB every time
+	    Try HA Refactor of the volume
+	    Try one HA node Reboot
+
+		all the above 3 operations are done in parallel
+	*/
+	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeMultipleHAIncreaseVolResize",
+			"Px crashes when we perform multiple HAUpdate in a loop", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Px crashes when we perform multiple HAUpdate in a loop"
+	It(stepLog, func() {
+		var wg sync.WaitGroup
+		var driverNode *node.Node
+
+		var volReplMap map[string]int64
+
+		driverNode = nil
+
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volmulhaupvolr-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get a pool with running IO
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		// Get All Volumes from the pool
+		volumes, err := GetVolumesFromPoolID(contexts, poolUUID)
+		log.FailOnError(err, "Failed to get list of volumes from the poolIDs")
+
+		for _, each := range volumes {
+			replFactor, err := Inst().V.GetReplicationFactor(each)
+			log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
+			volReplMap[each.ID] = replFactor
+		}
+
+		revertReplica := func() {
+			for _, each := range volumes {
+				for vID, replCount := range volReplMap {
+					if each.ID == vID {
+						replFactor, err := Inst().V.GetReplicationFactor(each)
+						log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
+						if replFactor != replCount {
+							err = Inst().V.SetReplicationFactor(each, replCount, nil, nil, true)
+							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
+						}
+					}
+				}
+			}
+		}
+
+		defer revertReplica()
+
+		numGoroutines := len(volumes)
+		wg.Add(numGoroutines)
+
+		done := make(chan bool)
+		terminate := false
+
+		terminateflow := func() {
+			terminate = true
+		}
+
+		waitTillDriverUp := func() {
+			if driverNode != nil {
+				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+				}
+			}
+		}
+
+		defer waitTillDriverUp()
+
+		log.InfoD("Initiate Volume resize continuously")
+		volumeResize := func(vol *volume.Volume) error {
+
+			apiVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				terminateflow()
+				return err
+			}
+
+			curSize := apiVol.Spec.Size
+			newSize := curSize + (uint64(5) * units.GiB)
+			log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
+				vol.ID, curSize/units.GiB, newSize/units.GiB)
+
+			err = Inst().V.ResizeVolume(vol.ID, newSize)
+			if err != nil {
+				terminateflow()
+				return err
+			}
+
+			// Wait for 2 seconds for Volume to update stats
+			time.Sleep(2 * time.Second)
+			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				terminateflow()
+				return err
+			}
+
+			updatedSize := volumeInspect.Spec.Size
+			if updatedSize <= curSize {
+				terminateflow()
+				return fmt.Errorf("volume did not update from [%v] to [%v] ",
+					curSize/units.GiB, updatedSize/units.GiB)
+			}
+
+			if terminate {
+				return nil
+			}
+			return nil
+		}
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+				for _, eachVol := range volumes {
+					err := volumeResize(eachVol)
+					if err != nil {
+						if strings.Contains(fmt.Sprintf("%v", err), "Resource has not been initialized") {
+							waitTillDriverUp()
+						} else {
+							terminateflow()
+							log.FailOnError(err, "failed to resize Volume  [%v]", eachVol.Name)
+						}
+					}
+				}
+			}
+		}()
+
+		log.InfoD("Trigger test to change replication factor of the volume continuously")
+		previousReplFactor := int64(1)
+		go func(vol []*volume.Volume) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+
+				// Change replication factor of the volume continuously once volume is resized
+				for _, each := range vol {
+					log.Infof("Changing replication factor of volume [%v]", each.Name)
+					setReplFactor := int64(1)
+					currRepFactor, err := Inst().V.GetReplicationFactor(each)
+					if err != nil {
+						terminateflow()
+						log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
+					}
+					// Do HA Update based on current replication factor for the node
+					// if repl factor is 3 reduce it by 1
+					// if previous repl factor is 3 and current repl factor is 2 reduce it by 1
+					// else increase repl factor by 1
+					if currRepFactor == 3 {
+						setReplFactor = currRepFactor - 1
+					} else if currRepFactor == 2 || previousReplFactor == 3 {
+						setReplFactor = setReplFactor
+					} else {
+						setReplFactor = currRepFactor + 1
+					}
+					previousReplFactor = currRepFactor
+
+					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", each.Name, currRepFactor, setReplFactor)
+					err = Inst().V.SetReplicationFactor(each, setReplFactor, nil, nil, true)
+					if err != nil {
+						if strings.Contains(fmt.Sprintf("%v", err), "Another HA increase operation is in progress") {
+							continue
+						} else {
+							terminateflow()
+							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
+						}
+					}
+				}
+			}
+		}(volumes)
+
+		duration := 2 * time.Hour
+		timeout := time.After(duration)
+		for {
+			if terminate {
+				break
+			}
+			select {
+			case <-timeout:
+				terminateflow()
+				done <- true
+			default:
+				// Pick a random volume
+				randomIndex := rand.Intn(len(volumes))
+				volPicked := volumes[randomIndex]
+
+				// Pick a Node on which volume is placed and start rebooting the node
+				poolIds, err := GetPoolIDsFromVolName(volPicked.ID)
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, "failed to get pool details from the volume")
+				}
+
+				// select random pool and get the node associated with that pool
+				randomIndex = rand.Intn(len(poolIds))
+				poolPicked := poolIds[randomIndex]
+
+				nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, "error while fetching node details from pool ID")
+				}
+				log.InfoD("Restarting Px on Node [%v] and waiting for the Px to come back online", nodeDetail.Name)
+
+				driverNode = nodeDetail
+
+				err = Inst().V.RestartDriver(*nodeDetail, nil)
+				if err != nil {
+					terminateflow()
+					log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+				}
+
+				waitTillDriverUp()
+
+				// flag is to make sure to wait for driver to be up and running when because
+				// of some other process test terminates in middle
+				driverNode = nil
+			}
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
 })

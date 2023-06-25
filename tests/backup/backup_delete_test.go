@@ -3,11 +3,12 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
@@ -491,8 +492,6 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 				bucketNameSuffix := getBucketNameSuffix()
 				bucketNamePrefix := fmt.Sprintf("local-%s", provider)
 				localBucketName := fmt.Sprintf("%s-%s-%v", bucketNamePrefix, bucketNameSuffix, time.Now().Unix())
-				CreateBucket(provider, localBucketName)
-				log.Infof("Bucket created with name - %s", localBucketName)
 				localBucketNameMap[provider] = localBucketName
 			}
 		})
@@ -503,7 +502,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, "local-location", time.Now().Unix())
 				cloudAccountUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
@@ -664,10 +663,8 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 		log.InfoD("Delete the local bucket created")
 		for _, provider := range providers {
-			if provider != "nfs" {
-				DeleteBucket(provider, localBucketNameMap[provider])
-				log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
-			}
+			DeleteBucket(provider, localBucketNameMap[provider])
+			log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
 		}
 	})
 })

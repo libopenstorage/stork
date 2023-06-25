@@ -14,7 +14,7 @@ import (
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXDuringAppScaleUp", "Restart PX on a node during application is scaled up", pdsLabels, 0)
-		pdslib.MarkResiliencyTC(true, true)
+		pdslib.MarkResiliencyTC(true)
 	})
 
 	It("Deploy Dataservices and Restart PX During App scaleup", func() {
@@ -142,7 +142,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, true)
+					pdslib.MarkResiliencyTC(true)
 
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
@@ -188,7 +188,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeDuringAppVersionUpdate", "Reboot node while app version update is going on", pdsLabels, 0)
 		// Global Resiliency TC marker
-		pdslib.MarkResiliencyTC(true, true)
+		pdslib.MarkResiliencyTC(true)
 	})
 
 	It("Reboot Node While App Version update is going on", func() {
@@ -324,7 +324,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 				Step("Start deployment, Kill Deployment Controller Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, false)
+					pdslib.MarkResiliencyTC(true)
 					// Type of failure that this TC needs to cover
 					failuretype := pdslib.TypeOfFailure{
 						Type: KillDeploymentControllerPod,
@@ -376,7 +376,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 				Step("Start deployment, Reboot multiple nodes on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, false)
+					pdslib.MarkResiliencyTC(true)
 
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
@@ -430,7 +430,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, false)
+					pdslib.MarkResiliencyTC(true)
 					// Type of failure that this TC needs to cover
 					failuretype := pdslib.TypeOfFailure{
 						Type: KillAgentPodDuringDeployment,
@@ -474,7 +474,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartAppDuringResourceUpdate", "Restart application pod during resource update", pdsLabels, 0)
-		pdslib.MarkResiliencyTC(true, false)
+		pdslib.MarkResiliencyTC(true)
 	})
 
 	It("Deploy Data Services", func() {
@@ -535,7 +535,7 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, false)
+					pdslib.MarkResiliencyTC(true)
 					// Type of failure that this TC needs to cover
 					failuretype := pdslib.TypeOfFailure{
 						Type: KillTeleportPodDuringDeployment,
@@ -590,7 +590,7 @@ var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
 				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, true)
+					pdslib.MarkResiliencyTC(true)
 
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,

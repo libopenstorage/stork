@@ -405,6 +405,8 @@ const (
 	ValidateDeviceMapper = "validateDeviceMapper"
 	// MetroDR runs Metro DR between two clusters
 	MetroDR = "metrodr"
+	// MetroDRMigrationSchedule runs Metro DR migration schedule between two clusters
+	MetroDRMigrationSchedule = "metrodrmigrationschedule"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
 	// AsyncDRMigrationSchedule runs AsyncDR Migrationschedule between two clusters
@@ -7108,7 +7110,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName             = "async-policy"
 		suspendSched          = false
 		autoSuspend           = false
-		schd_pol              *storkapi.SchedulePolicy
+		schdPol             *storkapi.SchedulePolicy
 		err                   error
 		makeSuspend           = true
 	)
@@ -7146,7 +7148,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 	})
 
 	Step("Create Schedule Policy", func() {
-		schd_pol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
+		schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("schedule policy creation error: %v", err))
 			return
@@ -7160,7 +7162,164 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			migrationScheduleName := migrationKey + "schedule-" + fmt.Sprintf("%d", i)
 			currMigSched, createMigSchedErr := asyncdr.CreateMigrationSchedule(
 				migrationScheduleName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag,
-				&includeResourcesFlag, &startApplicationsFlag, schd_pol.Name, &suspendSched, autoSuspend,
+				&includeResourcesFlag, &startApplicationsFlag, schdPol.Name, &suspendSched, autoSuspend,
+				nil, nil, nil, nil, nil, "", "", nil, nil, nil)
+			if createMigSchedErr != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to create migrationschedule wit error %v", err))
+				return
+			}
+			allMigrationsSched[currMigNamespace] = currMigSched.Name
+			time.Sleep(30 * time.Second)
+			migSchedResp, err := storkops.Instance().GetMigrationSchedule(currMigSched.Name, currMigNamespace)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to get migrationschedule, error: %v", err))
+				return
+			}
+			if len(migSchedResp.Status.Items) == 0 {
+				UpdateOutcome(event, fmt.Errorf("0 migrations have yet run for the migration schedule"))
+				return
+			}
+			expectedMigs, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("couldn't complete %v migrations due to error: %v", MigrationsCount, err))
+				return
+			} else {
+				for mig, status := range expectedMigs {
+					if status != "Successful" {
+						UpdateOutcome(event, fmt.Errorf("migration [%v] did not complete successfully, All migrations with status are: %v",
+							mig, expectedMigs))
+					}
+				}
+			}
+			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
+		}
+	})
+
+	Step("Suspend Migration Schedule", func() {
+		log.InfoD("All of these migrationschedules need to be suspended: %v", allMigrationsSched)
+		for namespace, mig := range allMigrationsSched {
+			migrationSchedule, err := storkops.Instance().GetMigrationSchedule(mig, namespace)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to get migrationschedule"))
+			}
+			migrationSchedule.Spec.Suspend = &makeSuspend
+			_, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("couldn't suspend migration %v due to error %v", migrationSchedule.Name, err))
+			} else {
+				log.InfoD("migrationSchedule %v, suspended successfully", migrationSchedule.Name)
+			}
+		}
+	})
+}
+
+func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(MetroDRMigrationSchedule)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Metro DR Migrationschedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: MetroDRMigrationSchedule,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		migrationNamespaces      []string
+		taskNamePrefix           = "metro-dr-mig-sched"
+		clusterDomainWaitTimeout = 10 * time.Minute
+		defaultWaitInterval      = 10 * time.Second
+		allMigrationsSched       = make(map[string]string)
+		includeVolumesFlag       = false
+		includeResourcesFlag     = true
+		startApplicationsFlag    = false
+		scpolName                = "async-policy"
+		suspendSched             = false
+		autoSuspend              = false
+		schdPol                 *storkapi.SchedulePolicy
+		err                      error
+		makeSuspend              = true
+	)
+
+	listCdsTask := func() (interface{}, bool, error) {
+		// Fetch the cluster domains
+		cdses, err := storkops.Instance().ListClusterDomainStatuses()
+		if err != nil || len(cdses.Items) == 0 {
+			log.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		cds := cdses.Items[0]
+		if len(cds.Status.ClusterDomainInfos) == 0 {
+			log.Infof("Found 0 cluster domain info objects in cluster domain status.")
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		return "", false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to get cluster domains status, Please check metro DR setup"))
+		return
+	}
+
+	chaosLevel := ChaosMap[AsyncDRMigrationSchedule]
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+		err = asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to write kubeconfig: %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to Set source kubeconfig: %v", err))
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], true, true, defaultClusterPairDir, false)
+			})
+		}
+		log.InfoD("Migration Namespaces: %v", migrationNamespaces)
+	})
+
+	Step("Create Schedule Policy", func() {
+		schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("schedule policy creation error: %v", err))
+			return
+		} else {
+			log.InfoD("schedule Policy created with %v mins of interval", MigrationInterval)
+		}
+	})
+
+	Step("Create Migration Schedule", func() {
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationScheduleName := metromigrationKey + "schedule-" + fmt.Sprintf("%d", i)
+			currMigSched, createMigSchedErr := asyncdr.CreateMigrationSchedule(
+				migrationScheduleName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag,
+				&includeResourcesFlag, &startApplicationsFlag, schdPol.Name, &suspendSched, autoSuspend,
 				nil, nil, nil, nil, nil, "", "", nil, nil, nil)
 			if createMigSchedErr != nil {
 				UpdateOutcome(event, fmt.Errorf("failed to create migrationschedule wit error %v", err))

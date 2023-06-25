@@ -21,6 +21,7 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
     ibmcloud plugin install -f vpc-infrastructure && \
     ibmcloud plugin install -f container-service
 
+
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
 COPY Makefile Makefile
@@ -45,6 +46,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 FROM alpine
 
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+
+ # Install Azure Cli
+RUN apk add --no-cache --update python3 py3-pip
+RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl

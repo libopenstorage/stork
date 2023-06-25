@@ -140,6 +140,7 @@ const (
 	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
+	volumeUpdateTimeout               = 2 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -797,6 +798,26 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 
 	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
 	return resp.VolumeId, nil
+}
+
+// ResizeVolume resizes Volume to specific size provided
+func (d *portworx) ResizeVolume(volName string, size uint64) error {
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volName})
+	if err != nil {
+		return fmt.Errorf("failed to find volume %v due to %v", volName, err)
+	}
+	volumeSpecUpdate := &api.VolumeSpecUpdate{
+		SizeOpt: &api.VolumeSpecUpdate_Size{Size: size},
+	}
+	_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+		VolumeId: volumeInspectResponse.Volume.Id,
+		Spec:     volumeSpecUpdate,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
@@ -5014,9 +5035,22 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		if poolID != -1 {
 			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
 		} else {
-			driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+			stringMatch := false
+			matchType := []string{"metadata", "journal"}
+			for _, word := range matchType {
+				re := regexp.MustCompile(fmt.Sprintf(".*--%s", word))
+				match := re.MatchString(drivePath)
+				if match {
+					stringMatch = true
+				}
+			}
+			if !stringMatch {
+				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+			}
+
 		}
 	}
+	log.Infof("adding cloud drive with params [%v]", driveAddFlag)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
