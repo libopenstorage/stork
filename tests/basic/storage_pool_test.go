@@ -6602,7 +6602,6 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
 					err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, invalidPoolUUID,
 						alertType, expectedSize, true)
-					log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
 				}
 			}
 
