@@ -9546,51 +9546,42 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 			}
 		}()
 
-		duration := 30 * time.Minute
-		timeout := time.After(duration)
-		for {
-			if terminate {
-				break
-			}
-			select {
-			case <-timeout:
+		for i := 0; i < 6; i++ {
+			// Wait for KVDB Members to be online
+			err := WaitForKVDBMembers()
+			if err != nil {
 				stopRoutine()
-				break
-			default:
-				// Wait for KVDB Members to be online
-				err := WaitForKVDBMembers()
-				if err != nil {
-					stopRoutine()
-					log.FailOnError(err, "failed waiting for KVDB members to be active")
-				}
-
-				// Kill KVDB Master Node
-				masterNode, err := GetKvdbMasterNode()
-				if err != nil {
-					stopRoutine()
-					log.FailOnError(err, "failed getting details of KVDB master node")
-				}
-
-				// Get KVDB Master PID
-				pid, err := GetKvdbMasterPID(*masterNode)
-				if err != nil {
-					stopRoutine()
-					log.FailOnError(err, "failed getting PID of KVDB master node")
-				}
-
-				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
-
-				// Kill kvdb master PID for regular intervals
-				err = KillKvdbMemberUsingPid(*masterNode)
-				if err != nil {
-					stopRoutine()
-					log.FailOnError(err, "failed to kill KVDB Node")
-				}
-
-				// Wait for some time after killing kvdb master Node
-				time.Sleep(5 * time.Minute)
+				log.FailOnError(err, "failed waiting for KVDB members to be active")
 			}
+
+			// Kill KVDB Master Node
+			masterNode, err := GetKvdbMasterNode()
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed getting details of KVDB master node")
+			}
+
+			// Get KVDB Master PID
+			pid, err := GetKvdbMasterPID(*masterNode)
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed getting PID of KVDB master node")
+			}
+
+			log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+			// Kill kvdb master PID for regular intervals
+			err = KillKvdbMemberUsingPid(*masterNode)
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed to kill KVDB Node")
+			}
+
+			// Wait for some time after killing kvdb master Node
+			time.Sleep(5 * time.Minute)
 		}
+
+		terminate = true
 		wg.Wait()
 	})
 

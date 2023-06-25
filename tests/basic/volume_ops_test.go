@@ -595,25 +595,19 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 				if terminate {
 					break
 				}
-				select {
-				case <-done:
-					break
-				default:
-					// Volume create continuously
-					uuidObj := uuid.New()
-					VolName := fmt.Sprintf("volume_%s", uuidObj.String())
-					Size := uint64(rand.Intn(100) + 1)  // Size of the Volume between 1G to 100G
-					haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
+				// Volume create continuously
+				uuidObj := uuid.New()
+				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+				Size := uint64(rand.Intn(100) + 1)  // Size of the Volume between 1G to 100G
+				haUpdate := int64(rand.Intn(2) + 1) // Size of the HA between 1 and 3
 
-					volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
-					if err != nil {
-						stopRoutine()
-						log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-					}
-
-					volumesCreated = append(volumesCreated, volId)
-
+				volId, err := Inst().V.CreateVolume(VolName, Size, haUpdate)
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 				}
+
+				volumesCreated = append(volumesCreated, volId)
 			}
 		}()
 
@@ -625,65 +619,50 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 				if terminate {
 					break
 				}
-				select {
-				case <-done:
-					break
-				default:
-					if len(volumesCreated) > 5 {
-						deleteVolume := volumesCreated[0]
+				if len(volumesCreated) > 5 {
+					deleteVolume := volumesCreated[0]
 
-						err := Inst().V.DeleteVolume(deleteVolume)
-						if err != nil {
-							stopRoutine()
-							log.FailOnError(err,
-								"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
-						}
-
-						// Remove the first element
-						for i := 0; i < len(volumesCreated)-1; i++ {
-							volumesCreated[i] = volumesCreated[i+1]
-						}
-						// Resize the array by truncating the last element
-						volumesCreated = volumesCreated[:len(volumesCreated)-1]
-
+					err := Inst().V.DeleteVolume(deleteVolume)
+					if err != nil {
+						stopRoutine()
+						log.FailOnError(err,
+							"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
 					}
+
+					// Remove the first element
+					for i := 0; i < len(volumesCreated)-1; i++ {
+						volumesCreated[i] = volumesCreated[i+1]
+					}
+					// Resize the array by truncating the last element
+					volumesCreated = volumesCreated[:len(volumesCreated)-1]
 				}
 			}
 
 		}()
 
 		// Run KVDB Master Terminate / Volume Create / Delete continuously in parallel for latest one hour
-		duration := 1 * time.Hour
-		timeout := time.After(duration)
-		for {
-			select {
-			case <-timeout:
-				stopRoutine()
-				break
-			default:
-				// Wait for KVDB Members to be online
-				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+		for i := 0; i < 10; i++ {
+			// Wait for KVDB Members to be online
+			log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
 
-				// Kill KVDB Master Node
-				masterNode, err := GetKvdbMasterNode()
-				log.FailOnError(err, "failed getting details of KVDB master node")
+			// Kill KVDB Master Node
+			masterNode, err := GetKvdbMasterNode()
+			log.FailOnError(err, "failed getting details of KVDB master node")
 
-				// Get KVDB Master PID
-				pid, err := GetKvdbMasterPID(*masterNode)
-				log.FailOnError(err, "failed getting PID of KVDB master node")
+			// Get KVDB Master PID
+			pid, err := GetKvdbMasterPID(*masterNode)
+			log.FailOnError(err, "failed getting PID of KVDB master node")
 
-				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+			log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
 
-				// Kill kvdb master PID for regular intervals
-				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+			// Kill kvdb master PID for regular intervals
+			log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
 
-				// Wait for some time after killing kvdb master Node
-				time.Sleep(5 * time.Minute)
-				if terminate {
-					break
-				}
-			}
+			// Wait for some time after killing kvdb master Node
+			time.Sleep(5 * time.Minute)
 		}
+		terminate = true
+		wg.Wait()
 
 	})
 
@@ -768,9 +747,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 		numGoroutines := len(volumes)
 		wg.Add(numGoroutines)
 
-		done := make(chan bool)
 		terminate := false
-
 		terminateflow := func() {
 			terminate = true
 		}
@@ -784,7 +761,6 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 				}
 			}
 		}
-
 		defer waitTillDriverUp()
 
 		log.InfoD("Initiate Volume resize continuously")
@@ -822,9 +798,6 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 					curSize/units.GiB, updatedSize/units.GiB)
 			}
 
-			if terminate {
-				return nil
-			}
 			return nil
 		}
 
@@ -832,7 +805,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
-				if terminate {
+				if terminate == true {
 					break
 				}
 				for _, eachVol := range volumes {
@@ -855,7 +828,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
-				if terminate {
+				if terminate == true {
 					break
 				}
 
@@ -895,55 +868,44 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			}
 		}(volumes)
 
-		duration := 2 * time.Hour
-		timeout := time.After(duration)
-		for {
-			if terminate {
-				break
-			}
-			select {
-			case <-timeout:
+		for i := 0; i < 2; i++ {
+			// Pick a random volume
+			randomIndex := rand.Intn(len(volumes))
+			volPicked := volumes[randomIndex]
+
+			// Pick a Node on which volume is placed and start rebooting the node
+			poolIds, err := GetPoolIDsFromVolName(volPicked.ID)
+			if err != nil {
 				terminateflow()
-				done <- true
-				break
-			default:
-				// Pick a random volume
-				randomIndex := rand.Intn(len(volumes))
-				volPicked := volumes[randomIndex]
-
-				// Pick a Node on which volume is placed and start rebooting the node
-				poolIds, err := GetPoolIDsFromVolName(volPicked.ID)
-				if err != nil {
-					terminateflow()
-					log.FailOnError(err, "failed to get pool details from the volume")
-				}
-
-				// select random pool and get the node associated with that pool
-				randomIndex = rand.Intn(len(poolIds))
-				poolPicked := poolIds[randomIndex]
-
-				nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
-				if err != nil {
-					terminateflow()
-					log.FailOnError(err, "error while fetching node details from pool ID")
-				}
-				log.InfoD("Restarting Px on Node [%v] and waiting for the Px to come back online", nodeDetail.Name)
-
-				driverNode = nodeDetail
-
-				err = Inst().V.RestartDriver(*nodeDetail, nil)
-				if err != nil {
-					terminateflow()
-					log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
-				}
-
-				waitTillDriverUp()
-
-				// flag is to make sure to wait for driver to be up and running when because
-				// of some other process test terminates in middle
-				driverNode = nil
+				log.FailOnError(err, "failed to get pool details from the volume")
 			}
+
+			// select random pool and get the node associated with that pool
+			randomIndex = rand.Intn(len(poolIds))
+			poolPicked := poolIds[randomIndex]
+
+			nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
+			if err != nil {
+				terminateflow()
+				log.FailOnError(err, "error while fetching node details from pool ID")
+			}
+			log.InfoD("Restarting Px on Node [%v] and waiting for the Px to come back online", nodeDetail.Name)
+
+			driverNode = nodeDetail
+			err = Inst().V.RestartDriver(*nodeDetail, nil)
+			if err != nil {
+				terminateflow()
+				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+			}
+
+			waitTillDriverUp()
+
+			// flag is to make sure to wait for driver to be up and running when because
+			// of some other process test terminates in middle
+			driverNode = nil
 		}
+		terminate = true
+		wg.Wait()
 
 	})
 	JustAfterEach(func() {
