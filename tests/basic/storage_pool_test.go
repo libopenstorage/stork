@@ -34,6 +34,7 @@ const (
 	poolResizeTimeout        = time.Minute * 360
 	retryTimeout             = time.Minute * 2
 	addDriveUpTimeOut        = time.Minute * 15
+	maxPoolLength            = 8
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
@@ -9596,43 +9597,70 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 	})
 })
 
-func CreateMultiplePoolsOnNodeParallely(n *node.Node, poolCount int, asyncOps bool) (*sync.WaitGroup, error) {
-	var wg sync.WaitGroup
-	wg.Add(poolCount)
-
-	asyncOps = false
-
-	totalPoolPresent, err := GetPoolsDetailsOnNode(*n)
-	if err != nil {
-		return nil, err
-	}
-	log.Info("total Pools present on Node [%v] is [%v]", n.Name, totalPoolPresent)
-
-	// Function to add Pool online
-	addDrive := func() {
-		defer wg.Done()
-		defer GinkgoRecover()
+var _ = Describe("{AddMultipleNewPoolsParallelyOnNode}", func() {
+	/*
+		test to add multiple pools parallely on a perticular Node
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddMultipleNewPoolsParallelyOnNode",
+			"Add Multiple pools on the Node Parallely",
+			nil, 0)
+	})
+	CreateMultiplePoolsOnNodeInParallel := func(n *node.Node, poolCount int) {
+		var wg sync.WaitGroup
+		wg.Add(poolCount)
 
 		totalPoolPresent, err := GetPoolsDetailsOnNode(*n)
 		log.FailOnError(err, "failed to get total pool list from the node [%v]", n.Name)
 		log.Info("total Pools present on Node [%v] is [%v]", n.Name, totalPoolPresent)
 
-		log.FailOnError(addCloudDrive(*n, -1), "adding cloud drive failed the node [%v]", n.Name)
+		// Function to add Pool online
+		addDrive := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			log.FailOnError(addCloudDrive(*n, -1), "adding cloud drive failed the node [%v]", n.Name)
+		}
+
+		// Run Go routine to create number of pools in parallel
+		for i := 0; i < poolCount; i++ {
+			go addDrive()
+		}
+		wg.Wait()
+		log.FailOnError(Inst().S.RefreshNodeRegistry(), "Refreshing node Registry failed [%v]", n.Name)
 
 		totalPoolPresentAfterCreate, err := GetPoolsDetailsOnNode(*n)
 		dash.VerifyFatal(len(totalPoolPresentAfterCreate) <= len(totalPoolPresent), true, fmt.Sprintf("No New Pools added on the Node [%v]", n.Name))
 
 	}
 
-	// Run Go routine to create number of pools in parallel
-	for i := 0; i < poolCount; i++ {
-		go addDrive()
-	}
+	var contexts []*scheduler.Context
+	stepLog := "Add Multiple pools on the Node Parallely"
+	It(stepLog, func() {
 
-	if asyncOps == true {
-		return &wg, nil
-	} else {
-		wg.Wait()
-		return nil, nil
-	}
-}
+		nodes := node.GetNodes()
+		log.InfoD("Total number of nodes present in the cluster [%v]", len(nodes))
+
+		// Select Random Volumes for pool Expand
+		randomIndex := rand.Intn(len(nodes))
+		randomNode := nodes[randomIndex]
+		log.InfoD("Node picked for Pool Addition [%v]", randomNode.Name)
+
+		poolsPresent := randomNode.StoragePools
+		log.InfoD("list of Pools Present on the Nodes [%v]", len(poolsPresent))
+
+		poolsToCreate := maxPoolLength - len(poolsPresent)
+		log.InfoD("Total New pools to create on Node [%v]", poolsToCreate)
+
+		CreateMultiplePoolsOnNodeInParallel(&randomNode, poolsToCreate)
+
+		totalPoolPresentAfterCreate, err := GetPoolsDetailsOnNode(randomNode)
+		log.FailOnError(err, "failed to get details of new node created")
+
+		log.InfoD("Total pools created after parallel execution [%v]", totalPoolPresentAfterCreate)
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
