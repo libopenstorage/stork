@@ -6274,13 +6274,21 @@ outer:
 					i := strings.Index(drvSize, eachString)
 					if i != -1 {
 						indexChecked = true
-						drvSize = drvSize[:i]
+						if eachString == "T" {
+							num, err := strconv.ParseFloat(drvSize[:i], 64)
+							if err != nil {
+								return 0, fmt.Errorf("converting string to int failed for value [%v]", drv)
+							}
+							drvSize = strconv.FormatFloat(num*1000, 'f', 0, 64)
+						} else {
+							drvSize = drvSize[:i]
+						}
 					}
-					if !indexChecked {
-						return 0, fmt.Errorf("unable to determine drive size with info [%v]", drv)
+					if indexChecked {
+						break outer
 					}
-					break outer
 				}
+				return 0, fmt.Errorf("unable to determine drive size with info [%v]", drv)
 			}
 		}
 	}
@@ -7079,11 +7087,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 
 		// Add Drive on the Node [ PTX-15856 ]
 		err = addCloudDrive(*nodeDetail, -1)
-		re := regexp.MustCompile(".*PX is not running.*portworx.*installed but not active.*")
-		dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
-			true,
-			"Failed to match the error while adding drive")
-		log.InfoD(fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+		log.FailOnError(err, "adding new pool on the node failed?")
 	})
 
 	JustAfterEach(func() {
@@ -7180,6 +7184,7 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expanddiskadddrive-%d", i))...)
@@ -7193,6 +7198,7 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Node Details of the Pool with IO
+		poolUUID := "5ce6e3f0-f36f-4f54-8975-09063fd0250f"
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
