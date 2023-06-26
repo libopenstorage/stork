@@ -9273,10 +9273,38 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
 			fmt.Sprintf("No pools with IO present ?"))
 
-		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
-		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
-		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
-
+			stepLog = "setting volumes repl to current repl +1"
+			var appVolumes []*volume.Volume
+			var selectedCtx *scheduler.Context
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range contexts {
+					if !strings.Contains(ctx.App.Key, "fio-fstrim") {
+						continue
+					}
+					selectedCtx = ctx
+	
+					var err error
+					stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						appVolumes, err = Inst().S.GetVolumes(ctx)
+						log.FailOnError(err, "Failed to get volumes")
+						dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Found %d app volmues", len(appVolumes)))
+					})
+					currRep, err := Inst().V.GetReplicationFactor(v)
+					log.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
+					
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
+						}
+			})
+	
+	//restart one node
+	RestartPxOnNode(n node.Node) error
+	currRep1, err := Inst().V.GetReplicationFactor(v)
+						log.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
+						if currRep1=currRep+1
 		wg.Wait()
 	})
 	JustAfterEach(func() {
@@ -9609,3 +9637,5 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+
