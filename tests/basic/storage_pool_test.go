@@ -7198,7 +7198,6 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Node Details of the Pool with IO
-		poolUUID := "5ce6e3f0-f36f-4f54-8975-09063fd0250f"
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
