@@ -180,7 +180,7 @@ func (v *vsphere) connect() error {
 
 		// Get the hostname
 		hostname := vmMo.Guest.HostName
-		log.Infof("hostname: %v", hostname)
+		log.Debugf("hostname: %v", hostname)
 		if hostname == "" {
 			continue
 		}
@@ -219,7 +219,7 @@ func (v *vsphere) AddMachine(vmName string) error {
 
 	// Get the hostname
 	hostname := vmMo.Guest.HostName
-	log.Infof("hostname: %v", hostname)
+	log.Debugf("hostname: %v", hostname)
 	if hostname == "" {
 		return fmt.Errorf("Failed to find hostname for  virtual machine on %s: %v", vm.Name(), err)
 	}
