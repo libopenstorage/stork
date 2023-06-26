@@ -4551,6 +4551,92 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 		})
 }
 
+// HaIncreaseRebootSourceNode repl increase and reboot source node
+func HaIncreaseRebootPXOnNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
+		Inst().V.String(), ctx.App.Key, v)
+	Step(stepLog,
+		func() {
+			log.InfoD(stepLog)
+			currRep, err := Inst().V.GetReplicationFactor(v)
+			if err != nil {
+				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
+				log.Error(err)
+				UpdateOutcome(event, err)
+				return
+			}
+
+			//if repl is 3 cannot increase repl for the volume
+			if currRep == 3 {
+				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
+				log.Warn(err)
+				UpdateOutcome(event, err)
+				return
+			}
+
+			if err == nil {
+				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						replicaSets, err := Inst().V.GetReplicaSets(v)
+						if err == nil {
+							replicaNodes := replicaSets[0].Nodes
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								newFastPathNode, err := AddFastPathLabel(ctx)
+								if err == nil {
+									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
+								}
+								UpdateOutcome(event, err)
+							}
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
+							if err != nil {
+								log.Errorf("There is an error increasing repl [%v]", err.Error())
+								UpdateOutcome(event, err)
+							} else {
+								log.Infof("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
+								time.Sleep(10 * time.Second)
+								//rebooting source nodes one by one
+								for _, nID := range replicaNodes {
+									replNodeToReboot := storageNodeMap[nID]
+									testError := Inst().V.RestartDriver(replNodeToReboot, nil)
+									if testError != nil {
+										return testError
+									}
+
+									log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
+								}
+								err = ValidateReplFactorUpdate(v, currRep+1)
+								if err != nil {
+									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
+									log.Error(err)
+									UpdateOutcome(event, err)
+								} else {
+									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									UpdateOutcome(event, err)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+								}
+							}
+						} else {
+							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
+							log.Error(err)
+							UpdateOutcome(event, err)
+						}
+
+					})
+			} else {
+				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
+				log.Error(err)
+				UpdateOutcome(event, err)
+			}
+
+		})
+}
+
 func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
 	sNodes := node.GetStorageDriverNodes()
 	appNodes, err := Inst().S.GetNodesForApp(ctx)
