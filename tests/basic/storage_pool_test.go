@@ -9240,7 +9240,7 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 	return &wg, nil
 }
 
-var _ = Describe("{ReplAddRestartNodeCHeckHAIncrease}", func() {
+var _ = Describe("{ReplAddRestartNodeCheckHAIncrease}", func() {
 	/*
 			test to expand multiple pool at once in parallel
 		    Pick a Pool from each Storage Node and expand all the node in parallel
@@ -9275,25 +9275,67 @@ var _ = Describe("{ReplAddRestartNodeCHeckHAIncrease}", func() {
 		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
 			fmt.Sprintf("No pools with IO present ?"))
 
-			stepLog = "setting volumes repl to current repl +1"
+			stepLog = "setting volumes repl to current repl + 1"
 			var appVolumes []*volume.Volume
 			var selectedCtx *scheduler.Context
-			HaIncreaseRebootPXOnNode
+			event := &EventRecord{
+				Event: Event{
+					ID:   GenerateUUID(),
+					Type: HAIncreaseAndReboot,
+				},
+			}
+//Reboot target node and source node while repl increase is in progress
+stepLog := "get a volume to  increase replication factor and reboot source  and target node"
+Step(stepLog, func() {
+	log.InfoD("get a volume to  increase replication factor and reboot source  and target node")
+	storageNodeMap := make(map[string]node.Node)
+	storageNodes, err := GetStorageNodes()
+	UpdateOutcome(event, err)
+
+	for _, n := range storageNodes {
+		storageNodeMap[n.Id] = n
+	}
+
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appVolumes, err = Inst().S.GetVolumes(ctx)
+			UpdateOutcome(event, err)
+			if len(appVolumes) == 0 {
+				UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+			}
+		})
+
+		if strings.Contains(ctx.App.Key, "fio-fstrim") {
+			for _, v := range appVolumes {
+				// Check if volumes are Pure FA/FB DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+					continue
+				}
+
+
+				if err == nil {
+			HaIncreaseRebootPXOnNode(event , ctx, v , storageNodeMap)
+
+
+
+
+
 			nodeList:=GetNodes()
 			for _,node1:=range nodeList{
 				if node!=node1{
 					nodetorestart:=node
 				}
 			}
-	//restart one node
-	err:=RestartPxOnNode(nodetorestart)
-	currRep1, err := Inst().V.GetReplicationFactor(v)
-						log.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
-						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep+1))
-						}
-		wg.Wait()
-	})
+	
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
