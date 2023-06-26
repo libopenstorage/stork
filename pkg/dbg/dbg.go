@@ -26,12 +26,19 @@ func Init(name string, dir string) {
 }
 
 func installSignalHandlers(name string, dir string) {
+	// Create the directory where heap and profile will be collected.
+	if err := os.MkdirAll(dir, os.ModeDir); err != nil {
+		logrus.Warnf("Failed to create dump directory %v: %v", dir, err)
+	}
+
 	dumpChannel := make(chan os.Signal, 1)
 	cpuProfChannel := make(chan os.Signal, 1)
 	signal.Notify(dumpChannel, syscall.SIGUSR1)
+
 	go func() {
 		for {
 			<-dumpChannel
+
 			dumpGoMemoryTrace()
 			dumpHeap(generateFilename(name, dir, ".heap"))
 			dumpGoProfile(generateFilename(name, dir, ".stack"))
