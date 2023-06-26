@@ -9240,13 +9240,13 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 	return &wg, nil
 }
 
-var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
+var _ = Describe("{ReplAddRestartNodeCHeckHAIncrease}", func() {
 	/*
 			test to expand multiple pool at once in parallel
 		    Pick a Pool from each Storage Node and expand all the node in parallel
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("ExpandMultiplePoolWithIOsInClusterAtOnce",
+		StartTorpedoTest("ReplAddRestartNodeCHeckHAIncrease",
 			"Expand multiple pool in the cluster at once in parallel",
 			nil, 0)
 	})
@@ -9266,6 +9266,8 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 			poolsPresent, err := GetPoolWithIOsInGivenNode(eachNodes, contexts)
 			if err == nil {
 				poolIdsToExpand = append(poolIdsToExpand, poolsPresent.Uuid)
+				node:=eachNodes
+				break
 			} else {
 				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
 			}
@@ -9276,35 +9278,20 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 			stepLog = "setting volumes repl to current repl +1"
 			var appVolumes []*volume.Volume
 			var selectedCtx *scheduler.Context
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				for _, ctx := range contexts {
-					if !strings.Contains(ctx.App.Key, "fio-fstrim") {
-						continue
-					}
-					selectedCtx = ctx
-	
-					var err error
-					stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						appVolumes, err = Inst().S.GetVolumes(ctx)
-						log.FailOnError(err, "Failed to get volumes")
-						dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Found %d app volmues", len(appVolumes)))
-					})
-					currRep, err := Inst().V.GetReplicationFactor(v)
-					log.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
-					
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
-						}
-			})
-	
+			HaIncreaseRebootPXOnNode
+			nodeList:=GetNodes()
+			for _,node1:=range nodeList{
+				if node!=node1{
+					nodetorestart:=node
+				}
+			}
 	//restart one node
-	RestartPxOnNode(n node.Node) error
+	err:=RestartPxOnNode(nodetorestart)
 	currRep1, err := Inst().V.GetReplicationFactor(v)
 						log.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
-						if currRep1=currRep+1
+						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep+1))
+						}
 		wg.Wait()
 	})
 	JustAfterEach(func() {
