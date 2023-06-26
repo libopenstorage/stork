@@ -9591,3 +9591,102 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+// CreateNewPoolsOnMultipleNodesInParallel Create New Pools in parallel on the cluster
+func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
+	defer GinkgoRecover()
+	var wg sync.WaitGroup
+	numGoroutines := len(nodes)
+
+	wg.Add(numGoroutines)
+	poolList := make(map[string]int)
+	poolListAfterCreate := make(map[string]int)
+
+	for _, eachNode := range nodes {
+		pools, _ := GetPoolsDetailsOnNode(eachNode)
+		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
+		poolList[eachNode.Name] = len(pools)
+	}
+
+	log.InfoD("Pool Details and total pools present [%v]", poolList)
+
+	for _, eachNode := range nodes {
+		go func(eachNode node.Node) {
+			defer wg.Done()
+			log.InfoD("Adding cloud drive on Node [%v]", eachNode.Name)
+
+			err := addCloudDrive(eachNode, -1)
+			log.FailOnError(err, "error adding cloud drive")
+		}(eachNode)
+	}
+	wg.Wait()
+
+	err := Inst().V.RefreshDriverEndpoints()
+	log.FailOnError(err, "error refreshing driver end points")
+
+	for _, eachNode := range nodes {
+		pools, _ := GetPoolsDetailsOnNode(eachNode)
+		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
+		poolListAfterCreate[eachNode.Name] = len(pools)
+	}
+	log.InfoD("Pool Details and total pools present [%v]", poolListAfterCreate)
+
+	for pool, poolCount := range poolList {
+		if poolListAfterCreate[pool] <= poolList[pool] {
+			return fmt.Errorf("NewPool didnot create on Node. Available pool length is [%v]", poolCount)
+		}
+	}
+	return nil
+}
+
+var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
+	/*
+				Create new pools on the cluster in parallel
+			    https://portworx.atlassian.net/browse/PTX-17614
+
+				Priority : P0
+
+		        Test legacy Drive Add to multiple pools at the same time
+				for Automation : Trying to add Drives using legacy method to create new pools on all the nodes in the cluster
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateNewPoolsOnClusterInParallel",
+			"create new pools on the cluster in parallel",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "create new pools on the cluster in parallel"
+	It(stepLog, func() {
+
+		var nodesToUse []node.Node
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createnewpoolsinparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		getNodes := node.GetNodes()
+		for _, each := range getNodes {
+			if node.IsMasterNode(each) == false {
+				sPools, err := GetPoolsDetailsOnNode(each)
+				if err != nil {
+					fmt.Printf("[%v]", err)
+				}
+				if len(sPools) < 8 {
+					nodesToUse = append(nodesToUse, each)
+				}
+			}
+		}
+		err := CreateNewPoolsOnMultipleNodesInParallel(nodesToUse)
+		log.FailOnError(err, "error adding cloud drives in parallel")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
