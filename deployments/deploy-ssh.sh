@@ -1,9 +1,5 @@
 #!/bin/bash -x
 
-if [ -n "${VERBOSE}" ]; then
-    VERBOSE="--v"
-fi
-
 if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
@@ -463,7 +459,6 @@ spec:
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--slowSpecThreshold", "600",
-            $VERBOSE,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
