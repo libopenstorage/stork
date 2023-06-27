@@ -695,7 +695,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 		var wg sync.WaitGroup
 		var driverNode *node.Node
 
-		var volReplMap map[string]int64
+		volReplMap := make(map[string]int64)
 
 		driverNode = nil
 
@@ -745,7 +745,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 		defer revertReplica()
 
 		numGoroutines := len(volumes)
-		wg.Add(numGoroutines)
+		wg.Add(numGoroutines + 1)
 
 		terminate := false
 		terminateflow := func() {
@@ -805,7 +805,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
-				if terminate == true {
+				if terminate {
 					break
 				}
 				for _, eachVol := range volumes {
@@ -818,6 +818,9 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 							log.FailOnError(err, "failed to resize Volume  [%v]", eachVol.Name)
 						}
 					}
+					if terminate {
+						break
+					}
 				}
 			}
 		}()
@@ -828,7 +831,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
-				if terminate == true {
+				if terminate {
 					break
 				}
 
@@ -864,11 +867,14 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
 						}
 					}
+					if terminate {
+						break
+					}
 				}
 			}
 		}(volumes)
 
-		for i := 0; i < 2; i++ {
+		for i := 0; i < 5; i++ {
 			// Pick a random volume
 			randomIndex := rand.Intn(len(volumes))
 			volPicked := volumes[randomIndex]
@@ -904,7 +910,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			// of some other process test terminates in middle
 			driverNode = nil
 		}
-		terminate = true
+		terminateflow()
 		wg.Wait()
 
 	})
