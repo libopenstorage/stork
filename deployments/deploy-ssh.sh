@@ -463,7 +463,7 @@ spec:
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--slowSpecThreshold", "600",
-            "$VERBOSE",
+            $VERBOSE,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
