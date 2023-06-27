@@ -33,6 +33,9 @@ const (
 	gcloudPath             = "./google-cloud-sdk/bin/gcloud"
 	gcloudBinaryName       = "gcloud"
 	skipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
+	pxAdminTokenSecret     = "px-admin-token"
+	secretNamespace        = "openstorage.io/auth-secret-namespace"
+	secretName             = "openstorage.io/auth-secret-name"
 )
 
 var (
@@ -247,6 +250,8 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	var azureAccountName, azureAccountKey string
 	var googleProjectID, googleJSONKey string
 	var syncDR bool
+	var pxAuthTokenSrc, pxAuthSecretNamespaceSrc string
+	var pxAuthTokenDest, pxAuthSecretNamespaceDest string
 
 	createClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
@@ -289,13 +294,12 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 
 			// Handling the syncDR cases here
 			if syncDR {
-				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false, true)
+				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, true)
 				if err != nil {
 					util.CheckErr(err)
 					return
 				}
 
-				// Create cluster-pair on source cluster
 				conf, err := getConfig(sFile).ClientConfig()
 				if err != nil {
 					util.CheckErr(err)
@@ -311,12 +315,12 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				}
 				printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
 
-				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true, true)
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, true)
 				if err != nil {
 					util.CheckErr(err)
 					return
 				}
-				// Create cluster-pair on dest cluster
+
 				conf, err = getConfig(dFile).ClientConfig()
 				if err != nil {
 					util.CheckErr(err)
@@ -439,16 +443,23 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			dIP, dPort := getHostPortFromEndPoint(dEP, ioStreams)
 
 			if len(destToken) == 0 {
-				token, err := getPXToken(dFile, dEP)
+				pxAuthTokenDest, pxAuthSecretNamespaceDest, err = getPXAuthToken(dFile)
 				if err != nil {
-					err := fmt.Errorf("unable to get px token from destination %s. Err: %v", dEP, err)
+					printMsg(fmt.Sprintf("Got error while fetching px auth token in destination cluster: %v", err), ioStreams.Out)
+				}
+				if len(pxAuthTokenDest) > 0 {
+					printMsg("Fetching px token with auth token in destination cluster", ioStreams.Out)
+				}
+				token, err := getPXToken(dEP, pxAuthTokenDest)
+				if err != nil {
+					err = fmt.Errorf("got error while fetching px token in destination cluster %s. Err: %v", dEP, err)
 					util.CheckErr(err)
 					return
 				}
 				destToken = token
 			}
 
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false, false)
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -504,15 +515,22 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
 
 			if len(srcToken) == 0 {
-				token, err := getPXToken(sFile, sEP)
+				pxAuthTokenSrc, pxAuthSecretNamespaceSrc, err = getPXAuthToken(sFile)
 				if err != nil {
-					err := fmt.Errorf("unable to get px token from source %s. Err: %v", sEP, err)
+					printMsg(fmt.Sprintf("Got error while fetching px auth token in source cluster: %v", err), ioStreams.Out)
+				}
+				if len(pxAuthTokenSrc) > 0 {
+					printMsg("Fetching px token with auth token in source cluster", ioStreams.Out)
+				}
+				token, err := getPXToken(sEP, pxAuthTokenSrc)
+				if err != nil {
+					err := fmt.Errorf("got error while fetching px token in source cluster %s. Err: %v", sEP, err)
 					util.CheckErr(err)
 					return
 				}
 				srcToken = token
 			}
-			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true, false)
+			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -589,7 +607,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	return createClusterPairCommand
 }
 
-func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, reverse bool, ignoreStorageOptions bool) (*storkv1.ClusterPair, error) {
+func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, authSecretNamespace string, reverse bool, ignoreStorageOptions bool) (*storkv1.ClusterPair, error) {
 	opts := make(map[string]string)
 	if !ignoreStorageOptions {
 		opts["ip"] = ip
@@ -640,6 +658,15 @@ func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMapping
 
 		}
 	}
+
+	// Add the annotations for auth enabled clusters
+	if len(authSecretNamespace) > 0 {
+		annotations := make(map[string]string)
+		annotations[secretNamespace] = authSecretNamespace
+		annotations[secretName] = pxAdminTokenSecret
+		clusterPair.ObjectMeta.Annotations = annotations
+	}
+
 	return clusterPair, nil
 }
 
@@ -775,12 +802,10 @@ func getPXEndPointDetails(config string) (string, error) {
 	return ep, nil
 }
 
-func getPXToken(config, pxEndpoint string) (string, error) {
+func getPXToken(pxEndpoint, pxToken string) (string, error) {
 	var token string
 
 	net.SplitHostPort(pxEndpoint)
-
-	pxToken := os.Getenv("PX_AUTH_TOKEN")
 	// TODO: support https as well
 	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
 	if err != nil {
@@ -794,6 +819,42 @@ func getPXToken(config, pxEndpoint string) (string, error) {
 	token = resp.GetToken()
 
 	return token, nil
+}
+
+func getPXAuthToken(configFile string) (string, string, error) {
+	var authToken, authSecretNamespace string
+	// Create cluster-pair on source cluster
+	conf, err := getConfig(configFile).ClientConfig()
+	if err != nil {
+		util.CheckErr(err)
+		return authToken, authSecretNamespace, err
+	}
+
+	core.Instance().SetConfig(conf)
+	// Get the token from the secret px-admin-token
+	secrets, err := core.Instance().ListSecret("", meta.ListOptions{})
+	if err != nil {
+		return authToken, authSecretNamespace, fmt.Errorf("failed to list secrets, err %v", err)
+	}
+
+	var secretData []byte
+	var ok bool
+	for _, secret := range secrets.Items {
+		if secret.Name == pxAdminTokenSecret {
+			authTokenSecret, err := core.Instance().GetSecret(secret.Name, secret.Namespace)
+			if err != nil {
+				return authToken, authSecretNamespace, fmt.Errorf("unable to retrieve %v secret: %v", secret.Name, err)
+			}
+
+			if secretData, ok = authTokenSecret.Data["auth-token"]; !ok {
+				return authToken, authSecretNamespace, fmt.Errorf("invalid secret key data")
+			}
+			return string(secretData), secret.Namespace, nil
+		}
+	}
+
+	// If token secret is not found, return empty token as it is not secured cluster.
+	return authToken, authSecretNamespace, nil
 }
 
 func getHostPortFromEndPoint(ep string, ioStreams genericclioptions.IOStreams) (string, string) {
