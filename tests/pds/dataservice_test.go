@@ -1913,6 +1913,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					err = IncreasePVCby1Gig(ctx)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
+					controlPlane.UpdateResourceTemplateName("Small")
 				})
 
 				Step("Validate Deployments after PVC Resize", func() {
@@ -1923,6 +1924,61 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					}
 				})
 			}
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{ResizePVCBy1GB}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizePVCBy1GB", "Deploys and increases the pvc size of DS by 1GB", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
+		var depList []*pds.ModelsDeployment
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					depList = append(depList, deployment)
+
+				})
+			}
+			defer func() {
+				for _, newDeployment := range deployments {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				}
+			}()
+
+			Step("Resizing the PVC size", func() {
+				ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
+				log.FailOnError(err, "Unable to create scheduler context")
+				err = IncreasePVCby1Gig(ctx)
+				log.FailOnError(err, "Failing while Increasing the PVC name...")
+			})
+			//ToDo: Add a step to take backup after resize.
+
+			Step("Validate Deployments after PVC Resize", func() {
+				for ds, deployment := range deployments {
+					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+					log.FailOnError(err, "Error while validating dataservices")
+					log.InfoD("Data-service: %v is up and healthy", ds.Name)
+				}
+			})
 
 		})
 	})
