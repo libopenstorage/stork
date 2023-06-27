@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
@@ -25,6 +26,10 @@ var _ = Describe("{HaIncreaseRebootSource}", func() {
 	testName := "ha-inc-reboot-src"
 	performHaIncreaseRebootTest(testName)
 })
+var _ = Describe("{HaIncreaseRebootPXSource}", func() {
+	testName := "ha-inc-rebootpx-src"
+	performHaIncreaseRebootTest(testName)
+})
 
 func performHaIncreaseRebootTest(testName string) {
 	var contexts []*scheduler.Context
@@ -35,6 +40,12 @@ func performHaIncreaseRebootTest(testName string) {
 	if testName == "ha-inc-reboot-src" {
 		nodeRebootType = "source"
 		testDesc = "HaIncreaseRebootSource"
+
+	}
+
+	if testName == "ha-inc-rebootpx-src" {
+		nodeRebootType = "source"
+		testDesc = "HaIncreaseRebootPX on Source"
 
 	}
 	JustBeforeEach(func() {
@@ -101,6 +112,8 @@ func performHaIncreaseRebootTest(testName string) {
 
 					if testName == "ha-inc-reboot-src" {
 						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap)
+					} else if testName == "ha_inc_rebootpx" {
+						HaIncreaseRebootPXOnNode(nil, ctx, v, storageNodeMap)
 					} else {
 						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap)
 					}

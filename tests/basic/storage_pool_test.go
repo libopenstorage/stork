@@ -9246,7 +9246,7 @@ var _ = Describe("{ReplAddRestartNodeCheckHAIncrease}", func() {
 		    Pick a Pool from each Storage Node and expand all the node in parallel
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("ReplAddRestartNodeCHeckHAIncrease",
+		StartTorpedoTest("ReplAddRestartNodeCheckHAIncrease",
 			"Expand multiple pool in the cluster at once in parallel",
 			nil, 0)
 	})
@@ -9285,16 +9285,18 @@ var _ = Describe("{ReplAddRestartNodeCheckHAIncrease}", func() {
 				},
 			}
 //Reboot target node and source node while repl increase is in progress
-stepLog := "get a volume to  increase replication factor and reboot source  and target node"
+stepLog := "get a volume to  increase replication factor and reboot px on source node"
 Step(stepLog, func() {
 	log.InfoD("get a volume to  increase replication factor and reboot source  and target node")
 	storageNodeMap := make(map[string]node.Node)
 	storageNodes, err := GetStorageNodes()
 	UpdateOutcome(event, err)
 
-	for _, n := range storageNodes {
-		storageNodeMap[n.Id] = n
-	}
+	var stNode node.Node
+	var err error
+
+	// Get List of Volumes present in the Node
+	stNode, err = GetRandomNodeWithPoolIOs(contexts)
 
 	for _, ctx := range *contexts {
 		var appVolumes []*volume.Volume
@@ -9308,33 +9310,38 @@ Step(stepLog, func() {
 				UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 			}
 		})
+	}
+		var selectedVol *volume.Volume
+		for _, each := range contexts {
+			log.InfoD("Getting context Info [%v]", each)
+			Volumes, err := Inst().S.GetVolumes(each)
+			log.FailOnError(err, "Listing Volumes Failed")
 
-		if strings.Contains(ctx.App.Key, "fio-fstrim") {
-			for _, v := range appVolumes {
-				// Check if volumes are Pure FA/FB DA volumes
-				isPureVol, err := Inst().V.IsPureVolume(v)
-				if err != nil {
-					UpdateOutcome(event, err)
+			log.InfoD("Get all the details of Volumes Present")
+		outer:
+			for _, vol := range Volumes {
+				log.InfoD("List of Volumes to inspect [%T] , [%s]", vol, vol.ID)
+				volInspect, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, "Failed to Inpect volumes present Err : [%s]", volInspect)
+				replicaNodes := volInspect.ReplicaSets[0].Nodes
+
+				for _, nID := range replicaNodes {
+					if nID == stNode.Id {
+						selectedVol = vol
+						break outer
+					}
 				}
-				if isPureVol {
-					log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
-					continue
-				}
+			}
+			if selectedVol != nil {
+				break
+			}
+		}
+		dash.VerifyFatal(selectedVol != nil, true, fmt.Sprintf("Identify volume for snapshots on the node [%v]", stNode.Name))
+
 
 
 				if err == nil {
 			HaIncreaseRebootPXOnNode(event , ctx, v , storageNodeMap)
-
-
-
-
-
-			nodeList:=GetNodes()
-			for _,node1:=range nodeList{
-				if node!=node1{
-					nodetorestart:=node
-				}
-			}
 	
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
