@@ -727,26 +727,6 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			volReplMap[each.ID] = replFactor
 		}
 
-		revertReplica := func() {
-			for _, each := range volumes {
-				for vID, replCount := range volReplMap {
-					if each.ID == vID {
-						replFactor, err := Inst().V.GetReplicationFactor(each)
-						log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
-						if replFactor != replCount {
-							err = Inst().V.SetReplicationFactor(each, replCount, nil, nil, true)
-							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
-						}
-					}
-				}
-			}
-		}
-
-		defer revertReplica()
-
-		numGoroutines := len(volumes)
-		wg.Add(numGoroutines + 1)
-
 		terminate := false
 		terminateflow := func() {
 			terminate = true
@@ -761,6 +741,47 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 				}
 			}
 		}
+
+		// Function to Set replication factor on Volume
+		setReplOnVolume := func(volName *volume.Volume, replCount int64, waitToFinish bool) error {
+			err = Inst().V.SetReplicationFactor(volName, replCount, nil, nil, waitToFinish)
+			if err != nil {
+				if strings.Contains(fmt.Sprintf("%v", err), "Another HA increase operation is in progress") {
+					return nil
+				} else if strings.Contains(fmt.Sprintf("%v", err), "Resource has not been initialized") {
+					waitTillDriverUp()
+					err = Inst().V.SetReplicationFactor(volName, replCount, nil, nil, waitToFinish)
+					if err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
+
+			}
+			return nil
+		}
+
+		revertReplica := func() {
+			log.Info("Reverting Replica on the volumes")
+			waitTillDriverUp()
+			for _, each := range volumes {
+				for vID, replCount := range volReplMap {
+					if each.ID == vID {
+						replFactor, err := Inst().V.GetReplicationFactor(each)
+						log.FailOnError(err, "failed to get replication factor for volume [%v]", each.Name)
+						if replFactor != replCount {
+							err := setReplOnVolume(each, replCount, true)
+							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
+						}
+					}
+				}
+			}
+		}
+
+		defer revertReplica()
+
+		wg.Add(2)
 		defer waitTillDriverUp()
 
 		log.InfoD("Initiate Volume resize continuously")
@@ -818,9 +839,6 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 							log.FailOnError(err, "failed to resize Volume  [%v]", eachVol.Name)
 						}
 					}
-					if terminate {
-						break
-					}
 				}
 			}
 		}()
@@ -858,20 +876,11 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 					previousReplFactor = currRepFactor
 
 					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", each.Name, currRepFactor, setReplFactor)
-					err = Inst().V.SetReplicationFactor(each, setReplFactor, nil, nil, true)
-					if err != nil {
-						if strings.Contains(fmt.Sprintf("%v", err), "Another HA increase operation is in progress") {
-							continue
-						} else {
-							terminateflow()
-							log.FailOnError(err, "failed to set replication factor for volume [%v]", each.Name)
-						}
-					}
-					if terminate {
-						break
-					}
+					err = setReplOnVolume(each, setReplFactor, true)
+					log.FailOnError(err, "failed to set replication factor for volume after waiting for Px online [%v]", each.Name)
 				}
 			}
+
 		}(volumes)
 
 		for i := 0; i < 5; i++ {
