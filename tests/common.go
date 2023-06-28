@@ -4602,7 +4602,8 @@ func HaIncreaseRebootPXOnNode(event *EventRecord, ctx *scheduler.Context, v *vol
 									replNodeToReboot := storageNodeMap[nID]
 									testError := Inst().V.RestartDriver(replNodeToReboot, nil)
 									if testError != nil {
-										return testError
+										log.Error(testError)
+										return
 									}
 
 									log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
