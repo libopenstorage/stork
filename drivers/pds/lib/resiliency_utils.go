@@ -408,7 +408,7 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 }
 
 // Reboot All Worker Nodes while deployment is ongoing
-func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployment) error {
+func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployment, testType string) error {
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
@@ -439,8 +439,19 @@ func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployme
 		CapturedErrors <- err
 		return err
 	}
-	// Reboot All Worker Nodes
+	// Reboot Worker Nodes depending on Test Type (all or quorum)
 	nodesToReboot := node.GetWorkerNodes()
+	if testType == "quorum" {
+		num_nodes := len(nodesToReboot)
+		if num_nodes < 3 {
+			nodesToReboot = nodesToReboot[0:2]
+		}
+		quorum_nodes := (num_nodes / 2) + 1
+		log.InfoD("Total number of nodes in Cluter: %v", num_nodes)
+		log.InfoD("Rebooting %v nodes in Cluster", quorum_nodes)
+		nodesToReboot = nodesToReboot[0:quorum_nodes]
+	}
+
 	for _, n := range nodesToReboot {
 		log.InfoD("reboot node: %s", n.Name)
 		err = tests.Inst().N.RebootNode(n, node.RebootNodeOpts{
