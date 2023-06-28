@@ -887,6 +887,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
+					time.Sleep(5 * time.Second)
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
