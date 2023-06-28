@@ -4551,7 +4551,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 		})
 }
 
-// HaIncreaseRebootSourceNode repl increase and reboot source node
+// HaIncreaseRebootPX repl increase and reboot px on node
 func HaIncreaseRebootPXOnNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -4573,7 +4573,6 @@ func HaIncreaseRebootPXOnNode(event *EventRecord, ctx *scheduler.Context, v *vol
 				UpdateOutcome(event, err)
 				return
 			}
-
 			if err == nil {
 				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
 					Inst().V.String(), ctx.App.Key, v)
@@ -4583,13 +4582,6 @@ func HaIncreaseRebootPXOnNode(event *EventRecord, ctx *scheduler.Context, v *vol
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
 							replicaNodes := replicaSets[0].Nodes
-							if strings.Contains(ctx.App.Key, fastpathAppName) {
-								newFastPathNode, err := AddFastPathLabel(ctx)
-								if err == nil {
-									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
-								}
-								UpdateOutcome(event, err)
-							}
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -4605,25 +4597,19 @@ func HaIncreaseRebootPXOnNode(event *EventRecord, ctx *scheduler.Context, v *vol
 										log.Error(testError)
 										return
 									}
-
 									log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
+									err = fmt.Errorf("error in ha-increase after reboot px node. Error: %v", err)
 									log.Error(err)
 									UpdateOutcome(event, err)
 								} else {
 									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								}
-								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
-									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
-								}
 							}
 						} else {
-							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
+							err = fmt.Errorf("error getting replicasets for volume %s, Error: %v", v.Name, err)
 							log.Error(err)
 							UpdateOutcome(event, err)
 						}
