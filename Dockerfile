@@ -4,13 +4,13 @@ MAINTAINER Portworx Inc. <support@portworx.com>
 ARG VERSION=master
 ARG RELEASE=latest
 LABEL name="Stork" \
-       vendor="Openstorage.org" \
-       version=${VERSION} \
-       release=${RELEASE} \
-       summary="Storage Operator Runtime for Kubernetes" \
-       description="Stork is a Cloud Native storage operator runtime scheduler plugin"
+    vendor="Openstorage.org" \
+    version=${VERSION} \
+    release=${RELEASE} \
+    summary="Storage Operator Runtime for Kubernetes" \
+    description="Stork is a Cloud Native storage operator runtime scheduler plugin"
 
-RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip openssl
+RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip openssl curl git findutils unzip
 
 RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -m pip install rsa --upgrade
 
@@ -18,13 +18,25 @@ RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -
 RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
+#Install asdf
+RUN git clone https://github.com/asdf-vm/asdf.git $HOME/.asdf --branch v0.12.0
+RUN echo -e '\n. "$HOME/.asdf/asdf.sh"' >> ~/.bashrc
+RUN echo -e '\n. "$HOME/.asdf/completions/asdf.bash"' >> ~/.bashrc
+RUN . $HOME/.asdf/asdf.sh
+ENV PATH "${PATH}:$HOME/root/.asdf/bin:$HOME/root/.asdf/shims"
+#Install kubelogin plugin
+RUN asdf update
+RUN asdf plugin add kubelogin
+RUN asdf install kubelogin latest
+RUN asdf global kubelogin latest
+
 #Install Google Cloud SDK
 ARG GCLOUD_SDK=google-cloud-sdk-418.0.0-linux-x86_64.tar.gz
 ARG GCLOUD_INSTALL_DIR="/usr/lib"
 RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
     tar xf $GCLOUD_SDK -C $GCLOUD_INSTALL_DIR && rm -rf $GCLOUD_SDK && \
     rm -rf $GCLOUD_INSTALL_DIR/google-cloud-sdk/platform/gsutil \
-           $GCLOUD_INSTALL_DIR/google-cloud-sdk/RELEASE_NOTES
+    $GCLOUD_INSTALL_DIR/google-cloud-sdk/RELEASE_NOTES
 ENV PATH "${PATH}:$GCLOUD_INSTALL_DIR/google-cloud-sdk/bin"
 #Install gke-gcloud-auth-plugin
 RUN gcloud components install gke-gcloud-auth-plugin
