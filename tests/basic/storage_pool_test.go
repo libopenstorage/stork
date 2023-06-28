@@ -9594,11 +9594,8 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 
 // CreateNewPoolsOnMultipleNodesInParallel Create New Pools in parallel on the cluster
 func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
-	defer GinkgoRecover()
 	var wg sync.WaitGroup
-	numGoroutines := len(nodes)
 
-	wg.Add(numGoroutines)
 	poolList := make(map[string]int)
 	poolListAfterCreate := make(map[string]int)
 
@@ -9610,13 +9607,15 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 
 	log.InfoD("Pool Details and total pools present [%v]", poolList)
 
+	wg.Add(len(nodes))
 	for _, eachNode := range nodes {
 		go func(eachNode node.Node) {
 			defer wg.Done()
+			defer GinkgoRecover()
 			log.InfoD("Adding cloud drive on Node [%v]", eachNode.Name)
 
 			err := addCloudDrive(eachNode, -1)
-			log.FailOnError(err, "error adding cloud drive")
+			log.FailOnError(err, "adding cloud drive failed on Node [%v]", eachNode)
 		}(eachNode)
 	}
 	wg.Wait()
