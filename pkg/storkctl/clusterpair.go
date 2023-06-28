@@ -33,6 +33,7 @@ const (
 	gcloudPath             = "./google-cloud-sdk/bin/gcloud"
 	gcloudBinaryName       = "gcloud"
 	skipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
+	storkCreatedAnnotation = "stork.libopenstorage.org/created-by-stork"
 	pxAdminTokenSecret     = "px-admin-token"
 	secretNamespace        = "openstorage.io/auth-secret-namespace"
 	secretName             = "openstorage.io/auth-secret-name"
@@ -346,6 +347,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					Namespace: cmdFactory.GetNamespace(),
 					Annotations: map[string]string{
 						skipResourceAnnotation: "true",
+						storkCreatedAnnotation: "true",
 					},
 				},
 				Location: storkv1.BackupLocationItem{},
@@ -481,6 +483,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					Namespace: cmdFactory.GetNamespace(),
 					Annotations: map[string]string{
 						skipResourceAnnotation: "true",
+						storkCreatedAnnotation: "true",
 					},
 				},
 				Data: credentialData,
