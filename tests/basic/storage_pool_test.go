@@ -9689,3 +9689,75 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{AddDriveMetadataPool}", func() {
+	/*
+				Create new pools on the cluster in parallel
+			    https://portworx.atlassian.net/browse/PTX-17616
+
+				Priority : P0
+
+		        Test Add Drive to Metadata Pool
+				for Automation : for automation we try only expand using add-disk option on the pool
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveMetadataPool",
+			"Test Add Drive to Metadata Pool",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Test Add Drive to Metadata Pool"
+	It(stepLog, func() {
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivemetadatapool-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		// Get metadata poolUUID from the Node
+		poolUUID, err = GetPoolUUIDWithMetadataDisk(*nodeDetail)
+		log.FailOnError(err, "Failed to get metadata pool uuid on Node [%v]", nodeDetail.Name)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
+
+		drvSize, err := getPoolDiskSize(poolToBeResized)
+		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+		log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, expectedSize)
+
+		alertType := api.SdkStoragePool_RESIZE_TYPE_AUTO
+		// Now trying to Expand Pool with Invalid Pool UUID
+		err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
+			alertType, expectedSize, false)
+		if err != nil && strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
+				alertType, expectedSize, true)
+		}
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil,
+			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
