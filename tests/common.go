@@ -7224,7 +7224,7 @@ func IsDMthin() (bool, error) {
 	}
 	argsList, err := util.MiscArgs(cluster)
 	for _, args := range argsList {
-		if strings.Contains(args, "dmthin") {
+		if strings.Contains(strings.ToLower(args), "px-storev2") {
 			dmthinEnabled = true
 		}
 	}

@@ -2,13 +2,17 @@ package tests
 
 import (
 	"fmt"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -379,6 +383,188 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{ValidateZombieReplicas}", func() {
+	/*
+			1. Create aggressive localsnap for every minute.
+			2. Validate zombie replicas
+			3. Restore cloud snap and validate
+		https://portworx.atlassian.net/browse/PTX-17088
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateZombieReplicas", "Create aggressive local snaps and validate zombie replicas", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to cloud snap  and restore"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		policyName := "localintervalpolicy"
+		appScale := 5
+		var snapStatuses map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus
+		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				retain := 3
+				interval := 1
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: 1,
+						},
+					}}
+
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+
+			}()
+			cmd := "/opt/pwx/bin/runc exec -t portworx ls -l /var/.px/"
+
+			nodeContentsMap := make(map[string][]string)
+			for _, n := range node.GetStorageDriverNodes() {
+				for _, p := range n.GetPools() {
+					rCmd := fmt.Sprintf("%s%d", cmd, p.ID)
+					log.Infof("Running command [%s]", rCmd)
+					output, err := runCmd(rCmd, n)
+					log.FailOnError(err, fmt.Sprintf("error running command [%s] on node [%s]", cmd, n.Name))
+					dirContents := strings.Split(output, "\n")
+					nodeContentsMap[n.Name] = append(nodeContentsMap[n.Name], dirContents...)
+				}
+			}
+
+			Inst().AppList = []string{"fio-localsnap"}
+
+			for i := 0; i < appScale; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+			log.Infof("waiting for 15 mins for enough local snaps to be created.")
+			time.Sleep(15 * time.Minute)
+
+			stepLog = "Verify that local snap status"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				for _, ctx := range contexts {
+					var appVolumes []*volume.Volume
+					var err error
+					appNamespace := ctx.App.Key + "-" + ctx.UID
+					log.Infof("Namespace : %v", appNamespace)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						appVolumes, err = Inst().S.GetVolumes(ctx)
+						log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+						if len(appVolumes) == 0 {
+							log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+						}
+					})
+					log.Infof("Got volume count : %v", len(appVolumes))
+					scaleFactor := time.Duration(appScale * len(appVolumes))
+					err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
+					log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
+
+					for _, v := range appVolumes {
+
+						snapshotScheduleName := v.Name + "-interval-schedule"
+						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+						snapStatuses, err = storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+							appNamespace,
+							snapshotScheduleRetryTimeout,
+							snapshotScheduleRetryInterval)
+						log.FailOnError(err, fmt.Sprintf("error while getting volume snapshot status for [%s]", snapshotScheduleName))
+						for k, v := range snapStatuses {
+							log.Infof("Policy Type: %v", k)
+							for _, e := range v {
+								log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
+								log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
+								snapData, err := Inst().S.GetSnapShotData(ctx, e.Name, appNamespace)
+								log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, e.Name))
+
+								snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+								log.InfoD("Snapshot Type: %v", snapType)
+								if snapType != "local" {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+									}
+									log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, e.Name))
+
+								}
+
+								snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+								log.InfoD("Snapshot ID: %v", snapID)
+
+								if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+									len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+									}
+									log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, e.Name))
+								}
+							}
+						}
+					}
+				}
+			})
+			stepLog = "Delete Apps and validate zombie replicas"
+			Step(stepLog, func() {
+				opts := make(map[string]bool)
+				opts[SkipClusterScopedObjects] = true
+				DestroyApps(contexts, opts)
+				n := node.GetStorageDriverNodes()[0]
+				dCmd := "pxctl v l -s | awk '{print $1}' | grep -v ID | xargs -L 1 pxctl v d -f"
+
+				// Execute the command and delete volume local snapshots
+				_, err := Inst().N.RunCommandWithNoRetry(n, dCmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, fmt.Sprintf("error running command [%s]", dCmd))
+
+				time.Sleep(5 * time.Second)
+				postNodeContentsMap := make(map[string][]string)
+				for _, n := range node.GetStorageDriverNodes() {
+					for _, p := range n.GetPools() {
+						rCmd := fmt.Sprintf("%s%d", cmd, p.ID)
+						log.Infof("Running command [%s]", rCmd)
+						output, err := runCmd(rCmd, n)
+						log.FailOnError(err, fmt.Sprintf("error running command [%s] on node [%s]", cmd, n.Name))
+						dirContents := strings.Split(output, "\n")
+						postNodeContentsMap[n.Name] = append(postNodeContentsMap[n.Name], dirContents...)
+					}
+					if len(nodeContentsMap[n.Name]) != len(postNodeContentsMap[n.Name]) {
+						dash.VerifySafely(len(postNodeContentsMap[n.Name]), len(nodeContentsMap[n.Name]), fmt.Sprintf("replicas not deleted in node [%s], Actual: [%v], Expected: [%v]", n.Name, postNodeContentsMap[n.Name], nodeContentsMap[n.Name]))
+					}
+				}
+
+			})
+
+		})
+
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
