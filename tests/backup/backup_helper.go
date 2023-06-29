@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -116,6 +117,13 @@ var (
 	globalGCPLockedBucketName   string
 	cloudProviders              = []string{"aws"}
 	commonPassword              string
+	backupPodLabels             = []map[string]string{
+		{"app": "px-backup"}, {"app.kubernetes.io/component": "pxcentral-apiserver"},
+		{"app.kubernetes.io/component": "pxcentral-backend"},
+		{"app.kubernetes.io/component": "pxcentral-frontend"},
+		{"app.kubernetes.io/component": "keycloak"},
+		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
+		{"app.kubernetes.io/component": "pxcentral-mysql"}}
 )
 
 type userRoleAccess struct {
@@ -2447,24 +2455,32 @@ func deleteJobAndWait(job batchv1.Job) error {
 
 func ValidateAllPodsInPxBackupNamespace() error {
 	pxBackupNamespace, err := backup.GetPxBackupNamespace()
-	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
-	for _, pod := range allPods.Items {
-		if strings.Contains(pod.Name, pxCentralPostInstallHookJobName) ||
-			strings.Contains(pod.Name, quickMaintenancePod) ||
-			strings.Contains(pod.Name, fullMaintenancePod) {
-			continue
-		}
-		log.Infof("Checking status for pod - %s", pod.GetName())
-		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	for _, label := range backupPodLabels {
+		allPods, err := core.Instance().GetPods(pxBackupNamespace, label)
 		if err != nil {
-			// Collect mongoDB logs right after the command
-			ginkgoTest := CurrentGinkgoTestDescription()
-			testCaseName := fmt.Sprintf("%s-error", ginkgoTest.FullTestText)
-			CollectMongoDBLogs(testCaseName)
 			return err
 		}
+		for _, pod := range allPods.Items {
+			log.Infof("Checking status for pod - %s", pod.GetName())
+			err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				// Collect mongoDB logs right after the command
+				ginkgoTest := CurrentGinkgoTestDescription()
+				testCaseName := ginkgoTest.FullTestText
+				matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTest.FullTestText)
+				if len(matches) > 1 {
+					testCaseName = fmt.Sprintf("%s-error-%s", matches[1], label)
+				}
+				CollectLogsFromPods(testCaseName, label, pxBackupNamespace, pod.GetName())
+				return err
+			}
+		}
 	}
-	return nil
+	err = IsMongoDBReady()
+	return err
 }
 
 // getStorkImageVersion returns current stork image version.
