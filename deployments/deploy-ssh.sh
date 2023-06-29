@@ -469,6 +469,7 @@ spec:
             "--pds-driver", "$PDS_DRIVER",
             "--secure-apps", "$SECURE_APP_LIST",
             "--repl1-apps", "$REPL1_APP_LIST",
+            "--csi-app-list", "$CSI_APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",
