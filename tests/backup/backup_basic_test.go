@@ -154,7 +154,7 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:
-			globalNFSBucketName = fmt.Sprintf("%s", globalNFSBucketPrefix)
+			globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, RandomString(6))
 		}
 	}
 	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")

@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -382,19 +381,15 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
-			pods, err := core.Instance().GetPods(pxbNamespace, nil)
-			dash.VerifyFatal(err, nil, "Getting all the backup pods")
-			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
-				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
-			}
+			err = ValidateAllPodsInPxBackupNamespace()
+			log.FailOnError(err, "Failed to validate pods in px-backup namespace")
 		})
 		Step("Verify the license count after backup pods restart", func() {
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-2))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after backup pods restart should be same as before pod restart"))
 		})
-		Step("Label all the remaining worker nodes on source and destination cluster after pod restart", func() {
-			log.InfoD("Applying label portworx.io/nobackup=true to all the remaining worker nodes on source cluster after pod restart")
+		Step("Label all the remaining worker nodes on source and destination cluster before pod restart", func() {
+			log.InfoD("Applying label portworx.io/nobackup=true to all the remaining worker nodes on source cluster before pod restart")
 			for _, workerNode := range sourceClusterWorkerNodes[1:] {
 				err := Inst().S.AddLabelOnNode(workerNode, "portworx.io/nobackup", "true")
 				log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to source cluster worker node %v", workerNode.Name))
@@ -415,12 +410,8 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
-			pods, err := core.Instance().GetPods(pxbNamespace, nil)
-			dash.VerifyFatal(err, nil, "Getting all the backup pods")
-			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
-				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
-			}
+			err = ValidateAllPodsInPxBackupNamespace()
+			log.FailOnError(err, "Failed to validate pods in px-backup namespace")
 		})
 		Step("Verify the license count again after pod restart with all the worker nodes labelled portworx.io/nobackup=true", func() {
 			err = VerifyLicenseConsumedCount(ctx, orgID, 0)

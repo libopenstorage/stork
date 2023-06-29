@@ -2182,7 +2182,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 					defer wg.Done()
 					_, err = DeleteBackup(backup, backupMap[backup], orgID, ctx)
 					log.FailOnError(err, "Failed to delete backup - %s", backup)
-					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, time.Minute*30, time.Minute*1)
+					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, backupDeleteTimeout, backupDeleteRetryTime)
 					log.FailOnError(err, "Error waiting for backup deletion %v", backup)
 				}(backup)
 			}
@@ -2866,7 +2866,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 					backupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, backup, orgID)
 					backupDeleteResponse, err := DeleteBackup(backup, backupUID, orgID, ctxNonAdmin)
 					log.FailOnError(err, "Backup [%s] could not be deleted by user [%s] with delete response %s", backup, userName, backupDeleteResponse)
-					err = backupDriver.WaitForBackupDeletion(ctxNonAdmin, backup, orgID, time.Minute*30, time.Minute*1)
+					err = backupDriver.WaitForBackupDeletion(ctxNonAdmin, backup, orgID, backupDeleteTimeout, backupDeleteRetryTime)
 					log.FailOnError(err, "Error waiting for backup deletion %v", backup)
 					dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying backup %s deletion status", backup))
 
@@ -3864,7 +3864,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 					defer wg.Done()
 					_, err = DeleteBackup(backupName, backupMap[backupName], orgID, ctxNonAdmin)
 					log.FailOnError(err, "Failed to delete backup - %s", backupName)
-					err = backupDriver.WaitForBackupDeletion(ctx, backupName, orgID, time.Minute*10, time.Minute*1)
+					err = backupDriver.WaitForBackupDeletion(ctx, backupName, orgID, backupDeleteTimeout, backupDeleteRetryTime)
 					log.FailOnError(err, "Error waiting for backup deletion %v", backupName)
 				}(user)
 			}
