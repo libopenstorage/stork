@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -35,6 +36,7 @@ func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBefore
 
 	resultChan := make(chan interface{})
 	errChan := make(chan error)
+	errInRetires := make([]string, 0)
 
 	go func() {
 		for {
@@ -48,18 +50,19 @@ func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBefore
 				return
 			default:
 				out, retry, err := t()
-				if err == nil {
+				if err != nil {
+					if retry {
+						errInRetires = append(errInRetires, err.Error())
+						log.Printf("DoRetryWithTimeout - Error: {%v}, Next try in [%v], timeout [%v]", err, timeBeforeRetry, timeout)
+						time.Sleep(timeBeforeRetry)
+					} else {
+						errChan <- err
+						return
+					}
+				} else {
 					resultChan <- out
 					return
 				}
-
-				if err != nil && !retry {
-					errChan <- err
-					return
-				}
-
-				log.Printf("%v Next retry in: %v", err, timeBeforeRetry)
-				time.Sleep(timeBeforeRetry)
 			}
 		}
 	}()
@@ -70,7 +73,7 @@ func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBefore
 	case err := <-errChan:
 		if err == context.DeadlineExceeded {
 			return nil, &ErrTimedOut{
-				Reason: err.Error(),
+				Reason: fmt.Sprintf("DoRetryWithTimeout timed out. Errors generated in retries: {%s}", strings.Join(errInRetires, "}\n{")),
 			}
 		}
 

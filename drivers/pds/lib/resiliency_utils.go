@@ -46,7 +46,6 @@ var (
 	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
-	isInitDone                = false
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -73,12 +72,8 @@ func ExecuteInParallel(functions ...func()) {
 }
 
 // Function to enable Resiliency Test
-func MarkResiliencyTC(resiliency bool, node_ops bool) {
+func MarkResiliencyTC(resiliency bool) {
 	ResiliencyFlag = resiliency
-	if node_ops && !isInitDone {
-		tests.InitInstance()
-		isInitDone = true
-	}
 }
 
 // Function to wait for event to induce failure
@@ -320,7 +315,7 @@ func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment
 }
 
 // Reboot the Active Node onto which the application pod is coming up
-func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeployment) error {
+func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeployment, num_reboots int) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
 	var testError error
@@ -382,6 +377,30 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 				CapturedErrors <- testError
 				return testError
 			}
+			if num_reboots > 1 {
+				for index := 1; index <= num_reboots; index++ {
+					log.Infof("wait for node: %s to be back up", nodeToReboot.Name)
+					err = tests.Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
+						Timeout:         defaultTestConnectionTimeout,
+						TimeBeforeRetry: defaultWaitRebootRetry,
+					})
+					if err != nil {
+						CapturedErrors <- err
+						return err
+					}
+					testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         defaultCommandTimeout,
+							TimeBeforeRetry: defaultCommandRetry,
+						},
+					})
+					if testError != nil {
+						CapturedErrors <- testError
+						return testError
+					}
+				}
+			}
 			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
 		}
 	}
@@ -389,7 +408,7 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 }
 
 // Reboot All Worker Nodes while deployment is ongoing
-func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployment) error {
+func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployment, testType string) error {
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
@@ -420,8 +439,19 @@ func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployme
 		CapturedErrors <- err
 		return err
 	}
-	// Reboot All Worker Nodes
+	// Reboot Worker Nodes depending on Test Type (all or quorum)
 	nodesToReboot := node.GetWorkerNodes()
+	if testType == "quorum" {
+		num_nodes := len(nodesToReboot)
+		if num_nodes < 3 {
+			nodesToReboot = nodesToReboot[0:2]
+		}
+		quorum_nodes := (num_nodes / 2) + 1
+		log.InfoD("Total number of nodes in Cluter: %v", num_nodes)
+		log.InfoD("Rebooting %v nodes in Cluster", quorum_nodes)
+		nodesToReboot = nodesToReboot[0:quorum_nodes]
+	}
+
 	for _, n := range nodesToReboot {
 		log.InfoD("reboot node: %s", n.Name)
 		err = tests.Inst().N.RebootNode(n, node.RebootNodeOpts{

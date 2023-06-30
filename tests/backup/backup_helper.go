@@ -7,13 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -77,9 +78,9 @@ const (
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	pxBackupDeployment                        = "px-backup"
-	backupDeleteTimeout                       = 20 * time.Minute
+	backupDeleteTimeout                       = 60 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
-	backupLocationDeleteTimeout               = 30 * time.Minute
+	backupLocationDeleteTimeout               = 60 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
@@ -116,6 +117,13 @@ var (
 	globalGCPLockedBucketName   string
 	cloudProviders              = []string{"aws"}
 	commonPassword              string
+	backupPodLabels             = []map[string]string{
+		{"app": "px-backup"}, {"app.kubernetes.io/component": "pxcentral-apiserver"},
+		{"app.kubernetes.io/component": "pxcentral-backend"},
+		{"app.kubernetes.io/component": "pxcentral-frontend"},
+		{"app.kubernetes.io/component": "keycloak"},
+		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
+		{"app.kubernetes.io/component": "pxcentral-mysql"}}
 )
 
 type userRoleAccess struct {
@@ -200,7 +208,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
 func GetCsiSnapshotClassName() (string, error) {
-	var snapShotClasses *v1beta1.VolumeSnapshotClassList
+	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapShotClasses, err = Inst().S.GetAllSnapshotClasses(); err != nil {
 		return "", err
@@ -940,6 +948,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
+			// Delete the backup location object
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
@@ -948,11 +957,21 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
 				}
 				if status {
-					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					backupLocationInspectRequest := api.BackupLocationInspectRequest{
+						Name:  bkpLocationName,
+						Uid:   backupLocationUID,
+						OrgId: orgID,
+					}
+					backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
+					if err != nil {
+						return "", true, fmt.Errorf("inspect backup location - backup location %s still present with error %v", bkpLocationName, err)
+					}
+					backupLocationStatus := backupLocationObject.BackupLocation.BackupLocationInfo.GetStatus()
+					return "", true, fmt.Errorf("backup location %s is not deleted yet. Status - [%s]", bkpLocationName, backupLocationStatus)
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
 		status, err := IsCloudCredPresent(credName, ctx, orgID)
@@ -2436,24 +2455,32 @@ func deleteJobAndWait(job batchv1.Job) error {
 
 func ValidateAllPodsInPxBackupNamespace() error {
 	pxBackupNamespace, err := backup.GetPxBackupNamespace()
-	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
-	for _, pod := range allPods.Items {
-		if strings.Contains(pod.Name, pxCentralPostInstallHookJobName) ||
-			strings.Contains(pod.Name, quickMaintenancePod) ||
-			strings.Contains(pod.Name, fullMaintenancePod) {
-			continue
-		}
-		log.Infof("Checking status for pod - %s", pod.GetName())
-		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	for _, label := range backupPodLabels {
+		allPods, err := core.Instance().GetPods(pxBackupNamespace, label)
 		if err != nil {
-			// Collect mongoDB logs right after the command
-			ginkgoTest := CurrentGinkgoTestDescription()
-			testCaseName := fmt.Sprintf("%s-error", ginkgoTest.FullTestText)
-			CollectMongoDBLogs(testCaseName)
 			return err
 		}
+		for _, pod := range allPods.Items {
+			log.Infof("Checking status for pod - %s", pod.GetName())
+			err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				// Collect mongoDB logs right after the command
+				ginkgoTest := CurrentGinkgoTestDescription()
+				testCaseName := ginkgoTest.FullTestText
+				matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTest.FullTestText)
+				if len(matches) > 1 {
+					testCaseName = fmt.Sprintf("%s-error-%s", matches[1], label)
+				}
+				CollectLogsFromPods(testCaseName, label, pxBackupNamespace, pod.GetName())
+				return err
+			}
+		}
 	}
-	return nil
+	err = IsMongoDBReady()
+	return err
 }
 
 // getStorkImageVersion returns current stork image version.
@@ -3209,6 +3236,40 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
 		}
 	}
+	return nil
+}
+
+// IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
+func IsMongoDBReady() error {
+	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	mongoDBPodStatus := func() (interface{}, bool, error) {
+		statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+		if err != nil {
+			return "", true, err
+		}
+		// Px-Backup would function with just 2 mongo DB pods in healthy state.
+		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
+		if statefulSet.Status.ReadyReplicas < 2 {
+			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
+				2, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 	return nil
 }
 

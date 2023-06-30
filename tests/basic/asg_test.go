@@ -51,6 +51,14 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			intitialNodeCount, (scaleupCount/3)*3)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			Scale(scaleupCount)
+			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+				Inst().AutoStorageNodeRecoveryTimeout.String())
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+			})
 			// After scale up, get fresh list of nodes
 			// by re-initializing scheduler and volume driver
 			err = Inst().S.RefreshNodeRegistry()
@@ -59,7 +67,6 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "Verify driver end points refresh")
 
-			Scale(scaleupCount)
 			stepLog = "validate number of storage nodes after scale up"
 			Step(fmt.Sprintf(stepLog), func() {
 				log.InfoD(stepLog)

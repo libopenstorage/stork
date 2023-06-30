@@ -22,6 +22,8 @@ import (
 	"text/template"
 	"time"
 
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 
@@ -29,7 +31,7 @@ import (
 
 	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
-	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
@@ -2773,6 +2775,24 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 
 			log.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			var ss *appsapi.StatefulSet
+			var err error
+			if ss, err = k8sApps.GetStatefulSet(obj.GetClusterResourceName(), *obj.Namespace.Name); err != nil {
+				return &scheduler.ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v,Namespace: %v. Err: %v", obj.GetClusterResourceName(), *obj.Namespace.Name, err),
+				}
+			}
+
+			if err := k8sApps.ValidateStatefulSet(ss, timeout*time.Duration(*ss.Spec.Replicas)); err != nil {
+				return &scheduler.ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v,Namespace: %v. Err: %v", obj.Name, *obj.Namespace.Name, err),
+				}
+			}
+
+			log.Infof("[%v] Validated statefulset: %v", ctx.App.Key, *obj.Name)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			if err := k8sApps.ValidateStatefulSet(obj, timeout*time.Duration(*obj.Spec.Replicas)); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
@@ -3475,6 +3495,53 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			result[snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID] = map[string]string{
 				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
 			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			var labels map[string]string
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), *obj.Namespace.Name)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v, Namespace : %v. Err: %v", obj.GetClusterResourceName(), *obj.Namespace.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v, Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
+				}
+			}
+
+			if len(ctx.ScheduleOptions.TopologyLabels) > 0 {
+				nodeAff := ss.Spec.Template.Spec.Affinity.NodeAffinity
+				labels = getLabelsFromNodeAffinity(nodeAff)
+			}
+
+			for _, pvc := range pvcList.Items {
+				params, err := k8sCore.GetPersistentVolumeClaimParams(&pvc)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToGetVolumeParameters{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to get params for volume: %v, namespace: %v. Err: %v", pvc.Name, pvc.Namespace, err),
+					}
+				}
+
+				for k, v := range pvc.Annotations {
+					params[k] = v
+				}
+				params[PvcNameKey] = pvc.GetName()
+				params[PvcNamespaceKey] = pvc.GetNamespace()
+
+				if len(pvc.Spec.VolumeName) > 0 && len(ctx.ScheduleOptions.TopologyLabels) > 0 {
+					for key, val := range labels {
+						params[key] = val
+						log.Infof("Topology labels for volume [%s] are: [%s]", pvc.Spec.VolumeName, params[key])
+					}
+				}
+				result[pvc.Spec.VolumeName] = params
+
+			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			var labels map[string]string
 			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
@@ -3604,6 +3671,26 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 
 			log.Infof("[%v] Validated group snapshot: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), *obj.Namespace.Name)
+			if err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
+				}
+			}
+			// Providing the scaling factor in timeout
+			scalingFactor := *ss.Spec.Replicas
+			if *ss.Spec.Replicas > *obj.NodeCount {
+				scalingFactor = int32(*ss.Spec.Replicas - *ss.Spec.Replicas)
+			}
+			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v,Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
+				}
+			}
+			log.Infof("[%v] Validated PVCs from StatefulSet: %v", ctx.App.Key, obj.GetClusterResourceName())
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -3886,6 +3973,34 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				vol.Annotations[key] = val
 			}
 			vols = append(vols, vol)
+		} else if pdsobj, ok := specObj.(*pds.ModelsDeployment); ok {
+			ss, err := k8sApps.GetStatefulSet(*pdsobj.ClusterResourceName, *pdsobj.Namespace.Name)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", pdsobj.GetClusterResourceName(), *pdsobj.Namespace.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v, Namespace: %s. Err: %v", ss.Name, ss.Namespace, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
+			}
+			for _, vol := range vols {
+				log.Infof("In Get Volume method, vol name %s", vol.Name)
+			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -4031,6 +4146,36 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 
+			for _, pvc := range pvcList.Items {
+				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if shouldResize {
+					vol, err := k.resizePVCBy1GB(ctx, &pvc)
+					if err != nil {
+						return nil, err
+					}
+					vols = append(vols, vol)
+				}
+			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			pdsNs := *obj.Namespace.Name
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNs)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.GetClusterResourceName(), pdsNs, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
 			for _, pvc := range pvcList.Items {
 				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
 				if err != nil {
@@ -4298,6 +4443,34 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				buf.WriteString(dumpPodStatusRecursively(pod))
 			}
 			buf.WriteString(insertLineBreak("END Deployment"))
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("StatefulSet: [%s] ", obj.GetClusterResourceName())))
+			var ssetStatus *appsapi.StatefulSetStatus
+			if ssetStatus, err = k8sApps.DescribeStatefulSet(obj.GetClusterResourceName(), *obj.Namespace.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of statefulset: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			// Dump ssetStatus
+			ssetStatusString := "nil"
+			if ssetStatus != nil {
+				ssetStatusString = fmt.Sprintf("%+v", *ssetStatus)
+			}
+			buf.WriteString(fmt.Sprintf("Status: %s\n", ssetStatusString))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(*obj.Namespace.Name, "StatefulSet", obj.GetClusterResourceName())))
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), *obj.Namespace.Name)
+			if err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetPodStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get statefulsets: %v. Err: %v", obj.GetClusterResourceName(), err),
+				}))
+			}
+			pods, _ := k8sApps.GetStatefulSetPods(ss)
+			for _, pod := range pods {
+				buf.WriteString(dumpPodStatusRecursively(pod))
+			}
+			buf.WriteString(insertLineBreak("END StatefulSet"))
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("StatefulSet: [%s] %s", obj.Namespace, obj.Name)))
 			var ssetStatus *appsapi.StatefulSetStatus
@@ -6077,10 +6250,10 @@ func (k *K8s) RecycleNode(n node.Node) error {
 }
 
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
-func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	// Only FA (pure_block) volume is supported
 	volTypes := []string{PureBlock}
-	var volSnapMap = make(map[string]*v1beta1.VolumeSnapshot)
+	var volSnapMap = make(map[string]*volsnapv1.VolumeSnapshot)
 
 	for _, specObj := range ctx.App.SpecList {
 
@@ -6720,7 +6893,7 @@ func (k *K8s) ValidateCsiRestore(pvcName string, namespace string, timeout time.
 // restoreCsiSnapshot restore PVC from csiSnapshot
 func (k *K8s) restoreCsiSnapshot(
 	restorePvcName string, pvc corev1.PersistentVolumeClaim,
-	snap *v1beta1.VolumeSnapshot, sc *storageapi.StorageClass,
+	snap *volsnapv1.VolumeSnapshot, sc *storageapi.StorageClass,
 ) (*v1.PersistentVolumeClaim, error) {
 	var resPvc *corev1.PersistentVolumeClaim
 	var dataSource v1.TypedLocalObjectReference
@@ -6764,10 +6937,10 @@ func (k *K8s) restoreCsiSnapshot(
 }
 
 // CreateCsiSnapshotClass creates csi volume snapshot class
-func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
 	var err error
 	var annotation = make(map[string]string)
-	var volumeSnapClass *v1beta1.VolumeSnapshotClass
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
 	annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
 
 	v1obj := metav1.ObjectMeta{
@@ -6775,10 +6948,10 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 		Annotations: annotation,
 	}
 
-	snapClass := v1beta1.VolumeSnapshotClass{
+	snapClass := volsnapv1.VolumeSnapshotClass{
 		ObjectMeta:     v1obj,
 		Driver:         CsiProvisioner,
-		DeletionPolicy: v1beta1.DeletionPolicy(deleionPolicy),
+		DeletionPolicy: volsnapv1.DeletionPolicy(deleionPolicy),
 	}
 
 	log.Infof("Creating volume snapshot class: %v", snapClassName)
@@ -6793,7 +6966,7 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
 func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
-	var snap *v1beta1.VolumeSnapshot
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
 	log.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
 	t := func() (interface{}, bool, error) {
@@ -6872,25 +7045,25 @@ func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string)
 }
 
 // CreateCsiSnapshot create snapshot for given pvc
-func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	var err error
-	var snapshot *v1beta1.VolumeSnapshot
+	var snapshot *volsnapv1.VolumeSnapshot
 
 	v1obj := metav1.ObjectMeta{
 		Name:      name,
 		Namespace: namespace,
 	}
 
-	source := v1beta1.VolumeSnapshotSource{
+	source := volsnapv1.VolumeSnapshotSource{
 		PersistentVolumeClaimName: &pvc,
 	}
 
-	spec := v1beta1.VolumeSnapshotSpec{
+	spec := volsnapv1.VolumeSnapshotSpec{
 		VolumeSnapshotClassName: &class,
 		Source:                  source,
 	}
 
-	snap := v1beta1.VolumeSnapshot{
+	snap := volsnapv1.VolumeSnapshot{
 		ObjectMeta: v1obj,
 		Spec:       spec,
 	}
@@ -6911,11 +7084,11 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 }
 
 // GetCsiSnapshots return snapshot list for a pvc
-func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
-	var snaplist *v1beta1.VolumeSnapshotList
-	var snap *v1beta1.VolumeSnapshot
+func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.VolumeSnapshot, error) {
+	var snaplist *volsnapv1.VolumeSnapshotList
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
-	snapshots := make([]*v1beta1.VolumeSnapshot, 0)
+	snapshots := make([]*volsnapv1.VolumeSnapshot, 0)
 
 	if snaplist, err = k8sExternalsnap.ListSnapshots(namespace); err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapshotList{
@@ -6939,7 +7112,7 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.Volu
 }
 
 // ValidateCsiSnapshots validate all snapshots in the context
-func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*v1beta1.VolumeSnapshot) error {
+func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*volsnapv1.VolumeSnapshot) error {
 	var pureBlkType = []string{PureBlock}
 
 	for _, specObj := range ctx.App.SpecList {
@@ -7001,8 +7174,8 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 }
 
 // validateCsiSnapshot validates the given snapshot is successfully created or not
-func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1beta1.VolumeSnapshot) error {
-	var snap *v1beta1.VolumeSnapshot
+func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot volsnapv1.VolumeSnapshot) error {
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
 
 	if csiSnapshot.Name == "" {
@@ -7041,8 +7214,8 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1be
 }
 
 // GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
-func (k *K8s) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
-	var snapshotClasses *v1beta1.VolumeSnapshotClassList
+func (k *K8s) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error) {
+	var snapshotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapshotClasses, err = k8sExternalsnap.ListSnapshotClasses(); err != nil {
 		return nil, err

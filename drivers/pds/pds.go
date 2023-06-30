@@ -13,7 +13,8 @@ import (
 
 type Driver interface {
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
-	CreateSchedulerContextForPDSApps([]*pds.ModelsDeployment) []*scheduler.Context
+	CreateSchedulerContextForPDSApps([]*pds.ModelsDeployment) ([]*scheduler.Context, error)
+	ValidateDataServiceDeployment(*pds.ModelsDeployment, string) error
 }
 
 var (

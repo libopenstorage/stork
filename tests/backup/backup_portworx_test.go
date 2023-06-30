@@ -72,7 +72,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
@@ -519,7 +519,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		encryptionBucketName = fmt.Sprintf("%s-%s-%v", providers[0], "encryptionbucket", time.Now().Unix())
 		backupLocationName := fmt.Sprintf("%s-%s", "location", providers[0])
 		backupLocationNames = append(backupLocationNames, backupLocationName)
-		backupLocationName = fmt.Sprintf("%s-%s", "encryption-location", providers[0])
+		backupLocationName = fmt.Sprintf("%s-%s-%v", "encryption-location", providers[0], time.Now().Unix())
 		backupLocationNames = append(backupLocationNames, backupLocationName)
 		CredName = fmt.Sprintf("%s-%s-%v", "cred", providers[0], time.Now().Unix())
 		CloudCredUID = uuid.New()

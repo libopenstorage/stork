@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ type gcpStorageClient struct {
 	projectId string
 }
 
-func (awsObj *awsStorageClient) createBucket(bucketName string) error {
+func (awsObj *awsStorageClient) createBucket() error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(awsObj.region),
@@ -68,7 +69,7 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
+func (awsObj *awsStorageClient) DeleteBucket() error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(awsObj.region),
@@ -81,26 +82,87 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 	}
 
 	client := s3.New(sess)
+
+	// Delete all objects and versions in the bucket
+	err = client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		// Iterate through the objects in the bucket and delete them
+		var objects []*s3.ObjectIdentifier
+		for _, obj := range page.Contents {
+			objects = append(objects, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+
+		_, err := client.DeleteObjects(&s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &s3.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			fmt.Printf("Failed to delete objects in bucket: %v\n", err)
+			return false
+		}
+
+		return true
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete objects in bucket: %v", err)
+	}
+
+	// Delete the bucket
 	_, err = client.DeleteBucket(&s3.DeleteBucketInput{
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				log.Infof("[AWS] Bucket: %v doesn't exists.!!", bucketName)
+				log.Infof("[AWS] Bucket: %v doesn't exist.!!", bucketName)
 				return nil
-			} else {
-				return fmt.Errorf("couldn't delete bucket: %v", err)
 			}
-
+			return fmt.Errorf("couldn't delete bucket: %v", err)
 		}
-
 	}
+
 	log.Infof("[AWS] Successfully deleted the bucket: %v", bucketName)
 	return nil
 }
 
-func (azObj *azureStorageClient) createBucket(containerName string) error {
+func (awsObj *awsStorageClient) ListFolders(after time.Time) ([]string, error) {
+	var folders []string
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(awsObj.region),
+			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize new session: %v", err)
+	}
+	svc := s3.New(sess)
+	resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error while listing the folders in S3 bucket")
+	}
+	for _, obj := range resp.Contents {
+		log.Infof("Last modified status: %v", obj.LastModified.After(after))
+		if obj.LastModified.After(after) {
+			parts := strings.Split(*obj.Key, "/")
+			log.Infof("Parts: %v", parts)
+			if len(parts) >= 1 {
+				folders = append(folders, parts[0])
+			}
+		}
+	}
+	return folders, nil
+}
+
+func (azObj *azureStorageClient) createBucket() error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
 		return err
@@ -110,18 +172,18 @@ func (azObj *azureStorageClient) createBucket(containerName string) error {
 		return fmt.Errorf("error -> %v", err.Error())
 	}
 
-	_, err = client.CreateContainer(context.TODO(), containerName, nil)
+	_, err = client.CreateContainer(context.TODO(), bucketName, nil)
 	if err != nil && strings.Contains(err.Error(), "ContainerAlreadyExists") {
-		log.Infof("Container: %s, already exists.", containerName)
+		log.Infof("Container: %s, already exists.", bucketName)
 	} else if err != nil && !strings.Contains(err.Error(), "ContainerAlreadyExists") {
 		return fmt.Errorf("error while creating azure container. Error - %v", err)
 	} else {
-		log.Infof("[Azure]Successfully created the container: %s", containerName)
+		log.Infof("[Azure]Successfully created the container: %s", bucketName)
 	}
 	return nil
 }
 
-func (azObj *azureStorageClient) deleteBucket(containerName string) error {
+func (azObj *azureStorageClient) DeleteBucket() error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
 		return fmt.Errorf("error -> %v", err.Error())
@@ -130,18 +192,18 @@ func (azObj *azureStorageClient) deleteBucket(containerName string) error {
 	if err != nil {
 		return fmt.Errorf("error -> %v", err.Error())
 	}
-	_, err = client.DeleteContainer(context.TODO(), containerName, nil)
+	_, err = client.DeleteContainer(context.TODO(), bucketName, nil)
 	if err != nil && strings.Contains(err.Error(), "not found") {
-		log.Infof("[Azure]Container: %s not found!!", containerName)
+		log.Infof("[Azure]Container: %s not found!!", bucketName)
 	} else if err != nil && !strings.Contains(err.Error(), "not found") {
 		return fmt.Errorf("error while creating azure container. Error - %v", err)
 	} else {
-		log.Infof("[Azure]Container: %s deleted successfully!!", containerName)
+		log.Infof("[Azure]Container: %s deleted successfully!!", bucketName)
 	}
 	return nil
 }
 
-func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {
+func (gcpObj *gcpStorageClient) createBucket() error {
 	err := gcpObj.setGcpJsonPath()
 	if err != nil {
 		return err
@@ -207,7 +269,7 @@ func (gcpObj *gcpStorageClient) createGcpJsonFile(path string) error {
 	return nil
 }
 
-func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
+func (gcpObj *gcpStorageClient) DeleteBucket() error {
 	ctx := context.Background()
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/json")
 	client, err := storage.NewClient(context.Background())
@@ -232,4 +294,14 @@ func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
 		log.Infof("[GCP]Bucket: %v doesn't exist.", bucketName)
 	}
 	return nil
+}
+
+func RandString(length int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }

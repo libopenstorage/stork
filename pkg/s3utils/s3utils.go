@@ -115,7 +115,7 @@ func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]
 	}
 	objs, err := S3Client.ListObjects(input)
 	if err != nil {
-		return nil, fmt.Errorf("Error in getting details from S3 %v", err)
+		return nil, fmt.Errorf("error in getting details from S3 %v", err)
 	}
 	var objects []Object
 	for _, obj := range objs.Contents {
@@ -127,4 +127,55 @@ func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]
 		objects = append(objects, object)
 	}
 	return objects, nil
+}
+
+func DeleteS3Objects(bucket string) error {
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return err
+	}
+
+	S3Client := s3.New(sess)
+
+	// List all objects in the bucket
+	listInput := &s3.ListObjectsInput{
+		Bucket: aws.String(bucket),
+	}
+
+	var objectsToDelete []*s3.ObjectIdentifier
+
+	log.Infof("List of objects found in S3 bucket - [%s]", bucket)
+	err = S3Client.ListObjectsPages(listInput, func(page *s3.ListObjectsOutput, lastPage bool) bool {
+		for _, obj := range page.Contents {
+			log.Infof(*obj.Key)
+			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+		return true
+	})
+	if err != nil {
+		return err
+	}
+
+	// Prepare the input parameters for the delete operation
+	deleteInput := &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucket),
+		Delete: &s3.Delete{
+			Objects: objectsToDelete,
+			Quiet:   aws.Bool(false),
+		},
+	}
+
+	// Delete the objects from the bucket
+	_, err = S3Client.DeleteObjects(deleteInput)
+	return err
 }

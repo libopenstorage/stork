@@ -662,6 +662,12 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 	defer session.Close()
 
+	// This is required to run runc commands
+	if strings.Contains(cmd, "runc exec") {
+		// Disable PTY allocation
+		session.RequestPty("dummy", 80, 40, ssh_pkg.TerminalModes{})
+	}
+
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		return "", fmt.Errorf("fail to setup stderr, err: %v", err)

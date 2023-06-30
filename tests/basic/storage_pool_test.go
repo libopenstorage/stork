@@ -4775,7 +4775,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		log.InfoD(stepLog)
 		selectedNode := getNodeWithLeastSize()
 
-		stNodes := node.GetStorageDriverNodes()
+		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
 			if stNode.Name != selectedNode.Name {
@@ -5442,7 +5442,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				nodesToBeUpdated = nil
 				poolsToBeUpdated = nil
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true)
+					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
 					return err
 				}

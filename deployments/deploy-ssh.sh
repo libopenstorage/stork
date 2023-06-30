@@ -1,9 +1,5 @@
 #!/bin/bash -x
 
-if [ -n "${VERBOSE}" ]; then
-    VERBOSE="--v"
-fi
-
 if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
@@ -81,6 +77,10 @@ fi
 
 if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
     UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
+fi
+
+if [ -z "${SKIP_PX_OPERATOR_UPGRADE}" ]; then
+    SKIP_PX_OPERATOR_UPGRADE=false
 fi
 
 if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
@@ -459,7 +459,6 @@ spec:
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--slowSpecThreshold", "600",
-            "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
@@ -502,6 +501,7 @@ spec:
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
+            "--migration-hops=$MIGRATION_HOPS",
             "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
             "--metering_interval_mins=$METERING_INTERVAL_MINS",
             "--testrail-milestone=$TESTRAIL_MILESTONE",
@@ -557,6 +557,8 @@ spec:
       value: "${AZURE_ACCOUNT_KEY}"
     - name: AZURE_SUBSCRIPTION_ID
       value: "${AZURE_SUBSCRIPTION_ID}"
+    - name: AZURE_CLUSTER_NAME
+      value: "${AZURE_CLUSTER_NAME}"
     - name: AWS_ACCESS_KEY_ID
       value: "${AWS_ACCESS_KEY_ID}"
     - name: AWS_SECRET_ACCESS_KEY
@@ -617,8 +619,6 @@ spec:
       value: "${DEPLOY_ALL_IMAGES}"
     - name: DEPLOY_ALL_DATASERVICE
       value: "${DEPLOY_ALL_DATASERVICE}"
-    - name: CONTROL_PLANE_URL
-      value: "${CONTROL_PLANE_URL}"
     - name: GCP_PROJECT_ID
       value: "${GCP_PROJECT_ID}"
     - name: PDS_USERNAME
@@ -667,6 +667,8 @@ spec:
       value: "${NFS_MOUNT_OPTION}"
     - name: NFS_PATH
       value: "${NFS_PATH}"
+    - name: SKIP_PX_OPERATOR_UPGRADE
+      value: "${SKIP_PX_OPERATOR_UPGRADE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
