@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"github.com/libopenstorage/cloudops"
 	"math"
 	"net"
 	"os"
@@ -144,6 +145,8 @@ const (
 	AnnotationDisableCSRAutoApprove = pxAnnotationPrefix + "/disable-csr-approve"
 	// AnnotationDisableCSRAutoApprove annotation to set priority for SCCs.
 	AnnotationSCCPriority = pxAnnotationPrefix + "/scc-priority"
+	// AnnotationFACDTopology is added when FACD topology was successfully installed on a *new* cluster (it's blocked for existing clusters)
+	AnnotationFACDTopology = pxAnnotationPrefix + "/facd-topology"
 
 	// EnvKeyPXImage key for the environment variable that specifies Portworx image
 	EnvKeyPXImage = "PX_IMAGE"
@@ -341,6 +344,25 @@ func IsIKS(cluster *corev1.StorageCluster) bool {
 func IsOpenshift(cluster *corev1.StorageCluster) bool {
 	enabled, err := strconv.ParseBool(cluster.Annotations[AnnotationIsOpenshift])
 	return err == nil && enabled
+}
+
+// IsVsphere returns true if VSPHERE_VCENTER is present in the spec
+func IsVsphere(cluster *corev1.StorageCluster) bool {
+	for _, env := range cluster.Spec.Env {
+		if env.Name == "VSPHERE_VCENTER" && len(env.Value) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// GetCloudProvider returns the cloud provider string
+func GetCloudProvider(cluster *corev1.StorageCluster) string {
+	if IsVsphere(cluster) {
+		return cloudops.Vsphere
+	}
+	// TODO: implement conditions for other providers
+	return ""
 }
 
 // IsHostPidEnabled returns if hostPid should be set to true for portworx pod.

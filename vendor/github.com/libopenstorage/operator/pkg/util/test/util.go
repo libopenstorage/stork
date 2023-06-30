@@ -842,10 +842,12 @@ func nodeSpecsToMaps(nodes []corev1.NodeSpec) map[string]*corev1.CloudStorageNod
 }
 
 func validateDeployedSpec(expected, live *corev1.StorageCluster) error {
+	/* Will find a better way to do this in PTX-18637
 	// Validate cloudStorage
 	if !reflect.DeepEqual(expected.Spec.CloudStorage, live.Spec.CloudStorage) {
 		return fmt.Errorf("deployed CloudStorage spec doesn't match expected")
 	}
+	*/
 	// Validate kvdb
 	if !reflect.DeepEqual(expected.Spec.Kvdb, live.Spec.Kvdb) {
 		return fmt.Errorf("deployed Kvdb spec doesn't match expected")
@@ -1091,15 +1093,15 @@ func validateStorageClusterPods(
 // and makes sure its there, if dmthin misc-args annotation is found
 func validateDmthinOnPxNodes(cluster *corev1.StorageCluster) error {
 	listOptions := map[string]string{"name": "portworx"}
-	cmd := "cat /etc/pwx/config.json | grep dmthin"
+	cmd := "cat /etc/pwx/config.json | grep px-storev2"
 
-	if !strings.Contains(cluster.Annotations["portworx.io/misc-args"], "-T dmthin") {
-		logrus.Debugf("Dmthin is not enabled on PX cluster [%s]", cluster.Name)
+	if !strings.Contains(cluster.Annotations["portworx.io/misc-args"], "-T px-storev2") {
+		logrus.Debugf("PX-StoreV2 is not enabled on PX cluster [%s]", cluster.Name)
 		return nil
 	}
-	logrus.Infof("Dmthin is enabled on PX cluster [%s]", cluster.Name)
+	logrus.Infof("PX-StoreV2 is enabled on PX cluster [%s]", cluster.Name)
 
-	logrus.Infof("Will check that storage is type dmthin on all PX pods")
+	logrus.Infof("Will check that storage is type PX-StoreV2 on all PX pods")
 	t := func() (interface{}, bool, error) {
 		// Get Portworx pods
 		pxPods, err := coreops.Instance().GetPods(cluster.Namespace, listOptions)
@@ -1115,7 +1117,7 @@ func validateDmthinOnPxNodes(cluster *corev1.StorageCluster) error {
 			if dmthinEnabled {
 				continue
 			}
-			return nil, true, fmt.Errorf("dmthin is not enabled on PX pod [%s]", pxPod.Name)
+			return nil, true, fmt.Errorf("PX-StoreV2 is not enabled on PX pod [%s]", pxPod.Name)
 		}
 		return nil, false, nil
 	}
@@ -1125,7 +1127,7 @@ func validateDmthinOnPxNodes(cluster *corev1.StorageCluster) error {
 		return err
 	}
 
-	logrus.Info("Validated dmthin is enabled on all PX pods")
+	logrus.Info("Validated PX-StoreV2 is enabled on all PX pods")
 	return nil
 }
 
@@ -1137,10 +1139,10 @@ func validateDmthinViaPodCmd(pxPod *v1.Pod, cmd string, namespace string) (bool,
 	}
 
 	if len(output) > 0 {
-		logrus.Infof("Validated dmthin is enabled on pod [%s], output from the command [%s] is [%s]", pxPod.Name, cmd, strings.TrimSpace(strings.TrimSuffix(output, "\n")))
+		logrus.Infof("Validated PX-StoreV2 is enabled on pod [%s], output from the command [%s] is [%s]", pxPod.Name, cmd, strings.TrimSpace(strings.TrimSuffix(output, "\n")))
 		return true, nil
 	}
-	return false, fmt.Errorf("failed to find [dmthin] in the putput from [%s]", cmd)
+	return false, fmt.Errorf("failed to find [PX-StoreV2] in the putput from [%s]", cmd)
 }
 
 // Set default Node Affinity rules as Portworx Operator would when deploying StorageCluster
