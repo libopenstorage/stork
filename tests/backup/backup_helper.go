@@ -3404,3 +3404,14 @@ func GetCustomBucketName(provider string, testName string) string {
 	}
 	return customBucket
 }
+
+// ValidateBackupLocation validates the given backup location
+func ValidateBackupLocation(ctx context.Context, orgID string, backupLocationName string, uid string) error {
+	backupLocationValidateRequest := &api.BackupLocationValidateRequest{
+		OrgId: orgID,
+		Name:  backupLocationName,
+		Uid:   uid,
+	}
+	_, err := Inst().Backup.ValidateBackupLocation(ctx, backupLocationValidateRequest)
+	return err
+}
