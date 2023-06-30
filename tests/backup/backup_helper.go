@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/drivers"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -3392,4 +3393,14 @@ func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]strin
 		labels[key] = value
 	}
 	return labels
+}
+
+// GetCustomBucketName creates a custom bucket and returns name
+func GetCustomBucketName(provider string, testName string) string {
+	var customBucket string
+	customBucket = fmt.Sprintf("%s-%s-%v", provider, testName, time.Now().Unix())
+	if provider == drivers.ProviderAws {
+		CreateBucket(provider, customBucket)
+	}
+	return customBucket
 }
