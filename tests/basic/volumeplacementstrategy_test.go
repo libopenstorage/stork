@@ -72,6 +72,14 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 			testValidateVPS()
 		})
 
+		// test mongo volume affinity with dynamic labels
+		Context("{VPSMongoVolumeAntiAffinityDynamicLabels}", func() {
+			BeforeEach(func() {
+				vpsTestCase = &mongoVolumeAntiAffinityDynamicLabels{}
+			})
+			testValidateVPS()
+		})
+
 		// test mongo volume affinity
 		Context("{VPSMongVolumeoAffinity}", func() {
 			BeforeEach(func() {
@@ -169,6 +177,54 @@ func (m *mongoVolumeAntiAffinity) ValidateVPSDeployment(contexts []*scheduler.Co
 	}
 
 	volumeLabelKey := "px/statefulset-pod"
+	expectedNodeLength := 2
+
+	return vpsutil.ValidateVolumeAntiAffinityByNode(apiVols, volumeLabelKey, expectedNodeLength)
+}
+
+type mongoVolumeAntiAffinityDynamicLabels struct {
+	VolumePlacementStrategySpec
+}
+
+func (m *mongoVolumeAntiAffinityDynamicLabels) TestName() string {
+	return "mongovolumeantiaffinitydl"
+}
+
+func (m *mongoVolumeAntiAffinityDynamicLabels) DeployVPS() error {
+
+	matchExpression := []*v1beta1.LabelSelectorRequirement{
+		{
+			Key:      "dynamiclabel",
+			Operator: v1beta1.LabelSelectorOpIn,
+			Values:   []string{"${pvc.labels.dynamiclabel}"},
+		},
+	}
+
+	vpsSpec := vpsutil.VolumeAntiAffinityByMatchExpression("mongo-vps", matchExpression)
+	_, err := talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+	m.spec = &vpsSpec
+	return err
+}
+
+func (m *mongoVolumeAntiAffinityDynamicLabels) DestroyVPSDeployment() error {
+	return talisman.Instance().DeleteVolumePlacementStrategy(m.spec.Name)
+}
+
+// mongoVPSAntiAffinityDynamicLabels is expecting to have deploy 2 replica of vol for each pod that has label [mongo-0, mongo-1]
+// since this is antiaffinity, we are expecting that vol with the same labels are not deployed on the same pool/node.
+// To validate that, we get the label from each deployed vol and extract the pool it's deployed on. if deployed correctly,
+// there should be two pools per label.
+func (m *mongoVolumeAntiAffinityDynamicLabels) ValidateVPSDeployment(contexts []*scheduler.Context) error {
+	vols, err := Inst().S.GetVolumes(contexts[0])
+	if err != nil {
+		return err
+	}
+	apiVols, err := getApiVols(vols)
+	if err != nil {
+		return err
+	}
+
+	volumeLabelKey := "dynamiclabel"
 	expectedNodeLength := 2
 
 	return vpsutil.ValidateVolumeAntiAffinityByNode(apiVols, volumeLabelKey, expectedNodeLength)

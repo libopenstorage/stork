@@ -56,6 +56,7 @@ spec:
       name: mongodb-data
       labels:
         app: "mongo-sts"
+        dynamiclabel: "dynamiclabel1"
       annotations:
         volume.beta.kubernetes.io/storage-class: "px-sc-repl-1"
         placement_strategy: "mongo-vps"
@@ -68,6 +69,7 @@ spec:
       name: mongodb-journal
       labels:
         app: "mongo-sts"
+        dynamiclabel: "dynamiclabel2"
       annotations:
         volume.beta.kubernetes.io/storage-class: "px-sc-repl-1"
         placement_strategy: "mongo-vps"
