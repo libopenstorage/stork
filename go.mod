@@ -27,7 +27,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20230520011658-1e7a1349f832
+	github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52
 	github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.21.1
@@ -105,7 +105,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
-	github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible // indirect
 	github.com/dimchansky/utfbom v1.1.0 // indirect
 	github.com/docker/cli v20.10.17+incompatible // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
@@ -210,7 +209,7 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 // indirect
+	github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/client v0.46.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
@@ -284,7 +283,8 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 
 	// PX dependencies
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
+	//github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81

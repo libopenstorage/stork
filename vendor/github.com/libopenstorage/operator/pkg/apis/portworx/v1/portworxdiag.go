@@ -67,6 +67,7 @@ type NodeStatus struct {
 	Message string `json:"message,omitempty"`
 }
 
+// +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=pxdiag

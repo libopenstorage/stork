@@ -7045,16 +7045,17 @@ func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume,
 	return volumes, nil
 }
 
-// VerifyVolumeStatusOnline returns true is volume status is up
-func VerifyVolumeStatusOnline(vol *volume.Volume) error {
+// IsVolumeStatusUP returns true is volume status is up
+func IsVolumeStatusUP(vol *volume.Volume) (bool, error) {
 	appVol, err := Inst().V.InspectVolume(vol.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if fmt.Sprintf("%v", appVol.Status.String()) == "VOLUME_STATUS_UP" {
-		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status.String())
+	if fmt.Sprintf("%v", appVol.Status.String()) != "VOLUME_STATUS_UP" {
+		return false, nil
 	}
-	return nil
+	log.InfoD("volume [%v] status is [%v]", vol.Name, appVol.Status.String())
+	return true, nil
 }
 
 type KvdbNode struct {
