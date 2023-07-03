@@ -758,7 +758,8 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 
 					if err == nil {
 						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap)
-						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap)
+						RestartPX := false
+						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap, RestartPX)
 					}
 				}
 			}
@@ -7110,7 +7111,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName             = "async-policy"
 		suspendSched          = false
 		autoSuspend           = false
-		schdPol             *storkapi.SchedulePolicy
+		schdPol               *storkapi.SchedulePolicy
 		err                   error
 		makeSuspend           = true
 	)
@@ -7245,7 +7246,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName                = "async-policy"
 		suspendSched             = false
 		autoSuspend              = false
-		schdPol                 *storkapi.SchedulePolicy
+		schdPol                  *storkapi.SchedulePolicy
 		err                      error
 		makeSuspend              = true
 	)
