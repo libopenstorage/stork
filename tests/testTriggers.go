@@ -5818,6 +5818,9 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 // TriggerAsyncDR triggers Async DR
 func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDR)
+	defer ginkgo.GinkgoRecover()
 	log.Infof("Async DR triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -5880,7 +5883,6 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	})
 
-	time.Sleep(5 * time.Minute)
 	log.Info("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
@@ -5899,6 +5901,11 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -5990,7 +5997,6 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	})
 
-	time.Sleep(5 * time.Minute)
 	log.InfoD("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
@@ -6009,6 +6015,11 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-metrodr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -6110,6 +6121,11 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		} else {
 			log.InfoD("Number of resources migrated: %d", resourcesMigrated)
 		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-asyncdr-volonly", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -7110,7 +7126,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName             = "async-policy"
 		suspendSched          = false
 		autoSuspend           = false
-		schdPol             *storkapi.SchedulePolicy
+		schdPol               *storkapi.SchedulePolicy
 		err                   error
 		makeSuspend           = true
 	)
@@ -7245,7 +7261,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName                = "async-policy"
 		suspendSched             = false
 		autoSuspend              = false
-		schdPol                 *storkapi.SchedulePolicy
+		schdPol                  *storkapi.SchedulePolicy
 		err                      error
 		makeSuspend              = true
 	)
@@ -7407,6 +7423,14 @@ func rangeStructer(args ...interface{}) []interface{} {
 	}
 
 	return out
+}
+
+func getPXVersion(nd node.Node) string {
+	pxVersion, err := Inst().V.GetDriverVersionOnNode(nd)
+	if err != nil {
+		return "Couldn't get PX version"
+	}
+	return pxVersion
 }
 
 // createPureStorageClass create storage class
