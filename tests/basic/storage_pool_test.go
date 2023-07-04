@@ -9761,3 +9761,106 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
+	/*
+		1. create one pool
+		2. run ios
+		3. expand pool to higher size
+		4. while it is in progress shutdown and restart the node
+		5. let rebalance continue.
+		6. check if pending operation continues
+	*/
+
+	var testrailID = 0
+	// Testrail Description : while pool expand Rebalance is in progress ShutdownNode and check operation resumes
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolExpandRebalanceShutdownNode",
+			"Get Px State after pool delete",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Get Px State after pool delete"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebalanceshutdown-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		if IsLocalCluster(*nodeDetail) != true {
+			log.FailOnError(fmt.Errorf("This test will only support onprem vms"), "is this onprem?")
+		}
+		// Get Total Pools present on the Node present
+		poolDetails, err := GetPoolsDetailsOnNode(*nodeDetail)
+		log.FailOnError(err, "Failed to get Pool Details from Node [%v]", nodeDetail.Name)
+		log.InfoD("List of Pools present in the node [%v]", poolDetails)
+		poolToBeResized, err := GetStoragePoolByUUID(poolDetails[0].Uuid)
+		drvSize, err := getPoolDiskSize(poolToBeResized)
+		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+		err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
+		expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
+		fmt.Printf("expandedpool %v", expandedPool)
+		log.FailOnError(err, "error getting pool by using id %s", poolToBeResized.Uuid)
+		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
+		if expandedPool.LastOperation != nil {
+			log.Infof("Pool Resize Status: %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
+				(strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance is running") || strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress")) {
+				errstring := true
+				dash.VerifyFatal(errstring == true, true, "poolresize failed")
+			}
+			var connect node.ConnectionOpts
+			connect.Timeout = 60
+			connect.TimeBeforeRetry = 10
+			err := Inst().N.ShutdownNode(*nodeDetail, node.ShutdownNodeOpts{
+				Force:          true,
+				ConnectionOpts: connect,
+			})
+			time.Sleep(300 * time.Second)
+			log.FailOnError(err, "failed to shutdown the node with err %s", err)
+			dash.VerifyFatal(expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize has failed. Error: %s", expandedPool.LastOperation))
+		}
+		t := func() (interface{}, bool, error) {
+			err = Inst().N.PowerOnVM(*nodeDetail)
+			if err != nil {
+				return nil, false, err
+			}
+			return nil, false, nil
+		}
+		time.Sleep(200 * time.Second)
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+		log.FailOnError(err, "Failed to powered on the vm")
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil,
+			fmt.Sprintf("Verify pool %s on expansion using add_disk option", poolUUID))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
