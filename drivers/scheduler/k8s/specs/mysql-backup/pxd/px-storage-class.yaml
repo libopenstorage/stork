@@ -24,7 +24,6 @@ parameters:
   priority_io: "high"
   snap_schedule: "periodic=60,5"
   labels: "type=aggregated"
-  group: "mysql-data"
 allowVolumeExpansion: true
 ---
 kind: StorageClass
@@ -40,5 +39,4 @@ parameters:
   priority_io: "high"
   snap_schedule: "daily=12:00,7"
   labels: "type=replicated"
-  group: "mysql-data"
 allowVolumeExpansion: true
