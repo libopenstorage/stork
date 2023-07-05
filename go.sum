@@ -957,7 +957,6 @@ github.com/denverdino/aliyungo v0.0.0-20190125010748-a747050bb1ba/go.mod h1:dV8l
 github.com/devigned/tab v0.1.1/go.mod h1:XG9mPq0dFghrYvoBF3xdRrJzSTX1b7IQrvaL9mzjeJY=
 github.com/dgrijalva/jwt-go v0.0.0-20170104182250-a601269ab70c/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
-github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible h1:KXHmiNq5AM1PBK0MgUU0T1gHdd7fpR7NFnkcp0Tnw2E=
 github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dimchansky/utfbom v1.1.0 h1:FcM3g+nofKgUteL8dm/UpdRXNC9KmADgTpLKsu0TRo4=
@@ -1820,13 +1819,13 @@ github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10/go.mod h1:nf
 github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e h1:4l9N2Sw8VGGUqe50yC2BnTFMRJuHJGpIGZcCUZ2S6gg=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
-github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854 h1:QON4dcM6ZHI/VDHcNYreVgRLLfYE7w96VyWyCK4uwHU=
-github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854/go.mod h1:YzzAF0twdm+CWNCy3CEhg2XfCIGnk/uThxct8Zn/1DU=
+github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f h1:dSAlVqrRaNO2rpN4poXsQhVPN8454yakKTY+k9hzSRM=
+github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f/go.mod h1:IpEMdOcPFyGpnvYeL1qLNeIHGnm6ofoDourL2kOdIoE=
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
 github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594/go.mod h1:0S4k1ouTScuVS3rxPukfEFvc5bMasmI1wpAAM0NejWQ=
-github.com/libopenstorage/operator v0.0.0-20230520011658-1e7a1349f832 h1:9O4xPlm1wyHPaqBgYWqDRfV9HYq7Q1XbKrhxGfzx/OQ=
-github.com/libopenstorage/operator v0.0.0-20230520011658-1e7a1349f832/go.mod h1:xMo6NNkaMrYMzMqr9qRZgpbQKMa0BZfWVp8ay4ZV9sA=
+github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52 h1:vnCTaxkg/b6RDcVPJtmrEWAqk8sKJPsnS1jxzkGfwYU=
+github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52/go.mod h1:Lc0sagIlgkrXHn+vwR9JfZkAkSsdedtbrRx42qF0vMc=
 github.com/libopenstorage/secrets v0.0.0-20190403224602-c282e8dc17bf/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
@@ -2211,8 +2210,9 @@ github.com/portworx/kdmp v0.4.1-0.20230316085313-95fc97e8493b/go.mod h1:VtbY8ASr
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467 h1:jkqzdbOnejgSN5HG/FLt4enNrozWT/K+nlmaRm3P1II=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
+github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b h1:nP+m9tYQv2cWbN9wAwjlhJU9FZRs7GaYszhLJBLAg/I=
+github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9 h1:+H7QxM4TKGgphdfh03wrK4Yqkk3VcEYGVSFc+4/psT4=
 github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=

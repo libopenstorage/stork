@@ -2502,6 +2502,7 @@ func getStorkImageVersion() (string, error) {
 // upgradeStorkVersion upgrades the stork to the provided version.
 func upgradeStorkVersion(storkImageToUpgrade string) error {
 	var finalImageToUpgrade string
+	var postUpgradeStorkImageVersionStr string
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return err
@@ -2555,8 +2556,22 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 			return err
 		}
 	}
-	// Sleep for upgrade request to go through before validating.
-	time.Sleep(10 * time.Second)
+	// Wait for upgrade request to go through before validating
+	t := func() (interface{}, bool, error) {
+		postUpgradeStorkImageVersionStr, err = getStorkImageVersion()
+		if err != nil {
+			return "", true, err
+		}
+		if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageToUpgrade) {
+			return "", true, fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToUpgrade, postUpgradeStorkImageVersionStr)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
 	// validate stork pods after upgrade
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
@@ -2567,16 +2582,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		return err
 	}
 
-	postUpgradeStorkImageVersionStr, err := getStorkImageVersion()
-	if err != nil {
-		return err
-	}
-
-	if !strings.EqualFold(postUpgradeStorkImageVersionStr, storkImageToUpgrade) {
-		return fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToUpgrade, postUpgradeStorkImageVersionStr)
-	}
-
-	log.Infof("Succesfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
+	log.Infof("Successfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
 }
 

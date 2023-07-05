@@ -272,9 +272,6 @@ github.com/davecgh/go-spew/spew
 ## explicit; go 1.14
 github.com/deepmap/oapi-codegen/pkg/runtime
 github.com/deepmap/oapi-codegen/pkg/types
-# github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible
-## explicit
-github.com/dgrijalva/jwt-go
 # github.com/dimchansky/utfbom v1.1.0
 ## explicit
 github.com/dimchansky/utfbom
@@ -675,7 +672,7 @@ github.com/libopenstorage/cloudops/unsupported
 # github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e
 ## explicit
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
+# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f
 ## explicit; go 1.17
 github.com/libopenstorage/openstorage/api
 github.com/libopenstorage/openstorage/api/client
@@ -706,7 +703,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20230520011658-1e7a1349f832
+# github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/drivers/storage/portworx/util
@@ -717,6 +714,7 @@ github.com/libopenstorage/operator/pkg/apis/portworx/v1
 github.com/libopenstorage/operator/pkg/client/clientset/versioned
 github.com/libopenstorage/operator/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/core/v1
+github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/portworx/v1
 github.com/libopenstorage/operator/pkg/constants
 github.com/libopenstorage/operator/pkg/errors
 github.com/libopenstorage/operator/pkg/mock
@@ -921,7 +919,7 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467
+# github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b
 ## explicit
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
@@ -2080,7 +2078,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
+# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f
 # github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
