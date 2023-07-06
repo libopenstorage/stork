@@ -9813,11 +9813,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		drvSize, err := getPoolDiskSize(poolToBeResized)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
-
 		err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
 		expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
-		fmt.Printf("expandedpool %v", expandedPool)
 		log.FailOnError(err, "error getting pool by using id %s", poolToBeResized.Uuid)
 		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
 		if expandedPool.LastOperation != nil {
