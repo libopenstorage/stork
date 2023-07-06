@@ -123,6 +123,8 @@ type InitOptions struct {
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
 	AppKeys []string
+	// CsiAppKeys identified a list of applications keys that users wants to schedule with CSI provisioner
+	CsiAppKeys []string
 	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used

@@ -167,6 +167,7 @@ const (
 	appListCliFlag                       = "app-list"
 	secureAppsCliFlag                    = "secure-apps"
 	repl1AppsCliFlag                     = "repl1-apps"
+	csiAppCliFlag                        = "csi-app-list"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
 	scaleFactorCliFlag                   = "scale-factor"
@@ -1627,6 +1628,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
+			CsiAppKeys:         Inst().CsiAppList,
 			StorageProvisioner: Inst().Provisioner,
 			Nodes:              storagelessNodes,
 			Labels:             storageLessNodeLabels,
@@ -1637,6 +1639,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 	} else {
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
+			CsiAppKeys:         Inst().CsiAppList,
 			StorageProvisioner: Inst().Provisioner,
 			Namespace:          namespace,
 		}
@@ -4812,6 +4815,7 @@ type Torpedo struct {
 	SpecDir                             string
 	AppList                             []string
 	SecureAppList                       []string
+	CsiAppList                          []string
 	LogLoc                              string
 	LogLevel                            string
 	Logger                              *logrus.Logger
@@ -4859,7 +4863,7 @@ type Torpedo struct {
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, csiAppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -4932,6 +4936,7 @@ func ParseFlags() {
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
 	flag.StringVar(&repl1AppsCSV, repl1AppsCliFlag, "", "Comma-separated list of apps to deploy with repl 1 volumes. The names should match directories in the spec dir.")
+	flag.StringVar(&csiAppsCSV, csiAppCliFlag, "", "Comma-separated list of apps to deploy with CSI provisioner")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
@@ -4987,6 +4992,15 @@ func ParseFlags() {
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
 		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+	}
+
+	csiAppsList := make([]string, 0)
+	if len(csiAppsCSV) > 0 {
+		apl, err := splitCsv(csiAppsCSV)
+		log.FailOnError(err, fmt.Sprintf("failed to parse csiAppsCSV app list: %v", repl1AppsCSV))
+		csiAppsList = append(csiAppsList, apl...)
+		log.Infof("provisioner CSI apps : %+v", csiAppsList)
+		appList = append(appList, csiAppsList...)
 	}
 
 	secureAppList := make([]string, 0)
@@ -5168,6 +5182,7 @@ func ParseFlags() {
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				SecureAppList:                       secureAppList,
+				CsiAppList:                          csiAppsList,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
