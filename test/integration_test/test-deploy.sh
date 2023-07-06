@@ -25,6 +25,7 @@ kube_scheduler_version="v1.21.0"
 cloud_deletion_validation=true
 internal_aws_lb=false
 px_namespace="kube-system"
+bidirectional_cluster_pair=false
 for i in "$@"
 do
 case $i in
@@ -175,6 +176,12 @@ case $i in
     --px_namespace)
         echo "Flag to indicate namespace PX has been deployed in: $2"
         px_namespace=$2
+        shift
+        shift
+        ;;		
+    --bidirectional-cluster-pair)
+        echo "Flag to indicate if bidirectional clusterpairing is intended in tests: $2"
+        bidirectional_cluster_pair=$2
         shift
         shift
         ;;		
@@ -359,6 +366,10 @@ if [ "$cloud_deletion_validation" = "true" ] ; then
        sed -i 's/'cloud_deletion_validation'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else
        sed -i 's/'cloud_deletion_validation'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$bidirectional_cluster_pair" = "true" ] ; then
+	sed -i 's/- -bidirectional-cluster-pair=false/- -bidirectional-cluster-pair='"$bidirectional_cluster_pair"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 kubectl delete -f /testspecs/stork-test-pod.yaml

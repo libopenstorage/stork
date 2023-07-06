@@ -59,6 +59,7 @@ spec:
     - -volume-driver=pxd
     - -generic-csi-config=csi_config_map_name
     - -stork-version-check=false
+    - -bidirectional-cluster-pair=false
     imagePullPolicy: Always
     image: openstorage/stork_test:latest
     securityContext:
