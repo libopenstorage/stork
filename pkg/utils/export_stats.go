@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,7 +22,7 @@ var StorkVersion string
 var PortworxVersion string
 
 type StatsExportType struct {
-	id        OidType            `json: "_id",omitempty`
+	//id        OidType            `json: "_id",omitempty`
 	Name      string             `json: "name",omitempty`
 	Product   string             `json: "product",omitempty`
 	Version   string             `json: "version",omitempty`
@@ -44,9 +44,9 @@ type MigrationStatsType struct {
 	PortworxVersion                 string      `json: "portworxVersion",omitempty`
 }
 
-type OidType struct {
-	oid string `json: "$oid"`
-}
+//type OidType struct {
+//	oid string `json: "$oid"`
+//}
 
 type AllStats []StatsExportType
 
@@ -70,7 +70,7 @@ func GetMigrationStatsFromAetos(url string) ([]StatsExportType, error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("error querying Aetos metadata: Code %d returned for url %s", resp.StatusCode, req.URL)
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error querying Aetos metadata: %v", err)
 	}
@@ -105,7 +105,7 @@ func WriteMigrationStatsToAetos(data StatsExportType) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			//Failed to read response.
 			return fmt.Errorf("response from Aetos failed: %v", err)
@@ -114,7 +114,7 @@ func WriteMigrationStatsToAetos(data StatsExportType) error {
 		jsonStr := string(body)
 		logrus.Infof("Stats successfully pushed to DB. Response: ", jsonStr)
 	} else {
-		return fmt.Errorf("Get failed with Reponse status: %s", resp.Status)
+		return fmt.Errorf("get failed with Reponse status: %s", resp.Status)
 	}
 
 	return nil
