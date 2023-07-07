@@ -157,6 +157,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					log.Warnf("error getting driver version, Err: %v", err)
 				}
 				timeBeforeUpgrade = time.Now()
+				isDmthinBeforeUpgrade, errDmthinCheck := IsDMthin()
+				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin before upgrade? ")
 				err = Inst().V.UpgradeDriver(upgradeHop)
 				timeAfterUpgrade = time.Now()
 				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
@@ -176,6 +178,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if err != nil {
 					log.Warnf("error getting driver version, Err: %v", err)
 				}
+				isDmthinAfterUpgrade, errDmthinCheck := IsDMthin()
+				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin after upgrade? ")
+				dash.VerifyFatal(isDmthinBeforeUpgrade, isDmthinAfterUpgrade, "setup type remained same pre and post upgrade")
 				majorVersion := strings.Split(currPXVersion, "-")[0]
 				statsData := make(map[string]string)
 				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
