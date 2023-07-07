@@ -567,7 +567,9 @@ var _ = Describe("{ScaleDownScaleupPXCluster}", func() {
 					nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
 					log.FailOnError(err, "Error while getting Data Serice Nodes")
 					deploymentNode := nodes[0]
-					nodeList = append(nodeList, deploymentNode)
+					if len(nodeList) < 2 {
+						nodeList = append(nodeList, deploymentNode)
+					}
 				})
 			}
 		})
