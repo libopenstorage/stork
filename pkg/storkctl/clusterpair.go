@@ -293,6 +293,17 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
+			if sFile == dFile {
+				util.CheckErr(fmt.Errorf("source kubeconfig file and destination kubeconfig file should be different"))
+			}
+
+			sameFiles, err := utils.CompareFiles(sFile, dFile)
+			if err != nil {
+				util.CheckErr(err)
+			}
+			if sameFiles {
+				util.CheckErr(fmt.Errorf("source kubeconfig and destination kubeconfig file should be different"))
+			}
 			// Handling the syncDR cases here
 			if syncDR {
 				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, true)
@@ -419,7 +430,6 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			credentialData["encryptionKey"] = []byte(encryptionKey)
 
 			// Bail out if portworx-api service type is not loadbalancer type and the endpoints are not provided.
-			var err error
 			if len(sEP) == 0 {
 				srcPXEndpoint, err := getPXEndPointDetails(sFile)
 				if err != nil {
@@ -805,10 +815,7 @@ func getPXEndPointDetails(config string) (string, error) {
 	return ep, nil
 }
 
-func getPXToken(pxEndpoint, pxToken string) (string, error) {
-	var token string
-
-	net.SplitHostPort(pxEndpoint)
+func getPXToken(pxEndpoint, pxToken string) (token string, err error) {
 	// TODO: support https as well
 	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
 	if err != nil {
@@ -824,8 +831,7 @@ func getPXToken(pxEndpoint, pxToken string) (string, error) {
 	return token, nil
 }
 
-func getPXAuthToken(configFile string) (string, string, error) {
-	var authToken, authSecretNamespace string
+func getPXAuthToken(configFile string) (authToken string, authSecretNamespace string, err error) {
 	// Create cluster-pair on source cluster
 	conf, err := getConfig(configFile).ClientConfig()
 	if err != nil {
