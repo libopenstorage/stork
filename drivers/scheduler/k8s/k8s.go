@@ -3732,7 +3732,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 	return nil
 }
 
-// GetSnapShotData retruns the snapshotdata
+// GetSnapShotData returns the snapshotdata
 func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 
 	snap, err := k8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
