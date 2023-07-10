@@ -32,6 +32,7 @@ var appList = []MigrateApps{
 func TestMigrationExportStats(t *testing.T) {
 	t.Run("migrationStatsExportTest", migrationStatsExportTest)
 	t.Run("migrationStatsDisplayTest", migrationStatsDisplayTest)
+	t.Run("migrationStatsPostTest", migrationStatsPostTest)
 }
 
 func migrationStatsExportTest(t *testing.T) {
@@ -103,4 +104,14 @@ func migrationStatsDisplayTest(t *testing.T) {
 	}
 	err = file.Close()
 	require.NoError(t, err, "error during closure of html stats file: %s", htmlStatsFile)
+}
+
+func migrationStatsPostTest(t *testing.T) {
+	migName, migNamespace := "mysql-migration", "mysql-1-pvc-mysql-migration"
+	mig, err := storkops.Instance().GetMigration(migName, migNamespace)
+	require.NoError(t, err, "Failed to get migration %s in namespace: %s", migName, migNamespace)
+
+	stats := utils.GetExportableStatsFromMigrationObject(mig)
+	err = utils.WriteMigrationStatsToAetos(stats)
+	require.NoError(t, err, "failed to write stats")
 }

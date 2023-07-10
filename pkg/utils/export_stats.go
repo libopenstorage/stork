@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,31 +23,31 @@ var StorkVersion string
 var PortworxVersion string
 
 type StatsExportType struct {
-	//id        OidType            `json: "_id",omitempty`
-	Name      string             `json: "name",omitempty`
-	Product   string             `json: "product",omitempty`
-	Version   string             `json: "version",omitempty`
-	StatsType string             `json: "statsType",omitempty`
-	Data      MigrationStatsType `json: "data",omitempty`
+	id        OidType            `json: "_id",omitempty`
+	Name      string             `json:"name",omitempty`
+	Product   string             `json:"product",omitempty`
+	Version   string             `json:"version",omitempty`
+	StatsType string             `json:"statsType",omitempty`
+	Data      MigrationStatsType `json:"data",omitempty`
 }
 
 type MigrationStatsType struct {
-	CreatedOn                       string      `json: "created",omitempty`
-	TotalNumberOfVolumes            json.Number `json: "totalNumberOfVolumes",omitempty`
-	NumOfMigratedVolumes            json.Number `json: "numOfMigratedVolumes",omitempty`
-	TotalNumberOfResources          json.Number `json: "totalNumberOfResources",omitempty`
-	NumOfMigratedResources          json.Number `json: "numOfMigratedResources",omitempty`
-	TotalBytesMigrated              json.Number `json: "totalBytesMigrated",omitempty`
-	ElapsedTimeForVolumeMigration   string      `json: "elapsedTimeForVolumeMigration",omitempty`
-	ElapsedTimeForResourceMigration string      `json: "elapsedTimeForResourceMigration",omitempty`
-	Application                     string      `json: "application",omitempty`
-	StorkVersion                    string      `json: "storkVersion",omitempty`
-	PortworxVersion                 string      `json: "portworxVersion",omitempty`
+	CreatedOn                       string      `json:"created",omitempty`
+	TotalNumberOfVolumes            json.Number `json:"totalNumberOfVolumes",omitempty`
+	NumOfMigratedVolumes            json.Number `json:"numOfMigratedVolumes",omitempty`
+	TotalNumberOfResources          json.Number `json:"totalNumberOfResources",omitempty`
+	NumOfMigratedResources          json.Number `json:"numOfMigratedResources",omitempty`
+	TotalBytesMigrated              json.Number `json:"totalBytesMigrated",omitempty`
+	ElapsedTimeForVolumeMigration   string      `json:"elapsedTimeForVolumeMigration",omitempty`
+	ElapsedTimeForResourceMigration string      `json:"elapsedTimeForResourceMigration",omitempty`
+	Application                     string      `json:"application",omitempty`
+	StorkVersion                    string      `json:"storkVersion",omitempty`
+	PortworxVersion                 string      `json:"portworxVersion",omitempty`
 }
 
-//type OidType struct {
-//	oid string `json: "$oid"`
-//}
+type OidType struct {
+	oid string `json: "$oid"`
+}
 
 type AllStats []StatsExportType
 
@@ -99,22 +100,30 @@ func WriteMigrationStatsToAetos(data StatsExportType) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal: %v", err)
 	}
-	resp, err := http.Post("http://aetos.pwx.purestorage.com/dashboard/stats", "application/json", bytes.NewBuffer(body))
+
+	logrus.Infof("RK=> JSON marshal:\n %s", string(body))
+
+	transCfg := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: transCfg}
+
+	resp, err := client.Post("https://aetos.pwx.purestorage.com/dashboard/stats", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("post request to Aetos failed: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			//Failed to read response.
-			return fmt.Errorf("response from Aetos failed: %v", err)
-		}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		//Failed to read response.
+		return fmt.Errorf("response from Aetos failed: %v", err)
+	}
+	jsonStr := string(respBody)
 
-		jsonStr := string(body)
+	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
 		logrus.Infof("Stats successfully pushed to DB. Response: ", jsonStr)
 	} else {
-		return fmt.Errorf("get failed with Reponse status: %s", resp.Status)
+		return fmt.Errorf("post failed with Reponse status: %s, %s", resp.Status, jsonStr)
 	}
 
 	return nil
@@ -164,9 +173,21 @@ func NewStat() StatsExportType {
 	return newStat
 }
 
-func GetExportableStatsFromMigrationObject(mig *storkv1.Migration) StatsExportType {
+func GetExportableStatsFromMigrationObject(mig *storkv1.Migration, statArgs ...string) StatsExportType {
 	exportStats := NewStat()
 
+	for i := 0; i < len(statArgs); i++ {
+		switch i {
+		case 0:
+			exportStats.Name = statArgs[0]
+		case 1:
+			exportStats.Product = statArgs[1]
+		case 2:
+			exportStats.StatsType = statArgs[2]
+		case 3:
+			exportStats.Version = statArgs[3]
+		}
+	}
 	exportStats.Data.Application = getResourceNamesFromMigration(mig)
 
 	exportStats.Data.CreatedOn = (mig.GetCreationTimestamp()).Format("2006-01-02 15:04:05")

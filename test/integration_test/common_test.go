@@ -133,6 +133,9 @@ const (
 	testrailUserNameVar        = "TESTRAIL_USERNAME"
 	testrailPasswordVar        = "TESTRAIL_PASSWORD"
 	testrailMilestoneVar       = "TESTRAIL_MILESTONE"
+
+	statsExportName    = "stork_integration_test"
+	statsExportProduct = "stork"
 )
 
 var nodeDriver node.Driver
@@ -162,6 +165,7 @@ var testrailHostname string
 var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
+var exportStats bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -1487,6 +1491,10 @@ func TestMain(m *testing.M) {
 		"stork-version-check",
 		false,
 		"Turn on/off stork version check before running tests. Default off.")
+	flag.BoolVar(&exportStats,
+		"export-stats",
+		true,
+		"Turn on/off exporting stats to aetos DB. Default on.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
@@ -1523,4 +1531,29 @@ func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, a
 			}
 		}
 	}
+}
+
+func ExportMigrationStats(ctx *scheduler.Context, name string) error {
+	if !exportStats {
+		logrus.Infof("Export flag is off, won't export migration stats")
+		return nil
+	}
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*storkv1.Migration); ok {
+			logrus.Infof("Found migration object: %s", obj.Name)
+			mig, err := storkops.Instance().GetMigration(obj.Name, obj.Namespace)
+			if err != nil {
+				return fmt.Errorf("Failed to get migration %s in namespace: %s: %v", obj.Name, obj.Namespace, err)
+			}
+			//stats := utils.GetExportableStatsFromMigrationObject(mig, statsExportName, statsExportProduct, name, utils.StorkVersion)
+			stats := utils.GetExportableStatsFromMigrationObject(mig)
+			err = utils.WriteMigrationStatsToAetos(stats)
+			if err != nil {
+				return fmt.Errorf("Failed to write stats: %v", err)
+			}
+		} else {
+			logrus.Info("Not a migration object")
+		}
+	}
+	return nil
 }

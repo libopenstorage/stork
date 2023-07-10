@@ -113,6 +113,7 @@ func triggerMigrationTest(
 	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false, "", nil)
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false)
+
 }
 
 func triggerMigration(
@@ -248,6 +249,10 @@ func validateAndDestroyMigration(
 	} else {
 		require.Error(t, err, "Expected migration to fail")
 	}
+
+	// export migration stats before deleting it
+	err = ExportMigrationStats(ctxs[0], t.Name())
+	require.NoError(t, err, "Error exporting migration stats")
 
 	// destroy app on cluster 1
 	if !skipAppDeletion {

@@ -33,21 +33,7 @@ func TestExportStatsPushMockStats(t *testing.T) {
 }
 
 func NewStat() utils.StatsExportType {
-	mockStat := utils.StatsExportType{
-		Name:      "stork_integration_test",
-		Product:   "stork",
-		StatsType: "migration_stats_mock",
-		Version:   "v1alpha1",
-		Data: utils.MigrationStatsType{
-			TotalNumberOfVolumes:            "1",
-			NumOfMigratedVolumes:            "1",
-			TotalNumberOfResources:          "5",
-			NumOfMigratedResources:          "1",
-			TotalBytesMigrated:              "12345",
-			ElapsedTimeForVolumeMigration:   "11.1111s",
-			ElapsedTimeForResourceMigration: "12321.3453s",
-		},
-	}
+	mockStat := utils.StatsExportType{}
 	return mockStat
 }
 
