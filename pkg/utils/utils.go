@@ -254,3 +254,11 @@ func CompareFiles(filePath1 string, filePath2 string) (bool, error) {
 	// Compare the byte content of the files
 	return string(content1) == string(content2), nil
 }
+
+func GetStashedConfigMapName(objKind string, group string, objName string) string {
+	cmName := fmt.Sprintf("%s-%s-%s", objKind, group, objName)
+	if len(cmName) > 253 {
+		cmName = cmName[:253]
+	}
+	return cmName
+}

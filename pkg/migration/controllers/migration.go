@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -33,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -69,6 +71,11 @@ const (
 	StorkAnnotationPrefix = "stork.libopenstorage.org/"
 	// StorkNamespacePrefix for namespace created for applying dry run resources
 	StorkNamespacePrefix = "stork-transform"
+	// StashCRLabel is the label used for stashed configmaps for the CRs if stash strategy is enabled
+	StashCRLabel         = "stash-cr"
+	StashedCMOwnedPVCKey = "ownedPVCs"
+	StashedCMCRKey       = "cr-runtime-object"
+	StashedCMCRNameKey   = "name"
 	// Max number of times to retry applying resources on the destination
 	maxApplyRetries      = 10
 	deletedMaxRetries    = 12
@@ -601,10 +608,15 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
 		return err
 	}
+	excludeSelectors := make(map[string]string)
+	if migration.Spec.ExcludeSelectors != nil {
+		excludeSelectors = migration.Spec.ExcludeSelectors
+	}
+	excludeSelectors[StashCRLabel] = "true"
 	destObjects, _, err := rc.GetResources(
 		migrationNamespaces,
 		migration.Spec.Selectors,
-		migration.Spec.ExcludeSelectors,
+		excludeSelectors,
 		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false,
@@ -1059,7 +1071,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, m
 		return err
 	}
 
-	err = m.updateOwnerReferenceOnPVC(migration, updateObjects, clusterPair, pvcsWithOwnerRef)
+	err = m.updateOwnerReferenceOnPVC(migration, updateObjects, clusterPair, pvcsWithOwnerRef, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1668,10 +1680,16 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 	objects []runtime.Unstructured,
 	clusterPair *stork_api.ClusterPair,
 	pvcsWithOwnerRef []v1.PersistentVolumeClaim,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
 	remoteClient, err := m.getRemoteClient(migration)
 	if err != nil {
 		return err
+	}
+
+	appRegsStashMap := make(map[string]bool)
+	if !*migration.Spec.StartApplications {
+		appRegsStashMap = getAppRegsStashMap(*crdList)
 	}
 
 	ruleset := resourcecollector.GetDefaultRuleSet()
@@ -1698,6 +1716,19 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 				}
 				// Found the source object which is the parent of the source pvc resource
 				if metadata.GetName() == pvcOwner.Name && objectType.GetKind() == pvcOwner.Kind {
+					gvk := o.GetObjectKind().GroupVersionKind()
+					keyName := getAppRegsStashMapKeyName(gvk.Group, gvk.Kind, gvk.Version)
+					// if stashCR is enabled for the owner object, ignore updating ownerreference in pvc.
+					// instead keep the information of the pvc to be updated in stashed cm
+					// which will be used for updating ownerreference as part of storkctl activate.
+					if appRegsStashMap[keyName] {
+						cmName := utils.GetStashedConfigMapName(strings.ToLower(gvk.Kind), strings.ToLower(gvk.Group), metadata.GetName())
+						err = updateStashedCMWithPVCInfo(remoteClient, cmName, metadata.GetNamespace(), destPvc.Name, pvcOwner)
+						if err != nil {
+							log.MigrationLog(migration).Errorf("updating stashed configmap %s failed with error: %v", cmName, err)
+						}
+						continue
+					}
 					ownerName = metadata.GetName()
 					resource := &metav1.APIResource{
 						Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
@@ -1741,6 +1772,7 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -2217,8 +2249,12 @@ func (m *MigrationController) applyResources(
 			"Resource migrated successfully")
 	}
 
+	appRegsStashMap := make(map[string]bool)
+	if !*migration.Spec.StartApplications {
+		appRegsStashMap = getAppRegsStashMap(*crdList)
+	}
 	// apply remaining objects
-	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error) {
+	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error, appRegsStashMap map[string]bool) {
 		for o := range objectChan {
 			metadata, err := meta.Accessor(o)
 			if err != nil {
@@ -2227,18 +2263,6 @@ func (m *MigrationController) applyResources(
 			objectType, err := meta.TypeAccessor(o)
 			if err != nil {
 				errorChan <- err
-			}
-			resource := &metav1.APIResource{
-				Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
-				Namespaced: len(metadata.GetNamespace()) > 0,
-			}
-			var dynamicClient dynamic.ResourceInterface
-			if resource.Namespaced {
-				dynamicClient = remoteClient.remoteInterface.Resource(
-					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
-			} else {
-				dynamicClient = remoteClient.remoteAdminInterface.Resource(
-					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
 			}
 
 			unstructured, ok := o.(*unstructured.Unstructured)
@@ -2271,7 +2295,39 @@ func (m *MigrationController) applyResources(
 				unstructured.SetLabels(newLabels)
 			}
 
+			resource := &metav1.APIResource{
+				Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
+				Namespaced: len(metadata.GetNamespace()) > 0,
+			}
+			var dynamicClient dynamic.ResourceInterface
+
 			retries := 0
+
+			gvk := o.GetObjectKind().GroupVersionKind()
+			keyName := getAppRegsStashMapKeyName(gvk.Group, gvk.Kind, gvk.Version)
+			stashCREnabled := appRegsStashMap[keyName]
+			if !stashCREnabled {
+				if resource.Namespaced {
+					dynamicClient = remoteClient.remoteInterface.Resource(
+						o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+				} else {
+					dynamicClient = remoteClient.remoteAdminInterface.Resource(
+						o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+				}
+			} else {
+				log.MigrationLog(migration).Infof("Getting configmap details for stashing resource %s/%s/%s", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName())
+				unstructured, err = getStashedConfigMap(unstructured, objHash)
+				if err != nil {
+					goto stashedCMError
+				}
+				resource = &metav1.APIResource{
+					Name:       "configmaps",
+					Namespaced: len(metadata.GetNamespace()) > 0,
+				}
+				dynamicClient = remoteClient.remoteInterface.Resource(
+					v1.SchemeGroupVersion.WithResource("configmaps")).Namespace(unstructured.GetNamespace())
+			}
+
 			log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 			for {
 				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
@@ -2287,37 +2343,45 @@ func (m *MigrationController) applyResources(
 						}
 						fallthrough
 					default:
-						// Delete the resource if it already exists on the destination
-						// cluster and try creating again
-						deleteStart := metav1.Now()
-						err = dynamicClient.Delete(context.TODO(), metadata.GetName(), metav1.DeleteOptions{})
-						if err != nil && !errors.IsNotFound(err) {
-							log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+						// Check the objecthash before deleting
+						equalHash := isObjectHashEqual(dynamicClient, unstructured, objHash)
+						if equalHash {
+							log.MigrationLog(migration).Infof("skipping update for resource %s/%s, no changes found since last migration", objectType.GetKind(), metadata.GetName())
+							// resetting the error as the resource status needs to be correctly updated in migration CR.
+							err = nil
 						} else {
-							// wait for resources to get deleted
-							// 2 mins
-							for i := 0; i < deletedMaxRetries; i++ {
-								obj, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
-								if err != nil && errors.IsNotFound(err) {
-									break
-								}
-								createTime := obj.GetCreationTimestamp()
-								if deleteStart.Before(&createTime) {
-									log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
-										obj.GetName(), deleteStart, createTime)
-									break
-								}
-								if obj.GetFinalizers() != nil {
-									obj.SetFinalizers(nil)
-									_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
-									if err != nil {
-										log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+							// Delete the resource if it already exists on the destination
+							// cluster and try creating again
+							deleteStart := metav1.Now()
+							err = dynamicClient.Delete(context.TODO(), unstructured.GetName(), metav1.DeleteOptions{})
+							if err != nil && !errors.IsNotFound(err) {
+								log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+							} else {
+								// wait for resources to get deleted
+								// 2 mins
+								for i := 0; i < deletedMaxRetries; i++ {
+									obj, err := dynamicClient.Get(context.TODO(), unstructured.GetName(), metav1.GetOptions{})
+									if err != nil && errors.IsNotFound(err) {
+										break
 									}
+									createTime := obj.GetCreationTimestamp()
+									if deleteStart.Before(&createTime) {
+										log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+											obj.GetName(), deleteStart, createTime)
+										break
+									}
+									if obj.GetFinalizers() != nil {
+										obj.SetFinalizers(nil)
+										_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+										if err != nil {
+											log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+										}
+									}
+									log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+									time.Sleep(deletedRetryInterval)
 								}
-								log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
-								time.Sleep(deletedRetryInterval)
+								_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
 							}
-							_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
 						}
 					}
 				}
@@ -2328,6 +2392,10 @@ func (m *MigrationController) applyResources(
 				}
 				break
 			}
+
+		stashedCMError:
+			log.MigrationLog(migration).Warnf("unable to get stashed configmap content for object %s/%s/%s, error: %v", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName(), err)
+
 			if err != nil {
 				m.updateResourceStatus(
 					migration,
@@ -2344,13 +2412,13 @@ func (m *MigrationController) applyResources(
 			errorChan <- nil
 		}
 	}
-
-	return m.parallelWorker(worker, updatedObjects, true)
+	return m.parallelWorker(worker, updatedObjects, appRegsStashMap, true)
 }
 
 func (m *MigrationController) parallelWorker(
-	worker func(<-chan runtime.Unstructured, chan<- error),
+	worker func(<-chan runtime.Unstructured, chan<- error, map[string]bool),
 	objects []runtime.Unstructured,
+	appRegsStashMap map[string]bool,
 	shuffle bool,
 ) error {
 	numObjects := len(objects)
@@ -2365,7 +2433,7 @@ func (m *MigrationController) parallelWorker(
 
 	logrus.Infof("Updating %v objects with %v parallel workers", numObjects, m.migrationMaxThreads)
 	for w := 0; w < m.migrationMaxThreads; w++ {
-		go worker(objectChan, errorChan)
+		go worker(objectChan, errorChan, appRegsStashMap)
 	}
 
 	go func() {
@@ -2551,4 +2619,119 @@ func getPVToPVCMappingFromPVCObjects(pvcObjects []runtime.Unstructured) map[stri
 		}
 	}
 	return pvToPVCMapping
+}
+
+func getAppRegsStashMap(crdList stork_api.ApplicationRegistrationList) map[string]bool {
+	appRegsStashMap := make(map[string]bool)
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			appKey := getAppRegsStashMapKeyName(v.Group, v.Kind, v.Version)
+			appRegsStashMap[appKey] = v.StashStrategy.StashCR
+		}
+	}
+	return appRegsStashMap
+}
+
+func getAppRegsStashMapKeyName(group string, version string, kind string) string {
+	return fmt.Sprintf("%v-%v-%v", group, kind, version)
+}
+
+func getStashedConfigMap(obj *unstructured.Unstructured, inputObjectHash uint64) (*unstructured.Unstructured, error) {
+	configMap := &unstructured.Unstructured{}
+	jsonData, err := obj.MarshalJSON()
+	if err != nil {
+		return configMap, err
+	}
+	// obj uid is not available and appending random uid will cause the next migration's get/delete of the configmap fail
+	// hence adding kind-name for cm name.
+	cmName := utils.GetStashedConfigMapName(strings.ToLower(obj.GetKind()), strings.ToLower(obj.GroupVersionKind().Group), obj.GetName())
+
+	ownedPVCs := make(map[string][]metav1.OwnerReference)
+	ownedPVCsEncoded, err := json.Marshal(ownedPVCs)
+	if err != nil {
+		return configMap, err
+	}
+	configMapSpec := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cmName,
+			Namespace: obj.GetNamespace(),
+			Labels: map[string]string{
+				StashCRLabel:    "true",
+				"resource-kind": obj.GetKind(),
+			},
+			Annotations: map[string]string{
+				skipResourceAnnotation: "true",
+				storkCreatedAnnotation: "true",
+				// Using the objecthash of the CR which is getting put so that the objecthash check matches if there is no changes to the CR.
+				// Recalculating the hash on the configmap content will always change as the CR object has an annotation for the migration name.
+				resourcecollector.StorkResourceHash: strconv.FormatUint(inputObjectHash, 10),
+			},
+		},
+		Data: map[string]string{
+			StashedCMCRKey:       string(jsonData),
+			StashedCMOwnedPVCKey: string(ownedPVCsEncoded),
+			StashedCMCRNameKey:   obj.GetName(),
+		},
+	}
+
+	cm, err := runtime.DefaultUnstructuredConverter.ToUnstructured(configMapSpec)
+	if err != nil {
+		return nil, err
+	}
+	configMap = &unstructured.Unstructured{Object: cm}
+	return configMap, nil
+}
+
+func updateStashedCMWithPVCInfo(remoteClient *RemoteClient, configMapName string, namespace string, pvcName string, ownerReference metav1.OwnerReference) error {
+	cm, err := remoteClient.adminClient.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logrus.Errorf("error getting stashed configmap %s in namespace %s", configMapName, namespace)
+		}
+		return err
+	}
+	existingValue := cm.Data[StashedCMOwnedPVCKey]
+	nestedPVCOwnerReferenceMap := make(map[string]metav1.OwnerReference)
+	err = json.Unmarshal([]byte(existingValue), &nestedPVCOwnerReferenceMap)
+	if err != nil {
+		return err
+	}
+	nestedPVCOwnerReferenceMap[pvcName] = ownerReference
+	// Convert the nested map back to a string
+	newValue, err := json.Marshal(nestedPVCOwnerReferenceMap)
+	if err != nil {
+		return err
+	}
+	cm.Data[StashedCMOwnedPVCKey] = string(newValue)
+
+	// Update the ConfigMap
+	_, err = remoteClient.adminClient.CoreV1().ConfigMaps(namespace).Update(context.TODO(), cm, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func isObjectHashEqual(dynamicClient dynamic.ResourceInterface, u *unstructured.Unstructured, inputHashValue uint64) bool {
+	unstructuredDestination, err := dynamicClient.Get(context.TODO(), u.GetName(), metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+	content := unstructuredDestination.UnstructuredContent()
+	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+	if err != nil {
+		return false
+	}
+	if found {
+		if resHash, ok := annotations[resourcecollector.StorkResourceHash]; ok {
+			existingHashValue, err := strconv.ParseUint(resHash, 10, 64)
+			if err != nil {
+				return false
+			}
+			if existingHashValue == inputHashValue {
+				return true
+			}
+		}
+	}
+	return false
 }

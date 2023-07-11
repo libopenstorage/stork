@@ -30,6 +30,7 @@ import (
 const (
 	validateCRDInterval    time.Duration = 5 * time.Second
 	validateCRDTimeout     time.Duration = 1 * time.Minute
+	skipResourceAnnotation               = "stork.libopenstorage.org/skip-resource"
 	storkCreatedAnnotation               = "stork.libopenstorage.org/created-by-stork"
 )
 
