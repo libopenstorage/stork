@@ -23,31 +23,31 @@ var StorkVersion string
 var PortworxVersion string
 
 type StatsExportType struct {
-	id        OidType            `json: "_id",omitempty`
-	Name      string             `json:"name",omitempty`
-	Product   string             `json:"product",omitempty`
-	Version   string             `json:"version",omitempty`
-	StatsType string             `json:"statsType",omitempty`
-	Data      MigrationStatsType `json:"data",omitempty`
+	//	id        OidType            `json: "_id",omitempty`
+	Name      string             `json: "name",omitempty`
+	Product   string             `json: "product",omitempty`
+	Version   string             `json: "version",omitempty`
+	StatsType string             `json: "statsType",omitempty`
+	Data      MigrationStatsType `json: "data",omitempty`
 }
 
 type MigrationStatsType struct {
-	CreatedOn                       string      `json:"created",omitempty`
-	TotalNumberOfVolumes            json.Number `json:"totalNumberOfVolumes",omitempty`
-	NumOfMigratedVolumes            json.Number `json:"numOfMigratedVolumes",omitempty`
-	TotalNumberOfResources          json.Number `json:"totalNumberOfResources",omitempty`
-	NumOfMigratedResources          json.Number `json:"numOfMigratedResources",omitempty`
-	TotalBytesMigrated              json.Number `json:"totalBytesMigrated",omitempty`
-	ElapsedTimeForVolumeMigration   string      `json:"elapsedTimeForVolumeMigration",omitempty`
-	ElapsedTimeForResourceMigration string      `json:"elapsedTimeForResourceMigration",omitempty`
-	Application                     string      `json:"application",omitempty`
-	StorkVersion                    string      `json:"storkVersion",omitempty`
-	PortworxVersion                 string      `json:"portworxVersion",omitempty`
+	CreatedOn                       string      `json: "created",omitempty`
+	TotalNumberOfVolumes            json.Number `json: "totalNumberOfVolumes",omitempty`
+	NumOfMigratedVolumes            json.Number `json: "numOfMigratedVolumes",omitempty`
+	TotalNumberOfResources          json.Number `json: "totalNumberOfResources",omitempty`
+	NumOfMigratedResources          json.Number `json: "numOfMigratedResources",omitempty`
+	TotalBytesMigrated              json.Number `json: "totalBytesMigrated",omitempty`
+	ElapsedTimeForVolumeMigration   string      `json: "elapsedTimeForVolumeMigration",omitempty`
+	ElapsedTimeForResourceMigration string      `json: "elapsedTimeForResourceMigration",omitempty`
+	Application                     string      `json: "application",omitempty`
+	StorkVersion                    string      `json: "storkVersion",omitempty`
+	PortworxVersion                 string      `json: "portworxVersion",omitempty`
 }
 
-type OidType struct {
-	oid string `json: "$oid"`
-}
+//type OidType struct {
+//	oid string `json: "$oid"`
+//}
 
 type AllStats []StatsExportType
 
@@ -100,8 +100,6 @@ func WriteMigrationStatsToAetos(data StatsExportType) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal: %v", err)
 	}
-
-	logrus.Infof("RK=> JSON marshal:\n %s", string(body))
 
 	transCfg := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
