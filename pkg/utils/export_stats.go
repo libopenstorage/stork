@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	AetosStatsURL = "http://aetos.pwx.purestorage.com/dashboard/stats?stats_type=MigrationDemoFinal&limit=100"
+	AetosStatsURL = "https://aetos.pwx.purestorage.com/dashboard/stats?stats_type=MigrationDemoFinal&limit=100"
 )
 
 var StorkVersion string
