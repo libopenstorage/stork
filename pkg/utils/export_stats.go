@@ -120,7 +120,7 @@ func WriteMigrationStatsToAetos(data StatsExportType) error {
 	jsonStr := string(respBody)
 
 	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
-		logrus.Infof("Stats successfully pushed to DB. Response: ", jsonStr)
+		logrus.Infof("Stats successfully pushed to DB. Response: %s", jsonStr)
 	} else {
 		return fmt.Errorf("post failed with Reponse status: %s, %s", resp.Status, jsonStr)
 	}
