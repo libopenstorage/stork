@@ -2,6 +2,7 @@ package resourceutils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,6 +24,12 @@ import (
 	"k8s.io/kubectl/pkg/cmd/util"
 )
 
+const (
+	StashCRLabel         = "stash-cr"
+	StashedCMOwnedPVCKey = "ownedPVCs"
+	StashedCMCRKey       = "cr-runtime-object"
+)
+
 func ScaleReplicas(namespace string, activate bool, printFunc func(string, string), config *rest.Config) {
 	updateStatefulSets(namespace, activate, printFunc)
 	updateDeployments(namespace, activate, printFunc)
@@ -35,6 +42,8 @@ func ScaleReplicas(namespace string, activate bool, printFunc func(string, strin
 	updateVMObjects("VirtualMachine", namespace, true, printFunc)
 	updateCRDObjects(namespace, activate, printFunc, config)
 	updateCronJobObjects(namespace, activate, printFunc)
+	// This is unique for migration cases to support stash stratgery for CRs managed by clusterwide operators
+	updateStashedCMObjects(namespace, activate, printFunc, config)
 }
 
 func updateStatefulSets(namespace string, activate bool, printFunc func(string, string)) {
@@ -363,4 +372,98 @@ func getUpdatedReplicaCount(annotations map[string]string, activate bool, printF
 	}
 
 	return 0, false
+}
+
+func updateStashedCMObjects(namespace string, activate bool, printFunc func(string, string), config *rest.Config) {
+
+	pvcToPVCOwnerMapping := make(map[string][]metav1.OwnerReference)
+	// List the configmaps with label "stash-cr" enabled
+	configMaps, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{LabelSelector: StashCRLabel})
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+	ruleset := resourcecollector.GetDefaultRuleSet()
+	// Create the CRs in the same namespace if those don't exist
+	for _, configMap := range configMaps.Items {
+		objBytes := []byte(configMap.Data[StashedCMCRKey])
+		unstructuredObj := &unstructured.Unstructured{}
+		err := unstructuredObj.UnmarshalJSON(objBytes)
+		if err != nil {
+			printFunc(fmt.Sprintf("Error converting string to Unstructured object: %s\n", err.Error()), "err")
+			continue
+		}
+		configClient, err := k8sdynamic.NewForConfig(config)
+		if err != nil {
+			util.CheckErr(err)
+			continue
+		}
+		resource := &metav1.APIResource{
+			Name:       ruleset.Pluralize(strings.ToLower(unstructuredObj.GetKind())),
+			Namespaced: len(unstructuredObj.GetNamespace()) > 0,
+		}
+
+		var resourceClient k8sdynamic.ResourceInterface
+		if resource.Namespaced {
+			resourceClient = configClient.Resource(
+				unstructuredObj.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(unstructuredObj.GetNamespace())
+		} else {
+			resourceClient = configClient.Resource(
+				unstructuredObj.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+		}
+
+		// Create the CR
+		_, err = resourceClient.Create(context.TODO(), unstructuredObj, metav1.CreateOptions{})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			if errors.IsAlreadyExists(err) {
+				printFunc(fmt.Sprintf("Error creating resource %s/%s from stashed configmap : %v as it already exists\n", unstructuredObj.GetKind(), unstructuredObj.GetName(), err), "err")
+			} else {
+				printFunc(fmt.Sprintf("Error creating resource %s/%s from stashed configmap : %v\n", unstructuredObj.GetKind(), unstructuredObj.GetName(), err), "err")
+				util.CheckErr(err)
+				continue
+			}
+		}
+
+		// Get the CR
+		newResourceUnstructured, err := resourceClient.Get(context.TODO(), unstructuredObj.GetName(), metav1.GetOptions{})
+		if err != nil {
+			util.CheckErr(err)
+			continue
+		}
+
+		// Get the ownerreferences stored for PVCs and modify it to new resource's UID.
+		ownedPVCs := configMap.Data[StashedCMOwnedPVCKey]
+		nestedMap := make(map[string]metav1.OwnerReference)
+		err = json.Unmarshal([]byte(ownedPVCs), &nestedMap)
+		if err != nil {
+			util.CheckErr(err)
+			continue
+		}
+
+		for pvcName, ownerReference := range nestedMap {
+			ownerReference.UID = newResourceUnstructured.GetUID()
+			pvcToPVCOwnerMapping[pvcName] = append(pvcToPVCOwnerMapping[pvcName], ownerReference)
+		}
+		printFunc(fmt.Sprintf("Successfully created the CRs from the stashed configmaps %s/%s", unstructuredObj.GetKind(), unstructuredObj.GetName()), "out")
+	}
+
+	// Find PVCs in the namespace which are owned by previous CR, need to modify the owner reference to new CRs for those
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+
+	for _, pvc := range pvcList.Items {
+		if newOwnerReferences, ok := pvcToPVCOwnerMapping[pvc.GetName()]; ok {
+			ownerReferences := pvc.GetOwnerReferences()
+			ownerReferences = append(ownerReferences, newOwnerReferences...)
+			pvc.SetOwnerReferences(ownerReferences)
+			_, err = core.Instance().UpdatePersistentVolumeClaim(&pvc)
+			if err != nil {
+				util.CheckErr(err)
+				continue
+			}
+		}
+	}
 }
