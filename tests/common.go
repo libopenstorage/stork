@@ -7398,3 +7398,27 @@ func deleteNamespaces(namespaces []string) error {
 	}
 	return nil
 }
+
+// VerifyNilPointerDereferenceError returns true if nil pointer dereference, output of the log messages
+func VerifyNilPointerDereferenceError(n *node.Node) (bool, string) {
+	cmd := "journalctl | grep -i \"nil pointer dereference\""
+	output, err := runCmdGetOutput(cmd, *n)
+	if err != nil {
+		return false, ""
+	}
+
+	cmdGrepOutput := "journalctl | grep -i -A 50 \"nil pointer dereference\""
+	output, err = runCmdGetOutput(cmdGrepOutput, *n)
+	if err != nil {
+		return false, ""
+	}
+	re, err := regexp.Compile("panic: runtime error.*invalid memory address or nil pointer dereference")
+	if err != nil {
+		return false, ""
+	}
+	if re.MatchString(fmt.Sprintf("%v", output)) {
+		return true, output
+	}
+
+	return false, ""
+}
