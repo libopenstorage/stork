@@ -9728,9 +9728,9 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
 		// Get metadata poolUUID from the Node
-		metaPoolUUID, err := GetPoolUUIDWithMetadataDisk(*nodeDetail)
+		poolUUID, err = GetPoolUUIDWithMetadataDisk(*nodeDetail)
 		log.FailOnError(err, "Failed to get metadata pool uuid on Node [%v]", nodeDetail.Name)
-		log.InfoD("Metadata pool UUID : {%v}", metaPoolUUID)
+		log.InfoD("Metadata pool UUID : {%v}", poolUUID)
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 		log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
