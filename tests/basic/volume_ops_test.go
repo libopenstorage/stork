@@ -1155,7 +1155,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	It(stepLog, func() {
 
 		var wg sync.WaitGroup
-		wg.Add(2)
+		wg.Add(20)
 
 		if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
 			log.FailOnError(fmt.Errorf("need csi provisioner to run the test , please pass --provisioner csi "+

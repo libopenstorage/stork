@@ -2,7 +2,12 @@ package tests
 
 import (
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strings"
+	"sync"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -126,5 +131,105 @@ var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+// this tests brings up large number of pods on multiple namespaces and validate if there is not PANIC or nilpointer exceptions
+var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
+	/*
+		https://portworx.atlassian.net/browse/PTX-18792
+		https://portworx.atlassian.net/browse/PWX-32190
+
+		Bug Description :
+			PX is hitting `panic: runtime error: invalid memory address or nil pointer dereference` when creating 250 FADA volumes
+
+		1. Deploying nginx pods using two FADA volumes in 125 name-space simultaneously
+		2. After that verify if there any panic in the logs due to nil pointer deference.
+	*/
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("BringUpLargePodsVerifyNoPanic",
+			"Px should not panic when large number of pools are created", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Validate no panics when creating more than 125 pods on FADA Volumes"
+	It(stepLog, func() {
+
+		var wg sync.WaitGroup
+		wg.Add(20)
+
+		if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
+			log.FailOnError(fmt.Errorf("need csi provisioner to run the test , please pass --provisioner csi "+
+				"or -e provisioner=csi in the arguments"), "csi provisioner enabled?")
+		}
+
+		Inst().AppList = []string{"nginx-fa-davol"}
+		contexts = make([]*scheduler.Context, 0)
+
+		scheduleAppParallel := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			id := uuid.New()
+			nsName := fmt.Sprintf("%s", id.String()[:4])
+			for i := 0; i < 15; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf(fmt.Sprintf("largenumberpods-%v-%d", nsName, i)))...)
+			}
+		}
+
+		// Create apps in parallel
+		for count := 0; count < 20; count++ {
+			go scheduleAppParallel()
+		}
+		wg.Wait()
+
+		// Funciton to validate nil pointer dereference errors
+		validateNilPointerErrors := func() {
+			// we validate negative scenario here , function returns true if nil pointer exception is seen.
+			errors := []string{}
+			for _, eachNode := range node.GetStorageNodes() {
+				status, output, err := VerifyNilPointerDereferenceError(&eachNode)
+				if status == true {
+					log.Infof("nil pointer dereference error seen on the Node [%v]", eachNode.Name)
+					log.Infof("error log [%v]", output)
+					errors = append(errors, fmt.Sprintf("[%v]", eachNode.Name))
+				} else if err != nil && output == "" {
+					// we just print error in case if found one ,
+					log.InfoD("nil pointer exception not seen on the node")
+					log.InfoD(fmt.Sprintf("[%v]", err))
+				}
+			}
+			if len(errors) > 0 {
+				log.FailOnError(fmt.Errorf("nil pointer dereference panic seen on nodes [%v]", errors),
+					"nil pointer de-reference error?")
+			}
+		}
+		defer validateNilPointerErrors()
+
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get list of pods present
+		for _, eachContext := range contexts {
+			err := Inst().S.WaitForRunning(eachContext, 360, 5)
+			log.FailOnError(err, "failed waiting for pods to come up for context")
+
+			volumes, err := Inst().S.GetVolumes(eachContext)
+			log.FailOnError(err, "failed to get volumes running with each instances")
+			log.InfoD("Volumes created with Name [%v]", volumes)
+			for _, each := range volumes {
+				log.Infof("[%v]", each)
+				inspectVolume, err := Inst().V.InspectVolume(each.ID)
+				log.FailOnError(err, "failed to get volume Inspect details for running volumes")
+				log.Info("inspected volume with Name  [%v]", inspectVolume.Id)
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
