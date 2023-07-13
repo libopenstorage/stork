@@ -993,7 +993,22 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
 				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
 				nodeName = nodes[0].Name // Selecting the 1st node in the list to cordon
-				Step("Drain Pods from a node", func() {
+
+				defer func() {
+					if !isDeploymentsDeleted {
+						Step("Delete created deployments")
+						resp, err := pdslib.DeleteDeployment(deployment.GetId())
+						log.FailOnError(err, "Error while deleting data services")
+						dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+						log.InfoD("Getting all PV and associated PVCs and deleting them")
+						err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+						log.FailOnError(err, "Error while deleting PV and PVCs")
+					}
+				}()
+
+				steplog := "Drain Pods from a node"
+				Step(steplog, func() {
+					log.InfoD(steplog)
 					podsList, err := pdslib.GetPodsOfSsByNode(*deployment.ClusterResourceName, nodeName, namespace)
 					log.FailOnError(err, fmt.Sprintf("Pod not found on this Node : %s", nodeName))
 					log.InfoD("Pods found on %v node. Trying to Drain pods from this node now.", nodeName)
@@ -1001,12 +1016,18 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					log.FailOnError(err, fmt.Sprintf("Draining pod from the node %s failed", nodeName))
 					log.InfoD("Pods successfully drained from the node %s", nodeName)
 				})
-				Step("Validate Data Service to see if Pods have rescheduled on another node", func() {
+
+				steplog = "Validate Data Service to see if Pods have rescheduled on another node"
+				Step(steplog, func() {
+					log.InfoD(steplog)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, fmt.Sprintf("error on ValidateDataServiceVolumes method for %v", *deployment.ClusterResourceName))
 					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 				})
-				Step("Validate no pods are on the cordoned node anymore", func() {
+
+				steplog = "Validate no pods are on the cordoned node anymore"
+				Step(steplog, func() {
+					log.InfoD(steplog)
 					nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
 					log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.ClusterResourceName))
 					for _, nodeObj := range nodes {
@@ -1016,7 +1037,10 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					}
 					log.InfoD("The pods of the Stateful Set %v are not on the cordoned node. Moving ahead now.", *deployment.ClusterResourceName)
 				})
-				Step("Create a new Data Service Deployment and validate this doesn't get created on the Cordoned Node. Delete it as well.", func() {
+
+				steplog = "Create a new Data Service Deployment and validate this doesn't get created on the Cordoned Node. Delete it as well."
+				Step(steplog, func() {
+					log.InfoD(steplog)
 					newDeployment, _, _, err := DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
 					nodes, err := pdslib.GetNodesOfSS(*newDeployment.ClusterResourceName, namespace)
@@ -1035,7 +1059,10 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
 				})
-				Step("Running Workloads before scaling up of dataservices ", func() {
+
+				steplog = "Running Workloads before scaling up of dataservices"
+				Step(steplog, func() {
+					log.InfoD(steplog)
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					var params pdslib.WorkloadGenerationParams
 					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
@@ -1054,22 +1081,31 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 						})
 					}()
 				})
-				Step("UnCordon Selected Node", func() {
+
+				steplog = "UnCordon Selected Node"
+				Step(steplog, func() {
+					log.InfoD(steplog)
 					err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
 					log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
 					log.InfoD("Node %s successfully UnCordoned", nodeName)
+				})
+
+				steplog = "Delete created deployments"
+				Step(steplog, func() {
+					log.InfoD(steplog)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+					log.FailOnError(err, "Error while deleting PV and PVCs")
+					isDeploymentsDeleted = true
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		if !isDeploymentsDeleted {
-			Step("Delete created deployments")
-			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			log.FailOnError(err, "Error while deleting data services")
-			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-		}
 	})
 })
 
