@@ -78,6 +78,7 @@ type AppConfig struct {
 	Repl                 string   `yaml:"repl"`
 	Fs                   string   `yaml:"fs"`
 	AggregationLevel     string   `yaml:"aggregation_level"`
+	IoProfile            string   `yaml:"io_profile"`
 }
 
 // InitOptions initialization options

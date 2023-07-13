@@ -4997,7 +4997,7 @@ func ParseFlags() {
 	csiAppsList := make([]string, 0)
 	if len(csiAppsCSV) > 0 {
 		apl, err := splitCsv(csiAppsCSV)
-		log.FailOnError(err, fmt.Sprintf("failed to parse csiAppsCSV app list: %v", repl1AppsCSV))
+		log.FailOnError(err, fmt.Sprintf("failed to parse csiAppsCSV app list: %v", csiAppsCSV))
 		csiAppsList = append(csiAppsList, apl...)
 		log.Infof("provisioner CSI apps : %+v", csiAppsList)
 		appList = append(appList, csiAppsList...)
