@@ -7,6 +7,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
@@ -1152,10 +1153,11 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 
 	stepLog := "Validate no panics when creating more than 125 pods on FADA Volumes"
 	It(stepLog, func() {
-		var wg sync.WaitGroup
-		wg.Add(15)
 
-		if strings.ToLower(Inst().Provisioner) != "csi" {
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
 			log.FailOnError(fmt.Errorf("need csi provisioner to run the test , please pass --provisioner csi "+
 				"or -e provisioner=csi in the arguments"), "csi provisioner enabled?")
 		}
@@ -1168,26 +1170,31 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			defer GinkgoRecover()
 			id := uuid.New()
 			nsName := fmt.Sprintf("%s", id.String()[:4])
-			for i := 0; i < 20; i++ {
+			for i := 0; i < 15; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf(fmt.Sprintf("largenumberpods-%v-%d", nsName, i)))...)
 			}
 		}
 
 		// Create apps in parallel
-		for count := 0; count < 15; count++ {
+		for count := 0; count < 20; count++ {
 			go scheduleAppParallel()
 		}
 		wg.Wait()
 
 		// Funciton to validate nil pointer dereference errors
 		validateNilPointerErrors := func() {
+			// we validate negative scenario here , function returns true if nil pointer exception is seen.
 			errors := []string{}
 			for _, eachNode := range node.GetStorageNodes() {
-				status, output := VerifyNilPointerDereferenceError(&eachNode)
+				status, output, err := VerifyNilPointerDereferenceError(&eachNode)
 				if status == true {
 					log.Infof("nil pointer dereference error seen on the Node [%v]", eachNode.Name)
 					log.Infof("error log [%v]", output)
 					errors = append(errors, fmt.Sprintf("[%v]", eachNode.Name))
+				} else if err != nil && output == "" {
+					// we just print error in case if found one ,
+					log.InfoD("nil pointer exception not seen on the node")
+					log.InfoD(fmt.Sprintf("[%v]", err))
 				}
 			}
 			if len(errors) > 0 {

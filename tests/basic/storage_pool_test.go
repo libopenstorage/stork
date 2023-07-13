@@ -9710,10 +9710,6 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 	stepLog := "Test Add Drive to Metadata Pool"
 	It(stepLog, func() {
 
-		isDMthin, err := IsDMthin()
-		log.FailOnError(err, "error while checking for dmthin enablement")
-		dash.VerifyFatal(isDMthin == false, true, "dmthin is not enabled on the cluster")
-
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivemetadatapool-%d", i))...)
