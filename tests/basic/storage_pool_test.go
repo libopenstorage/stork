@@ -9753,6 +9753,7 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+
 	})
 
 	JustAfterEach(func() {

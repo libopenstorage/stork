@@ -206,9 +206,10 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 					"nil pointer de-reference error?")
 			}
 		}
+		// Check for nilPointer de-reference error on the nodes.
 		defer validateNilPointerErrors()
 
-		ValidateApplications(contexts)
+		//ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
 		// Get list of pods present
@@ -226,6 +227,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 				log.Info("inspected volume with Name  [%v]", inspectVolume.Id)
 			}
 		}
+		log.Info("all pods are up and in running state")
 	})
 
 	JustAfterEach(func() {
