@@ -9710,6 +9710,10 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 	stepLog := "Test Add Drive to Metadata Pool"
 	It(stepLog, func() {
 
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "error while checking for dmthin enablement")
+		dash.VerifyFatal(isDMthin == false, true, "dmthin is not enabled on the cluster")
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivemetadatapool-%d", i))...)
@@ -9728,11 +9732,12 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
 		// Get metadata poolUUID from the Node
-		poolUUID, err = GetPoolUUIDWithMetadataDisk(*nodeDetail)
+		metaPoolUUID, err := GetPoolUUIDWithMetadataDisk(*nodeDetail)
 		log.FailOnError(err, "Failed to get metadata pool uuid on Node [%v]", nodeDetail.Name)
+		log.InfoD("Metadata pool UUID : {%v}", metaPoolUUID)
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
+		log.FailOnError(err, "Failed to get pool using UUID [%s] ", poolUUID)
 
 		drvSize, err := getPoolDiskSize(poolToBeResized)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
@@ -9753,7 +9758,6 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
-
 	})
 
 	JustAfterEach(func() {
