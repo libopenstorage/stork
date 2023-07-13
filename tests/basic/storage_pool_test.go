@@ -9737,7 +9737,7 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		log.InfoD("Metadata pool UUID : {%v}", metaPoolUUID)
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "Failed to get pool using UUID [%s] ", poolUUID)
+		log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
 
 		drvSize, err := getPoolDiskSize(poolToBeResized)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
