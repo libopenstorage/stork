@@ -7398,8 +7398,8 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 	return nil
 }
 
-// deleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
-func deleteNamespaces(namespaces []string) error {
+// DeleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
+func DeleteNamespaces(namespaces []string) error {
 	// Delete a list of namespaces given
 	k8sCore = core.Instance()
 	for _, namespace := range namespaces {

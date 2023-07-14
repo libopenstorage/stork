@@ -3,11 +3,13 @@ package tests
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -137,14 +139,17 @@ var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
 // this tests brings up large number of pods on multiple namespaces and validate if there is not PANIC or nilpointer exceptions
 var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	/*
-		https://portworx.atlassian.net/browse/PTX-18792
-		https://portworx.atlassian.net/browse/PWX-32190
+			https://portworx.atlassian.net/browse/PTX-18792
+		    https://portworx.atlassian.net/browse/PTX-17723
 
-		Bug Description :
-			PX is hitting `panic: runtime error: invalid memory address or nil pointer dereference` when creating 250 FADA volumes
+			PWX :
+			https://portworx.atlassian.net/browse/PWX-32190
 
-		1. Deploying nginx pods using two FADA volumes in 125 name-space simultaneously
-		2. After that verify if there any panic in the logs due to nil pointer deference.
+			Bug Description :
+				PX is hitting `panic: runtime error: invalid memory address or nil pointer dereference` when creating 250 FADA volumes
+
+			1. Deploying nginx pods using two FADA volumes in 125 name-space simultaneously
+			2. After that verify if any panic in the logs due to nil pointer deference.
 	*/
 	var testrailID = 0
 	var runID int
@@ -160,11 +165,42 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 
 		var wg sync.WaitGroup
 		wg.Add(20)
+		var terminate bool = false
 
 		if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
 			log.FailOnError(fmt.Errorf("need csi provisioner to run the test , please pass --provisioner csi "+
 				"or -e provisioner=csi in the arguments"), "csi provisioner enabled?")
 		}
+
+		log.InfoD("Failover kvdb in parallel while volume creation in progress")
+		go func() {
+			defer GinkgoRecover()
+			for {
+				if terminate == true {
+					break
+				}
+				// Wait for KVDB Members to be online
+				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+
+				// Kill KVDB Master Node
+				masterNode, err := GetKvdbMasterNode()
+				log.FailOnError(err, "failed getting details of KVDB master node")
+
+				log.InfoD("killing kvdb master node with Name [%v]", masterNode.Name)
+
+				// Get KVDB Master PID
+				pid, err := GetKvdbMasterPID(*masterNode)
+				log.FailOnError(err, "failed getting PID of KVDB master node")
+
+				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+				// Kill kvdb master PID for regular intervals
+				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+
+				// Wait for some time after killing kvdb master Node
+				time.Sleep(5 * time.Minute)
+			}
+		}()
 
 		Inst().AppList = []string{"nginx-fa-davol"}
 		contexts = make([]*scheduler.Context, 0)
@@ -179,6 +215,15 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			}
 		}
 
+		teardownContext := func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+
 		// Create apps in parallel
 		for count := 0; count < 20; count++ {
 			go scheduleAppParallel()
@@ -187,18 +232,18 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 
 		// Funciton to validate nil pointer dereference errors
 		validateNilPointerErrors := func() {
+			terminate = true
 			// we validate negative scenario here , function returns true if nil pointer exception is seen.
 			errors := []string{}
 			for _, eachNode := range node.GetStorageNodes() {
-				status, output, err := VerifyNilPointerDereferenceError(&eachNode)
+				status, output, Nodeerr := VerifyNilPointerDereferenceError(&eachNode)
 				if status == true {
 					log.Infof("nil pointer dereference error seen on the Node [%v]", eachNode.Name)
 					log.Infof("error log [%v]", output)
 					errors = append(errors, fmt.Sprintf("[%v]", eachNode.Name))
-				} else if err != nil && output == "" {
-					// we just print error in case if found one ,
-					log.InfoD("nil pointer exception not seen on the node")
-					log.InfoD(fmt.Sprintf("[%v]", err))
+				} else if Nodeerr != nil && output == "" {
+					// we just print error in case if found one
+					log.InfoD(fmt.Sprintf("[%v]", Nodeerr))
 				}
 			}
 			if len(errors) > 0 {
@@ -206,27 +251,27 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 					"nil pointer de-reference error?")
 			}
 		}
+
+		// Delete all the applications
+		defer teardownContext()
+
 		// Check for nilPointer de-reference error on the nodes.
 		defer validateNilPointerErrors()
 
-		//ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-
-		// Get list of pods present
-		for _, eachContext := range contexts {
-			err := Inst().S.WaitForRunning(eachContext, 360, 5)
-			log.FailOnError(err, "failed waiting for pods to come up for context")
-
-			volumes, err := Inst().S.GetVolumes(eachContext)
-			log.FailOnError(err, "failed to get volumes running with each instances")
-			log.InfoD("Volumes created with Name [%v]", volumes)
-			for _, each := range volumes {
-				log.Infof("[%v]", each)
-				inspectVolume, err := Inst().V.InspectVolume(each.ID)
-				log.FailOnError(err, "failed to get volume Inspect details for running volumes")
-				log.Info("inspected volume with Name  [%v]", inspectVolume.Id)
+		// Waiting for all pods to become ready and in running state
+		waitForPodsRunning := func() (interface{}, bool, error) {
+			for _, eachContext := range contexts {
+				err := Inst().S.WaitForRunning(eachContext, 5*time.Minute, 2*time.Second)
+				if err != nil {
+					return nil, true, err
+				}
 			}
+			return nil, false, nil
 		}
+		_, err := task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
+		log.FailOnError(err, "Error checking pool rebalance")
+
+		terminate = true
 		log.Info("all pods are up and in running state")
 	})
 
