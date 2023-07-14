@@ -2017,10 +2017,15 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 	}
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
+		log.Infof("Deploying SC")
+		log.Infof("%v", k.secureApps)
+		log.Infof("secretConfigMapName: %s", k.secretConfigMapName)
+		log.Infof("secretConfigMapName: %s", configMap.Name)
 		//secure-apps list is provided for which volumes should be encrypted
-		if len(k.secureApps) > 0 {
-			if k.isSecureEnabled(app.Key, k.secureApps) {
-
+		if len(k.secureApps) > 0 || k.secretConfigMapName != "" {
+			if k.isSecureEnabled(app.Key, k.secureApps) || k.secretConfigMapName != "" {
+				log.Infof("Secret name key flag, secretNamespaceKeyFlag and CSI flag for SC: %b %b %b", secretNameKeyFlag, secretNamespaceKeyFlag, app.IsCSI)
+				log.Infof("volume.GetStorageProvisioner() is %b", volume.GetStorageProvisioner())
 				if obj.Parameters == nil {
 					obj.Parameters = make(map[string]string)
 				}
@@ -2028,7 +2033,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
 					obj.Parameters[encryptionName] = "true"
 				}
-				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+				if strings.Contains(volume.GetStorageProvisioner(), "pxd") || app.IsCSI {
 					if secretNameKeyFlag {
 						obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
 						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
@@ -2038,6 +2043,12 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 						obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
 						obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
 						obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+					}
+					if app.IsCSI {
+						obj.Parameters [CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+						obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+						obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
 					}
 				} else {
 					if secretNameKeyFlag {
@@ -2054,10 +2065,11 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		if secretNameKeyFlag {
+		log.Infof("Secret name key flag and CSI flag for PVC: %b %b", secretNameKeyFlag, app.IsCSI)
+		if secretNameKeyFlag && !app.IsCSI {
 			obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		}
-		if secretNamespaceKeyFlag {
+		if secretNamespaceKeyFlag && !app.IsCSI {
 			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 		}
 
