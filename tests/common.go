@@ -2116,6 +2116,18 @@ func runCmd(cmd string, n node.Node) error {
 
 }
 
+func runCmdOnce(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+
+	return output, err
+
+}
+
 func runCmdGetOutput(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         defaultCmdTimeout,
@@ -7397,8 +7409,8 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 	return nil
 }
 
-// deleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
-func deleteNamespaces(namespaces []string) error {
+// DeleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
+func DeleteNamespaces(namespaces []string) error {
 	// Delete a list of namespaces given
 	k8sCore = core.Instance()
 	for _, namespace := range namespaces {
@@ -7408,4 +7420,23 @@ func deleteNamespaces(namespaces []string) error {
 		}
 	}
 	return nil
+}
+
+// VerifyNilPointerDereferenceError returns true if nil pointer dereference, output of the log messages
+func VerifyNilPointerDereferenceError(n *node.Node) (bool, string, error) {
+
+	cmdGrepOutput := "journalctl | grep -i -A 50 \"nil pointer dereference\""
+	output, err := runCmdOnce(cmdGrepOutput, *n)
+	if err != nil {
+		return false, "", fmt.Errorf("command failed while running [%v] on Node [%v]", cmdGrepOutput, n.Name)
+	}
+	re, err := regexp.Compile("panic: runtime error.*invalid memory address or nil pointer dereference")
+	if err != nil {
+		return false, "", fmt.Errorf("command failed running [%v] on Node [%v]", cmdGrepOutput, n.Name)
+	}
+	if re.MatchString(fmt.Sprintf("%v", output)) {
+		return true, output, nil
+	}
+
+	return false, "", nil
 }
