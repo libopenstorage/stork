@@ -1810,6 +1810,38 @@ func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps u
 	}
 	return nil
 }
+
+// UpdateVolumeSpec updates given volume with provided spec
+func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.VolumeSpecUpdate) error {
+	volumeName := d.schedOps.GetVolumeName(vol)
+	log.Infof("Updating volume spec for volume [%s]", volumeName)
+	log.Infof("Volume Spec : %+v", volumeSpec)
+	volDriver := d.getVolDriver()
+	_, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	if err != nil && errIsNotFound(err) {
+		return err
+	} else if err != nil {
+		return err
+	}
+	log.Debugf("Updating volume [%s]", volumeName)
+	t := func() (interface{}, bool, error) {
+
+		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+			VolumeId: volumeName,
+			Spec:     volumeSpec,
+		})
+		if err != nil {
+			return nil, true, fmt.Errorf("volume [%s] not updated yet", volumeName)
+		}
+		log.Debugf("Updated volume [%s]", volumeName)
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, defaultRetryInterval); err != nil {
+		return fmt.Errorf("failed to set set IOps for volumeName [%s], Err: %v", volumeName, err)
+	}
+	return nil
+}
+
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
 	var token string
 	volumeName := d.schedOps.GetVolumeName(vol)

@@ -415,6 +415,14 @@ func (d *DefaultDriver) SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, wr
 	}
 }
 
+// UpdateVolumeSpec update the given volume with the provided spec
+func (d *DefaultDriver) UpdateVolumeSpec(vol *Volume, volumeSpec *api.VolumeSpecUpdate) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateVolumeSpec()",
+	}
+}
+
 // ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 func (d *DefaultDriver) ValidateDeleteVolume(vol *Volume) error {
 	return &errors.ErrNotSupported{

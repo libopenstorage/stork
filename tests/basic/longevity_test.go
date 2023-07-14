@@ -111,6 +111,7 @@ var _ = Describe("{Longevity}", func() {
 		DeleteOldNamespaces:      TriggerDeleteOldNamespaces,
 		MetroDRMigrationSchedule: TriggerMetroDRMigrationSchedule,
 		CloudSnapShotRestore:     TriggerCloudSnapshotRestore,
+		LocalSnapShotRestore:     TriggerLocalSnapshotRestore,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -690,6 +691,7 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
+	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1139,6 +1141,17 @@ func populateIntervals() {
 	triggerInterval[DeleteLocalSnapShot][2] = 24 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][1] = 27 * baseInterval
 
+	triggerInterval[LocalSnapShotRestore][10] = 1 * baseInterval
+	triggerInterval[LocalSnapShotRestore][9] = 3 * baseInterval
+	triggerInterval[LocalSnapShotRestore][8] = 6 * baseInterval
+	triggerInterval[LocalSnapShotRestore][7] = 9 * baseInterval
+	triggerInterval[LocalSnapShotRestore][6] = 12 * baseInterval
+	triggerInterval[LocalSnapShotRestore][5] = 15 * baseInterval
+	triggerInterval[LocalSnapShotRestore][4] = 18 * baseInterval
+	triggerInterval[LocalSnapShotRestore][3] = 21 * baseInterval
+	triggerInterval[LocalSnapShotRestore][2] = 24 * baseInterval
+	triggerInterval[LocalSnapShotRestore][1] = 27 * baseInterval
+
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
 	triggerInterval[EmailReporter][8] = 3 * baseInterval
@@ -1479,6 +1492,7 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
+	triggerInterval[LocalSnapShotRestore][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
