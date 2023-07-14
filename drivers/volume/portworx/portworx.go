@@ -1651,6 +1651,41 @@ func constructSnapshotName(volumeName string) string {
 	return volumeName + "-snapshot"
 }
 
+// GetCloudsnaps returns all the cloud snaps of the given volume
+func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+
+	cloudSnapResponse, err := d.csbackupManager.EnumerateWithFilters(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupEnumerateWithFiltersRequest{})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloudsnap, Err: %v", err)
+	}
+	return cloudSnapResponse.GetBackups(), nil
+
+}
+
+// DeleteAllCloudsnaps delete all cloud snaps for a given volume
+func (d *portworx) DeleteAllCloudsnaps(volumeName, sourceVolumeID string, params map[string]string) error {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	_, err := d.csbackupManager.DeleteAll(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupDeleteAllRequest{SrcVolumeId: sourceVolumeID})
+
+	if err != nil {
+		return fmt.Errorf("failed to delete cloudsnap, Err: %v", err)
+	}
+
+	return nil
+}
+
 func (d *portworx) ValidateCreateCloudsnap(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)

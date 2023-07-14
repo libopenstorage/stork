@@ -6,6 +6,10 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "2"
   priority_io: "low"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
 allowVolumeExpansion: true
 ---
 kind: PersistentVolumeClaim

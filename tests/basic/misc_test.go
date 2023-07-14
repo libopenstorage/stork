@@ -29,6 +29,7 @@ var _ = Describe("{SetupTeardown}", func() {
 		StartTorpedoTest("SetupTeardown", "Validate setup tear down", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
+
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {

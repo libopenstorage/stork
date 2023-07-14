@@ -2,12 +2,13 @@ package targetcluster
 
 import (
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
 	"strings"
 	"time"
+
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 
 	apps "github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -69,6 +70,7 @@ type TargetCluster struct {
 func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	var targetClusterStatus string
 	if err != nil {
 		return "", fmt.Errorf("error while listing deployments: %v", err)
 	}
@@ -80,7 +82,11 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 			deploymentTargetID = targetClusters[i].GetId()
 			log.Infof("deploymentTargetID %v", deploymentTargetID)
 			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+			targetClusterStatus = targetClusters[i].GetStatus()
 		}
+	}
+	if targetClusterStatus != "healthy" {
+		return "", fmt.Errorf("target Cluster is not in healthy state due to error : %v", err)
 	}
 	return deploymentTargetID, nil
 }

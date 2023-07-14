@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"math"
 	"math/rand"
 	"os"
@@ -109,6 +110,8 @@ const (
 const (
 	validateReplicationUpdateTimeout = 4 * time.Hour
 	errorChannelSize                 = 50
+	snapshotScheduleRetryInterval    = 2 * time.Minute
+	snapshotScheduleRetryTimeout     = 60 * time.Minute
 )
 
 const (
@@ -228,6 +231,8 @@ var decommissionedNode = node.Node{}
 // node with autopilot rule enabled
 var autoPilotLabelNode node.Node
 
+var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -334,9 +339,10 @@ const (
 	VolumeResize = "volumeResize"
 	// VolumesDelete deletes the columes of the context
 	VolumesDelete = "volumesDelete"
-	// CloudSnapShot takes local snap shot of the volumes
 	// CloudSnapShot takes cloud snapshot of the volumes
 	CloudSnapShot = "cloudSnapShot"
+	//CloudSnapShotRestore in-place cloudsnap restores
+	CloudSnapShotRestore = "cloudSnapShotRestore"
 	// LocalSnapShot takes local snapshot of the volumes
 	LocalSnapShot = "localSnapShot"
 	// CsiSnapShot takes csi snapshot of the volumes
@@ -2161,9 +2167,25 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 	}()
 
 	setMetrics(*event)
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "pxctl cred list -j | grep uuid"
 
-	snapshotScheduleRetryInterval := 10 * time.Second
-	snapshotScheduleRetryTimeout := 3 * time.Minute
+	output, err := Inst().V.GetPxctlCmdOutput(n, uuidCmd)
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+
+	log.FailOnError(err, "error getting uuid for cloudsnap credential")
+	if output == "" {
+		UpdateOutcome(event, fmt.Errorf("cloud cred is not created"))
+		return
+	}
+
+	credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+	credUUID = strings.ReplaceAll(credUUID, "\"", "")
+	log.Infof("Got Cred UUID: %s", credUUID)
+
 	stepLog := "Validate Cloud Snaps"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -2219,6 +2241,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				if err != nil {
 					UpdateOutcome(event, err)
 				} else {
+					snapMap := make(map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 					for _, v := range appVolumes {
 						// Skip cloud snapshot trigger for Pure DA volumes
 						isPureVol, err := Inst().V.IsPureVolume(v)
@@ -2233,29 +2256,114 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						}
 						snapshotScheduleName := v.Name + "-interval-schedule"
 						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-						snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
-							appNamespace,
-							snapshotScheduleRetryTimeout,
-							snapshotScheduleRetryInterval)
-						if err == nil {
-							for k, v := range snapStatuses {
-								log.InfoD("Policy Type: %v", k)
-								for _, e := range v {
-									log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
-									log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
+						var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+						checkSnapshotSchedules := func() (interface{}, bool, error) {
+							resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+							if err != nil {
+								return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+							}
+							if len(resp.Status.Items) == 0 {
+								return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+							}
+
+							log.Infof("%v", resp.Status.Items)
+							for _, snapshotStatuses := range resp.Status.Items {
+								if len(snapshotStatuses) > 0 {
+									volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
+									if volumeSnapshotStatus == nil {
+										return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+									}
+									if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
+										return nil, false, nil
+									}
+									if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
+										return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
+									}
+									if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
+										return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
+									}
 								}
 							}
-						} else {
-							log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
+							return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
 						}
+						_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
 						UpdateOutcome(event, err)
+						snapData, err := Inst().S.GetSnapShotData(ctx, volumeSnapshotStatus.Name, appNamespace)
+						UpdateOutcome(event, err)
+						snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+						log.Infof("Snapshot Type: %v", snapType)
+						if snapType != "cloud" {
+							err = &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+							}
+							log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
+						}
+						condition := snapData.Status.Conditions[0]
+						dash.VerifySafely(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true, fmt.Sprintf("validate volume snapshot condition data for %s expteced: %v, actual %v", volumeSnapshotStatus.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
+
+						snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+						log.Infof("Snapshot ID: %v", snapID)
+						if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+							len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+							err = &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+							}
+							UpdateOutcome(event, err)
+
+						}
+						snapMap[v] = volumeSnapshotStatus
 					}
+					cloudsnapMap[appNamespace] = snapMap
 				}
-
 			}
-
 		}
 		updateMetrics(*event)
+	})
+
+}
+
+// TriggerCloudSnapshotRestore perform in-place cloud snap restore
+func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CloudSnapShotRestore)
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: CloudSnapShotRestore,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Verify cloud snap restore"
+	Step(stepLog, func() {
+		for ns, volSnap := range cloudsnapMap {
+			for vol, snap := range volSnap {
+				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+					Name:      vol.Name,
+					Namespace: vol.Namespace,
+				}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
+				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+			}
+		}
 	})
 
 }
@@ -5818,6 +5926,9 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 // TriggerAsyncDR triggers Async DR
 func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDR)
+	defer ginkgo.GinkgoRecover()
 	log.Infof("Async DR triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -5880,7 +5991,6 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	})
 
-	time.Sleep(5 * time.Minute)
 	log.Info("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
@@ -5899,6 +6009,11 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -5990,7 +6105,6 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	})
 
-	time.Sleep(5 * time.Minute)
 	log.InfoD("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
@@ -6009,6 +6123,11 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-metrodr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -6110,6 +6229,11 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		} else {
 			log.InfoD("Number of resources migrated: %d", resourcesMigrated)
 		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-asyncdr-volonly", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -7110,7 +7234,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName             = "async-policy"
 		suspendSched          = false
 		autoSuspend           = false
-		schdPol             *storkapi.SchedulePolicy
+		schdPol               *storkapi.SchedulePolicy
 		err                   error
 		makeSuspend           = true
 	)
@@ -7245,7 +7369,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		scpolName                = "async-policy"
 		suspendSched             = false
 		autoSuspend              = false
-		schdPol                 *storkapi.SchedulePolicy
+		schdPol                  *storkapi.SchedulePolicy
 		err                      error
 		makeSuspend              = true
 	)
@@ -7407,6 +7531,14 @@ func rangeStructer(args ...interface{}) []interface{} {
 	}
 
 	return out
+}
+
+func getPXVersion(nd node.Node) string {
+	pxVersion, err := Inst().V.GetDriverVersionOnNode(nd)
+	if err != nil {
+		return "Couldn't get PX version"
+	}
+	return pxVersion
 }
 
 // createPureStorageClass create storage class

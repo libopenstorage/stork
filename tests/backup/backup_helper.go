@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/portworx/torpedo/drivers"
+	appsapi "k8s.io/api/apps/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -890,14 +891,14 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
 	var number int
 	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
 	for _, line := range strings.SplitAfter(ret, "\n") {
-		if strings.Contains(line, "pxd") {
+		if strings.Contains(line, volumeMount) {
 			ret = strings.Fields(line)[3]
 		}
 	}
@@ -3409,4 +3410,40 @@ func GetCustomBucketName(provider string, testName string) string {
 		CreateBucket(provider, customBucket)
 	}
 	return customBucket
+}
+
+// ValidateBackupLocation validates the given backup location
+func ValidateBackupLocation(ctx context.Context, orgID string, backupLocationName string, uid string) error {
+	backupLocationValidateRequest := &api.BackupLocationValidateRequest{
+		OrgId: orgID,
+		Name:  backupLocationName,
+		Uid:   uid,
+	}
+	_, err := Inst().Backup.ValidateBackupLocation(ctx, backupLocationValidateRequest)
+	return err
+}
+
+// GetAppLabelFromSpec gets the label of the pod from the spec
+func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]string, error) {
+	for _, specObj := range AppContextsMapping.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			return obj.Spec.Selector.MatchLabels, nil
+		}
+	}
+	return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+}
+
+// GetVolumeMounts gets the volume mounts from the spec
+func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
+	var volumeMounts []string
+	for _, specObj := range AppContextsMapping.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			mountPoints := obj.Spec.Template.Spec.Containers[0].VolumeMounts
+			for index := range mountPoints {
+				volumeMounts = append(volumeMounts, mountPoints[index].MountPath)
+			}
+			return volumeMounts, nil
+		}
+	}
+	return nil, fmt.Errorf("unable to find the mount point for %s", AppContextsMapping.App.Key)
 }

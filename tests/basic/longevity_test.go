@@ -110,6 +110,7 @@ var _ = Describe("{Longevity}", func() {
 		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
 		DeleteOldNamespaces:      TriggerDeleteOldNamespaces,
 		MetroDRMigrationSchedule: TriggerMetroDRMigrationSchedule,
+		CloudSnapShotRestore:     TriggerCloudSnapshotRestore,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -688,6 +689,7 @@ func populateIntervals() {
 	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
+	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1398,6 +1400,17 @@ func populateIntervals() {
 	triggerInterval[AddDrive][6] = 5 * baseInterval
 	triggerInterval[AddDrive][5] = 6 * baseInterval
 
+	triggerInterval[CloudSnapShotRestore][10] = 1 * baseInterval
+	triggerInterval[CloudSnapShotRestore][9] = 3 * baseInterval
+	triggerInterval[CloudSnapShotRestore][8] = 6 * baseInterval
+	triggerInterval[CloudSnapShotRestore][7] = 9 * baseInterval
+	triggerInterval[CloudSnapShotRestore][6] = 12 * baseInterval
+	triggerInterval[CloudSnapShotRestore][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CloudSnapShotRestore][4] = 18 * baseInterval
+	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
+	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
+	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
+
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
 
@@ -1465,6 +1478,7 @@ func populateIntervals() {
 	triggerInterval[ResizeDiskAndReboot][0] = 0
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
+	triggerInterval[CloudSnapShotRestore][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

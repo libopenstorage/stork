@@ -461,7 +461,7 @@ func (p *portworx) GetVolumeBackupIDs(
 		return volumeBackupIDs, err
 	}
 
-	backupUUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	backupUUID, err := p.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return volumeBackupIDs, err
 	}
@@ -532,7 +532,7 @@ func (p *portworx) WaitForBackupCompletion(
 	timeBeforeRetry time.Duration,
 ) error {
 
-	backupUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	backupUID, err := p.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
 	}
@@ -694,7 +694,7 @@ func (p *portworx) WaitForDeletePending(
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
-	backupUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	backupUID, err := p.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
 	}

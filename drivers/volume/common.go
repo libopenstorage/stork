@@ -330,6 +330,24 @@ func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) error {
 	}
 }
 
+// GetCloudsnaps returns cloudsnap backups.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) GetCloudsnaps(name string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "Getloudsnaps()",
+	}
+}
+
+// DeleteAllCloudsnaps deletes all  cloudsnap backups
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteAllCloudsnaps()",
+	}
+}
+
 // ValidateCreateCloudsnap validates whether a volume has been created properly.
 // params are the custom volume options passed when creating the volume.
 func (d *DefaultDriver) ValidateCreateCloudsnap(name string, params map[string]string) error {

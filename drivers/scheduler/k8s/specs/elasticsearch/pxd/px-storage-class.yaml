@@ -9,4 +9,8 @@ parameters:
   {{ else }}
   repl: "3"{{ end }}
   nodiscard: "true"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
 allowVolumeExpansion: true
