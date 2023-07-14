@@ -96,7 +96,7 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, true, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false)
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
@@ -147,7 +147,7 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, true, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false)
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
@@ -273,9 +273,11 @@ func testMigrationFailback(
 
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
-	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
-	require.NoError(t, err, "Error scheduling cluster pair")
+	if !bidirectionalClusterpair {
+		// create, apply and validate cluster pair specs
+		err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
+		require.NoError(t, err, "Error scheduling cluster pair")
+	}
 
 	// apply migration specs
 	err = schedulerDriver.AddTasks(ctxsReverse[0],

@@ -793,7 +793,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	if projectMappings != "" {
-		cmdArgs = append(cmdArgs, fmt.Sprintf("--projectMappings %s", projectMappings))
+		cmdArgs = append(cmdArgs, fmt.Sprintf("--project-mappings %s", projectMappings))
 	}
 
 	// Get external object store details and append to the command accordingily
