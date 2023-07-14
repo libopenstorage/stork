@@ -5663,8 +5663,9 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		var poolID int32
 
 		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolID)
 
 		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.InfoD("List of all the Pools present in the system [%s]", allPools)
@@ -9760,4 +9761,115 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+
+var _ = Describe("{ResizeVolumeAfterFull}", func() {
+	/*
+		https://portworx.atlassian.net/browse/PTX-18927
+		Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizeVolumeAfterFull",
+			"Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		currAppList := Inst().AppList
+
+		revertAppList := func() {
+			Inst().AppList = currAppList
+		}
+		defer revertAppList()
+
+		Inst().AppList = []string{}
+		var ioIntensiveApp = []string{"fio", "fio-writes", "vdbench-heavyload"}
+
+		for _, eachApp := range ioIntensiveApp {
+			Inst().AppList = append(Inst().AppList, eachApp)
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizepoolfiftyper-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		calculatePercentage := func(usedValue float64, totalValue float64) float64 {
+			percentage := (usedValue / totalValue) * 100
+			return float64(percentage)
+		}
+
+		// Waiting for all pods to become ready and in running state
+		waitForPoolFull := func() (interface{}, bool, error) {
+
+			// Wait for Pool status till pool is 100% full and goes offline
+			pool, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+			usedSize, totalSize := pool.Used, pool.TotalSize
+			log.Infof("Used vs Total Percentage [%v]:[%v]", usedSize, totalSize)
+
+			totalPercentage := calculatePercentage(float64(usedSize), float64(totalSize))
+			if totalPercentage >= 99.5 {
+				return nil, false, nil
+			}
+
+			return nil, true, fmt.Errorf("storage is not full on pool with uuid [%v] percentage used [%v]", poolUUID, totalPercentage)
+		}
+		_, err = task.DoRetryWithTimeout(waitForPoolFull, 120*time.Minute, 10*time.Second)
+		log.FailOnError(err, "failed waiting for pool to get full condition")
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolToBeResized.TotalSize, poolToBeResized.Used))
+
+		// Expand pool by 50 % upon storage full
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + ((poolToBeResized.TotalSize / 2) / units.GiB)
+		log.Infof("current Pool size is [%v] and expected resize size is [%v]", poolToBeResized.TotalSize, expectedSize)
+
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
+		//To-Do Need to handle the case for multiple pools
+		expectedSizeWithJournal := expectedSize
+		if isjournal {
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
+		}
+
+		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+
+		// Verify if IO is still running upon pool resize
+		time.Sleep(5 * time.Minute)
+
+		poolafterResize, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
+		dash.VerifyFatal(poolafterResize.Used > poolToBeResized.Used, true, "is pool ingest successful after resize?")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
 })
