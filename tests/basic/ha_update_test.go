@@ -31,12 +31,20 @@ var _ = Describe("{HaIncreaseRestartPXSource}", func() {
 	performHaIncreaseRebootTest(testName)
 })
 
+var _ = Describe("{HaIncreaseRestartPXTarget}", func() {
+	testName := "ha-inc-restartpx-tgt"
+	performHaIncreaseRebootTest(testName)
+})
+
 func performHaIncreaseRebootTest(testName string) {
 	var contexts []*scheduler.Context
-
 	nodeRebootType := "target"
 	testDesc := "HaIncreaseRebootTarget"
 
+	if testName == "ha-inc-reboot-tgt" {
+		nodeRebootType = "target"
+		testDesc = "HaIncreaseRebootTarget"
+	}
 	if testName == "ha-inc-reboot-src" {
 		nodeRebootType = "source"
 		testDesc = "HaIncreaseRebootSource"
@@ -45,6 +53,10 @@ func performHaIncreaseRebootTest(testName string) {
 	if testName == "ha-inc-restartpx-src" {
 		nodeRebootType = "source"
 		testDesc = "HaIncreaseRestartPX on Source"
+	}
+	if testName == "ha-inc-restartpx-tgt" {
+		nodeRebootType = "target"
+		testDesc = "HaIncreaseRestartPX on Target"
 	}
 	JustBeforeEach(func() {
 		StartTorpedoTest(testDesc, fmt.Sprintf("Validate HA increase and reboot %s", nodeRebootType), nil, 0)
@@ -114,6 +126,8 @@ func performHaIncreaseRebootTest(testName string) {
 					} else if testName == "ha-inc-restartpx-src" {
 						restartPX := true
 						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
+					} else if testName == "ha-inc-restartpx-tgt" {
+						restartPX := true
 						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
 					} else {
 						restartPX := false
