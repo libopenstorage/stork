@@ -584,7 +584,7 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "has to schedule cloud snap  and restore"
+	stepLog := "has to schedule cloud snap  and delete cloudsnaps"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		n := node.GetStorageDriverNodes()[0]
@@ -618,7 +618,7 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 					Policy: storkv1.SchedulePolicyItem{
 						Interval: &storkv1.IntervalPolicy{
 							Retain:          storkv1.Retain(retain),
-							IntervalMinutes: 3,
+							IntervalMinutes: interval,
 						},
 					}}
 

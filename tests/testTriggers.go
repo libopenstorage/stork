@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"math"
 	"math/rand"
 	"os"
@@ -109,6 +110,8 @@ const (
 const (
 	validateReplicationUpdateTimeout = 4 * time.Hour
 	errorChannelSize                 = 50
+	snapshotScheduleRetryInterval    = 2 * time.Minute
+	snapshotScheduleRetryTimeout     = 60 * time.Minute
 )
 
 const (
@@ -228,6 +231,8 @@ var decommissionedNode = node.Node{}
 // node with autopilot rule enabled
 var autoPilotLabelNode node.Node
 
+var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -334,11 +339,14 @@ const (
 	VolumeResize = "volumeResize"
 	// VolumesDelete deletes the columes of the context
 	VolumesDelete = "volumesDelete"
-	// CloudSnapShot takes local snap shot of the volumes
 	// CloudSnapShot takes cloud snapshot of the volumes
 	CloudSnapShot = "cloudSnapShot"
+	//CloudSnapShotRestore in-place cloudsnap restores
+	CloudSnapShotRestore = "cloudSnapShotRestore"
 	// LocalSnapShot takes local snapshot of the volumes
 	LocalSnapShot = "localSnapShot"
+	// LocalSnapShotRestore restores local snapshot of the volumes
+	LocalSnapShotRestore = "localSnapShotRestore"
 	// CsiSnapShot takes csi snapshot of the volumes
 	CsiSnapShot = "csiSnapShot"
 	//CsiSnapRestore takes restore
@@ -2093,8 +2101,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 							UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 						}
 					})
-					snapshotScheduleRetryInterval := 10 * time.Second
-					snapshotScheduleRetryTimeout := 3 * time.Minute
+
 					for _, v := range appVolumes {
 						snapshotScheduleName := v.Name + "-interval-schedule"
 						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
@@ -2140,6 +2147,101 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 
 }
 
+func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(LocalSnapShotRestore)
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: LocalSnapShotRestore,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		if strings.Contains(ctx.App.Key, "localsnap") {
+			appNamespace := ctx.App.Key + "-" + ctx.UID
+			log.Infof("Namespace : %v", appNamespace)
+			stepLog := fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+				if len(appVolumes) == 0 {
+					log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+				}
+			})
+			log.Infof("Got volume count : %v", len(appVolumes))
+			for _, v := range appVolumes {
+				snapshotScheduleName := v.Name + "-interval-schedule"
+				log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+				var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+				checkSnapshotSchedules := func() (interface{}, bool, error) {
+					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					if err != nil {
+						return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+					}
+					if len(resp.Status.Items) == 0 {
+						return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+					}
+
+					log.Infof("%v", resp.Status.Items)
+					for _, snapshotStatuses := range resp.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
+							if volumeSnapshotStatus == nil {
+								return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+							}
+							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
+								return nil, false, nil
+							}
+							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
+								return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
+							}
+							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
+								return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
+							}
+						}
+					}
+					return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
+				}
+				_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+					Name:      v.Name,
+					Namespace: v.Namespace,
+				}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
+				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, v.Name, v.Namespace))
+				UpdateOutcome(event, err)
+
+			}
+
+		}
+	}
+
+	setMetrics(*event)
+}
+
 // TriggerCloudSnapShot deploy Interval Policy and validates snapshot
 func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -2161,9 +2263,25 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 	}()
 
 	setMetrics(*event)
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "pxctl cred list -j | grep uuid"
 
-	snapshotScheduleRetryInterval := 10 * time.Second
-	snapshotScheduleRetryTimeout := 3 * time.Minute
+	output, err := Inst().V.GetPxctlCmdOutput(n, uuidCmd)
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+
+	log.FailOnError(err, "error getting uuid for cloudsnap credential")
+	if output == "" {
+		UpdateOutcome(event, fmt.Errorf("cloud cred is not created"))
+		return
+	}
+
+	credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+	credUUID = strings.ReplaceAll(credUUID, "\"", "")
+	log.Infof("Got Cred UUID: %s", credUUID)
+
 	stepLog := "Validate Cloud Snaps"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -2219,6 +2337,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				if err != nil {
 					UpdateOutcome(event, err)
 				} else {
+					snapMap := make(map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 					for _, v := range appVolumes {
 						// Skip cloud snapshot trigger for Pure DA volumes
 						isPureVol, err := Inst().V.IsPureVolume(v)
@@ -2233,29 +2352,117 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						}
 						snapshotScheduleName := v.Name + "-interval-schedule"
 						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-						snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
-							appNamespace,
-							snapshotScheduleRetryTimeout,
-							snapshotScheduleRetryInterval)
-						if err == nil {
-							for k, v := range snapStatuses {
-								log.InfoD("Policy Type: %v", k)
-								for _, e := range v {
-									log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
-									log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
+						var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+						checkSnapshotSchedules := func() (interface{}, bool, error) {
+							resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+							if err != nil {
+								return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+							}
+							if len(resp.Status.Items) == 0 {
+								return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+							}
+
+							log.Infof("%v", resp.Status.Items)
+							for _, snapshotStatuses := range resp.Status.Items {
+								if len(snapshotStatuses) > 0 {
+									volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
+									if volumeSnapshotStatus == nil {
+										return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+									}
+									if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
+										return nil, false, nil
+									}
+									if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
+										return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
+									}
+									if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
+										return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
+									}
 								}
 							}
-						} else {
-							log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
+							return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
 						}
+						_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
 						UpdateOutcome(event, err)
+						snapData, err := Inst().S.GetSnapShotData(ctx, volumeSnapshotStatus.Name, appNamespace)
+						UpdateOutcome(event, err)
+						snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+						log.Infof("Snapshot Type: %v", snapType)
+						if snapType != "cloud" {
+							err = &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+							}
+							log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
+						}
+						condition := snapData.Status.Conditions[0]
+						dash.VerifySafely(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true, fmt.Sprintf("validate volume snapshot condition data for %s expteced: %v, actual %v", volumeSnapshotStatus.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
+
+						snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+						log.Infof("Snapshot ID: %v", snapID)
+						if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+							len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+							err = &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+							}
+							UpdateOutcome(event, err)
+
+						}
+						snapMap[v] = volumeSnapshotStatus
 					}
+					cloudsnapMap[appNamespace] = snapMap
 				}
-
 			}
-
 		}
 		updateMetrics(*event)
+	})
+
+}
+
+// TriggerCloudSnapshotRestore perform in-place cloud snap restore
+func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CloudSnapShotRestore)
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: CloudSnapShotRestore,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Verify cloud snap restore"
+	Step(stepLog, func() {
+		for ns, volSnap := range cloudsnapMap {
+			for vol, snap := range volSnap {
+				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+					Name:      vol.Name,
+					Namespace: vol.Namespace,
+				}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
+				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+			}
+		}
+		for k, _ := range cloudsnapMap {
+			delete(cloudsnapMap, k)
+		}
 	})
 
 }

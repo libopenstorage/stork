@@ -8,4 +8,8 @@ parameters:
   repl: "{{ .Repl }}"
   {{ else }}
   repl: "3"{{ end }}
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
 allowVolumeExpansion: true
