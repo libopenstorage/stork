@@ -3398,22 +3398,31 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 // DeleteBackup deletes backup
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
+	var backupObj *api.BackupObject
 	var backupDeleteResponse *api.BackupDeleteResponse
 
-	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
-		backupName, orgID), func() {
-		backupDriver := Inst().Backup
-		bkpDeleteRequest := &api.BackupDeleteRequest{
-			Name:  backupName,
-			OrgId: orgID,
-			Uid:   backupUID,
+	backupDriver := Inst().Backup
+
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return backupDeleteResponse, err
+	}
+	for _, bkp := range curBackups.GetBackups() {
+		if bkp.Uid == backupUID {
+			backupObj = bkp
+			break
 		}
-		backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
-		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
-		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
-		// TODO: validate createClusterResponse also
-	})
+	}
+
+	bkpDeleteRequest := &api.BackupDeleteRequest{
+		Name:    backupName,
+		OrgId:   orgID,
+		Uid:     backupUID,
+		Cluster: backupObj.Cluster,
+	}
+	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
 }
 
@@ -3422,8 +3431,10 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 
 	backupDriver := Inst().Backup
 	clusterDeleteReq := &api.ClusterDeleteRequest{
-		OrgId: orgID,
-		Name:  name,
+		OrgId:          orgID,
+		Name:           name,
+		DeleteBackups:  true,
+		DeleteRestores: true,
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err

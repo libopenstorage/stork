@@ -307,7 +307,12 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 		},
 		ResourceTypes: resourceTypes,
 	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return err
 	}
@@ -410,18 +415,12 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 		},
 	}
 
-	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
-		log.Infof("Detected generic backup type")
-		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
-		var csiSnapshotClassName string
-		var err error
-		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-			return nil, err
-		}
-		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +484,12 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 			Uid:  postRuleUid,
 		},
 	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1564,9 +1568,14 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						}
 
 						var expectedVolumeDriver string
-						if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+						switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+						case string(NativeCSIWithOffloadToS3):
 							expectedVolumeDriver = "kdmp"
-						} else {
+						case string(NativeCSI):
+							expectedVolumeDriver = "csi"
+						case string(DirectKDMP):
+							expectedVolumeDriver = "kdmp"
+						default:
 							expectedVolumeDriver = Inst().V.String()
 						}
 
@@ -1576,8 +1585,13 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						}
 
 						if backedupVol.StorageClass != *pvcObj.Spec.StorageClassName {
-							err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
-							errors = append(errors, err)
+							switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+							case string(NativeCSI):
+								log.Infof("in case of native CSI backup volumes in backup object is not updated with storage class")
+							default:
+								err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
+								errors = append(errors, err)
+							}
 						}
 
 						continue volloop
@@ -1860,9 +1874,14 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 				}
 
 				var expectedVolumeDriver string
-				if os.Getenv("BACKUP_TYPE") == "Generic" {
+				switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+				case string(NativeCSIWithOffloadToS3):
 					expectedVolumeDriver = "kdmp"
-				} else {
+				case string(NativeCSI):
+					expectedVolumeDriver = "csi"
+				case string(DirectKDMP):
+					expectedVolumeDriver = "kdmp"
+				default:
 					expectedVolumeDriver = Inst().V.String()
 				}
 
@@ -2664,17 +2683,11 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 		NsLabelSelectors: namespaceLabel,
 	}
 
-	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
-		log.Infof("Detected generic backup type")
-		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
-		var csiSnapshotClassName string
-		var err error
-		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-			return nil, err
-		}
-		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return nil, err
 	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -2723,7 +2736,12 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 		},
 		NsLabelSelectors: namespaceLabel,
 	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -3500,6 +3518,76 @@ func UpdateBackupLocationOwnership(name string, uid string, userNames []string, 
 	_, err := backupDriver.UpdateOwnershipBackupLocation(ctx, bLocationOwnershipUpdateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+type BackupTypeForCSI string
+
+const (
+	NativeCSIWithOffloadToS3 BackupTypeForCSI = "csi_offload_s3"
+	NativeCSI                BackupTypeForCSI = "native_csi"
+	DirectKDMP               BackupTypeForCSI = "direct_kdmp"
+)
+
+// AdditionalBackupRequestParams decorates the backupRequest with additional parameters required
+// when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
+func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error {
+	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+	case string(NativeCSIWithOffloadToS3):
+		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
+		backupRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(NativeCSI):
+		log.Infof("Detected backup type - %s", NativeCSI)
+		backupRequest.BackupType = api.BackupCreateRequest_Normal
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(DirectKDMP):
+		log.Infof("Detected backup type - %s", DirectKDMP)
+		backupRequest.BackupType = api.BackupCreateRequest_Generic
+	default:
+		log.Infof("Environment variable BACKUP_TYPE is not provided")
+	}
+	return nil
+}
+
+// AdditionalScheduledBackupRequestParams decorates the backupScheduleRequest with additional parameters required
+// when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
+func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupScheduleCreateRequest) error {
+	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+	case string(NativeCSIWithOffloadToS3):
+		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(NativeCSI):
+		log.Infof("Detected backup type - %s", NativeCSI)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(DirectKDMP):
+		log.Infof("Detected backup type - %s", DirectKDMP)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
+	default:
+		log.Infof("Environment variable BACKUP_TYPE is not provided")
 	}
 	return nil
 }
