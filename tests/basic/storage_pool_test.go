@@ -9230,6 +9230,51 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 	return &wg, nil
 }
 
+var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
+	/*
+			test to expand multiple pool at once in parallel
+		    Pick a Pool from each Storage Node and expand all the node in parallel
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandMultiplePoolWithIOsInClusterAtOnce",
+			"Expand multiple pool in the cluster at once in parallel",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		poolIdsToExpand := []string{}
+		for _, eachNodes := range node.GetStorageNodes() {
+			poolsPresent, err := GetPoolWithIOsInGivenNode(eachNodes, contexts)
+			if err == nil {
+				poolIdsToExpand = append(poolIdsToExpand, poolsPresent.Uuid)
+			} else {
+				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+			fmt.Sprintf("No pools with IO present ?"))
+
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
 	/*
 		Restart Multiple Storage Nodes with one KVDB Master in parallel and wait for the node to come back online
