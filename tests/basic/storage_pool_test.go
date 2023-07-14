@@ -9819,7 +9819,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		log.FailOnError(err, "error getting pool by using id %s", poolToBeResized.Uuid)
 		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
 		poolStatus, err := getPoolLastOperation(expandedPool.Uuid)
-		log.FailOnError(err, "failed to get last operation %s")
+		log.FailOnError(err, "failed to get last operation on pool %s", expandedPool.Uuid)
 		if poolStatus.Msg != "" {
 			log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
 			if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
