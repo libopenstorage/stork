@@ -10,7 +10,12 @@ parameters:
   {{ else }}
   repl: "2"{{ end }}
   priority_io: "high"
-  io_profile: "db_remote"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"
+  {{ else }}
+  io_profile: "db_remote"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
   io_throttle_wr_iops: "1024"
   io_throttle_rd_bw: "10"
 allowVolumeExpansion: true
@@ -27,7 +32,12 @@ parameters:
   {{ else }}
   repl: "3"{{ end }}
   priority_io: "high"
-  io_profile: "db_remote"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"
+  {{ else }}
+  io_profile: "db_remote"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
   io_throttle_wr_iops: "1024"
   io_throttle_rd_bw: "10"
 allowVolumeExpansion: true
