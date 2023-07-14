@@ -9818,10 +9818,12 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
 		log.FailOnError(err, "error getting pool by using id %s", poolToBeResized.Uuid)
 		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
-		if expandedPool.LastOperation != nil {
-			log.Infof("Pool Resize Status: %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
-			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
-				(strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance is running") || strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress")) {
+		poolStatus, err := getPoolLastOperation(expandedPool.Uuid)
+		log.FailOnError(err, "failed to get last operation %s")
+		if poolStatus.Msg != "" {
+			log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
+			if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
+				(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
 				errstring := true
 				dash.VerifyFatal(errstring == true, true, "poolresize failed")
 			}
@@ -9834,7 +9836,6 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			})
 			time.Sleep(300 * time.Second)
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
-			dash.VerifyFatal(expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize has failed. Error: %s", expandedPool.LastOperation))
 		}
 		t := func() (interface{}, bool, error) {
 			err = Inst().N.PowerOnVM(*nodeDetail)
@@ -9852,6 +9853,8 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		if err := Inst().V.WaitDriverUpOnNode(*nodeDetail, validatePXStartTimeout); err != nil {
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
 		}
+		poolStatus, err = getPoolLastOperation(expandedPool.Uuid)
+		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize has failed. Error: %s", poolStatus.Msg))
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using add_disk option", poolUUID))
