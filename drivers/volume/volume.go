@@ -130,6 +130,14 @@ type Driver interface {
 	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
 	ValidateCreateSnapshotUsingPxctl(name string) error
 
+	// GetCloudsnaps returns cloudsnap backups
+	// params are the custom backup options passed
+	GetCloudsnaps(name string, params map[string]string) ([]*api.SdkCloudBackupInfo, error)
+
+	// DeleteAllCloudsnaps deletes all  cloudsnap backups
+	// params are the custom backup options passed
+	DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error
+
 	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
 	// params are the custom backup options passed
 	ValidateCreateCloudsnap(name string, params map[string]string) error

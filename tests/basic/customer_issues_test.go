@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -395,7 +396,6 @@ var _ = Describe("{ValidateZombieReplicas}", func() {
 	/*
 			1. Create aggressive localsnap for every minute.
 			2. Validate zombie replicas
-			3. Restore cloud snap and validate
 		https://portworx.atlassian.net/browse/PTX-17088
 	*/
 
@@ -404,7 +404,7 @@ var _ = Describe("{ValidateZombieReplicas}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "has to cloud snap  and restore"
+	stepLog := "has to schedule local snapshots and validate zombie replicas"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -457,7 +457,7 @@ var _ = Describe("{ValidateZombieReplicas}", func() {
 			Inst().AppList = []string{"fio-localsnap"}
 
 			for i := 0; i < appScale; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("localsnap-%d", i))...)
 			}
 
 			ValidateApplications(contexts)
@@ -561,6 +561,195 @@ var _ = Describe("{ValidateZombieReplicas}", func() {
 						dash.VerifySafely(len(postNodeContentsMap[n.Name]), len(nodeContentsMap[n.Name]), fmt.Sprintf("replicas not deleted in node [%s], Actual: [%v], Expected: [%v]", n.Name, postNodeContentsMap[n.Name], nodeContentsMap[n.Name]))
 					}
 				}
+
+			})
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{CreateCloudSnapAndDelete}", func() {
+	/*
+		1. Create aggressive cloud snaps for every minute
+		2. ValidateCloudSnap Deletion
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateCloudSnapAndDelete", "Create aggressive cloud snaps and validate deletion", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to schedule cloud snap  and delete cloudsnaps"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		n := node.GetStorageDriverNodes()[0]
+		uuidCmd := "pxctl cred list -j | grep uuid"
+		output, err := runCmd(uuidCmd, n)
+		log.FailOnError(err, "error getting uuid for cloudsnap credential")
+		if output == "" {
+			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+		}
+
+		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+		credUUID = strings.ReplaceAll(credUUID, "\"", "")
+		log.Infof("Got Cred UUID: %s", credUUID)
+		contexts = make([]*scheduler.Context, 0)
+		policyName := "intervalpolicy"
+		appScale := 5
+
+		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				retain := 3
+				interval := 1
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+
+			}()
+
+			Inst().AppList = []string{"fio-cloudsnap"}
+
+			for i := 0; i < appScale; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnap-%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+			log.Infof("waiting for 15 mins for enough cloud snaps to be created.")
+			time.Sleep(15 * time.Minute)
+
+			stepLog = "Verify that cloud snap status"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				for _, ctx := range contexts {
+					var appVolumes []*volume.Volume
+					var err error
+					appNamespace := ctx.App.Key + "-" + ctx.UID
+					log.Infof("Namespace : %v", appNamespace)
+					stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						appVolumes, err = Inst().S.GetVolumes(ctx)
+						log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+						if len(appVolumes) == 0 {
+							log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+						}
+					})
+					log.Infof("Got volume count : %v", len(appVolumes))
+					scaleFactor := time.Duration(appScale * len(appVolumes))
+					err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
+					log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
+
+					for _, v := range appVolumes {
+
+						isPureVol, err := Inst().V.IsPureVolume(v)
+						log.FailOnError(err, "error checking if volume is pure volume")
+						if isPureVol {
+							log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
+							continue
+						}
+
+						snapshotScheduleName := v.Name + "-interval-schedule"
+						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace))
+						dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
+						for _, snapshotStatuses := range resp.Status.Items {
+							if len(snapshotStatuses) > 0 {
+								status := snapshotStatuses[len(snapshotStatuses)-1]
+								if status == nil {
+									log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for %s", snapshotScheduleName))
+
+								}
+								log.Infof("Snapshot %s has status %v", status.Name, status.Status)
+
+								if status.Status == snapv1.VolumeSnapshotConditionError {
+									log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
+								}
+								if status.Status != snapv1.VolumeSnapshotConditionPending {
+									snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+									log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
+
+									snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+									log.Infof("Snapshot Type: %v", snapType)
+									if snapType != "cloud" {
+										err = &scheduler.ErrFailedToGetVolumeParameters{
+											App:   ctx.App,
+											Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+										}
+										log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
+									}
+
+									snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+									log.Infof("Snapshot ID: %v", snapID)
+									if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+										len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+										err = &scheduler.ErrFailedToGetVolumeParameters{
+											App:   ctx.App,
+											Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+										}
+										log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
+									}
+								}
+
+							}
+						}
+
+					}
+				}
+			})
+
+			stepLog = "Validate cloud snap deletion"
+			Step(stepLog, func() {
+
+				for _, ctx := range contexts {
+					vols, err := Inst().S.GetVolumeParameters(ctx)
+					log.FailOnError(err, fmt.Sprintf("error getting volume params for %s", ctx.App.Key))
+					for vol, params := range vols {
+						csBksps, err := Inst().V.GetCloudsnaps(vol, params)
+						log.FailOnError(err, fmt.Sprintf("error getting cloud snaps for %s", vol))
+						for _, bk := range csBksps {
+							log.Infof("Deleting : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
+							err = Inst().V.DeleteAllCloudsnaps(vol, bk.SrcVolumeId, params)
+							if err != nil && strings.Contains(err.Error(), "Key already exists") {
+								continue
+							}
+							log.FailOnError(err, fmt.Sprintf("error deleting Cloudsnap %s", bk.Id))
+						}
+
+					}
+
+				}
+
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				ValidateAndDestroy(contexts, opts)
 
 			})
 

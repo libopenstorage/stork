@@ -7,7 +7,12 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "2"
   priority_io: "high"
-  io_profile: "db_remote"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"
+  {{ else }}
+  io_profile: "db_remote"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
   snapshotschedule.stork.libopenstorage.org/interval-schedule: |
     schedulePolicyName: localintervalpolicy
     annotations:

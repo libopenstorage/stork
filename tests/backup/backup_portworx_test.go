@@ -568,12 +568,12 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 				encryptionBackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
 				backupNames = append(backupNames, encryptionBackupName)
 				err = CreateBackupWithValidation(ctx, encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", encryptionBackupName))
 			}
 		})
 
-		Step("Restoring encrypted and no-encrypted backups", func() {
-			log.InfoD("Restoring encrypted and no-encrypted backups")
+		Step("Restoring encrypted and non-encrypted backups", func() {
+			log.InfoD("Restoring encrypted and non-encrypted backups")
 			restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
 			restoreNames = append(restoreNames, restoreName)
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -585,6 +585,37 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			restoreNames = append(restoreNames, restoreName)
 			err = CreateRestore(restoreName, backupNames[1], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 			log.FailOnError(err, "%s restore failed", restoreName)
+		})
+		// PB-3962: Taking encrypted backup, validating the backup location and restoring the backup to make sure the encryption key is not lost after backup location validation which will result in restore failure
+		Step("Taking new encrypted backup", func() {
+			log.InfoD("Taking new encrypted backup")
+			for _, namespace := range bkpNamespaces {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				encryptedBackupName := fmt.Sprintf("new-%s-%s-%s", "encrypted", BackupNamePrefix, namespace)
+				backupNames = append(backupNames, encryptedBackupName)
+				err = CreateBackupWithValidation(ctx, encryptedBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of new encrypted backup [%s]", encryptedBackupName))
+			}
+		})
+
+		Step("Validate the encrypted backup location after taking backup", func() {
+			log.InfoD("Validate the encrypted backup location after taking backup")
+			err = ValidateBackupLocation(ctx, orgID, backupLocationNames[1], BackupLocation1UID)
+			log.FailOnError(err, "backup location %s validation failed", backupLocationNames[1])
+		})
+
+		Step("Restore the encrypted backups after validating the encrypted backup location", func() {
+			log.InfoD("Restore the encrypted backups after validating the encrypted backup location")
+			for i := 1; i < len(backupNames); i++ {
+				restoreName := fmt.Sprintf("%s-%s-encrypted", restoreNamePrefix, backupNames[i])
+				restoreNames = append(restoreNames, restoreName)
+				for i, _ := range scheduledAppContexts {
+					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
+				}
+				log.FailOnError(err, "%s restore failed", restoreName)
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -632,12 +663,15 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		nextScheduleBackupNameRef   interface{}
 		restoreNames                []string
 		nextScheduleBackupName      string
+		volumeMounts                []string
+		podList                     []string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
-	podListBeforeSizeMap := make(map[string]int)
-	podListAfterSizeMap := make(map[string]int)
+	AppContextsMapping := make(map[string]*scheduler.Context)
+	volListBeforeSizeMap := make(map[string]int)
+	volListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
 	scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -667,6 +701,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
+				AppContextsMapping[namespace] = ctx
 			}
 		}
 	})
@@ -727,14 +762,22 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
+					label, err := GetAppLabelFromSpec(AppContextsMapping[namespace])
+					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the label from the application spec %s", AppContextsMapping[namespace].App.Key))
+					labelSelectors["app"] = label["app"]
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
 					for _, pod := range pods.Items {
-						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-						podListBeforeSizeMap[pod.Name] = beforeSize
+						volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
+						for _, volumeMount := range volumeMounts {
+							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+							volListBeforeSizeMap[volumeMount] = beforeSize
+							podList = append(podList, pod.Name)
+						}
 					}
 				})
 				Step("Create schedule policy", func() {
@@ -789,20 +832,23 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 
-					firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				})
 				Step("Checking size of volume after resize", func() {
 					log.InfoD("Checking size of volume after resize")
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-					for podName := range podListBeforeSizeMap {
-						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
-						podListAfterSizeMap[podName] = afterSize
+					for _, podName := range podList {
+						volumeMounts, err = GetVolumeMounts(AppContextsMapping[namespace])
+						for _, volumeMount := range volumeMounts {
+							afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
+							volListAfterSizeMap[volumeMount] = afterSize
+						}
 					}
-					for podName := range podListBeforeSizeMap {
-						dash.VerifyFatal(podListAfterSizeMap[podName] > podListBeforeSizeMap[podName], true, fmt.Sprintf("Verifying volume size has increased for pod %s", podName))
+					for _, volumeMount := range volumeMounts {
+						dash.VerifyFatal(volListAfterSizeMap[volumeMount] > volListBeforeSizeMap[volumeMount], true, fmt.Sprintf("Verifying volume size has increased for pod %s", volumeMount))
 					}
 				})
 				Step("Verifying backup success after initializing volume resize", func() {

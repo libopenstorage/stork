@@ -17,6 +17,10 @@ parameters:
   nodiscard: "true"
   mount_options: "nodiscard=true"
   nodiscard: "true"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
 allowVolumeExpansion: true
 ---
 kind: PersistentVolumeClaim

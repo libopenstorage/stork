@@ -1,23 +1,31 @@
 package asyncdr
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/sirupsen/logrus"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var dash *aetosutil.Dashboard
 
 const (
 	clusterName            = "tp-cluster"
@@ -49,6 +57,67 @@ var (
 	orgID      string
 	bucketName string
 )
+
+type MigrationStatsType struct {
+	CreatedOn                       string
+	TotalNumberOfVolumes            string
+	NumOfMigratedVolumes            string
+	TotalNumberOfResources          string
+	NumOfMigratedResources          string
+	TotalBytesMigrated              string
+	ElapsedTimeForVolumeMigration   string
+	ElapsedTimeForResourceMigration string
+	Application                     string
+	StorkVersion                    string
+	PortworxVersion                 string
+}
+
+func CreateStats(name, namespace, pxversion string) (map[string]string, error) {
+	migStats := &MigrationStatsType{}
+	mig, err := storkops.Instance().GetMigration(name, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get migration")
+	}
+	storkVersion, err := GetStorkVersion()
+	log.InfoD("Stork Version: %v", storkVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get strok version")
+	}
+
+	migStats.CreatedOn = mig.CreationTimestamp.Format("2006-01-02 15:04:05")
+	migStats.TotalNumberOfVolumes = strconv.Itoa(int(mig.Status.Summary.TotalNumberOfVolumes))
+	migStats.NumOfMigratedVolumes = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedVolumes))
+	migStats.TotalNumberOfResources = strconv.Itoa(int(mig.Status.Summary.TotalNumberOfResources))
+	migStats.NumOfMigratedResources = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedResources))
+	migStats.TotalBytesMigrated = strconv.Itoa(int(mig.Status.Summary.TotalBytesMigrated))
+	migStats.ElapsedTimeForVolumeMigration = mig.Status.Summary.ElapsedTimeForVolumeMigration
+	migStats.ElapsedTimeForResourceMigration = mig.Status.Summary.ElapsedTimeForResourceMigration
+	migStats.Application = getResourceNamesFromMigration(mig)
+	migStats.StorkVersion = storkVersion
+	migStats.PortworxVersion = pxversion
+	data, _ := json.Marshal(migStats)
+	migMap := make(map[string]string)
+	json.Unmarshal(data, &migMap)
+	log.InfoD("Migration Stats are: %v", migMap)
+	return migMap, nil
+}
+
+func getResourceNamesFromMigration(mig *storkapi.Migration) string {
+	var resourceList []string
+	for _, resource := range mig.Status.Resources {
+		if resource.Kind == "Deployment" || resource.Kind == "StatefulSet" {
+			resourceList = append(resourceList, resource.Name)
+		}
+	}
+	if len(resourceList) > 1 {
+		// return comma separated list of apps if there are multiple apps
+		return strings.Join(resourceList, ",")
+	} else if len(resourceList) == 1 {
+		return resourceList[0]
+	}
+	logrus.Info("App name not found for pushing to DB.")
+	return ""
+}
 
 // WriteKubeconfigToFiles - writes kubeconfig to files after reading the names from environment variable
 func WriteKubeconfigToFiles() error {
@@ -439,4 +508,18 @@ func WaitForNamespaceDeletion(namespaces []string) error {
 		}
 	}
 	return nil
+}
+
+func GetStorkVersion() (string, error) {
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return "", err
+	}
+	storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return "", err
+	}
+	storkImage := storkDeployment.Spec.Template.Spec.Containers[0].Image
+	storkImageVersion := strings.Split(storkImage, ":")[len(strings.Split(storkImage, ":"))-1]
+	return storkImageVersion, nil
 }
