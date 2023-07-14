@@ -33,6 +33,7 @@ func TestMigrationStorkFailures(t *testing.T) {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
+	setDefaultsForBackup(t)
 
 	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
 	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
@@ -79,9 +80,8 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for app to get to running state")
 
-	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0], false, true, defaultClusterPairDir, "", false)
-	require.NoError(t, err, "Error scheduling cluster pair")
+	// Schedule bidirectional or regular cluster pair based on the flag
+	scheduleClusterPairGeneric(t, ctxs, migrationAppKey, nsKey+"-"+clusterKey, defaultClusterPairDir, "", false, true, false)
 
 	// apply migration specs
 	currMigNamespace := migrationAppKey + "-" + nsKey + "-" + clusterKey
@@ -119,6 +119,8 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster for checking stork pods.")
 	_, err = core.Instance().GetPods(storkNamespace, storkLabel)
 	require.NoError(t, err, "failed to get stork pods after migration.")
+	err = core.Instance().DeleteNamespace(currMigNamespace)
+	require.NoError(t, err, "failed to delete namespace %s on destination cluster", currMigNamespace)
 
 	// Change kubeconfig back to source. Clean up
 	err = setSourceKubeConfig()
@@ -126,6 +128,8 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 	destroyAndWait(t, ctxs)
 	err = deleteAndwaitForMigrationDeletion(currMig.Name, currMig.Namespace, migrationRetryTimeout)
 	require.NoError(t, err, "Migration %s failed to delete in namespace: %s", currMig.Name, currMig.Namespace)
+	err = core.Instance().DeleteNamespace(currMigNamespace)
+	require.NoError(t, err, "failed to delete namespace %s on source cluster", currMigNamespace)
 }
 
 func waitForMigrationToStart(name, namespace string, timeout time.Duration) error {

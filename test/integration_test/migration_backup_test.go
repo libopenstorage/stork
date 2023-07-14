@@ -55,7 +55,7 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		)
 
 		// Cleanup up source
-		validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, true, true, false, true)
+		validateAndDestroyMigration(t, ctxs, "mysql-migration", "mysql-1-pvc", preMigrationCtx, true, true, true, false, true, false)
 
 		logrus.Infoln("Completed migration of apps from source to destination, will now start backup on second cluster")
 
