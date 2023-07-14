@@ -9843,12 +9843,15 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			}
 			return nil, false, nil
 		}
-		time.Sleep(200 * time.Second)
+
 		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Failed to powered on the vm")
 		isjournal, err := isJournalEnabled()
 		log.FailOnError(err, "Failed to check if Journal enabled")
-
+		validatePXStartTimeout := 5 * time.Minute
+		if err := Inst().V.WaitDriverUpOnNode(*nodeDetail, validatePXStartTimeout); err != nil {
+			log.FailOnError(err, "failed to shutdown the node with err %s", err)
+		}
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using add_disk option", poolUUID))
