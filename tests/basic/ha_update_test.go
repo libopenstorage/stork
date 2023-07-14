@@ -109,13 +109,15 @@ func performHaIncreaseRebootTest(testName string) {
 					}
 
 					if testName == "ha-inc-reboot-src" {
-						RestartPX := false
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, RestartPX)
+						restartPX := false
+						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
 					} else if testName == "ha-inc-restartpx-src" {
-						RestartPX := true
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, RestartPX)
+						restartPX := true
+						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
 					} else {
-						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap)
+						restartPX := false
+						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
 					}
 				}
 			}
