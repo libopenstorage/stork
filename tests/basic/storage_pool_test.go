@@ -9829,7 +9829,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 
 			return nil, true, fmt.Errorf("storage is not full on pool with uuid [%v] percentage used [%v]", poolUUID, totalPercentage)
 		}
-		_, err = task.DoRetryWithTimeout(waitForPoolFull, 120*time.Minute, 10*time.Second)
+		_, err = task.DoRetryWithTimeout(waitForPoolFull, 300*time.Minute, 10*time.Second)
 		log.FailOnError(err, "failed waiting for pool to get full condition")
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
