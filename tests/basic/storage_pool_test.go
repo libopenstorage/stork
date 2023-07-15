@@ -9820,11 +9820,11 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 			}
 
 			if *status == api.Status_STATUS_STORAGE_DOWN || *status == api.Status_STATUS_OFFLINE {
+				log.InfoD("Status of the pool is [%v]", status)
 				return true, nil
 			}
 			return false, nil
 		}
-
 		// Waiting for all pods to become ready and in running state
 		waitForPoolFull := func() (interface{}, bool, error) {
 
@@ -9849,41 +9849,45 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 
 			return nil, true, fmt.Errorf("storage is not full on pool with uuid [%v] percentage used [%v]", poolUUID, totalPercentage)
 		}
-		_, err = task.DoRetryWithTimeout(waitForPoolFull, 300*time.Minute, 10*time.Second)
-		log.FailOnError(err, "failed waiting for pool to get full condition")
 
-		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolToBeResized.TotalSize, poolToBeResized.Used))
+		for iteration := 0; iteration <= 5; iteration++ {
 
-		// Expand pool by 50 % upon storage full
-		expectedSize := (poolToBeResized.TotalSize / units.GiB) + ((poolToBeResized.TotalSize / 2) / units.GiB)
-		log.Infof("current Pool size is [%v] and expected resize size is [%v]", poolToBeResized.TotalSize, expectedSize)
+			_, err = task.DoRetryWithTimeout(waitForPoolFull, 300*time.Minute, 10*time.Second)
+			log.FailOnError(err, "failed waiting for pool to get full condition")
 
-		isjournal, err := isJournalEnabled()
-		log.FailOnError(err, "Failed to check if Journal enabled")
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+			log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolToBeResized.TotalSize, poolToBeResized.Used))
 
-		//To-Do Need to handle the case for multiple pools
-		expectedSizeWithJournal := expectedSize
-		if isjournal {
-			expectedSizeWithJournal = expectedSizeWithJournal - 3
+			// Expand pool by 50 % upon storage full
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + ((poolToBeResized.TotalSize / 2) / units.GiB)
+			log.Infof("current Pool size is [%v] and expected resize size is [%v]", poolToBeResized.TotalSize, expectedSize)
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			//To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal := expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+
+			// Verify if IO is still running upon pool resize
+			time.Sleep(5 * time.Minute)
+
+			poolafterResize, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+			log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
+			dash.VerifyFatal(poolafterResize.Used > poolToBeResized.Used, true, "is pool ingest successful after resize?")
 		}
-
-		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
-		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-		dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
-
-		// Verify if IO is still running upon pool resize
-		time.Sleep(5 * time.Minute)
-
-		poolafterResize, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
-		dash.VerifyFatal(poolafterResize.Used > poolToBeResized.Used, true, "is pool ingest successful after resize?")
 
 	})
 
