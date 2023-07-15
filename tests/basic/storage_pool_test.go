@@ -9813,8 +9813,23 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 			return float64(percentage)
 		}
 
+		isStorageDown := func(n node.Node) (bool, error) {
+			status, err := Inst().V.GetNodeStatus(n)
+			if err != nil {
+				return false, err
+			}
+
+			if *status == api.Status_STATUS_STORAGE_DOWN || *status == api.Status_STATUS_OFFLINE {
+				return true, nil
+			}
+			return false, nil
+		}
+
 		// Waiting for all pods to become ready and in running state
 		waitForPoolFull := func() (interface{}, bool, error) {
+
+			nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
 			// Wait for Pool status till pool is 100% full and goes offline
 			pool, err := GetStoragePoolByUUID(poolUUID)
@@ -9822,8 +9837,13 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 			usedSize, totalSize := pool.Used, pool.TotalSize
 			log.Infof("Used vs Total Percentage [%v]:[%v]", usedSize, totalSize)
 
+			status, err := isStorageDown(*nodeDetail)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed fetching storage status")
+			}
+
 			totalPercentage := calculatePercentage(float64(usedSize), float64(totalSize))
-			if totalPercentage >= 99.5 {
+			if totalPercentage >= 90.0 || status == true {
 				return nil, false, nil
 			}
 
