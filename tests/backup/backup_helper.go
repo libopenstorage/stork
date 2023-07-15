@@ -999,9 +999,9 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		}
 	}
-	err := DeleteCluster(SourceClusterName, orgID, ctx)
+	err := DeleteCluster(SourceClusterName, orgID, ctx, true)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	err = DeleteCluster(destinationClusterName, orgID, ctx)
+	err = DeleteCluster(destinationClusterName, orgID, ctx, true)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 }
 

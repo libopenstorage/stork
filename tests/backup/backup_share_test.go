@@ -1206,16 +1206,16 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctx)
+		err = DeleteCluster(SourceClusterName, orgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctx)
+		err = DeleteCluster(destinationClusterName, orgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 		}
 
@@ -2520,9 +2520,9 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		log.FailOnError(err, fmt.Sprintf("Failed while waiting for backup %s to be deleted", userBackupName))
 
 		log.Infof("Deleting registered clusters for non-admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+		err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
@@ -2882,9 +2882,9 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 		}
 
@@ -3341,9 +3341,9 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 		}
 

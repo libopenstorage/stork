@@ -174,7 +174,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 			enumerateRsp, err := Inst().Backup.EnumerateCluster(ctx, clusterEnumerateReq)
 			log.FailOnError(err, "cluster enumeration failed")
 			for _, cluster := range enumerateRsp.GetClusters() {
-				err := DeleteCluster(cluster.GetName(), orgID, ctx)
+				err := DeleteCluster(cluster.GetName(), orgID, ctx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", cluster.GetName()))
 			}
 		})

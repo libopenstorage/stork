@@ -3439,14 +3439,14 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
-func DeleteCluster(name string, orgID string, ctx context1.Context) error {
+func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
 
 	backupDriver := Inst().Backup
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
-		DeleteBackups:  true,
-		DeleteRestores: true,
+		DeleteBackups:  cleanupBackupsRestores,
+		DeleteRestores: cleanupBackupsRestores,
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
