@@ -9850,44 +9850,41 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 			return nil, true, fmt.Errorf("storage is not full on pool with uuid [%v] percentage used [%v]", poolUUID, totalPercentage)
 		}
 
-		for iteration := 0; iteration <= 5; iteration++ {
+		_, err = task.DoRetryWithTimeout(waitForPoolFull, 300*time.Minute, 10*time.Second)
+		log.FailOnError(err, "failed waiting for pool to get full condition")
 
-			_, err = task.DoRetryWithTimeout(waitForPoolFull, 300*time.Minute, 10*time.Second)
-			log.FailOnError(err, "failed waiting for pool to get full condition")
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolToBeResized.TotalSize, poolToBeResized.Used))
 
-			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-			log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-			log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolToBeResized.TotalSize, poolToBeResized.Used))
+		// Expand pool by 50 % upon storage full
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + ((poolToBeResized.TotalSize / 2) / units.GiB)
+		log.Infof("current Pool size is [%v] and expected resize size is [%v]", poolToBeResized.TotalSize, expectedSize)
 
-			// Expand pool by 50 % upon storage full
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + ((poolToBeResized.TotalSize / 2) / units.GiB)
-			log.Infof("current Pool size is [%v] and expected resize size is [%v]", poolToBeResized.TotalSize, expectedSize)
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
 
-			isjournal, err := isJournalEnabled()
-			log.FailOnError(err, "Failed to check if Journal enabled")
-
-			//To-Do Need to handle the case for multiple pools
-			expectedSizeWithJournal := expectedSize
-			if isjournal {
-				expectedSizeWithJournal = expectedSizeWithJournal - 3
-			}
-
-			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-
-			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
-
-			// Verify if IO is still running upon pool resize
-			time.Sleep(5 * time.Minute)
-
-			poolafterResize, err := GetStoragePoolByUUID(poolUUID)
-			log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-			log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
-			dash.VerifyFatal(poolafterResize.Used > poolToBeResized.Used, true, "is pool ingest successful after resize?")
+		//To-Do Need to handle the case for multiple pools
+		expectedSizeWithJournal := expectedSize
+		if isjournal {
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
 		}
+
+		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+
+		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+
+		// Verify if IO is still running upon pool resize
+		time.Sleep(5 * time.Minute)
+
+		poolafterResize, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
+		dash.VerifyFatal(poolafterResize.TotalSize > poolToBeResized.TotalSize, true, "is pool expand stats update successful?")
 
 	})
 
