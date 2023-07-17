@@ -2,7 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -126,5 +133,150 @@ var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+// this tests brings up large number of pods on multiple namespaces and validate if there is not PANIC or nilpointer exceptions
+var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-18792
+		    https://portworx.atlassian.net/browse/PTX-17723
+
+			PWX :
+			https://portworx.atlassian.net/browse/PWX-32190
+
+			Bug Description :
+				PX is hitting `panic: runtime error: invalid memory address or nil pointer dereference` when creating 250 FADA volumes
+
+			1. Deploying nginx pods using two FADA volumes in 125 name-space simultaneously
+			2. After that verify if any panic in the logs due to nil pointer deference.
+	*/
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("BringUpLargePodsVerifyNoPanic",
+			"Px should not panic when large number of pools are created", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Validate no panics when creating more than 125 pods on FADA Volumes"
+	It(stepLog, func() {
+
+		var wg sync.WaitGroup
+		wg.Add(20)
+		var terminate bool = false
+
+		if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
+			log.FailOnError(fmt.Errorf("need csi provisioner to run the test , please pass --provisioner csi "+
+				"or -e provisioner=csi in the arguments"), "csi provisioner enabled?")
+		}
+
+		log.InfoD("Failover kvdb in parallel while volume creation in progress")
+		go func() {
+			defer GinkgoRecover()
+			for {
+				if terminate == true {
+					break
+				}
+				// Wait for KVDB Members to be online
+				log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+
+				// Kill KVDB Master Node
+				masterNode, err := GetKvdbMasterNode()
+				log.FailOnError(err, "failed getting details of KVDB master node")
+
+				log.InfoD("killing kvdb master node with Name [%v]", masterNode.Name)
+
+				// Get KVDB Master PID
+				pid, err := GetKvdbMasterPID(*masterNode)
+				log.FailOnError(err, "failed getting PID of KVDB master node")
+
+				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+				// Kill kvdb master PID for regular intervals
+				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+
+				// Wait for some time after killing kvdb master Node
+				time.Sleep(5 * time.Minute)
+			}
+		}()
+
+		Inst().AppList = []string{"nginx-fa-davol"}
+		contexts = make([]*scheduler.Context, 0)
+
+		scheduleAppParallel := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			id := uuid.New()
+			nsName := fmt.Sprintf("%s", id.String()[:4])
+			for i := 0; i < 15; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf(fmt.Sprintf("largenumberpods-%v-%d", nsName, i)))...)
+			}
+		}
+
+		teardownContext := func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+
+		// Create apps in parallel
+		for count := 0; count < 20; count++ {
+			go scheduleAppParallel()
+		}
+		wg.Wait()
+
+		// Funciton to validate nil pointer dereference errors
+		validateNilPointerErrors := func() {
+			terminate = true
+			// we validate negative scenario here , function returns true if nil pointer exception is seen.
+			errors := []string{}
+			for _, eachNode := range node.GetStorageNodes() {
+				status, output, Nodeerr := VerifyNilPointerDereferenceError(&eachNode)
+				if status == true {
+					log.Infof("nil pointer dereference error seen on the Node [%v]", eachNode.Name)
+					log.Infof("error log [%v]", output)
+					errors = append(errors, fmt.Sprintf("[%v]", eachNode.Name))
+				} else if Nodeerr != nil && output == "" {
+					// we just print error in case if found one
+					log.InfoD(fmt.Sprintf("[%v]", Nodeerr))
+				}
+			}
+			if len(errors) > 0 {
+				log.FailOnError(fmt.Errorf("nil pointer dereference panic seen on nodes [%v]", errors),
+					"nil pointer de-reference error?")
+			}
+		}
+
+		// Delete all the applications
+		defer teardownContext()
+
+		// Check for nilPointer de-reference error on the nodes.
+		defer validateNilPointerErrors()
+
+		// Waiting for all pods to become ready and in running state
+		waitForPodsRunning := func() (interface{}, bool, error) {
+			for _, eachContext := range contexts {
+				err := Inst().S.WaitForRunning(eachContext, 5*time.Minute, 2*time.Second)
+				if err != nil {
+					return nil, true, err
+				}
+			}
+			return nil, false, nil
+		}
+		_, err := task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
+		log.FailOnError(err, "Error checking pool rebalance")
+
+		terminate = true
+		log.Info("all pods are up and in running state")
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })

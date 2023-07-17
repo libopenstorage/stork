@@ -3146,7 +3146,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		Step("Delete source cluster where application is deployed", func() {
 			log.InfoD("Delete source cluster where application is deployed")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			err = DeleteCluster(SourceClusterName, orgID, ctx)
+			err = DeleteCluster(SourceClusterName, orgID, ctx, false)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 		})
 		Step("Add source cluster back with px-central-admin ctx", func() {

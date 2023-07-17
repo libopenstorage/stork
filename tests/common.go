@@ -2116,6 +2116,18 @@ func runCmd(cmd string, n node.Node) error {
 
 }
 
+func runCmdOnce(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+
+	return output, err
+
+}
+
 func runCmdGetOutput(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         defaultCmdTimeout,
@@ -3398,32 +3410,43 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 // DeleteBackup deletes backup
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
+	var backupObj *api.BackupObject
 	var backupDeleteResponse *api.BackupDeleteResponse
 
-	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
-		backupName, orgID), func() {
-		backupDriver := Inst().Backup
-		bkpDeleteRequest := &api.BackupDeleteRequest{
-			Name:  backupName,
-			OrgId: orgID,
-			Uid:   backupUID,
+	backupDriver := Inst().Backup
+
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return backupDeleteResponse, err
+	}
+	for _, bkp := range curBackups.GetBackups() {
+		if bkp.Uid == backupUID {
+			backupObj = bkp
+			break
 		}
-		backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
-		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
-		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
-		// TODO: validate createClusterResponse also
-	})
+	}
+
+	bkpDeleteRequest := &api.BackupDeleteRequest{
+		Name:    backupName,
+		OrgId:   orgID,
+		Uid:     backupUID,
+		Cluster: backupObj.Cluster,
+	}
+	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
-func DeleteCluster(name string, orgID string, ctx context1.Context) error {
+func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
 
 	backupDriver := Inst().Backup
 	clusterDeleteReq := &api.ClusterDeleteRequest{
-		OrgId: orgID,
-		Name:  name,
+		OrgId:          orgID,
+		Name:           name,
+		DeleteBackups:  cleanupBackupsRestores,
+		DeleteRestores: cleanupBackupsRestores,
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
@@ -7402,8 +7425,8 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 	return nil
 }
 
-// deleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
-func deleteNamespaces(namespaces []string) error {
+// DeleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
+func DeleteNamespaces(namespaces []string) error {
 	// Delete a list of namespaces given
 	k8sCore = core.Instance()
 	for _, namespace := range namespaces {
@@ -7413,4 +7436,23 @@ func deleteNamespaces(namespaces []string) error {
 		}
 	}
 	return nil
+}
+
+// VerifyNilPointerDereferenceError returns true if nil pointer dereference, output of the log messages
+func VerifyNilPointerDereferenceError(n *node.Node) (bool, string, error) {
+
+	cmdGrepOutput := "journalctl | grep -i -A 50 \"nil pointer dereference\""
+	output, err := runCmdOnce(cmdGrepOutput, *n)
+	if err != nil {
+		return false, "", fmt.Errorf("command failed while running [%v] on Node [%v]", cmdGrepOutput, n.Name)
+	}
+	re, err := regexp.Compile("panic: runtime error.*invalid memory address or nil pointer dereference")
+	if err != nil {
+		return false, "", fmt.Errorf("command failed running [%v] on Node [%v]", cmdGrepOutput, n.Name)
+	}
+	if re.MatchString(fmt.Sprintf("%v", output)) {
+		return true, output, nil
+	}
+
+	return false, "", nil
 }

@@ -280,7 +280,6 @@ func (s *SSH) initSSH() error {
 	} else {
 		return fmt.Errorf("Unknown auth type")
 	}
-
 	return nil
 }
 
@@ -835,7 +834,8 @@ func getExecPodNamespace() (string, error) {
 			return svc.Namespace, nil
 		}
 	}
-	return "", fmt.Errorf("can't find %s Portworx service from list of services.", schedops.PXServiceName)
+	log.Warnf("can't find %s Portworx service from list of services.", schedops.PXServiceName)
+	return "", nil
 }
 
 // New returns a new SSH object
