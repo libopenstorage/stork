@@ -19,6 +19,8 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+var GlobalCredentialConfig *backup.Config
+
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
 	if present {
@@ -130,12 +132,16 @@ func BackupInitInstance() {
 
 var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
+	var err error
 	dash = Inst().Dash
 	dash.TestSetBegin(dash.TestSet)
 	log.Infof("Backup Init instance")
 	BackupInitInstance()
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
+	// Get all the values from the cloud_config.json persist into struct which can be globally accessed
+	GlobalCredentialConfig, err = backup.GetConfigObj()
+	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
 	bucketNameSuffix := getBucketNameSuffix()

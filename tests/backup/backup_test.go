@@ -34,6 +34,17 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	})
 })
 
+// Reference test to access the cloud config details from the global variable
+var _ = Describe("{testParseConfig}", func() {
+	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
+	It("Testing parse config", func() {
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
+		log.InfoD("Aws secret Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
+		log.InfoD("Region from backup target: %s", GlobalCredentialConfig.BackupTargets.GetAWSBucket("default").Region)
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.BackupTargets.GetNFSServer("default").IP)
+	})
+})
+
 // This is a sample test case to verify User/Group Management and role mapping
 var _ = Describe("{UserGroupManagement}", func() {
 	JustBeforeEach(func() {

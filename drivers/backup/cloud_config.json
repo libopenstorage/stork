@@ -1,0 +1,62 @@
+{
+  "cloudProviders": {
+    "aws": {
+      "default": {
+        "access_key_id": "AWS_ACCESS_KEY_ID",
+        "secret_access_key": "AWS_SECRET_ACCESS_KEY",
+        "region": "AWS_REGION"
+      }
+    },
+    "azure": {
+      "default": {
+        "account_name": "AZURE_ACCOUNT_NAME",
+        "account_key": "AZURE_ACCOUNT_KEY",
+        "subscription_id": "AZURE_SUBSCRIPTION_ID",
+        "client_id": "AZURE_CLIENT_ID",
+        "client_secret": "AZURE_CLIENT_SECRET",
+        "tenant_id": "AZURE_TENANT_ID"
+      }
+    },
+    "gke": {
+      "default": {
+        "project_id": "GCP_PROJECT_ID",
+        "cluster_name": "GKE_CLUSTER_NAME",
+        "location": "GKE_CLUSTER_LOCATION",
+        "credentials_file": "GKE_PATH_TO_SERVICE_ACCOUNT_JSON"
+      }
+    },
+    "ibm": {
+      "default": {
+        "api_key": "IBM_CLOUD_API_KEY",
+        "region": "IBM_CLOUD_REGION",
+        "resource_group": "IBM_CLOUD_RESOURCE_GROUP"
+      },
+      "rancher": {
+        "default": {
+          "username": "RANCHER_USERNAME",
+          "password": "RANCHER_PASSWORD"
+        }
+      }
+    }
+  },
+  "backupTargets": {
+    "aws": {
+      "default": {
+        "name": "CLOUD_BUCKET_NAME",
+        "access_key_id": "S3_ACCESS_KEY_ID",
+        "secret_access_key": "S3_SECRET_ACCESS_KEY",
+        "region": "S3_REGION"
+      }
+    },
+    "nfs": {
+      "default": {
+        "name": "SERVER_NAME",
+        "ip": "SERVER_IP",
+        "export_path": "EXPORT_PATH",
+        "sub_path": "SUB_PATH",
+        "mount_options": "MOUNT_OPTIONS",
+        "encryption_key": "ENCRYPTION_KEY"
+      }
+    }
+  }
+}
