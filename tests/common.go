@@ -43,6 +43,8 @@ import (
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 
+	"github.com/libopenstorage/openstorage/api"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -7483,4 +7485,98 @@ func GetPoolUuidsWithStorageFull() ([]string, error) {
 	}
 
 	return poolUuids, nil
+}
+
+// GetAllVolumesWithIO Returns list of volumes with IO
+func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error) {
+
+	allVolsWithIO := []*volume.Volume{}
+	for _, eachContext := range contexts {
+		vols, err := Inst().S.GetVolumes(eachContext)
+		if err != nil {
+			log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
+		}
+
+		for _, eachVol := range vols {
+			n, err := Inst().V.GetNodeForVolume(eachVol, 60, 2)
+			if err != nil {
+				return nil, err
+			}
+
+			VolStatus, err := Inst().V.IsIOsInProgressForTheVolume(n, eachVol.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			if VolStatus {
+				allVolsWithIO = append(allVolsWithIO, eachVol)
+			}
+
+		}
+	}
+	return allVolsWithIO, nil
+}
+
+func IsVolumeFull(vol volume.Volume) (bool, error) {
+	volPercentage, err := GetVolumeFullPercentage(vol)
+	if err != nil {
+		return false, err
+	}
+	if volPercentage > 90.0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// GetVolumeFullPercentage returns percentage of volume size consumed
+func GetVolumeFullPercentage(vol volume.Volume) (float64, error) {
+	calculatePercentage := func(usedSize float64, totalSize float64) float64 {
+		percentage := (usedSize / totalSize) * 100
+		return float64(percentage)
+	}
+
+	totalSize := vol.Size
+	inspectVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return 0.0, err
+	}
+
+	usedSize := inspectVol.GetUsage()
+	percentageFull := calculatePercentage(float64(usedSize), float64(totalSize))
+	log.Infof("Percentage of Volume Filled [%v]", percentageFull)
+
+	return percentageFull, nil
+}
+
+// IsStorageNodeDown returns true if storage node is down
+func IsStorageNodeDown(n node.Node) (bool, error) {
+	nodeStatus, err := Inst().V.GetNodeStatus(n)
+	if err != nil {
+		return false, err
+	}
+	if *nodeStatus == api.Status_STATUS_STORAGE_DOWN {
+		log.InfoD("Status of the pool is [%v]", nodeStatus)
+		return true, nil
+	}
+	return false, nil
+}
+
+// GetPoolCapacityUsed Get Pool capacity percentage used
+func GetPoolCapacityUsed(poolUUID string) (float64, error) {
+
+	calculatePercentage := func(usedSize float64, totalSize float64) float64 {
+		percentage := (usedSize / totalSize) * 100
+		return float64(percentage)
+	}
+
+	pool, err := GetStoragePoolByUUID(poolUUID)
+	log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+
+	usedSize, totalSize := pool.Used, pool.TotalSize
+	log.Infof("Used vs Total Percentage [%v]:[%v]", usedSize, totalSize)
+
+	poolSizeUsed := calculatePercentage(float64(usedSize), float64(totalSize))
+
+	return poolSizeUsed, nil
 }

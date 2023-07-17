@@ -9808,104 +9808,43 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		// Tearing down contexts without validating
 		defer teardownContext()
 
-		// Get Pool with running IO on the cluster
-		poolUUID, err := GetPoolIDWithIOs(contexts)
-		log.FailOnError(err, "Failed to get pool running with IO")
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		allVolumes, err := GetAllVolumesWithIO(contexts)
+		log.FailOnError(err, "Failed to get volumes with IO Running")
 
-		// Get Node Details of the Pool with IO
-		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+		// Select Random Volumes for pool Expand
+		randomIndex := rand.Intn(len(allVolumes))
+		randomVol := allVolumes[randomIndex]
 
-		calculatePercentage := func(usedValue float64, totalValue float64) float64 {
-			percentage := (usedValue / totalValue) * 100
-			return float64(percentage)
+		volumeFull, err := IsVolumeFull(*randomVol)
+		log.FailOnError(err, "error while fetching volume details")
+
+		waitForVolumeFull := func(volName *volume.Volume) error {
+			waitTillVolume := func() (interface{}, bool, error) {
+				volumeFull, err := IsVolumeFull(*randomVol)
+				if err != nil {
+					return nil, true, err
+				}
+				if volumeFull {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("Volume is still not full. waiting.")
+			}
+			_, err := task.DoRetryWithTimeout(waitTillVolume, 60*time.Minute, 10*time.Second)
+			return err
 		}
 
-		isStorageDown := func(n node.Node) (bool, error) {
-			status, err := Inst().V.GetNodeStatus(n)
-			if err != nil {
-				return false, err
-			}
+		if volumeFull {
+			// Expand Volume Size by 50%
+			expectedSize := (randomVol.Size / units.GiB) + ((randomVol.Size / 2) / units.GiB)
+			log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to ResizeVolume")
+		} else {
+			// Wait for Volume Full on the Node
+			err := waitForVolumeFull(randomVol)
+			log.FailOnError(err, "waiting for volume full on the node")
 
-			if *status == api.Status_STATUS_STORAGE_DOWN || *status == api.Status_STATUS_OFFLINE {
-				log.InfoD("Status of the pool is [%v]", status)
-				return true, nil
-			}
-			return false, nil
+			expectedSize := (randomVol.Size / units.GiB) + ((randomVol.Size / 2) / units.GiB)
+			log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to ResizeVolume")
 		}
-		// Waiting for all pods to become ready and in running state
-		waitForPoolFull := func() (interface{}, bool, error) {
-
-			nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-
-			// Wait for Pool status till pool is 100% full and goes offline
-			pool, err := GetStoragePoolByUUID(poolUUID)
-			log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-			usedSize, totalSize := pool.Used, pool.TotalSize
-			log.Infof("Used vs Total Percentage [%v]:[%v]", usedSize, totalSize)
-
-			status, err := isStorageDown(*nodeDetail)
-			if err != nil {
-				return nil, true, fmt.Errorf("failed fetching storage status")
-			}
-
-			totalPercentage := calculatePercentage(float64(usedSize), float64(totalSize))
-			if totalPercentage >= 90.0 || status == true {
-				return nil, false, nil
-			}
-
-			return nil, true, fmt.Errorf("storage is not full on pool with uuid [%v] percentage used [%v]", poolUUID, totalPercentage)
-		}
-
-		_, err = task.DoRetryWithTimeout(waitForPoolFull, 300*time.Minute, 10*time.Second)
-		log.FailOnError(err, "failed waiting for pool to get full condition")
-
-		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolToBeResized.TotalSize, poolToBeResized.Used))
-
-		// Expand pool by 50 % upon storage full
-		expectedSize := (poolToBeResized.TotalSize / units.GiB) + ((poolToBeResized.TotalSize / 2) / units.GiB)
-		log.Infof("current Pool size is [%v] and expected resize size is [%v]", poolToBeResized.TotalSize, expectedSize)
-
-		isjournal, err := isJournalEnabled()
-		log.FailOnError(err, "Failed to check if Journal enabled")
-
-		//To-Do Need to handle the case for multiple pools
-		expectedSizeWithJournal := expectedSize
-		if isjournal {
-			expectedSizeWithJournal = expectedSizeWithJournal - 3
-		}
-
-		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
-		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-		dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
-
-		// Verify if IO is still running upon pool resize
-		time.Sleep(5 * time.Minute)
-
-		poolafterResize, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
-		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
-		dash.VerifyFatal(poolafterResize.TotalSize > poolToBeResized.TotalSize, true, "is pool expand stats update successful?")
-
-		// Get all pools which are offline due to storage full and try expanding pools all at once
-		poolIds, err := GetPoolUuidsWithStorageFull()
-		log.FailOnError(err, "Failed to get details of pool with storage full")
-
-		log.Infof("All Pools with storage full scenario [%v]", poolIds)
-		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
-		wg, err := ExpandMultiplePoolsInParallel(poolIds, 200, expandType)
-		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
-
-		wg.Wait()
 
 	})
 
