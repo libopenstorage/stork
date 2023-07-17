@@ -43,8 +43,6 @@ import (
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 
-	"github.com/libopenstorage/openstorage/api"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -7555,7 +7553,7 @@ func IsStorageNodeDown(n node.Node) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if *nodeStatus == api.Status_STATUS_STORAGE_DOWN {
+	if *nodeStatus == opsapi.Status_STATUS_STORAGE_DOWN {
 		log.InfoD("Status of the pool is [%v]", nodeStatus)
 		return true, nil
 	}
