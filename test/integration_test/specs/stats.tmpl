@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Go To-Do list</title>
+  </head>
+  <body style="background-color:black">
+    <p style="font-color:white;align:center">
+      DR Migration Stats:
+    </p>
+	<div id="toggle-sidebar-button" aria-expanded="false" role="button" tabindex="0" class="mdl-layout__drawer-button"><i class="material-icons"></i></div>
+		<a class="navbar-brand" href="https://portworx.com/" title="Portworx">
+			<img src="https://docs.portworx.com/images/portworx-ps-logo.png" style="left-align:auto;right-align:auto;display:block;width:384px;height:128px">
+		</a>
+	</div>
+    <br>
+    <br>
+    <br>
+    <h2 style="color:white;text-align:center;font-family:verdana">
+      Migration Statistics
+    </h2>
+    <table border="2" style="font-family:monospace;color:powderblue">
+        <tr style="color:black;background-color:burlywood">
+          <td>Migration Start time</td>
+          <td>Stork Version</td>
+          <td>Portworx Version</td>
+          <td>Application</td>
+          <td>Total Volumes</td>
+          <td>Migrated Volumes</td>
+          <td>Total Resources</td>
+          <td>Migrated Resources</td>
+          <td>Total Bytes Migrated</td>
+          <td>Elapsed time for Volume Migration</td>
+          <td>Elapsed time for Resource Migration</td>
+      </tr>
+ 	       {{ range $idx, $item := . }}
+               <tr>
+                  <td>{{ $item.Data.CreatedOn                       }}</td>
+                  <td>{{ $item.Data.StorkVersion                    }}</td>
+                  <td>{{ $item.Data.PortworxVersion                 }}</td>
+                  <td>{{ $item.Data.Application                     }}</td>
+                  <td>{{ $item.Data.TotalNumberOfVolumes            }}</td>
+                  <td>{{ $item.Data.NumOfMigratedVolumes            }}</td>
+                  <td>{{ $item.Data.TotalNumberOfResources          }}</td>
+                  <td>{{ $item.Data.NumOfMigratedResources          }}</td>
+                  <td>{{ $item.Data.TotalBytesMigrated              }}</td>
+                  <td>{{ $item.Data.ElapsedTimeForVolumeMigration   }}</td>
+                  <td>{{ $item.Data.ElapsedTimeForResourceMigration }}</td>
+              </tr>
+           {{ end }} 
+    </table>
+  </body>
+</html>

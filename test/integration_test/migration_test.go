@@ -114,6 +114,7 @@ func triggerMigrationTest(
 	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false, "", nil)
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false)
+
 }
 
 func triggerMigration(
@@ -249,6 +250,10 @@ func validateAndDestroyMigration(
 	} else {
 		require.Error(t, err, "Expected migration to fail")
 	}
+
+	// export migration stats before deleting it
+	err = ExportMigrationStats(ctxs[0], t.Name())
+	require.NoError(t, err, "Error exporting migration stats")
 
 	// destroy app on cluster 1
 	if !skipAppDeletion {
@@ -1424,7 +1429,7 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 				return "", false, err
 			}
 			if mig.Status.Status != v1alpha1.MigrationStatusSuccessful {
-				logrus.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
+				logrus.Infof("Migration %s in namespace %s is pending: %v", m.Name, m.Namespace, mig.Status.Status)
 				isComplete = false
 			}
 		}

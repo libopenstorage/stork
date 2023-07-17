@@ -26,6 +26,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -132,6 +133,9 @@ const (
 	testrailUserNameVar        = "TESTRAIL_USERNAME"
 	testrailPasswordVar        = "TESTRAIL_PASSWORD"
 	testrailMilestoneVar       = "TESTRAIL_MILESTONE"
+
+	statsExportName    = "stork_integration_test"
+	statsExportProduct = "stork"
 )
 
 var nodeDriver node.Driver
@@ -152,15 +156,18 @@ var backupLocationPath string
 var genericCsiConfigMap string
 var externalTest bool
 var storkVersionCheck bool
+var storkVersion string
+var pxVersion string
 var cloudDeletionValidate bool
 var isInternalLBAws bool
 var pxNamespace string
-var storkVersion string
 var testrailHostname string
 var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
+var exportStats bool
 var bidirectionalClusterpair bool
+
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -276,11 +283,19 @@ func setup() error {
 			return fmt.Errorf("stork version not found in configmap: %s", cmName)
 		}
 		storkVersion = getStorkVersion(ver)
+		utils.StorkVersion = ver
+
 		if storkVersionCheck == true {
 			if getStorkVersion(ver) != getStorkVersion(version.Version) {
 				return fmt.Errorf("stork version mismatch, found: %s, expected: %s", getStorkVersion(ver), getStorkVersion(version.Version))
 			}
 		}
+	}
+	stc, err := operator.Instance().ListStorageClusters("kube-system")
+	if err != nil {
+		logrus.Warnf("failed to list PX storage cluster during setup: %v, probably a daemonset install for portworx", err)
+	} else {
+		utils.PortworxVersion = oputils.GetPortworxVersion(&stc.Items[0]).Original()
 	}
 
 	isInternalLBAws, err = strconv.ParseBool(os.Getenv(internalLBAws))
@@ -1498,6 +1513,10 @@ func TestMain(m *testing.M) {
 		"stork-version-check",
 		false,
 		"Turn on/off stork version check before running tests. Default off.")
+	flag.BoolVar(&exportStats,
+		"export-stats",
+		true,
+		"Turn on/off exporting stats to aetos DB. Default on.")
 	flag.BoolVar(&bidirectionalClusterpair,
 		"bidirectional-cluster-pair",
 		false,
@@ -1538,4 +1557,29 @@ func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, a
 			}
 		}
 	}
+}
+
+func ExportMigrationStats(ctx *scheduler.Context, name string) error {
+	if !exportStats {
+		logrus.Infof("Export flag is off, won't export migration stats")
+		return nil
+	}
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*storkv1.Migration); ok {
+			logrus.Infof("Found migration object: %s", obj.Name)
+			mig, err := storkops.Instance().GetMigration(obj.Name, obj.Namespace)
+			if err != nil {
+				return fmt.Errorf("Failed to get migration %s in namespace: %s: %v", obj.Name, obj.Namespace, err)
+			}
+			//stats := utils.GetExportableStatsFromMigrationObject(mig, statsExportName, statsExportProduct, name, utils.StorkVersion)
+			stats := utils.GetExportableStatsFromMigrationObject(mig)
+			err = utils.WriteMigrationStatsToAetos(stats)
+			if err != nil {
+				return fmt.Errorf("Failed to write stats: %v", err)
+			}
+		} else {
+			logrus.Info("Not a migration object")
+		}
+	}
+	return nil
 }
