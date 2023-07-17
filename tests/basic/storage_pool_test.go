@@ -9796,7 +9796,17 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizepoolfiftyper-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
+
+		teardownContext := func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+		// Tearing down contexts
+		defer teardownContext()
 
 		// Get Pool with running IO on the cluster
 		poolUUID, err := GetPoolIDWithIOs(contexts)
