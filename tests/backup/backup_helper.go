@@ -3268,6 +3268,7 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 // IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
 func IsMongoDBReady() error {
 	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	errorString := "mongodb pods are not ready yet"
 	pxbNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {
 		return err
@@ -3277,19 +3278,30 @@ func IsMongoDBReady() error {
 		if err != nil {
 			return "", true, err
 		}
-		// Px-Backup would function with just 2 mongo DB pods in healthy state.
-		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
-		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
-		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
-		if statefulSet.Status.ReadyReplicas < 2 {
-			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
-				2, statefulSet.Status.ReadyReplicas)
+
+		// Check if all 3 mongo pods have come up
+		if statefulSet.Status.ReadyReplicas < 3 {
+			return "", true, fmt.Errorf("%s. expected ready pods - %d, actual ready pods - %d",
+				errorString, 3, statefulSet.Status.ReadyReplicas)
+
 		}
 		return "", false, nil
 	}
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), errorString) {
+			statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+
+			// Check atleast 2 mongo pods are up if 3 mongo pods have not come up even after waiting for 30 min
+			// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+			// Px-Backup would function with just 2 mongo DB pods in healthy state.
+			// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+			// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
+			log.Infof("Validating atleast 2 mongodb pods are ready")
+			if statefulSet.Status.ReadyReplicas < 2 {
+				return err
+			}
+		}
 	}
 	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
 	if err != nil {
