@@ -193,9 +193,9 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctx)
+		err = DeleteCluster(SourceClusterName, orgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctx)
+		err = DeleteCluster(destinationClusterName, orgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 	})
 })
