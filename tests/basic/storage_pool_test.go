@@ -9805,7 +9805,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 				TearDownContext(ctx, opts)
 			}
 		}
-		// Tearing down contexts
+		// Tearing down contexts without validating
 		defer teardownContext()
 
 		// Get Pool with running IO on the cluster
@@ -9895,6 +9895,17 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
 		log.Infof(fmt.Sprintf("Total size is [%v] and used size is [%v]", poolafterResize.TotalSize, poolafterResize.Used))
 		dash.VerifyFatal(poolafterResize.TotalSize > poolToBeResized.TotalSize, true, "is pool expand stats update successful?")
+
+		// Get all pools which are offline due to storage full and try expanding pools all at once
+		poolIds, err := GetPoolUuidsWithStorageFull()
+		log.FailOnError(err, "Failed to get details of pool with storage full")
+
+		log.Infof("All Pools with storage full scenario [%v]", poolIds)
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		wg, err := ExpandMultiplePoolsInParallel(poolIds, 200, expandType)
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
 
 	})
 
