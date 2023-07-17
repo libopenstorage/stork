@@ -7440,3 +7440,47 @@ func VerifyNilPointerDereferenceError(n *node.Node) (bool, string, error) {
 
 	return false, "", nil
 }
+
+func IsPoolOffline(n node.Node) (bool, error) {
+	poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+	if err != nil {
+		return false, err
+	}
+
+	for _, v := range poolsStatus {
+		if v == "Offline" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func GetPoolUuidsWithStorageFull() ([]string, error) {
+	var poolUuids []string
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return nil, err
+	}
+	calculatePercentage := func(usedValue float64, totalValue float64) float64 {
+		percentage := (usedValue / totalValue) * 100
+		return float64(percentage)
+	}
+
+	for _, eachPool := range pools {
+		nodeDetail, err := GetNodeWithGivenPoolID(eachPool.Uuid)
+		if err != nil {
+			return nil, err
+		}
+
+		poolOfflineStatus, err := IsPoolOffline(*nodeDetail)
+		if err != nil {
+			return nil, err
+		}
+
+		if calculatePercentage(float64(eachPool.Used), float64(eachPool.TotalSize)) > 90.0 || poolOfflineStatus {
+			poolUuids = append(poolUuids, eachPool.GetUuid())
+		}
+	}
+
+	return poolUuids, nil
+}
