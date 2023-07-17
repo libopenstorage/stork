@@ -18,7 +18,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -29,8 +28,9 @@ import (
 )
 
 const (
-	validateCRDInterval time.Duration = 5 * time.Second
-	validateCRDTimeout  time.Duration = 1 * time.Minute
+	validateCRDInterval    time.Duration = 5 * time.Second
+	validateCRDTimeout     time.Duration = 1 * time.Minute
+	storkCreatedAnnotation               = "stork.libopenstorage.org/created-by-stork"
 )
 
 // NewClusterPair creates a new instance of ClusterPairController.
@@ -166,13 +166,6 @@ func (c *ClusterPairController) handle(ctx context.Context, clusterPair *stork_a
 				err.Error())
 			return c.client.Update(context.TODO(), clusterPair)
 		}
-		if err := c.createBackupLocationOnRemote(remoteConfig, clusterPair); err != nil {
-			c.recorder.Event(clusterPair,
-				v1.EventTypeWarning,
-				string(clusterPair.Status.SchedulerStatus),
-				err.Error())
-			return c.client.Update(context.TODO(), clusterPair)
-		}
 		clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusReady
 		c.recorder.Event(clusterPair,
 			v1.EventTypeNormal,
@@ -238,6 +231,33 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 	if !skipDelete && clusterPair.Status.RemoteStorageID != "" {
 		return c.volDriver.DeletePair(clusterPair)
 	}
+
+	// Delete the backuplocation and secret associated with clusterpair as part of the delete
+	if backuplocationName, ok := clusterPair.Spec.Options["backuplocation"]; ok {
+		bl, err := storkops.Instance().GetBackupLocation(backuplocationName, clusterPair.Namespace)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				logrus.Errorf("fetching backuplocation %s in ns %s failed: %v", backuplocationName, clusterPair.Namespace, err)
+			}
+			return nil
+		}
+		if bl.Annotations[storkCreatedAnnotation] == "true" {
+			secret, err := core.Instance().GetSecret(bl.Location.SecretConfig, bl.Namespace)
+			if err != nil && errors.IsNotFound(err) {
+				logrus.Errorf("fetching secret %s in ns %s failed: %v", bl.Location.SecretConfig, bl.Namespace, err)
+			}
+			if err == nil && secret.Annotations[storkCreatedAnnotation] == "true" {
+				err := core.Instance().DeleteSecret(bl.Location.SecretConfig, bl.Namespace)
+				if err != nil && !errors.IsNotFound(err) {
+					logrus.Errorf("deleting secret %s in ns %s failed: %v", bl.Location.SecretConfig, bl.Namespace, err)
+				}
+			}
+			err = storkops.Instance().DeleteBackupLocation(bl.Name, bl.Namespace)
+			if err != nil && !errors.IsNotFound(err) {
+				logrus.Errorf("deleting backuplocation %s in ns %s failed: %v", backuplocationName, bl.Namespace, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -266,46 +286,4 @@ func (c *ClusterPairController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
-}
-
-func (c *ClusterPairController) createBackupLocationOnRemote(remoteConfig *restclient.Config, clusterPair *stork_api.ClusterPair) error {
-	if bkpl, ok := clusterPair.Spec.Options[stork_api.BackupLocationResourceName]; ok {
-		remoteClient, err := storkops.NewForConfig(remoteConfig)
-		if err != nil {
-			return err
-		}
-		client, err := kubernetes.NewForConfig(remoteConfig)
-		if err != nil {
-			return err
-		}
-		ns, err := core.Instance().GetNamespace(clusterPair.Namespace)
-		if err != nil {
-			return err
-		}
-		// Don't create if the namespace already exists on the remote cluster
-		_, err = client.CoreV1().Namespaces().Get(context.TODO(), clusterPair.Namespace, metav1.GetOptions{})
-		if err != nil {
-			// create namespace on destination cluster
-			_, err = client.CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        ns.Name,
-					Labels:      ns.Labels,
-					Annotations: ns.Annotations,
-				},
-			}, metav1.CreateOptions{})
-			if err != nil && !errors.IsAlreadyExists(err) {
-				return err
-			}
-		}
-		// create backuplocation on destination cluster
-		resp, err := storkops.Instance().GetBackupLocation(bkpl, clusterPair.GetNamespace())
-		if err != nil {
-			return err
-		}
-		resp.ResourceVersion = ""
-		if _, err := remoteClient.CreateBackupLocation(resp); err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
-	}
-	return nil
 }

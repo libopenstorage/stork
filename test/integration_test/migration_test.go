@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -1244,6 +1245,9 @@ func clusterPairFailuresTest(t *testing.T) {
 }
 
 func bidirectionalClusterPairTest(t *testing.T) {
+	if bidirectionalClusterpair == false {
+		t.Skipf("skipping %s test because bidirectional cluster pair flag has not been set", t.Name())
+	}
 	var testrailID, testResult = 86249, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
@@ -1251,47 +1255,65 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	clusterPairName := "birectional-cluster-pair"
 	clusterPairNamespace := "bidirectional-clusterpair-ns"
 
+	// Read the configmap secret-config in default namespace and based on the secret type , create the bidirectional pair
+	configMap, err := core.Instance().GetConfigMap("secret-config", "default")
+	if err != nil {
+		require.NoError(t, err, "error getting configmap secret-config in defaule namespace: %v")
+	}
+	cmData := configMap.Data
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
-	err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "")
-	require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	for location, secret := range cmData {
+		logrus.Infof("Creating a bidirectional-pair using %s as objectstore.", location)
+		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret)
+		require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
 
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
-	_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "failed to get bidirectional cluster pair on source: %v", err)
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "failed to get bidirectional cluster pair on source: %v", err)
 
-	err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "failed to validate bidirectional cluster pair on source: %v", err)
+		err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "failed to validate bidirectional cluster pair on source: %v", err)
 
-	logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+		logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
 
-	// Clean up on source cluster
-	err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "Error deleting clusterpair on source cluster")
+		// Clean up on source cluster
+		err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting clusterpair on source cluster")
 
-	logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+		logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
 
-	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+		// Clean up destination cluster while we are on it
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on destintation cluster", clusterPairNamespace)
 
-	_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "failed to get bidirectional cluster pair on destination: %v", err)
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
-	err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "failed to validate bidirectional cluster pair on destination: %v", err)
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "failed to get bidirectional cluster pair on destination: %v", err)
 
-	logrus.Infof("Successfully validated cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+		err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "failed to validate bidirectional cluster pair on destination: %v", err)
 
-	// Clean up on destination cluster
-	err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "Error deleting clusterpair on destination cluster")
+		logrus.Infof("Successfully validated cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
 
-	logrus.Infof("Successfully deleted cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+		// Clean up on destination cluster
+		err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting clusterpair on destination cluster")
 
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		// Clean up destination cluster while we are on it
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on destintation cluster", clusterPairNamespace)
 
+		logrus.Infof("Successfully deleted cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		logrus.Infof("Successfully tested creating a bidirectional-pair using %s as objectstore.", location)
+	}
 	// If we are here then the test has passed
 	testResult = testResultPass
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)

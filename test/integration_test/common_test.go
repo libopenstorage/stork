@@ -166,6 +166,8 @@ var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
 var exportStats bool
+var bidirectionalClusterpair bool
+
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -707,8 +709,8 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 }
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
-func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string) error {
-	var token string
+func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string) error {
+	//var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
 	if err != nil {
@@ -724,7 +726,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 			},
 		},
 	})
-	if err != nil {
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
 	}
 
@@ -754,21 +756,6 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
 	}
 
-	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
-	if authTokenConfigMap != "" {
-		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Get cluster pair details for source cluster
-	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath, token, IsEks(), true)
-	if err != nil {
-		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
-		return err
-	}
-
 	destKubeconfigPath := path.Join(tempDir, bidirectionalClusterPairDir, "dest_kubeconfig")
 	destKubeConfig, err := os.Create(destKubeconfigPath)
 	if err != nil {
@@ -794,21 +781,6 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
 	}
 
-	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
-	if authTokenConfigMap != "" {
-		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Get cluster pair details for destination cluster
-	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath, token, IsEks(), false)
-	if err != nil {
-		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
-		return err
-	}
-
 	// Create namespace for the cluster pair on destination cluster
 	_, err = core.Instance().CreateNamespace(&v1.Namespace{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -818,7 +790,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 			},
 		},
 	})
-	if err != nil {
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
 	}
 
@@ -830,21 +802,71 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	// Create source --> destination and destination --> cluster pairs using storkctl
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
-	cmd.SetArgs([]string{"create", "clusterpair", "-n", cpNamespace, cpName,
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
 		"--src-kube-file", srcKubeconfigPath,
-		"--src-ip", srcInfo[clusterIP],
-		"--src-token", srcInfo[tokenKey],
 		"--dest-kube-file", destKubeconfigPath,
-		"--dest-ip", destInfo[clusterIP],
-		"--dest-token", destInfo[tokenKey],
-		"--project-mappings", projectMappings,
-	})
+	}
 
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("--projectMappings %s", projectMappings))
+	}
+
+	// Get external object store details and append to the command accordingily
+	objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+	if err != nil {
+		return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+	}
+
+	cmdArgs = append(cmdArgs, objectStoreArgs...)
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Following is the bidirectional command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
 	}
 	return nil
 }
+
+func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
+	var objectStoreArgs []string
+	secretData, err := core.Instance().GetSecret(secretName, "default")
+	if err != nil {
+		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
+	}
+	if objectStoreType == storkv1.BackupLocationS3 {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "s3",
+				"--s3-access-key", string(secretData.Data["accessKeyID"]),
+				"--s3-secret-key", string(secretData.Data["secretAccessKey"]),
+				"--s3-region", string(secretData.Data["region"]),
+				"--s3-endpoint", string(secretData.Data["endpoint"]),
+			}...)
+		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
+			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
+		}
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationAzure {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
+				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationGoogle {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--azure-account-key", string(secretData.Data["accountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	}
+
+	return objectStoreArgs, nil
+}
+
 func setMockTime(t *time.Time) error {
 	timeString := ""
 	if t != nil {
@@ -1495,6 +1517,10 @@ func TestMain(m *testing.M) {
 		"export-stats",
 		true,
 		"Turn on/off exporting stats to aetos DB. Default on.")
+	flag.BoolVar(&bidirectionalClusterpair,
+		"bidirectional-cluster-pair",
+		false,
+		"Turn on/off bidirectional cluster pair creation for all migrations. Default off.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)

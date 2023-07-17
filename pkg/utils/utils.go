@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -237,4 +238,19 @@ func GetUIDLastSection(uid types.UID) string {
 		uidLastSection = string(uid)
 	}
 	return uidLastSection
+}
+
+func CompareFiles(filePath1 string, filePath2 string) (bool, error) {
+	content1, err := os.ReadFile(filePath1)
+	if err != nil {
+		return false, err
+	}
+
+	content2, err := os.ReadFile(filePath2)
+	if err != nil {
+		return false, err
+	}
+
+	// Compare the byte content of the files
+	return string(content1) == string(content2), nil
 }
