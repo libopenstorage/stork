@@ -9901,7 +9901,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		log.FailOnError(err, "Failed to get details of pool with storage full")
 
 		log.Infof("All Pools with storage full scenario [%v]", poolIds)
-		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
 		wg, err := ExpandMultiplePoolsInParallel(poolIds, 200, expandType)
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
