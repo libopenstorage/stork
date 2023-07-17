@@ -61,9 +61,9 @@ const (
 	// will incorporate in their names
 	pvcNameLenLimitForJob = 48
 	// shortRetryTimeout gets used for retry timeout
-	shortRetryTimeout = 30 * time.Second
+	shortRetryTimeout = 300 * time.Second
 	// shortRetryTimeout gets used for retry timeout interval
-	shortRetryTimeoutInterval = 2 * time.Second
+	shortRetryTimeoutInterval = 5 * time.Second
 	defaultTimeout            = 1 * time.Minute
 	progressCheckInterval     = 5 * time.Second
 )
