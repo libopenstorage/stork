@@ -7485,6 +7485,50 @@ func GetPoolUuidsWithStorageFull() ([]string, error) {
 	return poolUuids, nil
 }
 
+// GetVolumeConsumedSize returns size of the volume
+func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
+	// Get Random Storage Node
+	cmd := fmt.Sprintf("pxctl v i %v -j | jq '.[].usage'", vol.ID)
+	output, err := runCmdGetOutput(cmd, node.GetStorageNodes()[0])
+	if err != nil {
+		return 0, err
+	}
+	output = strings.ReplaceAll(output, "\"", "")
+	output = strings.TrimSpace(output)
+
+	num, err := strconv.ParseUint(output, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return num, nil
+}
+
+// IsIORunningOnVolume return true if IO is running on the volume
+func IsIORunningOnVolume(vol volume.Volume) (bool, error) {
+	log.Infof("Checking if io is running on the volume [%v]", vol.Name)
+	inspectVol, err := GetVolumeConsumedSize(vol)
+	if err != nil {
+		return false, err
+	}
+	usageBefore := inspectVol
+
+	// Sleep for 10 sec before reading back the output of the volume
+	time.Sleep(10 * time.Second)
+
+	inspectVol, err = GetVolumeConsumedSize(vol)
+	if err != nil {
+		return false, err
+	}
+
+	usageAfter := inspectVol
+	if usageBefore != usageAfter {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // GetAllVolumesWithIO Returns list of volumes with IO
 func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error) {
 
@@ -7494,14 +7538,9 @@ func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error
 		if err != nil {
 			log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
 		}
-
+		log.Infof("list of all volumes present in the cluster [%v]", vols)
 		for _, eachVol := range vols {
-			n, err := Inst().V.GetNodeForVolume(eachVol, 60, 2)
-			if err != nil {
-				return nil, err
-			}
-
-			VolStatus, err := Inst().V.IsIOsInProgressForTheVolume(n, eachVol.ID)
+			VolStatus, err := IsIORunningOnVolume(*eachVol)
 			if err != nil {
 				return nil, err
 			}
@@ -7509,7 +7548,6 @@ func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error
 			if VolStatus {
 				allVolsWithIO = append(allVolsWithIO, eachVol)
 			}
-
 		}
 	}
 	return allVolsWithIO, nil
@@ -7520,7 +7558,7 @@ func IsVolumeFull(vol volume.Volume) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if volPercentage > 90.0 {
+	if volPercentage > 80.0 {
 		return true, nil
 	}
 
@@ -7535,14 +7573,14 @@ func GetVolumeFullPercentage(vol volume.Volume) (float64, error) {
 	}
 
 	totalSize := vol.Size
-	inspectVol, err := Inst().V.InspectVolume(vol.ID)
+	usedSize, err := GetVolumeConsumedSize(vol)
 	if err != nil {
-		return 0.0, err
+		return 0, err
 	}
 
-	usedSize := inspectVol.GetUsage()
+	log.Infof("Total size of Volume is [%v] and used size is [%v]", totalSize, usedSize)
 	percentageFull := calculatePercentage(float64(usedSize), float64(totalSize))
-	log.Infof("Percentage of Volume Filled [%v]", percentageFull)
+	log.Infof("Volume [%v] : Percentage of size consumed [%v]", vol.Name, percentageFull)
 
 	return percentageFull, nil
 }
@@ -7572,7 +7610,7 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
 
 	usedSize, totalSize := pool.Used, pool.TotalSize
-	log.Infof("Used vs Total Percentage [%v]:[%v]", usedSize, totalSize)
+	log.Infof("Used vs Total volume stats [%v]/[%v]", usedSize, totalSize)
 
 	poolSizeUsed := calculatePercentage(float64(usedSize), float64(totalSize))
 

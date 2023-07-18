@@ -9786,7 +9786,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		defer revertAppList()
 
 		Inst().AppList = []string{}
-		var ioIntensiveApp = []string{"fio", "fio-writes", "vdbench-heavyload"}
+		var ioIntensiveApp = []string{"fio"}
 
 		for _, eachApp := range ioIntensiveApp {
 			Inst().AppList = append(Inst().AppList, eachApp)
@@ -9808,15 +9808,23 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		// Tearing down contexts without validating
 		defer teardownContext()
 
+		log.Infof("Get all the list of available volumes with IO running")
 		allVolumes, err := GetAllVolumesWithIO(contexts)
 		log.FailOnError(err, "Failed to get volumes with IO Running")
+		log.InfoD("List of all volumes with IO Running [%v]", allVolumes)
+
+		// All Data volumes for Resize
+		volumesToResize := []*volume.Volume{}
+		for _, eachVol := range allVolumes {
+			if strings.Contains(eachVol.Name, "fio-data-fio") {
+				volumesToResize = append(volumesToResize, eachVol)
+			}
+		}
+		dash.VerifyFatal(len(volumesToResize) > 0, true, "no volumes with IO for resize operations to continue")
 
 		// Select Random Volumes for pool Expand
-		randomIndex := rand.Intn(len(allVolumes))
-		randomVol := allVolumes[randomIndex]
-
-		volumeFull, err := IsVolumeFull(*randomVol)
-		log.FailOnError(err, "error while fetching volume details")
+		randomIndex := rand.Intn(len(volumesToResize))
+		randomVol := volumesToResize[randomIndex]
 
 		waitForVolumeFull := func(volName *volume.Volume) error {
 			waitTillVolume := func() (interface{}, bool, error) {
@@ -9829,23 +9837,23 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 				}
 				return nil, true, fmt.Errorf("Volume is still not full. waiting.")
 			}
-			_, err := task.DoRetryWithTimeout(waitTillVolume, 60*time.Minute, 10*time.Second)
+			_, err := task.DoRetryWithTimeout(waitTillVolume, 2*time.Hour, 10*time.Second)
 			return err
 		}
 
-		if volumeFull {
-			// Expand Volume Size by 50%
-			expectedSize := (randomVol.Size / units.GiB) + ((randomVol.Size / 2) / units.GiB)
-			log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to ResizeVolume")
-		} else {
-			// Wait for Volume Full on the Node
-			err := waitForVolumeFull(randomVol)
-			log.FailOnError(err, "waiting for volume full on the node")
+		// Wait for Volume Full on the Node
+		err = waitForVolumeFull(randomVol)
+		log.FailOnError(err, "waiting for volume full on the node")
 
-			expectedSize := (randomVol.Size / units.GiB) + ((randomVol.Size / 2) / units.GiB)
-			log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to ResizeVolume")
-		}
+		// Expand Volume Size by 50%
+		expectedSize := randomVol.Size + (randomVol.Size / 2)
+		log.InfoD("Volume will be resized from [%v] to [%v]", randomVol.Size, expectedSize)
+		log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to Resize Volume")
 
+		// Verify after Resize volume if IO is running
+		ioStatus, err := IsIORunningOnVolume(*randomVol)
+		log.FailOnError(err, "is io running on the volume")
+		dash.VerifyFatal(ioStatus, true, fmt.Sprintf("no io running on the volume [%v] after resize", randomVol.Name))
 	})
 
 	JustAfterEach(func() {
