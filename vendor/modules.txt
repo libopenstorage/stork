@@ -1007,7 +1007,9 @@ github.com/rancher/norman/types/slice
 github.com/rancher/norman/types/values
 # github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 ## explicit; go 1.19
+github.com/rancher/rancher/pkg/client/generated/cluster/v3
 github.com/rancher/rancher/pkg/client/generated/management/v3
+github.com/rancher/rancher/pkg/client/generated/project/v3
 # github.com/rancher/wrangler v1.1.0
 ## explicit; go 1.19
 github.com/rancher/wrangler/pkg/name
