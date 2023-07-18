@@ -2018,15 +2018,20 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		//secure-apps list is provided for which volumes should be encrypted
-		if len(k.secureApps) > 0 {
-			if k.isSecureEnabled(app.Key, k.secureApps) {
-
+		if len(k.secureApps) > 0 || k.secretConfigMapName != "" {
+			if k.isSecureEnabled(app.Key, k.secureApps) || k.secretConfigMapName != "" {
 				if obj.Parameters == nil {
 					obj.Parameters = make(map[string]string)
 				}
 				if encryptionFlag {
 					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
 					obj.Parameters[encryptionName] = "true"
+				}
+				if app.IsCSI {
+					obj.Parameters [CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
 				}
 				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
 					if secretNameKeyFlag {
@@ -2054,10 +2059,11 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		if secretNameKeyFlag {
+		log.Infof("Secret name key flag and CSI flag for PVC: %b %b", secretNameKeyFlag, app.IsCSI)
+		if secretNameKeyFlag && !app.IsCSI {
 			obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		}
-		if secretNamespaceKeyFlag {
+		if secretNamespaceKeyFlag && !app.IsCSI {
 			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 		}
 
