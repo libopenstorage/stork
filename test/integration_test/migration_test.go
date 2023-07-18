@@ -105,6 +105,7 @@ func triggerMigrationTest(
 	migrationSuccessExpected bool,
 	migrateAllAppsExpected bool,
 	startAppsOnMigration bool,
+	skipDestDeletion bool,
 ) {
 	var err error
 	// Reset config in case of error
@@ -115,7 +116,7 @@ func triggerMigrationTest(
 
 	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false, "", nil)
 
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, skipDestDeletion, true)
 }
 
 func triggerMigration(
@@ -215,7 +216,7 @@ func validateAndDestroyMigration(
 	var err error
 	timeout := defaultWaitTimeout
 	if !migrationSuccessExpected {
-		timeout = timeout / 2
+		timeout = timeout / 5
 	}
 
 	allAppsCtx := ctxs[0].DeepCopy()
@@ -281,6 +282,7 @@ func deploymentMigrationTest(t *testing.T) {
 		true,
 		true,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -377,6 +379,7 @@ func statefulsetMigrationTest(t *testing.T) {
 		true,
 		true,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -399,6 +402,7 @@ func statefulsetMigrationStartAppFalseTest(t *testing.T) {
 		"cassandra-migration-startapps-false",
 		true,
 		true,
+		false,
 		false,
 	)
 
@@ -423,6 +427,7 @@ func statefulsetMigrationRuleTest(t *testing.T) {
 		true,
 		true,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -446,6 +451,7 @@ func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
 		false,
 		true,
 		true,
+		true,
 	)
 
 	// If we are here then the test has passed
@@ -466,6 +472,7 @@ func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
 		nil,
 		"mysql-migration-post-exec-missing",
 		false,
+		true,
 		true,
 		true,
 	)
@@ -491,6 +498,7 @@ func migrationDisallowedNamespaceTest(t *testing.T) {
 		false,
 		true,
 		true,
+		true,
 	)
 
 	// If we are here then the test has passed
@@ -512,6 +520,7 @@ func migrationFailingPreExecRuleTest(t *testing.T) {
 		nil,
 		"mysql-migration-failing-pre-exec",
 		false,
+		true,
 		true,
 		true,
 	)
@@ -537,6 +546,7 @@ func migrationFailingPostExecRuleTest(t *testing.T) {
 		false,
 		true,
 		true,
+		true,
 	)
 
 	// If we are here then the test has passed
@@ -560,6 +570,7 @@ func migrationLabelSelectorTest(t *testing.T) {
 		true,
 		false,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -583,6 +594,7 @@ func migrationLabelExcludeSelectorTest(t *testing.T) {
 		true,
 		false,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -1378,6 +1390,7 @@ func operatorMigrationMongoTest(t *testing.T) {
 		true,
 		true,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -1413,6 +1426,7 @@ func operatorMigrationRabbitmqTest(t *testing.T) {
 		true,
 		true,
 		true,
+		false,
 	)
 
 	// If we are here then the test has passed
