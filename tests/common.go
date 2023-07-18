@@ -7572,7 +7572,10 @@ func GetVolumeFullPercentage(vol volume.Volume) (float64, error) {
 		return float64(percentage)
 	}
 
-	totalSize := vol.Size
+	appVol, err := Inst().V.InspectVolume(vol.ID)
+	log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol.ID))
+
+	totalSize := appVol.Spec.Size
 	usedSize, err := GetVolumeConsumedSize(vol)
 	if err != nil {
 		return 0, err

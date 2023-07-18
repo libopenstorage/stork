@@ -9786,7 +9786,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		defer revertAppList()
 
 		Inst().AppList = []string{}
-		var ioIntensiveApp = []string{"fio"}
+		var ioIntensiveApp = []string{"vdbench-heavyload"}
 
 		for _, eachApp := range ioIntensiveApp {
 			Inst().AppList = append(Inst().AppList, eachApp)
@@ -9816,7 +9816,8 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		// All Data volumes for Resize
 		volumesToResize := []*volume.Volume{}
 		for _, eachVol := range allVolumes {
-			if strings.Contains(eachVol.Name, "fio-data-fio") {
+			log.Infof("Checking volume with name [%v]", eachVol.Name)
+			if eachVol.Name != "vdbench-pvc-output" {
 				volumesToResize = append(volumesToResize, eachVol)
 			}
 		}
@@ -9835,7 +9836,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 				if volumeFull {
 					return nil, false, nil
 				}
-				return nil, true, fmt.Errorf("Volume is still not full. waiting.")
+				return nil, true, fmt.Errorf("Volume is still not full waiting.")
 			}
 			_, err := task.DoRetryWithTimeout(waitTillVolume, 2*time.Hour, 10*time.Second)
 			return err
