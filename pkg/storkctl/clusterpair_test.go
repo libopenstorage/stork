@@ -4,6 +4,7 @@
 package storkctl
 
 import (
+	"os"
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -125,4 +126,45 @@ func TestGenerateClusterPairInvalidNamespace(t *testing.T) {
 
 	expected := "error: the Namespace \"test_namespace\" is not valid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"
 	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateUniDirectionalClusterPairMissingParameters(t *testing.T) {
+	cmdArgs := []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--unidirectional"}
+	expected := "error: missing parameter \"src-kube-file\" - Kubeconfig file missing for source cluster"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	srcConfig := createTempFile(t, "src.config", "source configuration")
+	destConfig := createTempFile(t, "dest.config", "destination configuration")
+	defer os.Remove(srcConfig.Name())
+	defer os.Remove(destConfig.Name())
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--unidirectional"}
+	expected = "error: missing parameter \"dest-kube-file\" - Kubeconfig file missing for destination cluster"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", destConfig.Name(), "-u"}
+	expected = "error: missing parameter \"provider\" - External objectstore provider needs to be either of azure, google, s3"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfig.Name(), "-u"}
+	expected = "error: source kubeconfig file and destination kubeconfig file should be different"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	srcConfigDuplicate := createTempFile(t, "srcDup.config", "source configuration")
+	defer os.Remove(srcConfigDuplicate.Name())
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfigDuplicate.Name(), "-u"}
+	expected = "error: source kubeconfig and destination kubeconfig file should be different"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+}
+
+func createTempFile(t *testing.T, fileName string, fileContent string) *os.File {
+	f, err := os.CreateTemp("", fileName)
+	require.NoError(t, err, "Error creating file %s", fileName)
+	if _, err := f.Write([]byte(fileContent)); err != nil {
+		require.NoError(t, err, "Error writing to file %s", fileName)
+	}
+	if err := f.Close(); err != nil {
+		require.NoError(t, err, "Error closing the file %s", fileName)
+	}
+	return f
 }
