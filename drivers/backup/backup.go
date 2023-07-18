@@ -261,8 +261,8 @@ type SchedulePolicy interface {
 	// DeleteSchedulePolicy
 	DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
 
-	// UpdateOwnershiSchedulePolicy updating ownership of schedule policy
-	UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error)
+	// UpdateOwnershipSchedulePolicy updating ownership of schedule policy
+	UpdateOwnershipSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error)
 
 	// CreateIntervalSchedulePolicy creates interval schedule policy object
 	CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo
