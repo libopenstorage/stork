@@ -53,6 +53,9 @@ type ModelsDeployment struct {
 	// ProjectID which project the deployment belongs to (models.Project).
 	ProjectId *string `json:"project_id,omitempty"`
 	Resources *ModelsDeploymentResources `json:"resources,omitempty"`
+	Restore *ModelsRestore `json:"restore,omitempty"`
+	// ID of the restore to which the deployment belongs to (model.Restore).
+	RestoreId *string `json:"restore_id,omitempty"`
 	// ServiceType k8s service type.
 	ServiceType *string `json:"service_type,omitempty"`
 	// State of deployment.
@@ -759,6 +762,70 @@ func (o *ModelsDeployment) SetResources(v ModelsDeploymentResources) {
 	o.Resources = &v
 }
 
+// GetRestore returns the Restore field value if set, zero value otherwise.
+func (o *ModelsDeployment) GetRestore() ModelsRestore {
+	if o == nil || o.Restore == nil {
+		var ret ModelsRestore
+		return ret
+	}
+	return *o.Restore
+}
+
+// GetRestoreOk returns a tuple with the Restore field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeployment) GetRestoreOk() (*ModelsRestore, bool) {
+	if o == nil || o.Restore == nil {
+		return nil, false
+	}
+	return o.Restore, true
+}
+
+// HasRestore returns a boolean if a field has been set.
+func (o *ModelsDeployment) HasRestore() bool {
+	if o != nil && o.Restore != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetRestore gets a reference to the given ModelsRestore and assigns it to the Restore field.
+func (o *ModelsDeployment) SetRestore(v ModelsRestore) {
+	o.Restore = &v
+}
+
+// GetRestoreId returns the RestoreId field value if set, zero value otherwise.
+func (o *ModelsDeployment) GetRestoreId() string {
+	if o == nil || o.RestoreId == nil {
+		var ret string
+		return ret
+	}
+	return *o.RestoreId
+}
+
+// GetRestoreIdOk returns a tuple with the RestoreId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeployment) GetRestoreIdOk() (*string, bool) {
+	if o == nil || o.RestoreId == nil {
+		return nil, false
+	}
+	return o.RestoreId, true
+}
+
+// HasRestoreId returns a boolean if a field has been set.
+func (o *ModelsDeployment) HasRestoreId() bool {
+	if o != nil && o.RestoreId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetRestoreId gets a reference to the given string and assigns it to the RestoreId field.
+func (o *ModelsDeployment) SetRestoreId(v string) {
+	o.RestoreId = &v
+}
+
 // GetServiceType returns the ServiceType field value if set, zero value otherwise.
 func (o *ModelsDeployment) GetServiceType() string {
 	if o == nil || o.ServiceType == nil {
@@ -1079,6 +1146,12 @@ func (o ModelsDeployment) MarshalJSON() ([]byte, error) {
 	}
 	if o.Resources != nil {
 		toSerialize["resources"] = o.Resources
+	}
+	if o.Restore != nil {
+		toSerialize["restore"] = o.Restore
+	}
+	if o.RestoreId != nil {
+		toSerialize["restore_id"] = o.RestoreId
 	}
 	if o.ServiceType != nil {
 		toSerialize["service_type"] = o.ServiceType

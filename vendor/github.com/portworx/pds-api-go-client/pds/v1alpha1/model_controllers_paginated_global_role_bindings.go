@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedGlobalRoleBindings struct for ControllersPaginatedGlobalRoleBindings
 type ControllersPaginatedGlobalRoleBindings struct {
-	Data []ModelsGlobalRoleBinding `json:"data,omitempty"`
+	Data []ModelsLegacyGlobalBinding `json:"data,omitempty"`
 }
 
 // NewControllersPaginatedGlobalRoleBindings instantiates a new ControllersPaginatedGlobalRoleBindings object
@@ -37,9 +37,9 @@ func NewControllersPaginatedGlobalRoleBindingsWithDefaults() *ControllersPaginat
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *ControllersPaginatedGlobalRoleBindings) GetData() []ModelsGlobalRoleBinding {
+func (o *ControllersPaginatedGlobalRoleBindings) GetData() []ModelsLegacyGlobalBinding {
 	if o == nil || o.Data == nil {
-		var ret []ModelsGlobalRoleBinding
+		var ret []ModelsLegacyGlobalBinding
 		return ret
 	}
 	return o.Data
@@ -47,7 +47,7 @@ func (o *ControllersPaginatedGlobalRoleBindings) GetData() []ModelsGlobalRoleBin
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersPaginatedGlobalRoleBindings) GetDataOk() ([]ModelsGlobalRoleBinding, bool) {
+func (o *ControllersPaginatedGlobalRoleBindings) GetDataOk() ([]ModelsLegacyGlobalBinding, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -63,8 +63,8 @@ func (o *ControllersPaginatedGlobalRoleBindings) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given []ModelsGlobalRoleBinding and assigns it to the Data field.
-func (o *ControllersPaginatedGlobalRoleBindings) SetData(v []ModelsGlobalRoleBinding) {
+// SetData gets a reference to the given []ModelsLegacyGlobalBinding and assigns it to the Data field.
+func (o *ControllersPaginatedGlobalRoleBindings) SetData(v []ModelsLegacyGlobalBinding) {
 	o.Data = v
 }
 

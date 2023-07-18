@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedTenantRoleBindings struct for ControllersPaginatedTenantRoleBindings
 type ControllersPaginatedTenantRoleBindings struct {
-	Data []ModelsTenantRoleBinding `json:"data,omitempty"`
+	Data []ModelsLegacyTenantBinding `json:"data,omitempty"`
 }
 
 // NewControllersPaginatedTenantRoleBindings instantiates a new ControllersPaginatedTenantRoleBindings object
@@ -37,9 +37,9 @@ func NewControllersPaginatedTenantRoleBindingsWithDefaults() *ControllersPaginat
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *ControllersPaginatedTenantRoleBindings) GetData() []ModelsTenantRoleBinding {
+func (o *ControllersPaginatedTenantRoleBindings) GetData() []ModelsLegacyTenantBinding {
 	if o == nil || o.Data == nil {
-		var ret []ModelsTenantRoleBinding
+		var ret []ModelsLegacyTenantBinding
 		return ret
 	}
 	return o.Data
@@ -47,7 +47,7 @@ func (o *ControllersPaginatedTenantRoleBindings) GetData() []ModelsTenantRoleBin
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersPaginatedTenantRoleBindings) GetDataOk() ([]ModelsTenantRoleBinding, bool) {
+func (o *ControllersPaginatedTenantRoleBindings) GetDataOk() ([]ModelsLegacyTenantBinding, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -63,8 +63,8 @@ func (o *ControllersPaginatedTenantRoleBindings) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given []ModelsTenantRoleBinding and assigns it to the Data field.
-func (o *ControllersPaginatedTenantRoleBindings) SetData(v []ModelsTenantRoleBinding) {
+// SetData gets a reference to the given []ModelsLegacyTenantBinding and assigns it to the Data field.
+func (o *ControllersPaginatedTenantRoleBindings) SetData(v []ModelsLegacyTenantBinding) {
 	o.Data = v
 }
 

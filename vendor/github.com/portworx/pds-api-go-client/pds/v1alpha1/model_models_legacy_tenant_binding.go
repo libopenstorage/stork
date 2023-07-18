@@ -14,33 +14,33 @@ import (
 	"encoding/json"
 )
 
-// ModelsTenantRoleBinding struct for ModelsTenantRoleBinding
-type ModelsTenantRoleBinding struct {
+// ModelsLegacyTenantBinding struct for ModelsLegacyTenantBinding
+type ModelsLegacyTenantBinding struct {
 	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
 	RoleName *string `json:"role_name,omitempty"`
 	TenantId *string `json:"tenant_id,omitempty"`
 }
 
-// NewModelsTenantRoleBinding instantiates a new ModelsTenantRoleBinding object
+// NewModelsLegacyTenantBinding instantiates a new ModelsLegacyTenantBinding object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewModelsTenantRoleBinding() *ModelsTenantRoleBinding {
-	this := ModelsTenantRoleBinding{}
+func NewModelsLegacyTenantBinding() *ModelsLegacyTenantBinding {
+	this := ModelsLegacyTenantBinding{}
 	return &this
 }
 
-// NewModelsTenantRoleBindingWithDefaults instantiates a new ModelsTenantRoleBinding object
+// NewModelsLegacyTenantBindingWithDefaults instantiates a new ModelsLegacyTenantBinding object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewModelsTenantRoleBindingWithDefaults() *ModelsTenantRoleBinding {
-	this := ModelsTenantRoleBinding{}
+func NewModelsLegacyTenantBindingWithDefaults() *ModelsLegacyTenantBinding {
+	this := ModelsLegacyTenantBinding{}
 	return &this
 }
 
 // GetActorId returns the ActorId field value if set, zero value otherwise.
-func (o *ModelsTenantRoleBinding) GetActorId() string {
+func (o *ModelsLegacyTenantBinding) GetActorId() string {
 	if o == nil || o.ActorId == nil {
 		var ret string
 		return ret
@@ -50,7 +50,7 @@ func (o *ModelsTenantRoleBinding) GetActorId() string {
 
 // GetActorIdOk returns a tuple with the ActorId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsTenantRoleBinding) GetActorIdOk() (*string, bool) {
+func (o *ModelsLegacyTenantBinding) GetActorIdOk() (*string, bool) {
 	if o == nil || o.ActorId == nil {
 		return nil, false
 	}
@@ -58,7 +58,7 @@ func (o *ModelsTenantRoleBinding) GetActorIdOk() (*string, bool) {
 }
 
 // HasActorId returns a boolean if a field has been set.
-func (o *ModelsTenantRoleBinding) HasActorId() bool {
+func (o *ModelsLegacyTenantBinding) HasActorId() bool {
 	if o != nil && o.ActorId != nil {
 		return true
 	}
@@ -67,12 +67,12 @@ func (o *ModelsTenantRoleBinding) HasActorId() bool {
 }
 
 // SetActorId gets a reference to the given string and assigns it to the ActorId field.
-func (o *ModelsTenantRoleBinding) SetActorId(v string) {
+func (o *ModelsLegacyTenantBinding) SetActorId(v string) {
 	o.ActorId = &v
 }
 
 // GetActorType returns the ActorType field value if set, zero value otherwise.
-func (o *ModelsTenantRoleBinding) GetActorType() string {
+func (o *ModelsLegacyTenantBinding) GetActorType() string {
 	if o == nil || o.ActorType == nil {
 		var ret string
 		return ret
@@ -82,7 +82,7 @@ func (o *ModelsTenantRoleBinding) GetActorType() string {
 
 // GetActorTypeOk returns a tuple with the ActorType field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsTenantRoleBinding) GetActorTypeOk() (*string, bool) {
+func (o *ModelsLegacyTenantBinding) GetActorTypeOk() (*string, bool) {
 	if o == nil || o.ActorType == nil {
 		return nil, false
 	}
@@ -90,7 +90,7 @@ func (o *ModelsTenantRoleBinding) GetActorTypeOk() (*string, bool) {
 }
 
 // HasActorType returns a boolean if a field has been set.
-func (o *ModelsTenantRoleBinding) HasActorType() bool {
+func (o *ModelsLegacyTenantBinding) HasActorType() bool {
 	if o != nil && o.ActorType != nil {
 		return true
 	}
@@ -99,12 +99,12 @@ func (o *ModelsTenantRoleBinding) HasActorType() bool {
 }
 
 // SetActorType gets a reference to the given string and assigns it to the ActorType field.
-func (o *ModelsTenantRoleBinding) SetActorType(v string) {
+func (o *ModelsLegacyTenantBinding) SetActorType(v string) {
 	o.ActorType = &v
 }
 
 // GetRoleName returns the RoleName field value if set, zero value otherwise.
-func (o *ModelsTenantRoleBinding) GetRoleName() string {
+func (o *ModelsLegacyTenantBinding) GetRoleName() string {
 	if o == nil || o.RoleName == nil {
 		var ret string
 		return ret
@@ -114,7 +114,7 @@ func (o *ModelsTenantRoleBinding) GetRoleName() string {
 
 // GetRoleNameOk returns a tuple with the RoleName field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsTenantRoleBinding) GetRoleNameOk() (*string, bool) {
+func (o *ModelsLegacyTenantBinding) GetRoleNameOk() (*string, bool) {
 	if o == nil || o.RoleName == nil {
 		return nil, false
 	}
@@ -122,7 +122,7 @@ func (o *ModelsTenantRoleBinding) GetRoleNameOk() (*string, bool) {
 }
 
 // HasRoleName returns a boolean if a field has been set.
-func (o *ModelsTenantRoleBinding) HasRoleName() bool {
+func (o *ModelsLegacyTenantBinding) HasRoleName() bool {
 	if o != nil && o.RoleName != nil {
 		return true
 	}
@@ -131,12 +131,12 @@ func (o *ModelsTenantRoleBinding) HasRoleName() bool {
 }
 
 // SetRoleName gets a reference to the given string and assigns it to the RoleName field.
-func (o *ModelsTenantRoleBinding) SetRoleName(v string) {
+func (o *ModelsLegacyTenantBinding) SetRoleName(v string) {
 	o.RoleName = &v
 }
 
 // GetTenantId returns the TenantId field value if set, zero value otherwise.
-func (o *ModelsTenantRoleBinding) GetTenantId() string {
+func (o *ModelsLegacyTenantBinding) GetTenantId() string {
 	if o == nil || o.TenantId == nil {
 		var ret string
 		return ret
@@ -146,7 +146,7 @@ func (o *ModelsTenantRoleBinding) GetTenantId() string {
 
 // GetTenantIdOk returns a tuple with the TenantId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsTenantRoleBinding) GetTenantIdOk() (*string, bool) {
+func (o *ModelsLegacyTenantBinding) GetTenantIdOk() (*string, bool) {
 	if o == nil || o.TenantId == nil {
 		return nil, false
 	}
@@ -154,7 +154,7 @@ func (o *ModelsTenantRoleBinding) GetTenantIdOk() (*string, bool) {
 }
 
 // HasTenantId returns a boolean if a field has been set.
-func (o *ModelsTenantRoleBinding) HasTenantId() bool {
+func (o *ModelsLegacyTenantBinding) HasTenantId() bool {
 	if o != nil && o.TenantId != nil {
 		return true
 	}
@@ -163,11 +163,11 @@ func (o *ModelsTenantRoleBinding) HasTenantId() bool {
 }
 
 // SetTenantId gets a reference to the given string and assigns it to the TenantId field.
-func (o *ModelsTenantRoleBinding) SetTenantId(v string) {
+func (o *ModelsLegacyTenantBinding) SetTenantId(v string) {
 	o.TenantId = &v
 }
 
-func (o ModelsTenantRoleBinding) MarshalJSON() ([]byte, error) {
+func (o ModelsLegacyTenantBinding) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.ActorId != nil {
 		toSerialize["actor_id"] = o.ActorId
@@ -184,38 +184,38 @@ func (o ModelsTenantRoleBinding) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-type NullableModelsTenantRoleBinding struct {
-	value *ModelsTenantRoleBinding
+type NullableModelsLegacyTenantBinding struct {
+	value *ModelsLegacyTenantBinding
 	isSet bool
 }
 
-func (v NullableModelsTenantRoleBinding) Get() *ModelsTenantRoleBinding {
+func (v NullableModelsLegacyTenantBinding) Get() *ModelsLegacyTenantBinding {
 	return v.value
 }
 
-func (v *NullableModelsTenantRoleBinding) Set(val *ModelsTenantRoleBinding) {
+func (v *NullableModelsLegacyTenantBinding) Set(val *ModelsLegacyTenantBinding) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableModelsTenantRoleBinding) IsSet() bool {
+func (v NullableModelsLegacyTenantBinding) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableModelsTenantRoleBinding) Unset() {
+func (v *NullableModelsLegacyTenantBinding) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableModelsTenantRoleBinding(val *ModelsTenantRoleBinding) *NullableModelsTenantRoleBinding {
-	return &NullableModelsTenantRoleBinding{value: val, isSet: true}
+func NewNullableModelsLegacyTenantBinding(val *ModelsLegacyTenantBinding) *NullableModelsLegacyTenantBinding {
+	return &NullableModelsLegacyTenantBinding{value: val, isSet: true}
 }
 
-func (v NullableModelsTenantRoleBinding) MarshalJSON() ([]byte, error) {
+func (v NullableModelsLegacyTenantBinding) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableModelsTenantRoleBinding) UnmarshalJSON(src []byte) error {
+func (v *NullableModelsLegacyTenantBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

@@ -14,32 +14,32 @@ import (
 	"encoding/json"
 )
 
-// ControllersUpsertProjectRoleBindingRequest struct for ControllersUpsertProjectRoleBindingRequest
-type ControllersUpsertProjectRoleBindingRequest struct {
+// ModelsLegacyGlobalBinding struct for ModelsLegacyGlobalBinding
+type ModelsLegacyGlobalBinding struct {
 	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
 	RoleName *string `json:"role_name,omitempty"`
 }
 
-// NewControllersUpsertProjectRoleBindingRequest instantiates a new ControllersUpsertProjectRoleBindingRequest object
+// NewModelsLegacyGlobalBinding instantiates a new ModelsLegacyGlobalBinding object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewControllersUpsertProjectRoleBindingRequest() *ControllersUpsertProjectRoleBindingRequest {
-	this := ControllersUpsertProjectRoleBindingRequest{}
+func NewModelsLegacyGlobalBinding() *ModelsLegacyGlobalBinding {
+	this := ModelsLegacyGlobalBinding{}
 	return &this
 }
 
-// NewControllersUpsertProjectRoleBindingRequestWithDefaults instantiates a new ControllersUpsertProjectRoleBindingRequest object
+// NewModelsLegacyGlobalBindingWithDefaults instantiates a new ModelsLegacyGlobalBinding object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewControllersUpsertProjectRoleBindingRequestWithDefaults() *ControllersUpsertProjectRoleBindingRequest {
-	this := ControllersUpsertProjectRoleBindingRequest{}
+func NewModelsLegacyGlobalBindingWithDefaults() *ModelsLegacyGlobalBinding {
+	this := ModelsLegacyGlobalBinding{}
 	return &this
 }
 
 // GetActorId returns the ActorId field value if set, zero value otherwise.
-func (o *ControllersUpsertProjectRoleBindingRequest) GetActorId() string {
+func (o *ModelsLegacyGlobalBinding) GetActorId() string {
 	if o == nil || o.ActorId == nil {
 		var ret string
 		return ret
@@ -49,7 +49,7 @@ func (o *ControllersUpsertProjectRoleBindingRequest) GetActorId() string {
 
 // GetActorIdOk returns a tuple with the ActorId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersUpsertProjectRoleBindingRequest) GetActorIdOk() (*string, bool) {
+func (o *ModelsLegacyGlobalBinding) GetActorIdOk() (*string, bool) {
 	if o == nil || o.ActorId == nil {
 		return nil, false
 	}
@@ -57,7 +57,7 @@ func (o *ControllersUpsertProjectRoleBindingRequest) GetActorIdOk() (*string, bo
 }
 
 // HasActorId returns a boolean if a field has been set.
-func (o *ControllersUpsertProjectRoleBindingRequest) HasActorId() bool {
+func (o *ModelsLegacyGlobalBinding) HasActorId() bool {
 	if o != nil && o.ActorId != nil {
 		return true
 	}
@@ -66,12 +66,12 @@ func (o *ControllersUpsertProjectRoleBindingRequest) HasActorId() bool {
 }
 
 // SetActorId gets a reference to the given string and assigns it to the ActorId field.
-func (o *ControllersUpsertProjectRoleBindingRequest) SetActorId(v string) {
+func (o *ModelsLegacyGlobalBinding) SetActorId(v string) {
 	o.ActorId = &v
 }
 
 // GetActorType returns the ActorType field value if set, zero value otherwise.
-func (o *ControllersUpsertProjectRoleBindingRequest) GetActorType() string {
+func (o *ModelsLegacyGlobalBinding) GetActorType() string {
 	if o == nil || o.ActorType == nil {
 		var ret string
 		return ret
@@ -81,7 +81,7 @@ func (o *ControllersUpsertProjectRoleBindingRequest) GetActorType() string {
 
 // GetActorTypeOk returns a tuple with the ActorType field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersUpsertProjectRoleBindingRequest) GetActorTypeOk() (*string, bool) {
+func (o *ModelsLegacyGlobalBinding) GetActorTypeOk() (*string, bool) {
 	if o == nil || o.ActorType == nil {
 		return nil, false
 	}
@@ -89,7 +89,7 @@ func (o *ControllersUpsertProjectRoleBindingRequest) GetActorTypeOk() (*string, 
 }
 
 // HasActorType returns a boolean if a field has been set.
-func (o *ControllersUpsertProjectRoleBindingRequest) HasActorType() bool {
+func (o *ModelsLegacyGlobalBinding) HasActorType() bool {
 	if o != nil && o.ActorType != nil {
 		return true
 	}
@@ -98,12 +98,12 @@ func (o *ControllersUpsertProjectRoleBindingRequest) HasActorType() bool {
 }
 
 // SetActorType gets a reference to the given string and assigns it to the ActorType field.
-func (o *ControllersUpsertProjectRoleBindingRequest) SetActorType(v string) {
+func (o *ModelsLegacyGlobalBinding) SetActorType(v string) {
 	o.ActorType = &v
 }
 
 // GetRoleName returns the RoleName field value if set, zero value otherwise.
-func (o *ControllersUpsertProjectRoleBindingRequest) GetRoleName() string {
+func (o *ModelsLegacyGlobalBinding) GetRoleName() string {
 	if o == nil || o.RoleName == nil {
 		var ret string
 		return ret
@@ -113,7 +113,7 @@ func (o *ControllersUpsertProjectRoleBindingRequest) GetRoleName() string {
 
 // GetRoleNameOk returns a tuple with the RoleName field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersUpsertProjectRoleBindingRequest) GetRoleNameOk() (*string, bool) {
+func (o *ModelsLegacyGlobalBinding) GetRoleNameOk() (*string, bool) {
 	if o == nil || o.RoleName == nil {
 		return nil, false
 	}
@@ -121,7 +121,7 @@ func (o *ControllersUpsertProjectRoleBindingRequest) GetRoleNameOk() (*string, b
 }
 
 // HasRoleName returns a boolean if a field has been set.
-func (o *ControllersUpsertProjectRoleBindingRequest) HasRoleName() bool {
+func (o *ModelsLegacyGlobalBinding) HasRoleName() bool {
 	if o != nil && o.RoleName != nil {
 		return true
 	}
@@ -130,11 +130,11 @@ func (o *ControllersUpsertProjectRoleBindingRequest) HasRoleName() bool {
 }
 
 // SetRoleName gets a reference to the given string and assigns it to the RoleName field.
-func (o *ControllersUpsertProjectRoleBindingRequest) SetRoleName(v string) {
+func (o *ModelsLegacyGlobalBinding) SetRoleName(v string) {
 	o.RoleName = &v
 }
 
-func (o ControllersUpsertProjectRoleBindingRequest) MarshalJSON() ([]byte, error) {
+func (o ModelsLegacyGlobalBinding) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.ActorId != nil {
 		toSerialize["actor_id"] = o.ActorId
@@ -148,38 +148,38 @@ func (o ControllersUpsertProjectRoleBindingRequest) MarshalJSON() ([]byte, error
 	return json.Marshal(toSerialize)
 }
 
-type NullableControllersUpsertProjectRoleBindingRequest struct {
-	value *ControllersUpsertProjectRoleBindingRequest
+type NullableModelsLegacyGlobalBinding struct {
+	value *ModelsLegacyGlobalBinding
 	isSet bool
 }
 
-func (v NullableControllersUpsertProjectRoleBindingRequest) Get() *ControllersUpsertProjectRoleBindingRequest {
+func (v NullableModelsLegacyGlobalBinding) Get() *ModelsLegacyGlobalBinding {
 	return v.value
 }
 
-func (v *NullableControllersUpsertProjectRoleBindingRequest) Set(val *ControllersUpsertProjectRoleBindingRequest) {
+func (v *NullableModelsLegacyGlobalBinding) Set(val *ModelsLegacyGlobalBinding) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableControllersUpsertProjectRoleBindingRequest) IsSet() bool {
+func (v NullableModelsLegacyGlobalBinding) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableControllersUpsertProjectRoleBindingRequest) Unset() {
+func (v *NullableModelsLegacyGlobalBinding) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableControllersUpsertProjectRoleBindingRequest(val *ControllersUpsertProjectRoleBindingRequest) *NullableControllersUpsertProjectRoleBindingRequest {
-	return &NullableControllersUpsertProjectRoleBindingRequest{value: val, isSet: true}
+func NewNullableModelsLegacyGlobalBinding(val *ModelsLegacyGlobalBinding) *NullableModelsLegacyGlobalBinding {
+	return &NullableModelsLegacyGlobalBinding{value: val, isSet: true}
 }
 
-func (v NullableControllersUpsertProjectRoleBindingRequest) MarshalJSON() ([]byte, error) {
+func (v NullableModelsLegacyGlobalBinding) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableControllersUpsertProjectRoleBindingRequest) UnmarshalJSON(src []byte) error {
+func (v *NullableModelsLegacyGlobalBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

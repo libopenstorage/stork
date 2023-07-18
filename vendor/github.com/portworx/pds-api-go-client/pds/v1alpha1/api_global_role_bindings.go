@@ -293,16 +293,16 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsGetExecute(r ApiApiG
 type ApiApiGlobalRoleBindingsPutRequest struct {
 	ctx context.Context
 	ApiService *GlobalRoleBindingsApiService
-	body *ModelsGlobalRoleBinding
+	body *RequestsPutLegacyBindingRequest
 }
 
 // Request body containing the global role binding
-func (r ApiApiGlobalRoleBindingsPutRequest) Body(body ModelsGlobalRoleBinding) ApiApiGlobalRoleBindingsPutRequest {
+func (r ApiApiGlobalRoleBindingsPutRequest) Body(body RequestsPutLegacyBindingRequest) ApiApiGlobalRoleBindingsPutRequest {
 	r.body = &body
 	return r
 }
 
-func (r ApiApiGlobalRoleBindingsPutRequest) Execute() (*ModelsGlobalRoleBinding, *http.Response, error) {
+func (r ApiApiGlobalRoleBindingsPutRequest) Execute() (*ModelsLegacyGlobalBinding, *http.Response, error) {
 	return r.ApiService.ApiGlobalRoleBindingsPutExecute(r)
 }
 
@@ -322,13 +322,13 @@ func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsPut(ctx context.Cont
 }
 
 // Execute executes the request
-//  @return ModelsGlobalRoleBinding
-func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsPutExecute(r ApiApiGlobalRoleBindingsPutRequest) (*ModelsGlobalRoleBinding, *http.Response, error) {
+//  @return ModelsLegacyGlobalBinding
+func (a *GlobalRoleBindingsApiService) ApiGlobalRoleBindingsPutExecute(r ApiApiGlobalRoleBindingsPutRequest) (*ModelsLegacyGlobalBinding, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPut
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ModelsGlobalRoleBinding
+		localVarReturnValue  *ModelsLegacyGlobalBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GlobalRoleBindingsApiService.ApiGlobalRoleBindingsPut")
