@@ -253,6 +253,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	var syncDR bool
 	var pxAuthTokenSrc, pxAuthSecretNamespaceSrc string
 	var pxAuthTokenDest, pxAuthSecretNamespaceDest string
+	var unidirectional bool
 
 	createClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
@@ -327,6 +328,9 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				}
 				printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
 
+				if unidirectional {
+					return
+				}
 				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, true)
 				if err != nil {
 					util.CheckErr(err)
@@ -430,7 +434,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			credentialData["encryptionKey"] = []byte(encryptionKey)
 
 			// Bail out if portworx-api service type is not loadbalancer type and the endpoints are not provided.
-			if len(sEP) == 0 {
+			if !unidirectional && len(sEP) == 0 {
 				srcPXEndpoint, err := getPXEndPointDetails(sFile)
 				if err != nil {
 					err = fmt.Errorf("unable to get portworx endpoint in source cluster. Err: %v", err)
@@ -484,7 +488,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
-			printMsg(fmt.Sprintf("\nCreating Secret and Backuplocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
+			printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 			storkops.Instance().SetConfig(conf)
 			core.Instance().SetConfig(conf)
 			secret := &v1.Secret{
@@ -510,11 +514,11 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			annotations[skipResourceAnnotation] = "true"
 			_, err = storkops.Instance().CreateBackupLocation(backupLocation)
 			if err != nil {
-				err := fmt.Errorf("unable to create backuplocation in source. Err: %v", err)
+				err := fmt.Errorf("unable to create ObjectstoreLocation in source. Err: %v", err)
 				util.CheckErr(err)
 				return
 			}
-			printMsg(fmt.Sprintf("Backuplocation %v created on source cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
+			printMsg(fmt.Sprintf("ObjectstoreLocation %v created on source cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
 
 			printMsg("Creating a cluster pair. Direction: Source -> Destination", ioStreams.Out)
 			srcClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
@@ -524,6 +528,10 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 			printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
+
+			if unidirectional {
+				return
+			}
 
 			sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
 
@@ -557,7 +565,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			storkops.Instance().SetConfig(conf)
 			core.Instance().SetConfig(conf)
 
-			printMsg(fmt.Sprintf("Creating Secret and Backuplocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
+			printMsg(fmt.Sprintf("Creating Secret and ObjectstoreLocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 			_, err = core.Instance().CreateSecret(secret)
 			if err != nil {
 				util.CheckErr(err)
@@ -565,11 +573,11 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			}
 			_, err = storkops.Instance().CreateBackupLocation(backupLocation)
 			if err != nil {
-				err := fmt.Errorf("unable to create backuplocation in destination. Err: %v", err)
+				err := fmt.Errorf("unable to create ObjectstoreLocation in destination. Err: %v", err)
 				util.CheckErr(err)
 				return
 			}
-			printMsg(fmt.Sprintf("Backuplocation %v created on destination cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
+			printMsg(fmt.Sprintf("ObjectstoreLocation %v created on destination cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
 
 			printMsg("Creating a cluster pair. Direction: Destination -> Source", ioStreams.Out)
 			destClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
@@ -598,7 +606,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
 	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", "async-dr", "Mode of DR. [async-dr, sync-dr]")
-
+	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
 	// New parameters for creating backuplocation secret
 	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google]")
 	createClusterPairCommand.Flags().StringVar(&bucket, "bucket", "", "Bucket name")
