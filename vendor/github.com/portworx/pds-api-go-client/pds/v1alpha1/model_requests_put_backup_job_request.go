@@ -16,30 +16,28 @@ import (
 
 // RequestsPutBackupJobRequest struct for RequestsPutBackupJobRequest
 type RequestsPutBackupJobRequest struct {
-	// BackupID which backup created the snapshot (nullable).
+	BackupCapability *string `json:"backup_capability,omitempty"`
 	BackupId *string `json:"backup_id,omitempty"`
-	// BackupSpecJSON is the specification of the Backup in JSON format at the time the snapshot was taken.
-	BackupSpec []int32 `json:"backup_spec,omitempty"`
-	// CloudCredentialName credentials to access snapshot.
+	BackupSpec map[string]interface{} `json:"backup_spec,omitempty"`
 	CloudCredentialName *string `json:"cloud_credential_name,omitempty"`
-	// CloudSnapID snapshot of the backup volume.
 	CloudSnapId *string `json:"cloud_snap_id,omitempty"`
-	// CompletionStatus of the backup job.
+	// CompletionStatus of the snapshot.
 	CompletionStatus *string `json:"completion_status,omitempty"`
 	CompletionTime *string `json:"completion_time,omitempty"`
-	// BackupSpecJSON is the specification of the Backup in JSON format at the time the snapshot was taken.
-	DataServiceSpec []int32 `json:"data_service_spec,omitempty"`
-	// DeploymentID which deployment was backed up (nullable).
+	DataServiceSpec map[string]interface{} `json:"data_service_spec,omitempty"`
+	Deleted *bool `json:"deleted,omitempty"`
 	DeploymentId *string `json:"deployment_id,omitempty"`
+	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
+	// ErrorCode if CompletionStatus is \"Failed\"
 	ErrorCode *string `json:"error_code,omitempty"`
 	ErrorMessage *string `json:"error_message,omitempty"`
-	// FileSize of the CloudSnap image.
 	FileSize *int32 `json:"file_size,omitempty"`
-	// Name of the BackupJob.
+	ImageName *string `json:"image_name,omitempty"`
 	Name *string `json:"name,omitempty"`
-	// ProjectID which created the snapshot (required).
+	NamespaceName *string `json:"namespace_name,omitempty"`
 	ProjectId string `json:"project_id"`
 	StartTime *string `json:"start_time,omitempty"`
+	Timestamp *string `json:"timestamp,omitempty"`
 }
 
 // NewRequestsPutBackupJobRequest instantiates a new RequestsPutBackupJobRequest object
@@ -58,6 +56,38 @@ func NewRequestsPutBackupJobRequest(projectId string) *RequestsPutBackupJobReque
 func NewRequestsPutBackupJobRequestWithDefaults() *RequestsPutBackupJobRequest {
 	this := RequestsPutBackupJobRequest{}
 	return &this
+}
+
+// GetBackupCapability returns the BackupCapability field value if set, zero value otherwise.
+func (o *RequestsPutBackupJobRequest) GetBackupCapability() string {
+	if o == nil || o.BackupCapability == nil {
+		var ret string
+		return ret
+	}
+	return *o.BackupCapability
+}
+
+// GetBackupCapabilityOk returns a tuple with the BackupCapability field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPutBackupJobRequest) GetBackupCapabilityOk() (*string, bool) {
+	if o == nil || o.BackupCapability == nil {
+		return nil, false
+	}
+	return o.BackupCapability, true
+}
+
+// HasBackupCapability returns a boolean if a field has been set.
+func (o *RequestsPutBackupJobRequest) HasBackupCapability() bool {
+	if o != nil && o.BackupCapability != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetBackupCapability gets a reference to the given string and assigns it to the BackupCapability field.
+func (o *RequestsPutBackupJobRequest) SetBackupCapability(v string) {
+	o.BackupCapability = &v
 }
 
 // GetBackupId returns the BackupId field value if set, zero value otherwise.
@@ -93,9 +123,9 @@ func (o *RequestsPutBackupJobRequest) SetBackupId(v string) {
 }
 
 // GetBackupSpec returns the BackupSpec field value if set, zero value otherwise.
-func (o *RequestsPutBackupJobRequest) GetBackupSpec() []int32 {
+func (o *RequestsPutBackupJobRequest) GetBackupSpec() map[string]interface{} {
 	if o == nil || o.BackupSpec == nil {
-		var ret []int32
+		var ret map[string]interface{}
 		return ret
 	}
 	return o.BackupSpec
@@ -103,7 +133,7 @@ func (o *RequestsPutBackupJobRequest) GetBackupSpec() []int32 {
 
 // GetBackupSpecOk returns a tuple with the BackupSpec field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RequestsPutBackupJobRequest) GetBackupSpecOk() ([]int32, bool) {
+func (o *RequestsPutBackupJobRequest) GetBackupSpecOk() (map[string]interface{}, bool) {
 	if o == nil || o.BackupSpec == nil {
 		return nil, false
 	}
@@ -119,8 +149,8 @@ func (o *RequestsPutBackupJobRequest) HasBackupSpec() bool {
 	return false
 }
 
-// SetBackupSpec gets a reference to the given []int32 and assigns it to the BackupSpec field.
-func (o *RequestsPutBackupJobRequest) SetBackupSpec(v []int32) {
+// SetBackupSpec gets a reference to the given map[string]interface{} and assigns it to the BackupSpec field.
+func (o *RequestsPutBackupJobRequest) SetBackupSpec(v map[string]interface{}) {
 	o.BackupSpec = v
 }
 
@@ -253,9 +283,9 @@ func (o *RequestsPutBackupJobRequest) SetCompletionTime(v string) {
 }
 
 // GetDataServiceSpec returns the DataServiceSpec field value if set, zero value otherwise.
-func (o *RequestsPutBackupJobRequest) GetDataServiceSpec() []int32 {
+func (o *RequestsPutBackupJobRequest) GetDataServiceSpec() map[string]interface{} {
 	if o == nil || o.DataServiceSpec == nil {
-		var ret []int32
+		var ret map[string]interface{}
 		return ret
 	}
 	return o.DataServiceSpec
@@ -263,7 +293,7 @@ func (o *RequestsPutBackupJobRequest) GetDataServiceSpec() []int32 {
 
 // GetDataServiceSpecOk returns a tuple with the DataServiceSpec field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RequestsPutBackupJobRequest) GetDataServiceSpecOk() ([]int32, bool) {
+func (o *RequestsPutBackupJobRequest) GetDataServiceSpecOk() (map[string]interface{}, bool) {
 	if o == nil || o.DataServiceSpec == nil {
 		return nil, false
 	}
@@ -279,9 +309,41 @@ func (o *RequestsPutBackupJobRequest) HasDataServiceSpec() bool {
 	return false
 }
 
-// SetDataServiceSpec gets a reference to the given []int32 and assigns it to the DataServiceSpec field.
-func (o *RequestsPutBackupJobRequest) SetDataServiceSpec(v []int32) {
+// SetDataServiceSpec gets a reference to the given map[string]interface{} and assigns it to the DataServiceSpec field.
+func (o *RequestsPutBackupJobRequest) SetDataServiceSpec(v map[string]interface{}) {
 	o.DataServiceSpec = v
+}
+
+// GetDeleted returns the Deleted field value if set, zero value otherwise.
+func (o *RequestsPutBackupJobRequest) GetDeleted() bool {
+	if o == nil || o.Deleted == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Deleted
+}
+
+// GetDeletedOk returns a tuple with the Deleted field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPutBackupJobRequest) GetDeletedOk() (*bool, bool) {
+	if o == nil || o.Deleted == nil {
+		return nil, false
+	}
+	return o.Deleted, true
+}
+
+// HasDeleted returns a boolean if a field has been set.
+func (o *RequestsPutBackupJobRequest) HasDeleted() bool {
+	if o != nil && o.Deleted != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetDeleted gets a reference to the given bool and assigns it to the Deleted field.
+func (o *RequestsPutBackupJobRequest) SetDeleted(v bool) {
+	o.Deleted = &v
 }
 
 // GetDeploymentId returns the DeploymentId field value if set, zero value otherwise.
@@ -314,6 +376,38 @@ func (o *RequestsPutBackupJobRequest) HasDeploymentId() bool {
 // SetDeploymentId gets a reference to the given string and assigns it to the DeploymentId field.
 func (o *RequestsPutBackupJobRequest) SetDeploymentId(v string) {
 	o.DeploymentId = &v
+}
+
+// GetDeploymentTargetId returns the DeploymentTargetId field value if set, zero value otherwise.
+func (o *RequestsPutBackupJobRequest) GetDeploymentTargetId() string {
+	if o == nil || o.DeploymentTargetId == nil {
+		var ret string
+		return ret
+	}
+	return *o.DeploymentTargetId
+}
+
+// GetDeploymentTargetIdOk returns a tuple with the DeploymentTargetId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPutBackupJobRequest) GetDeploymentTargetIdOk() (*string, bool) {
+	if o == nil || o.DeploymentTargetId == nil {
+		return nil, false
+	}
+	return o.DeploymentTargetId, true
+}
+
+// HasDeploymentTargetId returns a boolean if a field has been set.
+func (o *RequestsPutBackupJobRequest) HasDeploymentTargetId() bool {
+	if o != nil && o.DeploymentTargetId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetDeploymentTargetId gets a reference to the given string and assigns it to the DeploymentTargetId field.
+func (o *RequestsPutBackupJobRequest) SetDeploymentTargetId(v string) {
+	o.DeploymentTargetId = &v
 }
 
 // GetErrorCode returns the ErrorCode field value if set, zero value otherwise.
@@ -412,6 +506,38 @@ func (o *RequestsPutBackupJobRequest) SetFileSize(v int32) {
 	o.FileSize = &v
 }
 
+// GetImageName returns the ImageName field value if set, zero value otherwise.
+func (o *RequestsPutBackupJobRequest) GetImageName() string {
+	if o == nil || o.ImageName == nil {
+		var ret string
+		return ret
+	}
+	return *o.ImageName
+}
+
+// GetImageNameOk returns a tuple with the ImageName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPutBackupJobRequest) GetImageNameOk() (*string, bool) {
+	if o == nil || o.ImageName == nil {
+		return nil, false
+	}
+	return o.ImageName, true
+}
+
+// HasImageName returns a boolean if a field has been set.
+func (o *RequestsPutBackupJobRequest) HasImageName() bool {
+	if o != nil && o.ImageName != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetImageName gets a reference to the given string and assigns it to the ImageName field.
+func (o *RequestsPutBackupJobRequest) SetImageName(v string) {
+	o.ImageName = &v
+}
+
 // GetName returns the Name field value if set, zero value otherwise.
 func (o *RequestsPutBackupJobRequest) GetName() string {
 	if o == nil || o.Name == nil {
@@ -442,6 +568,38 @@ func (o *RequestsPutBackupJobRequest) HasName() bool {
 // SetName gets a reference to the given string and assigns it to the Name field.
 func (o *RequestsPutBackupJobRequest) SetName(v string) {
 	o.Name = &v
+}
+
+// GetNamespaceName returns the NamespaceName field value if set, zero value otherwise.
+func (o *RequestsPutBackupJobRequest) GetNamespaceName() string {
+	if o == nil || o.NamespaceName == nil {
+		var ret string
+		return ret
+	}
+	return *o.NamespaceName
+}
+
+// GetNamespaceNameOk returns a tuple with the NamespaceName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPutBackupJobRequest) GetNamespaceNameOk() (*string, bool) {
+	if o == nil || o.NamespaceName == nil {
+		return nil, false
+	}
+	return o.NamespaceName, true
+}
+
+// HasNamespaceName returns a boolean if a field has been set.
+func (o *RequestsPutBackupJobRequest) HasNamespaceName() bool {
+	if o != nil && o.NamespaceName != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetNamespaceName gets a reference to the given string and assigns it to the NamespaceName field.
+func (o *RequestsPutBackupJobRequest) SetNamespaceName(v string) {
+	o.NamespaceName = &v
 }
 
 // GetProjectId returns the ProjectId field value
@@ -500,8 +658,43 @@ func (o *RequestsPutBackupJobRequest) SetStartTime(v string) {
 	o.StartTime = &v
 }
 
+// GetTimestamp returns the Timestamp field value if set, zero value otherwise.
+func (o *RequestsPutBackupJobRequest) GetTimestamp() string {
+	if o == nil || o.Timestamp == nil {
+		var ret string
+		return ret
+	}
+	return *o.Timestamp
+}
+
+// GetTimestampOk returns a tuple with the Timestamp field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPutBackupJobRequest) GetTimestampOk() (*string, bool) {
+	if o == nil || o.Timestamp == nil {
+		return nil, false
+	}
+	return o.Timestamp, true
+}
+
+// HasTimestamp returns a boolean if a field has been set.
+func (o *RequestsPutBackupJobRequest) HasTimestamp() bool {
+	if o != nil && o.Timestamp != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTimestamp gets a reference to the given string and assigns it to the Timestamp field.
+func (o *RequestsPutBackupJobRequest) SetTimestamp(v string) {
+	o.Timestamp = &v
+}
+
 func (o RequestsPutBackupJobRequest) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.BackupCapability != nil {
+		toSerialize["backup_capability"] = o.BackupCapability
+	}
 	if o.BackupId != nil {
 		toSerialize["backup_id"] = o.BackupId
 	}
@@ -523,8 +716,14 @@ func (o RequestsPutBackupJobRequest) MarshalJSON() ([]byte, error) {
 	if o.DataServiceSpec != nil {
 		toSerialize["data_service_spec"] = o.DataServiceSpec
 	}
+	if o.Deleted != nil {
+		toSerialize["deleted"] = o.Deleted
+	}
 	if o.DeploymentId != nil {
 		toSerialize["deployment_id"] = o.DeploymentId
+	}
+	if o.DeploymentTargetId != nil {
+		toSerialize["deployment_target_id"] = o.DeploymentTargetId
 	}
 	if o.ErrorCode != nil {
 		toSerialize["error_code"] = o.ErrorCode
@@ -535,14 +734,23 @@ func (o RequestsPutBackupJobRequest) MarshalJSON() ([]byte, error) {
 	if o.FileSize != nil {
 		toSerialize["file_size"] = o.FileSize
 	}
+	if o.ImageName != nil {
+		toSerialize["image_name"] = o.ImageName
+	}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
+	}
+	if o.NamespaceName != nil {
+		toSerialize["namespace_name"] = o.NamespaceName
 	}
 	if true {
 		toSerialize["project_id"] = o.ProjectId
 	}
 	if o.StartTime != nil {
 		toSerialize["start_time"] = o.StartTime
+	}
+	if o.Timestamp != nil {
+		toSerialize["timestamp"] = o.Timestamp
 	}
 	return json.Marshal(toSerialize)
 }

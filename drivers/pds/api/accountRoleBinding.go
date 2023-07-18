@@ -16,7 +16,7 @@ type AccountRoleBinding struct {
 }
 
 // ListAccountsRoleBindings function return pds account role bindings model.
-func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID string) ([]pds.ModelsAccountRoleBinding, error) {
+func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID string) ([]pds.ModelsLegacyAccountBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	log.Info("List Account Role Bindings.")
 	ctx, err := pdsutils.GetContext()
@@ -31,7 +31,7 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID
 }
 
 // ListAccountRoleBindingsOfUser function return pds account role bindings model for a given user.
-func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(userID string) ([]pds.ModelsAccountRoleBinding, error) {
+func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(userID string) ([]pds.ModelsLegacyAccountBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
@@ -45,9 +45,9 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(user
 }
 
 // UpdateAccountRoleBinding function return the updated pds account role binding model.
-func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountID string, actorID string, actorType string, roleName string) (*pds.ModelsAccountRoleBinding, error) {
+func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountID string, actorID string, actorType string, roleName string) (*pds.ModelsLegacyAccountBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
-	updateReq := pds.ControllersUpsertAccountRoleBindingRequest{ActorId: &actorID, ActorType: &actorType, RoleName: &roleName}
+	updateReq := pds.RequestsPutLegacyBindingRequest{ActorId: &actorID, ActorType: &actorType, RoleName: &roleName}
 	log.Info("Get list of Accounts.")
 	ctx, err := pdsutils.GetContext()
 	if err != nil {

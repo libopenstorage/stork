@@ -24,37 +24,37 @@ var (
 	_ context.Context
 )
 
-// TenantRoleBindingsApiService TenantRoleBindingsApi service
-type TenantRoleBindingsApiService service
+// EventsApiService EventsApi service
+type EventsApiService service
 
-type ApiApiTenantsIdRoleBindingsDeleteRequest struct {
+type ApiApiDeploymentTargetsIdDeploymentEventsPostRequest struct {
 	ctx context.Context
-	ApiService *TenantRoleBindingsApiService
+	ApiService *EventsApiService
 	id string
-	body *RequestsDeleteRoleBindingRequest
+	body *RequestsCreateDeploymentEventsRequest
 }
 
-// Request body containing the tenant role binding
-func (r ApiApiTenantsIdRoleBindingsDeleteRequest) Body(body RequestsDeleteRoleBindingRequest) ApiApiTenantsIdRoleBindingsDeleteRequest {
+// Request body containing list of events
+func (r ApiApiDeploymentTargetsIdDeploymentEventsPostRequest) Body(body RequestsCreateDeploymentEventsRequest) ApiApiDeploymentTargetsIdDeploymentEventsPostRequest {
 	r.body = &body
 	return r
 }
 
-func (r ApiApiTenantsIdRoleBindingsDeleteRequest) Execute() (*http.Response, error) {
-	return r.ApiService.ApiTenantsIdRoleBindingsDeleteExecute(r)
+func (r ApiApiDeploymentTargetsIdDeploymentEventsPostRequest) Execute() (*http.Response, error) {
+	return r.ApiService.ApiDeploymentTargetsIdDeploymentEventsPostExecute(r)
 }
 
 /*
-ApiTenantsIdRoleBindingsDelete Delete TenantRoleBinding
+ApiDeploymentTargetsIdDeploymentEventsPost Adds k8s generated events for a deployment
 
-Removes a single TenantRoleBinding
+Adds one or more k8s generated events from deployments
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param id Tenant ID (must be valid UUID)
- @return ApiApiTenantsIdRoleBindingsDeleteRequest
+ @param id DeploymentTarget ID (must be valid UUID)
+ @return ApiApiDeploymentTargetsIdDeploymentEventsPostRequest
 */
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDelete(ctx context.Context, id string) ApiApiTenantsIdRoleBindingsDeleteRequest {
-	return ApiApiTenantsIdRoleBindingsDeleteRequest{
+func (a *EventsApiService) ApiDeploymentTargetsIdDeploymentEventsPost(ctx context.Context, id string) ApiApiDeploymentTargetsIdDeploymentEventsPostRequest {
+	return ApiApiDeploymentTargetsIdDeploymentEventsPostRequest{
 		ApiService: a,
 		ctx: ctx,
 		id: id,
@@ -62,19 +62,19 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDelete(ctx contex
 }
 
 // Execute executes the request
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDeleteExecute(r ApiApiTenantsIdRoleBindingsDeleteRequest) (*http.Response, error) {
+func (a *EventsApiService) ApiDeploymentTargetsIdDeploymentEventsPostExecute(r ApiApiDeploymentTargetsIdDeploymentEventsPostRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
+		localVarHTTPMethod   = http.MethodPost
 		localVarPostBody     interface{}
 		formFiles            []formFile
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsDelete")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "EventsApiService.ApiDeploymentTargetsIdDeploymentEventsPost")
 	if err != nil {
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/api/tenants/{id}/role-bindings"
+	localVarPath := localBasePath + "/api/deployment-targets/{id}/deployment/events"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterToString(r.id, "")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -145,52 +145,28 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsDeleteExecute(r A
 	return localVarHTTPResponse, nil
 }
 
-type ApiApiTenantsIdRoleBindingsGetRequest struct {
+type ApiApiDeploymentTargetsIdEventsLastSyncedTimeGetRequest struct {
 	ctx context.Context
-	ApiService *TenantRoleBindingsApiService
+	ApiService *EventsApiService
 	id string
-	sortBy *string
-	roleName *string
-	actorId *string
-	actorType *string
 }
 
-// A given TenantRoleBinding attribute to sort results by (one of: role_name, actor_id)
-func (r ApiApiTenantsIdRoleBindingsGetRequest) SortBy(sortBy string) ApiApiTenantsIdRoleBindingsGetRequest {
-	r.sortBy = &sortBy
-	return r
-}
-// Filter results by TenantRoleBinding assigned role name
-func (r ApiApiTenantsIdRoleBindingsGetRequest) RoleName(roleName string) ApiApiTenantsIdRoleBindingsGetRequest {
-	r.roleName = &roleName
-	return r
-}
-// Filter results by TenantRoleBinding actor id
-func (r ApiApiTenantsIdRoleBindingsGetRequest) ActorId(actorId string) ApiApiTenantsIdRoleBindingsGetRequest {
-	r.actorId = &actorId
-	return r
-}
-// Filter results by TenantRoleBinding actor type
-func (r ApiApiTenantsIdRoleBindingsGetRequest) ActorType(actorType string) ApiApiTenantsIdRoleBindingsGetRequest {
-	r.actorType = &actorType
-	return r
-}
 
-func (r ApiApiTenantsIdRoleBindingsGetRequest) Execute() (*ControllersPaginatedTenantRoleBindings, *http.Response, error) {
-	return r.ApiService.ApiTenantsIdRoleBindingsGetExecute(r)
+func (r ApiApiDeploymentTargetsIdEventsLastSyncedTimeGetRequest) Execute() (*ModelsDeploymentTargetLastSyncedEvent, *http.Response, error) {
+	return r.ApiService.ApiDeploymentTargetsIdEventsLastSyncedTimeGetExecute(r)
 }
 
 /*
-ApiTenantsIdRoleBindingsGet List TenantRoleBindings
+ApiDeploymentTargetsIdEventsLastSyncedTimeGet Get the timestamp of the latest event
 
-Lists TenantRoleBindings
+Gets the timestamp of the latest event for the deployment target
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param id Tenant ID (must be valid UUID)
- @return ApiApiTenantsIdRoleBindingsGetRequest
+ @param id DeploymentTarget ID (must be valid UUID)
+ @return ApiApiDeploymentTargetsIdEventsLastSyncedTimeGetRequest
 */
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGet(ctx context.Context, id string) ApiApiTenantsIdRoleBindingsGetRequest {
-	return ApiApiTenantsIdRoleBindingsGetRequest{
+func (a *EventsApiService) ApiDeploymentTargetsIdEventsLastSyncedTimeGet(ctx context.Context, id string) ApiApiDeploymentTargetsIdEventsLastSyncedTimeGetRequest {
+	return ApiApiDeploymentTargetsIdEventsLastSyncedTimeGetRequest{
 		ApiService: a,
 		ctx: ctx,
 		id: id,
@@ -198,39 +174,27 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGet(ctx context.C
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedTenantRoleBindings
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGetExecute(r ApiApiTenantsIdRoleBindingsGetRequest) (*ControllersPaginatedTenantRoleBindings, *http.Response, error) {
+//  @return ModelsDeploymentTargetLastSyncedEvent
+func (a *EventsApiService) ApiDeploymentTargetsIdEventsLastSyncedTimeGetExecute(r ApiApiDeploymentTargetsIdEventsLastSyncedTimeGetRequest) (*ModelsDeploymentTargetLastSyncedEvent, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedTenantRoleBindings
+		localVarReturnValue  *ModelsDeploymentTargetLastSyncedEvent
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsGet")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "EventsApiService.ApiDeploymentTargetsIdEventsLastSyncedTimeGet")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/api/tenants/{id}/role-bindings"
+	localVarPath := localBasePath + "/api/deployment-targets/{id}/events/last-synced-time"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterToString(r.id, "")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
-	if r.sortBy != nil {
-		localVarQueryParams.Add("sort_by", parameterToString(*r.sortBy, ""))
-	}
-	if r.roleName != nil {
-		localVarQueryParams.Add("role_name", parameterToString(*r.roleName, ""))
-	}
-	if r.actorId != nil {
-		localVarQueryParams.Add("actor_id", parameterToString(*r.actorId, ""))
-	}
-	if r.actorType != nil {
-		localVarQueryParams.Add("actor_type", parameterToString(*r.actorType, ""))
-	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -299,34 +263,28 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsGetExecute(r ApiA
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiApiTenantsIdRoleBindingsPutRequest struct {
+type ApiApiDeploymentsIdEventsGetRequest struct {
 	ctx context.Context
-	ApiService *TenantRoleBindingsApiService
+	ApiService *EventsApiService
 	id string
-	body *RequestsPutLegacyBindingRequest
 }
 
-// Request body containing the tenant role binding
-func (r ApiApiTenantsIdRoleBindingsPutRequest) Body(body RequestsPutLegacyBindingRequest) ApiApiTenantsIdRoleBindingsPutRequest {
-	r.body = &body
-	return r
-}
 
-func (r ApiApiTenantsIdRoleBindingsPutRequest) Execute() (*ModelsLegacyTenantBinding, *http.Response, error) {
-	return r.ApiService.ApiTenantsIdRoleBindingsPutExecute(r)
+func (r ApiApiDeploymentsIdEventsGetRequest) Execute() ([]ModelsDeploymentTargetDeploymentEvent, *http.Response, error) {
+	return r.ApiService.ApiDeploymentsIdEventsGetExecute(r)
 }
 
 /*
-ApiTenantsIdRoleBindingsPut Create TenantRoleBinding
+ApiDeploymentsIdEventsGet Get Deployment Events
 
-Creates a new TenantRoleBinding
+Retrieves events of the given Deployment
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param id Tenant ID (must be valid UUID)
- @return ApiApiTenantsIdRoleBindingsPutRequest
+ @param id Deployment ID (must be valid UUID)
+ @return ApiApiDeploymentsIdEventsGetRequest
 */
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPut(ctx context.Context, id string) ApiApiTenantsIdRoleBindingsPutRequest {
-	return ApiApiTenantsIdRoleBindingsPutRequest{
+func (a *EventsApiService) ApiDeploymentsIdEventsGet(ctx context.Context, id string) ApiApiDeploymentsIdEventsGetRequest {
+	return ApiApiDeploymentsIdEventsGetRequest{
 		ApiService: a,
 		ctx: ctx,
 		id: id,
@@ -334,32 +292,29 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPut(ctx context.C
 }
 
 // Execute executes the request
-//  @return ModelsLegacyTenantBinding
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPutExecute(r ApiApiTenantsIdRoleBindingsPutRequest) (*ModelsLegacyTenantBinding, *http.Response, error) {
+//  @return []ModelsDeploymentTargetDeploymentEvent
+func (a *EventsApiService) ApiDeploymentsIdEventsGetExecute(r ApiApiDeploymentsIdEventsGetRequest) ([]ModelsDeploymentTargetDeploymentEvent, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
+		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ModelsLegacyTenantBinding
+		localVarReturnValue  []ModelsDeploymentTargetDeploymentEvent
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsPut")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "EventsApiService.ApiDeploymentsIdEventsGet")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/api/tenants/{id}/role-bindings"
+	localVarPath := localBasePath + "/api/deployments/{id}/events"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterToString(r.id, "")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if r.body == nil {
-		return localVarReturnValue, nil, reportError("body is required and must be specified")
-	}
 
 	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{"application/json"}
+	localVarHTTPContentTypes := []string{}
 
 	// set Content-Type header
 	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
@@ -368,15 +323,13 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPutExecute(r ApiA
 	}
 
 	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{"application/json"}
+	localVarHTTPHeaderAccepts := []string{"*/*"}
 
 	// set Accept header
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	// body params
-	localVarPostBody = r.body
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {

@@ -27,6 +27,7 @@ type Components struct {
 	BackupPolicy             *BackupPolicy
 	APIVersion               *PDSVersion
 	ServiceAccount           *ServiceAccount
+	Restore                  *Restore
 }
 
 // NewComponents create a struct literal that can be leveraged to call all the components functions.
@@ -91,6 +92,9 @@ func NewComponents(apiClient *pds.APIClient) *Components {
 			apiClient: apiClient,
 		},
 		ServiceAccount: &ServiceAccount{
+			apiClient: apiClient,
+		},
+		Restore: &Restore{
 			apiClient: apiClient,
 		},
 	}
