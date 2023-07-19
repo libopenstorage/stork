@@ -8,18 +8,21 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/go-version"
 	"github.com/portworx/sched-ops/k8s/core"
+	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type Gcp struct {
@@ -82,7 +85,9 @@ const (
 	// SchedName is the name of the kubernetes scheduler driver implementation
 	SchedName                    = "anthos"
 	adminUserName                = "ubuntu"
+	homeDir                      = "/home/ubuntu"
 	adminWsConfFile              = "admin-ws-config.yaml"
+	adminKubeconfPath            = "/home/ubuntu/kubeconfig"
 	gcpAccessFile                = "my-px-access.json"
 	vcenterCrtFile               = "vcenter.crt"
 	vcenterCredFile              = "credential.yaml"
@@ -92,18 +97,24 @@ const (
 	upgradePrepareCmd            = "gkectl prepare  --bundle-path /var/lib/gke/bundles/gke-onprem-vsphere-"
 	upgradeUserClusterCmd        = "gkectl upgrade cluster"
 	upgradeAdminClusterCmd       = "gkectl upgrade admin"
+	listUserClustersCmd          = "gkectl list"
+	labelKey                     = "cloud.google.com/gke-nodepool"
+	userClusterDescribeCmd       = "gkectl describe clusters"
 	adminWsIdRsa                 = "id_rsa"
 	kubeConfig                   = "kubeconfig"
 	clusterGrpPath               = "k8s/clusterGroup0"
 	gsUtilCmd                    = "./google-cloud-sdk/bin/gsutil"
 	jsonInstances                = "/instances.json"
-	errorTimeDuration            = 0 * time.Minute
+	userClusterConfPath          = "/home/ubuntu/user-cluster.yaml"
+	adminClusterConfPath         = "/home/ubuntu/admin-cluster.yaml"
+	errorTimeDuration            = 15 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
 )
 
 var (
 	versionReg = regexp.MustCompile(`\w.\w+.\w+-gke.\w+`)
+	k8sCore    = k8s.Instance()
 )
 
 type AnthosInstance struct {
@@ -251,10 +262,13 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	}
 	timeTaken := time.Since(startTime)
 	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
-	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
+	if err := anth.RefreshNodeRegistry(); err != nil {
 		return err
 	}
-	if err := anth.RefreshNodeRegistry(); err != nil {
+	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
+		return err
+	}
+	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 		return err
 	}
 	return nil
@@ -427,14 +441,17 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 // upgradeUserCluster upgrade user cluster to newer version
 func (anth *anthos) upgradeUserCluster(version string) error {
 	log.Infof("Upgrading user cluster to a newer version: %s", version)
-	var cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig /home/ubuntu/kubeconfig", upgradePrepareCmd, version)
+	var cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
-	cmd = fmt.Sprintf("%s --kubeconfig /home/ubuntu/kubeconfig --config /home/ubuntu/user-cluster.yaml",
-		upgradeUserClusterCmd)
+	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s",
+		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading user cluster is failing: [%s]. Err: (%v)", out, err)
+	}
+	if err := anth.updateFileOwnership(homeDir); err != nil {
+		return err
 	}
 	log.Debug("Successfully upgraded the user cluster")
 	return nil
@@ -447,14 +464,13 @@ func (anth *anthos) upgradeAdminCluster(version string) error {
 	if _, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("failed to copy vcenter certificate: %s. Err: %v", vcenterCrtFile, err)
 	}
-	cmd = fmt.Sprintf("%s --kubeconfig  /home/ubuntu/kubeconfig --config  /home/ubuntu/admin-cluster.yaml",
-		upgradeAdminClusterCmd)
+	cmd = fmt.Sprintf("%s --kubeconfig  %s --config %s",
+		upgradeAdminClusterCmd, adminKubeconfPath, adminClusterConfPath)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading admin cluster is failing: [%s]. Err: (%v)", out, err)
 	}
-	cmd = fmt.Sprintf("chown -R %s:%s /home/ubuntu/*", adminUserName, adminUserName)
-	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
-		return fmt.Errorf("updating file permission after upgrade is failing: [%s]. Err: (%v)", out, err)
+	if err := anth.updateFileOwnership(homeDir); err != nil {
+		return err
 	}
 	log.Debug("Successfully upgraded the admin cluster")
 	return nil
@@ -527,6 +543,122 @@ func (anth *anthos) unsetUserNameAndKey() error {
 		return err
 	}
 	return nil
+}
+
+// checkUserClusterNodesUpgradeTime measure the time taken by each node and report error
+func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
+	log.Info("Validating user cluster nodes upgrade time")
+	userCluster, err := anth.getUserClusterName()
+	if err != nil {
+		return err
+	}
+	initNodeUpgradeTime, err := anth.getStartTimeForNodePoolUpgrade(userCluster)
+	if err != nil {
+		return err
+	}
+	log.Debugf("User cluster node pool upgrade started at: [%v]", initNodeUpgradeTime.Format(time.UnixDate))
+	poolMap, err := getNodesSortByAge()
+	if err != nil {
+		return err
+	}
+	for _, sortedNodes := range poolMap {
+		startTime := initNodeUpgradeTime
+		for _, node := range sortedNodes {
+			diff := node.CreationTimestamp.Sub(startTime)
+			if diff > errorTimeDuration {
+				return fmt.Errorf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
+					node.Name, diff, errorTimeDuration)
+			}
+			log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
+			startTime = node.CreationTimestamp.Time
+		}
+	}
+	return nil
+}
+
+// getUserClusterName return Anthos user cluster name
+func (anth *anthos) getUserClusterName() (string, error) {
+	log.Info("Retrieving user cluster name")
+	var userCluster string
+	// Listing user cluster to get user cluster name
+	cmd := fmt.Sprintf("%s --kubeconfig %s clusters |grep -v NAME", listUserClustersCmd, adminKubeconfPath)
+	out, err := anth.execOnAdminWSNode(cmd)
+	if err != nil {
+		return "", fmt.Errorf("listing user clusters is failing: [%s]. Err: (%v)", out, err)
+	}
+	userClusters := strings.Split(out, "\n")
+	for _, cluster := range userClusters {
+		clusterInfo := strings.Fields(cluster)
+		userCluster = clusterInfo[1]
+		break
+	}
+	if userCluster == "" {
+		return "", fmt.Errorf("failed to find user cluster name")
+	}
+	log.Infof("Successfully retrieved user cluster name: [%s]", userCluster)
+	return userCluster, nil
+}
+
+// getStartTimeForNodePoolUpgrade return start time when node pool upgrade started
+func (anth *anthos) getStartTimeForNodePoolUpgrade(userClusterName string) (time.Time, error) {
+	log.Info("Getting start time for node pool upgrade")
+	var timeMatchReg = regexp.MustCompile(`\d+-\d+-\d+T\d+:\d+:\d+Z`)
+	var nodeUpgradeStartedReg = regexp.MustCompile(`gke-on-prem-last-upgrade-start-time: .+`)
+	layout := "2006-01-02T15:04:05Z"
+	// Describe user cluster command provide last upgrade start time
+	cmd := fmt.Sprintf("%s --kubeconfig %s --cluster %s",
+		userClusterDescribeCmd, adminKubeconfPath, userClusterName)
+	log.Debugf("Executing command: %s", cmd)
+	out, err := anth.execOnAdminWSNode(cmd)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("describing user cluster is failing: [%s]. Err: (%v)", out, err)
+	}
+	matches := nodeUpgradeStartedReg.FindAllString(out, -1)
+	if matches == nil {
+		return time.Time{}, fmt.Errorf("failed to match last-upgrade-start-time in describe user cluster command")
+	}
+	matchTimeInMinute := timeMatchReg.FindAllString(matches[0], -1)
+	if matchTimeInMinute == nil {
+		return time.Time{}, fmt.Errorf("failed to parse start time")
+	}
+	startTime, err := time.Parse(layout, matchTimeInMinute[0])
+	log.Debugf("Successfully retrieved startTime for user cluster [%s] upgrade: %s", userClusterName, startTime)
+	return startTime, nil
+}
+
+// updateFileOwnership change file ownership to ubuntu user
+func (anth *anthos) updateFileOwnership(dirPath string) error {
+	cmd := fmt.Sprintf("chown -R %s:%s %s/*", adminUserName, adminUserName, dirPath)
+	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
+		return fmt.Errorf("updating file permission after upgrade is failing: [%s]. Err: (%v)", out, err)
+	}
+	return nil
+}
+
+// getNodesSortByAge return pool node list map of sorted node list by their age
+func getNodesSortByAge() (map[string][]corev1.Node, error) {
+	poolMap := make(map[string][]corev1.Node)
+	nodeList, err := k8sCore.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+	nodeSlice := nodeList.Items
+	for _, node := range nodeSlice {
+		key, ok := node.Labels[labelKey]
+		if ok {
+			pool, _ := poolMap[key]
+			pool = append(pool, node)
+			poolMap[key] = pool
+		}
+	}
+
+	for _, poolList := range poolMap {
+		sort.Slice(poolList, func(i, j int) bool {
+			return poolList[i].CreationTimestamp.Before(&poolList[j].CreationTimestamp)
+		})
+	}
+	log.Info("Successfully retrieved sorted nodes")
+	return poolMap, nil
 }
 
 // downloadAndInstallGsutils download and install gsutil for google cloud
