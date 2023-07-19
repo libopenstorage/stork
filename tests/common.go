@@ -4461,7 +4461,7 @@ func DeleteBucket(provider string, bucketName string) {
 }
 
 // HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -4563,19 +4563,26 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.InfoD(stepLog)
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
-
-								err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
-									Force: true,
-									ConnectionOpts: node.ConnectionOpts{
-										Timeout:         1 * time.Minute,
-										TimeBeforeRetry: 5 * time.Second,
-									},
-								})
-								if err != nil {
-									log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-									UpdateOutcome(event, err)
+								if restartPX {
+									testError := Inst().V.RestartDriver(newReplNode, nil)
+									if testError != nil {
+										log.Error(testError)
+										return
+									}
+									log.InfoD("PX restarted successfully on node %v", newReplNode)
+								} else {
+									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
+										Force: true,
+										ConnectionOpts: node.ConnectionOpts{
+											Timeout:         1 * time.Minute,
+											TimeBeforeRetry: 5 * time.Second,
+										},
+									})
+									if err != nil {
+										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+										UpdateOutcome(event, err)
+									}
 								}
-
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
@@ -4603,7 +4610,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 }
 
 // HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
 	Step(stepLog,
@@ -4651,16 +4658,25 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
-									err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
-										Force: true,
-										ConnectionOpts: node.ConnectionOpts{
-											Timeout:         1 * time.Minute,
-											TimeBeforeRetry: 5 * time.Second,
-										},
-									})
-									if err != nil {
-										log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
-										UpdateOutcome(event, err)
+									if restartPX {
+										testError := Inst().V.RestartDriver(replNodeToReboot, nil)
+										if testError != nil {
+											log.Error(testError)
+											return
+										}
+										log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
+									} else {
+										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
+											Force: true,
+											ConnectionOpts: node.ConnectionOpts{
+												Timeout:         1 * time.Minute,
+												TimeBeforeRetry: 5 * time.Second,
+											},
+										})
+										if err != nil {
+											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+											UpdateOutcome(event, err)
+										}
 									}
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)

@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"math"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/pkg/applicationbackup"
@@ -766,8 +767,9 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 					}
 
 					if err == nil {
-						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap)
-						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap)
+						restartPX := false
+						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap, restartPX)
 					}
 				}
 			}
