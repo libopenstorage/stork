@@ -3581,7 +3581,6 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			}
 			return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 		}
-		clusterStatus()
 		_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 		if err != nil {
 			return err
