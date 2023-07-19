@@ -7582,6 +7582,7 @@ func GetClusterProviders() []string {
 	return clusterProviders
 }
 
+
 // GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
 func GetPoolUuidsWithStorageFull() ([]string, error) {
 	var poolUuids []string
@@ -7724,3 +7725,4 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
+

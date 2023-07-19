@@ -303,16 +303,16 @@ type ApiApiTenantsIdRoleBindingsPutRequest struct {
 	ctx context.Context
 	ApiService *TenantRoleBindingsApiService
 	id string
-	body *ControllersUpsertTenantRoleBindingRequest
+	body *RequestsPutLegacyBindingRequest
 }
 
 // Request body containing the tenant role binding
-func (r ApiApiTenantsIdRoleBindingsPutRequest) Body(body ControllersUpsertTenantRoleBindingRequest) ApiApiTenantsIdRoleBindingsPutRequest {
+func (r ApiApiTenantsIdRoleBindingsPutRequest) Body(body RequestsPutLegacyBindingRequest) ApiApiTenantsIdRoleBindingsPutRequest {
 	r.body = &body
 	return r
 }
 
-func (r ApiApiTenantsIdRoleBindingsPutRequest) Execute() (*ModelsTenantRoleBinding, *http.Response, error) {
+func (r ApiApiTenantsIdRoleBindingsPutRequest) Execute() (*ModelsLegacyTenantBinding, *http.Response, error) {
 	return r.ApiService.ApiTenantsIdRoleBindingsPutExecute(r)
 }
 
@@ -334,13 +334,13 @@ func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPut(ctx context.C
 }
 
 // Execute executes the request
-//  @return ModelsTenantRoleBinding
-func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPutExecute(r ApiApiTenantsIdRoleBindingsPutRequest) (*ModelsTenantRoleBinding, *http.Response, error) {
+//  @return ModelsLegacyTenantBinding
+func (a *TenantRoleBindingsApiService) ApiTenantsIdRoleBindingsPutExecute(r ApiApiTenantsIdRoleBindingsPutRequest) (*ModelsLegacyTenantBinding, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPut
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ModelsTenantRoleBinding
+		localVarReturnValue  *ModelsLegacyTenantBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "TenantRoleBindingsApiService.ApiTenantsIdRoleBindingsPut")

@@ -18,7 +18,7 @@ import (
 type ModelsBackupTargetState struct {
 	BackupTargetId *string `json:"backup_target_id,omitempty"`
 	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
-	// Predefined API error code.
+	// More detailed specification of the error when the 'state' is in one of the failed states.
 	ErrorCode *string `json:"error_code,omitempty"`
 	// More detailed error message possibly containing the root cause of the error, not suitable to show in the UI.
 	ErrorDetails *string `json:"error_details,omitempty"`

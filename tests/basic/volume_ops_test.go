@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -984,14 +985,6 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
-			appList := Inst().AppList
-			defer func() {
-				Inst().AppList = appList
-
-			}()
-
-			Inst().AppList = []string{"fio-cloudsnap"}
-
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnaprestore-%d", i))...)
 			}
@@ -1104,6 +1097,35 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			time.Sleep(10 * time.Minute)
 		})
 
+		stepLog = "Update volume io_profiles on all volumes"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+
+				appVols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+				for _, v := range appVols {
+					var volumeSpec *api.VolumeSpecUpdate
+					inspectVolume, err := Inst().V.InspectVolume(v.ID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
+					newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
+					if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
+						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+					} else {
+						newIOProfile = api.IoProfile_IO_PROFILE_AUTO
+						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+					}
+					err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
+					log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
+				}
+
+				ctx.SkipVolumeValidation = true
+				ValidateContext(ctx)
+
+			}
+
+		})
+
 		stepLog = "Verify cloud snap restore"
 		Step(stepLog, func() {
 			for ns, volSnap := range volSnapMap {
@@ -1120,7 +1142,17 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			}
 
 		})
-		appsValidateAndDestroy(contexts)
+		stepLog = "Validating and Destroying apps"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				ctx.SkipVolumeValidation = true
+				ctx.ReadinessTimeout = 15 * time.Minute
+				ValidateContext(ctx)
+				opts := make(map[string]bool)
+				opts[SkipClusterScopedObjects] = true
+				DestroyApps(contexts, opts)
+			}
+		})
 
 	})
 	JustAfterEach(func() {
@@ -1167,14 +1199,6 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
-
-			appList := Inst().AppList
-			defer func() {
-				Inst().AppList = appList
-
-			}()
-
-			Inst().AppList = []string{"fio-localsnap"}
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("localsnaprestore-%d", i))...)
@@ -1288,6 +1312,35 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 			time.Sleep(10 * time.Minute)
 		})
 
+		stepLog = "Update volume io_profiles on all volumes"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+
+				appVols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+				for _, v := range appVols {
+					var volumeSpec *api.VolumeSpecUpdate
+					inspectVolume, err := Inst().V.InspectVolume(v.ID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
+					newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
+					if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
+						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+					} else {
+						newIOProfile = api.IoProfile_IO_PROFILE_AUTO
+						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+					}
+					err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
+					log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
+				}
+
+				ctx.SkipVolumeValidation = true
+				ValidateContext(ctx)
+
+			}
+
+		})
+
 		stepLog = "Verify local snap restore"
 		Step(stepLog, func() {
 			for ns, volSnap := range volSnapMap {
@@ -1304,7 +1357,17 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 			}
 
 		})
-		appsValidateAndDestroy(contexts)
+		stepLog = "Validating and Destroying apps"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				ctx.SkipVolumeValidation = false
+				ctx.ReadinessTimeout = 15 * time.Minute
+				ValidateContext(ctx)
+				opts := make(map[string]bool)
+				opts[SkipClusterScopedObjects] = true
+				DestroyApps(contexts, opts)
+			}
+		})
 
 	})
 	JustAfterEach(func() {

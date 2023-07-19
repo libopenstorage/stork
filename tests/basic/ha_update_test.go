@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
@@ -25,17 +26,37 @@ var _ = Describe("{HaIncreaseRebootSource}", func() {
 	testName := "ha-inc-reboot-src"
 	performHaIncreaseRebootTest(testName)
 })
+var _ = Describe("{HaIncreaseRestartPXSource}", func() {
+	testName := "ha-inc-restartpx-src"
+	performHaIncreaseRebootTest(testName)
+})
+
+var _ = Describe("{HaIncreaseRestartPXTarget}", func() {
+	testName := "ha-inc-restartpx-tgt"
+	performHaIncreaseRebootTest(testName)
+})
 
 func performHaIncreaseRebootTest(testName string) {
 	var contexts []*scheduler.Context
-
 	nodeRebootType := "target"
 	testDesc := "HaIncreaseRebootTarget"
 
+	if testName == "ha-inc-reboot-tgt" {
+		nodeRebootType = "target"
+		testDesc = "HaIncreaseRebootTarget"
+	}
 	if testName == "ha-inc-reboot-src" {
 		nodeRebootType = "source"
 		testDesc = "HaIncreaseRebootSource"
+	}
 
+	if testName == "ha-inc-restartpx-src" {
+		nodeRebootType = "source"
+		testDesc = "HaIncreaseRestartPX on Source"
+	}
+	if testName == "ha-inc-restartpx-tgt" {
+		nodeRebootType = "target"
+		testDesc = "HaIncreaseRestartPX on Target"
 	}
 	JustBeforeEach(func() {
 		StartTorpedoTest(testDesc, fmt.Sprintf("Validate HA increase and reboot %s", nodeRebootType), nil, 0)
@@ -100,9 +121,17 @@ func performHaIncreaseRebootTest(testName string) {
 					}
 
 					if testName == "ha-inc-reboot-src" {
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap)
+						restartPX := false
+						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
+					} else if testName == "ha-inc-restartpx-src" {
+						restartPX := true
+						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
+					} else if testName == "ha-inc-restartpx-tgt" {
+						restartPX := true
+						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
 					} else {
-						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap)
+						restartPX := false
+						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
 					}
 				}
 			}

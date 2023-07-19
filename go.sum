@@ -1819,8 +1819,8 @@ github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10/go.mod h1:nf
 github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e h1:4l9N2Sw8VGGUqe50yC2BnTFMRJuHJGpIGZcCUZ2S6gg=
 github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
-github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f h1:dSAlVqrRaNO2rpN4poXsQhVPN8454yakKTY+k9hzSRM=
-github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f/go.mod h1:IpEMdOcPFyGpnvYeL1qLNeIHGnm6ofoDourL2kOdIoE=
+github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993 h1:8z/Qvl0crDn0OcCy92AHlvW5N7UuLkfRE4E/ATNptJU=
+github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993/go.mod h1:IpEMdOcPFyGpnvYeL1qLNeIHGnm6ofoDourL2kOdIoE=
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
 github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594/go.mod h1:0S4k1ouTScuVS3rxPukfEFvc5bMasmI1wpAAM0NejWQ=
@@ -2213,8 +2213,8 @@ github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b h1:nP+m9tYQv2cWbN9wAwjlhJU9FZRs7GaYszhLJBLAg/I=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9 h1:+H7QxM4TKGgphdfh03wrK4Yqkk3VcEYGVSFc+4/psT4=
-github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
+github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319 h1:dbazvw0l16+kgjHppXqYNT2kJETlCxLyF1Y8d+jYKXI=
+github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba h1:gfjvrZVdbwYKvxJEqOzbarvRgfzWFyl1xYMfX+QMETU=
 github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba/go.mod h1:fwJb8kCDTvEwzQbId6jJL+z6GX6m6acfHgPBFncZJGE=

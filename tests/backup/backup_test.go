@@ -2,15 +2,14 @@ package tests
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
+	"time"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -32,6 +31,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")
 	})
+
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
@@ -87,6 +87,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
+
 	var (
 		backupNames          []string
 		restoreNames         []string
@@ -211,7 +212,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)

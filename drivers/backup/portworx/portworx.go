@@ -822,7 +822,7 @@ func (p *portworx) DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePo
 	return p.schedulePolicyManager.Delete(ctx, req)
 }
 
-func (p *portworx) UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error) {
+func (p *portworx) UpdateOwnershipSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error) {
 	return p.schedulePolicyManager.UpdateOwnership(ctx, req)
 }
 

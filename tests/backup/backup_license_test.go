@@ -34,7 +34,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 			log.InfoD("Adding source and destination cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			log.FailOnError(err, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
 			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -174,7 +174,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 			enumerateRsp, err := Inst().Backup.EnumerateCluster(ctx, clusterEnumerateReq)
 			log.FailOnError(err, "cluster enumeration failed")
 			for _, cluster := range enumerateRsp.GetClusters() {
-				err := DeleteCluster(cluster.GetName(), orgID, ctx)
+				err := DeleteCluster(cluster.GetName(), orgID, ctx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", cluster.GetName()))
 			}
 		})
@@ -234,7 +234,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		})
 		Step("Adding source and destination cluster for backup", func() {
 			log.InfoD("Adding source and destination cluster for backup")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			log.FailOnError(err, fmt.Sprintf("Adding source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
@@ -334,7 +334,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Adding source and destination clusters for backup", func() {
 			log.InfoD("Adding source and destination clusters for backup")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			log.FailOnError(err, fmt.Sprintf("Adding source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
 		})
 		Step("Getting the total number of worker nodes in source and destination cluster", func() {
