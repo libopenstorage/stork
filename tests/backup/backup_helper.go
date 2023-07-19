@@ -104,6 +104,8 @@ const (
 	namespaceDeleteTimeout                    = 10 * time.Minute
 	clusterCreationTimeout                    = 5 * time.Minute
 	clusterCreationRetryTime                  = 10 * time.Second
+	clusterDeleteTimeout                      = 5 * time.Minute
+	clusterDeleteRetryTime                    = 5 * time.Second
 )
 
 var (
@@ -127,6 +129,7 @@ var (
 		{"app.kubernetes.io/component": "keycloak"},
 		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
 		{"app.kubernetes.io/component": "pxcentral-mysql"}}
+	cloudPlatformList = []string{"rke", "aws", "azure", "gke"}
 )
 
 type userRoleAccess struct {
@@ -953,6 +956,8 @@ func createUsers(numberOfUsers int) []string {
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
+	var clusterCredName string
+	var clusterCredUID string
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			// Delete the backup location object
@@ -1000,10 +1005,61 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		}
 	}
-	err := DeleteCluster(SourceClusterName, orgID, ctx, true)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	err = DeleteCluster(destinationClusterName, orgID, ctx, true)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+
+	log.Infof("Deleting the application cluster and their respective cloud credentials if present")
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	Inst().Dash.VerifyFatal(len(strings.Split(kubeconfigs, ",")) >= 2, true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
+		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
+		clusterObj := clusterResp.GetCluster()
+		clusterProvider := GetClusterProviders()
+		for _, provider := range clusterProvider {
+			switch provider {
+			case drivers.ProviderRke:
+				clusterCredName = clusterObj.PlatformCredentialRef.Name
+				clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+
+			default:
+				clusterCredName = clusterObj.CloudCredentialRef.Name
+				clusterCredUID = clusterObj.CloudCredentialRef.Uid
+			}
+			err = DeleteCluster(clusterName, orgID, ctx, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+			clusterDeleteStatus := func() (interface{}, bool, error) {
+				status, err := IsClusterPresent(clusterName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
+				}
+				if status {
+					return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting clsuter %s", clusterName))
+
+			if clusterCredName != "" {
+				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+				cloudCredDeleteStatus := func() (interface{}, bool, error) {
+					status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
+					}
+					if status {
+						return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
+					}
+					return "", false, nil
+				}
+				_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
+			}
+		}
+	}
 }
 
 // AddRoleAndAccessToUsers assigns role and access level to the users
@@ -1075,7 +1131,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
-	err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
+	err = CreateApplicationClusters(orgID, "", "", userCtx)
 	Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, backupAccessKeyValue[access], backupName)
 	backupDriver := Inst().Backup
@@ -3811,3 +3867,72 @@ func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	}
 	return nil
 }
+
+// CreateRestoreWithProjectMapping creates restore with project mapping
+func CreateRestoreWithProjectMapping(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, rancherProjectMapping map[string]string, rancherProjectNameMapping map[string]string) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		RancherProjectMapping:     rancherProjectMapping,
+		RancherProjectNameMapping: rancherProjectNameMapping,
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+
+	return nil
+}
+
+// IsClusterPresent checks whether the cluster is present or not
+func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bool, error) {
+	clusterEnumerateRequest := &api.ClusterEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	clusterObjs, err := Inst().Backup.EnumerateCluster(ctx, clusterEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, clusterObj := range clusterObjs.GetClusters() {
+		if clusterObj.GetName() == clusterName {
+			log.Infof("Cluster [%s] is present", clusterName)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+

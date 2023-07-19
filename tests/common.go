@@ -9,10 +9,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"math/rand"
 	"net/http"
 	"regexp"
 
+	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -153,6 +155,11 @@ const (
 const (
 	deployPDSAppsFlag = "deploy-pds-apps"
 	pdsDriveCliFlag   = "pds-driver"
+)
+
+var (
+	RkeMap           = make(map[string]*rke.RancherClusterParameters)
+	clusterProviders = []string{"k8s"}
 )
 
 const (
@@ -409,6 +416,11 @@ var TestLogger *lumberjack.Logger
 var dash *aetosutil.Dashboard
 var post_rule_uid string
 var pre_rule_uid string
+
+type PlatformCredentialStruct struct {
+	credName string
+	credUID  string
+}
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
@@ -2732,18 +2744,15 @@ func SetClusterContext(clusterConfigPath string) error {
 		log.InfoD("Switching context: The context is already [%s]", clusterConfigPathForLog)
 		return nil
 	}
-
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
-
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
 	}
-
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
@@ -2758,7 +2767,13 @@ func SetClusterContext(clusterConfigPath string) error {
 
 	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
-
+	// To update the RkeMap with value like token, endpoint access key, secret key for each cluster
+	if os.Getenv("CLUSTER_PROVIDER") == "rke" {
+		if rke.RancherClusterParametersValue != nil && CurrentClusterConfigPath != "" {
+			RkeMap[strings.Split(CurrentClusterConfigPath, "/tmp/")[1]] = rke.RancherClusterParametersValue
+			log.Infof("The value of RKE map is", RkeMap)
+		}
+	}
 	return nil
 }
 
@@ -3517,75 +3532,117 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	return nil
 }
 
-// CreateSourceAndDestClusters creates source and destination cluster
+// CreateApplicationClusters adds application clusters to backup
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
-	// TODO: Add support for adding multiple clusters from
-	// comma separated list of kubeconfig files
+func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
+	var clusterCredName string
+	var clusterCredUid string
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	if len(kubeconfigList) != 2 {
-		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
+	if len(kubeconfigList) < 2 {
+		return fmt.Errorf("minimum 2 kubeconfigs are required for source and destination cluster")
 	}
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
 	if err != nil {
 		return err
 	}
-	// Register source cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
 	srcClusterConfigPath, err := GetSourceClusterConfigPath()
 	if err != nil {
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-	sourceClusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
-		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
-			return "", true, err
-		}
-		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
-		if err != nil {
-			return "", true, err
-		}
-		if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
-			return "", false, nil
-		}
-		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
-	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
-	if err != nil {
-		return err
-	}
-	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
-	// Register destination cluster with backup driver
+
 	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
 	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 	if err != nil {
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-	destClusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
-		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
-			return "", true, err
-		}
-		destClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-		if err != nil {
-			return "", true, err
-		}
-		if destClusterStatus == api.ClusterInfo_StatusInfo_Online {
-			return "", false, nil
-		}
-		return "", true, fmt.Errorf("the %s cluster state is not Online yet", destinationClusterName)
-	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
-	if err != nil {
-		return err
-	}
+
+	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
 	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
+
+	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string) error {
+		clusterStatus := func() (interface{}, bool, error) {
+			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
+			if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+				return "", true, err
+			}
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			if err != nil {
+				return "", true, err
+			}
+			if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+				return "", false, nil
+			}
+			return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
+		}
+		clusterStatus()
+		_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	clusterProvider := GetClusterProviders()
+	for _, provider := range clusterProvider {
+		switch provider {
+		case drivers.ProviderRke:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					return err
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		case drivers.ProviderAzure:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					return err
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		case drivers.ProviderAws:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					return err
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		default:
+			for _, kubeconfig := range kubeconfigList {
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -3628,17 +3685,36 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 		return err
 	}
 	if cloud_name != "" {
-		clusterCreateReq = &api.ClusterCreateRequest{
-			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
-				OrgId: orgID,
-			},
-			Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
-			CloudCredentialRef: &api.ObjectRef{
-				Name: cloud_name,
-				Uid:  uid,
-			},
+		clusterProvider := GetClusterProviders()
+		for _, provider := range clusterProvider {
+			switch provider {
+			case drivers.ProviderRke:
+				clusterCreateReq = &api.ClusterCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  name,
+						OrgId: orgID,
+					},
+					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+					PlatformCredentialRef: &api.ObjectRef{
+						Name: cloud_name,
+						Uid:  uid,
+					},
+				}
+			default:
+				clusterCreateReq = &api.ClusterCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  name,
+						OrgId: orgID,
+					},
+					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+					CloudCredentialRef: &api.ObjectRef{
+						Name: cloud_name,
+						Uid:  uid,
+					},
+				}
+			}
 		}
+
 	} else {
 		clusterCreateReq = &api.ClusterCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
@@ -3656,16 +3732,18 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 }
 
 // CreateCloudCredential creates cloud credentials
-func CreateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context) error {
+func CreateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context, kubeconfig ...string) error {
 	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
 	var credCreateRequest *api.CloudCredentialCreateRequest
 	switch provider {
 	case drivers.ProviderAws:
-		log.Infof("Create creds for aws")
+		log.Infof("Create creds for Aws")
+		// PA-1328
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
 			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
+		// PA-1328
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
 			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
@@ -3686,8 +3764,10 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
+		// PA-1328
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
@@ -3709,9 +3789,28 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+
 	case drivers.ProviderNfs:
 		log.Warnf("provider [%s] does not require creating cloud credential", provider)
 		return nil
+
+	case drivers.ProviderRke:
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Rancher,
+				Config: &api.CloudCredentialInfo_RancherConfig{
+					RancherConfig: &api.RancherConfig{
+						Endpoint: RkeMap[kubeconfig[0]].Endpoint,
+						Token:    RkeMap[kubeconfig[0]].Token,
+					},
+				},
+			},
+		}
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -4130,11 +4229,27 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 	return fmt.Errorf("spec is of unknown resource type")
 }
 
+// GetClusterConfigPath returns kubeconfig for given cluster
+func GetClusterConfigPath(clusterConfig string) (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("failed to get source config path. Empty KUBECONFIGS environment variable")
+	}
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	for _, kubeconfig := range kubeconfigList {
+		if kubeconfig == clusterConfig {
+			log.Infof("Cluster config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig))
+			return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig), nil
+		}
+	}
+	return "", nil
+}
+
 // GetSourceClusterConfigPath returns kubeconfig for source
 func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
-		return "", fmt.Errorf("Failed to get source config path. Empty KUBECONFIGS environment variable")
+		return "", fmt.Errorf("failed to get source config path. Empty KUBECONFIGS environment variable")
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
@@ -4165,6 +4280,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 }
 
 // GetAzureCredsFromEnv get creds for azure
+// PA-1328
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	expect(accountName).NotTo(equal(""),
@@ -4903,6 +5019,7 @@ func ParseFlags() {
 	var err error
 
 	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, csiAppsCSV, provisionerName, configMapName string
+
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -4951,7 +5068,7 @@ func ParseFlags() {
 	var torpedoJobType string
 	var anthosWsNodeIp string
 	var anthosInstPath string
-
+	log.Infof("The default scheduler is %v", defaultScheduler)
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
@@ -5069,7 +5186,6 @@ func ParseFlags() {
 	}
 
 	sched.Init(time.Second)
-
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
 		log.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
@@ -7455,4 +7571,13 @@ func VerifyNilPointerDereferenceError(n *node.Node) (bool, string, error) {
 	}
 
 	return false, "", nil
+}
+
+// GetClusterProviders returns the list of cluster providers
+func GetClusterProviders() []string {
+	providersStr := os.Getenv("CLUSTER_PROVIDER")
+	if providersStr != "" {
+		return strings.Split(providersStr, ",")
+	}
+	return clusterProviders
 }

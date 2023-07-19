@@ -135,7 +135,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		Step("Register cluster for backup", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -315,7 +315,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		Step("Register cluster for backup", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -533,7 +533,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 			log.InfoD("Configure source and destination clusters with px-central-admin ctx")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
