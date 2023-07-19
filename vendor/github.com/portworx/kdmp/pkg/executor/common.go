@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/log"
+	storkutils "github.com/libopenstorage/stork/pkg/utils"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
@@ -666,6 +668,23 @@ func CreateNamespacesFromMapping(
 	return createNamespaces(backup, restore.Spec.BackupLocation, restore.Namespace, restore)
 }
 
+func getRancherProjectMapping(restore *storkapi.ApplicationRestore) map[string]string {
+	rancherProjectMapping := map[string]string{}
+	if restore.Spec.RancherProjectMapping != nil {
+		for key, value := range restore.Spec.RancherProjectMapping {
+			rancherProjectMapping[key] = value
+			dataKey := strings.Split(key, ":")
+			dataVal := strings.Split(value, ":")
+			if len(dataKey) == 2 && len(dataVal) == 2 {
+				rancherProjectMapping[dataKey[1]] = dataVal[1]
+			} else if len(dataKey) == 1 && len(dataVal) == 2 {
+				rancherProjectMapping[dataKey[0]] = dataVal[1]
+			}
+		}
+	}
+	return rancherProjectMapping
+}
+
 func createNamespaces(backup *storkapi.ApplicationBackup,
 	backupLocation string,
 	backupLocationNamespace string,
@@ -688,6 +707,8 @@ func createNamespaces(backup *storkapi.ApplicationBackup,
 	if err != nil {
 		return err
 	}
+
+	rancherProjectMapping := getRancherProjectMapping(restore)
 	if nsData != nil {
 		if err = json.Unmarshal(nsData, &namespaces); err != nil {
 			return err
@@ -699,6 +720,8 @@ func createNamespaces(backup *storkapi.ApplicationBackup,
 				// Skip namespaces we aren't restoring
 				continue
 			}
+			storkutils.ParseRancherProjectMapping(ns.Annotations, rancherProjectMapping)
+			storkutils.ParseRancherProjectMapping(ns.Labels, rancherProjectMapping)
 			// create mapped restore namespace with metadata of backed up
 			// namespace
 			_, err := core.Instance().CreateNamespace(&v1.Namespace{
@@ -727,8 +750,11 @@ func createNamespaces(backup *storkapi.ApplicationBackup,
 						if annotations == nil {
 							annotations = make(map[string]string)
 						}
+						// Add all annotations from Namespace.json except project annotations when not found in the namespace which is not created by px-backup.
+						// With retain policy, project annotations should not be applied to the namespace with no projects. Applies to a scenario where project association
+						// is removed by the user after taking the backup with project on a namespace
 						for k, v := range ns.GetAnnotations() {
-							if _, ok := annotations[k]; !ok {
+							if _, ok := annotations[k]; !ok && (!strings.Contains(k, storkutils.CattleProjectPrefix) || annotations[storkutils.PxbackupAnnotationCreateByKey] != "") {
 								annotations[k] = v
 							}
 						}
@@ -736,12 +762,19 @@ func createNamespaces(backup *storkapi.ApplicationBackup,
 						if labels == nil {
 							labels = make(map[string]string)
 						}
+						// Add all labels from Namespace.json except project labels when not found in the namespace which is not created by px-backup.
+						// With retain policy, project labels should not be applied to the namespace with no projects. Applies to a scenario where project association
+						// is removed by the user after taking the backup with project on a namespace
 						for k, v := range ns.GetLabels() {
-							if _, ok := labels[k]; !ok {
+							if _, ok := labels[k]; !ok && (!strings.Contains(k, storkutils.CattleProjectPrefix) || annotations[storkutils.PxbackupAnnotationCreateByKey] != "") {
 								labels[k] = v
 							}
 						}
+						storkutils.ParseRancherProjectMapping(annotations, rancherProjectMapping)
+						storkutils.ParseRancherProjectMapping(labels, rancherProjectMapping)
 					}
+					// delete the px backup CreateByKey Annotation
+					delete(annotations, storkutils.PxbackupAnnotationCreateByKey)
 					log.ApplicationRestoreLog(restore).Tracef("Namespace already exists, updating dest namespace %v", ns.Name)
 					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
