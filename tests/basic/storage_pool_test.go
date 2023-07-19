@@ -9820,13 +9820,17 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
 		poolStatus, err := getPoolLastOperation(expandedPool.Uuid)
 		log.FailOnError(err, "failed to get last operation on pool %s", expandedPool.Uuid)
+		var errstring bool
 		if poolStatus.Msg != "" {
 			log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
 			if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
 				(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
-				errstring := true
-				dash.VerifyFatal(errstring == true, true, "poolresize failed")
+				errstring = false
+			} else {
+				errstring = true
+
 			}
+			dash.VerifyFatal(errstring == true, true, "poolresize failed")
 			var connect node.ConnectionOpts
 			connect.Timeout = 60
 			connect.TimeBeforeRetry = 10
@@ -9834,8 +9838,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 				Force:          true,
 				ConnectionOpts: connect,
 			})
-			time.Sleep(300 * time.Second)
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
+			time.Sleep(300 * time.Second)
+			log.Infof("sleeping for 5 mins to wait for shutdown to be completed")
 		}
 		t := func() (interface{}, bool, error) {
 			err = Inst().N.PowerOnVM(*nodeDetail)
