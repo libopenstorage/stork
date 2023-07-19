@@ -9852,9 +9852,9 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to Resize Volume")
 
 		// Verify after Resize volume if IO is running
-		ioStatus, err := IsIORunningOnVolume(*randomVol)
-		log.FailOnError(err, "is io running on the volume")
-		dash.VerifyFatal(ioStatus, true, fmt.Sprintf("no io running on the volume [%v] after resize", randomVol.Name))
+		isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], randomVol.ID)
+		log.FailOnError(err, "is io running on the volume?")
+		dash.VerifyFatal(isIOsInProgress, true, fmt.Sprintf("no io running on the volume [%v] after resize", randomVol.Name))
 	})
 
 	JustAfterEach(func() {

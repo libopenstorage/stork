@@ -4461,7 +4461,7 @@ func DeleteBucket(provider string, bucketName string) {
 }
 
 // HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -4563,19 +4563,26 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.InfoD(stepLog)
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
-
-								err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
-									Force: true,
-									ConnectionOpts: node.ConnectionOpts{
-										Timeout:         1 * time.Minute,
-										TimeBeforeRetry: 5 * time.Second,
-									},
-								})
-								if err != nil {
-									log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-									UpdateOutcome(event, err)
+								if restartPX {
+									testError := Inst().V.RestartDriver(newReplNode, nil)
+									if testError != nil {
+										log.Error(testError)
+										return
+									}
+									log.InfoD("PX restarted successfully on node %v", newReplNode)
+								} else {
+									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
+										Force: true,
+										ConnectionOpts: node.ConnectionOpts{
+											Timeout:         1 * time.Minute,
+											TimeBeforeRetry: 5 * time.Second,
+										},
+									})
+									if err != nil {
+										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+										UpdateOutcome(event, err)
+									}
 								}
-
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
@@ -4603,7 +4610,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 }
 
 // HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
+func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
 	Step(stepLog,
@@ -4651,16 +4658,25 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
-									err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
-										Force: true,
-										ConnectionOpts: node.ConnectionOpts{
-											Timeout:         1 * time.Minute,
-											TimeBeforeRetry: 5 * time.Second,
-										},
-									})
-									if err != nil {
-										log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
-										UpdateOutcome(event, err)
+									if restartPX {
+										testError := Inst().V.RestartDriver(replNodeToReboot, nil)
+										if testError != nil {
+											log.Error(testError)
+											return
+										}
+										log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
+									} else {
+										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
+											Force: true,
+											ConnectionOpts: node.ConnectionOpts{
+												Timeout:         1 * time.Minute,
+												TimeBeforeRetry: 5 * time.Second,
+											},
+										})
+										if err != nil {
+											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+											UpdateOutcome(event, err)
+										}
 									}
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
@@ -7566,22 +7582,24 @@ func GetClusterProviders() []string {
 	return clusterProviders
 }
 
-func IsPoolOffline(n node.Node) (bool, error) {
-	poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
-	if err != nil {
-		return false, err
-	}
-
-	for _, v := range poolsStatus {
-		if v == "Offline" {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
+// GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
 func GetPoolUuidsWithStorageFull() ([]string, error) {
 	var poolUuids []string
+
+	isPoolOffline := func(n node.Node) (bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+		if err != nil {
+			return false, err
+		}
+
+		for _, v := range poolsStatus {
+			if v == "Offline" {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
 	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 	if err != nil {
 		return nil, err
@@ -7597,7 +7615,7 @@ func GetPoolUuidsWithStorageFull() ([]string, error) {
 			return nil, err
 		}
 
-		poolOfflineStatus, err := IsPoolOffline(*nodeDetail)
+		poolOfflineStatus, err := isPoolOffline(*nodeDetail)
 		if err != nil {
 			return nil, err
 		}
@@ -7629,31 +7647,6 @@ func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
 	return num, nil
 }
 
-// IsIORunningOnVolume return true if IO is running on the volume
-func IsIORunningOnVolume(vol volume.Volume) (bool, error) {
-	log.Infof("Checking if io is running on the volume [%v]", vol.Name)
-	inspectVol, err := GetVolumeConsumedSize(vol)
-	if err != nil {
-		return false, err
-	}
-	usageBefore := inspectVol
-
-	// Sleep for 10 sec before reading back the output of the volume
-	time.Sleep(10 * time.Second)
-
-	inspectVol, err = GetVolumeConsumedSize(vol)
-	if err != nil {
-		return false, err
-	}
-
-	usageAfter := inspectVol
-	if usageBefore != usageAfter {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 // GetAllVolumesWithIO Returns list of volumes with IO
 func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error) {
 
@@ -7665,12 +7658,12 @@ func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error
 		}
 		log.Infof("list of all volumes present in the cluster [%v]", vols)
 		for _, eachVol := range vols {
-			VolStatus, err := IsIORunningOnVolume(*eachVol)
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], eachVol.ID)
 			if err != nil {
 				return nil, err
 			}
 
-			if VolStatus {
+			if isIOsInProgress {
 				allVolsWithIO = append(allVolsWithIO, eachVol)
 			}
 		}
@@ -7711,19 +7704,6 @@ func GetVolumeFullPercentage(vol volume.Volume) (float64, error) {
 	log.Infof("Volume [%v] : Percentage of size consumed [%v]", vol.Name, percentageFull)
 
 	return percentageFull, nil
-}
-
-// IsStorageNodeDown returns true if storage node is down
-func IsStorageNodeDown(n node.Node) (bool, error) {
-	nodeStatus, err := Inst().V.GetNodeStatus(n)
-	if err != nil {
-		return false, err
-	}
-	if *nodeStatus == opsapi.Status_STATUS_STORAGE_DOWN {
-		log.InfoD("Status of the pool is [%v]", nodeStatus)
-		return true, nil
-	}
-	return false, nil
 }
 
 // GetPoolCapacityUsed Get Pool capacity percentage used
