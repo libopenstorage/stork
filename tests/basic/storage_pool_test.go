@@ -9825,12 +9825,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
 			if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
 				(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
-				errstring = false
-			} else {
 				errstring = true
-
 			}
-			dash.VerifyFatal(errstring == true, true, "poolresize failed")
+			dash.VerifyFatal(errstring == false, true, "poolresize failed")
 			var connect node.ConnectionOpts
 			connect.Timeout = 60
 			connect.TimeBeforeRetry = 10
