@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedAccountRoleBindings struct for ControllersPaginatedAccountRoleBindings
 type ControllersPaginatedAccountRoleBindings struct {
-	Data []ModelsAccountRoleBinding `json:"data,omitempty"`
+	Data []ModelsLegacyAccountBinding `json:"data,omitempty"`
 }
 
 // NewControllersPaginatedAccountRoleBindings instantiates a new ControllersPaginatedAccountRoleBindings object
@@ -37,9 +37,9 @@ func NewControllersPaginatedAccountRoleBindingsWithDefaults() *ControllersPagina
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *ControllersPaginatedAccountRoleBindings) GetData() []ModelsAccountRoleBinding {
+func (o *ControllersPaginatedAccountRoleBindings) GetData() []ModelsLegacyAccountBinding {
 	if o == nil || o.Data == nil {
-		var ret []ModelsAccountRoleBinding
+		var ret []ModelsLegacyAccountBinding
 		return ret
 	}
 	return o.Data
@@ -47,7 +47,7 @@ func (o *ControllersPaginatedAccountRoleBindings) GetData() []ModelsAccountRoleB
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersPaginatedAccountRoleBindings) GetDataOk() ([]ModelsAccountRoleBinding, bool) {
+func (o *ControllersPaginatedAccountRoleBindings) GetDataOk() ([]ModelsLegacyAccountBinding, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -63,8 +63,8 @@ func (o *ControllersPaginatedAccountRoleBindings) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given []ModelsAccountRoleBinding and assigns it to the Data field.
-func (o *ControllersPaginatedAccountRoleBindings) SetData(v []ModelsAccountRoleBinding) {
+// SetData gets a reference to the given []ModelsLegacyAccountBinding and assigns it to the Data field.
+func (o *ControllersPaginatedAccountRoleBindings) SetData(v []ModelsLegacyAccountBinding) {
 	o.Data = v
 }
 

@@ -21,6 +21,7 @@ type ServiceDeploymentStatus struct {
 	ReadyReplicas *int32 `json:"readyReplicas,omitempty"`
 	Replicas *int32 `json:"replicas,omitempty"`
 	Resources []DeploymentsResourceConditions `json:"resources,omitempty"`
+	Restoring *bool `json:"restoring,omitempty"`
 	Status *string `json:"status,omitempty"`
 }
 
@@ -201,6 +202,38 @@ func (o *ServiceDeploymentStatus) SetResources(v []DeploymentsResourceConditions
 	o.Resources = v
 }
 
+// GetRestoring returns the Restoring field value if set, zero value otherwise.
+func (o *ServiceDeploymentStatus) GetRestoring() bool {
+	if o == nil || o.Restoring == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Restoring
+}
+
+// GetRestoringOk returns a tuple with the Restoring field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ServiceDeploymentStatus) GetRestoringOk() (*bool, bool) {
+	if o == nil || o.Restoring == nil {
+		return nil, false
+	}
+	return o.Restoring, true
+}
+
+// HasRestoring returns a boolean if a field has been set.
+func (o *ServiceDeploymentStatus) HasRestoring() bool {
+	if o != nil && o.Restoring != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetRestoring gets a reference to the given bool and assigns it to the Restoring field.
+func (o *ServiceDeploymentStatus) SetRestoring(v bool) {
+	o.Restoring = &v
+}
+
 // GetStatus returns the Status field value if set, zero value otherwise.
 func (o *ServiceDeploymentStatus) GetStatus() string {
 	if o == nil || o.Status == nil {
@@ -249,6 +282,9 @@ func (o ServiceDeploymentStatus) MarshalJSON() ([]byte, error) {
 	}
 	if o.Resources != nil {
 		toSerialize["resources"] = o.Resources
+	}
+	if o.Restoring != nil {
+		toSerialize["restoring"] = o.Restoring
 	}
 	if o.Status != nil {
 		toSerialize["status"] = o.Status

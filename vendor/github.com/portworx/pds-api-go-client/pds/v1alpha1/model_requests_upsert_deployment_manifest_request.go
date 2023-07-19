@@ -16,6 +16,7 @@ import (
 
 // RequestsUpsertDeploymentManifestRequest struct for RequestsUpsertDeploymentManifestRequest
 type RequestsUpsertDeploymentManifestRequest struct {
+	Deleted *bool `json:"deleted,omitempty"`
 	Manifest map[string]interface{} `json:"manifest,omitempty"`
 	Timestamp *string `json:"timestamp,omitempty"`
 }
@@ -35,6 +36,38 @@ func NewRequestsUpsertDeploymentManifestRequest() *RequestsUpsertDeploymentManif
 func NewRequestsUpsertDeploymentManifestRequestWithDefaults() *RequestsUpsertDeploymentManifestRequest {
 	this := RequestsUpsertDeploymentManifestRequest{}
 	return &this
+}
+
+// GetDeleted returns the Deleted field value if set, zero value otherwise.
+func (o *RequestsUpsertDeploymentManifestRequest) GetDeleted() bool {
+	if o == nil || o.Deleted == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Deleted
+}
+
+// GetDeletedOk returns a tuple with the Deleted field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsUpsertDeploymentManifestRequest) GetDeletedOk() (*bool, bool) {
+	if o == nil || o.Deleted == nil {
+		return nil, false
+	}
+	return o.Deleted, true
+}
+
+// HasDeleted returns a boolean if a field has been set.
+func (o *RequestsUpsertDeploymentManifestRequest) HasDeleted() bool {
+	if o != nil && o.Deleted != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetDeleted gets a reference to the given bool and assigns it to the Deleted field.
+func (o *RequestsUpsertDeploymentManifestRequest) SetDeleted(v bool) {
+	o.Deleted = &v
 }
 
 // GetManifest returns the Manifest field value if set, zero value otherwise.
@@ -103,6 +136,9 @@ func (o *RequestsUpsertDeploymentManifestRequest) SetTimestamp(v string) {
 
 func (o RequestsUpsertDeploymentManifestRequest) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Deleted != nil {
+		toSerialize["deleted"] = o.Deleted
+	}
 	if o.Manifest != nil {
 		toSerialize["manifest"] = o.Manifest
 	}

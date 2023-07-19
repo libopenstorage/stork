@@ -274,34 +274,34 @@ func (a *RestoresApiService) ApiRestoresIdGetExecute(r ApiApiRestoresIdGetReques
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiApiRestoresIdUpdateStatusPostRequest struct {
+type ApiApiRestoresIdRetryPostRequest struct {
 	ctx context.Context
 	ApiService *RestoresApiService
 	id string
-	body *RequestsUpdateRestoreStatusRequest
+	body *RequestsCreateRestoreRequest
 }
 
-// Request body containing the status update
-func (r ApiApiRestoresIdUpdateStatusPostRequest) Body(body RequestsUpdateRestoreStatusRequest) ApiApiRestoresIdUpdateStatusPostRequest {
+// Request body containing information about required restore
+func (r ApiApiRestoresIdRetryPostRequest) Body(body RequestsCreateRestoreRequest) ApiApiRestoresIdRetryPostRequest {
 	r.body = &body
 	return r
 }
 
-func (r ApiApiRestoresIdUpdateStatusPostRequest) Execute() (*ModelsRestore, *http.Response, error) {
-	return r.ApiService.ApiRestoresIdUpdateStatusPostExecute(r)
+func (r ApiApiRestoresIdRetryPostRequest) Execute() (*ModelsRestore, *http.Response, error) {
+	return r.ApiService.ApiRestoresIdRetryPostExecute(r)
 }
 
 /*
-ApiRestoresIdUpdateStatusPost Update Restore Status
+ApiRestoresIdRetryPost Retry Restore
 
-Updates a Restore Status
+Retry a Restore
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param id Restore ID (must be valid UUID)
- @return ApiApiRestoresIdUpdateStatusPostRequest
+ @return ApiApiRestoresIdRetryPostRequest
 */
-func (a *RestoresApiService) ApiRestoresIdUpdateStatusPost(ctx context.Context, id string) ApiApiRestoresIdUpdateStatusPostRequest {
-	return ApiApiRestoresIdUpdateStatusPostRequest{
+func (a *RestoresApiService) ApiRestoresIdRetryPost(ctx context.Context, id string) ApiApiRestoresIdRetryPostRequest {
+	return ApiApiRestoresIdRetryPostRequest{
 		ApiService: a,
 		ctx: ctx,
 		id: id,
@@ -310,7 +310,7 @@ func (a *RestoresApiService) ApiRestoresIdUpdateStatusPost(ctx context.Context, 
 
 // Execute executes the request
 //  @return ModelsRestore
-func (a *RestoresApiService) ApiRestoresIdUpdateStatusPostExecute(r ApiApiRestoresIdUpdateStatusPostRequest) (*ModelsRestore, *http.Response, error) {
+func (a *RestoresApiService) ApiRestoresIdRetryPostExecute(r ApiApiRestoresIdRetryPostRequest) (*ModelsRestore, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPost
 		localVarPostBody     interface{}
@@ -318,12 +318,12 @@ func (a *RestoresApiService) ApiRestoresIdUpdateStatusPostExecute(r ApiApiRestor
 		localVarReturnValue  *ModelsRestore
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "RestoresApiService.ApiRestoresIdUpdateStatusPost")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "RestoresApiService.ApiRestoresIdRetryPost")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/api/restores/{id}/update-status"
+	localVarPath := localBasePath + "/api/restores/{id}/retry"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterToString(r.id, "")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -352,6 +352,249 @@ func (a *RestoresApiService) ApiRestoresIdUpdateStatusPostExecute(r ApiApiRestor
 	}
 	// body params
 	localVarPostBody = r.body
+	if r.ctx != nil {
+		// API Key Authentication
+		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
+			if apiKey, ok := auth["ApiKeyAuth"]; ok {
+				var key string
+				if apiKey.Prefix != "" {
+					key = apiKey.Prefix + " " + apiKey.Key
+				} else {
+					key = apiKey.Key
+				}
+				localVarHeaderParams["Authorization"] = key
+			}
+		}
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiApiRestoresIdUpdatePostRequest struct {
+	ctx context.Context
+	ApiService *RestoresApiService
+	id string
+	body *RequestsUpdateRestoreRequest
+}
+
+// Request body containing the update
+func (r ApiApiRestoresIdUpdatePostRequest) Body(body RequestsUpdateRestoreRequest) ApiApiRestoresIdUpdatePostRequest {
+	r.body = &body
+	return r
+}
+
+func (r ApiApiRestoresIdUpdatePostRequest) Execute() (*ModelsRestore, *http.Response, error) {
+	return r.ApiService.ApiRestoresIdUpdatePostExecute(r)
+}
+
+/*
+ApiRestoresIdUpdatePost Update Restore
+
+Updates a Restore
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @param id Restore ID (must be valid UUID)
+ @return ApiApiRestoresIdUpdatePostRequest
+*/
+func (a *RestoresApiService) ApiRestoresIdUpdatePost(ctx context.Context, id string) ApiApiRestoresIdUpdatePostRequest {
+	return ApiApiRestoresIdUpdatePostRequest{
+		ApiService: a,
+		ctx: ctx,
+		id: id,
+	}
+}
+
+// Execute executes the request
+//  @return ModelsRestore
+func (a *RestoresApiService) ApiRestoresIdUpdatePostExecute(r ApiApiRestoresIdUpdatePostRequest) (*ModelsRestore, *http.Response, error) {
+	var (
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsRestore
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "RestoresApiService.ApiRestoresIdUpdatePost")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/api/restores/{id}/update"
+	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterToString(r.id, "")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.body == nil {
+		return localVarReturnValue, nil, reportError("body is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"*/*"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.body
+	if r.ctx != nil {
+		// API Key Authentication
+		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
+			if apiKey, ok := auth["ApiKeyAuth"]; ok {
+				var key string
+				if apiKey.Prefix != "" {
+					key = apiKey.Prefix + " " + apiKey.Key
+				} else {
+					key = apiKey.Key
+				}
+				localVarHeaderParams["Authorization"] = key
+			}
+		}
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiApiRestoresRestorabilityMatrixGetRequest struct {
+	ctx context.Context
+	ApiService *RestoresApiService
+}
+
+
+func (r ApiApiRestoresRestorabilityMatrixGetRequest) Execute() (*map[string][]ServiceRestoreCompatibilityCondition, *http.Response, error) {
+	return r.ApiService.ApiRestoresRestorabilityMatrixGetExecute(r)
+}
+
+/*
+ApiRestoresRestorabilityMatrixGet Restorability Matrix
+
+Get Restorability Matrix
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @return ApiApiRestoresRestorabilityMatrixGetRequest
+*/
+func (a *RestoresApiService) ApiRestoresRestorabilityMatrixGet(ctx context.Context) ApiApiRestoresRestorabilityMatrixGetRequest {
+	return ApiApiRestoresRestorabilityMatrixGetRequest{
+		ApiService: a,
+		ctx: ctx,
+	}
+}
+
+// Execute executes the request
+//  @return map[string][]ServiceRestoreCompatibilityCondition
+func (a *RestoresApiService) ApiRestoresRestorabilityMatrixGetExecute(r ApiApiRestoresRestorabilityMatrixGetRequest) (*map[string][]ServiceRestoreCompatibilityCondition, *http.Response, error) {
+	var (
+		localVarHTTPMethod   = http.MethodGet
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *map[string][]ServiceRestoreCompatibilityCondition
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "RestoresApiService.ApiRestoresRestorabilityMatrixGet")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/api/restores/restorability-matrix"
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"*/*"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {

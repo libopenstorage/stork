@@ -265,7 +265,7 @@ func (backupClient *BackupClient) GetAllBackupSupportedDataServices() (map[strin
 
 // TriggerAndValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func (backupClient *BackupClient) TriggerAndValidateAdhocBackup(deploymentID string, backupTargetID string, backupType string) error {
-	var bkpJobs []pds.ControllersBackupJobStatus
+	var bkpJobs []pds.ModelsBackupJobStatusResponse
 	bkpObj, err := backupClient.Components.Backup.CreateBackup(deploymentID, backupTargetID, 10, true)
 	if err != nil {
 		return fmt.Errorf("failed while creating adhoc backup. Err: %v", err)

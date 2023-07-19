@@ -239,6 +239,9 @@ type Driver interface {
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)
 
+	// ResizePVC resizes given PVC
+	ResizePVC(*Context, *corev1.PersistentVolumeClaim, uint64) (*volume.Volume, error)
+
 	// GetSnapshots returns all storage snapshots for the given context
 	GetSnapshots(*Context) ([]*volume.Snapshot, error)
 

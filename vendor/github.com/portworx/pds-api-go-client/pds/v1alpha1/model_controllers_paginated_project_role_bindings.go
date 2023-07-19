@@ -16,7 +16,7 @@ import (
 
 // ControllersPaginatedProjectRoleBindings struct for ControllersPaginatedProjectRoleBindings
 type ControllersPaginatedProjectRoleBindings struct {
-	Data []ModelsProjectRoleBinding `json:"data,omitempty"`
+	Data []ModelsLegacyProjectBinding `json:"data,omitempty"`
 }
 
 // NewControllersPaginatedProjectRoleBindings instantiates a new ControllersPaginatedProjectRoleBindings object
@@ -37,9 +37,9 @@ func NewControllersPaginatedProjectRoleBindingsWithDefaults() *ControllersPagina
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *ControllersPaginatedProjectRoleBindings) GetData() []ModelsProjectRoleBinding {
+func (o *ControllersPaginatedProjectRoleBindings) GetData() []ModelsLegacyProjectBinding {
 	if o == nil || o.Data == nil {
-		var ret []ModelsProjectRoleBinding
+		var ret []ModelsLegacyProjectBinding
 		return ret
 	}
 	return o.Data
@@ -47,7 +47,7 @@ func (o *ControllersPaginatedProjectRoleBindings) GetData() []ModelsProjectRoleB
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersPaginatedProjectRoleBindings) GetDataOk() ([]ModelsProjectRoleBinding, bool) {
+func (o *ControllersPaginatedProjectRoleBindings) GetDataOk() ([]ModelsLegacyProjectBinding, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -63,8 +63,8 @@ func (o *ControllersPaginatedProjectRoleBindings) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given []ModelsProjectRoleBinding and assigns it to the Data field.
-func (o *ControllersPaginatedProjectRoleBindings) SetData(v []ModelsProjectRoleBinding) {
+// SetData gets a reference to the given []ModelsLegacyProjectBinding and assigns it to the Data field.
+func (o *ControllersPaginatedProjectRoleBindings) SetData(v []ModelsLegacyProjectBinding) {
 	o.Data = v
 }
 

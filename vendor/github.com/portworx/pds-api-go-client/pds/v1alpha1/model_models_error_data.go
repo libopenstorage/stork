@@ -16,7 +16,7 @@ import (
 
 // ModelsErrorData struct for ModelsErrorData
 type ModelsErrorData struct {
-	// Predefined API error code.
+	// More detailed specification of the error when the 'state' is in one of the failed states.
 	Code *string `json:"code,omitempty"`
 	// More detailed error message possibly containing the root cause.
 	Details *string `json:"details,omitempty"`
