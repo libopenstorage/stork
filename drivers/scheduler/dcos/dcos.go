@@ -581,6 +581,14 @@ func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume
 	}
 }
 
+func (d *dcos) ResizePVC(cxt *scheduler.Context, pvc *corev1.PersistentVolumeClaim, sizeInGb uint64) (*volume.Volume, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizePVC()",
+	}
+}
+
 func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{

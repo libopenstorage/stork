@@ -14,33 +14,33 @@ import (
 	"encoding/json"
 )
 
-// ControllersBackupJobStatus struct for ControllersBackupJobStatus
-type ControllersBackupJobStatus struct {
+// ModelsBackupJobStatusResponse struct for ModelsBackupJobStatusResponse
+type ModelsBackupJobStatusResponse struct {
 	CompletionTime *string `json:"completion_time,omitempty"`
 	Name *string `json:"name,omitempty"`
 	StartTime *string `json:"start_time,omitempty"`
 	Status *string `json:"status,omitempty"`
 }
 
-// NewControllersBackupJobStatus instantiates a new ControllersBackupJobStatus object
+// NewModelsBackupJobStatusResponse instantiates a new ModelsBackupJobStatusResponse object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewControllersBackupJobStatus() *ControllersBackupJobStatus {
-	this := ControllersBackupJobStatus{}
+func NewModelsBackupJobStatusResponse() *ModelsBackupJobStatusResponse {
+	this := ModelsBackupJobStatusResponse{}
 	return &this
 }
 
-// NewControllersBackupJobStatusWithDefaults instantiates a new ControllersBackupJobStatus object
+// NewModelsBackupJobStatusResponseWithDefaults instantiates a new ModelsBackupJobStatusResponse object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewControllersBackupJobStatusWithDefaults() *ControllersBackupJobStatus {
-	this := ControllersBackupJobStatus{}
+func NewModelsBackupJobStatusResponseWithDefaults() *ModelsBackupJobStatusResponse {
+	this := ModelsBackupJobStatusResponse{}
 	return &this
 }
 
 // GetCompletionTime returns the CompletionTime field value if set, zero value otherwise.
-func (o *ControllersBackupJobStatus) GetCompletionTime() string {
+func (o *ModelsBackupJobStatusResponse) GetCompletionTime() string {
 	if o == nil || o.CompletionTime == nil {
 		var ret string
 		return ret
@@ -50,7 +50,7 @@ func (o *ControllersBackupJobStatus) GetCompletionTime() string {
 
 // GetCompletionTimeOk returns a tuple with the CompletionTime field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersBackupJobStatus) GetCompletionTimeOk() (*string, bool) {
+func (o *ModelsBackupJobStatusResponse) GetCompletionTimeOk() (*string, bool) {
 	if o == nil || o.CompletionTime == nil {
 		return nil, false
 	}
@@ -58,7 +58,7 @@ func (o *ControllersBackupJobStatus) GetCompletionTimeOk() (*string, bool) {
 }
 
 // HasCompletionTime returns a boolean if a field has been set.
-func (o *ControllersBackupJobStatus) HasCompletionTime() bool {
+func (o *ModelsBackupJobStatusResponse) HasCompletionTime() bool {
 	if o != nil && o.CompletionTime != nil {
 		return true
 	}
@@ -67,12 +67,12 @@ func (o *ControllersBackupJobStatus) HasCompletionTime() bool {
 }
 
 // SetCompletionTime gets a reference to the given string and assigns it to the CompletionTime field.
-func (o *ControllersBackupJobStatus) SetCompletionTime(v string) {
+func (o *ModelsBackupJobStatusResponse) SetCompletionTime(v string) {
 	o.CompletionTime = &v
 }
 
 // GetName returns the Name field value if set, zero value otherwise.
-func (o *ControllersBackupJobStatus) GetName() string {
+func (o *ModelsBackupJobStatusResponse) GetName() string {
 	if o == nil || o.Name == nil {
 		var ret string
 		return ret
@@ -82,7 +82,7 @@ func (o *ControllersBackupJobStatus) GetName() string {
 
 // GetNameOk returns a tuple with the Name field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersBackupJobStatus) GetNameOk() (*string, bool) {
+func (o *ModelsBackupJobStatusResponse) GetNameOk() (*string, bool) {
 	if o == nil || o.Name == nil {
 		return nil, false
 	}
@@ -90,7 +90,7 @@ func (o *ControllersBackupJobStatus) GetNameOk() (*string, bool) {
 }
 
 // HasName returns a boolean if a field has been set.
-func (o *ControllersBackupJobStatus) HasName() bool {
+func (o *ModelsBackupJobStatusResponse) HasName() bool {
 	if o != nil && o.Name != nil {
 		return true
 	}
@@ -99,12 +99,12 @@ func (o *ControllersBackupJobStatus) HasName() bool {
 }
 
 // SetName gets a reference to the given string and assigns it to the Name field.
-func (o *ControllersBackupJobStatus) SetName(v string) {
+func (o *ModelsBackupJobStatusResponse) SetName(v string) {
 	o.Name = &v
 }
 
 // GetStartTime returns the StartTime field value if set, zero value otherwise.
-func (o *ControllersBackupJobStatus) GetStartTime() string {
+func (o *ModelsBackupJobStatusResponse) GetStartTime() string {
 	if o == nil || o.StartTime == nil {
 		var ret string
 		return ret
@@ -114,7 +114,7 @@ func (o *ControllersBackupJobStatus) GetStartTime() string {
 
 // GetStartTimeOk returns a tuple with the StartTime field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersBackupJobStatus) GetStartTimeOk() (*string, bool) {
+func (o *ModelsBackupJobStatusResponse) GetStartTimeOk() (*string, bool) {
 	if o == nil || o.StartTime == nil {
 		return nil, false
 	}
@@ -122,7 +122,7 @@ func (o *ControllersBackupJobStatus) GetStartTimeOk() (*string, bool) {
 }
 
 // HasStartTime returns a boolean if a field has been set.
-func (o *ControllersBackupJobStatus) HasStartTime() bool {
+func (o *ModelsBackupJobStatusResponse) HasStartTime() bool {
 	if o != nil && o.StartTime != nil {
 		return true
 	}
@@ -131,12 +131,12 @@ func (o *ControllersBackupJobStatus) HasStartTime() bool {
 }
 
 // SetStartTime gets a reference to the given string and assigns it to the StartTime field.
-func (o *ControllersBackupJobStatus) SetStartTime(v string) {
+func (o *ModelsBackupJobStatusResponse) SetStartTime(v string) {
 	o.StartTime = &v
 }
 
 // GetStatus returns the Status field value if set, zero value otherwise.
-func (o *ControllersBackupJobStatus) GetStatus() string {
+func (o *ModelsBackupJobStatusResponse) GetStatus() string {
 	if o == nil || o.Status == nil {
 		var ret string
 		return ret
@@ -146,7 +146,7 @@ func (o *ControllersBackupJobStatus) GetStatus() string {
 
 // GetStatusOk returns a tuple with the Status field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ControllersBackupJobStatus) GetStatusOk() (*string, bool) {
+func (o *ModelsBackupJobStatusResponse) GetStatusOk() (*string, bool) {
 	if o == nil || o.Status == nil {
 		return nil, false
 	}
@@ -154,7 +154,7 @@ func (o *ControllersBackupJobStatus) GetStatusOk() (*string, bool) {
 }
 
 // HasStatus returns a boolean if a field has been set.
-func (o *ControllersBackupJobStatus) HasStatus() bool {
+func (o *ModelsBackupJobStatusResponse) HasStatus() bool {
 	if o != nil && o.Status != nil {
 		return true
 	}
@@ -163,11 +163,11 @@ func (o *ControllersBackupJobStatus) HasStatus() bool {
 }
 
 // SetStatus gets a reference to the given string and assigns it to the Status field.
-func (o *ControllersBackupJobStatus) SetStatus(v string) {
+func (o *ModelsBackupJobStatusResponse) SetStatus(v string) {
 	o.Status = &v
 }
 
-func (o ControllersBackupJobStatus) MarshalJSON() ([]byte, error) {
+func (o ModelsBackupJobStatusResponse) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.CompletionTime != nil {
 		toSerialize["completion_time"] = o.CompletionTime
@@ -184,38 +184,38 @@ func (o ControllersBackupJobStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-type NullableControllersBackupJobStatus struct {
-	value *ControllersBackupJobStatus
+type NullableModelsBackupJobStatusResponse struct {
+	value *ModelsBackupJobStatusResponse
 	isSet bool
 }
 
-func (v NullableControllersBackupJobStatus) Get() *ControllersBackupJobStatus {
+func (v NullableModelsBackupJobStatusResponse) Get() *ModelsBackupJobStatusResponse {
 	return v.value
 }
 
-func (v *NullableControllersBackupJobStatus) Set(val *ControllersBackupJobStatus) {
+func (v *NullableModelsBackupJobStatusResponse) Set(val *ModelsBackupJobStatusResponse) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableControllersBackupJobStatus) IsSet() bool {
+func (v NullableModelsBackupJobStatusResponse) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableControllersBackupJobStatus) Unset() {
+func (v *NullableModelsBackupJobStatusResponse) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableControllersBackupJobStatus(val *ControllersBackupJobStatus) *NullableControllersBackupJobStatus {
-	return &NullableControllersBackupJobStatus{value: val, isSet: true}
+func NewNullableModelsBackupJobStatusResponse(val *ModelsBackupJobStatusResponse) *NullableModelsBackupJobStatusResponse {
+	return &NullableModelsBackupJobStatusResponse{value: val, isSet: true}
 }
 
-func (v NullableControllersBackupJobStatus) MarshalJSON() ([]byte, error) {
+func (v NullableModelsBackupJobStatusResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableControllersBackupJobStatus) UnmarshalJSON(src []byte) error {
+func (v *NullableModelsBackupJobStatusResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

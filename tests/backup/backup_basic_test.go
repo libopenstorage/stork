@@ -2,14 +2,10 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -17,7 +13,13 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
+
+var GlobalCredentialConfig *backup.Config
 
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
@@ -74,7 +76,6 @@ func BackupInitInstance() {
 		StorageProvisioner: Inst().Provisioner,
 		NodeDriverName:     Inst().N.String(),
 	})
-
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
@@ -82,7 +83,6 @@ func BackupInitInstance() {
 	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
-
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
@@ -124,18 +124,30 @@ func BackupInitInstance() {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
+	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
+
+	// Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
+	err = SetDestinationKubeConfig()
+	log.FailOnError(err, "Switching context to destination cluster failed")
+
+	// Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "Switching context to source cluster failed")
 }
 
 var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
+	var err error
 	dash = Inst().Dash
 	dash.TestSetBegin(dash.TestSet)
 	log.Infof("Backup Init instance")
 	BackupInitInstance()
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
+	// Get all the values from the cloud_config.json persist into struct which can be globally accessed
+	GlobalCredentialConfig, err = backup.GetConfigObj()
+	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
 	bucketNameSuffix := getBucketNameSuffix()
@@ -175,11 +187,9 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
-
 	// Cleanup all non admin users
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -221,6 +231,38 @@ var _ = AfterSuite(func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 	}
 
+	// Deleting clusters and the corresponding cloud cred
+	var clusterCredName string
+	var clusterCredUID string
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
+		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+		if err != nil && strings.Contains(err.Error(), "object not found") {
+			log.InfoD("Cluster %s is deleted", clusterName)
+		} else {
+			clusterObj := clusterResp.GetCluster()
+			clusterProvider := GetClusterProviders()
+			for _, provider := range clusterProvider {
+				switch provider {
+				case drivers.ProviderRke:
+					clusterCredName = clusterObj.PlatformCredentialRef.Name
+					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+				default:
+					clusterCredName = clusterObj.CloudCredentialRef.Name
+					clusterCredUID = clusterObj.CloudCredentialRef.Uid
+				}
+				err = DeleteCluster(clusterName, orgID, ctx, true)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+				if clusterCredName != "" {
+					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+				}
+			}
+		}
+	}
 	// Cleanup all backup locations
 	allBackupLocations, err := getAllBackupLocations(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
@@ -259,7 +301,7 @@ var _ = AfterSuite(func() {
 		}
 	}
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
-	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+	dash.VerifySafely(err, nil, "Verifying cloud credential deletion success")
 
 	// Cleanup all buckets after suite
 	providers := getProviders()
@@ -279,7 +321,6 @@ var _ = AfterSuite(func() {
 			log.Infof("NFS subpath deleted - %s", globalNFSBucketName)
 		}
 	}
-
 })
 
 func TestMain(m *testing.M) {

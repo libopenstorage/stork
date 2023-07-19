@@ -2018,15 +2018,20 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		//secure-apps list is provided for which volumes should be encrypted
-		if len(k.secureApps) > 0 {
-			if k.isSecureEnabled(app.Key, k.secureApps) {
-
+		if len(k.secureApps) > 0 || k.secretConfigMapName != "" {
+			if k.isSecureEnabled(app.Key, k.secureApps) || k.secretConfigMapName != "" {
 				if obj.Parameters == nil {
 					obj.Parameters = make(map[string]string)
 				}
 				if encryptionFlag {
 					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
 					obj.Parameters[encryptionName] = "true"
+				}
+				if app.IsCSI {
+					obj.Parameters [CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
 				}
 				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
 					if secretNameKeyFlag {
@@ -2054,10 +2059,11 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		if secretNameKeyFlag {
+		log.Infof("Secret name key flag and CSI flag for PVC: %b %b", secretNameKeyFlag, app.IsCSI)
+		if secretNameKeyFlag && !app.IsCSI {
 			obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		}
-		if secretNamespaceKeyFlag {
+		if secretNamespaceKeyFlag && !app.IsCSI {
 			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 		}
 
@@ -4139,7 +4145,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				return nil, err
 			}
 			if shouldResize {
-				vol, err := k.resizePVCBy1GB(ctx, updatedPVC)
+				vol, err := k.ResizePVC(ctx, updatedPVC, 1)
 				if err != nil {
 					return nil, err
 				}
@@ -4168,7 +4174,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 					return nil, err
 				}
 				if shouldResize {
-					vol, err := k.resizePVCBy1GB(ctx, &pvc)
+					vol, err := k.ResizePVC(ctx, &pvc, 1)
 					if err != nil {
 						return nil, err
 					}
@@ -4198,7 +4204,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 					return nil, err
 				}
 				if shouldResize {
-					vol, err := k.resizePVCBy1GB(ctx, &pvc)
+					vol, err := k.ResizePVC(ctx, &pvc, 1)
 					if err != nil {
 						return nil, err
 					}
@@ -4210,36 +4216,44 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 
 	return vols, nil
 }
+func (k *K8s) ResizePVC(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClaim, sizeInGb uint64) (*volume.Volume, error) {
+	var vol *volume.Volume
 
-func (k *K8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClaim) (*volume.Volume, error) {
-	k8sOps := k8sCore
-	storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-
-	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
-	resizeSupported := true
-	if annotationValue, hasKey := pvc.Annotations[resizeSupportedAnnotationKey]; hasKey {
-		resizeSupported, _ = strconv.ParseBool(annotationValue)
+	shouldResize, err := k.filterPureVolumesIfEnabled(pvc)
+	if err != nil {
+		return nil, err
 	}
-	if resizeSupported {
-		extraAmount, _ := resource.ParseQuantity("1Gi")
-		storageSize.Add(extraAmount)
-		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
-		if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
-			return nil, &scheduler.ErrFailedToResizeStorage{
-				App:   ctx.App,
-				Cause: err.Error(),
+	if shouldResize {
+		k8sOps := k8sCore
+		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+
+		// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
+		resizeSupported := true
+		if annotationValue, hasKey := pvc.Annotations[resizeSupportedAnnotationKey]; hasKey {
+			resizeSupported, _ = strconv.ParseBool(annotationValue)
+		}
+		if resizeSupported {
+			extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
+			storageSize.Add(extraAmount)
+			pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
+			if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: err.Error(),
+				}
 			}
 		}
-	}
-	sizeInt64, _ := storageSize.AsInt64()
-	vol := &volume.Volume{
-		ID:            string(pvc.Spec.VolumeName),
-		Name:          pvc.Name,
-		Namespace:     pvc.Namespace,
-		RequestedSize: uint64(sizeInt64),
-		Shared:        k.isPVCShared(pvc),
+		sizeInt64, _ := storageSize.AsInt64()
+		vol = &volume.Volume{
+			ID:            string(pvc.Spec.VolumeName),
+			Name:          pvc.Name,
+			Namespace:     pvc.Namespace,
+			RequestedSize: uint64(sizeInt64),
+			Shared:        k.isPVCShared(pvc),
+		}
 	}
 	return vol, nil
+
 }
 
 // GetSnapshots  Get the snapshots

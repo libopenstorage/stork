@@ -303,16 +303,16 @@ type ApiApiProjectsIdRoleBindingsPutRequest struct {
 	ctx context.Context
 	ApiService *ProjectRoleBindingsApiService
 	id string
-	body *ControllersUpsertProjectRoleBindingRequest
+	body *RequestsPutLegacyBindingRequest
 }
 
 // Request body containing the project role binding
-func (r ApiApiProjectsIdRoleBindingsPutRequest) Body(body ControllersUpsertProjectRoleBindingRequest) ApiApiProjectsIdRoleBindingsPutRequest {
+func (r ApiApiProjectsIdRoleBindingsPutRequest) Body(body RequestsPutLegacyBindingRequest) ApiApiProjectsIdRoleBindingsPutRequest {
 	r.body = &body
 	return r
 }
 
-func (r ApiApiProjectsIdRoleBindingsPutRequest) Execute() (*ModelsProjectRoleBinding, *http.Response, error) {
+func (r ApiApiProjectsIdRoleBindingsPutRequest) Execute() (*ModelsLegacyProjectBinding, *http.Response, error) {
 	return r.ApiService.ApiProjectsIdRoleBindingsPutExecute(r)
 }
 
@@ -334,13 +334,13 @@ func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsPut(ctx context
 }
 
 // Execute executes the request
-//  @return ModelsProjectRoleBinding
-func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsPutExecute(r ApiApiProjectsIdRoleBindingsPutRequest) (*ModelsProjectRoleBinding, *http.Response, error) {
+//  @return ModelsLegacyProjectBinding
+func (a *ProjectRoleBindingsApiService) ApiProjectsIdRoleBindingsPutExecute(r ApiApiProjectsIdRoleBindingsPutRequest) (*ModelsLegacyProjectBinding, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPut
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ModelsProjectRoleBinding
+		localVarReturnValue  *ModelsLegacyProjectBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ProjectRoleBindingsApiService.ApiProjectsIdRoleBindingsPut")

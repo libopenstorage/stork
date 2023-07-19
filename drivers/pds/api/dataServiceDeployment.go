@@ -115,20 +115,6 @@ func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.
 	return dsModel, res, err
 }
 
-// GetDeploymentEvents return events on the given deployment.
-func (ds *DataServiceDeployment) GetDeploymentEvents(deploymentID string) (*pds.ServiceDeploymentResourceEvents, error) {
-	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	dsModel, res, err := dsClient.ApiDeploymentsIdEventsGet(ctx, deploymentID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdEventsGet`: %v\n.Full HTTP response: %v", err, res)
-	}
-	return dsModel, err
-}
-
 // GetDeploymentCredentials return deployment credentials.
 func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (*pds.DeploymentsCredentials, error) {
 	dsClient := ds.apiClient.DeploymentsApi

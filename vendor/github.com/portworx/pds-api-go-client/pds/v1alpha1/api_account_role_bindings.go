@@ -421,16 +421,16 @@ type ApiApiAccountsIdRoleBindingsPutRequest struct {
 	ctx context.Context
 	ApiService *AccountRoleBindingsApiService
 	id string
-	body *ControllersUpsertAccountRoleBindingRequest
+	body *RequestsPutLegacyBindingRequest
 }
 
 // Request body containing the account role binding
-func (r ApiApiAccountsIdRoleBindingsPutRequest) Body(body ControllersUpsertAccountRoleBindingRequest) ApiApiAccountsIdRoleBindingsPutRequest {
+func (r ApiApiAccountsIdRoleBindingsPutRequest) Body(body RequestsPutLegacyBindingRequest) ApiApiAccountsIdRoleBindingsPutRequest {
 	r.body = &body
 	return r
 }
 
-func (r ApiApiAccountsIdRoleBindingsPutRequest) Execute() (*ModelsAccountRoleBinding, *http.Response, error) {
+func (r ApiApiAccountsIdRoleBindingsPutRequest) Execute() (*ModelsLegacyAccountBinding, *http.Response, error) {
 	return r.ApiService.ApiAccountsIdRoleBindingsPutExecute(r)
 }
 
@@ -452,13 +452,13 @@ func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPut(ctx context
 }
 
 // Execute executes the request
-//  @return ModelsAccountRoleBinding
-func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPutExecute(r ApiApiAccountsIdRoleBindingsPutRequest) (*ModelsAccountRoleBinding, *http.Response, error) {
+//  @return ModelsLegacyAccountBinding
+func (a *AccountRoleBindingsApiService) ApiAccountsIdRoleBindingsPutExecute(r ApiApiAccountsIdRoleBindingsPutRequest) (*ModelsLegacyAccountBinding, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPut
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ModelsAccountRoleBinding
+		localVarReturnValue  *ModelsLegacyAccountBinding
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AccountRoleBindingsApiService.ApiAccountsIdRoleBindingsPut")

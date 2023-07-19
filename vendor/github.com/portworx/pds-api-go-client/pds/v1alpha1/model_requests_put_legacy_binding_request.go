@@ -14,65 +14,32 @@ import (
 	"encoding/json"
 )
 
-// ModelsAccountRoleBinding struct for ModelsAccountRoleBinding
-type ModelsAccountRoleBinding struct {
-	AccountId *string `json:"account_id,omitempty"`
+// RequestsPutLegacyBindingRequest struct for RequestsPutLegacyBindingRequest
+type RequestsPutLegacyBindingRequest struct {
 	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
 	RoleName *string `json:"role_name,omitempty"`
 }
 
-// NewModelsAccountRoleBinding instantiates a new ModelsAccountRoleBinding object
+// NewRequestsPutLegacyBindingRequest instantiates a new RequestsPutLegacyBindingRequest object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewModelsAccountRoleBinding() *ModelsAccountRoleBinding {
-	this := ModelsAccountRoleBinding{}
+func NewRequestsPutLegacyBindingRequest() *RequestsPutLegacyBindingRequest {
+	this := RequestsPutLegacyBindingRequest{}
 	return &this
 }
 
-// NewModelsAccountRoleBindingWithDefaults instantiates a new ModelsAccountRoleBinding object
+// NewRequestsPutLegacyBindingRequestWithDefaults instantiates a new RequestsPutLegacyBindingRequest object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewModelsAccountRoleBindingWithDefaults() *ModelsAccountRoleBinding {
-	this := ModelsAccountRoleBinding{}
+func NewRequestsPutLegacyBindingRequestWithDefaults() *RequestsPutLegacyBindingRequest {
+	this := RequestsPutLegacyBindingRequest{}
 	return &this
-}
-
-// GetAccountId returns the AccountId field value if set, zero value otherwise.
-func (o *ModelsAccountRoleBinding) GetAccountId() string {
-	if o == nil || o.AccountId == nil {
-		var ret string
-		return ret
-	}
-	return *o.AccountId
-}
-
-// GetAccountIdOk returns a tuple with the AccountId field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *ModelsAccountRoleBinding) GetAccountIdOk() (*string, bool) {
-	if o == nil || o.AccountId == nil {
-		return nil, false
-	}
-	return o.AccountId, true
-}
-
-// HasAccountId returns a boolean if a field has been set.
-func (o *ModelsAccountRoleBinding) HasAccountId() bool {
-	if o != nil && o.AccountId != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetAccountId gets a reference to the given string and assigns it to the AccountId field.
-func (o *ModelsAccountRoleBinding) SetAccountId(v string) {
-	o.AccountId = &v
 }
 
 // GetActorId returns the ActorId field value if set, zero value otherwise.
-func (o *ModelsAccountRoleBinding) GetActorId() string {
+func (o *RequestsPutLegacyBindingRequest) GetActorId() string {
 	if o == nil || o.ActorId == nil {
 		var ret string
 		return ret
@@ -82,7 +49,7 @@ func (o *ModelsAccountRoleBinding) GetActorId() string {
 
 // GetActorIdOk returns a tuple with the ActorId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsAccountRoleBinding) GetActorIdOk() (*string, bool) {
+func (o *RequestsPutLegacyBindingRequest) GetActorIdOk() (*string, bool) {
 	if o == nil || o.ActorId == nil {
 		return nil, false
 	}
@@ -90,7 +57,7 @@ func (o *ModelsAccountRoleBinding) GetActorIdOk() (*string, bool) {
 }
 
 // HasActorId returns a boolean if a field has been set.
-func (o *ModelsAccountRoleBinding) HasActorId() bool {
+func (o *RequestsPutLegacyBindingRequest) HasActorId() bool {
 	if o != nil && o.ActorId != nil {
 		return true
 	}
@@ -99,12 +66,12 @@ func (o *ModelsAccountRoleBinding) HasActorId() bool {
 }
 
 // SetActorId gets a reference to the given string and assigns it to the ActorId field.
-func (o *ModelsAccountRoleBinding) SetActorId(v string) {
+func (o *RequestsPutLegacyBindingRequest) SetActorId(v string) {
 	o.ActorId = &v
 }
 
 // GetActorType returns the ActorType field value if set, zero value otherwise.
-func (o *ModelsAccountRoleBinding) GetActorType() string {
+func (o *RequestsPutLegacyBindingRequest) GetActorType() string {
 	if o == nil || o.ActorType == nil {
 		var ret string
 		return ret
@@ -114,7 +81,7 @@ func (o *ModelsAccountRoleBinding) GetActorType() string {
 
 // GetActorTypeOk returns a tuple with the ActorType field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsAccountRoleBinding) GetActorTypeOk() (*string, bool) {
+func (o *RequestsPutLegacyBindingRequest) GetActorTypeOk() (*string, bool) {
 	if o == nil || o.ActorType == nil {
 		return nil, false
 	}
@@ -122,7 +89,7 @@ func (o *ModelsAccountRoleBinding) GetActorTypeOk() (*string, bool) {
 }
 
 // HasActorType returns a boolean if a field has been set.
-func (o *ModelsAccountRoleBinding) HasActorType() bool {
+func (o *RequestsPutLegacyBindingRequest) HasActorType() bool {
 	if o != nil && o.ActorType != nil {
 		return true
 	}
@@ -131,12 +98,12 @@ func (o *ModelsAccountRoleBinding) HasActorType() bool {
 }
 
 // SetActorType gets a reference to the given string and assigns it to the ActorType field.
-func (o *ModelsAccountRoleBinding) SetActorType(v string) {
+func (o *RequestsPutLegacyBindingRequest) SetActorType(v string) {
 	o.ActorType = &v
 }
 
 // GetRoleName returns the RoleName field value if set, zero value otherwise.
-func (o *ModelsAccountRoleBinding) GetRoleName() string {
+func (o *RequestsPutLegacyBindingRequest) GetRoleName() string {
 	if o == nil || o.RoleName == nil {
 		var ret string
 		return ret
@@ -146,7 +113,7 @@ func (o *ModelsAccountRoleBinding) GetRoleName() string {
 
 // GetRoleNameOk returns a tuple with the RoleName field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsAccountRoleBinding) GetRoleNameOk() (*string, bool) {
+func (o *RequestsPutLegacyBindingRequest) GetRoleNameOk() (*string, bool) {
 	if o == nil || o.RoleName == nil {
 		return nil, false
 	}
@@ -154,7 +121,7 @@ func (o *ModelsAccountRoleBinding) GetRoleNameOk() (*string, bool) {
 }
 
 // HasRoleName returns a boolean if a field has been set.
-func (o *ModelsAccountRoleBinding) HasRoleName() bool {
+func (o *RequestsPutLegacyBindingRequest) HasRoleName() bool {
 	if o != nil && o.RoleName != nil {
 		return true
 	}
@@ -163,15 +130,12 @@ func (o *ModelsAccountRoleBinding) HasRoleName() bool {
 }
 
 // SetRoleName gets a reference to the given string and assigns it to the RoleName field.
-func (o *ModelsAccountRoleBinding) SetRoleName(v string) {
+func (o *RequestsPutLegacyBindingRequest) SetRoleName(v string) {
 	o.RoleName = &v
 }
 
-func (o ModelsAccountRoleBinding) MarshalJSON() ([]byte, error) {
+func (o RequestsPutLegacyBindingRequest) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if o.AccountId != nil {
-		toSerialize["account_id"] = o.AccountId
-	}
 	if o.ActorId != nil {
 		toSerialize["actor_id"] = o.ActorId
 	}
@@ -184,38 +148,38 @@ func (o ModelsAccountRoleBinding) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-type NullableModelsAccountRoleBinding struct {
-	value *ModelsAccountRoleBinding
+type NullableRequestsPutLegacyBindingRequest struct {
+	value *RequestsPutLegacyBindingRequest
 	isSet bool
 }
 
-func (v NullableModelsAccountRoleBinding) Get() *ModelsAccountRoleBinding {
+func (v NullableRequestsPutLegacyBindingRequest) Get() *RequestsPutLegacyBindingRequest {
 	return v.value
 }
 
-func (v *NullableModelsAccountRoleBinding) Set(val *ModelsAccountRoleBinding) {
+func (v *NullableRequestsPutLegacyBindingRequest) Set(val *RequestsPutLegacyBindingRequest) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableModelsAccountRoleBinding) IsSet() bool {
+func (v NullableRequestsPutLegacyBindingRequest) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableModelsAccountRoleBinding) Unset() {
+func (v *NullableRequestsPutLegacyBindingRequest) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableModelsAccountRoleBinding(val *ModelsAccountRoleBinding) *NullableModelsAccountRoleBinding {
-	return &NullableModelsAccountRoleBinding{value: val, isSet: true}
+func NewNullableRequestsPutLegacyBindingRequest(val *RequestsPutLegacyBindingRequest) *NullableRequestsPutLegacyBindingRequest {
+	return &NullableRequestsPutLegacyBindingRequest{value: val, isSet: true}
 }
 
-func (v NullableModelsAccountRoleBinding) MarshalJSON() ([]byte, error) {
+func (v NullableRequestsPutLegacyBindingRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableModelsAccountRoleBinding) UnmarshalJSON(src []byte) error {
+func (v *NullableRequestsPutLegacyBindingRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

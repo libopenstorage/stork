@@ -14,33 +14,33 @@ import (
 	"encoding/json"
 )
 
-// ModelsProjectRoleBinding struct for ModelsProjectRoleBinding
-type ModelsProjectRoleBinding struct {
+// ModelsLegacyProjectBinding struct for ModelsLegacyProjectBinding
+type ModelsLegacyProjectBinding struct {
 	ActorId *string `json:"actor_id,omitempty"`
 	ActorType *string `json:"actor_type,omitempty"`
 	ProjectId *string `json:"project_id,omitempty"`
 	RoleName *string `json:"role_name,omitempty"`
 }
 
-// NewModelsProjectRoleBinding instantiates a new ModelsProjectRoleBinding object
+// NewModelsLegacyProjectBinding instantiates a new ModelsLegacyProjectBinding object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewModelsProjectRoleBinding() *ModelsProjectRoleBinding {
-	this := ModelsProjectRoleBinding{}
+func NewModelsLegacyProjectBinding() *ModelsLegacyProjectBinding {
+	this := ModelsLegacyProjectBinding{}
 	return &this
 }
 
-// NewModelsProjectRoleBindingWithDefaults instantiates a new ModelsProjectRoleBinding object
+// NewModelsLegacyProjectBindingWithDefaults instantiates a new ModelsLegacyProjectBinding object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewModelsProjectRoleBindingWithDefaults() *ModelsProjectRoleBinding {
-	this := ModelsProjectRoleBinding{}
+func NewModelsLegacyProjectBindingWithDefaults() *ModelsLegacyProjectBinding {
+	this := ModelsLegacyProjectBinding{}
 	return &this
 }
 
 // GetActorId returns the ActorId field value if set, zero value otherwise.
-func (o *ModelsProjectRoleBinding) GetActorId() string {
+func (o *ModelsLegacyProjectBinding) GetActorId() string {
 	if o == nil || o.ActorId == nil {
 		var ret string
 		return ret
@@ -50,7 +50,7 @@ func (o *ModelsProjectRoleBinding) GetActorId() string {
 
 // GetActorIdOk returns a tuple with the ActorId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsProjectRoleBinding) GetActorIdOk() (*string, bool) {
+func (o *ModelsLegacyProjectBinding) GetActorIdOk() (*string, bool) {
 	if o == nil || o.ActorId == nil {
 		return nil, false
 	}
@@ -58,7 +58,7 @@ func (o *ModelsProjectRoleBinding) GetActorIdOk() (*string, bool) {
 }
 
 // HasActorId returns a boolean if a field has been set.
-func (o *ModelsProjectRoleBinding) HasActorId() bool {
+func (o *ModelsLegacyProjectBinding) HasActorId() bool {
 	if o != nil && o.ActorId != nil {
 		return true
 	}
@@ -67,12 +67,12 @@ func (o *ModelsProjectRoleBinding) HasActorId() bool {
 }
 
 // SetActorId gets a reference to the given string and assigns it to the ActorId field.
-func (o *ModelsProjectRoleBinding) SetActorId(v string) {
+func (o *ModelsLegacyProjectBinding) SetActorId(v string) {
 	o.ActorId = &v
 }
 
 // GetActorType returns the ActorType field value if set, zero value otherwise.
-func (o *ModelsProjectRoleBinding) GetActorType() string {
+func (o *ModelsLegacyProjectBinding) GetActorType() string {
 	if o == nil || o.ActorType == nil {
 		var ret string
 		return ret
@@ -82,7 +82,7 @@ func (o *ModelsProjectRoleBinding) GetActorType() string {
 
 // GetActorTypeOk returns a tuple with the ActorType field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsProjectRoleBinding) GetActorTypeOk() (*string, bool) {
+func (o *ModelsLegacyProjectBinding) GetActorTypeOk() (*string, bool) {
 	if o == nil || o.ActorType == nil {
 		return nil, false
 	}
@@ -90,7 +90,7 @@ func (o *ModelsProjectRoleBinding) GetActorTypeOk() (*string, bool) {
 }
 
 // HasActorType returns a boolean if a field has been set.
-func (o *ModelsProjectRoleBinding) HasActorType() bool {
+func (o *ModelsLegacyProjectBinding) HasActorType() bool {
 	if o != nil && o.ActorType != nil {
 		return true
 	}
@@ -99,12 +99,12 @@ func (o *ModelsProjectRoleBinding) HasActorType() bool {
 }
 
 // SetActorType gets a reference to the given string and assigns it to the ActorType field.
-func (o *ModelsProjectRoleBinding) SetActorType(v string) {
+func (o *ModelsLegacyProjectBinding) SetActorType(v string) {
 	o.ActorType = &v
 }
 
 // GetProjectId returns the ProjectId field value if set, zero value otherwise.
-func (o *ModelsProjectRoleBinding) GetProjectId() string {
+func (o *ModelsLegacyProjectBinding) GetProjectId() string {
 	if o == nil || o.ProjectId == nil {
 		var ret string
 		return ret
@@ -114,7 +114,7 @@ func (o *ModelsProjectRoleBinding) GetProjectId() string {
 
 // GetProjectIdOk returns a tuple with the ProjectId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsProjectRoleBinding) GetProjectIdOk() (*string, bool) {
+func (o *ModelsLegacyProjectBinding) GetProjectIdOk() (*string, bool) {
 	if o == nil || o.ProjectId == nil {
 		return nil, false
 	}
@@ -122,7 +122,7 @@ func (o *ModelsProjectRoleBinding) GetProjectIdOk() (*string, bool) {
 }
 
 // HasProjectId returns a boolean if a field has been set.
-func (o *ModelsProjectRoleBinding) HasProjectId() bool {
+func (o *ModelsLegacyProjectBinding) HasProjectId() bool {
 	if o != nil && o.ProjectId != nil {
 		return true
 	}
@@ -131,12 +131,12 @@ func (o *ModelsProjectRoleBinding) HasProjectId() bool {
 }
 
 // SetProjectId gets a reference to the given string and assigns it to the ProjectId field.
-func (o *ModelsProjectRoleBinding) SetProjectId(v string) {
+func (o *ModelsLegacyProjectBinding) SetProjectId(v string) {
 	o.ProjectId = &v
 }
 
 // GetRoleName returns the RoleName field value if set, zero value otherwise.
-func (o *ModelsProjectRoleBinding) GetRoleName() string {
+func (o *ModelsLegacyProjectBinding) GetRoleName() string {
 	if o == nil || o.RoleName == nil {
 		var ret string
 		return ret
@@ -146,7 +146,7 @@ func (o *ModelsProjectRoleBinding) GetRoleName() string {
 
 // GetRoleNameOk returns a tuple with the RoleName field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ModelsProjectRoleBinding) GetRoleNameOk() (*string, bool) {
+func (o *ModelsLegacyProjectBinding) GetRoleNameOk() (*string, bool) {
 	if o == nil || o.RoleName == nil {
 		return nil, false
 	}
@@ -154,7 +154,7 @@ func (o *ModelsProjectRoleBinding) GetRoleNameOk() (*string, bool) {
 }
 
 // HasRoleName returns a boolean if a field has been set.
-func (o *ModelsProjectRoleBinding) HasRoleName() bool {
+func (o *ModelsLegacyProjectBinding) HasRoleName() bool {
 	if o != nil && o.RoleName != nil {
 		return true
 	}
@@ -163,11 +163,11 @@ func (o *ModelsProjectRoleBinding) HasRoleName() bool {
 }
 
 // SetRoleName gets a reference to the given string and assigns it to the RoleName field.
-func (o *ModelsProjectRoleBinding) SetRoleName(v string) {
+func (o *ModelsLegacyProjectBinding) SetRoleName(v string) {
 	o.RoleName = &v
 }
 
-func (o ModelsProjectRoleBinding) MarshalJSON() ([]byte, error) {
+func (o ModelsLegacyProjectBinding) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.ActorId != nil {
 		toSerialize["actor_id"] = o.ActorId
@@ -184,38 +184,38 @@ func (o ModelsProjectRoleBinding) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-type NullableModelsProjectRoleBinding struct {
-	value *ModelsProjectRoleBinding
+type NullableModelsLegacyProjectBinding struct {
+	value *ModelsLegacyProjectBinding
 	isSet bool
 }
 
-func (v NullableModelsProjectRoleBinding) Get() *ModelsProjectRoleBinding {
+func (v NullableModelsLegacyProjectBinding) Get() *ModelsLegacyProjectBinding {
 	return v.value
 }
 
-func (v *NullableModelsProjectRoleBinding) Set(val *ModelsProjectRoleBinding) {
+func (v *NullableModelsLegacyProjectBinding) Set(val *ModelsLegacyProjectBinding) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableModelsProjectRoleBinding) IsSet() bool {
+func (v NullableModelsLegacyProjectBinding) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableModelsProjectRoleBinding) Unset() {
+func (v *NullableModelsLegacyProjectBinding) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableModelsProjectRoleBinding(val *ModelsProjectRoleBinding) *NullableModelsProjectRoleBinding {
-	return &NullableModelsProjectRoleBinding{value: val, isSet: true}
+func NewNullableModelsLegacyProjectBinding(val *ModelsLegacyProjectBinding) *NullableModelsLegacyProjectBinding {
+	return &NullableModelsLegacyProjectBinding{value: val, isSet: true}
 }
 
-func (v NullableModelsProjectRoleBinding) MarshalJSON() ([]byte, error) {
+func (v NullableModelsLegacyProjectBinding) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableModelsProjectRoleBinding) UnmarshalJSON(src []byte) error {
+func (v *NullableModelsLegacyProjectBinding) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

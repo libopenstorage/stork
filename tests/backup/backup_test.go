@@ -2,15 +2,14 @@ package tests
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
+	"time"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -31,6 +30,18 @@ var _ = Describe("{BackupClusterVerification}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")
+	})
+
+})
+
+// Reference test to access the cloud config details from the global variable
+var _ = Describe("{testParseConfig}", func() {
+	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
+	It("Testing parse config", func() {
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
+		log.InfoD("Aws secret Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
+		log.InfoD("Region from backup target: %s", GlobalCredentialConfig.BackupTargets.GetAWSBucket("default").Region)
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.BackupTargets.GetNFSServer("default").IP)
 	})
 })
 
@@ -87,6 +98,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
+
 	var (
 		backupNames          []string
 		restoreNames         []string
@@ -211,7 +223,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)

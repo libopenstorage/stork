@@ -586,6 +586,8 @@ spec:
       value: "${DIAGS_BUCKET}"
     - name: PROVIDERS
       value: "${PROVIDERS}"
+    - name: CLUSTER_PROVIDER
+      value: "${CLUSTER_PROVIDER}"
     - name: INTERNAL_DOCKER_REGISTRY
       value: "$INTERNAL_DOCKER_REGISTRY"
     - name: IMAGE_PULL_SERVER

@@ -672,7 +672,7 @@ github.com/libopenstorage/cloudops/unsupported
 # github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e
 ## explicit
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f
+# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993
 ## explicit; go 1.17
 github.com/libopenstorage/openstorage/api
 github.com/libopenstorage/openstorage/api/client
@@ -924,7 +924,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9
+# github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319
 ## explicit; go 1.17
 github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
@@ -1007,7 +1007,9 @@ github.com/rancher/norman/types/slice
 github.com/rancher/norman/types/values
 # github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 ## explicit; go 1.19
+github.com/rancher/rancher/pkg/client/generated/cluster/v3
 github.com/rancher/rancher/pkg/client/generated/management/v3
+github.com/rancher/rancher/pkg/client/generated/project/v3
 # github.com/rancher/wrangler v1.1.0
 ## explicit; go 1.19
 github.com/rancher/wrangler/pkg/name
@@ -2078,7 +2080,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f
+# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993
 # github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
