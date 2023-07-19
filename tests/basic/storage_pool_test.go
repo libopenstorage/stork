@@ -9840,7 +9840,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			})
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
 			time.Sleep(300 * time.Second)
-			log.Infof("sleeping for 5 mins to wait for shutdown to be completed")
+			log.InfoD("sleeping for 5 mins to wait for shutdown to be completed")
 		}
 		t := func() (interface{}, bool, error) {
 			err = Inst().N.PowerOnVM(*nodeDetail)
