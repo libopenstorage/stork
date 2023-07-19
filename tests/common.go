@@ -7581,3 +7581,148 @@ func GetClusterProviders() []string {
 	}
 	return clusterProviders
 }
+
+
+// GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
+func GetPoolUuidsWithStorageFull() ([]string, error) {
+	var poolUuids []string
+
+	isPoolOffline := func(n node.Node) (bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+		if err != nil {
+			return false, err
+		}
+
+		for _, v := range poolsStatus {
+			if v == "Offline" {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return nil, err
+	}
+	calculatePercentage := func(usedValue float64, totalValue float64) float64 {
+		percentage := (usedValue / totalValue) * 100
+		return float64(percentage)
+	}
+
+	for _, eachPool := range pools {
+		nodeDetail, err := GetNodeWithGivenPoolID(eachPool.Uuid)
+		if err != nil {
+			return nil, err
+		}
+
+		poolOfflineStatus, err := isPoolOffline(*nodeDetail)
+		if err != nil {
+			return nil, err
+		}
+
+		if calculatePercentage(float64(eachPool.Used), float64(eachPool.TotalSize)) > 90.0 || poolOfflineStatus {
+			poolUuids = append(poolUuids, eachPool.GetUuid())
+		}
+	}
+
+	return poolUuids, nil
+}
+
+// GetVolumeConsumedSize returns size of the volume
+func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
+	// Get Random Storage Node
+	cmd := fmt.Sprintf("pxctl v i %v -j | jq '.[].usage'", vol.ID)
+	output, err := runCmdGetOutput(cmd, node.GetStorageNodes()[0])
+	if err != nil {
+		return 0, err
+	}
+	output = strings.ReplaceAll(output, "\"", "")
+	output = strings.TrimSpace(output)
+
+	num, err := strconv.ParseUint(output, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return num, nil
+}
+
+// GetAllVolumesWithIO Returns list of volumes with IO
+func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error) {
+
+	allVolsWithIO := []*volume.Volume{}
+	for _, eachContext := range contexts {
+		vols, err := Inst().S.GetVolumes(eachContext)
+		if err != nil {
+			log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
+		}
+		log.Infof("list of all volumes present in the cluster [%v]", vols)
+		for _, eachVol := range vols {
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], eachVol.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			if isIOsInProgress {
+				allVolsWithIO = append(allVolsWithIO, eachVol)
+			}
+		}
+	}
+	return allVolsWithIO, nil
+}
+
+func IsVolumeFull(vol volume.Volume) (bool, error) {
+	volPercentage, err := GetVolumeFullPercentage(vol)
+	if err != nil {
+		return false, err
+	}
+	if volPercentage > 80.0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// GetVolumeFullPercentage returns percentage of volume size consumed
+func GetVolumeFullPercentage(vol volume.Volume) (float64, error) {
+	calculatePercentage := func(usedSize float64, totalSize float64) float64 {
+		percentage := (usedSize / totalSize) * 100
+		return float64(percentage)
+	}
+
+	appVol, err := Inst().V.InspectVolume(vol.ID)
+	log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol.ID))
+
+	totalSize := appVol.Spec.Size
+	usedSize, err := GetVolumeConsumedSize(vol)
+	if err != nil {
+		return 0, err
+	}
+
+	log.Infof("Total size of Volume is [%v] and used size is [%v]", totalSize, usedSize)
+	percentageFull := calculatePercentage(float64(usedSize), float64(totalSize))
+	log.Infof("Volume [%v] : Percentage of size consumed [%v]", vol.Name, percentageFull)
+
+	return percentageFull, nil
+}
+
+// GetPoolCapacityUsed Get Pool capacity percentage used
+func GetPoolCapacityUsed(poolUUID string) (float64, error) {
+
+	calculatePercentage := func(usedSize float64, totalSize float64) float64 {
+		percentage := (usedSize / totalSize) * 100
+		return float64(percentage)
+	}
+
+	pool, err := GetStoragePoolByUUID(poolUUID)
+	log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+
+	usedSize, totalSize := pool.Used, pool.TotalSize
+	log.Infof("Used vs Total volume stats [%v]/[%v]", usedSize, totalSize)
+
+	poolSizeUsed := calculatePercentage(float64(usedSize), float64(totalSize))
+
+	return poolSizeUsed, nil
+}
+

@@ -1375,3 +1375,94 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ResizeVolumeAfterFull}", func() {
+	/*
+		https://portworx.atlassian.net/browse/PTX-18927
+		Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizeVolumeAfterFull",
+			"Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		currAppList := Inst().AppList
+
+		revertAppList := func() {
+			Inst().AppList = currAppList
+		}
+		defer revertAppList()
+
+		Inst().AppList = []string{}
+		var ioIntensiveApp = []string{"vdbench-heavyload"}
+
+		for _, eachApp := range ioIntensiveApp {
+			Inst().AppList = append(Inst().AppList, eachApp)
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizepoolfiftyper-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		log.Infof("Get all the list of available volumes with IO running")
+		allVolumes, err := GetAllVolumesWithIO(contexts)
+		log.FailOnError(err, "Failed to get volumes with IO Running")
+		log.InfoD("List of all volumes with IO Running [%v]", allVolumes)
+
+		// All Data volumes for Resize
+		volumesToResize := []*volume.Volume{}
+		for _, eachVol := range allVolumes {
+			log.Infof("Checking volume with name [%v]", eachVol.Name)
+			if eachVol.Name != "vdbench-pvc-output" {
+				volumesToResize = append(volumesToResize, eachVol)
+			}
+		}
+		dash.VerifyFatal(len(volumesToResize) > 0, true, "no volumes with IO for resize operations to continue")
+
+		// Select Random Volumes for pool Expand
+		randomIndex := rand.Intn(len(volumesToResize))
+		randomVol := volumesToResize[randomIndex]
+
+		waitForVolumeFull := func(volName *volume.Volume) error {
+			waitTillVolume := func() (interface{}, bool, error) {
+				volumeFull, err := IsVolumeFull(*randomVol)
+				if err != nil {
+					return nil, true, err
+				}
+				if volumeFull {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("Volume is still not full waiting.")
+			}
+			_, err := task.DoRetryWithTimeout(waitTillVolume, 2*time.Hour, 10*time.Second)
+			return err
+		}
+
+		// Wait for Volume Full on the Node
+		err = waitForVolumeFull(randomVol)
+		log.FailOnError(err, "waiting for volume full on the node")
+
+		// Expand Volume Size by 50%
+		expectedSize := randomVol.Size + (randomVol.Size / 2)
+		log.InfoD("Volume will be resized from [%v] to [%v]", randomVol.Size, expectedSize)
+		log.FailOnError(Inst().V.ResizeVolume(randomVol.ID, expectedSize), "failed to Resize Volume")
+
+		// Verify after Resize volume if IO is running
+		isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], randomVol.ID)
+		log.FailOnError(err, "is io running on the volume?")
+		dash.VerifyFatal(isIOsInProgress, true, fmt.Sprintf("no io running on the volume [%v] after resize", randomVol.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
