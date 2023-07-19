@@ -87,7 +87,6 @@ func BackupInitInstance() {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
 	}
-
 	SetupTestRail()
 
 	// Getting Px version info
@@ -116,7 +115,6 @@ func BackupInitInstance() {
 	t.Tags["pureSANType"] = Inst().PureSANType
 
 	Inst().Dash.TestSetUpdate(t)
-
 	// Setting the common password
 	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
 	// Dumping source and destination kubeconfig to file system path
@@ -126,14 +124,14 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
-
-	// Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
-	err = SetDestinationKubeConfig()
-	log.FailOnError(err, "Switching context to destination cluster failed")
-
-	// Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
-	err = SetSourceKubeConfig()
-	log.FailOnError(err, "Switching context to source cluster failed")
+	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+		// Switch context to destination cluster to update RancherMap with destination cluster details
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
+		// Switch context to destination cluster to update RancherMap with source cluster details
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+	}
 }
 
 var dash *aetosutil.Dashboard
