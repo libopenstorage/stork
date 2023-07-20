@@ -23,7 +23,7 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 200Gi
+      storage: {{ if .VolumeSize }}{{ .VolumeSize }}{{ else }}200Gi{{ end }}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1

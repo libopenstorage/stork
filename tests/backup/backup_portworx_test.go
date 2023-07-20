@@ -611,7 +611,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			for i := 1; i < len(backupNames); i++ {
 				restoreName := fmt.Sprintf("%s-%s-encrypted", restoreNamePrefix, backupNames[i])
 				restoreNames = append(restoreNames, restoreName)
-				for i, _ := range scheduledAppContexts {
+				for i := range scheduledAppContexts {
 					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
 				}
 				log.FailOnError(err, "%s restore failed", restoreName)

@@ -5663,8 +5663,9 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		var poolID int32
 
 		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolID)
 
 		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.InfoD("List of all the Pools present in the system [%s]", allPools)

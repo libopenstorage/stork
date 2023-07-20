@@ -284,7 +284,7 @@ replace (
 
 	// PX dependencies
 	//github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230511212757-41751b27d69f
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
