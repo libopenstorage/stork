@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	version "github.com/hashicorp/go-version"
@@ -56,6 +57,11 @@ var (
 	// JobPodBackOffLimit backofflimit for the job
 	JobPodBackOffLimit = int32(10)
 )
+
+// GetCsiRestoreJobName returns a CSI restore Job name based on name of the CR
+func GetCsiRestoreJobName(jobPrefix string, crName string) string {
+	return jobPrefix + strings.SplitN(crName, "restore", 2)[1]
+}
 
 // isServiceAccountSecretMissing returns true, if the K8s version does not support secret token for the service account.
 func isServiceAccountSecretMissing() (bool, error) {
@@ -140,6 +146,12 @@ func CleanServiceAccount(name, namespace string) error {
 	}
 	if err := coreops.Instance().DeleteServiceAccount(name, namespace); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("delete %s/%s serviceaccount: %s", namespace, name, err)
+	}
+	if err := rbacops.Instance().DeleteClusterRole(name); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("delete %s/%s clusterrole: %s", namespace, name, err)
+	}
+	if err := rbacops.Instance().DeleteClusterRoleBinding(name); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("delete %s/%s clusterrolebinding: %s", namespace, name, err)
 	}
 	return nil
 }

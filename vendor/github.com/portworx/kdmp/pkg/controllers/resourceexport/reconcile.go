@@ -239,7 +239,7 @@ func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) er
 	// clean up resources
 	rbNamespace, rbName, err := utils.ParseJobID(resourceExport.Status.TransferID)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to parse job ID %v from ResourceeExport CR: %v: %v",
+		errMsg := fmt.Sprintf("failed to parse job ID %v from ResourceExport CR: %v: %v",
 			resourceExport.Status.TransferID, resourceExport.Name, err)
 		logrus.Errorf("%v", errMsg)
 		return err

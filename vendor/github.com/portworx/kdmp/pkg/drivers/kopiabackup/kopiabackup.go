@@ -211,7 +211,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	// Check whether mount point failure
 	mountFailed := utils.IsJobPodMountFailed(job, namespace)
 	if mountFailed {
-		errMsg := fmt.Sprintf("job [%v/%v] failed while mounting NFS mount endpoint", namespace, name)
+		errMsg := fmt.Sprintf("job [%v/%v] failed to mount pvc, please check job pod's description for more detail", namespace, name)
 		return utils.ToJobStatus(0, errMsg, batchv1.JobFailed), nil
 	}
 
