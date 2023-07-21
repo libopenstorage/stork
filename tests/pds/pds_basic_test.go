@@ -37,6 +37,7 @@ var (
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
 	components    *api.Components
+	wkloadParams  pdsdriver.LoadGenParams
 )
 
 var _ = BeforeSuite(func() {
