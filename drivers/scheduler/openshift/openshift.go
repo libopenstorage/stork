@@ -38,7 +38,7 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
-	mdFileName                  = "changelog.md"
+	releaseFileName             = "release.txt"
 	defaultCmdTimeout           = 5 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
 	generationNumberWaitTime    = 10 * time.Minute
@@ -423,7 +423,7 @@ spec:
 // getImageSha get Image sha
 func getImageSha(ocpVersion string) (string, error) {
 	downloadURL := fmt.Sprintf("%s/%s/%s", OpenshiftMirror,
-		ocpVersion, mdFileName)
+		ocpVersion, releaseFileName)
 	request := netutil.HttpRequest{
 		Method:   "GET",
 		Url:      downloadURL,
@@ -440,8 +440,8 @@ func getImageSha(ocpVersion string) (string, error) {
 	contentInString := string(content)
 	parts := strings.Split(contentInString, "\n")
 	for _, a := range parts {
-		if strings.Contains(a, "Image Digest:") {
-			return strings.Split(a, "`")[1], nil
+		if strings.Contains(a, "Digest:") {
+			return strings.TrimSpace(strings.Split(a, ": ")[1]), nil
 		}
 	}
 	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
@@ -723,22 +723,30 @@ func ackAPIRemoval(version string) error {
 	if err != nil {
 		return err
 	}
-	// this issue happens on OCP 4.9
+	// this issue happens on OCP 4.9, 4.12 and 4.13
 	parsedVersion49, _ := semver.Parse("4.9.0")
-
-	if parsedVersion.GTE(parsedVersion49) {
-		t := func() (interface{}, bool, error) {
-			var output []byte
-			patchData := "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
-			args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
-			if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-				return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
-			}
-			log.Info(string(output))
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	parsedVersion412, _ := semver.Parse("4.12.0")
+	parsedVersion413, _ := semver.Parse("4.13.0")
+	var patchData string
+	if (parsedVersion.GTE(parsedVersion49) && parsedVersion.LT(parsedVersion412)){
+		patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
+	}else if (parsedVersion.GTE(parsedVersion412) && parsedVersion.LT(parsedVersion413)){
+		patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
+	}else if (parsedVersion.GTE(parsedVersion413)){
+		patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
+	}else{
+		return nil
 	}
+	t := func() (interface{}, bool, error) {
+		var output []byte
+		args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
+		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+			return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
+		}
+		log.Info(string(output))
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
 	return err
 }
 
