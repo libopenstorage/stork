@@ -9821,14 +9821,14 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
 		poolStatus, err := getPoolLastOperation(expandedPool.Uuid)
 		log.FailOnError(err, "failed to get last operation on pool %s", expandedPool.Uuid)
-		var errstring bool
+		var poolInProgress bool
 		if poolStatus.Msg != "" {
 			log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
 			if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
 				(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
-				errstring = true
+				poolInProgress = true
 			}
-			dash.VerifyFatal(errstring == false, true, "poolresize failed")
+			dash.VerifyFatal(poolInProgress == false, true, fmt.Sprintf("poolresize failed on pool %v", expandedPool.Uuid))
 			var connect node.ConnectionOpts
 			connect.Timeout = 60
 			connect.TimeBeforeRetry = 10
@@ -9857,7 +9857,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
 		}
 		poolStatus, err = getPoolLastOperation(expandedPool.Uuid)
-		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize has failed. Error: %s", poolStatus.Msg))
+		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize is successful on pool %s", expandedPool.Uuid))
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using add_disk option", poolUUID))
@@ -9869,5 +9869,4 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
 		AfterEachTest(contexts, testrailID, runID)
 	})
-
 })
