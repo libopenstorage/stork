@@ -94,6 +94,7 @@ var _ = Describe("{Longevity}", func() {
 		AsyncDR:                  TriggerAsyncDR,
 		AsyncDRMigrationSchedule: TriggerAsyncDRMigrationSchedule,
 		ConfluentAsyncDR:         TriggerConfluentAsyncDR,
+		KafkaAsyncDR:             TriggerKafkaAsyncDR,
 		AsyncDRVolumeOnly:        TriggerAsyncDRVolumeOnly,
 		AutoFsTrimAsyncDR:        TriggerAutoFsTrimAsyncDR,
 		IopsBwAsyncDR:            TriggerIopsBwAsyncDR,
@@ -678,6 +679,7 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrimAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[IopsBwAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[ConfluentAsyncDR] = make(map[int]time.Duration)
+	triggerInterval[KafkaAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpVolResize] = make(map[int]time.Duration)
@@ -889,6 +891,17 @@ func populateIntervals() {
 	triggerInterval[ConfluentAsyncDR][3] = 21 * baseInterval
 	triggerInterval[ConfluentAsyncDR][2] = 24 * baseInterval
 	triggerInterval[ConfluentAsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[KafkaAsyncDR][10] = 1 * baseInterval
+	triggerInterval[KafkaAsyncDR][9] = 3 * baseInterval
+	triggerInterval[KafkaAsyncDR][8] = 6 * baseInterval
+	triggerInterval[KafkaAsyncDR][7] = 9 * baseInterval
+	triggerInterval[KafkaAsyncDR][6] = 12 * baseInterval
+	triggerInterval[KafkaAsyncDR][5] = 15 * baseInterval
+	triggerInterval[KafkaAsyncDR][4] = 18 * baseInterval
+	triggerInterval[KafkaAsyncDR][3] = 21 * baseInterval
+	triggerInterval[KafkaAsyncDR][2] = 24 * baseInterval
+	triggerInterval[KafkaAsyncDR][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRVolumeOnly][10] = 1 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][9] = 3 * baseInterval
@@ -1478,6 +1491,7 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrimAsyncDR][0] = 0
 	triggerInterval[IopsBwAsyncDR][0] = 0
 	triggerInterval[ConfluentAsyncDR][0] = 0
+	triggerInterval[KafkaAsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[StorkApplicationBackup][0] = 0
 	triggerInterval[StorkAppBkpVolResize][0] = 0
