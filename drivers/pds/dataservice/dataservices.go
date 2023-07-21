@@ -9,6 +9,7 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/rbac"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
@@ -29,6 +30,7 @@ var (
 
 	k8sCore = core.Instance()
 	k8sApps = apps.Instance()
+	k8sRbac = rbac.Instance()
 
 	err                                  error
 	isVersionAvailable                   bool
@@ -46,14 +48,28 @@ var (
 	dataServiceImageMap        = make(map[string][]string)
 )
 
+const (
+	postgresql    = "PostgreSQL"
+	cassandra     = "Cassandra"
+	elasticSearch = "Elasticsearch"
+	couchbase     = "Couchbase"
+	mongodb       = "MongoDB Enterprise"
+	rabbitmq      = "RabbitMQ"
+	mysql         = "MySQL"
+	mssql         = "MS SQL Server"
+	kafka         = "Kafka"
+	consul        = "Consul"
+	zookeeper     = "ZooKeeper"
+	redis         = "Redis"
+)
+
 // PDS const
 const (
-	zookeeper       = "ZooKeeper"
-	redis           = "Redis"
-	deploymentName  = "qa"
-	driverName      = "pds"
-	maxtimeInterval = 30 * time.Second
-	timeOut         = 30 * time.Minute
+	deploymentName   = "qa"
+	driverName       = "pds"
+	maxtimeInterval  = 30 * time.Second
+	timeOut          = 30 * time.Minute
+	pdsWorkloadImage = "portworx/pds-loadtests:sample-load-pds-qa"
 )
 
 // PDS packages

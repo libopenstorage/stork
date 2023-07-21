@@ -2028,7 +2028,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 					obj.Parameters[encryptionName] = "true"
 				}
 				if app.IsCSI {
-					obj.Parameters [CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
 					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
 					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
 					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
