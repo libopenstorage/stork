@@ -9857,7 +9857,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
 		}
 		poolStatus, err = getPoolLastOperation(expandedPool.Uuid)
-		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, true, fmt.Sprintf("PoolResize is successful on pool %s", expandedPool.Uuid))
+		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize is successful on pool %s", expandedPool.Uuid))
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using add_disk option", poolUUID))
