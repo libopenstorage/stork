@@ -672,6 +672,8 @@ spec:
       value: "${NFS_PATH}"
     - name: SKIP_PX_OPERATOR_UPGRADE
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
+    - name: VOLUME_SNAPSHOT_CLASS
+      value: "${VOLUME_SNAPSHOT_CLASS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

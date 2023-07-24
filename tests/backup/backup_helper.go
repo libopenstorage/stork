@@ -106,6 +106,7 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 5 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 )
 
 var (
@@ -212,7 +213,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
-// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
+// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class based on the env variable - VOLUME_SNAPSHOT_CLASS
 func GetCsiSnapshotClassName() (string, error) {
 	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
@@ -220,18 +221,20 @@ func GetCsiSnapshotClassName() (string, error) {
 		return "", err
 	}
 	if len(snapShotClasses.Items) > 0 {
-		log.InfoD("Volume snapshot classes found - ")
+		log.InfoD("Volume snapshot classes found in the cluster - ")
 		for _, snapshotClass := range snapShotClasses.Items {
 			log.InfoD(snapshotClass.GetName())
-			if strings.Contains(snapshotClass.GetName(), "csi") {
-				log.InfoD("CSI volume snapshot class - %s", snapshotClass.GetName())
-				return snapshotClass.GetName(), nil
-			}
 		}
-		log.Warnf("no csi volume snapshot classes found")
-		return "", nil
+		volumeSnapshotClass, present := os.LookupEnv(volumeSnapshotClassEnv)
+		if present {
+			log.InfoD("Picking the volume snapshot class [%s] from env variable [%s]", volumeSnapshotClass, volumeSnapshotClassEnv)
+			return volumeSnapshotClass, nil
+		} else {
+			log.InfoD("Env variable %s not set hence returning empty volume snapshot class name", volumeSnapshotClassEnv)
+			return "", nil
+		}
 	} else {
-		log.Warnf("no volume snapshot classes found")
+		log.InfoD("no volume snapshot classes found in the cluster")
 		return "", nil
 	}
 }
@@ -3935,4 +3938,3 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 	}
 	return false, nil
 }
-
