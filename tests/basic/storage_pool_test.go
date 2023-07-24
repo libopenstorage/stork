@@ -9813,33 +9813,28 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		poolToBeResized, err := GetStoragePoolByUUID(poolDetails[0].Uuid)
 		drvSize, err := getPoolDiskSize(poolToBeResized)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
-		expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+		//add more disk since it should take longer for the resize to take longer
+		driveSize := drvSize * 3
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + driveSize
 		err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
 		expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
 		log.FailOnError(err, "error getting pool by using id %s", poolToBeResized.Uuid)
 		dash.VerifyFatal(expandedPool == nil, false, "expanded pool value is nil")
-		poolStatus, err := getPoolLastOperation(expandedPool.Uuid)
-		log.FailOnError(err, "failed to get last operation on pool %s", expandedPool.Uuid)
-		var poolInProgress bool
-		if poolStatus.Msg != "" {
-			log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
-			if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
-				(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
-				poolInProgress = true
-			}
-			dash.VerifyFatal(poolInProgress == false, true, fmt.Sprintf("poolresize failed on pool %v", expandedPool.Uuid))
-			var connect node.ConnectionOpts
-			connect.Timeout = 60
-			connect.TimeBeforeRetry = 10
-			err := Inst().N.ShutdownNode(*nodeDetail, node.ShutdownNodeOpts{
-				Force:          true,
-				ConnectionOpts: connect,
-			})
-			log.FailOnError(err, "failed to shutdown the node with err %s", err)
-			time.Sleep(300 * time.Second)
-			log.InfoD("sleeping for 5 mins to wait for shutdown to be completed")
+		err = WaitForExpansionToStart(poolToBeResized.Uuid)
+		if err != nil {
+			log.FailOnError(err, "error getting pool by using id %s", poolToBeResized.Uuid)
 		}
+		var connect node.ConnectionOpts
+		connect.Timeout = 60
+		connect.TimeBeforeRetry = 10
+		err = Inst().N.ShutdownNode(*nodeDetail, node.ShutdownNodeOpts{
+			Force:          true,
+			ConnectionOpts: connect,
+		})
+		log.FailOnError(err, "failed to shutdown the node with err %s", err)
+		time.Sleep(300 * time.Second)
+		log.InfoD("sleeping for 5 mins to wait for shutdown to be completed")
 		t := func() (interface{}, bool, error) {
 			err = Inst().N.PowerOnVM(*nodeDetail)
 			if err != nil {
@@ -9856,8 +9851,8 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		if err := Inst().V.WaitDriverUpOnNode(*nodeDetail, validatePXStartTimeout); err != nil {
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
 		}
-		poolStatus, err = getPoolLastOperation(expandedPool.Uuid)
-		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, false, fmt.Sprintf("PoolResize is successful on pool %s", expandedPool.Uuid))
+		poolStatus, err := getPoolLastOperation(expandedPool.Uuid)
+		dash.VerifyFatal(poolStatus.Status == api.SdkStoragePool_OPERATION_FAILED, true, fmt.Sprintf("PoolResize is successful on pool %s", expandedPool.Uuid))
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using add_disk option", poolUUID))
