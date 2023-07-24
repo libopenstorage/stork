@@ -1,0 +1,19 @@
+allowVolumeExpansion: true
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: postgres-sc
+parameters:
+  billingType: hourly
+  classVersion: "1"
+  csi.storage.k8s.io/fstype: ext4
+  encrypted: "false"
+  encryptionKey: ""
+  profile: 10iops-tier
+  region: ""
+  resourceGroup: ""
+  tags: ""
+  zone: ""
+provisioner: vpc.block.csi.ibm.io
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
