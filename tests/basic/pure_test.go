@@ -227,7 +227,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		}
 
 		// if app list is more than 5 we run 1 application in one point of time in parallel,
-		// intension here is to run 20 applications in parallel, In any point of time max pod count doesn't exceed more than 300
+		// intention here is to run 20 applications in parallel, In any point of time max pod count doesn't exceed more than 300
 		var appTheads int
 		if len(totalAppsRequested) >= 5 {
 			appTheads = 1
