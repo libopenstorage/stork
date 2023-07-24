@@ -54,7 +54,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		poolToBeResized = ensurePoolExists(poolIDToResize)
 	})
 
-	It("select a pool that has I/O and expand it by 100 GB. ", func() {
+	It("select a pool that has I/O and expand it by 100 GB with resize-disk type. ", func() {
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
 		targetSizeInGB := targetSizeInBytes / units.GiB
