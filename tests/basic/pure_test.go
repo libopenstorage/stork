@@ -204,10 +204,9 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			}
 		}()
 
-		// Inst().AppList = []string{"nginx-fa-davol"}
 		contexts = make([]*scheduler.Context, 0)
 
-		// in case if user provides
+		// Apps list provided by user while triggering the test is considered to run the apps in parallel
 		totalAppsRequested := Inst().AppList
 
 		parallelThreads := 5
