@@ -13,7 +13,7 @@ STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
-DOCK_BUILD_CNT  := golang:1.19.1
+DOCK_BUILD_CNT  := golang:1.19.10
 
 ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork' | grep -v 'hack')
@@ -39,7 +39,7 @@ BIN         :=$(BASE_DIR)/bin
 VERSION = $(RELEASE_VER)-$(GIT_SHA)
 
 LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)"
-BUILD_OPTIONS := -ldflags=$(LDFLAGS)
+BUILD_OPTIONS := -ldflags=$(LDFLAGS) -buildvcs=false
 
 .DEFAULT_GOAL=all
 .PHONY: test clean vendor vendor-update px-statfs
