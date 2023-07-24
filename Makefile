@@ -113,7 +113,7 @@ test:
 
 integration-test:
 	@echo "Building stork integration tests"
-	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+	docker run --rm --security-opt seccomp=unconfined -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		   /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/test/integration_test && \
 		   GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test;'
 
@@ -132,19 +132,19 @@ codegen:
 
 stork:
 	@echo "Building the stork binary"
-	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+	docker run --rm  --security-opt seccomp=unconfined  -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
            /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/stork && \
 		   CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/stork;'
 
 cmdexecutor:
 	@echo "Building command executor binary"
-	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+	docker run --rm --security-opt seccomp=unconfined -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/cmdexecutor && \
 		GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/cmdexecutor;'
 
 storkctl:
 	@echo "Building storkctl"
-	docker run --rm -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+	docker run --rm --security-opt seccomp=unconfined -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/storkctl; \
 		CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/linux/storkctl; \
 		CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/darwin/storkctl; \
