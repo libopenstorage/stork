@@ -228,14 +228,14 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 
 		// if app list is more than 5 we run 1 application in one point of time in parallel,
 		// intention here is to run 20 applications in parallel, In any point of time max pod count doesn't exceed more than 300
-		var appTheads int
+		var appThreads int
 		if len(totalAppsRequested) >= 5 {
-			appTheads = 1
+			appThreads = 1
 		} else {
-			appTheads = parallelThreads / len(totalAppsRequested)
+			appThreads = parallelThreads / len(totalAppsRequested)
 		}
 
-		wg.Add(appTheads)
+		wg.Add(appThreads)
 		scheduleAppParallel := func() {
 			defer wg.Done()
 			defer GinkgoRecover()
@@ -256,7 +256,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		}
 
 		// Create apps in parallel
-		for count := 0; count < appTheads; count++ {
+		for count := 0; count < appThreads; count++ {
 			go scheduleAppParallel()
 			time.Sleep(500 * time.Millisecond)
 		}
