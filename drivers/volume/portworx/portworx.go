@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -15,13 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/portworx/torpedo/pkg/log"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
-
-	"github.com/portworx/torpedo/pkg/s3utils"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
@@ -47,15 +42,18 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -97,6 +95,8 @@ const (
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
 	envSkipPxOperatorUpgrade                  = "SKIP_PX_OPERATOR_UPGRADE"
+	pxCustomRegistryConfigmapName             = "px-custom-registry"
+	pxVersionsConfigmapName                   = "px-versions"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
@@ -2943,6 +2943,33 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	// If PX Operator based install, perform PX StorageCluster upgrade
 	isOperatorBasedInstall, _ := d.IsOperatorBasedInstall()
 	if isOperatorBasedInstall {
+		// Check to see if px-versions configmap exists in PX namespace
+		deployPxVersionsConfigMap := false
+		if doesConfigMapExist(pxVersionsConfigmapName, d.namespace) {
+			log.Infof("Configmap [%s] is found", pxVersionsConfigmapName)
+
+			// Delete px-versions configmap
+			if err := core.Instance().DeleteConfigMap(pxVersionsConfigmapName, d.namespace); err != nil {
+				return fmt.Errorf("Failed to delete [%s] configmap", pxVersionsConfigmapName)
+			}
+			deployPxVersionsConfigMap = true
+		}
+
+		// Run air-gapped script to pull/push images for the new PX version hop, if custom registry configmap found
+		if doesConfigMapExist(pxCustomRegistryConfigmapName, d.namespace) {
+			if err := d.pullAndPushImagesToPrivateRegistry(specGenUrl); err != nil {
+				return err
+			}
+		}
+
+		// Create/Update px-version configmap to the new PX version hop only if it previously existed
+		if deployPxVersionsConfigMap {
+			if err := d.createPxVersionsConfigmap(specGenUrl, d.namespace); err != nil {
+				return err
+			}
+		}
+
+		// Upgrade PX operator, if not skipped
 		log.Debugf("Env var SKIP_PX_OPERATOR_UPGRADE is set to [%v]", d.skipPxOperatorUpgrade)
 		if !d.skipPxOperatorUpgrade {
 			log.InfoD("Will upgrade PX Operator, if new version is availabe for given PX endpoint [%s]", specGenUrl)
@@ -2994,6 +3021,124 @@ func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenUR
 	}
 
 	return newEnvVarList, nil
+}
+
+// doesConfigMapExist returns true or false wether configmap exists or not
+func doesConfigMapExist(configmapName, namespace string) bool {
+	// Get configmap
+	_, err := core.Instance().GetConfigMap(configmapName, namespace)
+	if err != nil && k8serrors.IsNotFound(err) {
+		return false
+	}
+	return true
+}
+
+func (d *portworx) createPxVersionsConfigmap(specGenUrl, pxNamespace string) error {
+	// Get k8s version
+	k8sVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return err
+	}
+
+	// Construct PX versions URL
+	pxVersionURL, err := optest.ConstructVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return fmt.Errorf("Failed to construct PX version URL, Err: %v", err)
+	}
+
+	// Download PX versions URL content
+	pxVersionsFile := path.Join("/versions")
+	cmd := fmt.Sprintf("curl -o %s %s", pxVersionsFile, pxVersionURL)
+	_, strErr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to download versions file from URL [%s], Err: %v %v", pxVersionURL, strErr, err)
+	}
+
+	// Create px-versions configmap
+	log.InfoD("Creating px-versions configmap [%s] in [%s] namespace", pxVersionsConfigmapName, pxNamespace)
+	cmd = fmt.Sprintf("kubectl -n %s create configmap %s --from-file=%s", pxNamespace, pxVersionsConfigmapName, pxVersionsFile)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to create [%s] configmap in [%s] namespace, Err: %v", pxVersionsConfigmapName, pxNamespace, err)
+	}
+
+	return nil
+}
+
+// PpullAndPushImagesToPrivateRegistry will pull and push images to private registry using our air-gapped script
+func (d *portworx) pullAndPushImagesToPrivateRegistry(specGenUrl string) error {
+	// Get credentials for custom registry from px-custom-registry configmap
+	log.Debugf("Get all docker credentials from [%s] configmap in [%s] namespace", pxCustomRegistryConfigmapName, d.namespace)
+	pxCustomRegistryConfigmap, err := core.Instance().GetConfigMap(pxCustomRegistryConfigmapName, d.namespace)
+	if err != nil || k8serrors.IsNotFound(err) {
+		return fmt.Errorf("Failed to get [%s] configmap that should have been created by spawn or manually, Err: %v", pxCustomRegistryConfigmapName, err)
+	}
+
+	// Credentials for portworx and custom registry
+	portworxDockerRegistryUsername := pxCustomRegistryConfigmap.Data["portworxDockerRegistryUsername"]
+	portworxDockerRegistryPassword := pxCustomRegistryConfigmap.Data["portworxDockerRegistryPassword"]
+	customDockerRegistryName := pxCustomRegistryConfigmap.Data["customDockerRegistryName"]
+	customDockerRegistryUsername := pxCustomRegistryConfigmap.Data["customDockerRegistryUsername"]
+	customDockerRegistryPassword := pxCustomRegistryConfigmap.Data["customDockerRegistryPassword"]
+
+	if customDockerRegistryName == "" && customDockerRegistryUsername == "" && customDockerRegistryPassword == "" {
+		return fmt.Errorf("Failed to get custom docker registry info from [%s] configmap [%+v]", pxCustomRegistryConfigmapName, pxCustomRegistryConfigmap.Data)
+	}
+
+	if portworxDockerRegistryUsername == "" && portworxDockerRegistryPassword == "" {
+		return fmt.Errorf("Failed to get portworx docker registry info from [%s] configmap [%+v]", pxCustomRegistryConfigmapName, pxCustomRegistryConfigmap.Data)
+	}
+
+	log.InfoD("Pull and push PX images via air-gapped script to a private registry [%s]", customDockerRegistryName)
+
+	// Construct air-gapped URL to use to download script
+	pxAirgappedURL, err := d.constructPxAirgappedUrl(specGenUrl)
+	if err != nil {
+		return fmt.Errorf("Failed to construct air-gapped URL, Err: %v", err)
+	}
+
+	pxAgInstallBinary := path.Join("/px-ag-install.sh")
+	log.InfoD("Downloading air-gapped script from [%s] to [%s]", pxAirgappedURL, pxAgInstallBinary)
+	cmd := fmt.Sprintf("curl -o %s -L %s", pxAgInstallBinary, pxAirgappedURL)
+	_, strErr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to download [%s] script from URL [%s], Err: %v %v", pxAgInstallBinary, pxAirgappedURL, strErr, err)
+	}
+
+	// Docker login to pull images
+	log.InfoD("Login to pull images")
+	cmd = fmt.Sprintf("docker login -u %s -p %s", portworxDockerRegistryUsername, portworxDockerRegistryPassword)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to execute Docker login, Err: %v %v", strErr, err)
+	}
+
+	// Pull images via air-gapped script
+	log.InfoD("Pull images using air-gapped script")
+	cmd = fmt.Sprintf("sh %s pull", pxAgInstallBinary)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to pull images using [%s] script, Err: %v %v", pxAgInstallBinary, strErr, err)
+	}
+
+	// Docker login to push images
+	log.InfoD("Login to custom registry [%s] to push images", customDockerRegistryName)
+	cmd = fmt.Sprintf("docker login -u %s -p %s %s", customDockerRegistryUsername, customDockerRegistryPassword, customDockerRegistryName)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to execute Docker login, Err: %v %v", strErr, err)
+	}
+
+	// Push images to private registry
+	log.InfoD("Tag and push images using air-gapped script")
+	cmd = fmt.Sprintf("sh %s push %s", pxAgInstallBinary, customDockerRegistryName)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to push images using [%s] script, Err: %v %v", pxAgInstallBinary, strErr, err)
+	}
+
+	log.InfoD("Successfully pulled and pushed PX images via [%s] script to a private registry [%s]", pxAgInstallBinary, customDockerRegistryName)
+	return nil
 }
 
 // getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
@@ -3104,26 +3249,83 @@ func (d *portworx) upgradePortworxStorageCluster(specGenUrl string) error {
 		return err
 	}
 
-	log.Infof("Successfully upgraded Portworx StorageCluster [%s]", cluster.Name)
+	log.Infof("Successfully upgraded Portworx StorageCluster [%s] to [%s]", cluster.Name, specGenUrl)
 	return nil
 }
 
-// upgradePortworxOperator upgrades PX Operator based on the given Spec Generator URL
+// upgradePortworxOperator will upgrade PX Operator version
 func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
 	log.InfoD("Upgrading Portworx Operator")
 
-	pxOperatorSpecFileName := "/px-operator.yaml"
+	pxOperatorSpecGenUrl, err := d.constructPxOperatorSpecGenUrl(specGenUrl)
+	if err != nil {
+		return fmt.Errorf("Failed to construct PX Operator spec gen URL, Err: %v", err)
+	}
 
+	resp, err := http.Get(pxOperatorSpecGenUrl)
+	if err != nil {
+		return fmt.Errorf("Failed to get data from [%s], Err: %v", pxOperatorSpecGenUrl, err)
+	}
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Failed to read data from [%s], Err: %v", pxOperatorSpecGenUrl, err)
+	}
+
+	// This regex will look for image: and will pull the tag after the colon : which should be match[1]
+	regexpString := "image:\\s\\S+:(\\S+)"
+	matchRegExp := regexp.MustCompile(regexpString)
+	match := matchRegExp.FindStringSubmatch(string(respBytes))
+	// Expecting match to contain 2 slices, one is full image and the other is just an image tag
+	if len(match) < 2 {
+		return fmt.Errorf("Expecting match [%s] to have 2 slices, only got %d ", match, len(match))
+	}
+	pxOperatorNewImageTag := fmt.Sprintf("%v", match[1])
+
+	// Get PX Operator deployment
+	opDep, err := apps.Instance().GetDeployment("portworx-operator", d.namespace)
+	if err != nil {
+		return fmt.Errorf("Failed to get PX Operator deployment [portworx-operator] in [%s] namespace, Err: %v", d.namespace, err)
+	}
+
+	for ind, container := range opDep.Spec.Template.Spec.Containers {
+		if container.Name == "portworx-operator" {
+			fmt.Printf("KOKADBG: IMAGE BEFORE: [%s]\n", container.Image)
+			container.Image = strings.Replace(container.Image, strings.Split(container.Image, ":")[1], pxOperatorNewImageTag, -1)
+			opDep.Spec.Template.Spec.Containers[ind] = container
+			fmt.Printf("KOKADBG: IMAGE AFTER: [%s]\n", opDep.Spec.Template.Spec.Containers[ind].Image)
+		}
+	}
+
+	// Update image for PX Operator deployment
+	log.InfoD("Updating PX Operator image tag to [%s]", pxOperatorNewImageTag)
+	opDep, err = apps.Instance().UpdateDeployment(opDep)
+	if err != nil {
+		return fmt.Errorf("Failed to update PX Operator deployment [%s] in [%s] namespace, Errr: %v", opDep.Name, opDep.Namespace, err)
+	}
+
+	// Validate PX Operator deployment
+	log.InfoD("Validating PX Operator deployment [%s] in [%s] namespace", opDep.Name, opDep.Namespace)
+	if err := apps.Instance().ValidateDeployment(opDep, validateDeploymentTimeout, validateDeploymentInterval); err != nil {
+		return fmt.Errorf("Failed to validate PX Operator deployment [%s] in [%s] namespace, Err: %v", opDep.Name, opDep.Namespace, err)
+	}
+
+	log.InfoD("Successfully upgraded Portworx Operator to [%s]", pxOperatorNewImageTag)
+	return nil
+}
+
+// constructPxOperatorSpecGenUrl constructs PX Operator spec gen URL
+func (d *portworx) constructPxOperatorSpecGenUrl(specGenUrl string) (string, error) {
 	// Get k8s version
 	kubeVersion, err := d.schedOps.GetKubernetesVersion()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	// Getting PX Operator spec
+	// Construct PX Operator spec gen URL
 	u, err := url.Parse(specGenUrl)
 	if err != nil {
-		return fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+		return "", fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
 	}
 	q := u.Query()
 	q.Set("kbver", kubeVersion.String())
@@ -3131,37 +3333,38 @@ func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
 	q.Set("ns", d.namespace)
 	u.RawQuery = q.Encode()
 	pxOperatorSpecGenUrl := u.String()
-	log.Debugf("Getting PX Operator spec from URL [%s]", pxOperatorSpecGenUrl)
-	if err := osutils.Wget(pxOperatorSpecGenUrl, pxOperatorSpecFileName, true); err != nil {
-		return err
+
+	return pxOperatorSpecGenUrl, nil
+}
+
+// constructPxAirgappedUrl constructs PX air-gapped URL
+func (d *portworx) constructPxAirgappedUrl(specGenUrl string) (string, error) {
+	// Get k8s version
+	kubeVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return "", err
 	}
 
-	// Getting context of the file
-	if _, err := osutils.Cat(pxOperatorSpecFileName); err != nil {
-		return err
+	// Convert k8s version into a specific format that is acceptable by air-gapped script
+	// NOTE: This is needed due to the bug in the air-gapped script, for more info please see https://portworx.atlassian.net/browse/PWX-30781
+	newK8sVersion, err := version.NewVersion(kubeVersion.String())
+	if err != nil {
+		return "", err
 	}
+	k8sVersion := newK8sVersion.Core().String()
 
-	// Apply PX Operator spec
-	log.Info("Applying PX Operator spec")
-	cmdArgs := []string{"apply", "-f", pxOperatorSpecFileName}
-	if err := osutils.Kubectl(cmdArgs); err != nil {
-		return err
+	// Construct PX air-gapped URL
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
 	}
+	q := u.Query()
+	q.Set("kbver", k8sVersion)
+	u.Path = path.Join(u.Path, "air-gapped")
+	u.RawQuery = q.Encode()
+	pxAirgappedUrl := u.String()
 
-	// TODO: Temporary workaround, need to rewrite Operator validation functions to be able to use it here
-	// Validate PX Operator deployment
-	pxOperatorDeployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "portworx-operator",
-			Namespace: d.namespace,
-		},
-	}
-	if err := apps.Instance().ValidateDeployment(pxOperatorDeployment, validateDeploymentTimeout, validateDeploymentInterval); err != nil {
-		return err
-	}
-
-	log.Info("Successfully upgraded Portworx Operator")
-	return nil
+	return pxAirgappedUrl, nil
 }
 
 // UpgradeStork upgrades Stork based on the given Spec Generator URL
