@@ -306,6 +306,7 @@ const (
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
 	defaultKvdbRetryInterval  = 5 * time.Minute
+	addDriveUpTimeOut         = 15 * time.Minute
 )
 
 const (
@@ -7581,7 +7582,6 @@ func GetClusterProviders() []string {
 	return clusterProviders
 }
 
-
 // GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
 func GetPoolUuidsWithStorageFull() ([]string, error) {
 	var poolUuids []string
@@ -7725,3 +7725,121 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
+func AddCloudDrive(stNode node.Node, poolID int32) error {
+	driveSpecs, err := GetCloudDriveDeviceSpecs()
+	if err != nil {
+		return fmt.Errorf("error getting cloud drive specs, err: %v", err)
+	}
+	deviceSpec := driveSpecs[0]
+	deviceSpecParams := strings.Split(deviceSpec, ",")
+	var specSize uint64
+	var driveSize string
+
+	if poolID != -1 {
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
+		if err != nil {
+			return fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+		}
+
+	outer:
+		for _, v := range drivesMap {
+			labels := v.Labels
+			for _, pID := range labels {
+				if pID == fmt.Sprintf("%d", poolID) {
+					driveSize = v.Size
+					i := strings.Index(driveSize, "G")
+					driveSize = driveSize[:i]
+					break outer
+				}
+			}
+		}
+	}
+
+	if driveSize != "" {
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%s,", driveSize))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		deviceSpec = strings.Join(paramsArr, ",")
+		specSize, err = strconv.ParseUint(driveSize, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error converting size to uint64, err: %v", err)
+		}
+	}
+
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+
+	var currentTotalPoolSize uint64
+
+	for _, pool := range pools {
+		currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+
+	log.Info(fmt.Sprintf("current pool size: %d GiB", currentTotalPoolSize))
+
+	expectedTotalPoolSize := currentTotalPoolSize + specSize
+
+	log.InfoD("Initiate add cloud drive and validate")
+	err = Inst().V.AddCloudDrive(&stNode, deviceSpec, poolID)
+	if err != nil {
+		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
+	}
+
+	log.InfoD("Validate pool rebalance after drive add")
+	err = ValidateDriveRebalance(stNode)
+	if err != nil {
+		return fmt.Errorf("pool re-balance failed, err: %v", err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+	if err != nil {
+		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
+	}
+	dash.VerifyFatal(err == nil, true, "PX is up after add drive")
+
+	var newTotalPoolSize uint64
+
+	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+	for _, pool := range pools {
+		newTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+	isPoolSizeUpdated := false
+
+	if newTotalPoolSize >= expectedTotalPoolSize {
+		isPoolSizeUpdated = true
+	}
+	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
+	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+	return nil
+}
+
+func IsJournalEnabled() (bool, error) {
+	storageSpec, err := Inst().V.GetStorageSpec()
+	if err != nil {
+		return false, err
+	}
+	jDev := storageSpec.GetJournalDev()
+	if jDev != "" {
+		log.Infof("JournalDev: %s", jDev)
+		return true, nil
+	}
+	return false, nil
+}

@@ -311,6 +311,7 @@ func ProcessErrorWithMessage(event *EventRecord, err error, desc string) {
 }
 
 const (
+
 	// DeployApps installs new apps
 	DeployApps = "deployApps"
 	// ValidatePds Apps checks the healthstate of the pds apps
@@ -455,6 +456,8 @@ const (
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
 	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
 	DeleteOldNamespaces = "deleteoldnamespaces"
+	// Add Drive to create new pool and resize Drive in maintenance mode
+	AddResizePoolMaintenance = "addResizePoolInMaintenance"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -7640,6 +7643,172 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 	})
+}
+
+func TriggerAddResizePoolMaintenance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AddResizePoolMaintenance)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddResizePoolMaintenance,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := fmt.Sprintf("perform add drive to create a new pool and later resize pool in maintenance mode")
+	Step(stepLog, func() {
+
+		isNewPoolCreationAllowed := func(n *node.Node) (bool, error) {
+			totalPools, err := GetPoolsDetailsOnNode(*n)
+			if err != nil {
+				return false, err
+			}
+			if len(totalPools) < 8 {
+				return true, nil
+			}
+			return false, nil
+		}
+
+		// Select list of Storage Node which has room to create new storage pools using add disk
+		allStorageNodes := node.GetStorageNodes()
+		selectedNodes := []*node.Node{}
+		for _, eachNode := range allStorageNodes {
+			allowed, err := isNewPoolCreationAllowed(&eachNode)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("errored while fetching for node details"))
+				return
+			} else if allowed == false {
+				log.Infof("Node [%v] is not selected for expansion", eachNode.Name)
+			} else {
+				log.Infof("Node [%v] selected", eachNode.Name)
+				selectedNodes = append(selectedNodes, &eachNode)
+			}
+		}
+
+		// select random node to from the list to create new pool
+		randomIndex := rand.Intn(len(selectedNodes))
+		nodeSelected := selectedNodes[randomIndex]
+		poolDetailsOnNode, err := GetPoolsDetailsOnNode(*nodeSelected)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("errored while fetching for node details"))
+			return
+		}
+
+		// Create New Pool using Add Disk and make sure new node is created
+		log.Infof("Adding cloud drive on the Node [%v]", nodeSelected.Name)
+		err = AddCloudDrive(*nodeSelected, -1)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		log.Infof("Waiting for Volume driver up on the Node [%v]", nodeSelected.Name)
+		err = Inst().V.WaitDriverUpOnNode(*nodeSelected, addDriveUpTimeOut)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		log.Infof("Get pool details on the node [%v]", nodeSelected)
+		newPoolCreated, err := GetPoolsDetailsOnNode(*nodeSelected)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+
+		var deltaPool *opsapi.StoragePool
+		deltaPool = nil
+		for _, eachPool := range newPoolCreated {
+			isDelta := true
+			for _, oldPool := range poolDetailsOnNode {
+				if oldPool.Uuid == eachPool.Uuid {
+					isDelta = false
+				}
+			}
+			if isDelta {
+				deltaPool = eachPool
+			}
+		}
+		if deltaPool == nil {
+			UpdateOutcome(event, fmt.Errorf("no new pool created"))
+		}
+		log.Infof("New Pool Created with ID [%v]", deltaPool.Uuid)
+
+		exitPoolMaintenance := func(stNode *node.Node, poolUUID string) {
+			log.Infof("exiting pool maintenance on the Node [%v]", stNode)
+			t := func() (interface{}, bool, error) {
+
+				status, err := Inst().V.GetNodePoolsStatus(*stNode)
+				if err != nil {
+					return nil, true, err
+				}
+				log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolUUID]))
+				if status[poolUUID] == "In Maintenance" {
+					log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+					if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+						return nil, true, err
+					}
+				}
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+
+			err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+		}
+
+		log.Infof("Get List of nodes from given poolID [%v]", deltaPool.Uuid)
+		stNode, err := GetNodeWithGivenPoolID(deltaPool.Uuid)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+		log.Infof("Node from given pool ID [%v]", stNode.Name)
+
+		// Exit pool maintenance
+		defer exitPoolMaintenance(stNode, deltaPool.Uuid)
+
+		// Once new storage pool is created bring the node to maintenance state
+		log.Infof("entering maintenance mode on the Node [%v]", stNode.Name)
+		err = Inst().V.EnterPoolMaintenance(*stNode)
+		if err != nil {
+			log.Infof("fail to enter node %s in maintenance mode", stNode.Name)
+			UpdateOutcome(event, err)
+		}
+
+		// do expand pool using add drive while pool in maintenance mode
+		poolToBeResized, err := GetStoragePoolByUUID(deltaPool.Uuid)
+		if err != nil {
+			log.Infof("Failed to get pool using UUID %s", deltaPool.Uuid)
+			UpdateOutcome(event, err)
+		}
+
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+		expansionType := opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+
+		log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+		err = Inst().V.ExpandPool(poolToBeResized.Uuid, expansionType, expectedSize, true)
+		if err != nil {
+			log.Infof("failed while expanding pool [%v]", err)
+			UpdateOutcome(event, err)
+		}
+
+		err = waitForPoolToBeResized(poolToBeResized.TotalSize, poolToBeResized.Uuid)
+		if err != nil {
+			err = fmt.Errorf("pool [%v] %v failed. Error: %v", poolToBeResized.Uuid, expansionType, err)
+			UpdateOutcome(event, err)
+		}
+
+	})
+	updateMetrics(*event)
 }
 
 // GetContextPVCs returns pvc from the given context

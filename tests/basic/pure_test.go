@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -230,6 +231,17 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		}
 		wg.Wait()
 
+		allVolumes := []*volume.Volume{}
+		for _, eachContext := range contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			if err != nil {
+				log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
+			}
+			for _, eachVol := range vols {
+				allVolumes = append(allVolumes, eachVol)
+			}
+		}
+
 		// Funciton to validate nil pointer dereference errors
 		validateNilPointerErrors := func() {
 			terminate = true
@@ -270,6 +282,15 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		}
 		_, err := task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Error checking pool rebalance")
+
+		for _, eachVol := range allVolumes {
+			log.InfoD("Validating Volume Status of Volume [%v]", eachVol.ID)
+			status, err := IsVolumeStatusUP(eachVol)
+			if err != nil {
+				log.FailOnError(err, "error validating volume status")
+			}
+			dash.VerifyFatal(status == true, true, "is volume status up ?")
+		}
 
 		terminate = true
 		log.Info("all pods are up and in running state")

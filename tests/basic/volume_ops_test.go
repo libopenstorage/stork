@@ -1383,12 +1383,12 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeVolumeAfterFull",
-			"Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity",
+			"Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longrun script",
 			nil, 0)
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity"
+	stepLog := "Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longrun script"
 	It(stepLog, func() {
 		contexts = make([]*scheduler.Context, 0)
 		currAppList := Inst().AppList
