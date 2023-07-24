@@ -56,7 +56,7 @@ func (backup *Backup) GetBackup(backupID string) (*pds.ModelsBackup, error) {
 }
 
 // CreateBackup create adhoc/schedule backup and return the newly create backup model.
-func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, jobHistoryLimit int32, isAdhoc bool) (*pds.ModelsBackup, error) {
+func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, isAdhoc bool) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	backupType := "adhoc"
 	if !isAdhoc {
@@ -64,10 +64,9 @@ func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, j
 	}
 	backupLevel := "snapshot"
 	createRequest := pds.ControllersCreateDeploymentBackup{
-		BackupLevel:     &backupLevel,
-		BackupTargetId:  &backupTargetID,
-		BackupType:      &backupType,
-		JobHistoryLimit: &jobHistoryLimit,
+		BackupLevel:    &backupLevel,
+		BackupTargetId: &backupTargetID,
+		BackupType:     &backupType,
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {

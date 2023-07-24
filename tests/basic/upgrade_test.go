@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"strings"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/osutils"
 
 	"github.com/portworx/torpedo/pkg/log"
 

@@ -47,7 +47,7 @@ func (restore *Restore) RestoreToNewDeployment(backupJobId, name, deploymentTarg
 }
 
 // RetryRestoreToNewDeployment retry restore as new data service and return the newly create restore model.
-func (restore *Restore) RetryRestoreToNewDeployment(backupJobId, name, deploymentTargetId, namespaceId string) (*pds.ModelsRestore, error) {
+func (restore *Restore) RetryRestoreToNewDeployment(restoreID, name, deploymentTargetId, namespaceId string) (*pds.ModelsRestore, error) {
 	restoreClient := restore.apiClient.RestoresApi
 	createRequest := pds.RequestsCreateRestoreRequest{
 		DeploymentTargetId: &deploymentTargetId,
@@ -58,7 +58,7 @@ func (restore *Restore) RetryRestoreToNewDeployment(backupJobId, name, deploymen
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	restoreModel, res, err := restoreClient.ApiRestoresIdRetryPost(ctx, backupJobId).Body(createRequest).Execute()
+	restoreModel, res, err := restoreClient.ApiRestoresIdRetryPost(ctx, restoreID).Body(createRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdRestoresPost`: %v\n.Full HTTP response: %v", err, res)
 	}
