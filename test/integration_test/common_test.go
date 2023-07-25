@@ -842,7 +842,7 @@ func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName s
 		}
 	} else if objectStoreType == storkv1.BackupLocationGoogle {
 		objectStoreArgs = append(objectStoreArgs,
-			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--azure-account-key", string(secretData.Data["accountKey"])}...)
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
 		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
 			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
 			objectStoreArgs = append(objectStoreArgs, string(val))
