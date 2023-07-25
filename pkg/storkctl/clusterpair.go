@@ -412,7 +412,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					return
 				}
 				if len(googleJSONKey) == 0 {
-					util.CheckErr(getMissingParameterError("google-json-key", "Json key file missing for Google"))
+					util.CheckErr(getMissingParameterError("google-key-file-path", "Json key file missing for Google"))
 					return
 				}
 				// Read the jsonkey file
@@ -594,13 +594,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().MarkDeprecated("src-ip", "instead provide --src-ep")
 	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "", "Port of storage node from source cluster")
 	createClusterPairCommand.Flags().MarkDeprecated("src-port", "instead provide --src-ep")
-	createClusterPairCommand.Flags().StringVarP(&sEP, "src-ep", "", "", "Endpoint of portworx-api service in source cluster")
+	createClusterPairCommand.Flags().StringVarP(&sEP, "src-ep", "", "", "(Optional)Endpoint of portworx-api service in source cluster")
 	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "Path to the kubeconfig of source cluster")
 	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "IP of storage node from destination cluster")
 	createClusterPairCommand.Flags().MarkDeprecated("dest-ip", "instead provide --dest-ep")
 	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "", "Port of storage node from destination cluster")
 	createClusterPairCommand.Flags().MarkDeprecated("dest-port", "instead provide --dest-ep")
-	createClusterPairCommand.Flags().StringVarP(&dEP, "dest-ep", "", "", "Endpoint of portworx-api service in destination cluster")
+	createClusterPairCommand.Flags().StringVarP(&dEP, "dest-ep", "", "", "(Optional)Endpoint of portworx-api service in destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "Path to the kubeconfig of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
@@ -623,7 +623,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVar(&azureAccountKey, "azure-account-key", "", "Account key for Azure")
 	// Google
 	createClusterPairCommand.Flags().StringVar(&googleProjectID, "google-project-id", "", "Project ID for Google")
-	createClusterPairCommand.Flags().StringVar(&googleJSONKey, "google-json-key", "", "Json key for Google")
+	createClusterPairCommand.Flags().StringVar(&googleJSONKey, "google-key-file-path", "", "Json key for Google")
 
 	return createClusterPairCommand
 }
