@@ -1906,14 +1906,12 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 				continue
 			}
 			vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)[vInfo.BackupID] = snapshot
-			if snapshotInfo.Status == snapshotter.StatusReady {
-				snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1.VolumeSnapshotContent)
-				if !ok {
-					logrus.Warnf("failed to map volumesnapshotcontent object")
-					continue
-				}
-				vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
+			snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1.VolumeSnapshotContent)
+			if !ok {
+				logrus.Warnf("failed to map volumesnapshotcontent object")
+				continue
 			}
+			vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
 		} else {
 			snapshot, ok := snapshotInfo.SnapshotRequest.(*kSnapshotv1beta1.VolumeSnapshot)
 			if !ok {
@@ -1921,14 +1919,12 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 				continue
 			}
 			vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[vInfo.BackupID] = snapshot
-			if snapshotInfo.Status == snapshotter.StatusReady {
-				snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
-				if !ok {
-					logrus.Warnf("failed to map volumesnapshotcontent object")
-					continue
-				}
-				vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
+			snapshotContent, ok := snapshotInfo.Content.(*kSnapshotv1beta1.VolumeSnapshotContent)
+			if !ok {
+				logrus.Warnf("failed to map volumesnapshotcontent object")
+				continue
 			}
+			vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
 		}
 	}
 	// cleanup after a successful object upload
@@ -1937,9 +1933,9 @@ func (c *csi) CleanupBackupResources(backup *storkapi.ApplicationBackup) error {
 		logrus.Tracef("failed to cleanup snapshots: %v", err)
 	}
 	if c.v1SnapshotRequired {
-		log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)))
+		log.ApplicationBackupLog(backup).Infof("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)))
 	} else {
-		log.ApplicationBackupLog(backup).Tracef("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)))
+		log.ApplicationBackupLog(backup).Infof("started clean up of %v snapshots and %v snapshotcontents", len(vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)), len(vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)))
 	}
 	return nil
 }
