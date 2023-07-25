@@ -21,6 +21,7 @@ import (
 	"github.com/portworx/kdmp/pkg/controllers/dataexport"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
+	_ "github.com/portworx/kdmp/pkg/drivers/rsync"
 	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
