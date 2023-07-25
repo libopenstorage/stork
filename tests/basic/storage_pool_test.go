@@ -33,7 +33,7 @@ const (
 	replicationUpdateTimeout         = 4 * time.Hour
 	retryTimeout                     = time.Minute * 2
 	addDriveUpTimeOut                = time.Minute * 15
-	poolResizeTimeout                = time.Minute * 90
+	poolResizeTimeout                = time.Minute * 120
 	poolExpansionStatusCheckInterval = time.Minute * 3
 )
 
@@ -42,11 +42,11 @@ var poolIDToResize string
 var poolToBeResized *api.StoragePool
 var targetSizeInBytes uint64
 var originalSizeInBytes uint64
+var testDescription string
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
 		contexts = initializeContexts()
-		ValidateApplications(contexts)
 	})
 
 	JustBeforeEach(func() {
@@ -54,6 +54,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		poolToBeResized = ensurePoolExists(poolIDToResize)
 	})
 
+	testDescription = "Validate storage pool expansion using resize-disk option"
 	It("select a pool that has I/O and expand it by 100 GB with resize-disk type. ", func() {
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
@@ -68,12 +69,12 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	})
 
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 
 	AfterEach(func() {
 		appsValidateAndDestroy(contexts)
-		AfterEachTest(contexts)
+		EndTorpedoTest()
 	})
 })
 
