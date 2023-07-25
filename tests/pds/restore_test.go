@@ -12,15 +12,297 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
+	"sync"
 )
 
 var (
-	restoreTargetCluster *tc.TargetCluster
-	bkpTarget            *pds.ModelsBackupTarget
-	dsEntity             restoreBkp.DSEntity
-	bkpJob               *pds.ModelsBackupJobStatusResponse
-	restoredDeployment   *pds.ModelsDeployment
+	restoreTargetCluster   *tc.TargetCluster
+	bkpTarget              *pds.ModelsBackupTarget
+	dsEntity               restoreBkp.DSEntity
+	bkpJob                 *pds.ModelsBackupJobStatusResponse
+	restoredDeployment     *pds.ModelsDeployment
+	restoredDeployments    []*pds.ModelsDeployment
+	deploymentsToBeCleaned []*pds.ModelsDeployment
+	deploymentDSentityMap  = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
 )
+var _ = Describe("{PerformRestoreToSameCluster}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		awsBkpTargets = append(awsBkpTargets, bkpTarget)
+	})
+
+	It("Perform multiple restore within same cluster", func() {
+		var deploymentsToBeCleaned []*pds.ModelsDeployment
+		stepLog := "Deploy data service and take adhoc backup."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					log.FailOnError(err, "Error while deploying data services")
+
+					// TODO: Add workload generation
+
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: deployment,
+					}
+				})
+				stepLog = "Perform adhoc backup and validate them"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+					log.FailOnError(err, "Failed while performing adhoc backup")
+				})
+				stepLog = "Perform restore for the backup jobs."
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					restoreTarget := tc.NewTargetCluster(ctx)
+					restoreClient := restoreBkp.RestoreClient{
+						TenantId:             tenantID,
+						ProjectId:            projectID,
+						Components:           components,
+						Deployment:           deployment,
+						RestoreTargetCluster: restoreTarget,
+					}
+					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					for _, backupJob := range backupJobs {
+						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+						log.FailOnError(err, "Failed during restore.")
+						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+						log.InfoD("Restored successfully. Deployment- %v", restoredModel.GetClusterResourceName())
+					}
+				})
+
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
+
+var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		awsBkpTargets = append(awsBkpTargets, bkpTarget)
+	})
+
+	It("Perform multiple restore within same cluster", func() {
+		var deploymentsToBeCleaned []*pds.ModelsDeployment
+		stepLog := "Deploy data service and take adhoc backup."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					log.FailOnError(err, "Error while deploying data services")
+
+					// TODO: Add workload generation
+
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: deployment,
+					}
+				})
+				stepLog = "Perform adhoc backup and validate them"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+					log.FailOnError(err, "Failed while performing adhoc backup.")
+				})
+				stepLog = "Perform multiple restores for the backup jobs in parallel."
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					numberOfIterations := 3
+					var wg sync.WaitGroup
+					for i := 0; i < numberOfIterations; i++ {
+						log.Infof("Triggering restore operation")
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							defer GinkgoRecover()
+							ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+							restoreTarget := tc.NewTargetCluster(ctx)
+							restoreClient := restoreBkp.RestoreClient{
+								TenantId:             tenantID,
+								ProjectId:            projectID,
+								Components:           components,
+								Deployment:           deployment,
+								RestoreTargetCluster: restoreTarget,
+							}
+							backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+							log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+
+							for _, backupJob := range backupJobs {
+								log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+								restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, false, true)
+								log.FailOnError(err, "Failed during restore.")
+								restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+								log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+								deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+								log.InfoD("Restored as Deployment: %v successfully!", restoredModel.GetClusterResourceName())
+							}
+						}()
+					}
+					wg.Wait()
+					log.Infof("Restoring multiple backup job succeeded.")
+				})
+
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
+
+var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		awsBkpTargets = append(awsBkpTargets, bkpTarget)
+	})
+
+	It("Perform multiple restore within same cluster", func() {
+		stepLog := "Deploy data service and take adhoc backup, "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					dsDeployment, _, _, err := DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+
+					// TODO: Add workload generation
+
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: dsDeployment,
+					}
+					log.Infof("Details DSObject- %v, Name - %v, DSEntity - %v", dsDeployment, dsDeployment.GetClusterResourceName(), dsEntity)
+					deploymentDSentityMap[dsDeployment] = dsEntity
+				})
+			}
+		})
+		stepLog = "Perform adhoc backup and validate them for all the deployed data services."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for deployment := range deploymentDSentityMap {
+				log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+				err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+				log.FailOnError(err, "Failed while performing adhoc backup")
+			}
+		})
+		stepLog = "Perform multiple restores simultaneously."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for deployment, dsEntity := range deploymentDSentityMap {
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				wg.Add(1)
+				log.Info("Triggering restore.")
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					log.Info("Fetching back up jobs")
+					backupJobs, err := components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					log.Info("Create restore client.")
+					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					restoreTarget := tc.NewTargetCluster(ctx)
+					restoreClient := restoreBkp.RestoreClient{
+						TenantId:             tenantID,
+						ProjectId:            projectID,
+						Components:           components,
+						Deployment:           deployment,
+						RestoreTargetCluster: restoreTarget,
+					}
+					for _, backupJob := range backupJobs {
+						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+						log.FailOnError(err, "Failed during restore.")
+						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+						restoredDeployments = append(restoredDeployments, restoredDeployment)
+						log.InfoD("Restored successfully. Details: Deployment- %v", restoredModel.GetClusterResourceName())
+					}
+				}()
+			}
+			wg.Wait()
+			log.Info("Simultaneous backups and restores succeeded.")
+			deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployments...)
+		})
+
+		Step("Delete all the Deployments.", func() {
+			CleanupDeployments(deploymentsToBeCleaned)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
 
 var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 	var deps []*pds.ModelsDeployment
@@ -187,90 +469,6 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 		})
 	})
 
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
-	})
-})
-
-var _ = Describe("{PerformRestoreToSameCluster}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
-	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
-	})
-
-	It("Perform multiple restore within same cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
-		stepLog := "Deploy data service and take adhoc backup, deleting the data service should not delete the backups."
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
-			log.FailOnError(err, "Error while fetching the backup supported ds.")
-			for _, ds := range params.DataServiceToTest {
-				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
-				if !supported {
-					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
-					continue
-				}
-				stepLog = "Deploy and validate data service"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-					log.FailOnError(err, "Error while deploying data services")
-
-					// TODO: Add workload generation
-
-					dsEntity = restoreBkp.DSEntity{
-						Deployment: deployment,
-					}
-				})
-				stepLog = "Perform adhoc backup and validate them"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
-					log.FailOnError(err, "Failed while performing adhoc backup")
-				})
-				stepLog = "Perform restore for the backup jobs."
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
-					restoreTarget := tc.NewTargetCluster(ctx)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
-						log.FailOnError(err, "Failed during restore.")
-						log.Infof("Validate ")
-						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-					}
-				})
-
-				Step("Delete Deployments", func() {
-					CleanupDeployments(deploymentsToBeCleaned)
-				})
-			}
-		})
-	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		err := bkpClient.AWSStorageClient.DeleteBucket()
