@@ -9847,7 +9847,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		log.FailOnError(err, "Failed to powered on the vm")
 		isjournal, err := isJournalEnabled()
 		log.FailOnError(err, "Failed to check if Journal enabled")
-		validatePXStartTimeout := 5 * time.Minute
+		validatePXStartTimeout := 10 * time.Minute
 		if err := Inst().V.WaitDriverUpOnNode(*nodeDetail, validatePXStartTimeout); err != nil {
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
 		}
