@@ -117,7 +117,7 @@ integration-test:
 	@echo "Building stork integration tests"
 	docker run --rm $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		   /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/test/integration_test && \
-		   GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test;'
+		   GOOS=linux GO_ENABLED=0 go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test;'
 
 integration-test-container:
 	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
