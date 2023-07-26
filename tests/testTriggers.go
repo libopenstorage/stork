@@ -7694,52 +7694,20 @@ func TriggerAddResizePoolMaintenance(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 
+		if len(selectedNodes) == 0 {
+			log.Infof("new pools cannot be created .. skipping the test")
+			return
+		}
+
 		// select random node to from the list to create new pool
 		randomIndex := rand.Intn(len(selectedNodes))
 		nodeSelected := selectedNodes[randomIndex]
-		poolDetailsOnNode, err := GetPoolsDetailsOnNode(*nodeSelected)
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("errored while fetching for node details"))
-			return
-		}
-
-		// Create New Pool using Add Disk and make sure new node is created
-		log.Infof("Adding cloud drive on the Node [%v]", nodeSelected.Name)
-		err = AddCloudDrive(*nodeSelected, -1)
-		if err != nil {
-			UpdateOutcome(event, err)
-		}
-
-		log.Infof("Waiting for Volume driver up on the Node [%v]", nodeSelected.Name)
-		err = Inst().V.WaitDriverUpOnNode(*nodeSelected, addDriveUpTimeOut)
-		if err != nil {
-			UpdateOutcome(event, err)
-		}
-
-		log.Infof("Get pool details on the node [%v]", nodeSelected)
-		newPoolCreated, err := GetPoolsDetailsOnNode(*nodeSelected)
+		poolUUID, err := GetPoolUUIDWithMetadataDisk(*nodeSelected)
 		if err != nil {
 			UpdateOutcome(event, err)
 			return
 		}
-
-		var deltaPool *opsapi.StoragePool
-		deltaPool = nil
-		for _, eachPool := range newPoolCreated {
-			isDelta := true
-			for _, oldPool := range poolDetailsOnNode {
-				if oldPool.Uuid == eachPool.Uuid {
-					isDelta = false
-				}
-			}
-			if isDelta {
-				deltaPool = eachPool
-			}
-		}
-		if deltaPool == nil {
-			UpdateOutcome(event, fmt.Errorf("no new pool created"))
-		}
-		log.Infof("New Pool Created with ID [%v]", deltaPool.Uuid)
+		log.Infof("metadata Pool UUID selected [%v] from node [%v]", poolUUID, nodeSelected.Name)
 
 		exitPoolMaintenance := func(stNode *node.Node, poolUUID string) {
 			log.Infof("exiting pool maintenance on the Node [%v]", stNode)
@@ -7766,15 +7734,42 @@ func TriggerAddResizePoolMaintenance(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 
-		log.Infof("Get List of nodes from given poolID [%v]", deltaPool.Uuid)
-		stNode, err := GetNodeWithGivenPoolID(deltaPool.Uuid)
+		// Expand pool with Add drive on the pool selected
+		expandPoolAndWait := func(pool *opsapi.StoragePool, size uint64, operation opsapi.SdkStoragePool_ResizeOperationType) error {
+			log.InfoD("Current Size of the pool with UUID [%v] is [%s]", pool.GetUuid(), pool.TotalSize)
+
+			expectedSize := (pool.TotalSize / units.GiB) + size
+			log.InfoD("Expanding pool [%v] to Size [%v]", pool.GetUuid(), expectedSize)
+
+			err = waitForPoolToBeResized(pool.TotalSize, pool.Uuid)
+			if err != nil {
+				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, operation, err)
+				return err
+
+			}
+			return nil
+		}
+
+		// do expand pool using add drive while pool in maintenance mode
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 		if err != nil {
+			log.Infof("Failed to get pool using UUID %s", poolUUID)
 			UpdateOutcome(event, err)
 		}
-		log.Infof("Node from given pool ID [%v]", stNode.Name)
+		err = expandPoolAndWait(poolToBeResized, 100, opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+		if err != nil {
+			log.Infof("pool resize failed on the pool [%v]", poolToBeResized.Uuid)
+			UpdateOutcome(event, err)
+		}
+
+		stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+		if err != nil {
+			log.Infof("failed to get node details from poolUUID %s", poolToBeResized.Uuid)
+			UpdateOutcome(event, err)
+		}
 
 		// Exit pool maintenance
-		defer exitPoolMaintenance(stNode, deltaPool.Uuid)
+		defer exitPoolMaintenance(stNode, poolToBeResized.Uuid)
 
 		// Once new storage pool is created bring the node to maintenance state
 		log.Infof("entering maintenance mode on the Node [%v]", stNode.Name)
@@ -7784,26 +7779,9 @@ func TriggerAddResizePoolMaintenance(contexts *[]*scheduler.Context, recordChan 
 			UpdateOutcome(event, err)
 		}
 
-		// do expand pool using add drive while pool in maintenance mode
-		poolToBeResized, err := GetStoragePoolByUUID(deltaPool.Uuid)
+		err = expandPoolAndWait(poolToBeResized, 100, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 		if err != nil {
-			log.Infof("Failed to get pool using UUID %s", deltaPool.Uuid)
-			UpdateOutcome(event, err)
-		}
-
-		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
-		expansionType := opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK
-
-		log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-		err = Inst().V.ExpandPool(poolToBeResized.Uuid, expansionType, expectedSize, true)
-		if err != nil {
-			log.Infof("failed while expanding pool [%v]", err)
-			UpdateOutcome(event, err)
-		}
-
-		err = waitForPoolToBeResized(poolToBeResized.TotalSize, poolToBeResized.Uuid)
-		if err != nil {
-			err = fmt.Errorf("pool [%v] %v failed. Error: %v", poolToBeResized.Uuid, expansionType, err)
+			log.Infof("pool resize failed on the pool [%v]", poolToBeResized.Uuid)
 			UpdateOutcome(event, err)
 		}
 
