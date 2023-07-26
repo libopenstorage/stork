@@ -383,7 +383,7 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 		var snapshotContent *kSnapshotv1.VolumeSnapshotContent
 		var volumeSnapshotContentReady bool
 		var contentName string
-		if snapshot.Status.BoundVolumeSnapshotContentName != nil {
+		if snapshot.Status != nil && snapshot.Status.BoundVolumeSnapshotContentName != nil {
 			snapshotContentName := *snapshot.Status.BoundVolumeSnapshotContentName
 			snapshotContent, err = c.snapshotClient.SnapshotV1().VolumeSnapshotContents().Get(context.TODO(), snapshotContentName, metav1.GetOptions{})
 			if err != nil {
@@ -474,7 +474,7 @@ func (c *csiDriver) SnapshotStatus(name, namespace string) (SnapshotInfo, error)
 		var snapshotContent *kSnapshotv1beta1.VolumeSnapshotContent
 		var volumeSnapshotContentReady bool
 		var contentName string
-		if snapshot.Status.BoundVolumeSnapshotContentName != nil {
+		if snapshot.Status != nil && snapshot.Status.BoundVolumeSnapshotContentName != nil {
 			snapshotContentName := *snapshot.Status.BoundVolumeSnapshotContentName
 			snapshotContent, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(context.TODO(), snapshotContentName, metav1.GetOptions{})
 			if err != nil {
