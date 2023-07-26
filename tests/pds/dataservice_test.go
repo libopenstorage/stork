@@ -1733,16 +1733,16 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 }
 
 func DeployInANamespaceAndVerify(nname string) []*pds.ModelsDeployment {
-	var cleanup []*pds.ModelsDeployment
+	var deployments []*pds.ModelsDeployment
 	for _, ds := range params.DataServiceToTest {
 		Step("Deploy and validate data service", func() {
 			isDeploymentsDeleted = false
 			deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
 			log.FailOnError(err, "Error while deploying data services")
-			cleanup = append(cleanup, deployment)
+			deployments = append(deployments, deployment)
 		})
 	}
-	return cleanup
+	return deployments
 }
 
 var _ = Describe("{RollingRebootNodes}", func() {

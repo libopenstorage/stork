@@ -139,38 +139,40 @@ var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
 // this tests brings up large number of pods on multiple namespaces and validate if there is not PANIC or nilpointer exceptions
 var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	/*
-			https://portworx.atlassian.net/browse/PTX-18792
-		    https://portworx.atlassian.net/browse/PTX-17723
+				https://portworx.atlassian.net/browse/PTX-18792
+			    https://portworx.atlassian.net/browse/PTX-17723
 
-			PWX :
-			https://portworx.atlassian.net/browse/PWX-32190
+				PWX :
+				https://portworx.atlassian.net/browse/PWX-32190
 
-			Bug Description :
-				PX is hitting `panic: runtime error: invalid memory address or nil pointer dereference` when creating 250 FADA volumes
+				Bug Description :
+					PX is hitting `panic: runtime error: invalid memory address or nil pointer dereference`
+		when creating 250 FADA volumes
 
-			1. Deploying nginx pods using two FADA volumes in 125 name-space simultaneously
-			2. After that verify if any panic in the logs due to nil pointer deference.
+				1. Deploying nginx pods using two FADA volumes in 125 name-space simultaneously
+				2. After that verify if any panic in the logs due to nil pointer deference.
 	*/
 	var testrailID = 0
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("BringUpLargePodsVerifyNoPanic",
-			"Px should not panic when large number of pools are created", nil, testrailID)
+			"Validate no panics when creating more number of pods on "+
+				"FADA/Generic Volumes while kvdb failover in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
-	stepLog := "Validate no panics when creating more than 125 pods on FADA Volumes"
+	stepLog := "Validate no panics when creating more number of pods on FADA/Generic " +
+		"Volumes while kvdb failover in progress"
 	It(stepLog, func() {
+		/*
+			NOTE : In order to verify https://portworx.atlassian.net/browse/PWX-32190 , please use nginx-fa-davol
+				please use provisioner as portworx.PortworxCsi and storage-device to pure and application as nginx-fa-davol
+			e.x : --app-list nginx-fa-davol --provisioner csi --storage-device pure
+		*/
 
 		var wg sync.WaitGroup
-		wg.Add(20)
 		var terminate bool = false
-
-		if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
-			log.FailOnError(fmt.Errorf("need csi provisioner to run the test , please pass --provisioner csi "+
-				"or -e provisioner=csi in the arguments"), "csi provisioner enabled?")
-		}
 
 		log.InfoD("Failover kvdb in parallel while volume creation in progress")
 		go func() {
@@ -202,15 +204,43 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			}
 		}()
 
-		Inst().AppList = []string{"nginx-fa-davol"}
 		contexts = make([]*scheduler.Context, 0)
 
+		// Apps list provided by user while triggering the test is considered to run the apps in parallel
+		totalAppsRequested := Inst().AppList
+
+		parallelThreads := 5
+		scheduleCount := 1
+		if len(totalAppsRequested) > 0 {
+			for _, eachApp := range totalAppsRequested {
+				if eachApp == "nginx-fa-davol" {
+					if strings.ToLower(Inst().Provisioner) != fmt.Sprintf("%v", portworx.PortworxCsi) {
+						log.FailOnError(fmt.Errorf("need csi provisioner to run the test , "+
+							"please pass --provisioner csi "+
+							"or -e provisioner=csi in the arguments"), "csi provisioner enabled?")
+					}
+					parallelThreads = 15
+					scheduleCount = 20
+				}
+			}
+		}
+
+		// if app list is more than 5 we run 1 application in one point of time in parallel,
+		// intention here is to run 20 applications in parallel, In any point of time max pod count doesn't exceed more than 300
+		var appThreads int
+		if len(totalAppsRequested) >= 5 {
+			appThreads = 1
+		} else {
+			appThreads = parallelThreads / len(totalAppsRequested)
+		}
+
+		wg.Add(appThreads)
 		scheduleAppParallel := func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			id := uuid.New()
 			nsName := fmt.Sprintf("%s", id.String()[:4])
-			for i := 0; i < 15; i++ {
+			for i := 0; i < scheduleCount; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf(fmt.Sprintf("largenumberpods-%v-%d", nsName, i)))...)
 			}
 		}
@@ -225,8 +255,9 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		}
 
 		// Create apps in parallel
-		for count := 0; count < 20; count++ {
+		for count := 0; count < appThreads; count++ {
 			go scheduleAppParallel()
+			time.Sleep(500 * time.Millisecond)
 		}
 		wg.Wait()
 
@@ -261,6 +292,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		// Waiting for all pods to become ready and in running state
 		waitForPodsRunning := func() (interface{}, bool, error) {
 			for _, eachContext := range contexts {
+				log.Infof("Verifying Context [%v]", eachContext.App.Key)
 				err := Inst().S.WaitForRunning(eachContext, 5*time.Minute, 2*time.Second)
 				if err != nil {
 					return nil, true, err

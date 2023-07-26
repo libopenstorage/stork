@@ -236,23 +236,51 @@ func createPolicies(namespace string) (*corev1.ServiceAccount, error) {
 	return serviceAccount, nil
 }
 
-// Inserts Data into the db and returns the checksum
-func (ds *DataserviceType) InsertDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, error) {
+// InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
+func (ds *DataserviceType) InsertDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
-	cksum, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
-	return cksum, err
+	ckSum, wlDep, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
+	return ckSum, wlDep, err
 }
 
-// Reads Data from the db and returns the checksum
-func (ds *DataserviceType) ReadDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, error) {
+// ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
+func (ds *DataserviceType) ReadDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
-	cksum, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
-	return cksum, err
+	ckSum, wlDep, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
+	return ckSum, wlDep, err
+}
+
+// ValidateDataMd5Hash validates the hash of the data service deployments
+func (ds *DataserviceType) ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool {
+	count := 0
+
+	//Debug block to print hash of the database table
+	for depName, hash := range deploymentHash {
+		log.Debugf("Dep name %s and hash %s", depName, hash)
+	}
+	for depName, hash := range restoredDepHash {
+		log.Debugf("Restored Dep name %s and hash %s", depName, hash)
+	}
+
+	for key, depHash := range deploymentHash {
+		depName, _, _ := strings.Cut(key, "-")
+		for key1, resDepHash := range restoredDepHash {
+			resDepName, _, _ := strings.Cut(key1, "-")
+			if depName == resDepName && depHash == resDepHash {
+				log.InfoD("data is consistent for restored deployment %s", key1)
+				count += 1
+			}
+		}
+	}
+	if count != len(restoredDepHash) {
+		return false
+	}
+	return true
 }
 
 // GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
 func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
-	wkloadGenParams pdsdriver.LoadGenParams) (string, error) {
+	wkloadGenParams pdsdriver.LoadGenParams) (string, *v1.Deployment, error) {
 
 	var checksum string
 	dsName := pdsDeployment.GetClusterResourceName()
@@ -270,7 +298,7 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 
 	serviceAccount, err := createPolicies(namespace)
 	if err != nil {
-		return "", fmt.Errorf("error while creating policies")
+		return "", nil, fmt.Errorf("error while creating policies")
 	}
 
 	deploymentSpec := &v1.Deployment{
@@ -325,26 +353,26 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 	log.Debugf("Deployment spec %+v", deploymentSpec)
 	wlDeployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		return "", fmt.Errorf("error Occured while creating deployment %v", err)
+		return "", nil, fmt.Errorf("error Occured while creating deployment %v", err)
 	}
 	err = k8sApps.ValidateDeployment(wlDeployment, timeOut, 10*time.Second)
 	if err != nil {
-		return "", fmt.Errorf("error Occured while validating the pod %v", err)
+		return "", nil, fmt.Errorf("error Occured while validating the pod %v", err)
 	}
 	podList, err := k8sCore.GetPods(wlDeployment.Namespace, nil)
 	if err != nil {
-		return "", fmt.Errorf("error Occured while getting the podlist %v", err)
+		return "", nil, fmt.Errorf("error Occured while getting the podlist %v", err)
 	}
 	for _, pod := range podList.Items {
 		if strings.Contains(pod.Name, wlDeployment.Name) {
 			log.Debugf("workload pod name %s", pod.Name)
 			checksum, err = ReadChecksum(pod.Name, wlDeployment.Namespace, mode)
 			if err != nil {
-				return "", fmt.Errorf("error Occured while fetching checksum %v", err)
+				return "", nil, fmt.Errorf("error Occured while fetching checksum %v", err)
 			}
 		}
 	}
-	return checksum, nil
+	return checksum, wlDeployment, nil
 }
 
 func ReadChecksum(podName, namespace, mode string) (string, error) {
