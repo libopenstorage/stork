@@ -2416,7 +2416,7 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
 			}
 		}
-		for k, _ := range cloudsnapMap {
+		for k := range cloudsnapMap {
 			delete(cloudsnapMap, k)
 		}
 	})

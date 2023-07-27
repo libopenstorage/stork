@@ -139,6 +139,9 @@ import (
 	// import pso driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/pso"
 
+	// import ibm driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"

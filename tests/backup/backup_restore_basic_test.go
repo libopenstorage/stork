@@ -172,7 +172,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 58043)
+		StartTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 83720)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
