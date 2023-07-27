@@ -66,54 +66,53 @@ var _ = Describe("{Longevity}", func() {
 		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:              TriggerAppTaskDown,
-		AppTasksDown:             TriggerAppTasksDown,
-		AddDrive:                 TriggerAddDrive,
-		CoreChecker:              TriggerCoreChecker,
-		CloudSnapShot:            TriggerCloudSnapShot,
-		LocalSnapShot:            TriggerLocalSnapShot,
-		DeleteLocalSnapShot:      TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:           TriggerPoolResizeDisk,
-		PoolAddDisk:              TriggerPoolAddDisk,
-		UpgradeStork:             TriggerUpgradeStork,
-		VolumesDelete:            TriggerVolumeDelete,
-		UpgradeVolumeDriver:      TriggerUpgradeVolumeDriver,
-		AutoFsTrim:               TriggerAutoFsTrim,
-		UpdateVolume:             TriggerVolumeUpdate,
-		RestartManyVolDriver:     TriggerRestartManyVolDriver,
-		RebootManyNodes:          TriggerRebootManyNodes,
-		NodeDecommission:         TriggerNodeDecommission,
-		NodeRejoin:               TriggerNodeRejoin,
-		CsiSnapShot:              TriggerCsiSnapShot,
-		CsiSnapRestore:           TriggerCsiSnapRestore,
-		RelaxedReclaim:           TriggerRelaxedReclaim,
-		Trashcan:                 TriggerTrashcan,
-		KVDBFailover:             TriggerKVDBFailover,
-		ValidateDeviceMapper:     TriggerValidateDeviceMapperCleanup,
-		MetroDR:                  TriggerMetroDR,
-		AsyncDR:                  TriggerAsyncDR,
-		AsyncDRMigrationSchedule: TriggerAsyncDRMigrationSchedule,
-		ConfluentAsyncDR:         TriggerConfluentAsyncDR,
-		KafkaAsyncDR:             TriggerKafkaAsyncDR,
-		AsyncDRVolumeOnly:        TriggerAsyncDRVolumeOnly,
-		AutoFsTrimAsyncDR:        TriggerAutoFsTrimAsyncDR,
-		IopsBwAsyncDR:            TriggerIopsBwAsyncDR,
-		StorkApplicationBackup:   TriggerStorkApplicationBackup,
-		StorkAppBkpVolResize:     TriggerStorkAppBkpVolResize,
-		StorkAppBkpHaUpdate:      TriggerStorkAppBkpHaUpdate,
-		StorkAppBkpPxRestart:     TriggerStorkAppBkpPxRestart,
-		StorkAppBkpPoolResize:    TriggerStorkAppBkpPoolResize,
-		RestartKvdbVolDriver:     TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:      TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:         TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:      TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:       TriggerAutopilotPoolRebalance,
-		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
-		DeleteOldNamespaces:      TriggerDeleteOldNamespaces,
-		MetroDRMigrationSchedule: TriggerMetroDRMigrationSchedule,
-		CloudSnapShotRestore:     TriggerCloudSnapshotRestore,
-		LocalSnapShotRestore:     TriggerLocalSnapshotRestore,
-		AddResizePoolMaintenance: TriggerAddResizePoolMaintenance,
+		AppTaskDown:                     TriggerAppTaskDown,
+		AppTasksDown:                    TriggerAppTasksDown,
+		AddDrive:                        TriggerAddDrive,
+		CoreChecker:                     TriggerCoreChecker,
+		CloudSnapShot:                   TriggerCloudSnapShot,
+		LocalSnapShot:                   TriggerLocalSnapShot,
+		DeleteLocalSnapShot:             TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:                  TriggerPoolResizeDisk,
+		PoolAddDisk:                     TriggerPoolAddDisk,
+		UpgradeStork:                    TriggerUpgradeStork,
+		VolumesDelete:                   TriggerVolumeDelete,
+		UpgradeVolumeDriver:             TriggerUpgradeVolumeDriver,
+		AutoFsTrim:                      TriggerAutoFsTrim,
+		UpdateVolume:                    TriggerVolumeUpdate,
+		RestartManyVolDriver:            TriggerRestartManyVolDriver,
+		RebootManyNodes:                 TriggerRebootManyNodes,
+		NodeDecommission:                TriggerNodeDecommission,
+		NodeRejoin:                      TriggerNodeRejoin,
+		CsiSnapShot:                     TriggerCsiSnapShot,
+		CsiSnapRestore:                  TriggerCsiSnapRestore,
+		RelaxedReclaim:                  TriggerRelaxedReclaim,
+		Trashcan:                        TriggerTrashcan,
+		KVDBFailover:                    TriggerKVDBFailover,
+		ValidateDeviceMapper:            TriggerValidateDeviceMapperCleanup,
+		MetroDR:                         TriggerMetroDR,
+		AsyncDR:                         TriggerAsyncDR,
+		AsyncDRMigrationSchedule:        TriggerAsyncDRMigrationSchedule,
+		ConfluentAsyncDR:                TriggerConfluentAsyncDR,
+		KafkaAsyncDR:                    TriggerKafkaAsyncDR,
+		AsyncDRVolumeOnly:               TriggerAsyncDRVolumeOnly,
+		AutoFsTrimAsyncDR:               TriggerAutoFsTrimAsyncDR,
+		IopsBwAsyncDR:                   TriggerIopsBwAsyncDR,
+		StorkApplicationBackup:          TriggerStorkApplicationBackup,
+		StorkAppBkpVolResize:            TriggerStorkAppBkpVolResize,
+		StorkAppBkpHaUpdate:             TriggerStorkAppBkpHaUpdate,
+		StorkAppBkpPxRestart:            TriggerStorkAppBkpPxRestart,
+		StorkAppBkpPoolResize:           TriggerStorkAppBkpPoolResize,
+		RestartKvdbVolDriver:            TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:             TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:                TriggerPoolAddDiskAndReboot,
+		MetadataPoolResizeDiskAndReboot: TriggerMetadataPoolResizeDiskAndReboot,
+		AutopilotRebalance:              TriggerAutopilotPoolRebalance,
+		VolumeCreatePxRestart:           TriggerVolumeCreatePXRestart,
+		DeleteOldNamespaces:             TriggerDeleteOldNamespaces,
+		MetroDRMigrationSchedule:        TriggerMetroDRMigrationSchedule,
+		CloudSnapShotRestore:            TriggerCloudSnapshotRestore,
+		LocalSnapShotRestore:            TriggerLocalSnapshotRestore,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -368,9 +367,8 @@ func populateDisruptiveTriggers() {
 		KVDBFailover:                    true,
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
-		ResizeDiskAndReboot:             true,
+		MetadataPoolResizeDiskAndReboot: true,
 		VolumeCreatePxRestart:           true,
-		AddResizePoolMaintenance:        true,
 	}
 }
 
@@ -691,12 +689,11 @@ func populateIntervals() {
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
-	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
+	triggerInterval[MetadataPoolResizeDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
 	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
-	triggerInterval[AddResizePoolMaintenance] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1312,16 +1309,16 @@ func populateIntervals() {
 	triggerInterval[AddDiskAndReboot][2] = 24 * baseInterval
 	triggerInterval[AddDiskAndReboot][1] = 30 * baseInterval
 
-	triggerInterval[ResizeDiskAndReboot][10] = 1 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][9] = 3 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][8] = 6 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][7] = 9 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][6] = 12 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][5] = 15 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][4] = 18 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][3] = 21 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][2] = 24 * baseInterval
-	triggerInterval[ResizeDiskAndReboot][1] = 30 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][10] = 1 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][9] = 3 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][8] = 6 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][7] = 9 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][6] = 12 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][5] = 15 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][4] = 18 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][3] = 21 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][2] = 24 * baseInterval
+	triggerInterval[MetadataPoolResizeDiskAndReboot][1] = 30 * baseInterval
 
 	triggerInterval[AutopilotRebalance][10] = 1 * baseInterval
 	triggerInterval[AutopilotRebalance][9] = 3 * baseInterval
@@ -1441,8 +1438,6 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
 
-	triggerInterval[AddResizePoolMaintenance][5] = 15 * baseInterval
-
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
 
@@ -1508,12 +1503,11 @@ func populateIntervals() {
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0
-	triggerInterval[ResizeDiskAndReboot][0] = 0
+	triggerInterval[MetadataPoolResizeDiskAndReboot][0] = 0
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
-	triggerInterval[AddResizePoolMaintenance][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

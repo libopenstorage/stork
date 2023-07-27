@@ -448,8 +448,8 @@ const (
 	AddDrive = "addDrive"
 	// AddDiskAndReboot performs add-disk and reboots node
 	AddDiskAndReboot = "addDiskAndReboot"
-	// ResizeDiskAndReboot performs  resize-disk and reboots node
-	ResizeDiskAndReboot = "resizeDiskAndReboot"
+	// MetadataPoolResizeDiskAndReboot performs  resize-disk and reboots node on a metadatapool
+	MetadataPoolResizeDiskAndReboot = "resizeDiskAndReboot"
 	// AutopilotRebalance performs  pool rebalance
 	AutopilotRebalance = "autopilotRebalance"
 	// VolumeCreatePxRestart performs  volume create and px restart parallel
@@ -4209,6 +4209,35 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 
 }
 
+// returns list of pools with metadata disk to expand
+func getStorageMetadataPoolsToExpand() ([]*opsapi.StoragePool, error) {
+	stNodes := node.GetStorageNodes()
+	expectedCapacity := (len(stNodes) / 2) + 1
+	poolsToExpand := make([]*opsapi.StoragePool, 0)
+	for _, stNode := range stNodes {
+		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		if err != nil {
+			return nil, err
+		}
+		if len(poolsToExpand) <= expectedCapacity {
+			if eligibility[stNode.Id] {
+				for _, p := range stNode.Pools {
+					metaPool, err := GetPoolUUIDWithMetadataDisk(stNode)
+					if err != nil {
+						return nil, err
+					}
+					if eligibility[p.Uuid] && p.Uuid == metaPool {
+						poolsToExpand = append(poolsToExpand, p)
+					}
+				}
+			}
+			continue
+		}
+		break
+	}
+	return poolsToExpand, nil
+}
+
 func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType, doNodeReboot bool) {
 
 	if wg != nil {
@@ -4310,14 +4339,14 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 }
 
 // TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
-func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerMetadataPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(ResizeDiskAndReboot)
+	startLongevityTest(MetadataPoolResizeDiskAndReboot)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: ResizeDiskAndReboot,
+			Type: MetadataPoolResizeDiskAndReboot,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -4330,12 +4359,12 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 
 	setMetrics(*event)
 
-	chaosLevel := getPoolExpandPercentage(ResizeDiskAndReboot)
+	chaosLevel := getPoolExpandPercentage(MetadataPoolResizeDiskAndReboot)
 
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
 
 		if err != nil {
 			log.Error(err.Error())
@@ -4408,7 +4437,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	updateMetrics(*event)
 }
 
-// TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
+// TriggerMetadataPoolAddDiskAndReboot performs add-disk and reboots the node
 func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -7643,150 +7672,6 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 	})
-}
-
-func TriggerAddResizePoolMaintenance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
-	defer endLongevityTest()
-	startLongevityTest(AddResizePoolMaintenance)
-	event := &EventRecord{
-		Event: Event{
-			ID:   GenerateUUID(),
-			Type: AddResizePoolMaintenance,
-		},
-		Start:   time.Now().Format(time.RFC1123),
-		Outcome: []error{},
-	}
-
-	defer func() {
-		event.End = time.Now().Format(time.RFC1123)
-		*recordChan <- event
-	}()
-
-	setMetrics(*event)
-	stepLog := fmt.Sprintf("perform add drive to create a new pool and later resize pool in maintenance mode")
-	Step(stepLog, func() {
-
-		isNewPoolCreationAllowed := func(n *node.Node) (bool, error) {
-			totalPools, err := GetPoolsDetailsOnNode(*n)
-			if err != nil {
-				return false, err
-			}
-			if len(totalPools) < 8 {
-				return true, nil
-			}
-			return false, nil
-		}
-
-		// Select list of Storage Node which has room to create new storage pools using add disk
-		allStorageNodes := node.GetStorageNodes()
-		selectedNodes := []*node.Node{}
-		for _, eachNode := range allStorageNodes {
-			allowed, err := isNewPoolCreationAllowed(&eachNode)
-			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("errored while fetching for node details"))
-				return
-			} else if allowed == false {
-				log.Infof("Node [%v] is not selected for expansion", eachNode.Name)
-			} else {
-				log.Infof("Node [%v] selected", eachNode.Name)
-				selectedNodes = append(selectedNodes, &eachNode)
-			}
-		}
-
-		if len(selectedNodes) == 0 {
-			log.Infof("new pools cannot be created .. skipping the test")
-			return
-		}
-
-		// select random node to from the list to create new pool
-		randomIndex := rand.Intn(len(selectedNodes))
-		nodeSelected := selectedNodes[randomIndex]
-		poolUUID, err := GetPoolUUIDWithMetadataDisk(*nodeSelected)
-		if err != nil {
-			UpdateOutcome(event, err)
-			return
-		}
-		log.Infof("metadata Pool UUID selected [%v] from node [%v]", poolUUID, nodeSelected.Name)
-
-		exitPoolMaintenance := func(stNode *node.Node, poolUUID string) {
-			log.Infof("exiting pool maintenance on the Node [%v]", stNode)
-			t := func() (interface{}, bool, error) {
-
-				status, err := Inst().V.GetNodePoolsStatus(*stNode)
-				if err != nil {
-					return nil, true, err
-				}
-				log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolUUID]))
-				if status[poolUUID] == "In Maintenance" {
-					log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
-					if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
-						return nil, true, err
-					}
-				}
-				return nil, false, nil
-			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-
-			err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
-			if err != nil {
-				UpdateOutcome(event, err)
-			}
-		}
-
-		// Expand pool with Add drive on the pool selected
-		expandPoolAndWait := func(pool *opsapi.StoragePool, size uint64, operation opsapi.SdkStoragePool_ResizeOperationType) error {
-			log.InfoD("Current Size of the pool with UUID [%v] is [%s]", pool.GetUuid(), pool.TotalSize)
-
-			expectedSize := (pool.TotalSize / units.GiB) + size
-			log.InfoD("Expanding pool [%v] to Size [%v]", pool.GetUuid(), expectedSize)
-
-			err = waitForPoolToBeResized(pool.TotalSize, pool.Uuid)
-			if err != nil {
-				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, operation, err)
-				return err
-
-			}
-			return nil
-		}
-
-		// do expand pool using add drive while pool in maintenance mode
-		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-		if err != nil {
-			log.Infof("Failed to get pool using UUID %s", poolUUID)
-			UpdateOutcome(event, err)
-		}
-		err = expandPoolAndWait(poolToBeResized, 100, opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-		if err != nil {
-			log.Infof("pool resize failed on the pool [%v]", poolToBeResized.Uuid)
-			UpdateOutcome(event, err)
-		}
-
-		stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
-		if err != nil {
-			log.Infof("failed to get node details from poolUUID %s", poolToBeResized.Uuid)
-			UpdateOutcome(event, err)
-		}
-
-		// Exit pool maintenance
-		defer exitPoolMaintenance(stNode, poolToBeResized.Uuid)
-
-		// Once new storage pool is created bring the node to maintenance state
-		log.Infof("entering maintenance mode on the Node [%v]", stNode.Name)
-		err = Inst().V.EnterPoolMaintenance(*stNode)
-		if err != nil {
-			log.Infof("fail to enter node %s in maintenance mode", stNode.Name)
-			UpdateOutcome(event, err)
-		}
-
-		err = expandPoolAndWait(poolToBeResized, 100, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-		if err != nil {
-			log.Infof("pool resize failed on the pool [%v]", poolToBeResized.Uuid)
-			UpdateOutcome(event, err)
-		}
-
-	})
-	updateMetrics(*event)
 }
 
 // GetContextPVCs returns pvc from the given context
