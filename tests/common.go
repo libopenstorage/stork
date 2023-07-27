@@ -161,7 +161,6 @@ const (
 )
 
 var (
-	RkeMap           = make(map[string]*rke.RancherClusterParameters)
 	clusterProviders = []string{"k8s"}
 )
 
@@ -2769,13 +2768,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		}
 	}
 
-	CurrentClusterConfigPath = clusterConfigPath
-	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
-	// To update the RkeMap with value like token, endpoint access key, secret key for each cluster
-	if os.Getenv("CLUSTER_PROVIDER") == "rke" {
-		if rke.RancherClusterParametersValue != nil && CurrentClusterConfigPath != "" {
-			RkeMap[strings.Split(CurrentClusterConfigPath, "/tmp/")[1]] = rke.RancherClusterParametersValue
-			log.Infof("The value of RKE map is", RkeMap)
+	// To update the rancher client for current cluster context
+	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		if err != nil {
+			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
 	}
 	return nil
@@ -3808,8 +3805,8 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				Type: api.CloudCredentialInfo_Rancher,
 				Config: &api.CloudCredentialInfo_RancherConfig{
 					RancherConfig: &api.RancherConfig{
-						Endpoint: RkeMap[kubeconfig[0]].Endpoint,
-						Token:    RkeMap[kubeconfig[0]].Token,
+						Endpoint: rke.RancherMap[kubeconfig[0]].Endpoint,
+						Token:    rke.RancherMap[kubeconfig[0]].Token,
 					},
 				},
 			},
@@ -7727,6 +7724,7 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
+
 
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
