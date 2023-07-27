@@ -46,26 +46,27 @@ var testDescription string
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
-		contexts = initializeContexts()
+		contexts = scheduleApps()
 	})
 
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize(contexts)
-		poolToBeResized = ensurePoolExists(poolIDToResize)
+		poolToBeResized = getStoragePool(poolIDToResize)
 	})
 
 	testDescription = "Validate storage pool expansion using resize-disk option"
-	It("select a pool that has I/O and expand it by 100 GB with resize-disk type. ", func() {
+	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+		StartTorpedoTest("StoragePoolExpandDiskAdd", testDescription, nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
-		targetSizeInGB := targetSizeInBytes / units.GiB
+		targetSizeGiB := targetSizeInBytes / units.GiB
 
-		log.InfoD("Current Size of the pool %s is %d GB. Trying to expand to %v GB",
-			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeInGB)
-		triggerPoolExpansion(poolIDToResize, targetSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB",
+			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeInGB)
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
 	JustAfterEach(func() {
@@ -9710,7 +9711,7 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 	})
 })
 
-func initializeContexts() []*scheduler.Context {
+func scheduleApps() []*scheduler.Context {
 	contexts := make([]*scheduler.Context, 0)
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
 		log.Infof("Deploy app %v", i)
@@ -9727,7 +9728,7 @@ func pickPoolToResize(contexts []*scheduler.Context) string {
 	return poolIDToResize
 }
 
-func ensurePoolExists(poolIDToResize string) *api.StoragePool {
+func getStoragePool(poolIDToResize string) *api.StoragePool {
 	pool, err := GetStoragePoolByUUID(poolIDToResize)
 	failOnError(err, "Failed to get pool using UUID %s", poolIDToResize)
 	dash.VerifyFatal(pool != nil, true, "found pool to resize")
@@ -9744,11 +9745,11 @@ func verifyNonEmpty(value string, message string, args ...interface{}) {
 	dash.VerifyFatal(len(value) > 0, true, message)
 }
 
-func triggerPoolExpansion(poolIDToResize string, targetSizeInGB uint64, expandType api.SdkStoragePool_ResizeOperationType) {
+func triggerPoolExpansion(poolIDToResize string, targetSizeGiB uint64, expandType api.SdkStoragePool_ResizeOperationType) {
 	stepLog := "Trigger pool expansion"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err := Inst().V.ExpandPool(poolIDToResize, expandType, targetSizeInGB, true)
+		err := Inst().V.ExpandPool(poolIDToResize, expandType, targetSizeGiB, true)
 		dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 	})
 }
@@ -9791,12 +9792,12 @@ func waitForOngoingPoolExpansionToComplete(poolIDToResize string) error {
 	return err
 }
 
-func verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize string, targetSize uint64) {
+func verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize string, targetSizeGiB uint64) {
 	Step("Verify that pool has been expanded to the expected size", func() {
 		resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 		failOnError(err, "Failed to get pool using UUID %s", poolIDToResize)
-		newPoolSize := resizedPool.TotalSize / units.GiB
-		dash.VerifyFatal(newPoolSize >= targetSize, true,
-			fmt.Sprintf("Expected pool to have been expanded to %v, but got %v", targetSize, newPoolSize))
+		newPoolSizeGiB := resizedPool.TotalSize / units.GiB
+		dash.VerifyFatal(newPoolSizeGiB >= targetSizeGiB, true,
+			fmt.Sprintf("Expected pool to have been expanded to %v GiB, but got %v GiB", targetSizeGiB, newPoolSizeGiB))
 	})
 }
