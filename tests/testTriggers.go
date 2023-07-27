@@ -4437,7 +4437,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	updateMetrics(*event)
 }
 
-// TriggerMetadataPoolAddDiskAndReboot performs add-disk and reboots the node
+// TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
 func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
