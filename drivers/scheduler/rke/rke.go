@@ -1,18 +1,15 @@
 package rke
 
 import (
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
+	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"io/ioutil"
-	"net/http"
+	"os"
 	"strings"
 )
 
@@ -21,13 +18,9 @@ const (
 	schedulerName = "rke"
 	// SystemdScheduleServiceName is the name of the system service responsible for scheduling
 	SystemdScheduleServiceName = "kubelet"
-	// PxLabelNameKey is key for map
-	PxLabelNameKey = "name"
-	// PxLabelValue portworx pod label
-	PxLabelValue = "portworx"
 )
 
-var RancherClusterParametersValue *RancherClusterParameters
+var RancherMap = make(map[string]*RancherClusterParameters)
 
 type Rancher struct {
 	kube.K8s
@@ -46,21 +39,19 @@ func (r *Rancher) String() string {
 	return schedulerName
 }
 
-// Will uncomment the Init after PR https://portworx.atlassian.net/browse/PA-1335 is merged.
-/*
-// Init Initialize the driver
+// Init Initializes the driver
 func (r *Rancher) Init(scheduleOpts scheduler.InitOptions) error {
 	var err error
 	err = r.K8s.Init(scheduleOpts)
-	RancherClusterParametersValue, err = r.GetRancherClusterParametersValue()
+	rkeParametersValue, err := r.GetRancherClusterParametersValue()
 	if err != nil {
 		return err
 	}
 	rancherClientOpts := rancherClientBase.ClientOpts{
-		URL:       RancherClusterParametersValue.Endpoint,
-		TokenKey:  RancherClusterParametersValue.Token,
-		AccessKey: RancherClusterParametersValue.AccessKey,
-		SecretKey: RancherClusterParametersValue.SecretKey,
+		URL:       rkeParametersValue.Endpoint,
+		TokenKey:  rkeParametersValue.Token,
+		AccessKey: rkeParametersValue.AccessKey,
+		SecretKey: rkeParametersValue.SecretKey,
 		Insecure:  true,
 	}
 	r.client, err = rancherClient.NewClient(&rancherClientOpts)
@@ -69,59 +60,64 @@ func (r *Rancher) Init(scheduleOpts scheduler.InitOptions) error {
 	}
 	return nil
 }
-*/
 
 // GetRancherClusterParametersValue returns the rancher token, endpoint, secret key, access key
 func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters, error) {
-	var rkeData map[string]interface{}
 	var rkeParameters RancherClusterParameters
+	var rkeToken string
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
 	masterNodeName := node.GetMasterNodes()[0].Name
 	endpoint := "https://" + masterNodeName + "/v3"
-	rancherURL := "https://" + masterNodeName + "/v3-public/localProviders/local?action=login"
-	//TODO: Get the values from config map after https://github.com/portworx/torpedo/pull/1517 is merged
-	username := ""
-	password := ""
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-	body := strings.NewReader(fmt.Sprintf(`{"username":"%s","password":"%s"}`, username, password))
-	req, err := http.NewRequest("POST", rancherURL, body)
-	if err != nil {
-		log.Errorf("Failed to create rancher POST request:", err)
-		return nil, err
-	}
-	req.Header.Add("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Errorf("Failed to send request:", err)
-		return nil, err
-	}
-	defer resp.Body.Close()
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("Failed to read response:", err)
-		return nil, err
-	}
-	response := string(respBody)
-	err = json.Unmarshal([]byte(response), &rkeData)
-	if err != nil {
-		log.Errorf("Error:", err)
-		return nil, err
-	}
 	rkeParameters.Endpoint = endpoint
-	rkeToken, res := rkeData["token"].(string)
-	if res != true {
-		return nil, fmt.Errorf("token in rkeData is not of string type")
-	}
-	if len(strings.Split(rkeToken, ":")) != 2 {
-		return nil, fmt.Errorf("invalid RKE token value")
+	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+	if rkeToken == "" {
+		return nil, fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 	}
 	rkeParameters.Token = rkeToken
 	rkeParameters.AccessKey = strings.Split(rkeToken, ":")[0]
 	rkeParameters.SecretKey = strings.Split(rkeToken, ":")[1]
 	return &rkeParameters, nil
+}
+
+// UpdateRancherClient updates the rancher client based on the current cluster context
+func (r *Rancher) UpdateRancherClient(clusterName string) error {
+	var rkeParametersValue RancherClusterParameters
+	var err error
+	var rkeToken string
+	masterNodeName := node.GetMasterNodes()[0].Name
+	endpoint := "https://" + masterNodeName + "/v3"
+	if clusterName == "destination-config" {
+		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
+		if rkeToken == "" {
+			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
+		}
+	} else if clusterName == "source-config" {
+		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+		if rkeToken == "" {
+			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
+		}
+	} else {
+		return fmt.Errorf("cluster name is not correct")
+	}
+	accessKey := strings.Split(rkeToken, ":")[0]
+	secretKey := strings.Split(rkeToken, ":")[1]
+	rkeParametersValue.Token = rkeToken
+	rkeParametersValue.SecretKey = secretKey
+	rkeParametersValue.AccessKey = accessKey
+	rkeParametersValue.Endpoint = endpoint
+	rancherClientOpts := rancherClientBase.ClientOpts{
+		URL:       endpoint,
+		TokenKey:  rkeToken,
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+		Insecure:  true,
+	}
+	r.client, err = rancherClient.NewClient(&rancherClientOpts)
+	if err != nil {
+		return err
+	}
+	RancherMap[clusterName] = &rkeParametersValue
+	return nil
 }
 
 // GetActiveRancherClusterID returns the ID of active rancher cluster
@@ -264,7 +260,7 @@ func (r *Rancher) DeleteRancherProject(uid string) error {
 // SaveSchedulerLogsToFile gathers all scheduler logs into a file
 func (r *Rancher) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	driver, _ := node.Get(r.K8s.NodeDriverName)
-	// requires 2>&1 since docker logs command send the logs to stdrr instead of sdout
+	// requires 2>&1 since docker logs command send the logs to stderr instead of stdout
 	cmd := fmt.Sprintf("docker logs %s > %s/kubelet.log 2>&1", SystemdScheduleServiceName, location)
 	_, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         kube.DefaultTimeout,
