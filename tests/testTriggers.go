@@ -360,8 +360,8 @@ const (
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
 	CoreChecker = "coreChecker"
-	// PoolResizeDisk resize storage pool using resize-disk
-	PoolResizeDisk = "poolResizeDisk"
+	// MetadataPoolResizeDisk resize storage pool using resize-disk
+	MetadataPoolResizeDisk = "metadatapoolResizeDisk"
 	// PoolAddDisk resize storage pool using add-disk
 	PoolAddDisk = "poolAddDisk"
 	// BackupAllApps Perform backups of all deployed apps
@@ -448,8 +448,8 @@ const (
 	AddDrive = "addDrive"
 	// AddDiskAndReboot performs add-disk and reboots node
 	AddDiskAndReboot = "addDiskAndReboot"
-	// MetadataPoolResizeDiskAndReboot performs  resize-disk and reboots node on a metadatapool
-	MetadataPoolResizeDiskAndReboot = "resizeDiskAndReboot"
+	// ResizeDiskAndReboot performs  resize-disk and reboots node on a metadatapool
+	ResizeDiskAndReboot = "resizeDiskAndReboot"
 	// AutopilotRebalance performs  pool rebalance
 	AutopilotRebalance = "autopilotRebalance"
 	// VolumeCreatePxRestart performs  volume create and px restart parallel
@@ -4288,15 +4288,15 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	}
 }
 
-// TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
-func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerMetadataPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
+func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(PoolResizeDisk)
+	startLongevityTest(MetadataPoolResizeDisk)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: PoolResizeDisk,
+			Type: MetadataPoolResizeDisk,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -4309,11 +4309,11 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 
 	setMetrics(*event)
 
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	chaosLevel := getPoolExpandPercentage(MetadataPoolResizeDisk)
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
 
 		if err != nil {
 			log.Error(err.Error())
@@ -4338,15 +4338,15 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	updateMetrics(*event)
 }
 
-// TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
-func TriggerMetadataPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
+func TriggerResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(MetadataPoolResizeDiskAndReboot)
+	startLongevityTest(ResizeDiskAndReboot)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: MetadataPoolResizeDiskAndReboot,
+			Type: ResizeDiskAndReboot,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -4359,12 +4359,12 @@ func TriggerMetadataPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, reco
 
 	setMetrics(*event)
 
-	chaosLevel := getPoolExpandPercentage(MetadataPoolResizeDiskAndReboot)
+	chaosLevel := getPoolExpandPercentage(ResizeDiskAndReboot)
 
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand()
 
 		if err != nil {
 			log.Error(err.Error())
