@@ -106,7 +106,7 @@ var _ = Describe("{Longevity}", func() {
 		RestartKvdbVolDriver:     TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:      TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:         TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:      TriggerResizeDiskAndReboot,
+		ResizeDiskAndReboot:      TriggerPoolResizeDiskAndReboot,
 		AutopilotRebalance:       TriggerAutopilotPoolRebalance,
 		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
 		DeleteOldNamespaces:      TriggerDeleteOldNamespaces,

@@ -4338,8 +4338,8 @@ func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *c
 	updateMetrics(*event)
 }
 
-// TriggerResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
-func TriggerResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
+func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(ResizeDiskAndReboot)
