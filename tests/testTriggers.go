@@ -311,6 +311,7 @@ func ProcessErrorWithMessage(event *EventRecord, err error, desc string) {
 }
 
 const (
+
 	// DeployApps installs new apps
 	DeployApps = "deployApps"
 	// ValidatePds Apps checks the healthstate of the pds apps
@@ -359,8 +360,8 @@ const (
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
 	CoreChecker = "coreChecker"
-	// PoolResizeDisk resize storage pool using resize-disk
-	PoolResizeDisk = "poolResizeDisk"
+	// MetadataPoolResizeDisk resize storage pool using resize-disk
+	MetadataPoolResizeDisk = "metadatapoolResizeDisk"
 	// PoolAddDisk resize storage pool using add-disk
 	PoolAddDisk = "poolAddDisk"
 	// BackupAllApps Perform backups of all deployed apps
@@ -455,6 +456,8 @@ const (
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
 	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
 	DeleteOldNamespaces = "deleteoldnamespaces"
+	// Add Drive to create new pool and resize Drive in maintenance mode
+	AddResizePoolMaintenance = "addResizePoolInMaintenance"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -4206,6 +4209,35 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 
 }
 
+// returns list of pools with metadata disk to expand
+func getStorageMetadataPoolsToExpand() ([]*opsapi.StoragePool, error) {
+	stNodes := node.GetStorageNodes()
+	expectedCapacity := (len(stNodes) / 2) + 1
+	poolsToExpand := make([]*opsapi.StoragePool, 0)
+	for _, stNode := range stNodes {
+		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		if err != nil {
+			return nil, err
+		}
+		if len(poolsToExpand) <= expectedCapacity {
+			if eligibility[stNode.Id] {
+				for _, p := range stNode.Pools {
+					metaPoolUUID, err := GetPoolUUIDWithMetadataDisk(stNode)
+					if err != nil {
+						return nil, err
+					}
+					if eligibility[p.Uuid] && p.Uuid == metaPoolUUID {
+						poolsToExpand = append(poolsToExpand, p)
+					}
+				}
+			}
+			continue
+		}
+		break
+	}
+	return poolsToExpand, nil
+}
+
 func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType, doNodeReboot bool) {
 
 	if wg != nil {
@@ -4256,15 +4288,15 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	}
 }
 
-// TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
-func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerMetadataPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
+func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(PoolResizeDisk)
+	startLongevityTest(MetadataPoolResizeDisk)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: PoolResizeDisk,
+			Type: MetadataPoolResizeDisk,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -4277,11 +4309,11 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 
 	setMetrics(*event)
 
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	chaosLevel := getPoolExpandPercentage(MetadataPoolResizeDisk)
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
 
 		if err != nil {
 			log.Error(err.Error())
