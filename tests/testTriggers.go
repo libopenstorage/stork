@@ -448,7 +448,7 @@ const (
 	AddDrive = "addDrive"
 	// AddDiskAndReboot performs add-disk and reboots node
 	AddDiskAndReboot = "addDiskAndReboot"
-	// ResizeDiskAndReboot performs  resize-disk and reboots node on a metadatapool
+	// ResizeDiskAndReboot performs  resize-disk and reboots node
 	ResizeDiskAndReboot = "resizeDiskAndReboot"
 	// AutopilotRebalance performs  pool rebalance
 	AutopilotRebalance = "autopilotRebalance"
