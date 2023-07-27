@@ -46,6 +46,7 @@ var testDescription string
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
+		StartTorpedoTest("StoragePoolExpandDiskAdd", testDescription, nil, 0)
 		contexts = scheduleApps()
 	})
 
@@ -56,7 +57,6 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 	testDescription = "Validate storage pool expansion using resize-disk option"
 	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
-		StartTorpedoTest("StoragePoolExpandDiskAdd", testDescription, nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
 		targetSizeGiB := targetSizeInBytes / units.GiB
@@ -9736,12 +9736,10 @@ func getStoragePool(poolIDToResize string) *api.StoragePool {
 }
 
 func failOnError(err error, message string, args ...interface{}) {
-	if err != nil {
-		log.FailOnError(err, message, args...)
-	}
+	log.FailOnError(err, message, args...)
 }
 
-func verifyNonEmpty(value string, message string, args ...interface{}) {
+func verifyNonEmpty(value string, message string) {
 	dash.VerifyFatal(len(value) > 0, true, message)
 }
 
