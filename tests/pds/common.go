@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -95,6 +96,7 @@ var (
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
+	k8sApps                                 = apps.Instance()
 	pdsLabels                               = make(map[string]string)
 	accountID                               string
 )
