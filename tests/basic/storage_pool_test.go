@@ -43,10 +43,10 @@ var poolToBeResized *api.StoragePool
 var targetSizeInBytes uint64
 var originalSizeInBytes uint64
 var testDescription string
-
+var testName string
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskAdd", testDescription, nil, 0)
+		StartTorpedoTest(testName, testDescription, nil, 0)
 		contexts = scheduleApps()
 	})
 
@@ -55,6 +55,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		poolToBeResized = getStoragePool(poolIDToResize)
 	})
 
+	testName = "StoragePoolExpandDiskResize"
 	testDescription = "Validate storage pool expansion using resize-disk option"
 	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
 		originalSizeInBytes = poolToBeResized.TotalSize
@@ -9724,7 +9725,7 @@ func scheduleApps() []*scheduler.Context {
 func pickPoolToResize(contexts []*scheduler.Context) string {
 	poolIDToResize, err := GetPoolIDWithIOs(contexts)
 	failOnError(err, "Error identifying pool to run test")
-	verifyNonEmpty(poolIDToResize, "Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize)
+	verifyNonEmpty(poolIDToResize, "Expected poolIDToResize to not be empty, pool id to resize %s")
 	return poolIDToResize
 }
 
