@@ -17,6 +17,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/validation"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -321,6 +322,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 
 				storkops.Instance().SetConfig(conf)
 				core.Instance().SetConfig(conf)
+				if len(cmdFactory.GetNamespace()) > 0 {
+					err = createNamespace(sFile, cmdFactory.GetNamespace())
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+				}
 				_, err = storkops.Instance().CreateClusterPair(srcClusterPair)
 				if err != nil {
 					util.CheckErr(err)
@@ -345,6 +353,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				storkops.Instance().SetConfig(conf)
 				core.Instance().SetConfig(conf)
 
+				if len(cmdFactory.GetNamespace()) > 0 {
+					err = createNamespace(dFile, cmdFactory.GetNamespace())
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+				}
 				_, err = storkops.Instance().CreateClusterPair(destClusterPair)
 				if err != nil {
 					util.CheckErr(err)
@@ -488,6 +503,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
+			if len(cmdFactory.GetNamespace()) > 0 {
+				err = createNamespace(sFile, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+			}
 			printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 			storkops.Instance().SetConfig(conf)
 			core.Instance().SetConfig(conf)
@@ -565,6 +587,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			storkops.Instance().SetConfig(conf)
 			core.Instance().SetConfig(conf)
 
+			if len(cmdFactory.GetNamespace()) > 0 {
+				err = createNamespace(dFile, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+			}
 			printMsg(fmt.Sprintf("Creating Secret and ObjectstoreLocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 			_, err = core.Instance().CreateSecret(secret)
 			if err != nil {
@@ -886,4 +915,24 @@ func getHostPortFromEndPoint(ep string, ioStreams genericclioptions.IOStreams) (
 
 func getMissingParameterError(param string, desc string) error {
 	return fmt.Errorf("missing parameter %q - %s", param, desc)
+}
+
+func createNamespace(config string, namespace string) error {
+	conf, err := getConfig(config).ClientConfig()
+	if err != nil {
+		return err
+	}
+	coreOps, err := core.NewForConfig(conf)
+	if err != nil {
+		return err
+	}
+	_, err = coreOps.CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta.ObjectMeta{
+			Name: namespace,
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
