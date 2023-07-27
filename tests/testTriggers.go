@@ -4222,11 +4222,11 @@ func getStorageMetadataPoolsToExpand() ([]*opsapi.StoragePool, error) {
 		if len(poolsToExpand) <= expectedCapacity {
 			if eligibility[stNode.Id] {
 				for _, p := range stNode.Pools {
-					metaPool, err := GetPoolUUIDWithMetadataDisk(stNode)
+					metaPoolUUID, err := GetPoolUUIDWithMetadataDisk(stNode)
 					if err != nil {
 						return nil, err
 					}
-					if eligibility[p.Uuid] && p.Uuid == metaPool {
+					if eligibility[p.Uuid] && p.Uuid == metaPoolUUID {
 						poolsToExpand = append(poolsToExpand, p)
 					}
 				}
