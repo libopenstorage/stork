@@ -15,7 +15,7 @@ RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip
 RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -m pip install rsa --upgrade
 
 
-RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
+RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.5.9/aws-iam-authenticator_0.5.9_linux_amd64 && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
 #Install asdf
@@ -31,7 +31,7 @@ RUN asdf install kubelogin latest
 RUN asdf global kubelogin latest
 
 #Install Google Cloud SDK
-ARG GCLOUD_SDK=google-cloud-sdk-418.0.0-linux-x86_64.tar.gz
+ARG GCLOUD_SDK=google-cloud-cli-439.0.0-linux-x86_64.tar.gz
 ARG GCLOUD_INSTALL_DIR="/usr/lib"
 RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
     tar xf $GCLOUD_SDK -C $GCLOUD_INSTALL_DIR && rm -rf $GCLOUD_SDK && \
