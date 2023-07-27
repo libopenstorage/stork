@@ -412,7 +412,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					return
 				}
 				if len(googleJSONKey) == 0 {
-					util.CheckErr(getMissingParameterError("google-key-file-path", "Json key file missing for Google"))
+					util.CheckErr(getMissingParameterError("google-key-file-path", "Json key file path missing for Google"))
 					return
 				}
 				// Read the jsonkey file
@@ -623,7 +623,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVar(&azureAccountKey, "azure-account-key", "", "Account key for Azure")
 	// Google
 	createClusterPairCommand.Flags().StringVar(&googleProjectID, "google-project-id", "", "Project ID for Google")
-	createClusterPairCommand.Flags().StringVar(&googleJSONKey, "google-key-file-path", "", "Json key for Google")
+	createClusterPairCommand.Flags().StringVar(&googleJSONKey, "google-key-file-path", "", "Json key file path for Google")
 
 	return createClusterPairCommand
 }
