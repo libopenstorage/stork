@@ -185,7 +185,8 @@ func (v *vsphere) connect() error {
 				return regErr
 			}
 			if re.MatchString(fmt.Sprintf("%v", err)) {
-				log.Info(err)
+				log.Errorf("%v", err)
+				continue
 			} else {
 				log.Errorf("failed to get properties: %v", err)
 				return err
