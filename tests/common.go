@@ -2768,6 +2768,8 @@ func SetClusterContext(clusterConfigPath string) error {
 		}
 	}
 
+	CurrentClusterConfigPath = clusterConfigPath
+	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
@@ -7724,7 +7726,6 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
-
 
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
