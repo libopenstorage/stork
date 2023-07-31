@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var GlobalCredentialConfig *backup.Config
+var GlobalCredentialConfig *backup.BackupCloudConfig
 
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
@@ -144,7 +144,7 @@ var _ = BeforeSuite(func() {
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
 	// Get all the values from the cloud_config.json persist into struct which can be globally accessed
-	GlobalCredentialConfig, err = backup.GetConfigObj()
+	GlobalCredentialConfig, err = GetConfigObj()
 	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()

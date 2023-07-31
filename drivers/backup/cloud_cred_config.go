@@ -1,12 +1,5 @@
 package backup
 
-import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"os"
-)
-
 // CloudProviders represents the cloud providers configuration.
 type CloudProviders struct {
 	AWS     map[string]AWSCredential     `json:"aws"`
@@ -43,6 +36,7 @@ type GKECredential struct {
 
 // IBMCredential represents the IBM credential information.
 type IBMCredential struct {
+	AccountName   string `json:"account_name"`
 	APIKey        string `json:"api_key"`
 	Region        string `json:"region"`
 	ResourceGroup string `json:"resource_group"`
@@ -81,25 +75,10 @@ type NFSServer struct {
 	Tag           string `json:"tag"`
 }
 
-// Config represents the overall configuration.
-type Config struct {
+// BackupCloudConfig representing the credentials for cloud platforms.
+type BackupCloudConfig struct {
 	CloudProviders CloudProviders `json:"cloudProviders"`
 	BackupTargets  BackupTargets  `json:"backupTargets"`
-}
-
-// GetConfigObj reads the configuration file and returns a Config object.
-func GetConfigObj() (*Config, error) {
-	var config Config
-	_, err := os.Getwd()
-	// Read JSON file into a variable
-	testConfigPath := "../drivers/backup/cloud_config.json"
-	jsonData, err := ioutil.ReadFile(testConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read the test configuration file in the path %s", testConfigPath)
-	}
-	// Parse JSON into Configuration struct
-	err = json.Unmarshal(jsonData, &config)
-	return &config, nil
 }
 
 // GetAWSCredential retrieves the AWS credential based on the provided tag.

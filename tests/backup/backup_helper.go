@@ -42,8 +42,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/json"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -106,6 +108,7 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 5 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 )
 
@@ -3994,6 +3997,34 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 		}
 	}
 	return false, nil
+}
+
+// GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
+func GetConfigObj() (*backup.BackupCloudConfig, error) {
+	var config *backup.BackupCloudConfig
+	var found bool
+	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
+	log.FailOnError(err, fmt.Sprintf("Error listing Configmaps in default namespace"))
+	for _, cm := range cmList.Items {
+		if cm.Name == cloudCredConfigMap {
+			found = true
+			break
+		}
+	}
+	if found {
+		log.Infof(fmt.Sprintf("Configmap with name %s found in the Configmaps list", cloudCredConfigMap))
+		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
+		if err != nil {
+			log.Errorf("Error reading Configmap: %v", err)
+			return nil, err
+		}
+		log.Infof("Fetch the cloud-config from the Configmap")
+		configData := cm.Data["cloud-json"]
+		err = json.Unmarshal([]byte(configData), &config)
+		return config, nil
+	}
+	log.Warnf(fmt.Sprintf("Configmap with name %s not found in the Configmaps list, if you are running on any cloud provider please provide Configmap", cloudCredConfigMap))
+	return config, nil
 }
 
 // CreateRuleForBackupWithMultipleApplications creates backup rule for multiple application in one rule
