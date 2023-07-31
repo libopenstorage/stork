@@ -105,6 +105,8 @@ var _ = Describe("{VolumeDriverDown}", func() {
 					}
 				})
 			}
+			err := ValidateDataIntegrity(&contexts)
+			log.FailOnError(err, "error validating data integrity")
 		})
 
 		Step("destroy apps", func() {

@@ -985,6 +985,14 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
+			appList := Inst().AppList
+
+			defer func() {
+				Inst().AppList = appList
+			}()
+
+			Inst().AppList = []string{"fio-cloudsnap"}
+
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnaprestore-%d", i))...)
 			}
@@ -1199,6 +1207,16 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
+
+			appList := Inst().AppList
+
+			defer func() {
+
+				Inst().AppList = appList
+
+			}()
+
+			Inst().AppList = []string{"fio-localsnap"}
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("localsnaprestore-%d", i))...)

@@ -4,6 +4,10 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
+if [ -z "${DATA_INTEGRITY_VALIDATION_TESTS}" ]; then
+    DATA_INTEGRITY_VALIDATION_TESTS=""
+fi
+
 if [ -z "${DASH_UID}" ]; then
     if [ -e /build.properties ]; then
       DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
@@ -519,6 +523,7 @@ spec:
             "--jira-account-id=$JIRA_ACCOUNT_ID",
             "--user=$USER",
             "--enable-dash=$ENABLE_DASH",
+            "--data-integrity-validation-tests=$DATA_INTEGRITY_VALIDATION_TESTS",
             "--test-desc=$TEST_DESCRIPTION",
             "--test-type=$TEST_TYPE",
             "--test-tags=$TEST_TAGS",

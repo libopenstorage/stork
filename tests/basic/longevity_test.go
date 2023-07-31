@@ -405,7 +405,7 @@ func setEmailRecipients(configData *map[string]string) {
 			EmailRecipientsConfigMapField, testTriggersConfigMap, configMapNS, DefaultEmailRecipient)
 		EmailRecipients = []string{DefaultEmailRecipient}
 	} else {
-		EmailRecipients = strings.Split(emailRecipients, ",")
+		EmailRecipients = strings.Split(emailRecipients, ";")
 		delete(*configData, EmailRecipientsConfigMapField)
 	}
 }

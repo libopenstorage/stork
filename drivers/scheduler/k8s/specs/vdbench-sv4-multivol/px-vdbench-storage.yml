@@ -13,4 +13,6 @@ parameters:
   sharedv4_svc_type: ""
   nodiscard: "true"
   mount_options: "nodiscard=true"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"{{ end }}
 allowVolumeExpansion: true
