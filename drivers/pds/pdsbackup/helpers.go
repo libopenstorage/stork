@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"math/rand"
 	"os"
@@ -285,6 +286,24 @@ func (gcpObj *gcpStorageClient) DeleteBucket() error {
 		return fmt.Errorf("unexpected error occured: %v", err)
 	}
 	if exist != nil {
+		// List all objects associated with the bucket
+		query := &storage.Query{}
+		it := bucketClient.Objects(ctx, query)
+		for {
+			objectAttrs, err := it.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("error listing objects: %v", err)
+			}
+			err = bucketClient.Object(objectAttrs.Name).Delete(ctx)
+			if err != nil {
+				return fmt.Errorf("error deleting object %s: %v", objectAttrs.Name, err)
+			}
+			fmt.Printf("[GCP] Successfully deleted object: gs://%s/%s\n", bucketName, objectAttrs.Name)
+		}
+		// Delete the bucket
 		err := bucketClient.Delete(ctx)
 		if err != nil {
 			return fmt.Errorf("Bucket(%v).Delete: %v", bucketName, err)
