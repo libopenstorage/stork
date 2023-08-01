@@ -28,6 +28,27 @@ const (
 	Sunday            = "Sun"
 )
 
+type RuleSpec struct {
+	ActionList      []string
+	PodSelectorList []string
+	Background      []string
+	RunInSinglePod  []string
+	Container       []string
+}
+
+type PreRule struct {
+	Rule RuleSpec
+}
+
+type PostRule struct {
+	Rule RuleSpec
+}
+
+type AppRule struct {
+	PreRule  PreRule
+	PostRule PostRule
+}
+
 // Driver for backup
 type Driver interface {
 	// Org interface

@@ -42,8 +42,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/json"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -106,6 +108,7 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 5 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 )
 
@@ -177,6 +180,63 @@ type ExecutionMode int32
 const (
 	Sequential ExecutionMode = iota
 	Parallel
+)
+
+var (
+	// AppRuleMaster is a map of struct for all the value for rules
+	// This map needs to be updated for new applications as and whe required
+	AppRuleMaster = map[string]backup.AppRule{
+		"cassandra": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"nodetool flush -- keyspace1;", "echo 'test"}, PodSelectorList: []string{"app=cassandra", "app=cassandra1"}, Background: []string{"false", "false"}, RunInSinglePod: []string{"false", "false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"nodetool verify -- keyspace1;", "nodetool verify -- keyspace1;"}, PodSelectorList: []string{"app=cassandra", "app=cassandra1"}, Background: []string{"false", "false"}, RunInSinglePod: []string{"false", "false"}, Container: []string{},
+				},
+			},
+		},
+		"mysql": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"mysql-backup": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-backup": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+	}
 )
 
 // Set default provider as aws
@@ -3937,4 +3997,196 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 		}
 	}
 	return false, nil
+}
+
+// GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
+func GetConfigObj() (*backup.BackupCloudConfig, error) {
+	var config *backup.BackupCloudConfig
+	var found bool
+	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
+	log.FailOnError(err, fmt.Sprintf("Error listing Configmaps in default namespace"))
+	for _, cm := range cmList.Items {
+		if cm.Name == cloudCredConfigMap {
+			found = true
+			break
+		}
+	}
+	if found {
+		log.Infof(fmt.Sprintf("Configmap with name %s found in the Configmaps list", cloudCredConfigMap))
+		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
+		if err != nil {
+			log.Errorf("Error reading Configmap: %v", err)
+			return nil, err
+		}
+		log.Infof("Fetch the cloud-config from the Configmap")
+		configData := cm.Data["cloud-json"]
+		err = json.Unmarshal([]byte(configData), &config)
+		return config, nil
+	}
+	log.Warnf(fmt.Sprintf("Configmap with name %s not found in the Configmaps list, if you are running on any cloud provider please provide Configmap", cloudCredConfigMap))
+	return config, nil
+}
+
+// CreateRuleForBackupWithMultipleApplications creates backup rule for multiple application in one rule
+func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string, ctx context.Context, appParameters ...map[string]backup.AppRule) (string, string, error) {
+	var (
+		preUid             string
+		preRuleName        string
+		postRuleName       string
+		postUid            string
+		preActionValue     []string
+		preContainer       []string
+		postActionValue    []string
+		postContainer      []string
+		postBackground     []bool
+		postRunInSinglePod []bool
+		preBackground      []bool
+		preRunInSinglePod  []bool
+		preRulesInfo       api.RulesInfo
+		postRulesInfo      api.RulesInfo
+		prePodSelector     []map[string]string
+		postPodSelector    []map[string]string
+		appParameter       map[string]backup.AppRule
+	)
+	if len(appParameters) == 0 {
+		appParameter = AppRuleMaster
+	} else {
+		appParameter = appParameters[0]
+	}
+
+	for i := 0; i < len(appList); i++ {
+		appRule := appParameter[appList[i]]
+		if reflect.DeepEqual(appRule.PreRule, backup.PreRule{}) {
+			log.Infof("Pre rule not required for application %v", appList[i])
+		} else {
+			for j := 0; j < len(appRule.PreRule.Rule.PodSelectorList); j++ {
+				ps := strings.Split(appRule.PreRule.Rule.PodSelectorList[j], "=")
+				psMap := make(map[string]string)
+				psMap[ps[0]] = ps[1]
+				prePodSelector = append(prePodSelector, psMap)
+				preActionValue = append(preActionValue, appRule.PreRule.Rule.ActionList[j])
+				backgroundVal, _ := strconv.ParseBool(appRule.PreRule.Rule.Background[j])
+				preBackground = append(preBackground, backgroundVal)
+				podVal, _ := strconv.ParseBool(appRule.PreRule.Rule.RunInSinglePod[j])
+				preRunInSinglePod = append(preRunInSinglePod, podVal)
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				preContainer = append(preContainer, os.Getenv(containerName))
+			}
+		}
+
+		if reflect.DeepEqual(appRule.PostRule, backup.PostRule{}) {
+			log.Infof("Post rule not required for application %v", appList[i])
+		} else {
+			for j := 0; j < len(appRule.PostRule.Rule.PodSelectorList); j++ {
+				ps := strings.Split(appRule.PostRule.Rule.PodSelectorList[j], "=")
+				psMap := make(map[string]string)
+				psMap[ps[0]] = ps[1]
+				postPodSelector = append(postPodSelector, psMap)
+				postActionValue = append(postActionValue, appRule.PostRule.Rule.ActionList[j])
+				backgroundVal, _ := strconv.ParseBool(appRule.PostRule.Rule.Background[j])
+				postBackground = append(postBackground, backgroundVal)
+				podVal, _ := strconv.ParseBool(appRule.PostRule.Rule.RunInSinglePod[j])
+				postRunInSinglePod = append(postRunInSinglePod, podVal)
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				postContainer = append(postContainer, os.Getenv(containerName))
+			}
+		}
+
+	}
+	totalPreRules := len(preActionValue)
+	totalPostRules := len(postActionValue)
+
+	if totalPreRules != 0 {
+		preRuleName = fmt.Sprintf("pre-rule-%v", RandomString(5))
+		rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalPreRules)
+		for i := 0; i < totalPreRules; i++ {
+			ruleAction := api.RulesInfo_Action{Background: preBackground[i], RunInSinglePod: preRunInSinglePod[i],
+				Value: preActionValue[i]}
+			var actions = []*api.RulesInfo_Action{&ruleAction}
+			rulesInfoRuleItem[i].PodSelector = prePodSelector[i]
+			rulesInfoRuleItem[i].Actions = actions
+			rulesInfoRuleItem[i].Container = preContainer[i]
+			preRulesInfo.Rules = append(preRulesInfo.Rules, &rulesInfoRuleItem[i])
+		}
+		PreRuleCreateReq := &api.RuleCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  preRuleName,
+				OrgId: orgID,
+			},
+			RulesInfo: &preRulesInfo,
+		}
+
+		_, err := Inst().Backup.CreateRule(ctx, PreRuleCreateReq)
+		if err != nil {
+			err = fmt.Errorf("failed to create backup pre-rules: [%v]", err)
+			return "", "", err
+		}
+	}
+
+	if totalPostRules != 0 {
+		postRuleName = fmt.Sprintf("post-rule-%v", RandomString(5))
+		rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalPostRules)
+		for i := 0; i < totalPostRules; i++ {
+			ruleAction := api.RulesInfo_Action{Background: postBackground[i], RunInSinglePod: postRunInSinglePod[i],
+				Value: postActionValue[i]}
+			var actions = []*api.RulesInfo_Action{&ruleAction}
+			rulesInfoRuleItem[i].PodSelector = postPodSelector[i]
+			rulesInfoRuleItem[i].Actions = actions
+			rulesInfoRuleItem[i].Container = postContainer[i]
+			postRulesInfo.Rules = append(postRulesInfo.Rules, &rulesInfoRuleItem[i])
+		}
+		PostRuleCreateReq := &api.RuleCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  postRuleName,
+				OrgId: orgID,
+			},
+			RulesInfo: &postRulesInfo,
+		}
+
+		_, err := Inst().Backup.CreateRule(ctx, PostRuleCreateReq)
+		if err != nil {
+			err = fmt.Errorf("failed to create backup post-rules: [%v]", err)
+			return "", "", err
+		}
+	}
+
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	ruleList, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+	if err != nil {
+		err = fmt.Errorf("failed to enumerate rule with Error: [%v]", err)
+		return "", "", err
+	}
+	for i := 0; i < len(ruleList.Rules); i++ {
+		if ruleList.Rules[i].Metadata.Name == preRuleName {
+			preUid = ruleList.Rules[i].Metadata.Uid
+
+		} else if ruleList.Rules[i].Metadata.Name == postRuleName {
+			postUid = ruleList.Rules[i].Metadata.Uid
+		}
+	}
+	log.Infof("Validate pre-rules for backup")
+	preRuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  preRuleName,
+		Uid:   preUid,
+	}
+	_, err = Inst().Backup.InspectRule(ctx, preRuleInspectReq)
+	if err != nil {
+		err = fmt.Errorf("failed to validate the created pre-rule with Error: [%v]", err)
+		return "", "", err
+	}
+	log.Infof("Validate post-rules for backup")
+	postRuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  postRuleName,
+		Uid:   postUid,
+	}
+	_, err = Inst().Backup.InspectRule(ctx, postRuleInspectReq)
+	if err != nil {
+		err = fmt.Errorf("failed to validate the created post-rule with Error: [%v]", err)
+		return "", "", err
+	}
+	return preRuleName, postRuleName, nil
 }

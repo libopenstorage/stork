@@ -4,6 +4,10 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
+if [ -z "${DATA_INTEGRITY_VALIDATION_TESTS}" ]; then
+    DATA_INTEGRITY_VALIDATION_TESTS=""
+fi
+
 if [ -z "${DASH_UID}" ]; then
     if [ -e /build.properties ]; then
       DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
@@ -332,6 +336,8 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
+kubectl create configmap cloud-config --from-file=/config/cloud-json
+
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
 CLUSTER_CONFIGS=""
@@ -517,6 +523,7 @@ spec:
             "--jira-account-id=$JIRA_ACCOUNT_ID",
             "--user=$USER",
             "--enable-dash=$ENABLE_DASH",
+            "--data-integrity-validation-tests=$DATA_INTEGRITY_VALIDATION_TESTS",
             "--test-desc=$TEST_DESCRIPTION",
             "--test-type=$TEST_TYPE",
             "--test-tags=$TEST_TAGS",
@@ -554,6 +561,10 @@ spec:
       value: "${AZURE_CLIENTSECRET}"
     - name: AZURE_ACCOUNT_NAME
       value: "${AZURE_ACCOUNT_NAME}"
+    - name: SOURCE_RKE_TOKEN
+      value: "${SOURCE_RKE_TOKEN}"
+    - name: DESTINATION_RKE_TOKEN
+      value: "${DESTINATION_RKE_TOKEN}"
     - name: AZURE_ACCOUNT_KEY
       value: "${AZURE_ACCOUNT_KEY}"
     - name: AZURE_SUBSCRIPTION_ID

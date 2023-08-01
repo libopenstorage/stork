@@ -2,23 +2,18 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	. "github.com/portworx/torpedo/tests"
 )
 
 // Sanity test for OCP Recycle method
 var _ = Describe("{RecycleOCPNode}", func() {
-
-	if Inst().S.String() != openshift.SchedName {
-		log.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
-		return
-	}
 
 	var contexts []*scheduler.Context
 
@@ -32,6 +27,10 @@ var _ = Describe("{RecycleOCPNode}", func() {
 
 	It("Validing the drives and pools after recyling a node", func() {
 		Step("Get the storage and storageless nodes and delete them", func() {
+			if Inst().S.String() != openshift.SchedName {
+				log.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
+				return
+			}
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {

@@ -128,7 +128,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
-				restoredNamespace := "restored-same-project-" + RandomString(5)
+				restoredNamespace := "restore-to-same-pro-diff-ns" + RandomString(5)
 				namespaceMapping[namespace] = restoredNamespace
 				restoreNamespacesAll = append(restoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
@@ -166,7 +166,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 
 		Step("Creating rancher project in destination cluster", func() {
 			log.InfoD("Creating rancher project in destination cluster")
-			// Switch context to destination cluster
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			project := fmt.Sprintf("dest-rke-project-%v", RandomString(10))
@@ -176,7 +175,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project ID for destination cluster %s", project))
 			destClusterProjectList = append(destClusterProjectList, project)
 			destClusterProjectUIDList = append(destClusterProjectUIDList, projectID)
-			// Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
 		})
@@ -214,7 +212,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
-				restoredNamespace := "restored-diff-project-diff-cluster-same-ns" + RandomString(5)
+				restoredNamespace := "restored-diff-project-diff-cluster-same-ns-" + RandomString(5)
 				namespaceMapping[namespace] = restoredNamespace
 				destRestoreNamespacesAll = append(destRestoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
@@ -254,7 +252,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(sourceClusterProjectUIDList[i])
 			log.FailOnError(err, "Deletion of project %s failed", project)
 		}
-
 		log.Infof("Deleting projects from destination cluster")
 		// Switch context to destination cluster
 		err = SetDestinationKubeConfig()

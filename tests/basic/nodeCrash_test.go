@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -39,9 +38,9 @@ var _ = Describe("{CrashOneNode}", func() {
 			nodesToCrash := node.GetStorageDriverNodes()
 
 			// Crash node and check driver status
-			stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
+			stepLog = fmt.Sprintf("crash node one at a time from the pxnode(s)")
 			Step(stepLog, func() {
-				log.InfoD(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash))
+				log.InfoD(stepLog)
 				for _, n := range nodesToCrash {
 					if n.IsStorageDriverInstalled {
 						stepLog = fmt.Sprintf("crash node: %s", n.Name)
@@ -85,6 +84,8 @@ var _ = Describe("{CrashOneNode}", func() {
 						})
 					}
 				}
+				err = ValidateDataIntegrity(&contexts)
+				log.FailOnError(err, "error validating data integrity")
 			})
 		})
 
