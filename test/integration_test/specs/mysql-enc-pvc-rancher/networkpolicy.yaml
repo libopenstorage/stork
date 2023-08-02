@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    field.cattle.io/projectId: "project-A"
+  labels:
+    field.cattle.io/projectId: "project-A"
+  name: default-allow-all
+spec:
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              field.cattle.io/projectId: "project-A"
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              field.cattle.io/projectId: "project-A"
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

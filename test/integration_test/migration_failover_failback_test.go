@@ -109,8 +109,8 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
-	// 1 sts, 1 service, 1 pvc, 1 pv
-	expectedResources := uint64(4)
+	// 1 sts, 1 service, 1 pvc, 1 pv, 1 nw policy
+	expectedResources := uint64(5)
 	// 1 volume
 	expectedVolumes := uint64(1)
 	// validate the migration summary based on the application specs that were deployed by the test
@@ -160,8 +160,8 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
-	// 1 sts, 1 service, 1 pvc, 1 pv
-	expectedResources := uint64(4)
+	// 1 sts, 1 service, 1 pvc, 1 pv, 1 nw policy
+	expectedResources := uint64(5)
 	// 1 volume
 	expectedVolumes := uint64(1)
 	// validate the migration summary based on the application specs that were deployed by the test
@@ -248,6 +248,38 @@ func testMigrationFailover(
 			require.True(t, ok, "expected rancher label")
 			require.Equal(t, projectValue, "project-B")
 		}
+
+		nwPolicyList, err := core.Instance().ListNetworkPolicy(namespace, meta_v1.ListOptions{})
+		require.NoError(t, err, "failed to get network policies")
+		require.GreaterOrEqual(t, len(nwPolicyList.Items), 1, "unexpected number of network policies")
+		for _, nwPolicy := range nwPolicyList.Items {
+			projectValue, ok := nwPolicy.Labels[rancherLabelKey]
+			require.True(t, ok, "expected rancher label")
+			require.Equal(t, projectValue, "project-B")
+
+			projectValue, ok = nwPolicy.Annotations[rancherLabelKey]
+			require.True(t, ok, "expected rancher label")
+			require.Equal(t, projectValue, "project-B")
+
+			require.GreaterOrEqual(t, nwPolicy.Spec.Egress, 1, "unexpected egress")
+			require.GreaterOrEqual(t, nwPolicy.Spec.Egress[0].To, 1, "unexpected egress network policy peer")
+			require.NotNil(t, nwPolicy.Spec.Egress[0].To[0].NamespaceSelector, "expected non nil namespace selector")
+			for k, v := range nwPolicy.Spec.Egress[0].To[0].NamespaceSelector.MatchLabels {
+				if k == rancherLabelKey {
+					require.Equal(t, v, "project-B", "Unexpected match label in namespace selector of nw policy")
+				}
+			}
+
+			require.GreaterOrEqual(t, nwPolicy.Spec.Ingress, 1, "unexpected ingress")
+			require.GreaterOrEqual(t, nwPolicy.Spec.Ingress[0].From, 1, "unexpected ingress network policy peer")
+			require.NotNil(t, nwPolicy.Spec.Ingress[0].From[0].NamespaceSelector, "expected non nil namespace selector")
+			for k, v := range nwPolicy.Spec.Ingress[0].From[0].NamespaceSelector.MatchLabels {
+				if k == rancherLabelKey {
+					require.Equal(t, v, "project-B", "Unexpected match label in namespace selector of nw policy")
+				}
+			}
+		}
+
 	}
 	return oldScaleFactor
 }
@@ -295,8 +327,9 @@ func testMigrationFailback(
 		}
 	}
 
-	// 1 sts, 1 service, 1 pvc, 1 pv
-	expectedResources := uint64(4)
+	// 1 sts, 1 service, 1 pvc, 1 pv, 1 network policy
+	expectedResources := uint64(5)
+
 	// 1 volume
 	expectedVolumes := uint64(1)
 	// validate the migration summary
@@ -337,8 +370,39 @@ func testMigrationFailback(
 			require.Equal(t, projectValue, "project-A")
 
 			projectValue, ok = service.Annotations[rancherLabelKey]
+			require.True(t, ok, "expected rancher annotation")
+			require.Equal(t, projectValue, "project-A")
+		}
+
+		nwPolicyList, err := core.Instance().ListNetworkPolicy(namespace, meta_v1.ListOptions{})
+		require.NoError(t, err, "failed to get network policies")
+		require.GreaterOrEqual(t, len(nwPolicyList.Items), 1, "unexpected number of network policies")
+		for _, nwPolicy := range nwPolicyList.Items {
+			projectValue, ok := nwPolicy.Labels[rancherLabelKey]
 			require.True(t, ok, "expected rancher label")
 			require.Equal(t, projectValue, "project-A")
+
+			projectValue, ok = nwPolicy.Annotations[rancherLabelKey]
+			require.True(t, ok, "expected rancher label")
+			require.Equal(t, projectValue, "project-A")
+
+			require.GreaterOrEqual(t, nwPolicy.Spec.Egress, 1, "unexpected egress")
+			require.GreaterOrEqual(t, nwPolicy.Spec.Egress[0].To, 1, "unexpected egress network policy peer")
+			require.NotNil(t, nwPolicy.Spec.Egress[0].To[0].NamespaceSelector, "expected non nil namespace selector")
+			for k, v := range nwPolicy.Spec.Egress[0].To[0].NamespaceSelector.MatchLabels {
+				if k == rancherLabelKey {
+					require.Equal(t, v, "project-A", "Unexpected match label in namespace selector of nw policy")
+				}
+			}
+
+			require.GreaterOrEqual(t, nwPolicy.Spec.Ingress, 1, "unexpected ingress")
+			require.GreaterOrEqual(t, nwPolicy.Spec.Ingress[0].From, 1, "unexpected ingress network policy peer")
+			require.NotNil(t, nwPolicy.Spec.Ingress[0].From[0].NamespaceSelector, "expected non nil namespace selector")
+			for k, v := range nwPolicy.Spec.Ingress[0].From[0].NamespaceSelector.MatchLabels {
+				if k == rancherLabelKey {
+					require.Equal(t, v, "project-A", "Unexpected match label in namespace selector of nw policy")
+				}
+			}
 		}
 	}
 
