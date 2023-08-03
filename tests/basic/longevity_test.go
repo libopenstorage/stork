@@ -80,6 +80,7 @@ var _ = Describe("{Longevity}", func() {
 		UpgradeVolumeDriver:      TriggerUpgradeVolumeDriver,
 		AutoFsTrim:               TriggerAutoFsTrim,
 		UpdateVolume:             TriggerVolumeUpdate,
+		UpdateIOProfile:          TriggerVolumeIOProfileUpdate,
 		RestartManyVolDriver:     TriggerRestartManyVolDriver,
 		RebootManyNodes:          TriggerRebootManyNodes,
 		NodeDecommission:         TriggerNodeDecommission,
@@ -661,6 +662,7 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
+	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
@@ -1254,6 +1256,17 @@ func populateIntervals() {
 	triggerInterval[UpdateVolume][2] = 24 * baseInterval
 	triggerInterval[UpdateVolume][1] = 27 * baseInterval
 
+	triggerInterval[UpdateIOProfile][10] = 1 * baseInterval
+	triggerInterval[UpdateIOProfile][9] = 3 * baseInterval
+	triggerInterval[UpdateIOProfile][8] = 6 * baseInterval
+	triggerInterval[UpdateIOProfile][7] = 9 * baseInterval
+	triggerInterval[UpdateIOProfile][6] = 12 * baseInterval
+	triggerInterval[UpdateIOProfile][5] = 15 * baseInterval
+	triggerInterval[UpdateIOProfile][4] = 18 * baseInterval
+	triggerInterval[UpdateIOProfile][3] = 21 * baseInterval
+	triggerInterval[UpdateIOProfile][2] = 24 * baseInterval
+	triggerInterval[UpdateIOProfile][1] = 27 * baseInterval
+
 	triggerInterval[NodeDecommission][10] = 1 * baseInterval
 	triggerInterval[NodeDecommission][9] = 3 * baseInterval
 	triggerInterval[NodeDecommission][8] = 6 * baseInterval
@@ -1508,6 +1521,8 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
+	triggerInterval[UpdateIOProfile][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

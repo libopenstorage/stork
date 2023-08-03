@@ -121,6 +121,13 @@ const (
 	pxVersionError = "ERROR GETTING PX VERSION"
 )
 
+// TODO Need to add for AutoJornal
+//var IOProfileChange = [4]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO_JOURNAL, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
+
+var IOProfileChange = [3]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
+
+var currentIOProfileChangeCounter = 0
+
 var longevityLogger *lumberjack.Logger
 
 // EmailRecipients list of email IDs to send email to
@@ -284,6 +291,11 @@ type PureSecret struct {
 	FlashBlades []FlashBlade
 }
 
+type VolumeIOProfile struct {
+	SpecInfo *volume.Volume
+	Profile  apios.IoProfile
+}
+
 // GenerateUUID generates unique ID
 func GenerateUUID() string {
 	uuidbyte, _ := exec.Command("uuidgen").Output()
@@ -401,7 +413,8 @@ const (
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
 	// UpdateVolume provides option to update volume with properties like iopriority.
-	UpdateVolume = "updateVolume"
+	UpdateVolume    = "updateVolume"
+	UpdateIOProfile = "updateIOProfile"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
@@ -4894,6 +4907,179 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 			})
 	})
 	updateMetrics(*event)
+}
+
+// TriggerVolumeUpdate enables to test volume update
+func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpdateVolume)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpdateVolume,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Validate IO profile update on volumes"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				var pvcProfileMap map[string]VolumeIOProfile
+				pvcProfileMap, err := getIOProfileOnVolumes(contexts)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+				for count := range [2]int{} {
+					if count < 1 {
+						updateIOProfile(event, pvcProfileMap, IOProfileChange[currentIOProfileChangeCounter])
+						log.Infof("Update IO profile completed %s", IOProfileChange[currentIOProfileChangeCounter])
+					} else {
+						//Revert IO profile back
+						revertIOProfile(event, pvcProfileMap)
+					}
+					for _, ctx := range *contexts {
+						errorChan := make(chan error, errorChannelSize)
+						log.Infof("Validating context: %v", ctx.App.Key)
+						if count == 0 {
+							ctx.SkipVolumeValidation = true
+						} else {
+							ctx.SkipVolumeValidation = false
+						}
+						ValidateContext(ctx, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					}
+					log.InfoD("Data integrity check has been started ")
+					err := ValidateDataIntegrity(contexts)
+					if err != nil {
+						UpdateOutcome(event, err)
+					} else {
+						log.Infof("Data integrity check has been successful")
+					}
+					if count < 1 {
+						log.InfoD("Wait for 15 minutes before resetting back")
+						time.Sleep(15 * time.Minute)
+						log.InfoD("Resetting IO profile back to %s ", IOProfileChange[currentIOProfileChangeCounter])
+					}
+				}
+				currentIOProfileChangeCounter += 1
+			})
+		if currentIOProfileChangeCounter >= len(IOProfileChange) {
+			//Reset back to 0
+			currentIOProfileChangeCounter = 0
+			log.InfoD("Resetting current counter ")
+		}
+	})
+	log.InfoD("Update IO profile completed")
+	updateMetrics(*event)
+}
+
+func getIOProfileOnVolumes(contexts *[]*scheduler.Context) (map[string]VolumeIOProfile, error) {
+	pvcProfileMap := make(map[string]VolumeIOProfile)
+	var appVolumes []*volume.Volume
+	var err error
+	var volumeInfo VolumeIOProfile
+	for _, ctx := range *contexts {
+		appVolumes, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			log.Errorf("Error inspecting volume: %v", err)
+			return nil, err
+		}
+		for _, v := range appVolumes {
+			if v.ID == "" {
+				log.InfoD("Volume info not avialbale %v", v)
+				continue
+			}
+			appVol, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				log.Errorf("Error inspecting volume: %v", err)
+			}
+			volumeInfo = VolumeIOProfile{v, appVol.Spec.IoProfile}
+			pvcProfileMap[v.ID] = volumeInfo
+		}
+	}
+	return pvcProfileMap, nil
+}
+func revertIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile) {
+	var volumeSpec *apios.VolumeSpecUpdate
+	for pvcName, v := range pvcProfileMap {
+		log.InfoD("Getting info from volume: %s", pvcName)
+		appVol, err := Inst().V.InspectVolume(pvcName)
+		if err != nil {
+			log.Errorf("Error inspecting volume: %v", err)
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", pvcName, appVol.Spec.IoProfile, appVol.DerivedIoProfile)
+		if appVol.Spec.IoProfile != v.Profile {
+			log.InfoD("Expected IO Profile change to  %v", v.Profile)
+			volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: v.Profile}}
+			err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+			//Verify Volume set with required IO profile.
+			appVol, err = Inst().V.InspectVolume(pvcName)
+			if err != nil {
+				log.Errorf("Error inspecting volume: %v", err)
+				UpdateOutcome(event, err)
+			}
+			log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
+			if v.Profile != appVol.Spec.IoProfile {
+				err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", pvcName, v.Profile)
+				UpdateOutcome(event, err)
+			}
+
+		}
+	}
+}
+func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile, ioProfileTo apios.IoProfile) {
+	//Get all volumes and change IO profile on those volumes.
+	var volumeSpec *apios.VolumeSpecUpdate
+	for pvcName, v := range pvcProfileMap {
+		log.InfoD("Getting info from volume: %s", pvcName)
+		appVol, err := Inst().V.InspectVolume(pvcName)
+		if err != nil {
+			log.Errorf("Error inspecting volume: %v", err)
+		}
+		currentIOProfile := appVol.Spec.IoProfile
+		derivedIOProfile := appVol.DerivedIoProfile
+		log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", pvcName, currentIOProfile, derivedIOProfile)
+		if currentIOProfile != ioProfileTo {
+			if appVol.Spec.HaLevel == 1 && ioProfileTo == apios.IoProfile_IO_PROFILE_DB_REMOTE {
+				log.InfoD(" HA of PVC  %v cannot be set to DB-REMOTE", pvcName)
+			} else {
+				log.InfoD("Expected IO Profile change to  %v", ioProfileTo)
+				volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: ioProfileTo}}
+				err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+				//Verify Volume set with required IO profile.
+				appVol, err = Inst().V.InspectVolume(pvcName)
+				if err != nil {
+					log.Errorf("Error inspecting volume: %v", err)
+					UpdateOutcome(event, err)
+				}
+				log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
+				log.InfoD("Dervived IO profile after update %v", appVol.DerivedIoProfile.SimpleString())
+				if ioProfileTo != appVol.Spec.IoProfile {
+					err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", pvcName, ioProfileTo)
+					UpdateOutcome(event, err)
+				}
+			}
+			log.InfoD("Completed update on %v", pvcName)
+		}
+	}
 }
 
 // updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
