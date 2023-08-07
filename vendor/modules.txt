@@ -998,7 +998,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
+# github.com/portworx/torpedo v0.20.4-rc2 => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
 ## explicit; go 1.19
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -1016,6 +1016,7 @@ github.com/portworx/torpedo/drivers/volume/linstor
 github.com/portworx/torpedo/drivers/volume/portworx
 github.com/portworx/torpedo/drivers/volume/portworx/schedops
 github.com/portworx/torpedo/pkg/aetosutil
+github.com/portworx/torpedo/pkg/asyncdr
 github.com/portworx/torpedo/pkg/aututils
 github.com/portworx/torpedo/pkg/errors
 github.com/portworx/torpedo/pkg/log
