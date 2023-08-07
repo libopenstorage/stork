@@ -307,6 +307,27 @@ func createMigratedDeployment(t *testing.T) {
 	require.NoError(t, err, "Error creating deployment")
 }
 
+func createMigratedReplicaset(t *testing.T) {
+	replicas := int32(0)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "rs"}})
+	require.NoError(t, err, "Error creating rs namespace")
+
+	replicaset := &appv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "migratedReplicaset",
+			Namespace: "rs",
+			Annotations: map[string]string{
+				migration.StorkMigrationReplicasAnnotation: "1",
+			},
+		},
+		Spec: appv1.ReplicaSetSpec{
+			Replicas: &replicas,
+		},
+	}
+	_, err = apps.Instance().CreateReplicaSet(replicaset, metav1.CreateOptions{})
+	require.NoError(t, err, "Error creating replicaset")
+}
+
 func createMigratedStatefulSet(t *testing.T) {
 	replicas := int32(0)
 	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sts"}})
@@ -352,11 +373,16 @@ func createMigratedDeploymentConfig(t *testing.T) {
 
 func TestActivateDeactivateMigrations(t *testing.T) {
 	createMigratedDeployment(t)
+	createMigratedReplicaset(t)
 	createMigratedStatefulSet(t)
 	createMigratedDeploymentConfig(t)
 
 	cmdArgs := []string{"activate", "migrations", "-n", "dep"}
 	expected := "Updated replicas for deployment dep/migratedDeployment to 1\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"activate", "migrations", "-n", "rs"}
+	expected = "Updated replicas for replicaset rs/migratedReplicaset to 1\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"activate", "migrations", "-n", "depconf"}
@@ -371,6 +397,10 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
+	cmdArgs = []string{"deactivate", "migrations", "-n", "rs"}
+	expected = "Updated replicas for replicaset rs/migratedReplicaset to 0\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
 	cmdArgs = []string{"deactivate", "migrations", "-n", "depconf"}
 	expected = "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -382,12 +412,14 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	cmdArgs = []string{"activate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 1\n"
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 1\n"
+	expected += "Updated replicas for replicaset rs/migratedReplicaset to 1\n"
 	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"deactivate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
+	expected += "Updated replicas for replicaset rs/migratedReplicaset to 0\n"
 	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
