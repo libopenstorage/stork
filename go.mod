@@ -30,7 +30,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
-	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
+	github.com/portworx/torpedo v0.20.4-rc2
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
