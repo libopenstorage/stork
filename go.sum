@@ -2358,8 +2358,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/polyfloyd/go-errorlint v1.0.5/go.mod h1:APVvOesVSAnne5SClsPxPdfvZTVDojXh1/G3qb5wjGI=
 github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611/go.mod h1:4hklRW/4DQpLqkcXcjtNprbH2tz/sJaNtqinfPWl/LA=
-github.com/portworx/kdmp v0.4.1-0.20230725051304-06a313a7fa66 h1:NhW9hX+6PVpYb//fj6iiUjmOoF/W0vPFanSt5hssxgU=
-github.com/portworx/kdmp v0.4.1-0.20230725051304-06a313a7fa66/go.mod h1:KFeJuczRm1Jw6AdejFLcXHB6yrjfKY/X1brfWDmXgr8=
+github.com/portworx/kdmp v0.4.1-0.20230808142221-b9f3d6cca602 h1:B1M4FS8rom0v1lF5csZzaj1NFqSxoV4BgkTNchkx77Q=
+github.com/portworx/kdmp v0.4.1-0.20230808142221-b9f3d6cca602/go.mod h1:KFeJuczRm1Jw6AdejFLcXHB6yrjfKY/X1brfWDmXgr8=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=

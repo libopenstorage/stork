@@ -111,7 +111,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 	case kdmpapi.ResourceExportStageInitial:
 		// Create ResourceBackup CR
 		err = createResourceBackup(resourceExport.Name, resourceExport.Namespace)
-		if err != nil {
+		if err != nil && !k8sErrors.IsAlreadyExists(err) {
 			updateData := updateResourceExportFields{
 				stage:  kdmpapi.ResourceExportStageFinal,
 				status: kdmpapi.ResourceExportStatusFailed,
