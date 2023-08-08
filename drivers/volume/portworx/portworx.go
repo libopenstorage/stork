@@ -1445,7 +1445,7 @@ func (d *portworx) ValidateVolumeTopology(vol *api.Volume, params map[string]str
 	zone := params[torpedok8s.TopologyZoneK8sNodeLabel]
 	nodes := node.GetNodesByTopologyZoneLabel(zone)
 	for _, node := range nodes {
-		if topoMatches, err = d.isVolumeAttachedOnNode(vol, node); err != nil {
+		if topoMatches, err = d.IsVolumeAttachedOnNode(vol, node); err != nil {
 			return err
 		}
 		if topoMatches {
@@ -1972,7 +1972,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		}
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
-			ok, err := d.isVolumeAttachedOnNode(pxVol, n)
+			ok, err := d.IsVolumeAttachedOnNode(pxVol, n)
 			if err != nil {
 				return nil, false, err
 			}
@@ -2021,7 +2021,7 @@ func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
 }
 
 // check all the possible attachment options (node ID or node IP)
-func (d *portworx) isVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
+func (d *portworx) IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
 	log.Debugf("Volume [%s]attached on [%s]", volume.Id, volume.AttachedOn)
 	if node.VolDriverNodeID == volume.AttachedOn {
 		return true, nil

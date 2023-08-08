@@ -54,8 +54,8 @@ const (
 )
 
 var (
-	orgID                   string
-	bucketName              string
+	orgID                string
+	bucketName           string
 	ExpectedKafkaCrdList = []string{"kafkabridges.kafka.strimzi.io", "kafkaconnectors.kafka.strimzi.io", "kafkaconnects.kafka.strimzi.io",
 		"kafkamirrormaker2s.kafka.strimzi.io", "kafkamirrormakers.kafka.strimzi.io", "kafkarebalances.kafka.strimzi.io",
 		"kafkas.kafka.strimzi.io", "kafkatopics.kafka.strimzi.io", "kafkausers.kafka.strimzi.io", "strimzipodsets.core.strimzi.io"}

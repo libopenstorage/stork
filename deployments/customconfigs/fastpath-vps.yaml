@@ -1,7 +1,7 @@
 apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: fastpath-repl1-vdbench-vps
+  name: fastpath-repl1-vps
 spec:
   volumeAffinity:
     - matchExpressions:

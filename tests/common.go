@@ -245,7 +245,7 @@ const (
 	anthosInstPathCliFlag = "anthos-inst-path"
 
 
-	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
+        skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
@@ -7792,6 +7792,39 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
+// GetRandomNode Gets Random node
+func GetRandomNode(pxNodes []node.Node) node.Node {
+	rand.Seed(time.Now().UnixNano())
+	randomIndex := rand.Intn(len(pxNodes))
+	randomNode := pxNodes[randomIndex]
+	return randomNode
+}
+
+func RemoveLabelsAllNodes(label string, forStorage, forStorageLess bool) error {
+	if !forStorage && !forStorageLess {
+		return errors.New("at least one of forStorage or forStorageLess must be true")
+	}
+
+	var pxNodes []node.Node
+
+	if forStorage && forStorageLess {
+		pxNodes = node.GetStorageDriverNodes()
+	} else if forStorage {
+		pxNodes = node.GetStorageNodes()
+	} else if forStorageLess {
+		pxNodes = node.GetStorageLessNodes()
+	}
+
+	for _, node := range pxNodes {
+		log.Infof("Node Name: %s\n", node.Name)
+		if err := Inst().S.RemoveLabelOnNode(node, label); err != nil {
+			return fmt.Errorf("error removing label on node [%s]: %w", node.Name, err)
+		}
+	}
+
+	return nil
+}
+
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	if err != nil {
@@ -8006,7 +8039,7 @@ outer:
 
 		applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
 
-		for name, _ := range applicationScaleMap {
+		for name := range applicationScaleMap {
 			applicationScaleDownMap[name] = 0
 		}
 		err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
@@ -8296,4 +8329,5 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 	}
 
 	return contextsOnNode, nil
+
 }

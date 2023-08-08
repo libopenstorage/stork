@@ -1144,3 +1144,10 @@ func (d *DefaultDriver) GetJournalDevicePath(n *node.Node) (string, error) {
 	}
 
 }
+
+func (d *DefaultDriver) IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
+	return true, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsVolumeAttachedOnNode()",
+	}
+}

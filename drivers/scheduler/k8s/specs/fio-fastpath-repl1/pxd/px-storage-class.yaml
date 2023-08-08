@@ -2,11 +2,12 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-vps-sc
+  name: fio-fast-repl1-vps-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
   placement_strategy: "fastpath-repl1-vps"
-  repl: "2"
+  repl: "1"
+  fastpath: "true"
   priority_io: "high"
 allowVolumeExpansion: true
 ---
@@ -14,9 +15,11 @@ allowVolumeExpansion: true
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-vps-log
+  name: fio-fast-repl1-vps-log
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  placement_strategy: "fastpath-repl1-vps"
+  repl: "1"
+  fastpath: "true"
   priority_io: "high"
 allowVolumeExpansion: true

@@ -475,6 +475,8 @@ type Driver interface {
 
 	// GetJournalDevicePath returns journal device path in the given node
 	GetJournalDevicePath(n *node.Node) (string, error)
+
+	IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

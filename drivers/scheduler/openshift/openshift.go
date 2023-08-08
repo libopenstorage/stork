@@ -728,13 +728,13 @@ func ackAPIRemoval(version string) error {
 	parsedVersion412, _ := semver.Parse("4.12.0")
 	parsedVersion413, _ := semver.Parse("4.13.0")
 	var patchData string
-	if (parsedVersion.GTE(parsedVersion49) && parsedVersion.LT(parsedVersion412)){
+	if parsedVersion.GTE(parsedVersion49) && parsedVersion.LT(parsedVersion412) {
 		patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
-	}else if (parsedVersion.GTE(parsedVersion412) && parsedVersion.LT(parsedVersion413)){
+	} else if parsedVersion.GTE(parsedVersion412) && parsedVersion.LT(parsedVersion413) {
 		patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
-	}else if (parsedVersion.GTE(parsedVersion413)){
+	} else if parsedVersion.GTE(parsedVersion413) {
 		patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
-	}else{
+	} else {
 		return nil
 	}
 	t := func() (interface{}, bool, error) {

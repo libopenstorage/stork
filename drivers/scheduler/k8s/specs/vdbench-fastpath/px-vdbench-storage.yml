@@ -5,7 +5,7 @@ metadata:
   name: vdbench-fastpath-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  placement_strategy: "fastpath-repl1-vdbench-vps"
+  placement_strategy: "fastpath-repl1-vps"
   repl: "1"
   sharedv4: "true"
   sharedv4_svc_type: ""
