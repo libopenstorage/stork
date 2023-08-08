@@ -2,11 +2,11 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-sc
+  name: fio-sc-aggr
 provisioner: kubernetes.io/portworx-volume
 parameters:
   {{ if .Repl }}
-  repl : "{{ .Repl }}"
+  repl: "{{ .Repl }}"
   {{ else }}
   repl: "2"{{ end }}
   priority_io: "high"
@@ -14,17 +14,28 @@ parameters:
   io_profile: "{{ .IoProfile }}"
   {{ else }}
   io_profile: "db_remote"{{ end }}
+
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .AggregationLevel }}
+  aggregation_level: "{{ .AggregationLevel }}"
+  {{ else }}
+  aggregation_level: "2"{{ end }}
+  {{ if .AggregationLevel }}
+  labels: "type=aggregated"
+  group: "fio-data"
+  {{ end }}
 allowVolumeExpansion: true
 ---
 ##### Portworx storage class
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-log
+  name: fio-log-aggr
 provisioner: kubernetes.io/portworx-volume
 parameters:
+  repl: "2"
+  io_profile: "db_remote"
   {{ if .Repl }}
   repl: "{{ .Repl }}"
   {{ else }}
@@ -37,4 +48,3 @@ parameters:
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
 allowVolumeExpansion: true
-

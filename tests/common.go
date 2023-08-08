@@ -257,9 +257,7 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
-
-
-        skipSystemCheckCliFlag = "torpedo-skip-system-checks"
+  skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
@@ -6720,6 +6718,12 @@ func ExitNodesFromMaintenanceMode() error {
 func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
+	// Refreshing Node Registry to make sure all changes done to the nodes are refreshed
+	err := Inst().S.RefreshNodeRegistry()
+	if err != nil {
+		return nil, err
+	}
+
 	if node.IsStorageNode(n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
@@ -8434,6 +8438,181 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 
 }
 
+type CloudDrive struct {
+	Type              string            `json:"Type"`
+	Size              int               `json:"Size"`
+	ID                string            `json:"ID"`
+	Path              string            `json:"Path"`
+	Iops              int               `json:"Iops"`
+	Vpus              int               `json:"Vpus"`
+	PXType            string            `json:"PXType"`
+	State             string            `json:"State"`
+	Labels            map[string]string `json:"labels"`
+	AttachOptions     interface{}       `json:"AttachOptions"`
+	Provisioner       string            `json:"Provisioner"`
+	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
+}
+
+// GetAllCloudDriveDetailsOnNode returns list of cloud drives present on the node
+func GetAllCloudDriveDetailsOnNode(n *node.Node) ([]CloudDrive, error) {
+
+	var drives CloudDrive
+	var allCloudDrives []CloudDrive
+
+	// Execute the command and check the alerts of type POOL
+	command := fmt.Sprintf("pxctl cd inspect --node %v -j", n.Id)
+	out, err := Inst().N.RunCommandWithNoRetry(node.GetStorageNodes()[0], command, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var configData struct {
+		Configs map[string]CloudDrive `json:"Configs"`
+	}
+
+	err = json.Unmarshal([]byte(out), &configData)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, config := range configData.Configs {
+		drives.ID = config.ID
+		drives.Size = config.Size
+		drives.Type = config.Type
+		drives.PXType = config.PXType
+		drives.Iops = config.Iops
+		drives.Vpus = config.Vpus
+		drives.Path = config.Path
+		drives.State = config.State
+		drives.AttachOptions = config.AttachOptions
+		drives.Provisioner = config.Provisioner
+		drives.EncryptionKeyInfo = config.EncryptionKeyInfo
+		drives.Labels = config.Labels
+		allCloudDrives = append(allCloudDrives, drives)
+	}
+	return allCloudDrives, nil
+}
+
+type DriveDetails struct {
+	PoolUUID string
+	Disks    []string
+}
+
+// GetDrivePathFromNode returns drive paths from all the pools on Node
+func GetDrivePathFromNode(n *node.Node) ([]DriveDetails, error) {
+
+	allPools := n.StoragePools
+	var allDrives []DriveDetails
+
+	for i := 0; i < len(allPools); i++ {
+		var drive DriveDetails
+		drive.Disks = []string{}
+		var drives []string
+		cmd := fmt.Sprintf("pxctl sv pool show -j | jq '.datapools[%v].uuid'", i)
+		out, err := runCmdOnce(cmd, *n)
+		if err != nil {
+			return nil, err
+		}
+		// Split the string into lines based on the newline character ("\n")
+		PoolUUID := strings.TrimSpace(out)
+
+		cmd = fmt.Sprintf("pxctl sv pool show -j | jq '.datapools[%v].Info | {Resources, ResourceJournal, ResourceSystemMetadata} | .. | .path? // empty'", i)
+		out, err = runCmdOnce(cmd, *n)
+		if err != nil {
+			return nil, err
+		}
+		// Split the string into lines based on the newline character ("\n")
+		lines := strings.Split(out, "\n")
+
+		// Print each line
+		for _, line := range lines {
+			// Remove leading and trailing spaces or double quotes if present
+			line = strings.TrimSpace(strings.Trim(line, `"`))
+			drives = append(drives, line)
+		}
+		drive.PoolUUID = PoolUUID
+		drive.Disks = drives
+		allDrives = append(allDrives, drive)
+	}
+
+	return allDrives, nil
+}
+
+// GetDriveProperties Returns type of the Disk from Path Specified
+func GetDriveProperties(path string) (CloudDrive, error) {
+	for _, each := range node.GetStorageNodes() {
+		cloudDrives, err := GetAllCloudDriveDetailsOnNode(&each)
+		if err != nil {
+			return CloudDrive{}, err
+		}
+		for _, eachDrive := range cloudDrives {
+			if strings.Contains(path, eachDrive.Path) {
+				return eachDrive, nil
+			}
+		}
+	}
+	return CloudDrive{}, nil
+}
+
+// returns ID and Name of the volume present
+type VolMap struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ListVolumeNamesUsingPxctl , Returns list of volumes present in the cluster
+// option will get the output of pxctl volume list, records ID and VolName and returns the struct
+func ListVolumeNamesUsingPxctl(n *node.Node) ([]VolMap, error) {
+	volList := []VolMap{}
+	var vols VolMap
+
+	cmd := "pxctl volume list -j | jq "
+	output, err := runCmdGetOutput(cmd, *n)
+	if err != nil {
+		return nil, err
+	}
+
+	// Define a slice of Volume structs
+	var vol []struct {
+		ID      string `json:"id"`
+		Locator struct {
+			Name string `json:"name"`
+		} `json:"locator"`
+	}
+	err = json.Unmarshal([]byte(output), &vol)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, volName := range vol {
+		vols.ID = volName.ID
+		vols.Name = volName.Locator.Name
+		volList = append(volList, vols)
+	}
+
+	return volList, nil
+}
+
+// IsVolumeExits Returns true if volume with ID or Name exists on the cluster
+func IsVolumeExits(volName string) bool {
+	isVolExist := false
+	n := node.GetStorageNodes()
+	allVols, err := ListVolumeNamesUsingPxctl(&n[0])
+	if err != nil {
+		return false
+	}
+
+	for _, eachVol := range allVols {
+		if eachVol.ID == volName || eachVol.Name == volName {
+			isVolExist = true
+		}
+	}
+	return isVolExist
+}
+
 // UpdateCloudCredentialOwnership updates the CloudCredential object ownership
 func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context, orgID string) error {
 	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
@@ -8495,3 +8674,4 @@ func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	}
 	return nil
 }
+

@@ -469,8 +469,8 @@ const (
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
 	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
 	DeleteOldNamespaces = "deleteoldnamespaces"
-	// Add Drive to create new pool and resize Drive in maintenance mode
-	AddResizePoolMaintenance = "addResizePoolInMaintenance"
+	// Volume update repl size and resize volume on aggregated volumes
+	AggrVolDepReplResizeOps = "aggrVolDepReplResizeOps"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -7957,6 +7957,190 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				log.InfoD("migrationSchedule %v, suspended successfully", migrationSchedule.Name)
 			}
 		}
+	})
+}
+
+// AggrVolDepReplResizeOps crashes vol driver
+func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	/*
+	   TO run this test please make sure to run the applications which creates aggr volumes
+	*/
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AggrVolDepReplResizeOps)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AggrVolDepReplResizeOps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Repl factor update and Volume Update on aggregated volume"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Starting test case here !!")
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			*contexts = append(*contexts, ScheduleApplications(fmt.Sprintf("aggrvoldeprepresize-%d", i))...)
+		}
+		ValidateApplications(*contexts)
+
+		allVolsCreated := []*volume.Volume{}
+		for _, eachContext := range *contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("Failed to get app %s's volumes", eachContext.App.Key))
+				return
+			}
+			for _, eachVol := range vols {
+				aggrLevel, err := Inst().V.GetAggregationLevel(eachVol)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed with error while checking for aggr level on volume [%v]", aggrLevel))
+					return
+				}
+				// Pick volumes with aggr level > 1
+				if aggrLevel > 1 {
+					allVolsCreated = append(allVolsCreated, eachVol)
+				}
+			}
+		}
+
+		if len(allVolsCreated) < 1 {
+			err := fmt.Errorf("no volumes created with aggregation level > 1 in the contexts")
+			UpdateOutcome(event, fmt.Errorf("volume with aggregator level > 1 created? Error [%v]", err))
+			return
+		}
+
+		teardownContext := func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			for _, ctx := range *contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+		defer teardownContext()
+
+		setReplFactor := func(volName *volume.Volume) {
+			volAggrLevel, err := Inst().V.GetAggregationLevel(volName)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed with error while checking for aggr level on volume [%v]", volAggrLevel))
+				return
+			}
+
+			getReplicaSets, err := Inst().V.GetReplicaSets(volName)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("Failed to get replication factor on the volume"))
+				return
+			}
+
+			storageNodes := node.GetStorageNodes()
+			maxReplFactor := 3
+
+			if volAggrLevel == 3 {
+				if len(storageNodes) >= 6 && len(storageNodes) < 9 {
+					maxReplFactor = 2
+				}
+				if len(storageNodes) < 6 {
+					maxReplFactor = 1
+				}
+			}
+			if volAggrLevel == 2 {
+				if len(storageNodes) >= 6 {
+					maxReplFactor = 3
+				}
+				if len(storageNodes) < 6 {
+					maxReplFactor = 2
+				}
+			}
+
+			if len(getReplicaSets[0].Nodes) == 3 || len(getReplicaSets[0].Nodes) == 1 {
+				if len(getReplicaSets[0].Nodes) < maxReplFactor {
+					err := Inst().V.SetReplicationFactor(volName, 2, nil, nil, true)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("failed to set replicaiton for Volume [%v]", volName.Name))
+					}
+				}
+			}
+
+			if len(getReplicaSets[0].Nodes) == 2 && len(getReplicaSets[0].Nodes) < maxReplFactor {
+				err := Inst().V.SetReplicationFactor(volName, 3, nil, nil, true)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to set replicaiton for Volume [%v] with error : [%v]", volName.Name, err))
+				}
+			}
+		}
+
+		// Set replication factor to 3 on all the volumes present in the cluster
+		for _, eachVol := range allVolsCreated {
+			setReplFactor(eachVol)
+		}
+
+		log.InfoD("Initiate Volume resize continuously")
+		volumeResize := func(vol *volume.Volume) error {
+
+			apiVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return err
+			}
+
+			curSize := apiVol.Spec.Size
+			newSize := curSize + (uint64(10) * units.GiB)
+			log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
+				vol.ID, curSize/units.GiB, newSize/units.GiB)
+
+			err = Inst().V.ResizeVolume(vol.ID, newSize)
+			if err != nil {
+				return err
+			}
+
+			// Wait for 2 seconds for Volume to update stats
+			time.Sleep(2 * time.Second)
+			volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return err
+			}
+
+			updatedSize := volumeInspect.Spec.Size
+			if updatedSize <= curSize {
+				return fmt.Errorf("volume did not update from [%v] to [%v] ",
+					curSize/units.GiB, updatedSize/units.GiB)
+			}
+			return nil
+		}
+
+		// Resize volume created with contextx
+		for _, eachVol := range allVolsCreated {
+			log.Infof("Resizing Volumes created [%v]", eachVol.Name)
+			err := volumeResize(eachVol)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("Resizing volume failed on the cluster err: [%v]", err))
+			}
+		}
+
+		// Set replication factor to 3 on all the volumes present in the cluster
+		for _, eachVol := range allVolsCreated {
+			setReplFactor(eachVol)
+		}
+
+		for _, eachVol := range allVolsCreated {
+			log.InfoD("Validating Volume Status of Volume [%v]", eachVol.ID)
+			status, err := IsVolumeStatusUP(eachVol)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
+			}
+			dash.VerifyFatal(status == true, true, "is volume status up ?")
+		}
+		updateMetrics(*event)
 	})
 }
 

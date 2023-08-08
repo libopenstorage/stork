@@ -824,7 +824,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
-			log.FailOnError(err, "Error waiting for poor resize")
+			log.FailOnError(err, "Error waiting for pool resize")
 
 			//validating new pool rebalance
 			log.InfoD("Validate pool rebalance after drive add")
@@ -6789,6 +6789,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(AddCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
+		log.Infof("Adding disks to the node completed")
 
 		// Refresh endpoints
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
@@ -8724,7 +8725,10 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				terminate = true
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
 				}
 
 			}
@@ -9266,10 +9270,15 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 				terminate = true
 				wg.Done()
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
 				}
 				for _, each := range snapshotsCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					}
 				}
 			}
 		}
@@ -9300,19 +9309,20 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 
 		inspectDeleteVolume := func(volumeId string) error {
 			defer GinkgoRecover()
-			// inspect volume
-			appVol, err := Inst().V.InspectVolume(volumeId)
-			if err != nil {
-				stopRoutine()
-				return err
-			}
+			if IsVolumeExits(volumeId) {
+				// inspect volume
+				appVol, err := Inst().V.InspectVolume(volumeId)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
 
-			err = Inst().V.DeleteVolume(appVol.Id)
-			if err != nil {
-				stopRoutine()
-				return err
+				err = Inst().V.DeleteVolume(appVol.Id)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
 			}
-
 			return nil
 		}
 
