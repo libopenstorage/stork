@@ -208,7 +208,9 @@ github.com/aws/aws-sdk-go/private/protocol/rest
 github.com/aws/aws-sdk-go/private/protocol/restjson
 github.com/aws/aws-sdk-go/private/protocol/restxml
 github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
+github.com/aws/aws-sdk-go/service/autoscaling
 github.com/aws/aws-sdk-go/service/ec2
+github.com/aws/aws-sdk-go/service/opsworks
 github.com/aws/aws-sdk-go/service/s3
 github.com/aws/aws-sdk-go/service/s3/s3iface
 github.com/aws/aws-sdk-go/service/s3/s3manager
@@ -261,6 +263,12 @@ github.com/chai2010/gettext-go/po
 # github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311
 ## explicit; go 1.15
 github.com/chenzhuoyu/base64x
+# github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0
+## explicit
+github.com/codegangsta/inject
+# github.com/codeskyblue/go-sh v0.0.0-20170112005953-b097669b1569
+## explicit
+github.com/codeskyblue/go-sh
 # github.com/container-storage-interface/spec v1.7.0
 ## explicit; go 1.18
 github.com/container-storage-interface/spec/lib/go/csi
@@ -732,11 +740,13 @@ github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/aut
 # github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 ## explicit; go 1.13
 github.com/libopenstorage/cloudops
+github.com/libopenstorage/cloudops/aws
 github.com/libopenstorage/cloudops/azure
 github.com/libopenstorage/cloudops/backoff
 github.com/libopenstorage/cloudops/gce
 github.com/libopenstorage/cloudops/ibm
 github.com/libopenstorage/cloudops/oracle
+github.com/libopenstorage/cloudops/pkg/exec
 github.com/libopenstorage/cloudops/unsupported
 # github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e
 ## explicit
@@ -772,7 +782,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52
+# github.com/libopenstorage/operator v0.0.0-20230804084623-e42992ab8512
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/drivers/storage/portworx/util
@@ -787,6 +797,7 @@ github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/portworx
 github.com/libopenstorage/operator/pkg/constants
 github.com/libopenstorage/operator/pkg/errors
 github.com/libopenstorage/operator/pkg/mock
+github.com/libopenstorage/operator/pkg/preflight
 github.com/libopenstorage/operator/pkg/util
 github.com/libopenstorage/operator/pkg/util/k8s
 github.com/libopenstorage/operator/pkg/util/test

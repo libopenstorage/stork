@@ -17,6 +17,7 @@ type SdkServers struct {
 	Cluster *MockOpenStorageClusterServer
 	Node    *MockOpenStorageNodeServer
 	Role    *MockOpenStorageRoleServer
+	Volume  *MockOpenStorageVolumeServer
 }
 
 // SdkServer can be used to create a sdk server which implements mock server
@@ -54,6 +55,9 @@ func (m *SdkServer) StartOnAddress(ip, port string) error {
 	}
 	if m.servers.Role != nil {
 		api.RegisterOpenStorageRoleServer(m.server, m.servers.Role)
+	}
+	if m.servers.Volume != nil {
+		api.RegisterOpenStorageVolumeServer(m.server, m.servers.Volume)
 	}
 
 	reflection.Register(m.server)

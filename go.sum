@@ -780,7 +780,9 @@ github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f/go.mod h1:i/u9
 github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd/go.mod h1:sE/e/2PUdi/liOCUjSTXgM1o87ZssimdTWN964YiIeI=
 github.com/codegangsta/cli v1.13.1-0.20160326223947-bc465becccd1/go.mod h1:/qJNoX69yVSKu5o4jLyXAENLRyk1uhi7zkbQ3slBdOA=
 github.com/codegangsta/inject v0.0.0-20140425184007-37d7f8432a3e/go.mod h1:4Zcjuz89kmFXt9morQgcfYZAYZ5n8WHjt81YYWIwtTM=
+github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 h1:sDMmm+q/3+BukdIpxwO365v/Rbspp2Nt5XntgQRXq8Q=
 github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0/go.mod h1:4Zcjuz89kmFXt9morQgcfYZAYZ5n8WHjt81YYWIwtTM=
+github.com/codeskyblue/go-sh v0.0.0-20170112005953-b097669b1569 h1:sJQCqjgEvdsavYbeW69ALoyyKZWxavSgq3JYw6+zmP4=
 github.com/codeskyblue/go-sh v0.0.0-20170112005953-b097669b1569/go.mod h1:2hUMLQDY+46DXIf/i7n2rUCHUwF3gZrb4slZV8C4RYI=
 github.com/container-storage-interface/spec v1.1.0/go.mod h1:6URME8mwIBbpVyZV93Ce5St17xBiQJQY67NDsuohiy4=
 github.com/container-storage-interface/spec v1.2.0/go.mod h1:6URME8mwIBbpVyZV93Ce5St17xBiQJQY67NDsuohiy4=
@@ -1850,8 +1852,8 @@ github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993/go.mo
 github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HIyQva4Avwx61U1kWcw4HGQh3sjzV2DEEs=
 github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
 github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594/go.mod h1:0S4k1ouTScuVS3rxPukfEFvc5bMasmI1wpAAM0NejWQ=
-github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52 h1:vnCTaxkg/b6RDcVPJtmrEWAqk8sKJPsnS1jxzkGfwYU=
-github.com/libopenstorage/operator v0.0.0-20230630001033-63a47a3b4e52/go.mod h1:Lc0sagIlgkrXHn+vwR9JfZkAkSsdedtbrRx42qF0vMc=
+github.com/libopenstorage/operator v0.0.0-20230804084623-e42992ab8512 h1:aPzQQPw/Ru53tGEfB6jvISD/ZKRudGzI1LQYa48SIkc=
+github.com/libopenstorage/operator v0.0.0-20230804084623-e42992ab8512/go.mod h1:Lc0sagIlgkrXHn+vwR9JfZkAkSsdedtbrRx42qF0vMc=
 github.com/libopenstorage/secrets v0.0.0-20190403224602-c282e8dc17bf/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=

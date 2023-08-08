@@ -4,6 +4,25 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// Node Statuses
+	NodeStatusPending    = "Pending"
+	NodeStatusInProgress = "InProgress"
+	NodeStatusFailed     = "Failed"
+	NodeStatusCompleted  = "Completed"
+
+	// Diag Statuses
+	DiagStatusPending        = "Pending"
+	DiagStatusInProgress     = "InProgress"
+	DiagStatusFailed         = "Failed"
+	DiagStatusCompleted      = "Completed"
+	DiagStatusPartialFailure = "PartiallyFailed"
+	DiagStatusUnknown        = "Unknown"
+
+	// Labels
+	LabelPortworxDiagName = "portworx.io/diag-name"
+)
+
 // PortworxDiagSpec is the spec used to define a portworx diag.
 type PortworxDiagSpec struct {
 	// Configuration for diags collection of the main Portworx component.
@@ -51,6 +70,8 @@ type VolumeSelector struct {
 type PortworxDiagStatus struct {
 	// One word status of the entire diags collection job.
 	Phase string `json:"phase,omitempty"`
+	// Optional message used to give the reason for any failure.
+	Message string `json:"message,omitempty"`
 	// UUID of the Portworx cluster. This is useful to find the uploaded diags.
 	ClusterUUID string `json:"clusterUuid,omitempty"`
 	// Status of the diags collection from all the selected nodes.
