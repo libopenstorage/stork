@@ -49,7 +49,7 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 30 * time.Minute
+	cloudAccountDeleteTimeout                 = 5 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
@@ -106,7 +106,7 @@ const (
 	namespaceDeleteTimeout                    = 10 * time.Minute
 	clusterCreationTimeout                    = 5 * time.Minute
 	clusterCreationRetryTime                  = 10 * time.Second
-	clusterDeleteTimeout                      = 5 * time.Minute
+	clusterDeleteTimeout                      = 10 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
@@ -1077,49 +1077,56 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
 		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
-		clusterObj := clusterResp.GetCluster()
-		clusterProvider := GetClusterProviders()
-		for _, provider := range clusterProvider {
-			switch provider {
-			case drivers.ProviderRke:
-				clusterCredName = clusterObj.PlatformCredentialRef.Name
-				clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+		if err == nil {
+			clusterObj := clusterResp.GetCluster()
+			clusterProvider := GetClusterProviders()
+			for _, provider := range clusterProvider {
+				switch provider {
+				case drivers.ProviderRke:
+					clusterCredName = clusterObj.PlatformCredentialRef.Name
+					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
 
-			default:
-				clusterCredName = clusterObj.CloudCredentialRef.Name
-				clusterCredUID = clusterObj.CloudCredentialRef.Uid
-			}
-			err = DeleteCluster(clusterName, orgID, ctx, true)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-			clusterDeleteStatus := func() (interface{}, bool, error) {
-				status, err := IsClusterPresent(clusterName, ctx, orgID)
-				if err != nil {
-					return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
+				default:
+					clusterCredName = clusterObj.CloudCredentialRef.Name
+					clusterCredUID = clusterObj.CloudCredentialRef.Uid
 				}
-				if status {
-					return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
-				}
-				return "", false, nil
-			}
-			_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting clsuter %s", clusterName))
-
-			if clusterCredName != "" {
-				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
-				cloudCredDeleteStatus := func() (interface{}, bool, error) {
-					status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
+				err = DeleteCluster(clusterName, orgID, ctx, true)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+				clusterDeleteStatus := func() (interface{}, bool, error) {
+					status, err := IsClusterPresent(clusterName, ctx, orgID)
 					if err != nil {
-						return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
+						return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
 					}
 					if status {
-						return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
+						return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
+				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+
+				if clusterCredName != "" {
+					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+					cloudCredDeleteStatus := func() (interface{}, bool, error) {
+						status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
+						if err != nil {
+							return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
+						}
+						if status {
+							return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
+						}
+						return "", false, nil
+					}
+					_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
+				}
+			}
+		} else {
+			if strings.Contains(err.Error(), "object not found") {
+				log.Infof("Cluster %s is not created for the user", clusterName)
+			} else {
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
 			}
 		}
 	}
@@ -3598,20 +3605,6 @@ func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
 	return nil, fmt.Errorf("unable to find the mount point for %s", AppContextsMapping.App.Key)
 }
 
-type OwnershipAccessType int32
-
-const (
-	Invalid OwnershipAccessType = 0
-	// Read access only and cannot affect the resource.
-	Read = 1
-	// Write access and can affect the resource.
-	// This type automatically provides Read access also.
-	Write = 2
-	// Administrator access.
-	// This type automatically provides Read and Write access also.
-	Admin = 3
-)
-
 // UpdateBackupLocationOwnership Updates the backup location ownership
 func UpdateBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
 	log.Infof("UpdateBackupLocationOwnership for users %v", userNames)
@@ -3864,69 +3857,6 @@ func UpdateRuleOwnership(ruleName string, ruleUid string, userNames []string, gr
 	_, err := backupDriver.UpdateOwnershipRule(ctx, ruleOwnershipUpdateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update rule ownership: %v", err)
-	}
-	return nil
-}
-
-// UpdateCloudCredentialOwnership Updates the CloudCredential object ownership
-func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
-	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
-	backupDriver := Inst().Backup
-	userIDs := make([]string, 0)
-	groupIDs := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		log.Info("add id for the user - %s", userName)
-		userIDs = append(userIDs, userID)
-	}
-
-	for _, group := range groups {
-		groupID, err := backup.FetchIDOfGroup(group)
-		if err != nil {
-			return err
-		}
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, userID := range userIDs {
-		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     userID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
-	}
-
-	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, groupID := range groupIDs {
-		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     groupID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
-	}
-
-	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
-		OrgId: orgID,
-		Name:  cloudCredentialName,
-		Ownership: &api.Ownership{
-			Groups:        groupCloudCredentialOwnershipAccessConfigs,
-			Collaborators: userCloudCredentialOwnershipAccessConfigs,
-			Public: &api.Ownership_PublicAccessControl{
-				Type: api.Ownership_AccessType(publicAccess),
-			},
-		},
-		Uid: cloudCredentialUid,
-	}
-
-	_, err := backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
-	if err != nil {
-		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
 	}
 	return nil
 }

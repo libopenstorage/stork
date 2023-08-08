@@ -399,6 +399,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	timeStamp := time.Now().Unix()
 	bkpNamespaces = make([]string, 0)
+	userContextsList := make([]context.Context, 0)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartBackupPodDuringBackupSharing", "Restart backup pod during backup sharing", nil, 82948)
@@ -586,6 +587,17 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 		var wg sync.WaitGroup
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
+
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContextsList {
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
+		}
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
