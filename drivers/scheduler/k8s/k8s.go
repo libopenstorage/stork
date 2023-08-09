@@ -825,7 +825,7 @@ func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
 	return false
 }
 
-// Schedule Schedule the application
+// Schedule Schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
@@ -846,7 +846,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
-
 		appNamespace := app.GetID(instanceID)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
@@ -871,9 +870,10 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		ctx := &scheduler.Context{
 			UID: instanceID,
 			App: &spec.AppSpec{
-				Key:      app.Key,
-				SpecList: specObjects,
-				Enabled:  app.Enabled,
+				Key:       app.Key,
+				SpecList:  specObjects,
+				Enabled:   app.Enabled,
+				NameSpace: appNamespace,
 			},
 			ScheduleOptions: options,
 		}

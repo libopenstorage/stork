@@ -257,7 +257,8 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
-  skipSystemCheckCliFlag = "torpedo-skip-system-checks"
+
+	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
@@ -1723,7 +1724,8 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
+// ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
+// the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -6413,6 +6415,18 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
+// GetPoolsInUse lists all persistent volumes and returns the pool IDs
+func GetPoolsInUse() ([]string, error) {
+	pvlist, err := k8sCore.GetPersistentVolumes()
+	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
+		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
+	}
+	volumeInUse := pvlist.Items[0]
+	volumeID := volumeInUse.GetName()
+
+	return GetPoolIDsFromVolName(volumeID)
+}
+
 // GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
@@ -6438,7 +6452,7 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			t := func() (interface{}, bool, error) {
 				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
-				if err != nil {
+				if err != nil || !isIOsInProgress {
 					return false, true, err
 				}
 				return true, false, nil
@@ -6563,24 +6577,13 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		return nil, err
 	}
 	for _, each := range volDetails.ReplicaSets {
-		for _, uuids := range each.PoolUuids {
-			if len(poolUuids) == 0 {
-				poolUuids = append(poolUuids, uuids)
-			} else {
-				isPresent := false
-				for i := 0; i < len(poolUuids); i++ {
-					if uuids == poolUuids[i] {
-						isPresent = true
-					}
-				}
-				if isPresent == false {
-					poolUuids = append(poolUuids, uuids)
-				}
+		for _, uuid := range each.PoolUuids {
+			if !Contains(poolUuids, uuid) {
+				poolUuids = append(poolUuids, uuid)
 			}
 		}
-
 	}
-	return poolUuids, err
+	return poolUuids, nil
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
