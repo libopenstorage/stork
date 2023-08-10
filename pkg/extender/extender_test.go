@@ -353,6 +353,7 @@ func TestExtender(t *testing.T) {
 	t.Run("disableHyperConvergenceTest", disableHyperConvergenceTest)
 	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
 	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
+	t.Run("skipScoringForWindowsPods", skipScoringForWindowsPods)
 	t.Run("teardown", teardown)
 }
 
@@ -2126,4 +2127,52 @@ func preferLocalNodeIgnoredWithAntiHyperConvergenceTest(t *testing.T) {
 		t.Fatalf("Error sending filter request: %v", err)
 	}
 	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+}
+
+// Verify scoring is skipped entirely if Pod uses a volume with winshare "true"
+func skipScoringForWindowsPods(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("windowsVolumeSkipScoring", map[string]bool{"WindowsVolume": true})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("WindowsVolume", regularVolumeProvNodes, 3, map[string]string{windowsStorageClassLabel: "true"}, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	if err := driver.UpdateNodeStatus(2, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	// All nodes including offline nodes will be returned as scheduler is disabled for Windows Pods
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
 }

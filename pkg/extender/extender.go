@@ -45,8 +45,10 @@ const (
 	schedulingFailureEventReason                  = "FailedScheduling"
 	// Pod annotation to check if only local nodes should be used to schedule a pod
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
-	// StorageCluster parameter to check if only remote nodes should be used to schedule a pod
+	// StorageClass parameter to check if only remote nodes should be used to schedule a pod
 	preferRemoteNodeOnlyParameter = "stork.libopenstorage.org/preferRemoteNodeOnly"
+	// StorageClass parameter to check if the Pod is using a volume labeled for Windows
+	windowsStorageClassLabel = "winshare"
 	// annotation to skip a volume and its local node replicas for scoring while
 	// scheduling a pod
 	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
@@ -228,6 +230,15 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
 		} else {
 			for _, volumeInfo := range driverVolumes {
+				// Pod is using a volume that is labeled for Windows
+				// This Pod needs to run only on Windows node
+				// Stork will return all nodes in the filter request
+				if e.volumePrefersWindowsNodes(volumeInfo) {
+					e.encodeFilterResponse(encoder,
+						pod,
+						args.Nodes.Items)
+					return
+				}
 				onlineNodeFound := false
 				for _, volumeNode := range volumeInfo.DataNodes {
 					for _, driverNode := range driverNodes {
@@ -324,6 +335,13 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		filteredNodes = args.Nodes.Items
 	}
 
+	e.encodeFilterResponse(encoder, pod, filteredNodes)
+}
+
+func (e *Extender) encodeFilterResponse(encoder *json.Encoder,
+	pod *v1.Pod,
+	filteredNodes []v1.Node) {
+
 	storklog.PodLog(pod).Debugf("Nodes in filter response:")
 	for _, node := range filteredNodes {
 		log.Debugf("%v %+v", node.Name, node.Status.Addresses)
@@ -338,12 +356,24 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 }
 
-// volumePrefersRemoteOnly checks if preferRemoteNodeOnly label is applied to the label
+// volumePrefersRemoteOnly checks if preferRemoteNodeOnly label is applied to the volume
 func (e *Extender) volumePrefersRemoteOnly(volumeInfo *volume.Info) bool {
 	if volumeInfo.Labels != nil {
 		if value, ok := volumeInfo.Labels[preferRemoteNodeOnlyParameter]; ok {
 			if preferRemoteOnlyExists, err := strconv.ParseBool(value); err == nil {
 				return preferRemoteOnlyExists
+			}
+		}
+	}
+	return false
+}
+
+// volumePrefersWindowsNodes checks if "winshare" label is applied to the volume
+func (e *Extender) volumePrefersWindowsNodes(volumeInfo *volume.Info) bool {
+	if volumeInfo.Labels != nil {
+		if value, ok := volumeInfo.Labels[windowsStorageClassLabel]; ok {
+			if preferWindowsNodesExists, err := strconv.ParseBool(value); err == nil {
+				return preferWindowsNodesExists
 			}
 		}
 	}
@@ -631,6 +661,11 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 						skipVolumeScoring = false
 					}
 				}
+
+				if e.volumePrefersWindowsNodes(volume) {
+					skipVolumeScoring = true
+				}
+
 				if skipVolumeScoring {
 					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
 					continue
@@ -764,18 +799,7 @@ func (e *Extender) processCSIExtPodFilterRequest(
 		filteredNodes = args.Nodes.Items
 	}
 
-	storklog.PodLog(pod).Debugf("Nodes in filter response:")
-	for _, node := range filteredNodes {
-		log.Debugf("%v %+v", node.Name, node.Status.Addresses)
-	}
-	response := &schedulerapi.ExtenderFilterResult{
-		Nodes: &v1.NodeList{
-			Items: filteredNodes,
-		},
-	}
-	if err := encoder.Encode(response); err != nil {
-		storklog.PodLog(pod).Errorf("Error encoding filter response: %+v : %v", response, err)
-	}
+	e.encodeFilterResponse(encoder, pod, filteredNodes)
 }
 
 func (e *Extender) processCSIExtPodPrioritizeRequest(
