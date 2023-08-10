@@ -1239,6 +1239,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 
 		vol := volumeInspectResponse.Volume
+
 		// Status
 		if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
 			return nil, true, &ErrFailedToInspectVolume{

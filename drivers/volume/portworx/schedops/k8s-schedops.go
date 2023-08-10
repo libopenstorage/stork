@@ -237,11 +237,22 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		if err != nil {
 			return nil, true, err
 		}
-		resp, err := k.validateMountsInPods(vol, pvName, pods, d)
-		if err != nil {
-			log.Errorf("failed to validate mount in pod. Cause: %v", err)
-			return nil, true, err
+
+		resp := make([]string, 0)
+		if vol.Raw {
+			resp, err = k.validateDevicesInPods(vol, pvName, pods, d)
+			if err != nil {
+				log.Errorf("failed to validate devices in pod. Cause: %v", err)
+				return nil, true, err
+			}
+		} else {
+			resp, err = k.validateMountsInPods(vol, pvName, pods, d)
+			if err != nil {
+				log.Errorf("failed to validate mount in pod. Cause: %v", err)
+				return nil, true, err
+			}
 		}
+
 		lenValidatedPods := len(resp)
 		lenExpectedPods := len(pods)
 		// in case we have a Deployment/ReplicaSet or StatefulSet the expected pods are the same as set in
@@ -282,6 +293,60 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	}
 
 	return nil
+}
+
+func (k *k8sSchedOps) validateDevicesInPods(
+	vol *volume.Volume,
+	pvName string,
+	pods []corev1.Pod,
+	d node.Driver) ([]string, error) {
+
+	validatedDevicePods := make([]string, 0)
+	nodes := node.GetNodesByName()
+
+	for _, p := range pods {
+		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
+		if err != nil && err == k8serrors.ErrPodsNotFound {
+			log.Warnf("pod %s not found. probably it got rescheduled", p.Name)
+			continue
+		} else if !pod.DeletionTimestamp.IsZero() {
+			// pod is being terminated, skip
+			log.Warnf("pod %s/%s is being terminated, not validating the devices...", p.Namespace, p.Name)
+			continue
+		} else if !k8sCore.IsPodReady(*pod) {
+			// if pod is not ready, delay the check
+			printStatus(k, *pod)
+			continue
+		} else if err != nil {
+			return validatedDevicePods, err
+		}
+		log.Debugf("validating the devices in pod %s/%s", p.Namespace, p.Name)
+		containerPaths := getContainerPVCMountMap(*pod)
+		if len(containerPaths) == 0 {
+			return validatedDevicePods, fmt.Errorf("pod: [%s] %s does not have raw block devices.", pod.Namespace, pod.Name)
+		}
+		currentNode, nodeExists := nodes[p.Spec.NodeName]
+		if !nodeExists {
+			return validatedDevicePods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+		}
+
+		// ignore error when a command not exactly fail, like grep when empty return exit 1
+		connOpts := node.ConnectionOpts{
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+			IgnoreError:     true,
+		}
+
+		log.Debugf("findmnt | grep \\\\[ | grep %s", pvName)
+		volDevice, _ := d.RunCommand(currentNode,
+			fmt.Sprintf("findmnt | grep \\\\[ | grep %s", pvName), connOpts)
+		if len(volDevice) == 0 {
+			return validatedDevicePods, fmt.Errorf("volume %s not bind mounted on node %s", vol.Name, currentNode.Name)
+		}
+
+		validatedDevicePods = append(validatedDevicePods, pod.Name)
+	}
+	return validatedDevicePods, nil
 }
 
 func (k *k8sSchedOps) validateMountsInPods(
@@ -802,6 +867,12 @@ func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 		for _, cMount := range c.VolumeMounts {
 			if _, ok := pvcNamesInSpec[cMount.Name]; ok {
 				containerPaths[c.Name] = append(containerPaths[c.Name], cMount.MountPath)
+			}
+		}
+		// for raw block volumes
+		for _, cDevice := range c.VolumeDevices {
+			if _, ok := pvcNamesInSpec[cDevice.Name]; ok {
+				containerPaths[c.Name] = append(containerPaths[c.Name], cDevice.DevicePath)
 			}
 		}
 	}

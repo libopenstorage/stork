@@ -1,0 +1,14 @@
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fa-raw-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fa-raw-sc
+  

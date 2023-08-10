@@ -2,15 +2,16 @@ package tests
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"

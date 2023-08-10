@@ -1,0 +1,22 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-raw-block
+  labels:
+    app: "nginx-raw-block"
+spec:
+  # Specify a volume that uses the claim defined in pvc.yaml
+  volumes:
+    - name: pure-vol
+      persistentVolumeClaim:
+        claimName: fa-raw-pvc
+  containers:
+    - name: nginx
+      image: nginx
+      # Configure a device mount for the volume we defined above
+      volumeDevices:
+        - name: pure-vol
+          devicePath: /dev/xvda
+      ports:
+        - containerPort: 80
