@@ -155,6 +155,7 @@ func (m *Driver) ProvisionVolume(
 	size uint64,
 	labels map[string]string,
 	needsAntiHyperconvergence bool,
+	windowsVolume bool,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
 		return fmt.Errorf("volume %v already exists", volumeName)
@@ -166,6 +167,7 @@ func (m *Driver) ProvisionVolume(
 		Size:                      size,
 		Labels:                    labels,
 		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
+		WindowsVolume:             windowsVolume,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {
