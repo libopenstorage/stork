@@ -353,6 +353,7 @@ func TestExtender(t *testing.T) {
 	t.Run("disableHyperConvergenceTest", disableHyperConvergenceTest)
 	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
 	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
+	t.Run("skipScoringForWindowsPods", skipScoringForWindowsPods)
 	t.Run("teardown", teardown)
 }
 
@@ -597,7 +598,7 @@ func WFFCVolumeTest(t *testing.T) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
 	driver.AddPVC(pvcClaim)
 	provNodes := []int{}
-	if err := driver.ProvisionVolume("WFFCVol", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("WFFCVol", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -649,7 +650,7 @@ func WFFCMultiVolumeTest(t *testing.T) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume1)
 	driver.AddPVC(pvcClaim1)
 	provNodes := []int{}
-	if err := driver.ProvisionVolume("WFFCVol1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("WFFCVol1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -669,7 +670,7 @@ func WFFCMultiVolumeTest(t *testing.T) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume2)
 	driver.AddPVC(pvcClaim2)
 	provNodes = []int{1}
-	if err := driver.ProvisionVolume("normalVol", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("normalVol", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -711,7 +712,7 @@ func noVolumeNodeTest(t *testing.T) {
 	pod := newPod("noVolumeNode", map[string]bool{"noVolumeNode": false})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("noVolumeNode", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("noVolumeNode", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, requestNodes)
@@ -753,7 +754,7 @@ func noDriverNodeTest(t *testing.T) {
 	pod := newPod("noDriverNode", map[string]bool{"noDriverNode": false})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, requestNodes)
@@ -782,7 +783,7 @@ func singleVolumeTest(t *testing.T) {
 
 	pod := newPod("singleVolume", map[string]bool{"singleVolume": false})
 
-	if err := driver.ProvisionVolume("singleVolume", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("singleVolume", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -828,11 +829,11 @@ func multipleVolumeTest(t *testing.T) {
 	pod := newPod("doubleVolumePod", map[string]bool{"volume1": false, "volume2": false})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("volume2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("volume2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -880,11 +881,11 @@ func multipleVolumeSkipTest(t *testing.T) {
 	pod := newPod("doubleVolumeSkipPod", map[string]bool{"included-volume": false, "excluded-volume": true})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("included-volume", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("included-volume", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("excluded-volume", provNodes, 1, map[string]string{skipScoringLabel: "true"}, false); err != nil {
+	if err := driver.ProvisionVolume("excluded-volume", provNodes, 1, map[string]string{skipScoringLabel: "true"}, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -933,11 +934,11 @@ func multipleVolumeStorageDownTest(t *testing.T) {
 	pod := newPod("doubleVolumeSkipPod", map[string]bool{"vol1": false, "vol2": true})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("vol1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("vol1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("vol2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("vol2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -984,7 +985,7 @@ func driverErrorTest(t *testing.T) {
 
 	pod := newPod("driverErrorPod", map[string]bool{"driverErrorTest": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("volume1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1029,7 +1030,7 @@ func driverNodeErrorStateTest(t *testing.T) {
 
 	pod := newPod("driverErrorPod", map[string]bool{"driverNodeErrorTest": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("driverNodeErrorTest", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("driverNodeErrorTest", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1079,11 +1080,11 @@ func zoneTest(t *testing.T) {
 
 	pod := newPod("zoneTest", map[string]bool{"zoneVolume1": false, "zoneVolume2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("zoneVolume1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("zoneVolume1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("zoneVolume2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("zoneVolume2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1131,11 +1132,11 @@ func zoneStorageDownNodeTest(t *testing.T) {
 
 	pod := newPod("zoneStorageDownNodeTest", map[string]bool{"zoneVol1": false, "zoneVol2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("zoneVol1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("zoneVol1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("zoneVol2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("zoneVol2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	if err := driver.UpdateNodeStatus(0, volume.NodeStorageDown); err != nil {
@@ -1186,11 +1187,11 @@ func regionTest(t *testing.T) {
 
 	pod := newPod("regionTest", map[string]bool{"regionVolume1": false, "regionVolume2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("regionVolume1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("regionVolume1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("regionVolume2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("regionVolume2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1237,11 +1238,11 @@ func regionStorageDownNodeTest(t *testing.T) {
 
 	pod := newPod("regionStorageDownNodeTest", map[string]bool{"regionVol1": false, "regionVol2": false})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("regionVol1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("regionVol1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("regionVol2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("regionVol2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1287,7 +1288,7 @@ func nodeNameTest(t *testing.T) {
 
 	pod := newPod("nodeNameTest", map[string]bool{"nodeNameTest": false})
 
-	if err := driver.ProvisionVolume("nodeNameTest", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("nodeNameTest", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -1328,7 +1329,7 @@ func ipTest(t *testing.T) {
 
 	pod := newPod("ipTest", map[string]bool{"ipTest": false})
 
-	if err := driver.ProvisionVolume("ipTest", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("ipTest", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -1387,7 +1388,7 @@ func noReplicasTest(t *testing.T) {
 	pod := newPod("noReplicasTest", map[string]bool{"noReplicasTest": false})
 
 	provNodes := []int{0}
-	if err := driver.ProvisionVolume("noReplicasTest", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("noReplicasTest", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	if err := driver.UpdateNodeStatus(0, volume.NodeOffline); err != nil {
@@ -1479,7 +1480,7 @@ func preferLocalNodeTest(t *testing.T) {
 	pod := newPod("preferLocalNodeTest", map[string]bool{"preferLocalNodeTest": false})
 
 	provNodes := []int{0}
-	if err := driver.ProvisionVolume("preferLocalNodeTest", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("preferLocalNodeTest", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1506,7 +1507,7 @@ func extenderMetricsTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 	// check if pod is hyper-Converged
-	if err := driver.ProvisionVolume("metric-vol-1", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("metric-vol-1", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	pod := newPod("HyperPodTest", map[string]bool{"metric-vol-1": false})
@@ -1521,11 +1522,11 @@ func extenderMetricsTest(t *testing.T) {
 	require.Equal(t, testutil.ToFloat64(HyperConvergedPodsCounter), float64(1), "hyperConverged_pods_total not matched")
 
 	// Semi-Hyper converged pod metrics
-	if err := driver.ProvisionVolume("metric-vol-2", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("metric-vol-2", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes2 := []int{1, 2}
-	if err := driver.ProvisionVolume("metric-vol-3", provNodes2, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("metric-vol-3", provNodes2, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	semiHyperPod := newPod("SemiPodTest", map[string]bool{"metric-vol-2": false, "metric-vol-3": false})
@@ -1540,7 +1541,7 @@ func extenderMetricsTest(t *testing.T) {
 	require.Equal(t, testutil.ToFloat64(SemiHyperConvergePodsCounter), float64(1), "semi_hyperConverged_pods_total not matched")
 
 	// non-hyper converged pod metrics
-	if err := driver.ProvisionVolume("non-metric-vol", provNodes, 1, nil, false); err != nil {
+	if err := driver.ProvisionVolume("non-metric-vol", provNodes, 1, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	nonHyperPod := newPod("NonHyperPodTest", map[string]bool{"non-metric-vol": false})
@@ -1572,7 +1573,7 @@ func preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest(t *testing.T) {
 	pod := newPod("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", map[string]bool{"preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", provNodes, 6, map[string]string{preferRemoteNodeOnlyParameter: "true"}, false); err != nil {
+	if err := driver.ProvisionVolume("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", provNodes, 6, map[string]string{preferRemoteNodeOnlyParameter: "true"}, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1597,7 +1598,7 @@ func preferRemoteNodeOnlyFailedSchedulingTest(t *testing.T) {
 	pod := newPod("preferRemoteNodeOnlyFailedSchedulingTest", map[string]bool{"preferRemoteNodeOnlyFailedSchedulingTest": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("preferRemoteNodeOnlyFailedSchedulingTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true); err != nil {
+	if err := driver.ProvisionVolume("preferRemoteNodeOnlyFailedSchedulingTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1622,7 +1623,7 @@ func preferRemoteNodeOnlyAntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("preferRemoteNodeOnlyAntiHyperConvergenceTest", map[string]bool{"preferRemoteNodeOnlyAntiHyperConvergenceTest": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("preferRemoteNodeOnlyAntiHyperConvergenceTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true); err != nil {
+	if err := driver.ProvisionVolume("preferRemoteNodeOnlyAntiHyperConvergenceTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1671,7 +1672,7 @@ func antiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("sharedV4ServiceAntiHyperConverged", map[string]bool{"sharedV4ServiceAntiHyperConverged": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("sharedV4ServiceAntiHyperConverged", provNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("sharedV4ServiceAntiHyperConverged", provNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1713,7 +1714,7 @@ func offlineNodesAntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("offlineNodesAntiHyperConvergenceTest", map[string]bool{"offlineNodesAntiHyperConvergenceTest": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("offlineNodesAntiHyperConvergenceTest", provNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("offlineNodesAntiHyperConvergenceTest", provNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1749,12 +1750,12 @@ func multiVolumeAntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes": false, "sharedV4Svc": false})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("HyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{3, 4, 5}
-	if err := driver.ProvisionVolume("sharedV4Svc", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("sharedV4Svc", sharedV4SvcProvNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1797,12 +1798,12 @@ func multiVolume2AntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes2": false, "sharedV4Svc2": false})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("HyperConvergedVolumes2", regularVolumeProvNodes, 3, nil, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedVolumes2", regularVolumeProvNodes, 3, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{2, 3, 4}
-	if err := driver.ProvisionVolume("sharedV4Svc2", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("sharedV4Svc2", sharedV4SvcProvNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1851,12 +1852,12 @@ func multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes3": false, "sharedV4Svc3": false})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("HyperConvergedVolumes3", regularVolumeProvNodes, 3, nil, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedVolumes3", regularVolumeProvNodes, 3, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("sharedV4Svc3", sharedV4SvcProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true); err != nil {
+	if err := driver.ProvisionVolume("sharedV4Svc3", sharedV4SvcProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true"}, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1896,12 +1897,12 @@ func multiVolumeSkipHyperConvergedVolumesScoringTest(t *testing.T) {
 	pod := newPod("multiVolumeSkipHyperConvergedVolumesScoringTest", map[string]bool{"HyperConvergedVolumesMultiSkip": true, "sharedV4SvcMultiSkip": true})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("HyperConvergedVolumesMultiSkip", regularVolumeProvNodes, 3, map[string]string{skipScoringLabel: "true"}, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedVolumesMultiSkip", regularVolumeProvNodes, 3, map[string]string{skipScoringLabel: "true"}, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{3, 4, 5}
-	if err := driver.ProvisionVolume("sharedV4SvcMultiSkip", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("sharedV4SvcMultiSkip", sharedV4SvcProvNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1944,12 +1945,12 @@ func multiVolumeSkipAllVolumeScoringTest(t *testing.T) {
 	pod := newPod("multiVolumeSkipAllVolumeScoringTest", map[string]bool{"HyperConvergedVolumesSkip": true, "sharedV4SvcMultiVolumeSkip": true})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("HyperConvergedVolumesSkip", regularVolumeProvNodes, 3, map[string]string{skipScoringLabel: "true"}, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedVolumesSkip", regularVolumeProvNodes, 3, map[string]string{skipScoringLabel: "true"}, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{3, 4, 5}
-	if err := driver.ProvisionVolume("sharedV4SvcMultiVolumeSkip", sharedV4SvcProvNodes, 3, map[string]string{skipScoringLabel: "true"}, true); err != nil {
+	if err := driver.ProvisionVolume("sharedV4SvcMultiVolumeSkip", sharedV4SvcProvNodes, 3, map[string]string{skipScoringLabel: "true"}, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1992,12 +1993,12 @@ func multiVolumeWithStorageDownNodesAntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("multiVolumeWithStorageDownNodesAntiHyperConvergenceTest", map[string]bool{"StorageDownNodesHyperConvergedVolumes": false, "StorageDownNodeSharedV4Svc": false})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("StorageDownNodesHyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false); err != nil {
+	if err := driver.ProvisionVolume("StorageDownNodesHyperConvergedVolumes", regularVolumeProvNodes, 3, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{3, 4, 5}
-	if err := driver.ProvisionVolume("StorageDownNodeSharedV4Svc", sharedV4SvcProvNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("StorageDownNodeSharedV4Svc", sharedV4SvcProvNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -2045,7 +2046,7 @@ func disableHyperConvergenceTest(t *testing.T) {
 	pod.Annotations[disableHyperconvergenceAnnotation] = "true"
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("multiVolumeDisableHyperConvergedTest", provNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("multiVolumeDisableHyperConvergedTest", provNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -2089,7 +2090,7 @@ func preferLocalNodeWithHyperConvergedVolumesTest(t *testing.T) {
 	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("preferLocalNodeWithHyperConvergedVolumesTest", provNodes, 3, nil, false); err != nil {
+	if err := driver.ProvisionVolume("preferLocalNodeWithHyperConvergedVolumesTest", provNodes, 3, nil, false, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -2117,7 +2118,7 @@ func preferLocalNodeIgnoredWithAntiHyperConvergenceTest(t *testing.T) {
 	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", provNodes, 3, nil, true); err != nil {
+	if err := driver.ProvisionVolume("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", provNodes, 3, nil, true, false); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -2126,4 +2127,52 @@ func preferLocalNodeIgnoredWithAntiHyperConvergenceTest(t *testing.T) {
 		t.Fatalf("Error sending filter request: %v", err)
 	}
 	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+}
+
+// Verify scoring is skipped entirely if Pod uses a volume with winshare "true"
+func skipScoringForWindowsPods(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("windowsVolumeSkipScoring", map[string]bool{"WindowsVolume": true})
+
+	regularVolumeProvNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("WindowsVolume", regularVolumeProvNodes, 3, map[string]string{"winshare": "true"}, false, true); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	if err := driver.UpdateNodeStatus(2, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	// All nodes including offline nodes will be returned as scheduler is disabled for Windows Pods
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
 }

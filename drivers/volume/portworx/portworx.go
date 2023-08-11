@@ -189,6 +189,9 @@ const (
 	controllerExpandSecretName      = "csi.storage.k8s.io/controller-expand-secret-name"
 	nodePublishSecretNamespace      = "csi.storage.k8s.io/node-publish-secret-namespace"
 	controllerExpandSecretNamespace = "csi.storage.k8s.io/controller-expand-secret-namespace"
+
+	// StorageClass parameter to check if the Pod is using a volume labeled for Windows
+	windowsStorageClassLabel = "winshare"
 )
 
 type cloudSnapStatus struct {
@@ -526,10 +529,26 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 		info.Labels[k] = v
 	}
 	info.NeedsAntiHyperconvergence = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
+
+	info.WindowsVolume = p.volumePrefersWindowsNodes(info)
+
 	info.VolumeSourceRef = vols[0]
 
 	return info, nil
 }
+
+// volumePrefersWindowsNodes checks if "winshare" label is applied to the volume
+func (p *portworx) volumePrefersWindowsNodes(volumeInfo *storkvolume.Info) bool {
+	if volumeInfo.Labels != nil {
+		if value, ok := volumeInfo.Labels[windowsStorageClassLabel]; ok {
+			if preferWindowsNodesExists, err := strconv.ParseBool(value); err == nil {
+				return preferWindowsNodesExists
+			}
+		}
+	}
+	return false
+}
+
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
 	case api.Status_STATUS_POOLMAINTENANCE:
