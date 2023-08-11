@@ -47,8 +47,6 @@ const (
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 	// StorageClass parameter to check if only remote nodes should be used to schedule a pod
 	preferRemoteNodeOnlyParameter = "stork.libopenstorage.org/preferRemoteNodeOnly"
-	// StorageClass parameter to check if the Pod is using a volume labeled for Windows
-	windowsStorageClassLabel = "winshare"
 	// annotation to skip a volume and its local node replicas for scoring while
 	// scheduling a pod
 	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
@@ -233,7 +231,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				// Pod is using a volume that is labeled for Windows
 				// This Pod needs to run only on Windows node
 				// Stork will return all nodes in the filter request
-				if e.volumePrefersWindowsNodes(volumeInfo) {
+				if volumeInfo.WindowsVolume {
 					e.encodeFilterResponse(encoder,
 						pod,
 						args.Nodes.Items)
@@ -362,18 +360,6 @@ func (e *Extender) volumePrefersRemoteOnly(volumeInfo *volume.Info) bool {
 		if value, ok := volumeInfo.Labels[preferRemoteNodeOnlyParameter]; ok {
 			if preferRemoteOnlyExists, err := strconv.ParseBool(value); err == nil {
 				return preferRemoteOnlyExists
-			}
-		}
-	}
-	return false
-}
-
-// volumePrefersWindowsNodes checks if "winshare" label is applied to the volume
-func (e *Extender) volumePrefersWindowsNodes(volumeInfo *volume.Info) bool {
-	if volumeInfo.Labels != nil {
-		if value, ok := volumeInfo.Labels[windowsStorageClassLabel]; ok {
-			if preferWindowsNodesExists, err := strconv.ParseBool(value); err == nil {
-				return preferWindowsNodesExists
 			}
 		}
 	}
@@ -662,11 +648,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 					}
 				}
 
-				if e.volumePrefersWindowsNodes(volume) {
-					skipVolumeScoring = true
-				}
-
-				if skipVolumeScoring {
+				if skipVolumeScoring || volume.WindowsVolume {
 					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
 					continue
 				}
