@@ -15,7 +15,7 @@ RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip
 RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -m pip install rsa --upgrade
 
 
-RUN curl -q -o /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.5.9/aws-iam-authenticator_0.5.9_linux_amd64 && \
+RUN curl -Lo /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.11/aws-iam-authenticator_0.6.11_linux_amd64 && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
 #Install asdf
