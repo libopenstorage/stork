@@ -6,6 +6,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -239,7 +240,7 @@ var _ = AfterSuite(func() {
 		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
 		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
 		if err != nil && strings.Contains(err.Error(), "object not found") {
-			log.InfoD("Cluster %s is deleted", clusterName)
+			log.InfoD("Cluster %s is not present", clusterName)
 		} else {
 			clusterObj := clusterResp.GetCluster()
 			clusterProvider := GetClusterProviders()
@@ -253,6 +254,18 @@ var _ = AfterSuite(func() {
 					clusterCredUID = clusterObj.CloudCredentialRef.Uid
 				}
 				err = DeleteCluster(clusterName, orgID, ctx, true)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+				clusterDeleteStatus := func() (interface{}, bool, error) {
+					status, err := IsClusterPresent(clusterName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
+					}
+					if status {
+						return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
+					}
+					return "", false, nil
+				}
+				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 				if clusterCredName != "" {
 					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)

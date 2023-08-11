@@ -270,6 +270,53 @@ func (r *Rancher) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	return err
 }
 
+// RemoveNamespaceFromProject moves namespace to no project
+func (r *Rancher) RemoveNamespaceFromProject(nsList []string) error {
+	for _, ns := range nsList {
+		ns, err := core.Instance().GetNamespace(ns)
+		if err != nil {
+			return err
+		}
+		delete(ns.Labels, "field.cattle.io/projectId")
+		delete(ns.Annotations, "field.cattle.io/projectId")
+		_, err = core.Instance().UpdateNamespace(ns)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ChangeProjectForNamespace moves namespace from one project to other project
+func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string) error {
+	var projectId string
+	namespaceAnnotation := make(map[string]string)
+	namespaceLabel := make(map[string]string)
+	for _, ns := range nsList {
+		ns, err := core.Instance().GetNamespace(ns)
+		if err != nil {
+			return err
+		}
+		projectId, err = r.GetProjectID(projectName)
+		if err != nil {
+			return err
+		}
+		delete(ns.Labels, "field.cattle.io/projectId")
+		delete(ns.Annotations, "field.cattle.io/projectId")
+		namespaceAnnotation["field.cattle.io/projectId"] = projectId
+		namespaceLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
+		newLabels := kube.MergeMaps(ns.Labels, namespaceLabel)
+		newAnnotation := kube.MergeMaps(ns.Annotations, namespaceAnnotation)
+		ns.SetLabels(newLabels)
+		ns.SetAnnotations(newAnnotation)
+		_, err = core.Instance().UpdateNamespace(ns)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func init() {
 	r := &Rancher{}
 	scheduler.Register(schedulerName, r)

@@ -255,9 +255,9 @@ const (
 	clusterCreationRetryTime = 10 * time.Second
 
 	// Anthos
-	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
-	anthosInstPathCliFlag = "anthos-inst-path"
-	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
+	anthosWsNodeIpCliFlag            = "anthos-ws-node-ip"
+	anthosInstPathCliFlag            = "anthos-inst-path"
+	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
@@ -8691,4 +8691,3 @@ func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	}
 	return nil
 }
-
