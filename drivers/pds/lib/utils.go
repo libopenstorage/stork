@@ -1167,16 +1167,16 @@ func InitPdsComponents(ControlPlaneURL string) error {
 func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus string) (*pds.ModelsDeploymentTarget, error) {
 	var deploymentTarget *pds.ModelsDeploymentTarget
 
-	waiError := wait.Poll(timeInterval, timeOut, func() (bool, error) {
+	waiError := wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		deploymentTarget, err = components.DeploymentTarget.GetTarget(DeploymentTargetID)
 		log.FailOnError(err, "Error occurred while getting deployment target")
 		if deploymentTarget.GetStatus() == healthStatus {
+			log.Infof("deployment target status %s", deploymentTarget.GetStatus())
 			return true, nil
 		}
 		log.Infof("deployment target status %s", deploymentTarget.GetStatus())
 		return false, nil
 	})
-	log.Infof("deployment target status %s", deploymentTarget.GetStatus())
 
 	return deploymentTarget, waiError
 }

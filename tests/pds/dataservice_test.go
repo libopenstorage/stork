@@ -86,10 +86,10 @@ var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
 	})
-
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy dataservice, delete and validate pds pods", func() {
 			for _, ds := range params.DataServiceToTest {
+
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
@@ -99,7 +99,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 				pdsPods := make([]corev1.Pod, 0)
 
 				Step("get pods from pds-system namespace", func() {
-
 					podList, err = pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
 					log.Infof("PDS System Pods")
@@ -237,6 +236,12 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 			log.InfoD(steplog)
 			err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
 			log.FailOnError(err, "Target Cluster Registeration failed")
+		})
+
+		steplog = "Validate the deployment target is healthy in the control plane"
+		Step(steplog, func() {
+			_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+			log.FailOnError(err, "Error while getting deployment target status")
 		})
 
 		steplog = "Validate Deployments after pds-system pods are up"
@@ -432,6 +437,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 	It("Restart pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
+
 				Step("Deploy and validate data service", func() {
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
@@ -1302,6 +1308,14 @@ var _ = Describe("{DeployAllDataServices}", func() {
 })
 
 func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+
+	steplog := "Validate the deployment target is healthy in the control plane"
+	Step(steplog, func() {
+		log.Debugf("validating the health status of deploymentTarget %s", deploymentTargetID)
+		_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+		log.FailOnError(err, "Error while getting deployment target status")
+	})
+
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespace, serviceType)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
@@ -1733,6 +1747,12 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 }
 
 func DeployInANamespaceAndVerify(nname string) []*pds.ModelsDeployment {
+	steplog := "Validate the deployment target is healthy in the control plane"
+	Step(steplog, func() {
+		_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+		log.FailOnError(err, "Error while getting deployment target status")
+	})
+
 	var deployments []*pds.ModelsDeployment
 	for _, ds := range params.DataServiceToTest {
 		Step("Deploy and validate data service", func() {

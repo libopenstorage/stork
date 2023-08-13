@@ -24,11 +24,7 @@ import (
 )
 
 const (
-	k8sNodeReadyTimeout    = 5 * time.Minute
-	volDirCleanupTimeout   = 5 * time.Minute
 	k8sObjectCreateTimeout = 2 * time.Minute
-	k8sDestroyTimeout      = 5 * time.Minute
-
 	// DefaultRetryInterval default time to retry
 	DefaultRetryInterval = 10 * time.Second
 
@@ -37,7 +33,6 @@ const (
 	MaxTimeout     = 30 * time.Minute
 	timeOut        = 30 * time.Minute
 	timeInterval   = 10 * time.Second
-	minTimeOut     = 5 * time.Minute
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
@@ -70,7 +65,7 @@ type TargetCluster struct {
 
 func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
-	err = wait.Poll(DefaultRetryInterval, minTimeOut, func() (bool, error) {
+	err = wait.Poll(DefaultRetryInterval, DefaultTimeout, func() (bool, error) {
 		targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 		var targetClusterStatus string
 		if err != nil {

@@ -28,10 +28,21 @@ type LoadGenParams struct {
 }
 
 type Driver interface {
+
+	//DeployPDSDataservices Deploys the given PDS dataservice and retruns the models deployment object
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
+
+	//CreateSchedulerContextForPDSApps Creates Context for the pds deployed applications
 	CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) ([]*scheduler.Context, error)
+
+	//ValidateDataServiceDeployment Validate the PDS deployments
 	ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error
-	GenerateWorkload(pdsDeployment *pds.ModelsDeployment, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error)
+
+	//InsertDataAndReturnChecksum Inserts data and returns md5 hash for the data inserted
+	InsertDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error)
+
+	//ReadDataAndReturnChecksum Reads data and returns md5 hash for the data
+	ReadDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error)
 }
 
 var (
