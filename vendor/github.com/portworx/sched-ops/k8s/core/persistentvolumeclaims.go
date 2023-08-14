@@ -264,11 +264,6 @@ func (c *Client) GetPersistentVolumeClaimParams(pvc *corev1.PersistentVolumeClai
 		return nil, err
 	}
 
-	isRaw := *result.Spec.VolumeMode == corev1.PersistentVolumeBlock
-	if isRaw {
-		params["VolumeMode"] = "Block"
-	}
-
 	capacity, ok := result.Spec.Resources.Requests[corev1.ResourceName(corev1.ResourceStorage)]
 	if !ok {
 		return nil, fmt.Errorf("failed to get storage resource for pvc: %v", result.Name)

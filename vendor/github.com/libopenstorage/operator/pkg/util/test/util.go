@@ -742,7 +742,7 @@ func ValidateStorageCluster(
 	}
 
 	// Validate components
-	if err = validateComponents(pxImageList, liveCluster, timeout, interval); err != nil {
+	if err = validateComponents(pxImageList, clusterSpec, liveCluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -1401,7 +1401,7 @@ func IsK3sCluster() bool {
 	return false
 }
 
-func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+func validateComponents(pxImageList map[string]string, originalClusterSpec, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	// Validate PVC Controller components and images
 	if err := ValidatePvcController(pxImageList, cluster, timeout, interval); err != nil {
 		return err
@@ -1423,7 +1423,7 @@ func validateComponents(pxImageList map[string]string, cluster *corev1.StorageCl
 	}
 
 	// Validate Monitoring
-	if err := ValidateMonitoring(pxImageList, cluster, timeout, interval); err != nil {
+	if err := ValidateMonitoring(pxImageList, originalClusterSpec, cluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -3056,7 +3056,7 @@ func validateStorkSecurityEnvVar(cluster *corev1.StorageCluster, storkDeployment
 }
 
 // ValidateMonitoring validates all PX Monitoring components
-func ValidateMonitoring(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+func ValidateMonitoring(pxImageList map[string]string, originalClusterSpec, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	if err := ValidatePrometheus(pxImageList, cluster, timeout, interval); err != nil {
 		return err
 	}
@@ -3064,7 +3064,7 @@ func ValidateMonitoring(pxImageList map[string]string, cluster *corev1.StorageCl
 	// Increasing timeout for Telemetry components as they take quite long time to initialize
 	defaultTelemetryRetryInterval := 30 * time.Second
 	defaultTelemetryTimeout := 30 * time.Minute
-	if err := ValidateTelemetry(pxImageList, cluster, defaultTelemetryTimeout, defaultTelemetryRetryInterval); err != nil {
+	if err := ValidateTelemetry(pxImageList, originalClusterSpec, cluster, defaultTelemetryTimeout, defaultTelemetryRetryInterval); err != nil {
 		return err
 	}
 
@@ -3291,7 +3291,7 @@ func ValidateTelemetryV1Disabled(cluster *corev1.StorageCluster, timeout, interv
 }
 
 // ValidateTelemetry validates telemetry component is installed/uninstalled as expected
-func ValidateTelemetry(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+func ValidateTelemetry(pxImageList map[string]string, originalClusterSpec, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components")
 	logrus.Info("Check PX and PX Operator versions to determine which telemetry to validate against..")
 	pxVersion := GetPortworxVersion(cluster)
@@ -3308,15 +3308,15 @@ func ValidateTelemetry(pxImageList map[string]string, cluster *corev1.StorageClu
 	}
 
 	if pxVersion.GreaterThanOrEqual(minimumPxVersionCCMGO) && opVersion.GreaterThanOrEqual(opVer1_10) {
-		return ValidateTelemetryV2(pxImageList, cluster, timeout, interval)
+		return ValidateTelemetryV2(pxImageList, originalClusterSpec, cluster, timeout, interval)
 	}
-	return ValidateTelemetryV1(pxImageList, cluster, timeout, interval)
+	return ValidateTelemetryV1(pxImageList, originalClusterSpec, cluster, timeout, interval)
 }
 
 // ValidateTelemetryV1 validates old version of ccm-java telemetry
-func ValidateTelemetryV1(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+func ValidateTelemetryV1(pxImageList map[string]string, originalClusterSpec, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validating Telemetry (ccm-java)")
-	if shouldTelemetryBeEnabled(cluster) {
+	if shouldTelemetryBeEnabled(originalClusterSpec, cluster) {
 		if err := ValidateTelemetryV1Enabled(pxImageList, cluster, timeout, interval); err != nil {
 			return fmt.Errorf("failed to validate Telemetry enabled, Err: %v", err)
 		}
@@ -3330,9 +3330,9 @@ func ValidateTelemetryV1(pxImageList map[string]string, cluster *corev1.StorageC
 }
 
 // ValidateTelemetryV2 validates new version of ccm-go telemetry
-func ValidateTelemetryV2(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+func ValidateTelemetryV2(pxImageList map[string]string, originalClusterSpec, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validating Telemetry (ccm-go)")
-	if shouldTelemetryBeEnabled(cluster) {
+	if shouldTelemetryBeEnabled(originalClusterSpec, cluster) {
 		if err := ValidateTelemetryV2Enabled(pxImageList, cluster, timeout, interval); err != nil {
 			return fmt.Errorf("failed to validate Telemetry enabled, Err: %v", err)
 		}
@@ -3346,9 +3346,10 @@ func ValidateTelemetryV2(pxImageList map[string]string, cluster *corev1.StorageC
 }
 
 // shouldTelemetryBeEnabled validates if Telemetry should be auto enabled/disabled by default
-func shouldTelemetryBeEnabled(cluster *corev1.StorageCluster) bool {
+func shouldTelemetryBeEnabled(originalClusterSpec, cluster *corev1.StorageCluster) bool {
 	logrus.Info("Checking if Telemetry should be enabled or disabled")
 	var shouldTelemetryBeEnabled bool
+	var telemetryEnabledInTheSpec bool
 
 	logrus.Info("Check PX and PX Operator versions to determine which Telemetry version to validate against..")
 	pxVersion := GetPortworxVersion(cluster)
@@ -3356,19 +3357,43 @@ func shouldTelemetryBeEnabled(cluster *corev1.StorageCluster) bool {
 	opVersion, _ := GetPxOperatorVersion()
 	logrus.Infof("PX Operator version: [%s]", opVersion.String())
 
-	// Telemetry is disabled explicitly then leave it as is
-	if cluster.Spec.Monitoring != nil &&
-		cluster.Spec.Monitoring.Telemetry != nil &&
-		!cluster.Spec.Monitoring.Telemetry.Enabled {
-		logrus.Debug("Telemetry is explicitly disabled in StorageCluster")
-		return false
-	} else {
-		logrus.Debug("Telemetry is explicitly enabled in StorageCluster")
-		shouldTelemetryBeEnabled = true
+	// Check if Telemetry is enabled or disabled in the original spec
+	if originalClusterSpec.Spec.Monitoring != nil && originalClusterSpec.Spec.Monitoring.Telemetry != nil {
+		if originalClusterSpec.Spec.Monitoring.Telemetry.Enabled {
+			logrus.Debug("Telemetry is explicitly enabled in StorageCluster spec")
+			telemetryEnabledInTheSpec = true
+		} else {
+			logrus.Debug("Telemetry is explicitly disabled in StorageCluster spec")
+			telemetryEnabledInTheSpec = false
+		}
 	}
 
-	// Telemetry is not supported in those cases, set to disabled
+	// Get PX PROXY env vars from StorageCluster, if any
 	proxyType, proxy := GetPxProxyEnvVarValue(cluster)
+
+	// Validate conditions for when we are expecting Telemetry to be enabled/disabled
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil {
+		liveTelemetryEnabled := cluster.Spec.Monitoring.Telemetry.Enabled
+
+		// If Telemetry is disabled in both live and original spec, expect it to be disabled
+		if !telemetryEnabledInTheSpec && !liveTelemetryEnabled {
+			logrus.Debug("Telemetry is explicitly disabled in live StorageCluster and original spec")
+			return false
+		}
+
+		// If Telemetry is enabled in both live and original spec, expect it to be enabled
+		if telemetryEnabledInTheSpec && liveTelemetryEnabled {
+			logrus.Debug("Telemetry is explicitly enabled in live StorageCluster and original spec")
+			shouldTelemetryBeEnabled = true
+		}
+
+		// If Telemetry is enabled in the original spec and disabled in the live spec, but the PX PROXY is present, expect it to be enabled
+		if telemetryEnabledInTheSpec && len(proxy) > 0 && !liveTelemetryEnabled {
+			logrus.Warnf("Telemetry is explicitly enabled in the original spec, but it seems to be disabled in live StorageCluster, expecting it to be enabled and working as PROXY was provided [%s]", proxy)
+			shouldTelemetryBeEnabled = true
+		}
+	}
+
 	if pxVersion.LessThan(minimumPxVersionCCMJAVA) {
 		// PX version is lower than 2.8
 		logrus.Warnf("Telemetry is not supported on Portworx version: [%s]", pxVersion.String())
@@ -3410,6 +3435,10 @@ func shouldTelemetryBeEnabled(cluster *corev1.StorageCluster) bool {
 	if errors.IsNotFound(err) {
 		logrus.Debugf("Telemetry secret [%s] was not found, will try to reach to Pure1 to see if Telemetry should be auto enabled by default", TelemetryCertName)
 		if canAccess := CanAccessArcusRegisterEndpoint(cluster, proxy); !canAccess {
+			if shouldTelemetryBeEnabled {
+				logrus.Warnf("Not able to reach Pure1, but it should have been able to reach it due to PX PROXY was passed, please check your PROXY server")
+				return true
+			}
 			logrus.Warnf("Telemetry be disabled due to cannot reach to Pure1")
 			return false
 		}
@@ -3429,7 +3458,7 @@ func IsCCMGoSupported(pxVersion *version.Version) bool {
 func ParsePxProxyURL(proxy string) (string, string, string, error) {
 	var authHeader string
 
-	if strings.HasPrefix(proxy, HttpsProtocolPrefix) && strings.Contains(proxy, "@") {
+	if strings.Contains(proxy, "@") {
 		proxyUrl, err := url.Parse(proxy)
 		if err != nil {
 			return "", "", "", fmt.Errorf("failed to parse px proxy url [%s]", proxy)
@@ -3484,14 +3513,8 @@ func CanAccessArcusRegisterEndpoint(
 
 	client := &http.Client{}
 	if proxy != "" {
-		if strings.Contains(strings.ToLower(proxy), "@") {
-			if !strings.HasPrefix(strings.ToLower(proxy), "https://") {
-				proxy = "https://" + proxy
-			}
-		} else {
-			if !strings.HasPrefix(strings.ToLower(proxy), "http://") {
-				proxy = "http://" + proxy
-			}
+		if !strings.HasPrefix(strings.ToLower(proxy), "http://") {
+			proxy = "http://" + proxy
 		}
 		proxyURL, err := url.Parse(proxy)
 		if err != nil {
@@ -3553,12 +3576,6 @@ func GetPxProxyEnvVarValue(cluster *corev1.StorageCluster) (string, string) {
 	for _, env := range cluster.Spec.Env {
 		key, val := env.Name, env.Value
 		if key == EnvKeyPortworxHTTPSProxy {
-			// If http proxy is specified in https env var, treat it as a http proxy endpoint
-			if strings.HasPrefix(val, "http://") {
-				logrus.Warnf("Using endpoint [%s] from environment variable [%s] as a http proxy endpoint instead",
-					val, EnvKeyPortworxHTTPSProxy)
-				return EnvKeyPortworxHTTPProxy, val
-			}
 			return EnvKeyPortworxHTTPSProxy, val
 		} else if key == EnvKeyPortworxHTTPProxy {
 			httpProxy = val

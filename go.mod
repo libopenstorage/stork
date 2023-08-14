@@ -28,7 +28,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20230804084623-e42992ab8512
+	github.com/libopenstorage/operator v0.0.0-20230814210648-7843b18f6ab0
 	github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.21.1
@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319
 	github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230802175859-ff4459c520ae
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.14.0
@@ -197,7 +197,7 @@ require (
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/miekg/dns v1.1.41 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -265,7 +265,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiserver v0.25.4 // indirect
 	k8s.io/cli-runtime v0.25.2 // indirect
-	k8s.io/component-base v0.25.2 // indirect
+	k8s.io/component-base v0.26.1 // indirect
 	k8s.io/component-helpers v0.25.1 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect

@@ -709,12 +709,6 @@ func GetPxProxyEnvVarValue(cluster *corev1.StorageCluster) (string, string) {
 	for _, env := range cluster.Spec.Env {
 		key, val := env.Name, env.Value
 		if key == EnvKeyPortworxHTTPSProxy {
-			// If http proxy is specified in https env var, treat it as a http proxy endpoint
-			if strings.HasPrefix(val, "http://") {
-				logrus.Warnf("using endpoint %s from environment variable %s as a http proxy endpoint instead",
-					val, EnvKeyPortworxHTTPSProxy)
-				return EnvKeyPortworxHTTPProxy, val
-			}
 			return EnvKeyPortworxHTTPSProxy, val
 		} else if key == EnvKeyPortworxHTTPProxy {
 			httpProxy = val
@@ -732,7 +726,7 @@ var (
 
 // ParsePxProxy trims protocol prefix then splits the proxy address of the form "host:port" with possible basic authentication credential
 func ParsePxProxyURL(proxy string) (string, string, string, error) {
-	if strings.HasPrefix(proxy, HttpsProtocolPrefix) && strings.Contains(proxy, "@") {
+	if strings.Contains(proxy, "@") {
 		proxyUrl, err := url.Parse(proxy)
 		if err != nil {
 			return "", "", "", fmt.Errorf("failed to parse px proxy url %s", proxy)
