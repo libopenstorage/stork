@@ -268,9 +268,22 @@ func run(c *cli.Context) {
 
 	_, err = schedops.Instance().CreateConfigMap(storkControllerCm)
 	if k8s_errors.IsAlreadyExists(err) {
-		_, err := schedops.Instance().UpdateConfigMap(storkControllerCm)
+		// If the storkControllerCm configmap is already present, take the existing content and update only the
+		// value that need to be fetched dynamically. For example admin-namespace, serviceAccountName and storkPodNs
+		// Fetch the current content of the storkControllerCm configmap.
+		temp, err := schedops.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, defaultAdminNamespace)
 		if err != nil {
-			log.Warnf("unable to update stork controller configmap: %v", err)
+			log.Warnf("unable to get stork controller configmap: %v", err)
+		} else {
+
+			temp.Data[k8sutils.AdminNsKey] = c.String("admin-namespace")
+			temp.Data[k8sutils.StorkServiceAccount] = serviceAccountName
+			temp.Data[k8sutils.DeployNsKey] = storkPodNs
+
+			_, err := schedops.Instance().UpdateConfigMap(temp)
+			if err != nil {
+				log.Warnf("unable to update stork controller configmap: %v", err)
+			}
 		}
 	} else if err != nil {
 		log.Warnf("Unable to create stork controller configmap: %v", err)
