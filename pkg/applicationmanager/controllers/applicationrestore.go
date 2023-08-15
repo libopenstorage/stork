@@ -1980,7 +1980,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		}
 	}
 
-	log.ApplicationRestoreLog(restore).Infof("The size of application restore CR obtained %v bytes", restoreCrSize)
+	log.ApplicationRestoreLog(restore).Infof("The size of application restore CR obtained %v bytes - largeResourceSizeLimit: %v", restoreCrSize, largeResourceSizeLimit)
 	if restoreCrSize > int(largeResourceSizeLimit) {
 		log.ApplicationRestoreLog(restore).Infof("Stripping all the resource info from restore cr as it is a large resource based restore")
 		resourceCount := len(restore.Status.Resources)
