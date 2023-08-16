@@ -13,13 +13,16 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/sirupsen/logrus"
+	storageapi "k8s.io/api/storage/v1"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+
 	"github.com/portworx/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,15 +54,14 @@ const (
 	DeleteNamespaceTimeout = 5 * time.Minute
 	migrationKey           = "async-dr-"
 	kubeconfigDirectory    = "/tmp"
+	tempDir                = "/tmp"
+	portworxProvisioner    = "kubernetes.io/portworx-volume"
+	DefaultScName          = "async-sc"
 )
 
 var (
-	orgID                string
-	bucketName           string
-	ExpectedKafkaCrdList = []string{"kafkabridges.kafka.strimzi.io", "kafkaconnectors.kafka.strimzi.io", "kafkaconnects.kafka.strimzi.io",
-		"kafkamirrormaker2s.kafka.strimzi.io", "kafkamirrormakers.kafka.strimzi.io", "kafkarebalances.kafka.strimzi.io",
-		"kafkas.kafka.strimzi.io", "kafkatopics.kafka.strimzi.io", "kafkausers.kafka.strimzi.io", "strimzipodsets.core.strimzi.io"}
-	ExpectedMongoCrdList = []string{"mongodbcommunity.mongodbcommunity.mongodb.com"}
+	orgID      string
+	bucketName string
 )
 
 type MigrationStatsType struct {
@@ -74,6 +76,46 @@ type MigrationStatsType struct {
 	Application                     string
 	StorkVersion                    string
 	PortworxVersion                 string
+}
+
+type AppData struct {
+	AppName         string
+	Ns              string
+	RepoName        string
+	OperatorName    string
+	HelmUrl         string
+	ExpectedCrdList []string
+}
+
+func GetAppData(name string) (appdata *AppData) {
+	data := &AppData{}
+	if name == "mongo" {
+		data.AppName = "mongo"
+		data.Ns = "mongo"
+		data.RepoName = "mongodb"
+		data.OperatorName = "community-operator"
+		data.HelmUrl = "https://mongodb.github.io/helm-charts"
+		data.ExpectedCrdList = []string{"mongodbcommunity.mongodbcommunity.mongodb.com"}
+	} else if name == "kafka" {
+		data.AppName = "kafka"
+		data.Ns = "kafka"
+		data.RepoName = "strimzi"
+		data.OperatorName = "strimzi-kafka-operator"
+		data.HelmUrl = "https://strimzi.io/charts/"
+		data.ExpectedCrdList = []string{"kafkabridges.kafka.strimzi.io", "kafkaconnectors.kafka.strimzi.io", "kafkaconnects.kafka.strimzi.io",
+			"kafkamirrormaker2s.kafka.strimzi.io", "kafkamirrormakers.kafka.strimzi.io", "kafkarebalances.kafka.strimzi.io",
+			"kafkas.kafka.strimzi.io", "kafkatopics.kafka.strimzi.io", "kafkausers.kafka.strimzi.io", "strimzipodsets.core.strimzi.io"}
+	} else if name == "confluent" {
+		data.AppName = "confluent"
+		data.Ns = "confluent"
+		data.RepoName = "confluentinc"
+		data.OperatorName = "confluent-operator"
+		data.HelmUrl = "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
+		data.ExpectedCrdList = []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
+			"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
+			"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
+	}
+	return data
 }
 
 func CreateStats(name, namespace, pxversion string) (map[string]string, error) {
@@ -526,4 +568,65 @@ func GetStorkVersion() (string, error) {
 	storkImage := storkDeployment.Spec.Template.Spec.Containers[0].Image
 	storkImageVersion := strings.Split(storkImage, ":")[len(strings.Split(storkImage, ":"))-1]
 	return storkImageVersion, nil
+}
+
+func PrepareApp(appName string, appPath string) (*v1.PodList, error) {
+	appData := GetAppData(appName)
+	ns, err := core.Instance().GetNamespace(appData.Ns)
+	if err != nil {
+		log.InfoD("Creating namespace %v", ns)
+		nsSpec := &v1.Namespace{
+			ObjectMeta: meta_v1.ObjectMeta{
+				Name: appData.Ns,
+			},
+		}
+		ns, err = core.Instance().CreateNamespace(nsSpec)
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = CheckDefaultPxStorageClass(DefaultScName)
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("Pods Creation Started")
+	pods_created, err := HelmRepoAddandCrInstall(appData.RepoName, appData.HelmUrl, ns.Name, appData.OperatorName, fmt.Sprintf("%v/%v", appData.RepoName, appData.OperatorName), appPath)
+	if err != nil {
+		return nil, err
+	}
+	return pods_created, nil
+}
+
+func CheckDefaultPxStorageClass(name string) error {
+	sc, err := storage.Instance().GetDefaultStorageClasses()
+	if err != nil {
+		return err
+	}
+	if len(sc.Items) != 0 {
+		return nil
+	}
+	var reclaimPolicyDelete v1.PersistentVolumeReclaimPolicy
+	var bindMode storageapi.VolumeBindingMode
+	k8sStorage := storage.Instance()
+
+	v1obj := meta_v1.ObjectMeta{
+		Name:        name,
+		Annotations: map[string]string{},
+	}
+	reclaimPolicyDelete = v1.PersistentVolumeReclaimDelete
+	bindMode = storageapi.VolumeBindingImmediate
+	v1obj.Annotations["storageclass.kubernetes.io/is-default-class"] = "true"
+
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       portworxProvisioner,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+	}
+
+	_, err = k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return fmt.Errorf("failed to create storage class: %s.Error: %v", name, err)
+	}
+	return nil
 }

@@ -24,6 +24,7 @@ import (
 
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
@@ -80,6 +81,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -112,6 +114,7 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -393,6 +396,14 @@ var (
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
+)
+
+var (
+	includeResourcesFlag  = true
+	includeVolumesFlag    = true
+	startApplicationsFlag = true
+	tempDir               = "/tmp"
+	migrationList         []*storkapi.Migration
 )
 
 var (
@@ -8689,5 +8700,73 @@ func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	if err != nil {
 		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
 	}
+	return nil
+}
+
+func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
+	pods_created_len := len(pods.Items)
+	log.InfoD("Num of Pods on source: %v", pods_created_len)
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	options := scheduler.ScheduleOptions{Namespace: appData.Ns}
+	var emptyCtx = &scheduler.Context{
+		UID:             "",
+		ScheduleOptions: options,
+		App: &spec.AppSpec{
+			Key:      "",
+			SpecList: []interface{}{},
+		}}
+	log.InfoD("Create cluster pair between source and destination clusters")
+	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
+	migName := migrationKey + time.Now().Format("15h03m05s")
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	if err != nil {
+		return err
+	}
+	migrationList = append(migrationList, mig)
+	err = asyncdr.WaitForMigration(migrationList)
+	if err != nil {
+		return fmt.Errorf("Migration failed")
+	}
+	// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+	time.Sleep(5 * time.Minute)
+	SetDestinationKubeConfig()
+	pods_migrated, err := core.Instance().GetPods(appData.Ns, nil)
+	if err != nil {
+		return err
+	}
+	pods_migrated_len := len(pods_migrated.Items)
+	log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
+	if pods_created_len != pods_migrated_len {
+		return fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len)
+	}
+	destClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, destClusterConfigPath)
+	if err != nil {
+		return fmt.Errorf("CRDs not migrated properly, err: %v", err)
+	}
+	SetSourceKubeConfig()
+	err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
+	SetDestinationKubeConfig()
+	log.InfoD("Starting crd deletion")
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	SetSourceKubeConfig()
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	return nil
 }

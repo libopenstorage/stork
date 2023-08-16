@@ -7100,132 +7100,44 @@ func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *E
 	setMetrics(*event)
 
 	chaosLevel := ChaosMap[ConfluentAsyncDR]
-	var (
-		includeVolumesFlag    = true
-		includeResourcesFlag  = true
-		startApplicationsFlag = true
-		ns_name               = "confluent"
-		repoName              = "confluentinc"
-		operatorName          = "confluent-operator"
-		migrationList         []*storkapi.Migration
-		app_url               = "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
-	)
-
-	Step(fmt.Sprint("Export kubeconfigs"), func() {
-
+	stepLog := "Export kubeconfigs"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("Failed to write kubeconfig, err: %v", err))
 			return
 		}
-
 		err = SetSourceKubeConfig()
 		if err != nil {
-			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("Failed to set source config, err: %v", err))
 			return
 		}
 	})
-	Step(fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel), func() {
+	stepLog = fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		appName := "confluent"
+		appPath := "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
+		appData := asyncdr.GetAppData(appName)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			//taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			ns, err := core.Instance().GetNamespace(ns_name)
-			if err != nil {
-				log.InfoD("Creating namespace %v", ns_name)
-				nsSpec := &v1.Namespace{
-					ObjectMeta: meta_v1.ObjectMeta{
-						Name: ns_name,
-					},
-				}
-				ns, err = core.Instance().CreateNamespace(nsSpec)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to create namespace, err: %v", err))
-					return
-				}
-
-			}
-			log.InfoD("Pods Creation Started")
-			pods_created, err := asyncdr.HelmRepoAddandCrInstall(repoName, "https://packages.confluent.io/helm", ns.Name, operatorName, fmt.Sprintf("%v/confluent-for-kubernetes", repoName), app_url)
+			log.InfoD("Preparing apps now")
+			pods_created, err := asyncdr.PrepareApp(appName, appPath)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("Failed to create app pods, err: %v", err))
 				return
 			}
-			pods_created_len := len(pods_created.Items)
-			log.InfoD("Num of Pods on source: %v", pods_created_len)
-			expected_kafka_crd_list := []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
-				"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
-				"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
-			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+			err = ValidateCRMigration(pods_created, appData)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("Failed to get cluster config path: %v", err))
+				UpdateOutcome(event, fmt.Errorf("Failed to validate the Crs, err: %v", err))
 				return
 			}
-			err = asyncdr.ValidateCRD(expected_kafka_crd_list, sourceClusterConfigPath)
+			err = DeleteCrAndRepo(appData, appPath)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("CRD validation failed on source, err: %v", err))
+				UpdateOutcome(event, fmt.Errorf("Failed to delete the Crs, err: %v", err))
 				return
 			}
-			options := scheduler.ScheduleOptions{Namespace: ns.Name}
-			var emptyCtx = &scheduler.Context{
-				UID:             "",
-				ScheduleOptions: options,
-				App: &spec.AppSpec{
-					Key:      "",
-					SpecList: []interface{}{},
-				}}
-			Step("Create cluster pair between source and destination clusters", func() {
-				// Set cluster context to cluster where torpedo is running
-				log.InfoD("ClusterPairing Started")
-				ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
-			})
-			Step("Start migration and validate", func() {
-				log.InfoD("Migration Started")
-				mig_name := migrationKey + "confluent-" + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-				mig, err := asyncdr.CreateMigration(mig_name, ns.Name, asyncdr.DefaultClusterPairName, ns.Name, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to create migration: %v", err))
-					return
-				}
-				migrationList = append(migrationList, mig)
-				err = asyncdr.WaitForMigration(migrationList)
-				if err == nil {
-					// Sleeping here, as apps deploys one by one, which takes time to collect all pods
-					time.Sleep(5 * time.Minute)
-					SetDestinationKubeConfig()
-					pods_migrated, err := core.Instance().GetPods(ns.Name, nil)
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("Not able to get migrated pods, err: %v", err))
-						return
-					}
-					pods_migrated_len := len(pods_migrated.Items)
-					log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
-					if pods_created_len != pods_migrated_len {
-						UpdateOutcome(event, fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len))
-						return
-					}
-					destClusterConfigPath, err := GetDestinationClusterConfigPath()
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
-						return
-					}
-					err = asyncdr.ValidateCRD(expected_kafka_crd_list, destClusterConfigPath)
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
-						return
-					}
-					log.InfoD("Starting crd deletion")
-					asyncdr.DeleteCRAndUninstallCRD(operatorName, app_url, ns.Name)
-				} else {
-					UpdateOutcome(event, fmt.Errorf("Migration failed"))
-					return
-				}
-				SetSourceKubeConfig()
-				err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Migrations are not deleted on source, err: %v", err))
-				}
-				asyncdr.DeleteCRAndUninstallCRD(operatorName, app_url, ns.Name)
-			})
 		}
 	})
 }
@@ -7251,16 +7163,6 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 	setMetrics(*event)
 
 	chaosLevel := ChaosMap[KafkaAsyncDR]
-	var (
-		includeVolumesFlag    = true
-		includeResourcesFlag  = true
-		startApplicationsFlag = true
-		ns_name               = "kafka"
-		repoName              = "strimzi"
-		operatorName          = "strimzi-kafka-operator"
-		migrationList         []*storkapi.Migration
-		app_url               = "/torpedo/deployments/customconfigs/kafkacr.yaml"
-	)
 	stepLog := "Export kubeconfigs"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -7279,106 +7181,26 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 	stepLog = fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		appName := "kafka"
+		appPath := "/torpedo/deployments/customconfigs/kafkacr.yaml"
+		appData := asyncdr.GetAppData(appName)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			//taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			ns, err := core.Instance().GetNamespace(ns_name)
-			if err != nil {
-				log.InfoD("Creating namespace %v", ns_name)
-				nsSpec := &v1.Namespace{
-					ObjectMeta: meta_v1.ObjectMeta{
-						Name: ns_name,
-					},
-				}
-				ns, err = core.Instance().CreateNamespace(nsSpec)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to create namespace, err: %v", err))
-					return
-				}
-
-			}
-			log.InfoD("Pods Creation Started")
-			pods_created, err := asyncdr.HelmRepoAddandCrInstall(repoName, "https://strimzi.io/charts/", ns.Name, operatorName, fmt.Sprintf("%v/%v", repoName, operatorName), app_url)
+			log.InfoD("Preparing apps now")
+			pods_created, err := asyncdr.PrepareApp(appName, appPath)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("Failed to create app pods, err: %v", err))
 				return
 			}
-			pods_created_len := len(pods_created.Items)
-			log.InfoD("Num of Pods on source: %v", pods_created_len)
-			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+			err = ValidateCRMigration(pods_created, appData)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("Failed to get cluster config path: %v", err))
+				UpdateOutcome(event, fmt.Errorf("Failed to validate the Crs, err: %v", err))
 				return
 			}
-			err = asyncdr.ValidateCRD(asyncdr.ExpectedKafkaCrdList, sourceClusterConfigPath)
+			err = DeleteCrAndRepo(appData, appPath)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("CRD validation failed on source, err: %v", err))
+				UpdateOutcome(event, fmt.Errorf("Failed to delete the Crs, err: %v", err))
 				return
 			}
-			options := scheduler.ScheduleOptions{Namespace: ns.Name}
-			var emptyCtx = &scheduler.Context{
-				UID:             "",
-				ScheduleOptions: options,
-				App: &spec.AppSpec{
-					Key:      "",
-					SpecList: []interface{}{},
-				}}
-			stepLog = "Create cluster pair between source and destination clusters"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				// Set cluster context to cluster where torpedo is running
-				log.InfoD("ClusterPairing Started")
-				ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
-			})
-			stepLog = "Start migration and validate"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				log.InfoD("Migration Started")
-				mig_name := migrationKey + "kafka-" + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-				mig, err := asyncdr.CreateMigration(mig_name, ns.Name, asyncdr.DefaultClusterPairName, ns.Name, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to create migration: %v", err))
-					return
-				}
-				migrationList = append(migrationList, mig)
-				err = asyncdr.WaitForMigration(migrationList)
-				if err == nil {
-					// Sleeping here, as apps deploys one by one, which takes time to collect all pods
-					time.Sleep(5 * time.Minute)
-					SetDestinationKubeConfig()
-					pods_migrated, err := core.Instance().GetPods(ns.Name, nil)
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("Not able to get migrated pods, err: %v", err))
-						return
-					}
-					pods_migrated_len := len(pods_migrated.Items)
-					log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
-					if pods_created_len != pods_migrated_len {
-						UpdateOutcome(event, fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len))
-						return
-					}
-					destClusterConfigPath, err := GetDestinationClusterConfigPath()
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
-						return
-					}
-					err = asyncdr.ValidateCRD(asyncdr.ExpectedKafkaCrdList, destClusterConfigPath)
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
-						return
-					}
-					log.InfoD("Starting crd deletion")
-					asyncdr.DeleteCRAndUninstallCRD(operatorName, app_url, ns.Name)
-				} else {
-					UpdateOutcome(event, fmt.Errorf("Migration failed"))
-					return
-				}
-				SetSourceKubeConfig()
-				err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Migrations are not deleted on source, err: %v", err))
-				}
-				asyncdr.DeleteCRAndUninstallCRD(operatorName, app_url, ns.Name)
-			})
 		}
 	})
 }
@@ -7404,16 +7226,6 @@ func TriggerMongoAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 	setMetrics(*event)
 
 	chaosLevel := ChaosMap[MongoAsyncDR]
-	var (
-		includeVolumesFlag    = true
-		includeResourcesFlag  = true
-		startApplicationsFlag = true
-		nsName                = "mongo"
-		repoName              = "mongodb"
-		operatorName          = "community-operator"
-		migrationList         []*storkapi.Migration
-		appUrl                = "/root/torpedo/deployments/customconfigs/mongocr.yaml"
-	)
 	stepLog := "Export kubeconfigs"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -7432,104 +7244,26 @@ func TriggerMongoAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 	stepLog = fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		appName := "mongo"
+		appPath := "/root/tornew/torpedo/deployments/customconfigs/mongocr.yaml"
+		appData := asyncdr.GetAppData(appName)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			ns, err := core.Instance().GetNamespace(nsName)
-			if err != nil {
-				log.InfoD("Creating namespace %v", nsName)
-				nsSpec := &v1.Namespace{
-					ObjectMeta: meta_v1.ObjectMeta{
-						Name: nsName,
-					},
-				}
-				ns, err = core.Instance().CreateNamespace(nsSpec)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to create namespace, err: %v", err))
-					return
-				}
-
-			}
-			log.InfoD("Pods Creation Started")
-			pods_created, err := asyncdr.HelmRepoAddandCrInstall(repoName, "https://mongodb.github.io/helm-charts", ns.Name, operatorName, fmt.Sprintf("%v/%v", repoName, operatorName), appUrl)
+			log.InfoD("Preparing apps now")
+			pods_created, err := asyncdr.PrepareApp(appName, appPath)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("Failed to create app pods, err: %v", err))
 				return
 			}
-			pods_created_len := len(pods_created.Items)
-			log.InfoD("Num of Pods on source: %v", pods_created_len)
-			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+			err = ValidateCRMigration(pods_created, appData)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("Failed to get cluster config path: %v", err))
+				UpdateOutcome(event, fmt.Errorf("Failed to validate the Crs, err: %v", err))
 				return
 			}
-			err = asyncdr.ValidateCRD(asyncdr.ExpectedMongoCrdList, sourceClusterConfigPath)
+			err = DeleteCrAndRepo(appData, appPath)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("CRD validation failed on source, err: %v", err))
+				UpdateOutcome(event, fmt.Errorf("Failed to delete the Crs, err: %v", err))
 				return
 			}
-			options := scheduler.ScheduleOptions{Namespace: ns.Name}
-			var emptyCtx = &scheduler.Context{
-				UID:             "",
-				ScheduleOptions: options,
-				App: &spec.AppSpec{
-					Key:      "",
-					SpecList: []interface{}{},
-				}}
-			stepLog = "Create cluster pair between source and destination clusters"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				// Set cluster context to cluster where torpedo is running
-				log.InfoD("ClusterPairing Started")
-				ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
-			})
-			stepLog = "Start migration and validate"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				log.InfoD("Migration Started")
-				mig_name := migrationKey + "mongo-" + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-				mig, err := asyncdr.CreateMigration(mig_name, ns.Name, asyncdr.DefaultClusterPairName, ns.Name, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to create migration: %v", err))
-					return
-				}
-				migrationList = append(migrationList, mig)
-				err = asyncdr.WaitForMigration(migrationList)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Migration failed"))
-					return
-				}
-				// Sleeping here, as apps deploys one by one, which takes time to collect all pods
-				time.Sleep(5 * time.Minute)
-				SetDestinationKubeConfig()
-				pods_migrated, err := core.Instance().GetPods(ns.Name, nil)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Not able to get migrated pods, err: %v", err))
-					return
-				}
-				pods_migrated_len := len(pods_migrated.Items)
-				log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
-				if pods_created_len != pods_migrated_len {
-					UpdateOutcome(event, fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len))
-					return
-				}
-				destClusterConfigPath, err := GetDestinationClusterConfigPath()
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
-					return
-				}
-				err = asyncdr.ValidateCRD(asyncdr.ExpectedMongoCrdList, destClusterConfigPath)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
-					return
-				}
-				log.InfoD("Starting crd deletion")
-				asyncdr.DeleteCRAndUninstallCRD(operatorName, appUrl, ns.Name)
-				SetSourceKubeConfig()
-				err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
-				if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Migrations are not deleted on source, err: %v", err))
-				}
-				asyncdr.DeleteCRAndUninstallCRD(operatorName, appUrl, ns.Name)
-			})
 		}
 	})
 }
