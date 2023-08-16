@@ -26,6 +26,7 @@ import (
 func ScaleReplicas(namespace string, activate bool, printFunc func(string, string), config *rest.Config) {
 	updateStatefulSets(namespace, activate, printFunc)
 	updateDeployments(namespace, activate, printFunc)
+	updateReplicaSets(namespace, activate, printFunc)
 	updateDeploymentConfigs(namespace, activate, printFunc)
 	updateIBPObjects("IBPPeer", namespace, activate, printFunc)
 	updateIBPObjects("IBPCA", namespace, activate, printFunc)
@@ -71,6 +72,28 @@ func updateDeployments(namespace string, activate bool, printFunc func(string, s
 				continue
 			}
 			printFunc(fmt.Sprintf("Updated replicas for deployment %v/%v to %v", deployment.Namespace, deployment.Name, replicas), "out")
+		}
+	}
+}
+
+func updateReplicaSets(namespace string, activate bool, printFunc func(string, string)) {
+	replicasets, err := apps.Instance().ListReplicaSets(namespace, metav1.ListOptions{})
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+	for _, replicaset := range replicasets {
+		if replicaset.OwnerReferences != nil {
+			continue
+		}
+		if replicas, update := getUpdatedReplicaCount(replicaset.Annotations, activate, printFunc); update {
+			replicaset.Spec.Replicas = &replicas
+			_, err := apps.Instance().UpdateReplicaSet(&replicaset)
+			if err != nil {
+				printFunc(fmt.Sprintf("Error updating replicas for replicaset %v/%v : %v", replicaset.Namespace, replicaset.Name, err), "err")
+				continue
+			}
+			printFunc(fmt.Sprintf("Updated replicas for replicaset %v/%v to %v", replicaset.Namespace, replicaset.Name, replicas), "out")
 		}
 	}
 }
