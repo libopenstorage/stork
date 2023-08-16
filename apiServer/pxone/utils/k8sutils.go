@@ -1,23 +1,24 @@
-package main
+package utils
 
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/pds/lib"
-	"log"
 	"net/http"
 )
 
-func DeleteNamespace(ctx *gin.Context) {
-	ns := ctx.Param("namespace")
+// DeleteNS : This API Call will delete a given namespace
+func DeleteNS(c *gin.Context) {
+	ns := c.Param("namespace")
 	err := lib.DeleteK8sNamespace(ns)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	} else {
-		ctx.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Namespace %s Deleted", ns)})
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Namespace %s Deleted", ns)})
 	}
 }
 
+// CreateNS : This API call will create a namespace in the cluster
 func CreateNS(c *gin.Context) {
 	ns, err := lib.CreateTempNS(6)
 	if err != nil {
@@ -31,11 +32,4 @@ func CreateNS(c *gin.Context) {
 		"message":   "Namespace created successfully",
 		"namespace": ns,
 	})
-}
-
-func main() {
-	router := gin.Default()
-	router.DELETE("pxone/deletens/:namespace", DeleteNamespace)
-	router.POST("pxone/createns", CreateNS)
-	log.Fatal(router.Run(":8080"))
 }
