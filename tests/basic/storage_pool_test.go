@@ -36,11 +36,14 @@ const (
 	addDriveUpTimeOut                = time.Minute * 15
 	poolResizeTimeout                = time.Minute * 120
 	poolExpansionStatusCheckInterval = time.Minute * 3
+	JournalDeviceSizeInGB            = 3
 )
 
 var contexts []*scheduler.Context
 var poolIDToResize string
 var poolToBeResized *api.StoragePool
+var isJournalEnabled bool
+var bufferSizeInGB uint64
 var targetSizeInBytes uint64
 var originalSizeInBytes uint64
 var testDescription string
@@ -54,6 +57,11 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		poolToBeResized = getStoragePool(poolIDToResize)
+		isJournalEnabled, _ = IsJournalEnabled()
+		bufferSizeInGB = uint64(0)
+		if isJournalEnabled {
+			bufferSizeInGB = JournalDeviceSizeInGB
+		}
 	})
 
 	testName = "StoragePoolExpandDiskResize"
@@ -63,9 +71,9 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
 		targetSizeGiB := targetSizeInBytes / units.GiB
 
-		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB",
+		log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
 			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
-		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
@@ -9847,19 +9855,19 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 		log.FailOnError(err, "Failed to get Pool from Pool uuid [%v]", poolUUID)
-		
+
 		stNode, stNodeerr := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(stNodeerr, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 200
 		log.InfoD("Current Size of the Pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-		
+
 		expanderr := Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 		log.FailOnError(expanderr, "Failed to initiate Expand on Pool [%v]", poolUUID)
 
 		isjournal, journalerr := IsJournalEnabled()
 		log.FailOnError(journalerr, "Failed to get Journal Disk Details")
-		
+
 		err = WaitForExpansionToStart(poolUUID)
 		log.FailOnError(err, "Expansion is not started")
 
@@ -9871,30 +9879,30 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
-		
+
 		re, _ := regexp.Compile(".*remote command exited without exit status or exit signal")
 		regMatch := re.MatchString(fmt.Sprintf("%v", err))
 		dash.VerifyFatal(regMatch, true, " force panic the node successful?")
-		
+
 		err = Inst().N.TestConnection(*stNode, node.ConnectionOpts{
 			Timeout:         addDriveUpTimeOut,
 			TimeBeforeRetry: 10 * time.Second,
 		})
 		log.FailOnError(err, fmt.Sprintf("Verify the Node %s connection is up?", stNode.Name))
-		
+
 		err = Inst().V.WaitDriverDownOnNode(*stNode)
 		log.FailOnError(err, fmt.Sprintf("Verify the Node %s driver down and up?", stNode.Name))
-			
+
 		err = Inst().S.IsNodeReady(*stNode)
 		log.FailOnError(err, fmt.Sprintf("Verify the Node %s is ready?", stNode.Name))
-				
+
 		err = Inst().V.WaitDriverUpOnNode(*stNode, addDriveUpTimeOut)
 		log.FailOnError(err, fmt.Sprintf("Kernel Panic on Node %s", stNode.Name))
 		log.InfoD("Validate pool rebalance after drive add and Kernel panic")
 
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		log.FailOnError(resizeErr, "Failed waiting for Pool Resize")
-		
+
 		err = ValidateDriveRebalance(*stNode)
 		log.FailOnError(err, "Pool re-balance failed")
 		dash.VerifyFatal(err == nil, true, "PX is up after add drive with kernel panic")
