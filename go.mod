@@ -215,7 +215,7 @@ require (
 	github.com/onsi/gomega v1.21.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
-	github.com/opencontainers/runc v1.1.3 // indirect
+	github.com/opencontainers/runc v1.1.6 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
 	github.com/opencontainers/selinux v1.10.1 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
@@ -327,7 +327,7 @@ replace (
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.25.0
 	k8s.io/kubectl => k8s.io/kubectl v0.25.0
 	k8s.io/kubelet => k8s.io/kubelet v0.25.0
-	k8s.io/kubernetes => k8s.io/kubernetes v1.25.0
+	k8s.io/kubernetes => k8s.io/kubernetes v1.25.10
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.25.0
 	k8s.io/metrics => k8s.io/metrics v0.25.0
 	k8s.io/mount-utils => k8s.io/mount-utils v0.25.0
