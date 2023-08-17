@@ -283,6 +283,8 @@ type Info struct {
 	VolumeSourceRef interface{}
 	// NeedsAntiHyperconvergence is a flag for figuring if Pod needs anti-hyperconvergence
 	NeedsAntiHyperconvergence bool
+	// WindowsVolume is a flag to indicate if the volume is being used by a windows Pod
+	WindowsVolume bool
 }
 
 // NodeStatus Status of driver on a node
