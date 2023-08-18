@@ -1686,7 +1686,7 @@ func (a *ApplicationBackupController) backupResources(
 			}
 		}
 
-		log.ApplicationBackupLog(backup).Infof("The size of application backup CR obtained %v bytes", backupCrSize)
+		log.ApplicationBackupLog(backup).Infof("The size of application backup CR obtained %v bytes - largeResourceSizeLimit: %v", backupCrSize, largeResourceSizeLimit)
 		if backupCrSize > int(largeResourceSizeLimit) {
 			log.ApplicationBackupLog(backup).Infof("Stripping all the resource info from Application backup-cr %v in namespace %v", backup.GetName(), backup.GetNamespace())
 			// update the flag and resource-count.
