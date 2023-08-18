@@ -761,22 +761,28 @@ func GetAllBackupsForUser(username, password string) ([]string, error) {
 func CreateRestore(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
 
-	var bkp *api.BackupObject
 	var bkpUid string
-	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
 	}
-	for _, bkp = range curBackups.GetBackups() {
-		if bkp.Name == backupName {
-			bkpUid = bkp.Uid
-			break
-		}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
 	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+	backupDriver := Inst().Backup
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
