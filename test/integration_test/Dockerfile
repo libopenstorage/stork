@@ -35,4 +35,5 @@ COPY stork.test /
 COPY specs /specs/
 COPY stork-test-pod.yaml test-deploy.sh /testspecs/
 COPY stork-specs /stork-specs/
+COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
 

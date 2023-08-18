@@ -100,6 +100,7 @@ const (
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
+	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
 )
 
 const (
@@ -108,8 +109,8 @@ const (
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 2 * time.Minute
-	inspectVolumeTimeout              = 1 * time.Minute
-	inspectVolumeRetryInterval        = 2 * time.Second
+	inspectVolumeTimeout              = 2 * time.Minute
+	inspectVolumeRetryInterval        = 3 * time.Second
 	validateDeleteVolumeTimeout       = 6 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
@@ -147,8 +148,9 @@ const (
 )
 
 const (
-	driveAddSuccessStatus = "Drive add done"
-	driveExitsStatus      = "Device already exists"
+	driveAddSuccessStatus    = "Drive add done"
+	driveExitsStatus         = "Device already exists"
+	metadataAddSuccessStatus = "Successfully added metadata device"
 )
 
 // Provisioners types of supported provisioners
@@ -214,7 +216,7 @@ type statusJSON struct {
 }
 
 // ExpandPool resizes a pool of a given ID
-func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
 
 	// start a task to check if pool  resize is done
@@ -224,13 +226,14 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			ResizeFactor: &api.SdkStoragePoolResizeRequest_Size{
 				Size: size,
 			},
-			OperationType: operation,
+			OperationType:           operation,
+			SkipWaitForCleanVolumes: skipWaitForCleanVolumes,
 		})
 		if err != nil {
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			log.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize response: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
@@ -242,7 +245,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 }
 
 // ExpandPoolUsingPxctlCmd resizes a pool of a given UUID using CLI command
-func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 
 	var operationString string
 
@@ -257,6 +260,9 @@ func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operati
 
 	log.InfoD("Initiate Pool %v resize by %v with operationtype %v using CLI", poolUUID, size, operation.String())
 	cmd := fmt.Sprintf("pxctl sv pool expand --uid %v --size %v --operation %v", poolUUID, size, operationString)
+	if skipWaitForCleanVolumes {
+		cmd = fmt.Sprintf("%s -f", cmd)
+	}
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
 		n,
 		cmd,
@@ -1014,6 +1020,8 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 		}
 		return nil, false, nil
 	}
+	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
@@ -1035,6 +1043,7 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
+
 	return nil
 }
 
@@ -1080,6 +1089,8 @@ func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 		return fmt.Errorf("error when entering pool maintenance on node [%s], Err: %v", n.Name, err)
 	}
 	log.Infof("Enter pool maintenance %s", out)
+	log.Infof("waiting for 3 mins allowing pool to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 	return nil
 }
 
@@ -1439,6 +1450,22 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 	return nil
 }
 
+func (d *portworx) UpdateStickyFlag(volumeName, stickyOption string) error {
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s %s --sticky %s", pxctlVolumeUpdate, volumeName, stickyOption)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting sticky option to %s for volume %s, Err: %v", stickyOption, volumeName, err)
+	}
+	return nil
+}
+
 func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	cmd := fmt.Sprintf(mountGrepVolume, volumeName)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
@@ -1460,6 +1487,87 @@ func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption [
 	}
 	return nil
 
+}
+
+// ValidatePureFaCreateOptions validates FStype and createoptions with block size 2048 on those FStypes
+func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string, volumeNode *node.Node) error {
+	// Checking if file systems are properly set
+	FScmd := fmt.Sprintf(mountGrepVolume, volumeName)
+	FSout, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		FScmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get mount response for volume %s, Err: %v", volumeName, err)
+	}
+	if strings.Contains(FSout, FStype) {
+		log.Infof("%s file system is available in the volume %s", FStype, volumeName)
+	} else {
+		return fmt.Errorf("Failed to get %s File system, Err: %v", FStype, err)
+	}
+
+	// Getting mapper volumename where createoptions are applied
+	mapperCmd := fmt.Sprintf(mountGrepFirstColumn, volumeName)
+	mapperOut, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		mapperCmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get attached volume for create option for pvc %s, Err: %v", volumeName, err)
+	}
+
+	// Validating implementation of create options
+	if FStype == "xfs" {
+		xfsInfoCmd := fmt.Sprintf("xfs_info %s ", strings.ReplaceAll(mapperOut, "\n", ""))
+		xfsInfoOut, err := d.nodeDriver.RunCommandWithNoRetry(
+			*volumeNode,
+			xfsInfoCmd,
+			node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to get bsize for create option for pvc %s, Err: %v", volumeName, err)
+		}
+		if strings.Contains(xfsInfoOut, "bsize=2048") {
+			log.Infof("Blocksize 2048 is correctly configured by the create option of volume %s", volumeName)
+		} else {
+			log.Warnf("The filesystem type %s isn't properly implemented as block size 2048 has not been set, Err: %v", FStype, err)
+			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", xfsInfoOut, FStype, err)
+		}
+	} else if FStype == "ext4" {
+		ext4InfoCmd := fmt.Sprintf("tune2fs -l %s ", strings.ReplaceAll(mapperOut, "\n", ""))
+		ext4InfoOut, err := d.nodeDriver.RunCommandWithNoRetry(
+			*volumeNode,
+			ext4InfoCmd,
+			node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to get bsize for create option for pvc %s, Err: %v", volumeName, err)
+		}
+		blockSize := false
+		for _, b := range strings.Split(ext4InfoOut, "\n") {
+			if strings.Contains(b, "Block size") && strings.Contains(b, "2048") {
+				blockSize = true
+				break
+			}
+		}
+		if blockSize {
+			log.Infof("Blocksize 2048 is correctly configured by the create options of volume %s", volumeName)
+		} else {
+			log.Warnf("The filesystem type %s isn't properly implemented as block size 2048 has not been set, Err: %v", FStype, err)
+			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", ext4InfoOut, FStype, err)
+		}
+	}
+	return nil
 }
 
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
@@ -3474,7 +3582,7 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 		url = netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	}
 	// TODO replace by sdk call whenever it is available
-	log.Infof("Url to call %v", url)
+	log.Debugf("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
@@ -4792,7 +4900,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
 	}
 
-	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}
