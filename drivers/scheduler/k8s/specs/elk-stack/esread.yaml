@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: es-read
-        image: docker.pwx.dev.purestorage.com/portworx/elasticseach_read
+        image: portworx/elasticseach_read:v0.1
         imagePullPolicy: Always
         command:
           - /bin/bash

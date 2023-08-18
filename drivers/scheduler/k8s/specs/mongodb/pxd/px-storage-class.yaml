@@ -7,4 +7,5 @@ parameters:
   repl: "3"
   io_profile: "db"
   io_priority: "high"
+  nodiscard: "true"
   snap_schedule: "periodic=60,5"

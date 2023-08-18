@@ -46,6 +46,7 @@ const (
 	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
 	ocPath                      = " -c oc"
+	OpenshiftMachineNamespace   = "openshift-machine-api"
 )
 
 var (
@@ -1073,6 +1074,51 @@ func getParsedVersion(version string) (semver.Version, error) {
 		return semver.Version{}, err
 	}
 	return parsedVersion, nil
+}
+
+func getMachineSetName() (string, error) {
+	cmd := fmt.Sprintf("kubectl get machineset -n %s -o name", OpenshiftMachineNamespace)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	result := strings.TrimSpace(string(output))
+
+	return result, nil
+
+}
+
+// ScaleCluster scale the cluster to the given replicas
+func (k *openshift) ScaleCluster(replicas int) error {
+
+	machineSetName, err := getMachineSetName()
+	if err != nil {
+		return err
+	}
+	// kubectl scale machineset leela-ocp-vx6zf-worker-0 --replicas 6 -n openshift-machine-api
+	cmd := fmt.Sprintf("kubectl -n %s scale %s --replicas %d", OpenshiftMachineNamespace, machineSetName, replicas)
+	log.Infof("Running cmnd : %s", cmd)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	log.Infof("output : %s", string(output))
+
+	if !strings.Contains(string(output), fmt.Sprintf("%s scaled", machineSetName)) {
+		return fmt.Errorf("failed to scale %s, output %s", machineSetName, string(output))
+	}
+
+	_, err = k.checkAndGetNewNode()
+	if err != nil {
+		return err
+	}
+	err = k.RefreshNodeRegistry()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func init() {

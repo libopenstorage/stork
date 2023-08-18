@@ -13,6 +13,8 @@ parameters:
   io_profile: "db_remote"{{ end }}
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .Journal }}
+  journal: "true"{{ end }}
   snapshotschedule.stork.libopenstorage.org/interval-schedule: |
     schedulePolicyName: localintervalpolicy
     annotations:

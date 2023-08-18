@@ -14,7 +14,6 @@ parameters:
   io_profile: "{{ .IoProfile }}"
   {{ else }}
   io_profile: "db_remote"{{ end }}
-
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
   {{ if .AggregationLevel }}

@@ -20,6 +20,8 @@ parameters:
   sharedv4: "true"
   nodiscard: "true"
   sharedv4_svc_type: ""
+  {{ if .Journal }}
+  journal: "true"{{ end }}
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim

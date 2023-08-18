@@ -1050,6 +1050,14 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	}
 }
 
+func (d *dcos) ScaleCluster(replicas int) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScaleCluster()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

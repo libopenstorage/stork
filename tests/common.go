@@ -2113,11 +2113,17 @@ func CollectSupport() {
 	context("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
+		skipSystemCheck := false
+
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
-				return
+				skipSystemCheck = true
 			}
+		}
+
+		if skipSystemCheck || Inst().SkipSystemChecks {
+			log.Infof("skipping diag collection because env for skipping the check has been set to true")
+			return
 		}
 		nodes := node.GetWorkerNodes()
 		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")

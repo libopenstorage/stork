@@ -13,4 +13,6 @@ parameters:
   io_profile: "{{ .IoProfile }}"{{ end }}
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .Journal }}
+  journal: "true"{{ end }}
 allowVolumeExpansion: true

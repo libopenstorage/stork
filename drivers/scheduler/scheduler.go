@@ -79,6 +79,8 @@ type AppConfig struct {
 	Fs                   string   `yaml:"fs"`
 	AggregationLevel     string   `yaml:"aggregation_level"`
 	IoProfile            string   `yaml:"io_profile"`
+	Journal              string   `yaml:"journal"`
+	DataSize             string   `yaml:"data_size"`
 }
 
 // InitOptions initialization options
@@ -413,6 +415,9 @@ type Driver interface {
 
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
+
+	// ScaleCluster scale the cluster to the given replicas
+	ScaleCluster(replicas int) error
 }
 
 var (

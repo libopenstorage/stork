@@ -6284,6 +6284,15 @@ func (k *K8s) RecycleNode(n node.Node) error {
 	}
 }
 
+// ScaleCluster scale the cluster to the given replicas
+func (k *K8s) ScaleCluster(replicas int) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScaleCluster()",
+	}
+}
+
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
 func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	// Only FA (pure_block) volume is supported

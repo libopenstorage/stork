@@ -16,6 +16,8 @@ parameters:
   io_profile: "db_remote"{{ end }}
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .Journal }}
+  journal: "true"{{ end }}
 allowVolumeExpansion: true
 ---
 ##### Portworx storage class
@@ -36,5 +38,7 @@ parameters:
   io_profile: "db_remote"{{ end }}
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .Journal }}
+  journal: "true"{{ end }}
 allowVolumeExpansion: true
 

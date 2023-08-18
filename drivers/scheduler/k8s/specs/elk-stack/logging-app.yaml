@@ -62,7 +62,7 @@ spec:
         - name: manual-log-directory
           mountPath: /tmp/
       - name: flog-app
-        image: docker.pwx.dev.purestorage.com/portworx/logstash-fog
+        image: portworx/logstash-fog:v0.1
         imagePullPolicy: Always
         volumeMounts:
         - name: manual-log-directory

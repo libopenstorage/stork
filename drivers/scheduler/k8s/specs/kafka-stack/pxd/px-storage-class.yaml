@@ -7,6 +7,7 @@ parameters:
    repl: "3"
    priority_io: "high"
    io_profile: "db"
+   nodiscard: "true"
 allowVolumeExpansion: true
 ---
 kind: StorageClass
@@ -16,4 +17,5 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
    repl: "2"
+   nodiscard: "true"
 allowVolumeExpansion: true
