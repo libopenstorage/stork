@@ -44,7 +44,8 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 	}
 	// Create PV & PVC only in case of NFS.
 	if o.NfsServer != "" {
-		err := utils.CreateNFSPvPvcForJob(o.DataExportName, job.ObjectMeta.Namespace, o)
+		jobName := utils.GetCsiRestoreJobName(drivers.NFSCSIRestore, o.DataExportName)
+		err := utils.CreateNFSPvPvcForJob(jobName, job.ObjectMeta.Namespace, o)
 		if err != nil {
 			return "", err
 		}
@@ -131,7 +132,9 @@ func buildJob(
 	funct := "NfsbuildJob"
 	// Setup service account using same role permission as stork role
 	logrus.Infof("Inside %s function", funct)
-	if err := utils.SetupNFSServiceAccount(jobOptions.DataExportName, jobOptions.Namespace, roleFor()); err != nil {
+
+	jobName := utils.GetCsiRestoreJobName(drivers.NFSCSIRestore, jobOptions.DataExportName)
+	if err := utils.SetupNFSServiceAccount(jobName, jobOptions.Namespace, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", jobOptions.Namespace, jobOptions.DataExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return nil, fmt.Errorf(errMsg)
@@ -191,11 +194,12 @@ func jobForRestoreCSISnapshot(
 	}, " ")
 
 	labels := addJobLabels(jobOption.Labels)
-
+	// changing job name to nfcsirestore-backupUID-volumeUID instead of deName for better identification
+	jobName := utils.GetCsiRestoreJobName(drivers.NFSCSIRestore, jobOption.DataExportName)
 	nfsExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
 		jobOption.NfsImageExecutorSourceNs,
-		jobOption.DataExportName,
+		jobName,
 		jobOption)
 	if err != nil {
 		logrus.Errorf("failed to get the executor image details")
@@ -208,8 +212,6 @@ func jobForRestoreCSISnapshot(
 		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobOption.DataExportName)
 	}
 
-	// changing job name to nfcsirestore-backupUID-volumeUID instead of deName for better identification
-	jobName := drivers.NFSCSIRestore + strings.SplitN(jobOption.DataExportName, "restore", 2)[1]
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -227,7 +229,7 @@ func jobForRestoreCSISnapshot(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ServiceAccountName: jobOption.DataExportName,
+					ServiceAccountName: jobName,
 					Containers: []corev1.Container{
 						{
 							Name:            drivers.NfsExecutorImage,
@@ -255,7 +257,7 @@ func jobForRestoreCSISnapshot(
 							Name: "cred-secret",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: utils.GetCredSecretName(jobOption.DataExportName),
+									SecretName: utils.GetCredSecretName(jobName),
 								},
 							},
 						},
@@ -266,7 +268,7 @@ func jobForRestoreCSISnapshot(
 	}
 	// Add the image secret in job spec only if it is present in the stork deployment.
 	if len(imageRegistrySecret) != 0 {
-		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.DataExportName))
+		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
 	if len(jobOption.NfsServer) != 0 {
 		volumeMount := corev1.VolumeMount{
@@ -281,7 +283,7 @@ func jobForRestoreCSISnapshot(
 			Name: utils.NfsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: utils.GetPvcNameForJob(jobOption.DataExportName),
+					ClaimName: utils.GetPvcNameForJob(jobName),
 				},
 			},
 		}

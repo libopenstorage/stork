@@ -111,7 +111,7 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 	case kdmpapi.ResourceExportStageInitial:
 		// Create ResourceBackup CR
 		err = createResourceBackup(resourceExport.Name, resourceExport.Namespace)
-		if err != nil {
+		if err != nil && !k8sErrors.IsAlreadyExists(err) {
 			updateData := updateResourceExportFields{
 				stage:  kdmpapi.ResourceExportStageFinal,
 				status: kdmpapi.ResourceExportStatusFailed,
@@ -239,7 +239,7 @@ func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) er
 	// clean up resources
 	rbNamespace, rbName, err := utils.ParseJobID(resourceExport.Status.TransferID)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to parse job ID %v from ResourceeExport CR: %v: %v",
+		errMsg := fmt.Sprintf("failed to parse job ID %v from ResourceExport CR: %v: %v",
 			resourceExport.Status.TransferID, resourceExport.Name, err)
 		logrus.Errorf("%v", errMsg)
 		return err
