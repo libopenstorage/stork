@@ -221,7 +221,9 @@ func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.
 	}
 	namespacesToBackup := make([]string, 0)
 	for _, ns := range namespaces.Items {
-		namespacesToBackup = append(namespacesToBackup, ns.Name)
+		if ns.Name != "kube-system" {
+			namespacesToBackup = append(namespacesToBackup, ns.Name)
+		}
 	}
 	backup.Spec.Namespaces = namespacesToBackup
 	err = a.client.Update(context.TODO(), backup)
@@ -292,7 +294,9 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 		var selectedNamespaces []string
 		for _, namespace := range namespaces.Items {
-			selectedNamespaces = append(selectedNamespaces, namespace.Name)
+			if namespace.Name != "kube-system" {
+				selectedNamespaces = append(selectedNamespaces, namespace.Name)
+			}
 		}
 		backup.Spec.Namespaces = selectedNamespaces
 	}
