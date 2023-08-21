@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
@@ -67,6 +68,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	var rkeToken string
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
 	masterNodeName := node.GetMasterNodes()[0].Name
+	log.Infof("The master node here is %v", masterNodeName)
 	endpoint := "https://" + masterNodeName + "/v3"
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
@@ -89,7 +91,7 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
 		if rkeToken == "" {
-			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
+			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
 		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
@@ -272,13 +274,17 @@ func (r *Rancher) SaveSchedulerLogsToFile(n node.Node, location string) error {
 
 // RemoveNamespaceFromProject moves namespace to no project
 func (r *Rancher) RemoveNamespaceFromProject(nsList []string) error {
+	var namespaceParameterList []map[string]string
 	for _, ns := range nsList {
 		ns, err := core.Instance().GetNamespace(ns)
 		if err != nil {
 			return err
 		}
-		delete(ns.Labels, "field.cattle.io/projectId")
-		delete(ns.Annotations, "field.cattle.io/projectId")
+		namespaceParameterList = append(namespaceParameterList, ns.Labels)
+		namespaceParameterList = append(namespaceParameterList, ns.Annotations)
+		for _, val := range namespaceParameterList {
+			delete(val, "field.cattle.io/projectId")
+		}
 		_, err = core.Instance().UpdateNamespace(ns)
 		if err != nil {
 			return err
@@ -290,6 +296,7 @@ func (r *Rancher) RemoveNamespaceFromProject(nsList []string) error {
 // ChangeProjectForNamespace moves namespace from one project to other project
 func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string) error {
 	var projectId string
+	var namespaceParameterList []map[string]string
 	namespaceAnnotation := make(map[string]string)
 	namespaceLabel := make(map[string]string)
 	for _, ns := range nsList {
@@ -301,8 +308,11 @@ func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string)
 		if err != nil {
 			return err
 		}
-		delete(ns.Labels, "field.cattle.io/projectId")
-		delete(ns.Annotations, "field.cattle.io/projectId")
+		namespaceParameterList = append(namespaceParameterList, ns.Labels)
+		namespaceParameterList = append(namespaceParameterList, ns.Annotations)
+		for _, val := range namespaceParameterList {
+			delete(val, "field.cattle.io/projectId")
+		}
 		namespaceAnnotation["field.cattle.io/projectId"] = projectId
 		namespaceLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
 		newLabels := kube.MergeMaps(ns.Labels, namespaceLabel)
