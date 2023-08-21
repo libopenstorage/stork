@@ -102,6 +102,13 @@ const (
 	PXServiceName = "portworx-service"
 )
 
+// Map of ignored namespace to be backed up for faster lookout
+var IgnoreNamespaces = map[string]bool{
+	"kube-system":     true,
+	"kube-public":     true,
+	"kube-node-lease": true,
+}
+
 // ParseKeyValueList parses a list of key=values string into a map
 func ParseKeyValueList(expressions []string) (map[string]string, error) {
 	matchLabels := make(map[string]string)
