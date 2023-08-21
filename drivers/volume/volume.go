@@ -778,10 +778,6 @@ func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
 				return true
 			}
 		}
-		// For now, it is decided to take generic backup for OCP provisoiners.
-		if driverName == ocpCephfsProvisioner || driverName == ocpRbdProvisioner {
-			return true
-		}
 		// vsphere, efs, azure file and google file does not support snapshot.
 		// So defaulting to kdmp by not setting volumesnapshot class.
 		for _, name := range csiDriverWithoutSnapshotSupport {
