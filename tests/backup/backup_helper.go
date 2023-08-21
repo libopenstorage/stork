@@ -3981,8 +3981,8 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 }
 
 // GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
-func GetConfigObj() (*backup.BackupCloudConfig, error) {
-	var config *backup.BackupCloudConfig
+func GetConfigObj() (backup.BackupCloudConfig, error) {
+	var config backup.BackupCloudConfig
 	var found bool
 	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
 	log.FailOnError(err, fmt.Sprintf("Error listing Configmaps in default namespace"))
@@ -3997,7 +3997,7 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 		if err != nil {
 			log.Errorf("Error reading Configmap: %v", err)
-			return nil, err
+			return config, err
 		}
 		log.Infof("Fetch the cloud-config from the Configmap")
 		configData := cm.Data["cloud-json"]
