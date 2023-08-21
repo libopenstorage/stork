@@ -68,7 +68,7 @@ spec:
       containers:
       - name: k8skafka
         imagePullPolicy: Always
-        image: docker.pwx.dev.purestorage.com/portworx/kafka-broker
+        image: portworx/kafka-broker:v0.1
         # resources:
         #   requests:
         #     memory: "1Gi"

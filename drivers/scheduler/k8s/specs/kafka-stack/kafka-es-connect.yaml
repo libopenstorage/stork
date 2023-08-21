@@ -42,7 +42,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: es-connector
-          image: docker.pwx.dev.purestorage.com/portworx/kafka-es-connector:10.0.3
+          image: portworx/kafka-es-connector:10.0.3
           ports:
             - containerPort: 8083
           env:

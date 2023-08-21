@@ -2314,7 +2314,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	setMetrics(*event)
 	n := node.GetStorageDriverNodes()[0]
-	uuidCmd := "pxctl cred list -j | grep uuid"
+	uuidCmd := "cred list -j | grep uuid"
 
 	output, err := Inst().V.GetPxctlCmdOutput(n, uuidCmd)
 	if err != nil {

@@ -8093,6 +8093,7 @@ func runDataIntegrityValidation(testName string) bool {
 
 			testName = testName[i+1 : j]
 		}
+		log.Infof("validating test-name [%s] for running data integrity validation", testName)
 		if strings.Contains(dataIntegrityValidationTests, testName) {
 			return true
 		}
@@ -8115,6 +8116,11 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 	if strings.Contains(testName, "{Longevity}") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
+		sInd := strings.LastIndex(testName, ".")
+		if sInd != -1 {
+			testName = testName[sInd+1:]
+		}
+
 	}
 
 	if !runDataIntegrityValidation(testName) {

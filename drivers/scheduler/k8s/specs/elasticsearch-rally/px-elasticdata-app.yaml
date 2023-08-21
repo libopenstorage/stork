@@ -117,7 +117,7 @@ spec:
   - metadata:
       name: es-data
     spec:
-      storageClassName: elasticsearch-sc
+      storageClassName: elasticsearch-rally-sc
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
