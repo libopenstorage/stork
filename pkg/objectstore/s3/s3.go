@@ -71,6 +71,8 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 		if awsErr, ok := err.(awserr.Error); ok {
 			if awsErr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou {
 				return nil
+			} else if awsErr.Code() == s3.ErrCodeBucketAlreadyExists {
+				return nil
 			}
 		}
 	}

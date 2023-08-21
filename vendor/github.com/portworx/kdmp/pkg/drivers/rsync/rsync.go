@@ -102,7 +102,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		return utils.ToJobStatus(0, "", jobStatus), nil
 	}
 
-	return utils.ToJobStatus(drivers.TransferProgressCompleted, "", batchv1.JobConditionType("")), nil
+	return utils.ToJobStatus(drivers.TransferProgressCompleted, "", batchv1.JobComplete), nil
 }
 
 func (d Driver) validate(o drivers.JobOpts) error {
