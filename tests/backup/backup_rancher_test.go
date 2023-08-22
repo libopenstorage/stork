@@ -415,9 +415,13 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			restoreList = append(restoreList, restoreName)
 			err = CreateRestoreOnRancherWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping, 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s with replace policy from backup %s", restoreName, backupName))
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			log.Infof("Move namespaces in destination cluster to diff project while restore is going on")
 			err = Inst().S.(*rke.Rancher).ChangeProjectForNamespace(destProjectList[1], restoreNamespaceList)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Moving namespaces %v from project %s to project %s", restoreNamespaceList, destProjectList[0], destProjectList[1]))
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			log.Infof("Verifying if restore is successful after moving destination namespaces from one project to another")
 			err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Minute, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s taken from backup %v having namespaces %v with destination namespaces: %v", restoreName, backupName, appNamespaces, restoreNamespaceList))
@@ -431,9 +435,13 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			restoreList = append(restoreList, restoreName)
 			err = CreateRestoreOnRancherWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping, 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			log.Infof("Move destination ns to no project while restore is going on")
 			err = Inst().S.(*rke.Rancher).RemoveNamespaceFromProject(restoreNamespaceList)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Moving namespaces %v from project %s to no project", restoreNamespaceList, destProjectList[1]))
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			log.Infof("Verifying if restore is successful after moving destination namespaces to no project")
 			err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Minute, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s with destination namespaces: %v", restoreName, restoreNamespaceList))
@@ -449,8 +457,6 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		// Switch context to destination cluster
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx for destination cluster")
 		log.Infof("Deleting restored namespace from destination cluster")
 		for _, ns := range restoreNamespaceList {
 			err = core.Instance().DeleteNamespace(ns)
@@ -461,18 +467,18 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(destProjectIDList[i])
 			log.FailOnError(err, "Deletion of project %s from destination cluster failed", project)
 		}
-		log.Infof("Deleting restore from destination cluster")
-		for _, restoreName := range restoreList {
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
-		}
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
-		ctx, err = backup.GetAdminCtxFromSecret()
+		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx for source cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+		log.Infof("Deleting restores created")
+		for _, restoreName := range restoreList {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+		}
 		log.Infof("Deleting projects from source cluster")
 		err = Inst().S.(*rke.Rancher).DeleteRancherProject(sourceProjectID)
 		log.FailOnError(err, "Deletion of project %s from source cluster failed", sourceProject)
