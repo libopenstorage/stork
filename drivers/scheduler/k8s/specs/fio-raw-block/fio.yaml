@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fio
+spec:
+  serviceName: fio
+  {{ if .Replicas }}
+  replicas: {{ .Replicas }}
+  {{ else }}
+  replicas: 1{{ end }}
+  selector:
+    matchLabels:
+      app: fio
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      schedulerName: stork
+      containers:
+      - name: fio
+        image: docker.pwx.dev.purestorage.com/portworx/fio_drv
+        command: ["fio"]
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
+        args: ["/configs/fio.job", "--status-interval=1", "--eta=never", "--output=/logs/fio.log"]
+        livenessProbe:
+          exec:
+            command:
+            - /fioliveProbe/live-probe.sh
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        volumeDevices:
+        - name: pure-vol
+          devicePath: /dev/pure-block-device
+        volumeMounts:
+        - name: fio-config-vol
+          mountPath: /configs
+        - name: fio-log
+          mountPath: /logs
+        - name: live-probe
+          mountPath: /fioliveProbe
+      - name: grok
+        image: docker.pwx.dev.purestorage.com/pwxvin/grok-exporter:v1.0.0-RC4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: grok-port
+          containerPort: 9144
+          protocol: TCP
+        volumeMounts:
+        - name: grok-config-volume
+          mountPath: /etc/grok_exporter
+        - name: fio-log
+          mountPath: /logs
+      volumes:
+      - name: fio-config-vol
+        configMap:
+          name: fio-job-config
+      - name: grok-config-volume
+        configMap:
+          name: grok-exporter
+      - name: live-probe
+        configMap:
+          defaultMode: 0777
+          name: fio-live-probe
+  volumeClaimTemplates:
+  - metadata:
+      name: pure-vol
+    spec:
+      storageClassName: fio-raw-block-sc
+      accessModes:
+      - ReadWriteOnce
+      volumeMode: Block
+      resources:
+        requests:
+         {{ if .VolumeSize }}
+          storage: {{ .VolumeSize }}
+        {{ else }}
+          storage: 200Gi {{ end  }}
+  - metadata:
+      name: fio-log
+    spec:
+      storageClassName: fio-raw-block-sc
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grok-exporter-svc
+  labels:
+      app: fio
+spec:
+  clusterIP: None
+  selector: 
+    app: fio
+  ports:
+  - name: grok-port
+    port: 9144
+    targetPort: 9144
