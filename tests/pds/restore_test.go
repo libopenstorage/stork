@@ -37,10 +37,26 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
+
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
 	})
 
 	It("Perform multiple restore within same cluster", func() {
 		var deploymentsToBeCleaned []*pds.ModelsDeployment
+		var wlDeploymentsToBeCleaned []*v1.Deployment
+		var deps []*pds.ModelsDeployment
+		pdsdeploymentsmd5Hash := make(map[string]string)
+		restoredDeploymentsmd5Hash := make(map[string]string)
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -57,12 +73,23 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					log.InfoD(stepLog)
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					deps = append(deps, deployment)
 					log.FailOnError(err, "Error while deploying data services")
 
 					// TODO: Add workload generation
 
 					dsEntity = restoreBkp.DSEntity{
 						Deployment: deployment,
+					}
+				})
+				stepLog = "Running Workloads before taking backups"
+				Step(stepLog, func() {
+					for _, pdsDeployment := range deps {
+						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
+						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+						log.FailOnError(err, "Error while Running workloads")
+						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+						pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 					}
 				})
 				stepLog = "Perform adhoc backup and validate them"
@@ -96,7 +123,27 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
 				})
+				stepLog = "Validate md5hash for the restored deployments"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, pdsDeployment := range deploymentsToBeCleaned {
+						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
+						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+						log.FailOnError(err, "Error while Running workloads")
+						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+						restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
+					}
 
+					defer func() {
+						for _, wlDep := range wlDeploymentsToBeCleaned {
+							err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+							log.FailOnError(err, "Failed while deleting the workload deployment")
+						}
+					}()
+
+					dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
+						true, "Validate md5 hash after restore")
+				})
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
 				})

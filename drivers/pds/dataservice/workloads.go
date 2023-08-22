@@ -2,6 +2,9 @@ package dataservice
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/log"
@@ -11,8 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"strings"
-	"time"
 )
 
 func createServiceAccount(namespace string) (*corev1.ServiceAccount, error) {
@@ -239,7 +240,14 @@ func createPolicies(namespace string) (*corev1.ServiceAccount, error) {
 // InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
 func (ds *DataserviceType) InsertDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
-	ckSum, wlDep, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
+	_, dep, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
+	if err == nil {
+		err := k8sApps.DeleteDeployment(dep.Name, dep.Namespace)
+		if err != nil {
+			return "", nil, fmt.Errorf("error while deleting the workload deployment")
+		}
+	}
+	ckSum, wlDep, err := ds.ReadDataAndReturnChecksum(pdsDeployment, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
