@@ -27,7 +27,7 @@ spec:
   selector:
     app: kafka
 ---
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: kafka-pdb
@@ -68,7 +68,7 @@ spec:
       containers:
       - name: k8skafka
         imagePullPolicy: Always
-        image: portworx/kafka-broker:v0.1
+        image: portworx/kafka-broker
         # resources:
         #   requests:
         #     memory: "1Gi"

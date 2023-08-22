@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: producer
-          image: portworx/kafka-broker:v0.1
+          image: portworx/kafka-producer
           imagePullPolicy: Always
           ports:
             - containerPort: 8083

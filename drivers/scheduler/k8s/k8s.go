@@ -72,6 +72,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -710,7 +711,7 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
-	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
+	} else if specObj, ok := in.(*policyv1.PodDisruptionBudget); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*netv1.NetworkPolicy); ok {
 		return specObj, nil
