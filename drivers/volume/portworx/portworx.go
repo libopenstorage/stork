@@ -3626,7 +3626,13 @@ func (p *portworx) StartRestore(
 
 		taskID := p.getBackupRestoreTaskID(restore.UID, volumeInfo.SourceNamespace, volumeInfo.PersistentVolumeClaim)
 		credID := p.getCredID(restore.Spec.BackupLocation, restore.Namespace)
-		locator, restoreSpec, err := p.getCloudBackupRestoreSpec(restore.Spec.StorageClassMapping, backupVolumeInfo.StorageClass, taskID)
+		locator, restoreSpec, err := p.getCloudBackupRestoreSpec(
+			restore.Spec.StorageClassMapping,
+			backupVolumeInfo.StorageClass,
+			taskID,
+			destinationNamespace,
+			volumeInfo.PersistentVolumeClaim,
+		)
 		if err != nil {
 			return volumeInfos, fmt.Errorf("failed to parse restore volume spec: %v ", err)
 		}
@@ -3670,7 +3676,8 @@ func (p *portworx) getCloudBackupRestoreSpec(
 	storageClassMapping map[string]string,
 	sourceStorageClass string,
 	taskID string,
-
+	destinationNamespace string,
+	pvcName string,
 ) (*api.VolumeLocator, *api.RestoreVolumeSpec, error) {
 	locator := &api.VolumeLocator{
 		Name: taskID, // always override name with taskID
@@ -3699,6 +3706,11 @@ func (p *portworx) getCloudBackupRestoreSpec(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse storage class %v: %v", destStorageClass, err)
 	}
+	if locator.VolumeLabels == nil {
+		locator.VolumeLabels = make(map[string]string)
+	}
+	locator.VolumeLabels[pvcNameLabel] = pvcName
+	locator.VolumeLabels[namespaceLabel] = destinationNamespace
 	// Special handling for io_profile
 	// The default volumeSpec.IoProfile is set to sequential
 	// Check in storage class if an io profile is set. If not set use
