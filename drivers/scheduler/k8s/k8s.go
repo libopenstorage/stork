@@ -6373,8 +6373,13 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	if err != nil {
 		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
-	storageClassName := originalStorageClass.Name
-	log.Infof("Proceeding with storage class %s", storageClassName)
+	//PWX-32475:- Creating a clone of the original SC so that we can change the VolumeBindingMode to Immediate without changing the original storageclass spec
+	storageClassName, err := createClonedStorageClassIfRequired(originalStorageClass)
+	if err != nil {
+		return fmt.Errorf("failed to create cloned storage class with the name %s : %s", originalStorageClass.Name+"-clone", err)
+	}
+
+	log.Infof("Proceeding with cloned storage class %s", storageClassName)
 
 	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
@@ -6425,8 +6430,13 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	if err != nil {
 		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
-	storageClassName := originalStorageClass.Name
-	log.Infof("Proceeding with storage class %s", storageClassName)
+
+	//PWX-32475:- Creating a clone of the original SC so that we can change the VolumeBindingMode to Immediate without changing the original storageclass spec
+	storageClassName, err := createClonedStorageClassIfRequired(originalStorageClass)
+	if err != nil {
+		return fmt.Errorf("failed to create cloned storage class with the name %s : %s", originalStorageClass.Name+"-clone", err)
+	}
+	log.Infof("Proceeding with cloned storage class %s", storageClassName)
 
 	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
@@ -6486,7 +6496,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	}
 	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
 	storageClassName := originalStorageClass.Name
 	log.Infof("Proceeding with storage class %s", storageClassName)
@@ -7632,4 +7642,45 @@ func ClusterVersion() (string, error) {
 		return "", err
 	}
 	return strings.TrimLeft(ver.String(), "v"), nil
+}
+
+func createClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
+	cloneStorageClass := originalStorageClass.DeepCopy()
+	clonedSCName := cloneStorageClass.Name + "-clone"
+	clonedSCNotFound := false
+
+	t := func() (interface{}, bool, error) {
+		_, err := k8sStorage.GetStorageClass(clonedSCName)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				clonedSCNotFound = true
+				return "", false, err
+			}
+			return "", true, err
+		}
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+	if err != nil {
+		if clonedSCNotFound {
+			log.Infof("Cloned SC with the name %v does not exist and will be created", clonedSCName)
+
+			cloneStorageClass.Name = clonedSCName
+			immediate := storageapi.VolumeBindingImmediate
+			cloneStorageClass.VolumeBindingMode = &immediate
+			cloneStorageClass.ResourceVersion = ""
+			cloneStorageClass.UID = ""
+
+			clonedSCobj, err := k8sStorage.CreateStorageClass(cloneStorageClass)
+			if err != nil {
+				log.Errorf("Error occurred while creating cloned storage class:- %v", err)
+				return "", err
+			}
+			return clonedSCobj.Name, nil
+		} else {
+			return "", err
+		}
+	}
+	return clonedSCName, nil
 }
