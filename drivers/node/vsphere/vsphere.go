@@ -326,9 +326,31 @@ func (v *vsphere) PowerOffVM(n node.Node) error {
 		return fmt.Errorf("Failed to power off %s: %v", vm.Name(), err)
 	}
 	if _, err := tsk.WaitForResult(v.ctx); err != nil {
-		return &node.ErrFailedToRebootNode{
+		return &node.ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to power off  VM %s. cause %v", vm.Name(), err),
+		}
+	}
+
+	return nil
+}
+
+// DestroyVM powers off the VM if not already off
+func (v *vsphere) DestroyVM(n node.Node) error {
+	var err error
+	vm := vmMap[n.Name]
+
+	log.Infof("\nDestroying VM: %s  ", vm.Name())
+	tsk, err := vm.Destroy(v.ctx)
+
+	if err != nil {
+		return fmt.Errorf("Failed to power off %s: %v", vm.Name(), err)
+	}
+	if _, err := tsk.WaitForResult(v.ctx); err != nil {
+
+		return &node.ErrFailedToDeleteNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to destroy VM %s. cause %v", vm.Name(), err),
 		}
 	}
 

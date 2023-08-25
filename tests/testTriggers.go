@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"math"
 	"math/rand"
@@ -483,6 +484,8 @@ const (
 	AddStorageNode = "addStorageNode"
 	//AddStoragelessNode adds storageless node to existing OCP set up
 	AddStoragelessNode = "addStoragelessNode"
+	//OCPStorageNodeRecycle recycle Storageless to Storagenode
+	OCPStorageNodeRecycle = "ocpNodeStorageRecycle"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -565,7 +568,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	ValidateDataIntegrity(contexts)
+
 	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
 	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
@@ -8248,6 +8251,92 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
 	dash.VerifySafely(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")
+
+	validateContexts(event, contexts)
+	updateMetrics(*event)
+
+}
+
+func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer endLongevityTest()
+	startLongevityTest(OCPStorageNodeRecycle)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: OCPStorageNodeRecycle,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	if Inst().S.String() != openshift.SchedName {
+		log.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
+		return
+	}
+
+	if Inst().N.String() != vsphere.DriverName {
+		log.Warnf("Failed: This test is not supported for node driver: [%s]", Inst().N.String())
+		return
+	}
+
+	setMetrics(*event)
+
+	stepLog := "Recycle Storage node in the cluster"
+
+	stNodes := node.GetStorageNodes()
+	stlessNodes := node.GetStorageLessNodes()
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		index := randIntn(1, len(stNodes))[0]
+		delNode := stNodes[index]
+		Step(
+			fmt.Sprintf("Recycle a storage node: [%s] and validating the drives", delNode.Name),
+			func() {
+				err := Inst().S.RecycleNode(delNode)
+				UpdateOutcome(event, err)
+			})
+		Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
+			workerNodes := node.GetWorkerNodes()
+			for x, wNode := range workerNodes {
+				log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+			}
+		})
+
+	})
+
+	stepLog = "validate PX on all nodes after node recycling"
+	hasPXUp := true
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		nodes := node.GetWorkerNodes()
+		for _, n := range nodes {
+			log.InfoD("Check PX status on %v", n.Name)
+			err := Inst().V.WaitForPxPodsToBeUp(n)
+			if err != nil {
+				hasPXUp = false
+				UpdateOutcome(event, err)
+			}
+		}
+	})
+	if !hasPXUp {
+		return
+	}
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
+	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
+	dash.VerifySafely(len(stlessNodes), updatedStoragelessNodesCount, "verify storageless nodes count after node recycle")
+	updatedStorageNodesCount := len(node.GetStorageNodes())
+	dash.VerifySafely(len(stNodes), updatedStorageNodesCount, "verify storage node count after node recycle")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)

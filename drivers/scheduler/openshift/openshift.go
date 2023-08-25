@@ -2,6 +2,7 @@ package openshift
 
 import (
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -857,6 +858,7 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 
 	// Delete the node from machineset using kubectl command
 	t := func() (interface{}, bool, error) {
+		log.Infof("Deleting machine %s", nodeName)
 		cmd := "kubectl delete machines -n openshift-machine-api " + nodeName
 		if _, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
 			return "", true, fmt.Errorf("failed to delete machine. cause: %v", err)
@@ -928,15 +930,40 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		var driverName = k.K8s.NodeDriverName
 		if driverName == vsphere.DriverName {
 			driver, _ := node.Get(driverName)
-			driver.PowerOffVM(n)
+			err = driver.PowerOffVM(n)
+			if err != nil {
+				return err
+			}
+			//wait for power off complete before deleting machine
+			time.Sleep(5 * time.Second)
 		}
-		err = k.deleteAMachine(n.Name)
-		if err != nil {
-			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, err)
+
+		eg := errgroup.Group{}
+
+		eg.Go(func() error {
+			delErr := k.deleteAMachine(n.Name)
+			if delErr != nil {
+				log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, delErr)
+			}
+			return delErr
+		})
+
+		eg.Go(func() error {
+			var destroyErr error
+			if !isStoragelessNode && driverName == vsphere.DriverName {
+				driver, _ := node.Get(driverName)
+				destroyErr = driver.DestroyVM(n)
+				return destroyErr
+			}
+			return destroyErr
+		})
+
+		if err = eg.Wait(); err != nil {
 			return err
 		}
 
 		// Removing the node from the nodeRegistry
+		log.Infof("Deleting node %s from node registry", n.Name)
 		err = node.DeleteNode(n)
 		if err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
