@@ -108,6 +108,9 @@ type S3Config struct {
 	// UseIam when set stork will use the instance IAM role associated with the nodes
 	// on which stork pods run
 	UseIam bool `json:"useIam"`
+	// SSE (Server Side Encryption) type for the S3 bucket.
+	// supported option: "AES256", "aws:kms"
+	sse string `json:"sse"`
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
