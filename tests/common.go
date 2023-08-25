@@ -8168,14 +8168,19 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
-
 	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
 	if strings.Contains(testName, "{Longevity}") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
 		sInd := strings.LastIndex(testName, ".")
 		if sInd != -1 {
-			testName = testName[sInd+1:]
+			fnNames := strings.Split(testName, ".")
+			for _, fn := range fnNames {
+				if strings.Contains(fn, "Trigger") {
+					testName = fn
+					break
+				}
+			}
 		}
 
 	}
