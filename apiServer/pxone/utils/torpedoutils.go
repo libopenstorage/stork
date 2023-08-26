@@ -152,9 +152,28 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 	if !checkTorpedoInit(c) {
 		return
 	}
+	appToRun := c.Param("appName")
+	tests.Inst().AppList = []string{appToRun}
 	context = tests.ScheduleApplications(testName)
-	tests.ValidateApplications(context)
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Apps Created and Validated successfully",
-	})
+	for _, ctx := range context {
+		tests.ValidateContext(ctx, &errChan)
+	}
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+	errStrings := make([]string, 0)
+	for _, err := range errors {
+		if err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+	if len(errStrings) > 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": errStrings,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Apps Created and Validated successfully",
+		})
+	}
 }

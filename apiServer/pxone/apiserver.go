@@ -19,6 +19,7 @@ func main() {
 	router.GET("pxone/storagenodes", utils.GetStorageNodes)
 	router.GET("pxone/storagelessnodes", utils.GetStorageLessNodes)
 	router.POST("pxone/collectsupport", utils.CollectSupport)
-	router.POST("pxone/scheduleapps", utils.ScheduleAppsAndValidate)
+	router.POST("pxone/scheduleapps/:appName", utils.ScheduleAppsAndValidate)
+	router.POST("pxone/deploypxagent", utils.ExecuteHelmCmd)
 	log.Fatal(router.Run(":8080"))
 }
