@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -32,6 +33,7 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 	var waitForCompletion bool
 	var backupName string
 	var replacePolicy string
+	var resources string
 
 	createApplicationRestoreCommand := &cobra.Command{
 		Use:     applicationRestoreSubcommand,
@@ -46,10 +48,23 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 				util.CheckErr(fmt.Errorf("need to provide BackupLocation to use for restore"))
 				return
 			}
+			_, err := storkops.Instance().GetBackupLocation(backupLocation, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(fmt.Errorf("backuplocation %s does not exist in namespace %s", backupLocation, cmdFactory.GetNamespace()))
+				return
+			}
+
 			if backupName == "" {
 				util.CheckErr(fmt.Errorf("need to provide BackupName to restore"))
 				return
 			}
+
+			backup, err := storkops.Instance().GetApplicationBackup(backupName, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(fmt.Errorf("applicationbackup %s does not exist in namespace %s", backupName, cmdFactory.GetNamespace()))
+				return
+			}
+			backupObjectsMap := getBackupObjectsMap(backup)
 
 			applicationRestoreName = args[0]
 			applicationRestore := &storkv1.ApplicationRestore{
@@ -59,9 +74,19 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 					ReplacePolicy:  storkv1.ApplicationRestoreReplacePolicyType(replacePolicy),
 				},
 			}
+			if len(resources) > 0 {
+				objects, err := getObjectInfos(resources, backupObjectsMap, ioStreams)
+				if err != nil {
+					util.CheckErr(fmt.Errorf("error in creating applicationrestore: %v", err))
+					return
+				}
+				applicationRestore.Spec.IncludeResources = objects
+			}
+
+			applicationRestore.Spec.NamespaceMapping = getDefaultNamespaceMapping(backup)
 			applicationRestore.Name = applicationRestoreName
 			applicationRestore.Namespace = cmdFactory.GetNamespace()
-			_, err := storkops.Instance().CreateApplicationRestore(applicationRestore)
+			_, err = storkops.Instance().CreateApplicationRestore(applicationRestore)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -84,6 +109,8 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 	createApplicationRestoreCommand.Flags().StringVarP(&backupLocation, "backupLocation", "l", "", "BackupLocation to use for the restore")
 	createApplicationRestoreCommand.Flags().StringVarP(&backupName, "backupName", "b", "", "Backup to restore from")
 	createApplicationRestoreCommand.Flags().StringVarP(&replacePolicy, "replacePolicy", "r", "Retain", "Policy to use if resources being restored already exist (Retain or Delete).")
+	createApplicationRestoreCommand.Flags().StringVarP(&resources, "resources", "", "",
+		"Specific resources for restoring, should be given in format \"<kind>/<namespace>/<name>,<kind>/<namespace>/<name>,<kind>/<name>\", ex: \"<Deployment>/<ns1>/<dep1>,<PersistentVolumeClaim>/<ns1>/<pvc1>,<ClusterRole>/<clusterrole1>\"")
 
 	return createApplicationRestoreCommand
 }
@@ -263,4 +290,72 @@ func waitForApplicationRestore(name, namespace string, ioStreams genericclioptio
 	}
 
 	return msg, err
+}
+
+func getDefaultNamespaceMapping(backup *storkv1.ApplicationBackup) map[string]string {
+	nsMapping := make(map[string]string)
+	for _, ns := range backup.Spec.Namespaces {
+		nsMapping[ns] = ns
+	}
+	return nsMapping
+}
+
+func getBackupObjectsMap(backup *storkv1.ApplicationBackup) map[string]*storkv1.ApplicationBackupResourceInfo {
+	objectsMap := make(map[string]*storkv1.ApplicationBackupResourceInfo)
+	for _, resource := range backup.Status.Resources {
+		if len(resource.Namespace) > 0 {
+			objKey := getObjectKeyNameInBackupObjectsMap(strings.ToLower(resource.Kind), resource.Namespace, resource.Name)
+			objectsMap[objKey] = resource
+		} else {
+			objKey := getObjectKeyNameInBackupObjectsMap(strings.ToLower(resource.Kind), "", resource.Name)
+			objectsMap[objKey] = resource
+		}
+	}
+	return objectsMap
+}
+
+func getObjectInfos(resourceString string, backupObjectsMap map[string]*storkv1.ApplicationBackupResourceInfo, ioStreams genericclioptions.IOStreams) ([]storkv1.ObjectInfo, error) {
+	objects := make([]storkv1.ObjectInfo, 0)
+	var err error
+
+	resources := strings.Split(resourceString, ",")
+	for _, resource := range resources {
+		// resources will be provided like "<type>/<ns>/<name>,<type>/<name>"
+		resourceDetails := strings.Split(resource, "/")
+		object := storkv1.ObjectInfo{}
+		var objectKey string
+		if len(resourceDetails) == 3 {
+			object.Name = resourceDetails[2]
+			object.Namespace = resourceDetails[1]
+			// strict check on name and namespace for matching
+			objectKey = getObjectKeyNameInBackupObjectsMap(strings.ToLower(resourceDetails[0]), resourceDetails[1], resourceDetails[2])
+		} else if len(resourceDetails) == 2 {
+			object.Name = resourceDetails[1]
+			objectKey = getObjectKeyNameInBackupObjectsMap(strings.ToLower(resourceDetails[0]), "", resourceDetails[1])
+		} else {
+			err = fmt.Errorf("unsupported resource input format %s, should follow format \"<kind>/<namespace>/<name>,<kind>/<name>\"", resource)
+			return objects, err
+		}
+
+		if len(objectKey) > 0 {
+			if _, ok := backupObjectsMap[objectKey]; !ok {
+				err = fmt.Errorf("error getting resource %s with name %s in applicationbackup", resourceDetails[0], object.Name)
+				return objects, err
+			}
+			backupObject := backupObjectsMap[objectKey]
+			object.Kind = backupObject.Kind
+			object.Version = backupObject.Version
+			object.Group = backupObject.Group
+			objects = append(objects, object)
+		}
+	}
+	return objects, nil
+}
+
+func getObjectKeyNameInBackupObjectsMap(kind string, name string, namespace string) string {
+	if len(namespace) > 0 {
+		return fmt.Sprintf("%s_%s_%s", kind, namespace, name)
+	} else {
+		return fmt.Sprintf("%s_%s", kind, name)
+	}
 }
