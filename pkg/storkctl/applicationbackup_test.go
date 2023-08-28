@@ -32,6 +32,7 @@ func createApplicationBackupAndVerify(
 	backupLocation string,
 	preExecRule string,
 	postExecRule string,
+	resourceTypes string,
 ) {
 	cmdArgs := []string{"create", "backups", "-n", namespace, "--namespaces", strings.Join(namespaces, ","), name, "--backupLocation", backupLocation}
 	if preExecRule != "" {
@@ -39,6 +40,9 @@ func createApplicationBackupAndVerify(
 	}
 	if postExecRule != "" {
 		cmdArgs = append(cmdArgs, "--postExecRule", postExecRule)
+	}
+	if len(resourceTypes) > 0 {
+		cmdArgs = append(cmdArgs, "--resourceTypes", resourceTypes)
 	}
 
 	expected := "ApplicationBackup " + name + " started successfully\n"
@@ -57,7 +61,7 @@ func createApplicationBackupAndVerify(
 
 func TestGetApplicationBackupsOneApplicationBackup(t *testing.T) {
 	defer resetTest()
-	createApplicationBackupAndVerify(t, "getbackuptest", "test", []string{"namespace1"}, "backuplocation", "preExec", "postExec")
+	createApplicationBackupAndVerify(t, "getbackuptest", "test", []string{"namespace1"}, "backuplocation", "preExec", "postExec", "")
 
 	expected := "NAME            STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"getbackuptest                    0/0       0                     \n"
@@ -71,8 +75,8 @@ func TestGetApplicationBackupsMultiple(t *testing.T) {
 	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 	require.NoError(t, err, "Error creating default namespace")
 
-	createApplicationBackupAndVerify(t, "getbackuptest1", "default", []string{"namespace1"}, "backuplocation", "", "")
-	createApplicationBackupAndVerify(t, "getbackuptest2", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "getbackuptest1", "default", []string{"namespace1"}, "backuplocation", "", "", "")
+	createApplicationBackupAndVerify(t, "getbackuptest2", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 
 	expected := "NAME             STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"getbackuptest1                    0/0       0                     \n" +
@@ -93,7 +97,7 @@ func TestGetApplicationBackupsMultiple(t *testing.T) {
 
 	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns1"}})
 	require.NoError(t, err, "Error creating ns1 namespace")
-	createApplicationBackupAndVerify(t, "getbackuptest21", "ns1", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "getbackuptest21", "ns1", []string{"namespace1"}, "backuplocation", "", "", "")
 	cmdArgs = []string{"get", "backups", "--all-namespaces"}
 	expected = "NAMESPACE   NAME              STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"default     getbackuptest1                     0/0       0                     \n" +
@@ -104,7 +108,7 @@ func TestGetApplicationBackupsMultiple(t *testing.T) {
 
 func TestGetApplicationBackupsWithStatusAndProgress(t *testing.T) {
 	defer resetTest()
-	createApplicationBackupAndVerify(t, "getbackupstatustest", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "getbackupstatustest", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 	backup, err := storkops.Instance().GetApplicationBackup("getbackupstatustest", "default")
 	require.NoError(t, err, "Error getting backup")
 
@@ -140,12 +144,12 @@ func TestCreateApplicationBackupsNoName(t *testing.T) {
 
 func TestCreateApplicationBackups(t *testing.T) {
 	defer resetTest()
-	createApplicationBackupAndVerify(t, "createbackup", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "createbackup", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 }
 
 func TestCreateDuplicateApplicationBackups(t *testing.T) {
 	defer resetTest()
-	createApplicationBackupAndVerify(t, "createbackup", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "createbackup", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 	cmdArgs := []string{"create", "backups", "--namespaces", "namespace1", "createbackup", "--backupLocation", "backuplocation"}
 
 	expected := "Error from server (AlreadyExists): applicationbackups.stork.libopenstorage.org \"createbackup\" already exists"
@@ -162,7 +166,7 @@ func TestDeleteApplicationBackupsNoApplicationBackupName(t *testing.T) {
 
 func TestDeleteApplicationBackups(t *testing.T) {
 	defer resetTest()
-	createApplicationBackupAndVerify(t, "deletebackup", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "deletebackup", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 
 	cmdArgs := []string{"delete", "backups", "deletebackup"}
 	expected := "ApplicationBackup deletebackup deleted successfully\n"
@@ -172,16 +176,16 @@ func TestDeleteApplicationBackups(t *testing.T) {
 	expected = "Error from server (NotFound): applicationbackups.stork.libopenstorage.org \"deletebackup\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	createApplicationBackupAndVerify(t, "deletebackup1", "default", []string{"namespace1"}, "backuplocation", "", "")
-	createApplicationBackupAndVerify(t, "deletebackup2", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "deletebackup1", "default", []string{"namespace1"}, "backuplocation", "", "", "")
+	createApplicationBackupAndVerify(t, "deletebackup2", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 
 	cmdArgs = []string{"delete", "backups", "deletebackup1", "deletebackup2"}
 	expected = "ApplicationBackup deletebackup1 deleted successfully\n"
 	expected += "ApplicationBackup deletebackup2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	createApplicationBackupAndVerify(t, "deletebackup1", "default", []string{"namespace1"}, "backuplocation", "", "")
-	createApplicationBackupAndVerify(t, "deletebackup2", "default", []string{"namespace1"}, "backuplocation", "", "")
+	createApplicationBackupAndVerify(t, "deletebackup1", "default", []string{"namespace1"}, "backuplocation", "", "", "")
+	createApplicationBackupAndVerify(t, "deletebackup2", "default", []string{"namespace1"}, "backuplocation", "", "", "")
 }
 
 func TestCreateApplicationBackupWaitSuccess(t *testing.T) {
