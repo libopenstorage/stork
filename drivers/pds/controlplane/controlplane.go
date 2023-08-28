@@ -161,6 +161,80 @@ func (cp *ControlPlane) GetStorageTemplate(tenantID string) (string, error) {
 	return storageTemplateID, nil
 }
 
+// DeleteAppConfigTemplates deletes the templates of given prefix
+func (cp *ControlPlane) DeleteAppConfigTemplates(tenantID string, templatePrefixes []string) error {
+	appTemplates, err := components.AppConfigTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return fmt.Errorf("error occued while listing templates %v", err)
+	}
+	count := 0
+
+	for _, templatePrefix := range templatePrefixes {
+		for _, appTemplate := range appTemplates {
+			if strings.Contains(*appTemplate.Name, templatePrefix) {
+				log.Debugf("TemplateName %s", *appTemplate.Name)
+				_, err := components.AppConfigTemplate.DeleteTemplate(appTemplate.GetId())
+				if err != nil {
+					return err
+				}
+				log.InfoD("Template %s Deleted", *appTemplate.Name)
+				count++
+			}
+		}
+	}
+
+	log.Debugf("Number of templates deleted: %d", count)
+	return nil
+}
+
+// DeleteStorageConfigTemplates deletes the templates of given prefix
+func (cp *ControlPlane) DeleteStorageConfigTemplates(tenantID string, templatePrefixes []string) error {
+	appTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return fmt.Errorf("error occued while listing templates %v", err)
+	}
+	count := 0
+	for _, templatePrefix := range templatePrefixes {
+		for _, appTemplate := range appTemplates {
+			if strings.Contains(*appTemplate.Name, templatePrefix) {
+				log.Debugf("TemplateName %s", *appTemplate.Name)
+				_, err := components.StorageSettingsTemplate.DeleteTemplate(appTemplate.GetId())
+				if err != nil {
+					return err
+				}
+				log.InfoD("Template %s Deleted", *appTemplate.Name)
+				count++
+			}
+		}
+	}
+	log.Debugf("Number of templates deleted: %d", count)
+	return nil
+}
+
+// DeleteResourceSettingTemplates deletes the templates of given prefix
+func (cp *ControlPlane) DeleteResourceSettingTemplates(tenantID string, templatePrefixes []string) error {
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return fmt.Errorf("error occued while listing templates %v", err)
+	}
+	count := 0
+	for _, templatePrefix := range templatePrefixes {
+		for _, resourceTemp := range resourceTemplates {
+			if strings.Contains(*resourceTemp.Name, templatePrefix) {
+				log.Debugf("TemplateName %s", *resourceTemp.Name)
+				_, err := components.ResourceSettingsTemplate.DeleteTemplate(resourceTemp.GetId())
+				if err != nil {
+					return err
+				}
+				log.InfoD("Template %s Deleted", *resourceTemp.Name)
+				count++
+			}
+		}
+	}
+	log.Debugf("Number of templates deleted: %d", count)
+	return nil
+}
+
 // GetAppConfTemplate returns the app config template id
 func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, error) {
 	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)

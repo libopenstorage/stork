@@ -99,6 +99,12 @@
     "PxNamespace": "portworx",
     "PDSNamespace": "pds-system"
   },
+  "CleanUpParams": {
+    "AppTemplatePrefix": ["integration-test"],
+    "ResourceTemplatePrefix": ["integration-test"],
+    "StorageTemplatePrefix": ["integration-test"],
+    "SkipTargetClusterCheck": true
+  },
   "ResiliencyTest": {
     "CheckTillReplica": 1
   },

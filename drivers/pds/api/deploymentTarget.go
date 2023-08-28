@@ -83,7 +83,7 @@ func (dt *DeploymentTarget) DeleteTarget(targetID string) (*status.Response, err
 	}
 	res, err := dtClient.ApiDeploymentTargetsIdDelete(ctx, targetID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiDeploymentTargetsIdDelete`: %v\n.Full HTTP response: %v", err, res)
+		return res, fmt.Errorf("Error when calling `ApiDeploymentTargetsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, nil
 }

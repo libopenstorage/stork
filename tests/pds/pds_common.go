@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/pds/api"
+	"github.com/portworx/torpedo/drivers/pds/controlplane"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
+	"github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"net/http"
 	"time"
 
@@ -99,6 +104,16 @@ var (
 	k8sApps                                 = apps.Instance()
 	pdsLabels                               = make(map[string]string)
 	accountID                               string
+)
+
+// imports based on functionalities
+var (
+	dsTest        *dataservices.DataserviceType
+	customParams  *parameters.Customparams
+	targetCluster *targetcluster.TargetCluster
+	controlPlane  *controlplane.ControlPlane
+	components    *api.Components
+	wkloadParams  pdsdriver.LoadGenParams
 )
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}

@@ -32,7 +32,7 @@ func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplica
 // GetTemplate return app configurationtemplate model.
 func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
-	log.Infof("Get list of storage templates for tenant ID - %v", templateID)
+	log.Infof("Get list of application configuration templates for tenant ID - %v", templateID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -80,7 +80,7 @@ func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, 
 // DeleteTemplate function delete app configuration template and return the api statusresponse.
 func (at *AppConfigTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
-	log.Infof("Get list of storage templates for tenant ID - %v", templateID)
+	log.Infof("Get application configuration template for tenant ID - %v", templateID)
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
