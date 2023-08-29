@@ -1034,7 +1034,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareRancherNetworkPolicy(object, *opts)
 	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 		return false, r.prepareRancherApplicationResource(object, *opts)
-
+	case "VirtualMachine":
+		logrus.Tracef("Transforming kubevirt VM resource for apply")
+		return false, r.prepareVirtualMachineForApply(object, nil)
 	}
 	return false, nil
 }
