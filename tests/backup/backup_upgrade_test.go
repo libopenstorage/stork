@@ -53,7 +53,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		clusterUid           string
 		clusterStatus        api.ClusterInfo_StatusInfo_Status
 	)
-	var testrailID = 58023 // testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58023
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58023
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
@@ -63,7 +63,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("StorkUpgradeWithBackup", "Validates the scheduled backups and creation of new backup after stork upgrade", nil, testrailID)
+		StartTorpedoTest("StorkUpgradeWithBackup", "Validates the scheduled backups and creation of new backup after stork upgrade", nil, 58023)
 		log.Infof("Application installation")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

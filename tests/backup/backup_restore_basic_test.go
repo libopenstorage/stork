@@ -515,7 +515,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		restoreName             string
 		clusterStatus           api.ClusterInfo_StatusInfo_Status
 	)
-	var testrailID = 58014 // testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58014
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58014
 	namespaceMapping := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -525,7 +525,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, testrailID)
+		StartTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, 58014)
 		log.Infof("Application installation")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -655,7 +655,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		restoreName             string
 		clusterStatus           api.ClusterInfo_StatusInfo_Status
 	)
-	var testrailID = 58015 // testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58015
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58015
 	namespaceMapping := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -665,7 +665,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, testrailID)
+		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, 58015)
 		log.Infof("Application installation")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

@@ -35,7 +35,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBucket", "Deploying backup", nil, 60018)
+		StartTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Deploying backup", nil, 60018)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -229,7 +229,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeOnRestoredVolumeFromLockedBucket", "Resize after the volume is restored from a backup from locked bucket", nil, 59904)
+		StartTorpedoTest("LockedBucketResizeOnRestoredVolume", "Resize after the volume is restored from a backup from locked bucket", nil, 59904)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {

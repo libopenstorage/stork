@@ -18,7 +18,7 @@ import (
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
-		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil, 0)
+		StartTorpedoTest("BackupClusterVerification", "Validating backup cluster pods", nil, 0)
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
@@ -38,7 +38,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 var _ = Describe("{UserGroupManagement}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
-		StartTorpedoTest("Backup: UserGroupManagement", "Creating users and adding them to groups", nil, 0)
+		StartTorpedoTest("UserGroupManagement", "Creating users and adding them to groups", nil, 0)
 	})
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
@@ -110,7 +110,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
+		StartTorpedoTest("BasicBackupCreation", "Deploying backup", nil, 0)
 
 		appList = Inst().AppList
 		backupLocationMap = make(map[string]string)
