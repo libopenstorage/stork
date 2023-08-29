@@ -526,7 +526,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 	labelSelectors := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultipleProjectMultipleNamespacesBackupAndRestore",
+		StartTorpedoTest("MultipleProjectsAndNamespacesBackupAndRestore",
 			"Take backups and restores of multiple namespaces belonging to multiple projects", nil, 84874)
 		log.InfoD("Deploying multiple instances of applications required for the testcase")
 		contexts = make([]*scheduler.Context, 0)
