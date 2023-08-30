@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
@@ -14,6 +15,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+)
+
+const (
+	statfsConfigMapName = "px-statfs"
+	cmBinaryDataKey     = "px_statfs.so"
+	cmDataKey           = "ld.so.preload"
 )
 
 // This test is named starting with "TestExtender" so that is runs as part of the TestExtender suite
@@ -54,9 +61,16 @@ func TestExtenderWebhookStatfs(t *testing.T) {
 		require.NoError(t, err, "Error waiting for app to get to running state")
 	}
 
+	foundVirtLauncher := false
 	for _, appCtx := range ctxs {
 		validateStatfs(t, appCtx)
+
+		if !foundVirtLauncher && isVirtLauncherContext(appCtx) {
+			foundVirtLauncher = true
+			validateConfigMapUpdate(t, appCtx)
+		}
 	}
+	require.True(t, foundVirtLauncher)
 
 	logrus.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
@@ -152,4 +166,107 @@ func runCommandInSv4TestContainer(t *testing.T, pod *corev1.Pod, cmd []string) s
 
 func isVirtLauncherContext(ctx *scheduler.Context) bool {
 	return strings.HasPrefix(ctx.App.Key, "virt-launcher-sim")
+}
+
+// Make dummy changes to the px-statfs configmap and then delete a virt-launcher-sim pod.
+// Stork should restore the original configMap.
+func validateConfigMapUpdate(t *testing.T, ctx *scheduler.Context) {
+	require.True(t, isVirtLauncherContext(ctx))
+	vols, err := schedulerDriver.GetVolumes(ctx)
+	require.NoError(t, err, "Failed to get volumes for context %s", ctx.App.Key)
+
+	require.Equal(t, len(vols), 1)
+	vol := vols[0]
+
+	updateFn1 := func(cm *corev1.ConfigMap) {
+		// change the contents of ld.so.preload file in the configmap
+		cm.Data[cmDataKey] = "dummy-value"
+	}
+	updateFn2 := func(cm *corev1.ConfigMap) {
+		// change the contents of px_statfs.so in the configMap
+		cm.BinaryData[cmBinaryDataKey] = []byte("dummy-value")
+	}
+	updateFn3 := func(cm *corev1.ConfigMap) {
+		// change value of a single byte in px_statfs.so
+		origBytes := cm.BinaryData[cmBinaryDataKey]
+		updatedBytes := make([]byte, len(origBytes))
+		for i := range origBytes {
+			updatedBytes[i] = origBytes[i]
+		}
+		updateIndex := len(updatedBytes) / 2
+		origByte := updatedBytes[updateIndex]
+		newByte := origByte ^ 1
+		logrus.Infof("Updating byte at index %d from %d to %d", updateIndex, origByte, newByte)
+		updatedBytes[updateIndex] = newByte
+		cm.BinaryData[cmBinaryDataKey] = updatedBytes
+	}
+	for i, updateFn := range []func(*corev1.ConfigMap){updateFn1, updateFn2, updateFn3} {
+		logrus.Infof("Testing configmap update function %d", i)
+		pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+		require.NoError(t, err, "Failed to get pods for volume %v of context %s", vol.ID, ctx.App.Key)
+
+		require.True(t, len(pods) > 0)
+
+		// pick a pod that is not terminating already
+		var pod corev1.Pod
+		for _, pod = range pods {
+			if pod.DeletionTimestamp.IsZero() {
+				logrus.Infof("Using pod %s/%s for the configMap update test", pod.Namespace, pod.Name)
+				break
+			}
+		}
+
+		logrus.Infof("Changing configMap in namespace %s", pod.Namespace)
+		cm, err := core.Instance().GetConfigMap(statfsConfigMapName, pod.Namespace)
+		require.NoError(t, err)
+
+		origData, exists := cm.Data[cmDataKey]
+		require.True(t, exists)
+
+		origBinaryData, exists := cm.BinaryData[cmBinaryDataKey]
+		require.True(t, exists)
+
+		// change value of either data key or the binaryData and verify that it gets restored to the original value
+		// when a new pod starts up
+		updateFn(cm)
+		cm, err = core.Instance().UpdateConfigMap(cm)
+		require.NoError(t, err)
+
+		err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
+		require.NoError(t, err)
+
+		require.Eventuallyf(t, func() bool {
+			return configMapMatches(pod.Namespace, origData, origBinaryData)
+		}, 3*time.Minute, 10*time.Second, "ConfigMap %s/%s did not get updated", pod.Namespace, statfsConfigMapName)
+	}
+	logrus.Infof("Validated configMap update in context %v", ctx.App.Key)
+}
+
+func configMapMatches(namespace, expectedData string, expectedBinaryData []byte) bool {
+	cm, err := core.Instance().GetConfigMap(statfsConfigMapName, namespace)
+	if err != nil {
+		logrus.Infof("Failed to get configmap %s/%s: %v", namespace, statfsConfigMapName, err)
+		return false
+	}
+
+	actualData := cm.Data[cmDataKey]
+	if actualData != expectedData {
+		logrus.Infof("ConfigMap.Data[%s] does not match: expected %s, actual %s", cmDataKey, expectedData, actualData)
+		return false
+	}
+
+	actualBinaryData := cm.BinaryData[cmBinaryDataKey]
+	if len(actualBinaryData) != len(expectedBinaryData) {
+		logrus.Infof("Length of ConfigMap.BinaryData[%s] does not match: expected %d, actual %d",
+			cmBinaryDataKey, len(expectedBinaryData), len(actualBinaryData))
+		return false
+	}
+	for i := range expectedBinaryData {
+		if actualBinaryData[i] != expectedBinaryData[i] {
+			logrus.Infof("Byte at index %d in ConfigMap.BinaryData[%s] does not match: expected %d, actual %d",
+				i, cmBinaryDataKey, expectedBinaryData[i], actualBinaryData[i])
+			return false
+		}
+	}
+	return true
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -179,11 +178,13 @@ const (
 	pureFileParam    = "pure_file"
 	pureBlockParam   = "pure_block"
 
-	statfsSOName              = "px_statfs.so"
-	statfsSODirInStork        = "/"
-	statfsSODirInVirtLauncher = "/etc"
-	statfsConfigMapName       = "px-statfs"
-	statfsVolName             = "px-statfs"
+	statfsSOName               = "px_statfs.so"
+	statfsSOPathInStork        = "/" + statfsSOName
+	statfsSOPathInVirtLauncher = "/etc/" + statfsSOName
+	statfsConfigMapName        = "px-statfs"
+	statfsVolName              = "px-statfs"
+	ldPreloadFileName          = "ld.so.preload"
+	ldPreloadFilePath          = "/etc/" + ldPreloadFileName
 
 	nodePublishSecretName           = "csi.storage.k8s.io/node-publish-secret-name"
 	controllerExpandSecretName      = "csi.storage.k8s.io/controller-expand-secret-name"
@@ -4246,14 +4247,14 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 	for i := 0; i < len(pod.Spec.Containers); i++ {
 		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, v1.VolumeMount{
 			Name:      statfsVolName,
-			MountPath: path.Join(statfsSODirInVirtLauncher, statfsSOName),
+			MountPath: statfsSOPathInVirtLauncher,
 			SubPath:   statfsSOName,
 		})
 
 		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, v1.VolumeMount{
 			Name:      statfsVolName,
-			MountPath: "/etc/ld.so.preload",
-			SubPath:   "ld.so.preload",
+			MountPath: ldPreloadFilePath,
+			SubPath:   ldPreloadFileName,
 		})
 	}
 
@@ -4285,7 +4286,7 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 		},
 	}
 
-	if err := p.createStatfsConfigMap(podNamespace); err != nil {
+	if err := p.createOrUpdateStatfsConfigMap(podNamespace); err != nil {
 		return nil, fmt.Errorf("failed to create config map: %w", err)
 	}
 
@@ -4297,15 +4298,42 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 	return patches, nil
 }
 
-func (p *portworx) createStatfsConfigMap(cmNamespace string) error {
-	soPath := path.Join(statfsSODirInStork, statfsSOName)
-	statfsSOContents, err := os.ReadFile(soPath)
+func (p *portworx) createOrUpdateStatfsConfigMap(cmNamespace string) error {
+	statfsSOContents, err := os.ReadFile(statfsSOPathInStork)
 	if err != nil {
-		logrus.Errorf("Failed to read %s: %v", soPath, err)
+		logrus.Errorf("Failed to read %s: %v", statfsSOPathInStork, err)
 		return err
 	}
+	expected := p.getStatfsConfigMap(cmNamespace, statfsSOContents)
+	existing, err := core.Instance().GetConfigMap(statfsConfigMapName, cmNamespace)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		logrus.Errorf("Failed to check existing config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
+		return err
+	}
+	if err == nil && existing != nil {
+		if p.statfsConfigMapNeedsUpdate(existing, statfsSOContents) {
+			existing.BinaryData = expected.BinaryData
+			existing.Data = expected.Data
+			if _, err := core.Instance().UpdateConfigMap(existing); err != nil {
+				logrus.Errorf("Failed to update config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
+				return err
+			}
+			logrus.Infof("Updated configmap %v/%v", cmNamespace, statfsConfigMapName)
+		}
+		return nil
+	}
+	// create one
+	if _, err := core.Instance().CreateConfigMap(expected); err != nil && !k8s_errors.IsAlreadyExists(err) {
+		logrus.Errorf("Failed to create config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
+		return err
+	} else if err == nil {
+		logrus.Infof("Created configmap %v/%v", cmNamespace, statfsConfigMapName)
+	}
+	return nil
+}
 
-	cm := &v1.ConfigMap{
+func (p *portworx) getStatfsConfigMap(cmNamespace string, statfsSOContents []byte) *v1.ConfigMap {
+	return &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statfsConfigMapName,
 			Namespace: cmNamespace,
@@ -4314,17 +4342,22 @@ func (p *portworx) createStatfsConfigMap(cmNamespace string) error {
 			statfsSOName: statfsSOContents,
 		},
 		Data: map[string]string{
-			"ld.so.preload": path.Join(statfsSODirInVirtLauncher, statfsSOName),
+			ldPreloadFileName: statfsSOPathInVirtLauncher,
 		},
 	}
+}
 
-	if _, err := core.Instance().CreateConfigMap(cm); err != nil && !k8s_errors.IsAlreadyExists(err) {
-		logrus.Errorf("Failed to create  config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
-		return err
-	} else if err == nil {
-		logrus.Infof("Created configmap %v/%v", cmNamespace, statfsConfigMapName)
+func (p *portworx) statfsConfigMapNeedsUpdate(existing *v1.ConfigMap, statfsSOContents []byte) bool {
+	existingBytes := existing.BinaryData[statfsSOName]
+	if len(existingBytes) != len(statfsSOContents) {
+		return true
 	}
-	return nil
+	for i := range existingBytes {
+		if existingBytes[i] != statfsSOContents[i] {
+			return true
+		}
+	}
+	return !strings.Contains(existing.Data[ldPreloadFileName], statfsSOName)
 }
 
 func init() {
