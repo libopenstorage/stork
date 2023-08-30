@@ -55,6 +55,7 @@ const (
 	BackupUID  = "portworx.io/backup-uid"
 	retrySleep = 10 * time.Second
 	maxRetry   = 10
+	lastKnownErrorLen = 1000
 )
 
 // BackupTool backup tool
@@ -487,7 +488,14 @@ func WriteVolumeBackupStatus(
 	vb.Status.TotalBytesProcessed = status.TotalBytesProcessed
 	vb.Status.SnapshotID = status.SnapshotID
 	if status.LastKnownError != nil {
-		vb.Status.LastKnownError = status.LastKnownError.Error()
+		// If the length of LastKnownError string is less than or equal to 1000 chars
+		// add it directly to volumebackup status, else add it job pod log.
+		if len(status.LastKnownError.Error()) <= lastKnownErrorLen {
+			vb.Status.LastKnownError = status.LastKnownError.Error()
+		} else {
+			logrus.Errorf("LastKnownError for the volumebackup CR [%v]: %v", volumeBackupName, status.LastKnownError.Error())
+			vb.Status.LastKnownError = fmt.Sprintf("volumeBackupName [%v] failed, status is large to display. Please check the job pod log", volumeBackupName)
+		}
 	} else {
 		vb.Status.LastKnownError = ""
 	}
