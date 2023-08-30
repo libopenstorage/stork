@@ -927,7 +927,7 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20230822050227-928375ab6b1c => github.com/portworx/kdmp v0.4.1-0.20230822050227-928375ab6b1c
+# github.com/portworx/kdmp v0.4.1-0.20230830142135-ad7a4c39f25f => github.com/portworx/kdmp v0.4.1-0.20230830142135-ad7a4c39f25f
 ## explicit; go 1.19
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
@@ -2285,7 +2285,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
-# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230822050227-928375ab6b1c
+# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230830142135-ad7a4c39f25f
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
