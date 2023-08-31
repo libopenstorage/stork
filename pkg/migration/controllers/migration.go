@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
@@ -34,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/slice"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -85,7 +87,8 @@ const (
 )
 
 var (
-	AutoCreatedPrefixes = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+	AutoCreatedPrefixes    = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+	catergoriesExcludeList = []string{"all", "olm", "coreoperators"}
 
 	ErrReapplyLatestVersionMsg = "please apply your changes to the latest version and try again"
 )
@@ -1791,26 +1794,26 @@ func (m *MigrationController) applyResources(
 
 	ruleset := resourcecollector.GetDefaultRuleSet()
 
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("error getting cluster config: %v", err)
+	}
+
+	srcClnt, err := apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	destClnt, err := apiextensionsclient.NewForConfig(remoteClient.remoteAdminConfig)
+	if err != nil {
+		return err
+	}
+
+	relatedCRDList := getRelatedCRDListWRTGroupAndCategories(srcClnt, ruleset, crdList, resGroups)
+
 	// create CRD on destination cluster
-	for _, crd := range crdList.Items {
+	for _, crd := range relatedCRDList {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
-			if _, ok := resGroups[v.Group]; !ok {
-				continue
-			}
-			config, err := rest.InClusterConfig()
-			if err != nil {
-				return fmt.Errorf("error getting cluster config: %v", err)
-			}
-
-			srcClnt, err := apiextensionsclient.NewForConfig(config)
-			if err != nil {
-				return err
-			}
-			destClnt, err := apiextensionsclient.NewForConfig(remoteClient.remoteAdminConfig)
-			if err != nil {
-				return err
-			}
 			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
 			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 			if err == nil {
@@ -2734,4 +2737,79 @@ func isObjectHashEqual(dynamicClient dynamic.ResourceInterface, u *unstructured.
 		}
 	}
 	return false
+}
+
+// getRelatedCRDListWRTGroupAndCategories takes AppRegs as input and
+// finds out all the CRDs that need to be collected.
+// The CRD list should contain
+//
+//	a. CRD matching with the required groups.
+//	b. CRDs which are related with the CRDs from above list (#a)
+func getRelatedCRDListWRTGroupAndCategories(client *apiextensionsclient.Clientset, ruleset *inflect.Ruleset, crdList *stork_api.ApplicationRegistrationList, resGroups map[string]string) []*stork_api.ApplicationRegistration {
+	filteredCRDList := make([]*stork_api.ApplicationRegistration, 0)
+	reqCategoriesMap := make(map[string]bool)
+	// find all related categories from the CRDs having same group
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			if _, ok := resGroups[v.Group]; !ok {
+				continue
+			}
+			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			crdvbeta1, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+			if err == nil {
+				for _, category := range crdvbeta1.Spec.Names.Categories {
+					if !slice.ContainsString(catergoriesExcludeList, category, strings.ToLower) {
+						reqCategoriesMap[category] = true
+					}
+				}
+				continue
+			}
+			crdv1, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+			if err == nil {
+				for _, category := range crdv1.Spec.Names.Categories {
+					if !slice.ContainsString(catergoriesExcludeList, category, strings.ToLower) {
+						reqCategoriesMap[category] = true
+					}
+				}
+				continue
+			}
+		}
+	}
+	logrus.Infof("crd categories to include are: %+v", reqCategoriesMap)
+
+	// find all crds matching the group and having related categories
+	for _, tempCRD := range crdList.Items {
+		crd := tempCRD
+		for _, v := range crd.Resources {
+			if _, ok := resGroups[v.Group]; ok {
+				filteredCRDList = append(filteredCRDList, &crd)
+				continue
+			}
+			if len(reqCategoriesMap) > 0 {
+				crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+				crdvbeta1, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+				if err == nil {
+					for _, category := range crdvbeta1.Spec.Names.Categories {
+						if _, ok := reqCategoriesMap[category]; ok {
+							filteredCRDList = append(filteredCRDList, &crd)
+							continue
+						}
+					}
+					continue
+				}
+				crdv1, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+				if err == nil {
+					for _, category := range crdv1.Spec.Names.Categories {
+						if _, ok := reqCategoriesMap[category]; ok {
+							filteredCRDList = append(filteredCRDList, &crd)
+							continue
+						}
+					}
+					continue
+				}
+			}
+		}
+	}
+
+	return filteredCRDList
 }
