@@ -1,7 +1,9 @@
 package tests
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
@@ -57,7 +59,6 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 
 	})
-
 	if params.CleanUpParams.SkipTargetClusterCheck {
 		log.InfoD("Skipping Target Cluster Check")
 	} else {
@@ -98,6 +99,16 @@ var _ = BeforeSuite(func() {
 			dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
 		})
 	}
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs != "" {
+		kubeconfigList := strings.Split(kubeconfigs, ",")
+		if len(kubeconfigList) < 2 {
+			log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+				"Failed to get k8s config path.At least minimum two kubeconfigs required")
+		}
+		DumpKubeconfigs(kubeconfigList)
+	}
+
 })
 
 var _ = AfterSuite(func() {
