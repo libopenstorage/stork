@@ -33,6 +33,7 @@ type DSEntity struct {
 	// TODO Add datahash for data validation
 }
 
+// TriggerAndValidateRestore will trigger restore and validate if flag is true
 func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, namespace string, bkpDsEntity DSEntity, isRestoreInSameNS, validate bool) (*pds.ModelsRestore, error) {
 	var (
 		bkpJob                 *pds.ModelsBackupJob
@@ -66,7 +67,20 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 		log.Errorf("Failed during restore.")
 		return nil, fmt.Errorf("failed during restore")
 	}
-	err = wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
+
+	if validate {
+		err = restoreClient.WaitForRestoreAndValidate(restoredModel, bkpDsEntity, nsName)
+		if err != nil {
+			log.Errorf("Failed to validate restored dataservice")
+			return nil, fmt.Errorf("failed to validate restored dataservice")
+		}
+	}
+	return restoredModel, nil
+}
+
+// WaitForRestoreAndValidate will wait for the restore to complete and validate its configuration
+func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds.ModelsRestore, bkpDsEntity DSEntity, nsName string) error {
+	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
 		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
 		state := restore.GetStatus()
 		if err != nil {
@@ -80,27 +94,25 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 		return true, nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if validate {
-		newDeploymentId := restoredModel.GetDeploymentId()
-		newDeploymentModel, err := restoreClient.Components.DataServiceDeployment.GetDeployment(newDeploymentId)
-		if err != nil {
-			return nil, fmt.Errorf("error while fetching restored deployment object")
-		}
-		dsType := ds.DataserviceType{}
-		err = dsType.ValidateDataServiceDeployment(newDeploymentModel, nsName)
-		if err != nil {
-			return nil, fmt.Errorf("error while validating the restored deployment")
-		}
-		restoreDsEntity := DSEntity{Deployment: newDeploymentModel}
-		err = restoreClient.ValidateRestore(bkpDsEntity, restoreDsEntity)
-		if err != nil {
-			return nil, fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
-		}
+	newDeploymentId := restoredModel.GetDeploymentId()
+	newDeploymentModel, err := restoreClient.Components.DataServiceDeployment.GetDeployment(newDeploymentId)
+	if err != nil {
+		return fmt.Errorf("error while fetching restored deployment object")
 	}
-	return restoredModel, nil
+	dsType := ds.DataserviceType{}
+	err = dsType.ValidateDataServiceDeployment(newDeploymentModel, nsName)
+	if err != nil {
+		return fmt.Errorf("error while validating the restored deployment")
+	}
+	restoreDsEntity := DSEntity{Deployment: newDeploymentModel}
+	err = restoreClient.ValidateRestore(bkpDsEntity, restoreDsEntity)
+	if err != nil {
+		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
+	}
+	return nil
 }
 
 func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string, string, error) {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -14,14 +13,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/log"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 
-	state "net/http"
+	"github.com/libopenstorage/openstorage/api"
+
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/tests"
+	. "github.com/portworx/torpedo/tests"
+
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	v1 "k8s.io/api/apps/v1"
@@ -29,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	state "net/http"
 )
 
 type PDS_Health_Status string
@@ -163,6 +171,7 @@ const (
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
 	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
 
+	errorChannelSize             = 50
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
 	storageTemplateName          = "QaDefault"
@@ -2426,4 +2435,186 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 		return err
 	}
 	return nil
+}
+
+// ExpandAndValidatePxPool will pick a random px-pool and expand its size
+func ExpandAndValidatePxPool(context []*scheduler.Context) error {
+	log.InfoD("Entering into PX-POOL Expansion...")
+	poolIDToResize := PickPoolToResize(context)
+	poolToBeResized := GetStoragePool(poolIDToResize)
+	log.InfoD("Pool to be resized is %v", poolToBeResized)
+	log.InfoD("Verify that pool resize is not in progress")
+	if val, err := PoolResizeIsInProgress(poolToBeResized); val {
+		// wait until resize is completed and get the updated pool again
+		poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
+	} else {
+		log.FailOnError(err, fmt.Sprintf("pool [%s] cannot be expanded due to error: %v", poolIDToResize, err))
+	}
+	var expectedSize uint64
+	var expectedSizeWithJournal uint64
+	log.InfoD("Calculate expected pool size and trigger pool resize")
+	expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+	expectedSize = RoundUpValue(expectedSize)
+	isjournal, err := IsJournalEnabled()
+	log.FailOnError(err, "Failed to check is Journal enabled")
+	expectedSizeWithJournal = expectedSize
+	if isjournal {
+		expectedSizeWithJournal = expectedSizeWithJournal - 3
+	}
+	log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+	err = tests.Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+	resizeErr := WaitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+	if resizeErr != nil {
+		log.FailOnError(resizeErr, fmt.Sprintf("Failed to resize pool with ID-  %s", poolIDToResize))
+	}
+	errorChan := make(chan error, errorChannelSize)
+	for _, ctx := range context {
+		log.Infof("Validating context: %v", ctx.App.Key)
+		ValidateContext(ctx, &errorChan)
+		for err := range errorChan {
+			log.FailOnError(err, "Failed to validate Deployment")
+		}
+	}
+	resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+	log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
+	newPoolSize := resizedPool.TotalSize / units.GiB
+	isExpansionSuccess := false
+	if newPoolSize >= expectedSizeWithJournal {
+		isExpansionSuccess = true
+	} else {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		log.FailOnError(err, fmt.Sprintf("Failed to resize pool with ID-  %s", poolIDToResize))
+		return err
+	}
+	log.InfoD("Px-Pool expansion status is - %v", isExpansionSuccess)
+	log.InfoD("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize)
+	return nil
+}
+
+func GetStoragePool(poolIDToResize string) *api.StoragePool {
+	pool, err := GetStoragePoolByUUID(poolIDToResize)
+	log.FailOnError(err, "Failed to get pool using UUID %s", poolIDToResize)
+	return pool
+}
+
+// PickPoolToResize Picks any random px-pool to resize if I/0s are not running
+func PickPoolToResize(contexts []*scheduler.Context) string {
+	poolWithIO, err := GetPoolIDWithIOs(contexts)
+	if poolWithIO == "" || err != nil {
+		log.Warnf("No pool with IO found, picking a random pool in use to resize")
+	}
+	poolIDsInUseByTestingApp, err := GetPoolsInUse()
+	log.FailOnError(err, "Error identifying pool to run test")
+	poolIDToResize := poolIDsInUseByTestingApp[0]
+	return poolIDToResize
+}
+
+// RoundUpValue func to round up fetched values to 10
+func RoundUpValue(toRound uint64) uint64 {
+	if toRound%10 == 0 {
+		return toRound
+	}
+	rs := (10 - toRound%10) + toRound
+	return rs
+}
+
+// PoolResizeIsInProgress checks the status of PX-Pool resize
+func PoolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
+	if poolToBeResized.LastOperation != nil {
+		f := func() (interface{}, bool, error) {
+			pools, err := tests.Inst().V.ListStoragePools(metav1.LabelSelector{})
+			if err != nil || len(pools) == 0 {
+				return nil, true, fmt.Errorf("error getting pools list, err %v", err)
+			}
+			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
+			if updatedPoolToBeResized == nil {
+				return nil, false, fmt.Errorf("error getting pool with given pool id %s", poolToBeResized.Uuid)
+			}
+			if updatedPoolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_SUCCESSFUL {
+				log.Infof("Current pool status : %v", updatedPoolToBeResized.LastOperation)
+				if updatedPoolToBeResized.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
+					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
+				}
+				log.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
+				return nil, true, nil
+			}
+			return nil, false, nil
+		}
+		_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+		if err != nil {
+			return false, err
+		}
+	}
+	stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+	if err != nil {
+		return false, err
+	}
+	t := func() (interface{}, bool, error) {
+		status, err := tests.Inst().V.GetNodePoolsStatus(*stNode)
+		if err != nil {
+			return "", false, err
+		}
+		currStatus := status[poolToBeResized.Uuid]
+		if currStatus == "Offline" {
+			return "", true, fmt.Errorf("pool [%s] has current status [%s].Waiting rebalance to complete if in-progress", poolToBeResized.Uuid, currStatus)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Second)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// WaitForPoolToBeResized will wait for PX-Pool resize and report the status post expansion
+func WaitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
+	currentLastMsg := ""
+	f := func() (interface{}, bool, error) {
+		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting pool by using id %s", poolIDToResize)
+		}
+		if expandedPool == nil {
+			return nil, false, fmt.Errorf("expanded pool value is nil")
+		}
+		if expandedPool.LastOperation != nil {
+			log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
+				return nil, false, fmt.Errorf("pool %s expansion has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+			}
+			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_PENDING {
+				return nil, true, fmt.Errorf("pool %s is in pending state, waiting to start", poolIDToResize)
+			}
+			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
+				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
+					if currentLastMsg == expandedPool.LastOperation.Msg {
+						return nil, false, fmt.Errorf("pool reblance is not progressing")
+					}
+					currentLastMsg = expandedPool.LastOperation.Msg
+					return nil, true, fmt.Errorf("wait for pool rebalance to complete")
+				}
+				if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
+					strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("waiting for pool status to update")
+			}
+		}
+		newPoolSize := expandedPool.TotalSize / units.GiB
+		expectedSizeWithJournal := expectedSize
+		if isJournalEnabled {
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
+		}
+		if newPoolSize >= expectedSizeWithJournal {
+			// storage pool resize has been completed
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("pool has not been resized to %d or %d yet. Waiting...Current size is %d", expectedSize, expectedSizeWithJournal, newPoolSize)
+	}
+	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+	return err
 }

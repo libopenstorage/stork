@@ -3,15 +3,17 @@ package lib
 import (
 	"errors"
 	"fmt"
-	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
-
+	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -34,6 +36,9 @@ const (
 	UpdateTemplate                    = "medium"
 	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
 	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion    = "restore-ds-during-px-pool-expansion"
+	poolResizeTimeout                 = time.Minute * 120
+	retryTimeout                      = time.Minute * 2
 )
 
 // PDS vars
@@ -46,6 +51,8 @@ var (
 	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
+	restoredDeployment        *pds.ModelsDeployment
+	dsEntity                  restoreBkp.DSEntity
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -181,6 +188,15 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+	case RestoreDSDuringPXPoolExpansion:
+		log.InfoD("Entering to restore the Data service, while it does increase the PX-Pool size")
+		func1 := func() {
+			RestoreAndValidateConfiguration(namespace, deployment)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
 	}
 
 	var aggregatedError error
@@ -255,6 +271,45 @@ func RestartPXDuringDSScaleUp(ns string, deployment *pds.ModelsDeployment) error
 
 	log.InfoD("PX restarted successfully on node %v", podName)
 	return testError
+}
+
+// RestoreAndValidateConfiguration triggers restore of DS and validates configuration post restore
+func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment) (bool, error) {
+	//Get Cluster context and create restoreClient obj
+	ctx, err := tests.GetSourceClusterConfigPath()
+	log.FailOnError(err, "failed while getting src cluster path")
+	restoreTarget := tc.NewTargetCluster(ctx)
+	restoreClient := restoreBkp.RestoreClient{
+		TenantId:             deployment.GetTenantId(),
+		ProjectId:            deployment.GetProjectId(),
+		Components:           components,
+		Deployment:           deployment,
+		RestoreTargetCluster: restoreTarget,
+	}
+	dsEntity = restoreBkp.DSEntity{
+		Deployment: deployment,
+	}
+	//List all backups created on the deployment and trigger restore
+	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(restoreClient.ProjectId, deployment.GetId())
+	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+	for _, backupJob := range backupJobs {
+		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+		restoredModel, error := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), ns, dsEntity, true, false)
+		if error != nil {
+			CapturedErrors <- error
+			return false, error
+		}
+		if ResiliencyFlag {
+			ResiliencyCondition <- true
+		}
+		restoredDeployment, error = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+		if error != nil {
+			CapturedErrors <- error
+			return false, error
+		}
+		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+	}
+	return true, nil
 }
 
 func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment) error {

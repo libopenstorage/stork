@@ -2,13 +2,19 @@ package tests
 
 import (
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"net/http"
+
 	. "github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	dss "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
+	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"net/http"
+	v1 "k8s.io/api/apps/v1"
 )
 
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
@@ -1047,5 +1053,156 @@ var _ = Describe("{KillTeleportDuringWorkloadRun}", func() {
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+
+// This testcase requires a cloud-drive setup
+var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
+	var deps []*pds.ModelsDeployment
+	pdsdeploymentsmd5Hash := make(map[string]string)
+	restoredDeploymentsmd5Hash := make(map[string]string)
+	var deploymentsToBeCleaned []*pds.ModelsDeployment
+	var wlDeploymentsToBeCleaned []*v1.Deployment
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestoreDSDuringPXPoolExpansion", "Restore DataService during the PX Pool expansion", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		awsBkpTargets = append(awsBkpTargets, bkpTarget)
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
+	})
+	It("Deploy Dataservices and Restore during PX-Pool Expansion", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var depList []*pds.ModelsDeployment
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					depList = append(depList, deployment)
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					deps = append(deps, deployment)
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: deployment,
+					}
+				})
+			}
+		})
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+		Step("Running Workloads before taking backups", func() {
+			for _, pdsDeployment := range deps {
+				ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+				log.FailOnError(err, "Error while Running workloads")
+				log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+				pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
+			}
+		})
+		Step("Perform adhoc backup and validate them", func() {
+			log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+			err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+			log.FailOnError(err, "Failed while performing adhoc backup")
+		})
+		Step("Resize PX-POOL and trigger restore at the same time", func() {
+			for _, deployment := range deployments {
+				failuretype := pdslib.TypeOfFailure{
+					Type: RestoreDSDuringPXPoolExpansion,
+					Method: func() error {
+						ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
+						log.Infof("Created scheduler context", ctx)
+						log.FailOnError(err, "Unable to create the scheduler context")
+						return pdslib.ExpandAndValidatePxPool(ctx)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
+				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
+			}
+		})
+		Step("Validate Deployments after Px-pool Resize", func() {
+			for ds, deployment := range deployments {
+				err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+				log.FailOnError(err, "Error while validating dataservices")
+				log.InfoD("Data-service: %v is up and healthy", ds.Name)
+			}
+			dsEntity = restoreBkp.DSEntity{
+				Deployment: deployment,
+			}
+		})
+		Step("Taking adhoc backup and trigger restore again", func() {
+			log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+			err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+			log.FailOnError(err, "Failed while performing adhoc backup")
+			ctx, err := GetSourceClusterConfigPath()
+			log.FailOnError(err, "failed while getting src cluster path")
+			restoreTarget := tc.NewTargetCluster(ctx)
+			restoreClient := restoreBkp.RestoreClient{
+				TenantId:             tenantID,
+				ProjectId:            projectID,
+				Components:           components,
+				Deployment:           deployment,
+				RestoreTargetCluster: restoreTarget,
+			}
+			backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+			log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+			for _, backupJob := range backupJobs {
+				log.InfoD("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+				restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+				log.FailOnError(err, "Failed during restore.")
+				restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+				log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+				log.InfoD("Restored successfully. Deployment- %v", restoredModel.GetClusterResourceName())
+			}
+		})
+		Step("Validate md5hash for the restored deployments", func() {
+			for _, pdsDeployment := range deploymentsToBeCleaned {
+				ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+				log.FailOnError(err, "Error while Running workloads")
+				log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+				restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
+			}
+			defer func() {
+				for _, wlDep := range wlDeploymentsToBeCleaned {
+					err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+					log.FailOnError(err, "Failed while deleting the workload deployment")
+				}
+			}()
+			dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
+				true, "Validate md5 hash after restore")
+		})
+		Step("Delete Deployments", func() {
+			CleanupDeployments(deploymentsToBeCleaned)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
