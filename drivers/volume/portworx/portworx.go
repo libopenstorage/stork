@@ -179,7 +179,9 @@ const (
 	pureBlockParam   = "pure_block"
 
 	statfsSOName               = "px_statfs.so"
+	stasfsSOSumName            = "px_statfs.so.sha256"
 	statfsSOPathInStork        = "/" + statfsSOName
+	statfsSOSumPathInStork     = "/" + stasfsSOSumName
 	statfsSOPathInVirtLauncher = "/etc/" + statfsSOName
 	statfsConfigMapName        = "px-statfs"
 	statfsVolName              = "px-statfs"
@@ -4299,40 +4301,55 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 }
 
 func (p *portworx) createOrUpdateStatfsConfigMap(cmNamespace string) error {
+	// read only the checksum file first to see if an update or create is needed
+	sumBytes, err := os.ReadFile(statfsSOSumPathInStork)
+	if err != nil {
+		logrus.Errorf("Failed to read %s: %v", statfsSOSumPathInStork, err)
+		return err
+	}
+	sum := string(sumBytes)
+	cmNamespacedName := fmt.Sprintf("%s/%s", cmNamespace, statfsConfigMapName)
+	existing, err := core.Instance().GetConfigMap(statfsConfigMapName, cmNamespace)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		logrus.Errorf("Failed to check existing config map %s: %v", cmNamespacedName, err)
+		return err
+	}
+	needsUpdate := false
+	needsCreate := false
+	if err == nil && existing != nil {
+		needsUpdate = p.statfsConfigMapNeedsUpdate(existing, sum)
+	} else {
+		needsCreate = true
+	}
+	if !needsCreate && !needsUpdate {
+		return nil
+	}
 	statfsSOContents, err := os.ReadFile(statfsSOPathInStork)
 	if err != nil {
 		logrus.Errorf("Failed to read %s: %v", statfsSOPathInStork, err)
 		return err
 	}
-	expected := p.getStatfsConfigMap(cmNamespace, statfsSOContents)
-	existing, err := core.Instance().GetConfigMap(statfsConfigMapName, cmNamespace)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		logrus.Errorf("Failed to check existing config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
-		return err
-	}
-	if err == nil && existing != nil {
-		if p.statfsConfigMapNeedsUpdate(existing, statfsSOContents) {
-			existing.BinaryData = expected.BinaryData
-			existing.Data = expected.Data
-			if _, err := core.Instance().UpdateConfigMap(existing); err != nil {
-				logrus.Errorf("Failed to update config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
-				return err
-			}
-			logrus.Infof("Updated configmap %v/%v", cmNamespace, statfsConfigMapName)
+	expected := p.statfsConfigMap(cmNamespace, statfsSOContents, sum)
+	if needsUpdate {
+		existing.BinaryData = expected.BinaryData
+		existing.Data = expected.Data
+		if _, err := core.Instance().UpdateConfigMap(existing); err != nil {
+			logrus.Errorf("Failed to update config map %s: %v", cmNamespacedName, err)
+			return err
 		}
+		logrus.Infof("Updated configmap %s", cmNamespacedName)
 		return nil
 	}
 	// create one
-	if _, err := core.Instance().CreateConfigMap(expected); err != nil && !k8s_errors.IsAlreadyExists(err) {
-		logrus.Errorf("Failed to create config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
+	if _, err := core.Instance().CreateConfigMap(expected); err != nil {
+		logrus.Errorf("Failed to create config map %s: %v", cmNamespacedName, err)
 		return err
-	} else if err == nil {
-		logrus.Infof("Created configmap %v/%v", cmNamespace, statfsConfigMapName)
 	}
+	logrus.Infof("Created configmap %s", cmNamespacedName)
 	return nil
 }
 
-func (p *portworx) getStatfsConfigMap(cmNamespace string, statfsSOContents []byte) *v1.ConfigMap {
+func (p *portworx) statfsConfigMap(cmNamespace string, statfsSOContents []byte, sum string) *v1.ConfigMap {
 	return &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statfsConfigMapName,
@@ -4343,21 +4360,16 @@ func (p *portworx) getStatfsConfigMap(cmNamespace string, statfsSOContents []byt
 		},
 		Data: map[string]string{
 			ldPreloadFileName: statfsSOPathInVirtLauncher,
+			stasfsSOSumName:   sum,
 		},
 	}
 }
 
-func (p *portworx) statfsConfigMapNeedsUpdate(existing *v1.ConfigMap, statfsSOContents []byte) bool {
-	existingBytes := existing.BinaryData[statfsSOName]
-	if len(existingBytes) != len(statfsSOContents) {
+func (p *portworx) statfsConfigMapNeedsUpdate(existing *v1.ConfigMap, expectedSum string) bool {
+	if !strings.Contains(existing.Data[ldPreloadFileName], statfsSOName) {
 		return true
 	}
-	for i := range existingBytes {
-		if existingBytes[i] != statfsSOContents[i] {
-			return true
-		}
-	}
-	return !strings.Contains(existing.Data[ldPreloadFileName], statfsSOName)
+	return existing.Data[stasfsSOSumName] != expectedSum
 }
 
 func init() {

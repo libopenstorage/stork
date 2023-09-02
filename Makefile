@@ -19,6 +19,8 @@ DOCK_BUILD_CNT := golang:1.19.10
 # px_statfs.so can be loaded on OCP 4.12 which uses RHEL8. Use "ldd -r -v ./bin/px_statfs.so" to
 # see which glibc will be needed to be present on the host where the .so gets loaded.
 DOCK_GCC_BUILD_CNT := gcc:10.5.0
+PX_STATFS_SRC_DIR := /go/src/github.com/libopenstorage/stork/drivers/volume/portworx/px-statfs
+PX_STATFS_DEST_DIR := /go/src/github.com/libopenstorage/stork/bin
 
 ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork' | grep -v 'hack')
@@ -160,8 +162,9 @@ storkctl:
 px-statfs:
 	@echo "Building px_statfs.so"
 	docker run --rm  $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_GCC_BUILD_CNT) \
-		   /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/drivers/volume/portworx/px-statfs &&  \
-           gcc -g -shared -fPIC -o /go/src/github.com/libopenstorage/stork/bin/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64;'
+		   /bin/bash -c 'cd $(PX_STATFS_SRC_DIR) &&  \
+           gcc -g -shared -fPIC -o $(PX_STATFS_DEST_DIR)/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64 && \
+           sha256sum $(PX_STATFS_DEST_DIR)/px_statfs.so | cut -d " " -f 1 > $(PX_STATFS_DEST_DIR)/px_statfs.so.sha256;'
 
 
 container: help
