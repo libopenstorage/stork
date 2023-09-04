@@ -375,7 +375,9 @@ func getUpdatedReplicaCount(annotations map[string]string, activate bool, printF
 }
 
 func updateStashedCMObjects(namespace string, activate bool, printFunc func(string, string), config *rest.Config) {
-
+	if !activate {
+		return
+	}
 	pvcToPVCOwnerMapping := make(map[string][]metav1.OwnerReference)
 	// List the configmaps with label "stash-cr" enabled
 	configMaps, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{LabelSelector: StashCRLabel})
