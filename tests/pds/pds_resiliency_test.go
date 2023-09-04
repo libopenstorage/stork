@@ -1103,16 +1103,7 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 				})
 			}
 		})
-		defer func() {
-			for _, newDeployment := range deployments {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
-				log.FailOnError(err, "Error while deleting PV and PVCs")
-			}
-		}()
+
 		Step("Running Workloads before taking backups", func() {
 			for _, pdsDeployment := range deps {
 				ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
