@@ -998,7 +998,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20230818042152-e0873055fc17
 ## explicit; go 1.19
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -1016,6 +1016,7 @@ github.com/portworx/torpedo/drivers/volume/linstor
 github.com/portworx/torpedo/drivers/volume/portworx
 github.com/portworx/torpedo/drivers/volume/portworx/schedops
 github.com/portworx/torpedo/pkg/aetosutil
+github.com/portworx/torpedo/pkg/asyncdr
 github.com/portworx/torpedo/pkg/aututils
 github.com/portworx/torpedo/pkg/errors
 github.com/portworx/torpedo/pkg/log
@@ -2287,7 +2288,7 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 # github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230830195819-704706dda5c7
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230818042152-e0873055fc17
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0
