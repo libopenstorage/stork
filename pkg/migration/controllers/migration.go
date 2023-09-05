@@ -2258,6 +2258,7 @@ func (m *MigrationController) applyResources(
 	}
 	// apply remaining objects
 	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error, appRegsStashMap map[string]bool) {
+		var stashCMError bool
 		for o := range objectChan {
 			metadata, err := meta.Accessor(o)
 			if err != nil {
@@ -2321,83 +2322,85 @@ func (m *MigrationController) applyResources(
 				log.MigrationLog(migration).Infof("Getting configmap details for stashing resource %s/%s/%s", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName())
 				unstructured, err = getStashedConfigMap(unstructured, objHash)
 				if err != nil {
-					goto stashedCMError
+					log.MigrationLog(migration).Warnf("unable to get stashed configmap content for object %s/%s/%s, error: %v", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName(), err)
+					stashCMError = true
 				}
-				resource = &metav1.APIResource{
-					Name:       "configmaps",
-					Namespaced: len(metadata.GetNamespace()) > 0,
+				if !stashCMError {
+					resource = &metav1.APIResource{
+						Name:       "configmaps",
+						Namespaced: len(metadata.GetNamespace()) > 0,
+					}
+					dynamicClient = remoteClient.remoteInterface.Resource(
+						v1.SchemeGroupVersion.WithResource("configmaps")).Namespace(unstructured.GetNamespace())
 				}
-				dynamicClient = remoteClient.remoteInterface.Resource(
-					v1.SchemeGroupVersion.WithResource("configmaps")).Namespace(unstructured.GetNamespace())
 			}
 
-			log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
-			for {
-				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
-				if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
-					switch objectType.GetKind() {
-					case "ServiceAccount":
-						err = m.checkAndUpdateDefaultSA(migration, o)
-					case "Service":
-						var skipUpdate bool
-						skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
-						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
-							break
-						}
-						fallthrough
-					default:
-						// Check the objecthash before deleting
-						equalHash := isObjectHashEqual(dynamicClient, unstructured, objHash)
-						if equalHash {
-							log.MigrationLog(migration).Infof("skipping update for resource %s/%s, no changes found since last migration", objectType.GetKind(), metadata.GetName())
-							// resetting the error as the resource status needs to be correctly updated in migration CR.
-							err = nil
-						} else {
-							// Delete the resource if it already exists on the destination
-							// cluster and try creating again
-							deleteStart := metav1.Now()
-							err = dynamicClient.Delete(context.TODO(), unstructured.GetName(), metav1.DeleteOptions{})
-							if err != nil && !errors.IsNotFound(err) {
-								log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+			if !stashCMError {
+				log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
+				for {
+					_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+					if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
+						switch objectType.GetKind() {
+						case "ServiceAccount":
+							err = m.checkAndUpdateDefaultSA(migration, o)
+						case "Service":
+							var skipUpdate bool
+							skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
+							if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
+								break
+							}
+							fallthrough
+						default:
+							// Check the objecthash before deleting
+							equalHash := isObjectHashEqual(dynamicClient, unstructured, objHash)
+							if equalHash {
+								log.MigrationLog(migration).Infof("skipping update for resource %s/%s, no changes found since last migration", objectType.GetKind(), metadata.GetName())
+								// resetting the error as the resource status needs to be correctly updated in migration CR.
+								err = nil
 							} else {
-								// wait for resources to get deleted
-								// 2 mins
-								for i := 0; i < deletedMaxRetries; i++ {
-									obj, err := dynamicClient.Get(context.TODO(), unstructured.GetName(), metav1.GetOptions{})
-									if err != nil && errors.IsNotFound(err) {
-										break
-									}
-									createTime := obj.GetCreationTimestamp()
-									if deleteStart.Before(&createTime) {
-										log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
-											obj.GetName(), deleteStart, createTime)
-										break
-									}
-									if obj.GetFinalizers() != nil {
-										obj.SetFinalizers(nil)
-										_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
-										if err != nil {
-											log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+								// Delete the resource if it already exists on the destination
+								// cluster and try creating again
+								deleteStart := metav1.Now()
+								err = dynamicClient.Delete(context.TODO(), unstructured.GetName(), metav1.DeleteOptions{})
+								if err != nil && !errors.IsNotFound(err) {
+									log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+								} else {
+									// wait for resources to get deleted
+									// 2 mins
+									for i := 0; i < deletedMaxRetries; i++ {
+										obj, err := dynamicClient.Get(context.TODO(), unstructured.GetName(), metav1.GetOptions{})
+										if err != nil && errors.IsNotFound(err) {
+											break
 										}
+										createTime := obj.GetCreationTimestamp()
+										if deleteStart.Before(&createTime) {
+											log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+												obj.GetName(), deleteStart, createTime)
+											break
+										}
+										if obj.GetFinalizers() != nil {
+											obj.SetFinalizers(nil)
+											_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+											if err != nil {
+												log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+											}
+										}
+										log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+										time.Sleep(deletedRetryInterval)
 									}
-									log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
-									time.Sleep(deletedRetryInterval)
+									_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
 								}
-								_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
 							}
 						}
 					}
+					// Retry a few times for Unauthorized errors
+					if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
+						retries++
+						continue
+					}
+					break
 				}
-				// Retry a few times for Unauthorized errors
-				if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
-					retries++
-					continue
-				}
-				break
 			}
-
-		stashedCMError:
-			log.MigrationLog(migration).Warnf("unable to get stashed configmap content for object %s/%s/%s, error: %v", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName(), err)
 
 			if err != nil {
 				m.updateResourceStatus(

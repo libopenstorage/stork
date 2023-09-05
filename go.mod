@@ -62,7 +62,10 @@ require (
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
 
-require github.com/portworx/kdmp v0.4.1-0.20230830195819-704706dda5c7
+require (
+	github.com/portworx/kdmp v0.4.1-0.20230830195819-704706dda5c7
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+)
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -275,7 +278,6 @@ require (
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
-	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749 // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
@@ -302,7 +304,7 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230830195819-704706dda5c7
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230818042152-e0873055fc17
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
