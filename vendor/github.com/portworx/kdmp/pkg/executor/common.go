@@ -52,9 +52,9 @@ const (
 	// DefaultTimeout Max time a command will be retired before failing
 	DefaultTimeout = 1 * time.Minute
 	// BackupUID backup UID annotation
-	BackupUID  = "portworx.io/backup-uid"
-	retrySleep = 10 * time.Second
-	maxRetry   = 10
+	BackupUID         = "portworx.io/backup-uid"
+	retrySleep        = 10 * time.Second
+	maxRetry          = 10
 	lastKnownErrorLen = 1000
 )
 

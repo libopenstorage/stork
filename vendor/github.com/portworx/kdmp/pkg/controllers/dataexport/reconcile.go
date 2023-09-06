@@ -453,7 +453,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		var cleanupErr error
 		// Need to retain the old reason present in the dataexport CR, so passing the reason again.
 		data := updateDataExportDetail{
-			stage: kdmpapi.DataExportStageFinal,
+			stage:  kdmpapi.DataExportStageFinal,
 			reason: dataExport.Status.Reason,
 		}
 		// Append the job-pod log to stork's pod log in case of failure
@@ -532,27 +532,6 @@ func (c *Controller) createJobCredCertSecrets(
 		blNamespace = vb.Spec.BackupLocation.Namespace
 	}
 	if driverName == drivers.KopiaBackup {
-		pods, err := core.Instance().GetPodsUsingPVC(srcPVCName, dataExport.Spec.Source.Namespace)
-		if err != nil {
-			msg := fmt.Sprintf("error fetching pods using PVC %s/%s: %v", dataExport.Spec.Source.Namespace, srcPVCName, err)
-			logrus.Errorf(msg)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: msg,
-			}
-			return data, err
-		}
-		// filter out the pods that are create by us
-		count := len(pods)
-		for _, pod := range pods {
-			labels := pod.ObjectMeta.Labels
-			if _, ok := labels[drivers.DriverNameLabel]; ok {
-				count--
-			}
-		}
-		if count > 0 {
-			namespace = utils.AdminNamespace
-		}
 		blName = dataExport.Spec.Destination.Name
 		blNamespace = dataExport.Spec.Destination.Namespace
 	}
