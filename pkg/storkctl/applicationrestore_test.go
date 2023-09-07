@@ -245,6 +245,23 @@ func TestSpecificObjectRestore(t *testing.T) {
 
 }
 
+func TestResoreWithNamespaceMapping(t *testing.T) {
+	defer resetTest()
+
+	createBackupLocationAndVerify(t, "backuplocation1", "test")
+	createApplicationBackupAndVerify(t, "backup1", "test", []string{"namespace1"}, "backuplocation1", "", "", "")
+	_, err := storkops.Instance().GetApplicationBackup("backup1", "test")
+	require.NoError(t, err, "Error getting backup")
+
+	cmdArgs := []string{"create", "apprestores", "-n", "test", "restore1", "--backupLocation", "backuplocation1", "--backupName", "backup1", "--namespaceMapping", "namespace1:namespace2"}
+	expected := "ApplicationRestore restore1 started successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	restore, err := storkops.Instance().GetApplicationRestore("restore1", "test")
+	require.NoError(t, err, "Error getting restore")
+	require.Equal(t, "namespace2", restore.Spec.NamespaceMapping["namespace1"], "ApplicationRestore namespace mapping mismatch")
+}
+
 func TestCreateApplicationRestoreNoBackuplocation(t *testing.T) {
 	cmdArgs := []string{"create", "apprestores", "-n", "test", "restoreName", "--backupLocation", "backupLocation", "--backupName", "backupName"}
 	expected := "error: backuplocation backupLocation does not exist in namespace test"
