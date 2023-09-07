@@ -62,7 +62,10 @@ require (
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )
 
-require github.com/portworx/kdmp v0.4.1-0.20230822050227-928375ab6b1c
+require (
+	github.com/portworx/kdmp v0.4.1-0.20230831014346-7cff9af20171
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+)
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -212,7 +215,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/gomega v1.21.1 // indirect
+	github.com/onsi/gomega v1.24.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/opencontainers/runc v1.1.6 // indirect
@@ -275,7 +278,6 @@ require (
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
-	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749 // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
@@ -300,7 +302,7 @@ replace (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230822050227-928375ab6b1c
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230831014346-7cff9af20171
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230410110229-ad7b0df86670
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
