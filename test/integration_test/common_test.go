@@ -957,6 +957,124 @@ func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings stri
 	return nil
 }
 
+func activateAppUsingStorkctl(namespace string, runInSource bool) error {
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"activate", "migrations", "-n", namespace}
+	err := setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("setting kubeconfig to source failed during activate migrations %v", err)
+	}
+	if runInSource {
+		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
+		srcKubeConfig, err := os.Create(srcKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := srcKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting source config during activate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
+	} else {
+		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
+		destKubeConfig, err := os.Create(destKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := destKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			}
+		}()
+
+		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting destination config during activate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", destKubeconfigPath}...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("activating apps in namespace with command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("activating apps using storkctl failed: %v", err)
+	}
+	return nil
+}
+
+func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"deactivate", "migrations", "-n", namespace}
+
+	if runInSource {
+		err := setSourceKubeConfig()
+		if err != nil {
+			return fmt.Errorf("setting kubeconfig to source failed during deactivate migrations %v", err)
+		}
+		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
+		srcKubeConfig, err := os.Create(srcKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := srcKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting source config during deactivate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
+	} else {
+		err := setDestinationKubeConfig()
+		if err != nil {
+			return fmt.Errorf("setting kubeconfig to destination failed during deactivate migrations %v", err)
+		}
+		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
+		destKubeConfig, err := os.Create(destKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := destKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting destination config during deactivate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", destKubeconfigPath}...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("deactivating apps in namespace with command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("deactivating apps using storkctl failed: %v", err)
+	}
+	return nil
+}
+
 func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
 	var objectStoreArgs []string
 	secretData, err := core.Instance().GetSecret(secretName, "default")
@@ -1688,4 +1806,31 @@ func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, a
 			}
 		}
 	}
+}
+
+func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
+	operatorAppToCRMap := make(map[string][]meta_v1.APIResource)
+	// mongodbcommunity CR
+	operatorAppToCRMap[appNameMongo] = []meta_v1.APIResource{
+		{
+			Kind:       "MongoDBCommunity",
+			Version:    "v1",
+			Group:      "mongodbcommunity.mongodb.com",
+			Name:       "mongodbcommunity",
+			Namespaced: true,
+		},
+	}
+
+	// kafka CR
+	operatorAppToCRMap[appNameKafka] = []meta_v1.APIResource{
+		{
+			Kind:       "Kafka",
+			Version:    "v1beta2",
+			Group:      "kafka.strimzi.io",
+			Name:       "kafkas",
+			Namespaced: true,
+		},
+	}
+
+	return operatorAppToCRMap
 }
