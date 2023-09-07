@@ -550,34 +550,6 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 			printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
-
-			if unidirectional {
-				return
-			}
-
-			sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
-
-			if len(srcToken) == 0 {
-				pxAuthTokenSrc, pxAuthSecretNamespaceSrc, err = getPXAuthToken(sFile)
-				if err != nil {
-					printMsg(fmt.Sprintf("Got error while fetching px auth token in source cluster: %v", err), ioStreams.Out)
-				}
-				if len(pxAuthTokenSrc) > 0 {
-					printMsg("Fetching px token with auth token in source cluster", ioStreams.Out)
-				}
-				token, err := getPXToken(sEP, pxAuthTokenSrc)
-				if err != nil {
-					err := fmt.Errorf("got error while fetching px token in source cluster %s. Err: %v", sEP, err)
-					util.CheckErr(err)
-					return
-				}
-				srcToken = token
-			}
-			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, false)
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
 			// Create cluster-pair on dest cluster
 			conf, err = getConfig(dFile).ClientConfig()
 			if err != nil {
@@ -586,7 +558,6 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			}
 			storkops.Instance().SetConfig(conf)
 			core.Instance().SetConfig(conf)
-
 			if len(cmdFactory.GetNamespace()) > 0 {
 				err = createNamespace(dFile, cmdFactory.GetNamespace())
 				if err != nil {
@@ -608,14 +579,40 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			}
 			printMsg(fmt.Sprintf("ObjectstoreLocation %v created on destination cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
 
-			printMsg("Creating a cluster pair. Direction: Destination -> Source", ioStreams.Out)
-			destClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
-			_, err = storkops.Instance().CreateClusterPair(destClusterPair)
-			if err != nil {
-				util.CheckErr(err)
-				return
+			if !unidirectional {
+				sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
+
+				if len(srcToken) == 0 {
+					pxAuthTokenSrc, pxAuthSecretNamespaceSrc, err = getPXAuthToken(sFile)
+					if err != nil {
+						printMsg(fmt.Sprintf("Got error while fetching px auth token in source cluster: %v", err), ioStreams.Out)
+					}
+					if len(pxAuthTokenSrc) > 0 {
+						printMsg("Fetching px token with auth token in source cluster", ioStreams.Out)
+					}
+					token, err := getPXToken(sEP, pxAuthTokenSrc)
+					if err != nil {
+						err := fmt.Errorf("got error while fetching px token in source cluster %s. Err: %v", sEP, err)
+						util.CheckErr(err)
+						return
+					}
+					srcToken = token
+				}
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, false)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				printMsg("Creating a cluster pair. Direction: Destination -> Source", ioStreams.Out)
+				destClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
+				_, err = storkops.Instance().CreateClusterPair(destClusterPair)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", clusterPairName), ioStreams.Out)
 			}
-			printMsg(fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", clusterPairName), ioStreams.Out)
 		},
 	}
 
