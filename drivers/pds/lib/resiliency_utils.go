@@ -39,6 +39,7 @@ const (
 	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
 	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
 	RestoreDSDuringPXPoolExpansion    = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver       = "restore-ds-during-kvdb-fail-over"
 	poolResizeTimeout                 = time.Minute * 120
 	retryTimeout                      = time.Minute * 2
 )
@@ -55,6 +56,7 @@ var (
 	ResiliencyCondition       = make(chan bool)
 	restoredDeployment        *pds.ModelsDeployment
 	dsEntity                  restoreBkp.DSEntity
+	DynamicDeployments        []*pds.ModelsDeployment
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -199,6 +201,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+	case RestoreDSDuringKVDBFailOver:
+		log.InfoD("Entering to restore the Data service, while the KVDB pods are down")
+		func1 := func() {
+			RestoreAndValidateConfiguration(namespace, deployment)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+
 	}
 
 	var aggregatedError error
@@ -309,9 +321,17 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 			CapturedErrors <- error
 			return false, error
 		}
+		DynamicDeployments = append(DynamicDeployments, restoredDeployment)
 		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 	}
 	return true, nil
+}
+
+// GetDynamicDeployments will fetch deployments created as part of resiliency InduceFailure call
+func GetDynamicDeployments() []*pds.ModelsDeployment {
+	log.InfoD("Dynamically created deployments are - %v", DynamicDeployments)
+	return DynamicDeployments
+
 }
 
 func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment) error {
