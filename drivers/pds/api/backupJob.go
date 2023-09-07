@@ -14,6 +14,21 @@ type BackupJob struct {
 }
 
 // ListBackupJobs return back up jobs models.
+func (backupJob *BackupJob) ListBackupJobsBelongsToProject(projectID string) ([]pds.ModelsBackupJob, error) {
+	backupJobClient := backupJob.apiClient.BackupJobsApi
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	backupJobModels, res, err := backupJobClient.ApiProjectsIdBackupJobsGet(ctx, projectID).Execute()
+
+	if res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiBackupsIdJobsGet`: %v\n.Full HTTP response: %v", err, res)
+	}
+	return backupJobModels.GetData(), err
+}
+
+// ListBackupJobs return back up jobs models.
 func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ModelsBackupJobStatusResponse, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
 	ctx, err := pdsutils.GetContext()

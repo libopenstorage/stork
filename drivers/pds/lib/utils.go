@@ -24,6 +24,8 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 
+	state "net/http"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -36,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	state "net/http"
 )
 
 type PDS_Health_Status string
@@ -2205,13 +2206,13 @@ func DeleteK8sPDSNamespace(nname string) error {
 	return err
 }
 
-// GetPDSAgentPods returns the pds agent pod
-func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
+// GetPDSPods returns Name of the pds pod
+func GetPDSPods(podName string, pdsNamespace string) corev1.Pod {
 	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
 	podList, err := GetPods(pdsNamespace)
 	log.FailOnError(err, "Error while getting pods")
 	for _, pod := range podList.Items {
-		if strings.Contains(pod.Name, "pds-agent") {
+		if strings.Contains(pod.Name, podName) {
 			log.Infof("%v", pod.Name)
 			pdsAgentpod = pod
 			break

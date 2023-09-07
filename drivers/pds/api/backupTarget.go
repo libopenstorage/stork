@@ -14,7 +14,21 @@ type BackupTarget struct {
 }
 
 // ListBackupTarget return backup targets models.
-func (backupTarget *BackupTarget) ListBackupTarget(tenantID string) ([]pds.ModelsBackupTarget, error) {
+func (backupTarget *BackupTarget) ListBackupTargetBelongsToProject(projectId string) ([]pds.ModelsBackupTarget, error) {
+	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	backupTargetModels, res, err := backupTargetClient.ApiProjectsIdBackupTargetsGet(ctx, projectId).Execute()
+	if res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiTenantsIdBackupTargetsGet`: %v\n.Full HTTP response: %v", err, res)
+	}
+	return backupTargetModels.GetData(), err
+}
+
+// ListBackupTarget return backup targets models.
+func (backupTarget *BackupTarget) ListBackupTargetBelongsToTenant(tenantID string) ([]pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {

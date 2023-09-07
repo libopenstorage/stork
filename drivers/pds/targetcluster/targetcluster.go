@@ -2,6 +2,7 @@ package targetcluster
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -47,15 +48,14 @@ var (
 )
 
 var (
-	isavailable bool
-
+	isAvailable        bool
+	err                error
+	deploymentTargetID string
 	components         *pdsapi.Components
 	ns                 *corev1.Namespace
 	k8sCore            = core.Instance()
 	k8sApps            = apps.Instance()
 	namespaceNameIDMap = make(map[string]string)
-	err                error
-	deploymentTargetID string
 )
 
 // TargetCluster struct
@@ -63,7 +63,7 @@ type TargetCluster struct {
 	kubeconfig string
 }
 
-func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
+func (targetCluster *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
 	err = wait.Poll(DefaultRetryInterval, DefaultTimeout, func() (bool, error) {
 		targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
@@ -95,9 +95,9 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 }
 
 // CreatePDSNamespace checks if the namespace is available in the cluster and pds is enabled on it
-func (tc *TargetCluster) CreatePDSNamespace(namespace string) (*corev1.Namespace, bool, error) {
+func (targetCluster *TargetCluster) CreatePDSNamespace(namespace string) (*corev1.Namespace, bool, error) {
 	ns, err = k8sCore.GetNamespace(namespace)
-	isavailable = false
+	isAvailable = false
 	if err != nil {
 		log.Warnf("Namespace not found %v", err)
 		if strings.Contains(err.Error(), "not found") {
@@ -113,29 +113,29 @@ func (tc *TargetCluster) CreatePDSNamespace(namespace string) (*corev1.Namespace
 				log.Errorf("Error while creating namespace %v", err)
 				return nil, false, err
 			}
-			isavailable = true
+			isAvailable = true
 		}
-		if !isavailable {
+		if !isAvailable {
 			return nil, false, err
 		}
 	}
-	isavailable = false
+	isAvailable = false
 	for key, value := range ns.Labels {
 		log.Infof("key: %v values: %v", key, value)
 		if key == pxLabel && value == "true" {
 			log.InfoD("key: %v values: %v", key, value)
-			isavailable = true
+			isAvailable = true
 			break
 		}
 	}
-	if !isavailable {
+	if !isAvailable {
 		return nil, false, nil
 	}
 	return ns, true, nil
 }
 
-// GetnameSpaceID returns the namespace ID
-func (tc *TargetCluster) GetnameSpaceID(namespace string, deploymentTargetID string) (string, error) {
+// GetnameSpaceID Get nameSpaceID returns the namespace ID
+func (targetCluster *TargetCluster) GetnameSpaceID(namespace string, deploymentTargetID string) (string, error) {
 	var namespaceID string
 
 	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
@@ -267,7 +267,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 
 }
 
-// isReachable verify if the control plane is accessable.
+// isReachable verify if the control plane is accessible.
 func (targetCluster *TargetCluster) IsReachable(url string) (bool, error) {
 	timeout := time.Duration(15 * time.Second)
 	client := http.Client{
@@ -298,7 +298,7 @@ func (targetCluster *TargetCluster) ValidatePDSComponents() error {
 	return nil
 }
 
-// CreateNamespace create namespace for data service depoloyment
+// CreateNamespace create namespace for data service depolyment
 func (targetCluster *TargetCluster) CreateNamespace(namespace string) (*corev1.Namespace, error) {
 	t := func() (interface{}, bool, error) {
 		nsSpec := &corev1.Namespace{
@@ -376,7 +376,7 @@ func (tc *TargetCluster) DeleteDeploymentTargets(tenantID string) error {
 }
 
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
-func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.Parameter, tenantId string, installOldVersion bool) error {
+func (targetCluster *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.Parameter, tenantId string, installOldVersion bool) error {
 	log.InfoD("Test control plane url connectivity.")
 	var helmChartversion string
 	var serviceAccId string
@@ -389,7 +389,7 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 		return fmt.Errorf("error while initializing api components - %v", err)
 	}
 
-	_, err = tc.IsReachable(controlPlaneUrl)
+	_, err = targetCluster.IsReachable(controlPlaneUrl)
 	if err != nil {
 		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
 	}
@@ -426,10 +426,95 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 	}
 	bearerToken := *serviceAccToken.Token
 
-	err = tc.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
+	err = targetCluster.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
 	if err != nil {
 		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
 	}
+	return nil
+}
+
+// ExecuteCommandInStatefulSetPod executes the provided command inside a pod within the specified StatefulSet.
+func (targetCluster *TargetCluster) ExecuteCommandInStatefulSetPod(statefulsetName, namespace, command string) (string, error) {
+	podName, err := targetCluster.GetAnyPodName(statefulsetName, namespace)
+	if err != nil {
+		return "", err
+	}
+
+	return targetCluster.ExecCommandInPod(podName, namespace, command)
+}
+
+func (targetCluster *TargetCluster) GetAnyPodName(statefulName, namespace string) (string, error) {
+	rand.Seed(time.Now().UnixNano())
+	inst := apps.Instance()
+	sts, err := inst.GetStatefulSet(statefulName, namespace)
+	if err != nil {
+		return "", err
+	}
+	podList, err := inst.GetStatefulSetPods(sts)
+
+	randomIndex := rand.Intn(len(podList))
+	randomElement := podList[randomIndex]
+	return randomElement.GetName(), nil
+}
+
+func (targetCluster *TargetCluster) ExecCommandInPod(podName, namespace, command string) (string, error) {
+	cmd := fmt.Sprintf("kubectl --kubeconfig %v -n %v exec -it %v -- %v", targetCluster.kubeconfig, namespace, podName, command)
+	log.Infof("Command: ", cmd)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Terminal output: %v", output)
+
+	return string(output), nil
+}
+
+// KillPodsInNamespace Kill All pods matching podName string in a given namespace
+func (targetCluster *TargetCluster) KillPodsInNamespace(ns string, podName string) error {
+	var Pods []corev1.Pod
+
+	podList, err := targetCluster.GetPods(ns)
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, podName) {
+			log.Infof("Pod Name is : %v", pod.Name)
+			Pods = append(Pods, pod)
+		}
+	}
+
+	for _, pod := range Pods {
+		log.InfoD("Deleting Pod: %s", pod.Name)
+		err = targetCluster.DeleteK8sPods(pod.Name, ns)
+		if err != nil {
+			return err
+		}
+		log.InfoD("Successfully Killed Pod: %v", pod.Name)
+	}
+	return err
+}
+
+// GetPods returns the list of pods in namespace
+func (targetCluster *TargetCluster) GetPods(namespace string) (*corev1.PodList, error) {
+	k8sOps := k8sCore
+	podList, err := k8sOps.GetPods(namespace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return podList, err
+}
+
+// DeleteK8sPods deletes the pods in given namespace
+func (targetCluster *TargetCluster) DeleteK8sPods(pod string, namespace string) error {
+	cmd := fmt.Sprintf("kubectl --kubeconfig %v -n %v delete pod %v", targetCluster.kubeconfig, namespace, pod)
+	log.Infof("Command: ", cmd)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return err
+	}
+	log.Infof("Terminal output: %v", output)
 	return nil
 }
 

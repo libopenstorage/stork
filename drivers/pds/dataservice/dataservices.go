@@ -49,13 +49,13 @@ var (
 )
 
 const (
-	postgresql    = "PostgreSQL"
+	Postgresql    = "PostgreSQL"
 	cassandra     = "Cassandra"
 	elasticSearch = "Elasticsearch"
 	couchbase     = "Couchbase"
 	mongodb       = "MongoDB Enterprise"
 	rabbitmq      = "RabbitMQ"
-	mysql         = "MySQL"
+	Mysql         = "MySQL"
 	mssql         = "MS SQL Server"
 	kafka         = "Kafka"
 	consul        = "Consul"

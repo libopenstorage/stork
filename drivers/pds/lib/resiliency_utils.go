@@ -27,6 +27,8 @@ const (
 	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
 	PdsAgentPod                       = "pds-agent"
 	PdsTeleportPod                    = "pds-teleport"
+	PdsBackupControllerPod            = "pds-backup-controller-manager"
+	PdsTargetControllerPod            = "pds-operator-target-controller-manager"
 	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
 	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"

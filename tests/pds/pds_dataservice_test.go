@@ -445,7 +445,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 				Step("Delete pods from pds-system namespace", func() {
 					log.InfoD("Getting PDS System Pods")
-					agentPod := pdslib.GetPDSAgentPods(pdsNamespace)
+					agentPod := pdslib.GetPDSPods("pds-agent", pdsNamespace)
 
 					var wg sync.WaitGroup
 					wg.Add(2)
@@ -466,7 +466,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					wg.Wait()
 
 					log.Infof("Getting new PDS agent Pod")
-					agentPod = pdslib.GetPDSAgentPods(pdsNamespace)
+					agentPod = pdslib.GetPDSPods("pds-agent", pdsNamespace)
 
 					log.InfoD("Validating new PDS agent Pod")
 					err = k8sCore.ValidatePod(&agentPod, 5*time.Minute, 10*time.Second)

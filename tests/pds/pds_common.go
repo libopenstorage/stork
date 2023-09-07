@@ -2,15 +2,16 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"net/http"
-	"strings"
-	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -18,6 +19,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -342,4 +344,29 @@ func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 		}
 	}
 	return nil
+}
+
+func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDeployment, targetCluster *tc.TargetCluster) (string, bool) {
+	var command, dbMaster string
+	switch dsName {
+	case dataservices.Postgresql:
+		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.FailOnError(err, "Failed while fetching db master pods=.")
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	case dataservices.Mysql:
+		_, connectionDetails, err := pdslib.ApiComponents.DataServiceDeployment.GetConnectionDetails(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching connection details.")
+		cred, err := pdslib.ApiComponents.DataServiceDeployment.GetDeploymentCredentials(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching credentials.")
+		command = fmt.Sprintf("mysqlsh --host=%v --port %v --user=innodb-config "+
+			" --password=%v -- cluster status", connectionDetails["host"], connectionDetails["port"], cred.GetPassword())
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	default:
+		return "", false
+	}
+	return dbMaster, true
 }
