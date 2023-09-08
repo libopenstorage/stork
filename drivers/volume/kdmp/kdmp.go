@@ -307,6 +307,11 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
+			// If the dataexport CR already exists, continue to next PVC
+			if k8serror.IsAlreadyExists(err) {
+				logrus.Infof("dataexport [%v/%v] already exists, ignore and continue", dataExport.Namespace, dataExport.Name)
+				continue
+			}
 			logrus.Errorf("failed to create DataExport CR: %v", err)
 			return volumeInfos, err
 		}
@@ -781,6 +786,11 @@ func (k *kdmp) StartRestore(
 		}
 		logrus.Tracef("%s de cr name [%v/%v]", funct, dataExport.Namespace, dataExport.Name)
 		if _, err := kdmpShedOps.Instance().CreateDataExport(dataExport); err != nil {
+			// If the dataexport CR already exists, continue to next PVC
+			if k8serror.IsAlreadyExists(err) {
+				logrus.Infof("dataexport [%v/%v] already exists, ignore and continue", dataExport.Namespace, dataExport.Name)
+				continue
+			}
 			logrus.Errorf("failed to create DataExport CR: %v", err)
 			return volumeInfos, err
 		}
