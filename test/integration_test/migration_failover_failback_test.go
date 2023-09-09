@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -16,6 +15,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -275,7 +276,12 @@ func testMigrationFailback(
 
 	if !bidirectionalClusterpair {
 		// create, apply and validate cluster pair specs
-		err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
+		if unidirectionalClusterpair {
+			clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+			err = scheduleBidirectionalClusterPair("cluster-pair-reverse", clusterPairNamespace, "", defaultBackupLocation, defaultSecretName)
+		} else {
+		    err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
+		}
 		require.NoError(t, err, "Error scheduling cluster pair")
 	}
 

@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -26,6 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -89,6 +90,7 @@ func testMigration(t *testing.T) {
 	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
+	t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
 	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
 	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
 
@@ -332,7 +334,12 @@ func deploymentMigrationReverseTest(t *testing.T) {
 
 	// create, apply and validate cluster pair specs on destination for non-bidirectional pair
 	if !bidirectionalClusterpair {
-		err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", "", true)
+		if unidirectionalClusterpair {
+			clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+			err = scheduleBidirectionalClusterPair("cluster-pair-reverse", clusterPairNamespace, "", defaultBackupLocation, defaultSecretName)
+		} else {
+		    err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", "", true)
+		}
 		require.NoError(t, err, "Error scheduling cluster pair")
 	}
 
@@ -1376,6 +1383,63 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
+func unidirectionalClusterPairTest(t *testing.T) {
+	if unidirectionalClusterpair == false {
+		t.Skipf("skipping %s test because unidirectional cluster pair flag has not been set", t.Name())
+	}
+	var testrailID, testResult = 91979, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	clusterPairName := "unirectional-cluster-pair"
+	clusterPairNamespace := "unidirectional-clusterpair-ns"
+
+	// Read the configmap secret-config in default namespace and based on the secret type , create the bidirectional pair
+	configMap, err := core.Instance().GetConfigMap("secret-config", "default")
+	if err != nil {
+		require.NoError(t, err, "error getting configmap secret-config in defaule namespace: %v")
+	}
+	cmData := configMap.Data
+	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
+	for location, secret := range cmData {
+		logrus.Infof("Creating a unidirectional-pair using %s as objectstore.", location)
+		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret)
+		require.NoError(t, err, "failed to set unidirectional cluster pair: %v", err)
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "failed to get unidirectional cluster pair on source: %v", err)
+
+		err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "failed to validate unidirectional cluster pair on source: %v", err)
+
+		logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.Error(t, err, "clusterpair should not be created on destination cluster")
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		// Clean up on source cluster
+		err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting clusterpair on source cluster")
+
+		logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on source cluster", clusterPairNamespace)
+	}
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
 func operatorMigrationMongoTest(t *testing.T) {
 	var testrailID, testResult = 86250, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
@@ -2123,6 +2187,17 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 		err = setSourceKubeConfig()
 		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
+	} else if unidirectionalClusterpair {
+		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		logrus.Info("Unidirectional flag is set, will create unidirectional cluster pair:")
+		logrus.Infof("Name: %s", remotePairName)
+		logrus.Infof("Namespace: %s", clusterPairNamespace)
+		logrus.Infof("Backuplocation: %s", defaultBackupLocation)
+		logrus.Infof("Secret name: %s", defaultSecretName)
+		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+		require.NoError(t, err, "failed to set unidirectional cluster pair: %v", err)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	} else {
 		// create, apply and validate cluster pair specs
 		err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, projectIDMappings, pairReverse)

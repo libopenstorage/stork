@@ -161,6 +161,7 @@ var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
 var bidirectionalClusterpair bool
+var unidirectionalClusterpair bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -790,6 +791,13 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
 		"--src-kube-file", srcKubeconfigPath,
 		"--dest-kube-file", destKubeconfigPath,
+	}
+	if unidirectionalClusterpair {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+			"--src-kube-file", srcKubeconfigPath,
+			"--dest-kube-file", destKubeconfigPath,
+			"--unidirectional",
+		}
 	}
 
 	if projectMappings != "" {
@@ -1503,6 +1511,10 @@ func TestMain(m *testing.M) {
 		"bidirectional-cluster-pair",
 		false,
 		"Turn on/off bidirectional cluster pair creation for all migrations. Default off.")
+	flag.BoolVar(&unidirectionalClusterpair,
+		"unidirectional-cluster-pair",
+		false,
+		"Turn on/off unidirectional cluster pair creation for all migrations. Default off.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
