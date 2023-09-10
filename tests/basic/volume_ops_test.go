@@ -704,7 +704,6 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			"Px crashes when we perform multiple HAUpdate in a loop", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "Px crashes when we perform multiple HAUpdate in a loop"
 	It(stepLog, func() {
@@ -724,8 +723,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get a pool with running IO
-		poolUUID, err := GetPoolIDWithIOs(contexts)
-		log.FailOnError(err, "Failed to get pool running with IO")
+		poolUUID := pickPoolToResize()
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Node Details of the Pool with IO
@@ -1163,11 +1161,10 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		stepLog = "Validating and Destroying apps"
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
-				ctx.SkipVolumeValidation = true
 				ctx.ReadinessTimeout = 15 * time.Minute
+				ctx.SkipVolumeValidation = false
 				ValidateContext(ctx)
 				opts := make(map[string]bool)
-				opts[SkipClusterScopedObjects] = true
 				DestroyApps(contexts, opts)
 			}
 		})
@@ -1336,7 +1333,7 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 				}
 				volSnapMap[appNamespace] = snapMap
 			}
-			log.Infof("waiting for 10 mins to create multiple cloud snaps")
+			log.Infof("waiting for 10 mins to create multiple local snaps")
 			time.Sleep(10 * time.Minute)
 		})
 

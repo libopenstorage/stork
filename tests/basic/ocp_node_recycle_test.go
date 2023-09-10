@@ -182,8 +182,7 @@ var _ = Describe("{AddOCPStorageNode}", func() {
 
 			updatedStorageNodesCount := len(node.GetStorageNodes())
 			dash.VerifySafely(numOfStorageNodes+1, updatedStorageNodesCount, "verify new storage node is added")
-			// Validating the apps after recycling the Storage node
-			ValidateApplications(contexts)
+			ValidateAndDestroy(contexts, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -269,8 +268,8 @@ var _ = Describe("{AddOCPStoragelessNode}", func() {
 
 			updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
 			dash.VerifySafely(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")
-			// Validating the apps after recycling the Storage node
-			ValidateApplications(contexts)
+
+			ValidateAndDestroy(contexts, nil)
 		})
 	})
 	JustAfterEach(func() {

@@ -88,7 +88,16 @@ var _ = Describe("{DecommissionNode}", func() {
 			stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().V.RejoinNode(&nodeToDecommission)
+				//reboot required to remove encrypted dm devices if any
+				err := Inst().N.RebootNode(nodeToDecommission, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultCommandTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+					},
+				})
+				log.FailOnError(err, fmt.Sprintf("error rebooting node %s", nodeToDecommission.Name))
+				err = Inst().V.RejoinNode(&nodeToDecommission)
 				dash.VerifyFatal(err, nil, "Validate node rejoin init")
 				var rejoinedNode *api.StorageNode
 				t := func() (interface{}, bool, error) {

@@ -2126,7 +2126,7 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 				return nil, true, err
 			}
 			if nodeResponse.Node.MgmtIp == "" {
-				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest, response: %v", nodeResponse)
 			}
 			return nodeResponse, false, nil
 		}

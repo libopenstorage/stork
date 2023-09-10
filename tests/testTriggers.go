@@ -20,7 +20,6 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 
-	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
@@ -242,6 +241,7 @@ var decommissionedNode = node.Node{}
 
 // node with autopilot rule enabled
 var autoPilotLabelNode node.Node
+var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
@@ -4621,51 +4621,18 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	poolLabel := map[string]string{"autopilot": "rebalance"}
+
 	apRule := aututils.PoolRuleRebalanceAbsolute(120, 70, false)
 	apRule.Spec.ActionsCoolDownPeriod = int64(getReblanceCoolOffPeriod(AutopilotRebalance))
-	apRule.Spec.Selector = apapi.RuleObjectSelector{
-		LabelSelector: meta_v1.LabelSelector{
-			MatchLabels: poolLabel,
-		},
-	}
 
-	if autoPilotLabelNode.Name == "" {
-
-		Step("Create autopilot rule", func() {
-			log.InfoD("Creating autopilot rule ; %+v", apRule)
-
-			storageNodes := node.GetStorageDriverNodes()
-			maxUsed := uint64(0)
-			for _, sNode := range storageNodes {
-				totalSize := uint64(0)
-				for _, p := range sNode.StoragePools {
-					totalSize += p.StoragePool.Used
-				}
-				if totalSize > maxUsed {
-					autoPilotLabelNode = sNode
-					maxUsed = totalSize
-				}
-			}
-
-			log.InfoD("Adding label %s to the node %s", poolLabel, autoPilotLabelNode.Name)
-			err := AddLabelsOnNode(autoPilotLabelNode, poolLabel)
+	if !autoPilotRuleCreated {
+		log.InfoD("Creating autopilot rule ; %+v", apRule)
+		_, err := Inst().S.CreateAutopilotRule(apRule)
+		if err != nil {
 			UpdateOutcome(event, err)
-			if err == nil {
-				_, err = Inst().S.CreateAutopilotRule(apRule)
-				UpdateOutcome(event, err)
-				//Removing the label if autopilot rule creation is failed
-				if err != nil {
-					for k := range poolLabel {
-						Inst().S.RemoveLabelOnNode(autoPilotLabelNode, k)
-						autoPilotLabelNode = node.Node{}
-					}
-				}
-			} else {
-				log.Warn("Skipping autopilot rule creation as node is not labelled")
-			}
-
-		})
+			return
+		}
+		autoPilotRuleCreated = true
 	} else {
 
 		Step("validate the  autopilot events", func() {
@@ -5549,7 +5516,20 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			stepLog = fmt.Sprintf("Rejoin node %s", decommissionedNode.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().V.RejoinNode(&decommissionedNode)
+				//reboot required to remove encrypted dm devices if any
+				err := Inst().N.RebootNode(decommissionedNode, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+					},
+				})
+
+				if err != nil {
+					log.Errorf("Error while rebooting node %s the node. error: %v", decommissionedNode.Name, err)
+					UpdateOutcome(event, err)
+				}
+				err = Inst().V.RejoinNode(&decommissionedNode)
 
 				if err != nil {
 					log.InfoD("Error while rejoining the node. error: %v", err)

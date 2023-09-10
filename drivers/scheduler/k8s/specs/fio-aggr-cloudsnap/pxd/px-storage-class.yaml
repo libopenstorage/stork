@@ -24,6 +24,10 @@ parameters:
   labels: "type=aggregated"
   group: "fio-data"
   {{ end }}
+  snapshotschedule.stork.libopenstorage.org/interval-schedule: |
+    schedulePolicyName: intervalpolicy
+    annotations:
+      portworx/snapshot-type: cloud
 allowVolumeExpansion: true
 ---
 ##### Portworx storage class
@@ -46,4 +50,12 @@ parameters:
   io_profile: "db_remote"{{ end }}
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .AggregationLevel }}
+  aggregation_level: "{{ .AggregationLevel }}"
+  { { else } }
+  aggregation_level: "2"{{ end }}
+  snapshotschedule.stork.libopenstorage.org/interval-schedule: |
+    schedulePolicyName: intervalpolicy
+    annotations:
+      portworx/snapshot-type: cloud
 allowVolumeExpansion: true

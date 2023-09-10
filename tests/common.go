@@ -4867,11 +4867,12 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
 							} else {
-								log.Infof("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
-								time.Sleep(10 * time.Second)
+								log.Infof("Waiting for 60 seconds for re-sync to initialize before source nodes reboot")
+								time.Sleep(60 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
+									log.Infof("selected repl node: %s", replNodeToReboot.Name)
 									if restartPX {
 										testError := Inst().V.RestartDriver(replNodeToReboot, nil)
 										if testError != nil {
@@ -6624,25 +6625,21 @@ outer:
 		}
 	}
 
+	if selectedNodePoolID == "" {
+		log.Warnf("No pool with IO found, picking a random pool in node %s to resize", stNode.Name)
+		for _, p := range nodePools {
+			if eligibilityMap[p] {
+				selectedNodePoolID = p
+			}
+		}
+	}
+
 	selectedPool, err = GetStoragePoolByUUID(selectedNodePoolID)
 
 	if err != nil {
 		return nil, err
 	}
 	return selectedPool, nil
-}
-
-// GetRandomNodeWithPoolIOs returns node with IOs running
-func GetRandomNodeWithPoolIOs(contexts []*scheduler.Context) (node.Node, error) {
-	// pick a storage node with pool having IOs
-
-	poolID, err := GetPoolIDWithIOs(contexts)
-	if err != nil {
-		return node.Node{}, err
-	}
-
-	n, err := GetNodeWithGivenPoolID(poolID)
-	return *n, err
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
@@ -8169,7 +8166,7 @@ func runDataIntegrityValidation(testName string) bool {
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
-	if strings.Contains(testName, "{Longevity}") {
+	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
 		sInd := strings.LastIndex(testName, ".")
@@ -8495,9 +8492,21 @@ func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail 
 func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
 	contextsOnNode := make([]*scheduler.Context, 0)
 	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
-	if strings.Contains(testName, "{Longevity}") {
+
+	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
+		sInd := strings.LastIndex(testName, ".")
+		if sInd != -1 {
+			fnNames := strings.Split(testName, ".")
+			for _, fn := range fnNames {
+				if strings.Contains(fn, "Trigger") {
+					testName = fn
+					break
+				}
+			}
+		}
+
 	}
 
 	if !runDataIntegrityValidation(testName) {

@@ -6,7 +6,7 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
   {{ if .Repl }}
-  repl : "{{ .Repl }}"
+  repl: "{{ .Repl }}"
   {{ else }}
   repl: "2"{{ end }}
   priority_io: "high"
