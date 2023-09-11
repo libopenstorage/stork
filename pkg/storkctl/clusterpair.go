@@ -254,6 +254,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	var syncDR bool
 	var pxAuthTokenSrc, pxAuthSecretNamespaceSrc string
 	var pxAuthTokenDest, pxAuthSecretNamespaceDest string
+	var backupLocationName string
 	var unidirectional bool
 
 	createClusterPairCommand := &cobra.Command{
@@ -370,83 +371,19 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			}
 
 			//Handling the asyncDR cases here onwards
-			// create backuplocation in source
-			backupLocation := &storkv1.BackupLocation{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      clusterPairName,
-					Namespace: cmdFactory.GetNamespace(),
-					Annotations: map[string]string{
-						skipResourceAnnotation: "true",
-						storkCreatedAnnotation: "true",
-					},
-				},
-				Location: storkv1.BackupLocationItem{},
-			}
 
-			// create backuplocation secrets in both source and destination
-			credentialData := make(map[string][]byte)
-			switch provider {
-			case "s3":
-				if s3AccessKey == "" {
-					util.CheckErr(getMissingParameterError("s3-access-key", "Access Key missing for S3"))
-					return
-				}
-				if s3SecretKey == "" {
-					util.CheckErr(getMissingParameterError("s3-secret-key", "Secret Key missing for S3"))
-					return
-				}
-				if len(s3EndPoint) == 0 {
-					util.CheckErr(getMissingParameterError("s3-endpoint", "Endpoint missing for S3"))
-					return
-				}
-				if len(s3Region) == 0 {
-					util.CheckErr(getMissingParameterError("s3-region", "Region missing for S3"))
-					return
-				}
-				credentialData["endpoint"] = []byte(s3EndPoint)
-				credentialData["accessKeyID"] = []byte(s3AccessKey)
-				credentialData["secretAccessKey"] = []byte(s3SecretKey)
-				credentialData["region"] = []byte(s3Region)
-				credentialData["disableSSL"] = []byte(strconv.FormatBool(disableSSL))
-				backupLocation.Location.Type = storkv1.BackupLocationS3
-			case "azure":
-				if azureAccountName == "" {
-					util.CheckErr(getMissingParameterError("azure-account-name", "Account Name missing for Azure"))
-					return
-				}
-				if azureAccountKey == "" {
-					util.CheckErr(getMissingParameterError("azure-account-key", "Account Key missing for Azure"))
-					return
-				}
-				credentialData["storageAccountName"] = []byte(azureAccountName)
-				credentialData["storageAccountKey"] = []byte(azureAccountKey)
-				backupLocation.Location.Type = storkv1.BackupLocationAzure
-			case "google":
-				if len(googleProjectID) == 0 {
-					util.CheckErr(getMissingParameterError("google-project-id", "Project ID missing for Google"))
-					return
-				}
-				if len(googleJSONKey) == 0 {
-					util.CheckErr(getMissingParameterError("google-key-file-path", "Json key file path missing for Google"))
-					return
-				}
-				// Read the jsonkey file
-				keyData, err := os.ReadFile(googleJSONKey)
+			if len(cmdFactory.GetNamespace()) > 0 {
+				err = createNamespace(sFile, cmdFactory.GetNamespace())
 				if err != nil {
-					util.CheckErr(fmt.Errorf("failed to read json key file: %v", err))
+					util.CheckErr(fmt.Errorf("error in creating namespace %s in source cluster: %v", cmdFactory.GetNamespace(), err))
 					return
 				}
-				credentialData["accountKey"] = keyData
-				credentialData["projectID"] = []byte(googleProjectID)
-				backupLocation.Location.Type = storkv1.BackupLocationGoogle
-			default:
-				util.CheckErr(getMissingParameterError("provider", "External objectstore provider needs to be either of azure, google, s3"))
-				return
+				err = createNamespace(dFile, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("error in creating namespace %s in destination cluster: %v", cmdFactory.GetNamespace(), err))
+					return
+				}
 			}
-
-			credentialData["path"] = []byte(bucket)
-			credentialData["type"] = []byte(provider)
-			credentialData["encryptionKey"] = []byte(encryptionKey)
 
 			// Bail out if portworx-api service type is not loadbalancer type and the endpoints are not provided.
 			if !unidirectional && len(sEP) == 0 {
@@ -490,30 +427,20 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				destToken = token
 			}
 
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, false)
+			sconf, err := getConfig(sFile).ClientConfig()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+			dconf, err := getConfig(dFile).ClientConfig()
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
 
-			// Create cluster-pair on source cluster
-			conf, err := getConfig(sFile).ClientConfig()
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-
-			if len(cmdFactory.GetNamespace()) > 0 {
-				err = createNamespace(sFile, cmdFactory.GetNamespace())
-				if err != nil {
-					util.CheckErr(err)
-					return
-				}
-			}
-			printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
-			storkops.Instance().SetConfig(conf)
-			core.Instance().SetConfig(conf)
-			secret := &v1.Secret{
+			finalBackupLocationName := backupLocationName
+			// backuplocation object init as it is used in different if blocks
+			backupLocation := &storkv1.BackupLocation{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      clusterPairName,
 					Namespace: cmdFactory.GetNamespace(),
@@ -522,63 +449,153 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						storkCreatedAnnotation: "true",
 					},
 				},
-				Data: credentialData,
-				Type: v1.SecretTypeOpaque,
-			}
-			_, err = core.Instance().CreateSecret(secret)
-			if err != nil {
-				util.CheckErr(err)
-				return
+				Location: storkv1.BackupLocationItem{},
 			}
 
-			backupLocation.Location.SecretConfig = clusterPairName
-			var annotations = make(map[string]string)
-			annotations[skipResourceAnnotation] = "true"
-			_, err = storkops.Instance().CreateBackupLocation(backupLocation)
-			if err != nil {
-				err := fmt.Errorf("unable to create ObjectstoreLocation in source. Err: %v", err)
-				util.CheckErr(err)
-				return
+			if len(backupLocationName) > 0 {
+				err = verifyBackupLocationExistence(sFile, backupLocationName, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("input backuplocation %s existence check failed with error in source cluster: %v", backupLocationName, err))
+					return
+				}
+				err = verifyBackupLocationExistence(dFile, backupLocationName, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("input backuplocation %s existence check failed with error in destination cluster: %v", backupLocationName, err))
+					return
+				}
+			} else {
+				// create backuplocation secrets in both source and destination
+				credentialData := make(map[string][]byte)
+				switch provider {
+				case "s3":
+					if s3AccessKey == "" {
+						util.CheckErr(getMissingParameterError("s3-access-key", "Access Key missing for S3"))
+						return
+					}
+					if s3SecretKey == "" {
+						util.CheckErr(getMissingParameterError("s3-secret-key", "Secret Key missing for S3"))
+						return
+					}
+					if len(s3EndPoint) == 0 {
+						util.CheckErr(getMissingParameterError("s3-endpoint", "Endpoint missing for S3"))
+						return
+					}
+					if len(s3Region) == 0 {
+						util.CheckErr(getMissingParameterError("s3-region", "Region missing for S3"))
+						return
+					}
+					credentialData["endpoint"] = []byte(s3EndPoint)
+					credentialData["accessKeyID"] = []byte(s3AccessKey)
+					credentialData["secretAccessKey"] = []byte(s3SecretKey)
+					credentialData["region"] = []byte(s3Region)
+					credentialData["disableSSL"] = []byte(strconv.FormatBool(disableSSL))
+					backupLocation.Location.Type = storkv1.BackupLocationS3
+				case "azure":
+					if azureAccountName == "" {
+						util.CheckErr(getMissingParameterError("azure-account-name", "Account Name missing for Azure"))
+						return
+					}
+					if azureAccountKey == "" {
+						util.CheckErr(getMissingParameterError("azure-account-key", "Account Key missing for Azure"))
+						return
+					}
+					credentialData["storageAccountName"] = []byte(azureAccountName)
+					credentialData["storageAccountKey"] = []byte(azureAccountKey)
+					backupLocation.Location.Type = storkv1.BackupLocationAzure
+				case "google":
+					if len(googleProjectID) == 0 {
+						util.CheckErr(getMissingParameterError("google-project-id", "Project ID missing for Google"))
+						return
+					}
+					if len(googleJSONKey) == 0 {
+						util.CheckErr(getMissingParameterError("google-key-file-path", "Json key file path missing for Google"))
+						return
+					}
+					// Read the jsonkey file
+					keyData, err := os.ReadFile(googleJSONKey)
+					if err != nil {
+						util.CheckErr(fmt.Errorf("failed to read json key file: %v", err))
+						return
+					}
+					credentialData["accountKey"] = keyData
+					credentialData["projectID"] = []byte(googleProjectID)
+					backupLocation.Location.Type = storkv1.BackupLocationGoogle
+				default:
+					util.CheckErr(getMissingParameterError("provider", "External objectstore provider needs to be either of azure, google, s3"))
+					return
+				}
+
+				credentialData["path"] = []byte(bucket)
+				credentialData["type"] = []byte(provider)
+				credentialData["encryptionKey"] = []byte(encryptionKey)
+				finalBackupLocationName = backupLocation.Name
+
+				printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
+				storkops.Instance().SetConfig(sconf)
+				core.Instance().SetConfig(sconf)
+				secret := &v1.Secret{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      clusterPairName,
+						Namespace: cmdFactory.GetNamespace(),
+						Annotations: map[string]string{
+							skipResourceAnnotation: "true",
+							storkCreatedAnnotation: "true",
+						},
+					},
+					Data: credentialData,
+					Type: v1.SecretTypeOpaque,
+				}
+				_, err = core.Instance().CreateSecret(secret)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				backupLocation.Location.SecretConfig = clusterPairName
+				var annotations = make(map[string]string)
+				annotations[skipResourceAnnotation] = "true"
+				_, err = storkops.Instance().CreateBackupLocation(backupLocation)
+				if err != nil {
+					err := fmt.Errorf("unable to create ObjectstoreLocation in source. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("ObjectstoreLocation %v created on source cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
+
+				storkops.Instance().SetConfig(dconf)
+				core.Instance().SetConfig(dconf)
+				printMsg(fmt.Sprintf("Creating Secret and ObjectstoreLocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
+				_, err = core.Instance().CreateSecret(secret)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				_, err = storkops.Instance().CreateBackupLocation(backupLocation)
+				if err != nil {
+					err := fmt.Errorf("unable to create ObjectstoreLocation in destination. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("ObjectstoreLocation %v created on destination cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
 			}
-			printMsg(fmt.Sprintf("ObjectstoreLocation %v created on source cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
 
 			printMsg("Creating a cluster pair. Direction: Source -> Destination", ioStreams.Out)
-			srcClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, false)
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+			storkops.Instance().SetConfig(sconf)
+			core.Instance().SetConfig(sconf)
+			srcClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = finalBackupLocationName
 			_, err = storkops.Instance().CreateClusterPair(srcClusterPair)
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
 			printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
-			// Create cluster-pair on dest cluster
-			conf, err = getConfig(dFile).ClientConfig()
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-			storkops.Instance().SetConfig(conf)
-			core.Instance().SetConfig(conf)
-			if len(cmdFactory.GetNamespace()) > 0 {
-				err = createNamespace(dFile, cmdFactory.GetNamespace())
-				if err != nil {
-					util.CheckErr(err)
-					return
-				}
-			}
-			printMsg(fmt.Sprintf("Creating Secret and ObjectstoreLocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
-			_, err = core.Instance().CreateSecret(secret)
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-			_, err = storkops.Instance().CreateBackupLocation(backupLocation)
-			if err != nil {
-				err := fmt.Errorf("unable to create ObjectstoreLocation in destination. Err: %v", err)
-				util.CheckErr(err)
-				return
-			}
-			printMsg(fmt.Sprintf("ObjectstoreLocation %v created on destination cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
 
+			// Create clusterpair in destination only if unidirectional flag is not set
 			if !unidirectional {
 				sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
 
@@ -605,6 +622,8 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				}
 
 				printMsg("Creating a cluster pair. Direction: Destination -> Source", ioStreams.Out)
+				storkops.Instance().SetConfig(dconf)
+				core.Instance().SetConfig(dconf)
 				destClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
 				_, err = storkops.Instance().CreateClusterPair(destClusterPair)
 				if err != nil {
@@ -633,6 +652,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
 	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", "async-dr", "Mode of DR. [async-dr, sync-dr]")
 	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
+	createClusterPairCommand.Flags().StringVarP(&backupLocationName, "use-existing-backuplocation", "", "", "(Optional) Backuplocation with the provided name should be present in both source and destination cluster")
 	// New parameters for creating backuplocation secret
 	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google]")
 	createClusterPairCommand.Flags().StringVar(&bucket, "bucket", "", "Bucket name")
@@ -930,6 +950,32 @@ func createNamespace(config string, namespace string) error {
 	})
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
+	}
+	return nil
+}
+
+func verifyBackupLocationExistence(config string, blName string, namespace string) error {
+	conf, err := getConfig(config).ClientConfig()
+	if err != nil {
+		return err
+	}
+	storkOps, err := storkops.NewForConfig(conf)
+	if err != nil {
+		return err
+	}
+	bl, err := storkOps.GetBackupLocation(blName, namespace)
+	if err != nil {
+		return err
+	}
+	if len(bl.Location.SecretConfig) > 0 {
+		coreOps, err := core.NewForConfig(conf)
+		if err != nil {
+			return err
+		}
+		_, err = coreOps.GetSecret(bl.Location.SecretConfig, namespace)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
