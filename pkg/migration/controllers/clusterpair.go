@@ -228,9 +228,6 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 			}
 		}
 	}
-	if !skipDelete && clusterPair.Status.RemoteStorageID != "" {
-		return c.volDriver.DeletePair(clusterPair)
-	}
 
 	// Delete the backuplocation and secret associated with clusterpair as part of the delete
 	if backuplocationName, ok := clusterPair.Spec.Options["backuplocation"]; ok {
@@ -258,6 +255,11 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 			}
 		}
 	}
+
+	if !skipDelete && clusterPair.Status.RemoteStorageID != "" {
+		return c.volDriver.DeletePair(clusterPair)
+	}
+
 	return nil
 }
 
