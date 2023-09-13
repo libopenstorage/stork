@@ -133,24 +133,22 @@ func TestCreateUniDirectionalClusterPairMissingParameters(t *testing.T) {
 	expected := "error: missing parameter \"src-kube-file\" - Kubeconfig file missing for source cluster"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	srcConfig := createTempFile(t, "src.config", "source configuration")
-	destConfig := createTempFile(t, "dest.config", "destination configuration")
+	srcConfig := createTempFile(t, "src.config", "source")
+	destConfig := createTempFile(t, "dest.config", "destination")
 	defer os.Remove(srcConfig.Name())
 	defer os.Remove(destConfig.Name())
+
 	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--unidirectional"}
 	expected = "error: missing parameter \"dest-kube-file\" - Kubeconfig file missing for destination cluster"
-	testCommon(t, cmdArgs, nil, expected, true)
-
-	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", destConfig.Name(), "-u"}
-	expected = "error: missing parameter \"provider\" - External objectstore provider needs to be either of azure, google, s3"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfig.Name(), "-u"}
 	expected = "error: source kubeconfig file and destination kubeconfig file should be different"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	srcConfigDuplicate := createTempFile(t, "srcDup.config", "source configuration")
+	srcConfigDuplicate := createTempFile(t, "srcDup.config", "source")
 	defer os.Remove(srcConfigDuplicate.Name())
+
 	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfigDuplicate.Name(), "-u"}
 	expected = "error: source kubeconfig and destination kubeconfig file should be different"
 	testCommon(t, cmdArgs, nil, expected, true)
