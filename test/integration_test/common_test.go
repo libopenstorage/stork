@@ -16,17 +16,6 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	storkdriver "github.com/libopenstorage/stork/drivers/volume"
-	_ "github.com/libopenstorage/stork/drivers/volume/aws"
-	_ "github.com/libopenstorage/stork/drivers/volume/azure"
-	_ "github.com/libopenstorage/stork/drivers/volume/csi"
-	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
-	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
-	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/schedule"
-	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -63,6 +52,18 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	storkdriver "github.com/libopenstorage/stork/drivers/volume"
+	_ "github.com/libopenstorage/stork/drivers/volume/aws"
+	_ "github.com/libopenstorage/stork/drivers/volume/azure"
+	_ "github.com/libopenstorage/stork/drivers/volume/csi"
+	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
+	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
+	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/schedule"
+	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/version"
 )
 
 const (
@@ -161,6 +162,7 @@ var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
 var bidirectionalClusterpair bool
+var unidirectionalClusterpair bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -694,7 +696,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 }
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
-func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string) error {
+func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, reverse bool) error {
 	//var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
@@ -791,6 +793,21 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		"--src-kube-file", srcKubeconfigPath,
 		"--dest-kube-file", destKubeconfigPath,
 	}
+	if unidirectionalClusterpair {
+		if reverse {
+			cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+			    "--src-kube-file", destKubeconfigPath,
+			    "--dest-kube-file", srcKubeconfigPath,
+			    "--unidirectional",
+			}
+		} else {
+		    cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		        "--src-kube-file", srcKubeconfigPath,
+			    "--dest-kube-file", destKubeconfigPath,
+			    "--unidirectional",
+		    }
+	    }
+    }
 
 	if projectMappings != "" {
 		cmdArgs = append(cmdArgs, "--project-mappings")
@@ -805,9 +822,9 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 
 	cmdArgs = append(cmdArgs, objectStoreArgs...)
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("Following is the bidirectional command: %v", cmdArgs)
+	logrus.Infof("Following is the bidirectional/unidirectional command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
-		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
+		return fmt.Errorf("Creation of bidirectional/unidirectional cluster pair using storkctl failed: %v", err)
 	}
 	return nil
 }
@@ -1503,6 +1520,10 @@ func TestMain(m *testing.M) {
 		"bidirectional-cluster-pair",
 		false,
 		"Turn on/off bidirectional cluster pair creation for all migrations. Default off.")
+	flag.BoolVar(&unidirectionalClusterpair,
+		"unidirectional-cluster-pair",
+		false,
+		"Turn on/off unidirectional cluster pair creation for all migrations. Default off.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)

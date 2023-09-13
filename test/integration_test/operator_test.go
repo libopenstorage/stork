@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 var (
@@ -78,7 +79,7 @@ func validateAndDestroyCrMigration(t *testing.T, appName string, appPath string)
 	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
 	require.NoError(t, err, "Error validating source crds")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret, false)
 	require.NoError(t, err, "Error creating cluster pair")
 
 	logrus.Infof("Migration Started")
