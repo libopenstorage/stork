@@ -47,18 +47,19 @@ const (
 )
 
 type portworx struct {
-	clusterManager         api.ClusterClient
-	backupLocationManager  api.BackupLocationClient
-	cloudCredentialManager api.CloudCredentialClient
-	backupManager          api.BackupClient
-	restoreManager         api.RestoreClient
-	backupScheduleManager  api.BackupScheduleClient
-	schedulePolicyManager  api.SchedulePolicyClient
-	organizationManager    api.OrganizationClient
-	licenseManager         api.LicenseClient
-	healthManager          api.HealthClient
-	ruleManager            api.RulesClient
-	versionManager         api.VersionClient
+	clusterManager          api.ClusterClient
+	backupLocationManager   api.BackupLocationClient
+	cloudCredentialManager  api.CloudCredentialClient
+	backupManager           api.BackupClient
+	restoreManager          api.RestoreClient
+	backupScheduleManager   api.BackupScheduleClient
+	schedulePolicyManager   api.SchedulePolicyClient
+	organizationManager     api.OrganizationClient
+	licenseManager          api.LicenseClient
+	healthManager           api.HealthClient
+	ruleManager             api.RulesClient
+	versionManager          api.VersionClient
+	activityTimeLineManager api.ActivityTimeLineClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -181,6 +182,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.licenseManager = api.NewLicenseClient(conn)
 	p.ruleManager = api.NewRulesClient(conn)
 	p.versionManager = api.NewVersionClient(conn)
+	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -1533,6 +1535,10 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 		}
 	}
 	return nil
+}
+
+func (p *portworx) EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error) {
+	return p.activityTimeLineManager.Enumerate(ctx, req)
 }
 
 func init() {

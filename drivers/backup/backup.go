@@ -73,6 +73,8 @@ type Driver interface {
 	Rule
 	// Version
 	Version
+	//ActivityTimeLine interface
+	ActivityTimeLine
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -381,6 +383,13 @@ type Rule interface {
 
 	// GetRuleUid fetches uid for the given rule
 	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)
+}
+
+// ActivityTimeLine object interface
+type ActivityTimeLine interface {
+
+	// EnumerateActivityTimeLine enumerates ActivityData
+	EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
