@@ -16,17 +16,6 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	storkdriver "github.com/libopenstorage/stork/drivers/volume"
-	_ "github.com/libopenstorage/stork/drivers/volume/aws"
-	_ "github.com/libopenstorage/stork/drivers/volume/azure"
-	_ "github.com/libopenstorage/stork/drivers/volume/csi"
-	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
-	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
-	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/schedule"
-	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -63,37 +52,50 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	storkdriver "github.com/libopenstorage/stork/drivers/volume"
+	_ "github.com/libopenstorage/stork/drivers/volume/aws"
+	_ "github.com/libopenstorage/stork/drivers/volume/azure"
+	_ "github.com/libopenstorage/stork/drivers/volume/csi"
+	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
+	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
+	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/schedule"
+	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/version"
 )
 
 const (
-	nodeDriverName              = "ssh"
-	cmName                      = "stork-version"
-	defaultAdminNamespace       = "kube-system"
-	schedulerDriverName         = "k8s"
-	remotePairName              = "remoteclusterpair"
-	srcConfig                   = "sourceconfigmap"
-	destConfig                  = "destinationconfigmap"
-	specDir                     = "./specs"
-	tempDir                     = "/tmp"
-	defaultClusterPairDir       = "cluster-pair"
-	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
-	pairFileName                = "cluster-pair.yaml"
-	remoteFilePath              = "/tmp/kubeconfig"
-	configMapSyncWaitTime       = 3 * time.Second
-	defaultSchedulerName        = "default-scheduler"
-	bucketPrefix                = "stork-test"
-	adminTokenSecretName        = "px-admin-token"
-	pxStcServiceTypeKey         = "portworx.io/service-type"
-	stcLoadBalancerValue        = "LoadBalancer"
-	pxStcServiceKey             = "service/portworx-service"
-	awsInternalLBKey            = "service.beta.kubernetes.io/aws-load-balancer-internal"
-	awsInternalLBValue          = "true"
-	awsLBTypeKey                = "service.beta.kubernetes.io/aws-load-balancer-type"
-	awsLBTypeVal                = "nlb"
-	awsNLBTargetTypeKey         = "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"
-	awsNLBTargetTypeVal         = "ip"
-	awsLBSubnetKey              = "service.beta.kubernetes.io/aws-load-balancer-subnets"
-	awsLBSubnetVal              = "subnet-0758f16bc3ca384e0"
+	nodeDriverName               = "ssh"
+	cmName                       = "stork-version"
+	defaultAdminNamespace        = "kube-system"
+	schedulerDriverName          = "k8s"
+	remotePairName               = "remoteclusterpair"
+	srcConfig                    = "sourceconfigmap"
+	destConfig                   = "destinationconfigmap"
+	specDir                      = "./specs"
+	tempDir                      = "/tmp"
+	defaultClusterPairDir        = "cluster-pair"
+	bidirectionalClusterPairDir  = "bidirectional-cluster-pair"
+	unidirectionalClusterPairDir = "unidirectionalClusterPairDir"
+	pairFileName                 = "cluster-pair.yaml"
+	remoteFilePath               = "/tmp/kubeconfig"
+	configMapSyncWaitTime        = 3 * time.Second
+	defaultSchedulerName         = "default-scheduler"
+	bucketPrefix                 = "stork-test"
+	adminTokenSecretName         = "px-admin-token"
+	pxStcServiceTypeKey          = "portworx.io/service-type"
+	stcLoadBalancerValue         = "LoadBalancer"
+	pxStcServiceKey              = "service/portworx-service"
+	awsInternalLBKey             = "service.beta.kubernetes.io/aws-load-balancer-internal"
+	awsInternalLBValue           = "true"
+	awsLBTypeKey                 = "service.beta.kubernetes.io/aws-load-balancer-type"
+	awsLBTypeVal                 = "nlb"
+	awsNLBTargetTypeKey          = "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"
+	awsNLBTargetTypeVal          = "ip"
+	awsLBSubnetKey               = "service.beta.kubernetes.io/aws-load-balancer-subnets"
+	awsLBSubnetVal               = "subnet-0758f16bc3ca384e0"
 
 	pxServiceName = "portworx-service"
 
@@ -161,6 +163,7 @@ var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
 var bidirectionalClusterpair bool
+var unidirectionalClusterpair bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -809,6 +812,148 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
 	}
+	return nil
+}
+
+// Create a cluster pair from source to destination using unidirectional flag
+func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, resetConfig bool, reverse bool) error {
+	//var token string
+	// Setting kubeconfig to source because we will create unidirectional cluster pair based on source as reference
+	err := setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	// Create directory to store kubeconfig files
+	err = os.MkdirAll(path.Join(tempDir, unidirectionalClusterPairDir), 0777)
+	if err != nil {
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+unidirectionalClusterPairDir, err)
+		return err
+	}
+	srcKubeconfigPath := path.Join(tempDir, unidirectionalClusterPairDir, "src_kubeconfig")
+	srcKubeConfig, err := os.Create(srcKubeconfigPath)
+	if err != nil {
+		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		return err
+	}
+
+	defer func() {
+		err := srcKubeConfig.Close()
+		if err != nil {
+			logrus.Errorf("Error closing source kubeconfig file: %v", err)
+		}
+	}()
+
+	// Dump source config to the directory created before
+	err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+	}
+
+	destKubeconfigPath := path.Join(tempDir, unidirectionalClusterPairDir, "dest_kubeconfig")
+	destKubeConfig, err := os.Create(destKubeconfigPath)
+	if err != nil {
+		logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+		return err
+	}
+
+	defer func() {
+		err := destKubeConfig.Close()
+		if err != nil {
+			logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+		}
+	}()
+
+	// Dump destination config to the directory created before
+	err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting destination config: %v", err)
+	}
+
+	err = setDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	err = setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		"--src-kube-file", srcKubeconfigPath,
+		"--dest-kube-file", destKubeconfigPath,
+		"--unidirectional",
+	}
+	if reverse {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+			"--src-kube-file", destKubeconfigPath,
+			"--dest-kube-file", srcKubeconfigPath,
+			"--unidirectional",
+		}
+	}
+
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+	if err != nil {
+		return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+	}
+
+	cmdArgs = append(cmdArgs, objectStoreArgs...)
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Following is the unidirectional command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of unidirectional cluster pair using storkctl failed: %v", err)
+	}
+
+	if resetConfig {
+		err = setSourceKubeConfig()
+		if err != nil {
+			logrus.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+			return err
+		}
+	} else {
+		err = setDestinationKubeConfig()
+		if err != nil {
+			logrus.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1503,6 +1648,10 @@ func TestMain(m *testing.M) {
 		"bidirectional-cluster-pair",
 		false,
 		"Turn on/off bidirectional cluster pair creation for all migrations. Default off.")
+	flag.BoolVar(&unidirectionalClusterpair,
+		"unidirectional-cluster-pair",
+		false,
+		"Turn on/off unidirectional cluster pair creation for all migrations. Default off.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)

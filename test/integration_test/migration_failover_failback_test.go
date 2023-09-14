@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
@@ -16,6 +16,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -273,11 +275,26 @@ func testMigrationFailback(
 
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
-	if !bidirectionalClusterpair {
+	if !bidirectionalClusterpair && !unidirectionalClusterpair {
 		// create, apply and validate cluster pair specs
 		err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
-		require.NoError(t, err, "Error scheduling cluster pair")
+	} else if unidirectionalClusterpair {
+		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error setting remote config")
+		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting secret")
+		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting backuplocation")
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "Error setting remote config")
+		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting secret")
+		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting backuplocation")
+		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, false, true)
 	}
+	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
 	err = schedulerDriver.AddTasks(ctxsReverse[0],

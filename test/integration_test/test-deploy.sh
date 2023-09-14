@@ -26,6 +26,7 @@ cloud_deletion_validation=true
 internal_aws_lb=false
 px_namespace="kube-system"
 bidirectional_cluster_pair=false
+unidirectional_cluster_pair=false
 for i in "$@"
 do
 case $i in
@@ -184,7 +185,13 @@ case $i in
         bidirectional_cluster_pair=$2
         shift
         shift
-        ;;		
+        ;;
+    --unidirectional-cluster-pair)
+        echo "Flag to indicate if unidirectional clusterpairing is intended in tests: $2"
+        unidirectional_cluster_pair=$2
+        shift
+        shift
+        ;;	
 esac
 done
 
@@ -370,6 +377,10 @@ fi
 
 if [ "$bidirectional_cluster_pair" = "true" ] ; then
 	sed -i 's/- -bidirectional-cluster-pair=false/- -bidirectional-cluster-pair='"$bidirectional_cluster_pair"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$unidirectional_cluster_pair" = "true" ] ; then
+	sed -i 's/- -unidirectional-cluster-pair=false/- -unidirectional-cluster-pair='"$unidirectional_cluster_pair"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 kubectl delete -f /testspecs/stork-test-pod.yaml
