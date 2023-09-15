@@ -531,9 +531,17 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				credentialData["encryptionKey"] = []byte(encryptionKey)
 				backupLocationName = backupLocation.Name
 
-				printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 				storkops.Instance().SetConfig(sConf)
 				core.Instance().SetConfig(sConf)
+
+				// check for already existing backuplocation
+				_, err = storkops.Instance().GetBackupLocation(backupLocationName, cmdFactory.GetNamespace())
+				if err == nil {
+					util.CheckErr(fmt.Errorf("objectstoreLocation %s already exists in source cluster namespace %s, instead use \"--use-existing-objectstorelocation %s\" to use existing location", backupLocationName, cmdFactory.GetNamespace(), backupLocationName))
+					return
+				}
+
+				printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 				secret := &v1.Secret{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      clusterPairName,
@@ -565,6 +573,13 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 
 				storkops.Instance().SetConfig(dConf)
 				core.Instance().SetConfig(dConf)
+				// check for already existing backuplocation
+				_, err = storkops.Instance().GetBackupLocation(backupLocationName, cmdFactory.GetNamespace())
+				if err == nil {
+					util.CheckErr(fmt.Errorf("objectstoreLocation %s already exists in destination cluster namespace %s, instead use \"--use-existing-objectstorelocation %s\" to use existing location", backupLocationName, cmdFactory.GetNamespace(), backupLocationName))
+					return
+				}
+
 				printMsg(fmt.Sprintf("Creating Secret and ObjectstoreLocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
 				_, err = core.Instance().CreateSecret(secret)
 				if err != nil {
