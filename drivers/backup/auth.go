@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/onsi/ginkgo"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -1010,41 +1011,59 @@ func DeleteGroup(group string) error {
 	return nil
 }
 
-// Deletes Multiple groups
+// DeleteMultipleGroups deletes multiple groups concurrently and returns concatenated errors if any
 func DeleteMultipleGroups(groups []string) error {
-
 	var wg sync.WaitGroup
+	errCh := make(chan string, len(groups))
 	for _, group := range groups {
 		wg.Add(1)
 		go func(group string) {
+			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 			err := DeleteGroup(group)
-			log.FailOnError(err, "Failed to create group - %v", group)
-
+			if err != nil {
+				errCh <- fmt.Sprintf("failed to delete group - %v: %v", group, err)
+			}
+			log.Infof("Deleted Group - %s", group)
 		}(group)
-		log.Infof("Deleted Group - %s", group)
 	}
 	wg.Wait()
-
+	close(errCh)
+	var errSlice []string
+	for err := range errCh {
+		errSlice = append(errSlice, err)
+	}
+	if len(errSlice) > 0 {
+		return fmt.Errorf(strings.Join(errSlice, "; "))
+	}
 	return nil
 }
 
-// Deletes Multiple users
+// DeleteMultipleUsers deletes multiple users concurrently and returns concatenated errors if any
 func DeleteMultipleUsers(users []string) error {
-
 	var wg sync.WaitGroup
+	errCh := make(chan string, len(users))
 	for _, user := range users {
 		wg.Add(1)
 		go func(user string) {
+			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 			err := DeleteUser(user)
-			log.FailOnError(err, "Failed to create group - %v", user)
-
+			if err != nil {
+				errCh <- fmt.Sprintf("failed to delete user - %v: %v", user, err)
+			}
+			log.Infof("Deleted User - %s", user)
 		}(user)
-		log.Infof("Deleted User - %s", user)
 	}
 	wg.Wait()
-
+	close(errCh)
+	var errSlice []string
+	for err := range errCh {
+		errSlice = append(errSlice, err)
+	}
+	if len(errSlice) > 0 {
+		return fmt.Errorf(strings.Join(errSlice, "; "))
+	}
 	return nil
 }
 
