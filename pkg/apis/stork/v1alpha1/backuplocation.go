@@ -110,7 +110,7 @@ type S3Config struct {
 	UseIam bool `json:"useIam"`
 	// SSE (Server Side Encryption) type for the S3 bucket.
 	// supported option: "AES256", "aws:kms"
-	sse string `json:"sse"`
+	SSE string `json:"sse"`
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
