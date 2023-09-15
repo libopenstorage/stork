@@ -1,6 +1,9 @@
 package utils
 
-import "time"
+import (
+	"github.com/portworx/sched-ops/k8s/core"
+	"time"
+)
 
 type HelmPayload struct {
 	Command string `json:"command"`
@@ -13,6 +16,7 @@ const (
 	mongodb                      = "mongodb"
 	pgbench                      = "pgbench"
 	testName                     = "pxone-automation"
+	pxNameSpace                  = "kube-system"
 	defaultWaitRebootRetry       = 10 * time.Second
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
@@ -22,4 +26,5 @@ const (
 var (
 	errors  []error
 	errChan = make(chan error, 100)
+	k8sCore = core.Instance()
 )

@@ -21,5 +21,8 @@ func main() {
 	router.POST("pxone/collectsupport", utils.CollectSupport)
 	router.POST("pxone/scheduleapps/:appName", utils.ScheduleAppsAndValidate)
 	router.POST("pxone/deploypxagent", utils.ExecuteHelmCmd)
+	router.GET("pxone/getclusterid/:namespace", utils.GetNamespaceID)
+	router.GET("pxone/getclusternodestatus", utils.GetNodeStatus)
+	router.POST("pxone/runhelmcmd", utils.ExecuteHelmCmd)
 	log.Fatal(router.Run(":8080"))
 }
