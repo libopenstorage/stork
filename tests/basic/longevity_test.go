@@ -239,7 +239,7 @@ func testTrigger(wg *sync.WaitGroup,
 			   triggerLoc.Lock()
 			} else {
 			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
-			   // and release the lock immidiately so that other non-disruptive triggers can happen.
+			   // and release the lock immediately so that other non-disruptive triggers can happen.
 				triggerLoc.Lock()
 				log.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
 				triggerLoc.Unlock()
