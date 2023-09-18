@@ -1,8 +1,8 @@
-FROM golang:1.16.1
+FROM golang:1.17.0
 
 # Install dependancies
 RUN apt-get update && \ 
-    /usr/local/go/bin/go install gotest.tools/gotestsum@latest
+    /usr/local/go/bin/go install -v  gotest.tools/gotestsum@latest
 
 RUN apt-get update && apt-get install -y python3-pip && apt-get install -y jq
 
@@ -35,4 +35,4 @@ COPY stork.test /
 COPY specs /specs/
 COPY stork-test-pod.yaml test-deploy.sh /testspecs/
 COPY stork-specs /stork-specs/
-
+COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
