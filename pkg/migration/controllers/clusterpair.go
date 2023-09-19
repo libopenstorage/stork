@@ -232,13 +232,11 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 	// Delete the backuplocation and secret associated with clusterpair as part of the delete
 	if backuplocationName, ok := clusterPair.Spec.Options["backuplocation"]; ok {
 		bl, err := storkops.Instance().GetBackupLocation(backuplocationName, clusterPair.Namespace)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				logrus.Errorf("fetching backuplocation %s in ns %s failed: %v", backuplocationName, clusterPair.Namespace, err)
-			}
-			return nil
+		if err != nil && !errors.IsNotFound(err) {
+			logrus.Errorf("fetching backuplocation %s in ns %s failed: %v", backuplocationName, clusterPair.Namespace, err)
+			return err
 		}
-		if bl.Annotations[storkCreatedAnnotation] == "true" {
+		if err == nil && bl.Annotations[storkCreatedAnnotation] == "true" {
 			secret, err := core.Instance().GetSecret(bl.Location.SecretConfig, bl.Namespace)
 			if err != nil && errors.IsNotFound(err) {
 				logrus.Errorf("fetching secret %s in ns %s failed: %v", bl.Location.SecretConfig, bl.Namespace, err)
