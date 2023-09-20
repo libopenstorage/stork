@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -230,6 +231,18 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 		}
 	}
 
+	// Following is a work around to avoid deleting the earliest clusterpair as the later ones depend on it.
+	// The following code block can be removed once each clusterpair has its own corresponding pair info in px.
+	if _, ok := clusterPair.Spec.Options["backuplocation"]; ok && skipDelete {
+		referenced, err := c.isClusterPairReferenced(clusterPair)
+		if err != nil {
+			return fmt.Errorf("failed to get clusterpair reference, error: %v", err)
+		}
+		if referenced {
+			return fmt.Errorf("multiple clusterpairs found for same destination px cluster, the other clusterpairs need to be deleted first")
+		}
+	}
+
 	// Delete the backuplocation and secret associated with clusterpair as part of the delete
 	if backuplocationName, ok := clusterPair.Spec.Options["backuplocation"]; ok {
 		bl, err := storkops.Instance().GetBackupLocation(backuplocationName, clusterPair.Namespace)
@@ -260,6 +273,26 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 	}
 
 	return nil
+}
+
+func (c *ClusterPairController) isClusterPairReferenced(clusterPair *stork_api.ClusterPair) (bool, error) {
+	pairInfo, err := c.volDriver.GetPair(clusterPair.Status.RemoteStorageID)
+	if err != nil {
+		return false, err
+	}
+	if pairInfo == nil {
+		return false, fmt.Errorf("clusterpair info not found")
+	}
+	if credName, ok := pairInfo.Options["CredName"]; ok {
+		if blName, exists := clusterPair.Spec.Options["backuplocation"]; exists {
+			// sample example of credName in px is like "CredName":"k8s/ns/backuplocation"
+			expectedCredName := strings.Join([]string{"k8s", clusterPair.Namespace, blName}, "/")
+			if credName == expectedCredName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (c *ClusterPairController) createCRD() error {

@@ -15,6 +15,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -185,6 +186,8 @@ type ClusterPairPluginInterface interface {
 	CreatePair(*storkapi.ClusterPair) (string, error)
 	// Deletes a paring with a remote cluster
 	DeletePair(*storkapi.ClusterPair) error
+	// Get the pairing info with remote cluster
+	GetPair(string) (*api.ClusterPairInfo, error)
 }
 
 // MigratePluginInterface Interface to migrate data between clusters
@@ -426,6 +429,11 @@ func (c *ClusterPairNotSupported) CreatePair(*storkapi.ClusterPair) (string, err
 // DeletePair Returns ErrNotSupported
 func (c *ClusterPairNotSupported) DeletePair(*storkapi.ClusterPair) error {
 	return &errors.ErrNotSupported{}
+}
+
+// GetPair Returns ErrNotSupported
+func (c *ClusterPairNotSupported) GetPair(string) (*api.ClusterPairInfo, error) {
+	return nil, &errors.ErrNotSupported{}
 }
 
 // MigrationNotSupported to be used by drivers that don't support migration
