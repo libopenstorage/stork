@@ -2224,8 +2224,13 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			if err != nil {
+				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+					err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				}
+			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -6748,31 +6753,32 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
 
 		// Resize the cloud drive added on the Node
-		poolList, err := GetPoolsDetailsOnNode(pickNode)
+		//poolList, err := GetPoolsDetailsOnNode(pickNode)
+		poolList, err := GetAllPoolsOnNode(pickNode.Id)
 		log.FailOnError(err, "failed to get pool details from Node [%v]", pickNode)
 
 		for _, eachPool := range poolList {
-			poolToBeResized, err := GetStoragePoolByUUID(eachPool.Uuid)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", eachPool.Uuid))
+			poolToBeResized, err := GetStoragePoolByUUID(eachPool)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", eachPool))
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
 			// Resize the Pool with either one of the allowed resize type
-			log.InfoD("Current Size of the pool %s is %d", eachPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			log.InfoD("Current Size of the pool %s is %d", eachPool, poolToBeResized.TotalSize/units.GiB)
 			poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
 				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
 				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
 			randomIndex := rand.Intn(len(poolResizeType))
 			pickType := poolResizeType[randomIndex]
-			log.InfoD("Expanding Pool [%v] using resize type [%v]", eachPool.Uuid, pickType)
-			err = Inst().V.ExpandPool(eachPool.Uuid, pickType, expectedSize, false)
+			log.InfoD("Expanding Pool [%v] using resize type [%v]", eachPool, pickType)
+			err = Inst().V.ExpandPool(eachPool, pickType, expectedSize, false)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
-			resizeErr := waitForPoolToBeResized(expectedSize, eachPool.Uuid, isjournal)
+			resizeErr := waitForPoolToBeResized(expectedSize, eachPool, isjournal)
 			dash.VerifyFatal(resizeErr, nil,
-				fmt.Sprintf("Verify pool %s on expansion using auto option", eachPool.Uuid))
+				fmt.Sprintf("Verify pool %s on expansion using auto option", eachPool))
 		}
 	})
 

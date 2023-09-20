@@ -8976,3 +8976,17 @@ func GetPoolAvailableSize(poolUUID string) (float64, error) {
 	}
 	return -1, err
 }
+
+func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		if eachProvision.NodeUUID == nodeUuid {
+			poolDetails = append(poolDetails, eachProvision.PoolUUID)
+		}
+	}
+	return poolDetails, nil
+}
