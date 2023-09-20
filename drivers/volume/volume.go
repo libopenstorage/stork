@@ -478,6 +478,9 @@ type Driver interface {
 	GetJournalDevicePath(n *node.Node) (string, error)
 
 	IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error)
+
+	// IsPxReadyOnNode returns true is Px is ready on the node
+	IsPxReadyOnNode(n node.Node) bool
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

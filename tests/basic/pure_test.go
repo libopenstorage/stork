@@ -170,7 +170,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		/*
 			NOTE : In order to verify https://portworx.atlassian.net/browse/PWX-32190 , please use nginx-fa-davol
 				please use provisioner as portworx.PortworxCsi and storage-device to pure and application as nginx-fa-davol
-			e.x : --app-list nginx-fa-davol --provisioner csi --storage-device pure
+			e.x : --app-list nginx-fa-davol --provisioner csi --storage-driver pure
 		*/
 
 		var wg sync.WaitGroup
@@ -323,6 +323,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 				log.FailOnError(err, "error validating volume status")
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")
+			terminate = true
 		}
 
 		terminate = true

@@ -8853,3 +8853,126 @@ func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	return nil
 }
+
+// IsPXRunningOnNode returns true if px is running on the node
+func IsPxRunningOnNode(pxNode *node.Node) (bool, error) {
+	isPxInstalled, err := Inst().V.IsDriverInstalled(*pxNode)
+	if err != nil {
+		log.Debugf("Could not get PX status on %s", pxNode.Name)
+		return false, err
+	}
+	if !isPxInstalled {
+		return false, nil
+	}
+	status := Inst().V.IsPxReadyOnNode(*pxNode)
+	return status, nil
+}
+
+type ProvisionStatus struct {
+	NodeUUID      string
+	IpAddress     string
+	HostName      string
+	NodeStatus    string
+	PoolID        string
+	PoolUUID      string
+	IoPriority    string
+	TotalSize     float64
+	AvailableSize float64
+	UsedSize      float64
+}
+
+func tibToGib(tib float64) float64 {
+	return tib * 1024
+}
+
+func convertToGiB(size string) float64 {
+	output := strings.Split(size, " ")
+	number, err := strconv.ParseFloat(output[0], 64)
+	if err != nil {
+		return -1
+	}
+	if strings.Contains(size, "GiB") {
+		return number
+	} else if strings.Contains(size, "TiB") {
+		return tibToGib(number)
+	}
+	return -1
+}
+
+func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
+	clusterProvision := []ProvisionStatus{}
+	pattern := `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	cmd := "pxctl cluster provision-status list"
+
+	// Using Node which is up and running
+	var selectedNode []node.Node
+	for _, eachNode := range node.GetNodes() {
+		status, err := IsPxRunningOnNode(&eachNode)
+		if err != nil {
+			return nil, err
+		}
+		if status {
+			selectedNode = append(selectedNode, eachNode)
+			break
+		}
+	}
+	if len(selectedNode) == 0 {
+		return nil, fmt.Errorf("No Valid node exists")
+	}
+	output, err := runCmdGetOutput(cmd, selectedNode[0])
+	if err != nil {
+		return nil, err
+	}
+	// Compile the regex pattern
+	r := regexp.MustCompile(pattern)
+
+	lines := strings.Split(output, "\n")
+	for _, eachLine := range lines {
+		var provisionStatus ProvisionStatus
+		if !strings.Contains(eachLine, "NODE ID") {
+			matches := r.FindStringSubmatch(eachLine)
+			if len(matches) > 0 {
+				provisionStatus.NodeUUID = matches[1]
+				provisionStatus.IpAddress = matches[2]
+				provisionStatus.HostName = matches[3]
+				provisionStatus.NodeStatus = matches[4]
+				provisionStatus.PoolID = matches[5]
+				provisionStatus.PoolUUID = matches[6]
+				provisionStatus.IoPriority = matches[7]
+				provisionStatus.TotalSize = convertToGiB(matches[8])
+				provisionStatus.AvailableSize = convertToGiB(matches[9])
+				provisionStatus.UsedSize = convertToGiB(matches[10])
+				clusterProvision = append(clusterProvision, provisionStatus)
+			}
+		}
+	}
+	return clusterProvision, nil
+}
+
+// GetPoolTotalSize Return total Pool size
+func GetPoolTotalSize(poolUUID string) (float64, error) {
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return -1, err
+	}
+	for _, eachProvision := range provision {
+		if eachProvision.PoolUUID == poolUUID {
+			return eachProvision.TotalSize, nil
+		}
+	}
+	return -1, err
+}
+
+// GetPoolAvailableSize Returns available pool Size
+func GetPoolAvailableSize(poolUUID string) (float64, error) {
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return -1, err
+	}
+	for _, eachProvision := range provision {
+		if eachProvision.PoolUUID == poolUUID {
+			return eachProvision.AvailableSize, nil
+		}
+	}
+	return -1, err
+}

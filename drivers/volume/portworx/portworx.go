@@ -5676,3 +5676,7 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 
 	return alertsResp, nil
 }
+
+func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
+	return d.schedOps.IsPXReadyOnNode(n)
+}
