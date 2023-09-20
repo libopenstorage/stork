@@ -488,6 +488,7 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 	stage storkapi.ApplicationRestoreStageType,
 	reason string,
 	volumeInfos []*storkapi.ApplicationRestoreVolumeInfo,
+	namespacemapping map[string]string,
 ) (*storkapi.ApplicationRestore, error) {
 	restore := &storkapi.ApplicationRestore{}
 	var err error
@@ -508,6 +509,9 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 			return restore, nil
 		}
 		logrus.Infof("Updating restore  %s/%s in stage/stagus: %s/%s to volume stage", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status)
+		if namespacemapping != nil {
+			restore.Spec.NamespaceMapping = namespacemapping
+		}
 		restore.Status.Status = status
 		restore.Status.Stage = stage
 		restore.Status.Reason = reason
@@ -547,6 +551,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		storkapi.ApplicationRestoreStageVolumes,
 		"Volume or Resource restores are in progress",
 		nil,
+		restore.Spec.NamespaceMapping,
 	)
 	if err != nil {
 		return err
@@ -715,6 +720,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					storkapi.ApplicationRestoreStageVolumes,
 					"Volume restores are in progress",
 					existingRestoreVolInfos,
+					nil,
 				)
 				if err != nil {
 					return err
@@ -770,6 +776,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 								storkapi.ApplicationRestoreStageVolumes,
 								msg,
 								restoreVolumeInfos,
+								nil,
 							)
 							if updateErr != nil {
 								logrus.Warnf("failed to update restore status: %v", updateErr)
@@ -780,7 +787,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 							v1.EventTypeWarning,
 							string(storkapi.ApplicationRestoreStatusFailed),
 							message)
-						_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
+						_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil, nil)
 						return err
 					}
 					time.Sleep(volumeBatchSleepInterval)
@@ -790,6 +797,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						storkapi.ApplicationRestoreStageVolumes,
 						"Volume restores are in progress",
 						restoreVolumeInfos,
+						nil,
 					)
 					if err != nil {
 						return err
@@ -906,6 +914,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			storkapi.ApplicationRestoreStageVolumes,
 			"Volume restores are in progress",
 			restoreCompleteList,
+			nil,
 		)
 		if err != nil {
 			return err
