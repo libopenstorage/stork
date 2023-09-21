@@ -373,7 +373,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	//validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, preMigrationCtx, true, true, true, true, false)
 
 	destroyAndWait(t, []*scheduler.Context{postMigrationCtx})
-	validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, instanceID, appKey, preMigrationCtx, false, false, false, true, true, true)
+	validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, instanceID, appKey, preMigrationCtx, false, false, false, true, false, true)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
