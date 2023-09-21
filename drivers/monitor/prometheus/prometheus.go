@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/portworx/torpedo/drivers/monitor"
-	prometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -14,7 +14,7 @@ type Prom struct {
 	jobName        string
 	jobType        string
 	vCenterName    string
-	vCenerCluster  string
+	vCenterCluster string
 	vCenterNetwork string
 }
 
@@ -22,46 +22,43 @@ const (
 	// DriverName is the name of the Prometheus monitor driver implementation
 	DriverName = "prometheus"
 
-	// DefaultMetricsPort is port used for exposing metrics
-	DefaultMetricsPort = ":8181"
+	// DefaultMetricsPort is the default port for exposing metrics
+	DefaultMetricsPort = "8181"
 )
 
 var (
-	//metricsLabel
+	// metricsLabel consists of predefined labels that are common across multiple metrics
 	metricsLabel = []string{
 		// Test Name
 		"test_name",
-
 		// Torpedo Job Name
 		"job_name",
-
 		// Torpedo Job Type
 		"job_type",
 	}
 )
 
-// Define Torpedo metrics
+// Torpedo metrics
 var (
-	// torpedoAlertTestFailed will be set when test failed
-	TorpedoAlertTestFailed = AddGaugeMetric("torpedo_alert_test_failed", "Alert for torpedo test failed", "error_string")
+	// TorpedoAlertTestFailed is a gauge metric that is set when a test fails
+	TorpedoAlertTestFailed = AddGaugeMetric("torpedo_alert_test_failed", "Torpedo test failed alert", "error_string")
 
-	// torpedoTestRunning tells about test execution state
-	TorpedoTestRunning = AddGaugeMetric("torpedo_test_running", "Torpedo test executing state ")
+	// TorpedoTestRunning is a gauge metric that indicates the running state of a test
+	TorpedoTestRunning = AddGaugeMetric("torpedo_test_running", "Torpedo test running state")
 
-	// torpedoTestTriggerCount counter tells number of time test triggered
+	// TorpedoTestTotalTriggerCount is a counter metric for the total number of test triggers
 	TorpedoTestTotalTriggerCount = AddCounterMetric("torpedo_test_total_trigger_count", "Torpedo test total trigger count")
 
-	// torpedoTestPassCount counter counts number of time test passed
+	// TorpedoTestPassCount is a counter metric for the total number of passed tests
 	TorpedoTestPassCount = AddCounterMetric("torpedo_test_pass_count", "Torpedo test pass count")
 
-	// torpedoTestFailCount counter counts number of time test fail
+	// TorpedoTestFailCount is a counter metric for the total number of failed tests
 	TorpedoTestFailCount = AddCounterMetric("torpedo_test_fail_count", "Torpedo test fail count")
 )
 
-// AddGaugeMetrics adds GaugeVec metrics
+// AddGaugeMetric adds GaugeVec metrics
 func AddGaugeMetric(name string, helpMessage string, additionalLabels ...string) *prometheus.GaugeVec {
 	additionalLabels = append(metricsLabel, additionalLabels...)
-
 	gauageMetrics := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: name,
@@ -76,7 +73,6 @@ func AddGaugeMetric(name string, helpMessage string, additionalLabels ...string)
 // AddCounterMetric adds CounterVec metrics
 func AddCounterMetric(name string, helpMessage string, additionalLabels ...string) *prometheus.CounterVec {
 	additionalLabels = append(metricsLabel, additionalLabels...)
-
 	counterMetrics := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: name,
@@ -87,57 +83,63 @@ func AddCounterMetric(name string, helpMessage string, additionalLabels ...strin
 	return counterMetrics
 }
 
-// IncrementGaugeMetric increment Gauage Metrics
+// IncrementGaugeMetric increments gauge metrics
 func (p *Prom) IncrementGaugeMetric(metric *prometheus.GaugeVec, testName string) {
 	metric.WithLabelValues(testName, p.jobName, p.jobType).Inc()
 }
 
-// IncrementGaugeMetricsUsingAdditionalLabel increment Gauage Metrics
+// IncrementGaugeMetricsUsingAdditionalLabel increments gauge metrics using additional labels
 func (p *Prom) IncrementGaugeMetricsUsingAdditionalLabel(metric *prometheus.GaugeVec, testName string, additionalLabels ...string) {
 	lvs := []string{testName, p.jobName, p.jobType}
 	lvs = append(lvs, additionalLabels...)
 	metric.WithLabelValues(lvs...).Inc()
 }
 
-// DecrementGaugeMetric decrement Gauage Metrics
+// DecrementGaugeMetric decrements gauge metrics
 func (p *Prom) DecrementGaugeMetric(metric *prometheus.GaugeVec, testName string) {
 	metric.WithLabelValues(testName, p.jobName, p.jobType).Dec()
 }
 
-// IncrementCounterMetric increment Gauage Metrics
+// IncrementCounterMetric increments counter metrics
 func (p *Prom) IncrementCounterMetric(metric *prometheus.CounterVec, testName string) {
 	metric.WithLabelValues(testName, p.jobName, p.jobType).Inc()
 }
 
-// SetGaugeMetric set GaugeMetricVec value to given value
+// SetGaugeMetric sets gauge metrics to the value provided
 func (p *Prom) SetGaugeMetric(metric *prometheus.GaugeVec, value float64, testName string) {
 	metric.WithLabelValues(testName, p.jobName, p.jobType).Set(value)
 }
 
-// SetGaugeMetric set GaugeMetricVec value to given value
+// SetGaugeMetricWithNonDefaultLabels sets gauge metrics with non default labels to the value provided
 func (p *Prom) SetGaugeMetricWithNonDefaultLabels(metric *prometheus.GaugeVec, value float64, testName string, additionalLabels ...string) {
 	lvs := []string{testName, p.jobName, p.jobType}
 	lvs = append(lvs, additionalLabels...)
 	metric.WithLabelValues(lvs...).Set(value)
 }
 
-// String returns the string name of this driver.
+// String returns the name of the Prometheus monitor driver implementation
 func (p *Prom) String() string {
 	return DriverName
 }
 
-// Init method init Prom object and start metrics handler
+// Init initializes Prom object and starts metrics handler
 func (p *Prom) Init(jobName string, jobType string) error {
-	p.port = DefaultMetricsPort
+	if p.port == "" {
+		p.port = DefaultMetricsPort
+	}
 	p.jobName = jobName
 	p.jobType = jobType
 	http.Handle("/metrics", promhttp.Handler())
-	log.Infof("Starting http service on port: %s", p.port)
-	go http.ListenAndServe(p.port, nil)
+	log.Infof("Starting http service for %s on port %s", DriverName, p.port)
+	go func() {
+		if err := http.ListenAndServe(":"+p.port, nil); err != nil {
+			log.Errorf("Failed to start http service for %s on port %s due to %v", DriverName, p.port, err)
+		}
+	}()
 	return nil
 }
 
 func init() {
 	p := &Prom{}
-	monitor.Register(DriverName, p)
+	_ = monitor.Register(DriverName, p)
 }

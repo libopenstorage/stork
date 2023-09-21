@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	prometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Driver interface {
@@ -15,22 +15,22 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
-	// IncrementGaugeMetrics increment Gauge metrics
+	// IncrementGaugeMetric increments gauge metrics
 	IncrementGaugeMetric(metric *prometheus.GaugeVec, testName string)
 
-	// DecrementGaugeMetrics decrement Gauge metrics
+	// DecrementGaugeMetric decrements gauge metrics
 	DecrementGaugeMetric(metric *prometheus.GaugeVec, testName string)
 
-	// IncrementCounterMetrics increment counter metrics
+	// IncrementCounterMetric increments counter metrics
 	IncrementCounterMetric(metric *prometheus.CounterVec, testName string)
 
-	// IncrementGaugeMetricsUsingAdditionalLabel increment gauage metrics with additional labels
+	// IncrementGaugeMetricsUsingAdditionalLabel increments gauge metrics using additional labels
 	IncrementGaugeMetricsUsingAdditionalLabel(metric *prometheus.GaugeVec, testName string, additionalLabels ...string)
 
-	// SetGaugeMetrics set with value provided
+	// SetGaugeMetric sets gauge metrics to the value provided
 	SetGaugeMetric(metric *prometheus.GaugeVec, value float64, testName string)
 
-	// SetGaugeMetricWithNonDefaultLabels set value for guage metric
+	// SetGaugeMetricWithNonDefaultLabels sets gauge metrics with non default labels to the value provided
 	SetGaugeMetricWithNonDefaultLabels(metric *prometheus.GaugeVec, value float64, testName string, additionalLabels ...string)
 }
 
