@@ -184,7 +184,7 @@ type GroupSnapshotPluginInterface interface {
 type ClusterPairPluginInterface interface {
 	// Create a pair with a remote cluster
 	CreatePair(*storkapi.ClusterPair) (string, error)
-	// Deletes a paring with a remote cluster
+	// Deletes a pairing with a remote cluster
 	DeletePair(*storkapi.ClusterPair) error
 	// Get the pairing info with remote cluster
 	GetPair(string) (*api.ClusterPairInfo, error)

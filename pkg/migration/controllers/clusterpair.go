@@ -214,6 +214,7 @@ func getClusterPairSchedulerStatus(clusterPairName string, namespace string) (st
 
 func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) error {
 	skipDelete := false
+	dependentClusterPairs := make([]string, 0)
 	if clusterPair.Status.RemoteStorageID != "" {
 		// verify if any other cluster pair using the same RemoteStorageID
 		cpList, err := storkops.Instance().ListClusterPairs("")
@@ -226,7 +227,7 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 			if cp.Status.RemoteStorageID == clusterPair.Status.RemoteStorageID &&
 				cp.DeletionTimestamp == nil {
 				skipDelete = true
-				break
+				dependentClusterPairs = append(dependentClusterPairs, fmt.Sprintf("%s/%s", cp.Namespace, cp.Name))
 			}
 		}
 	}
@@ -239,7 +240,7 @@ func (c *ClusterPairController) cleanup(clusterPair *stork_api.ClusterPair) erro
 			return fmt.Errorf("failed to get clusterpair reference, error: %v", err)
 		}
 		if referenced {
-			return fmt.Errorf("multiple clusterpairs found for same destination px cluster, the other clusterpairs need to be deleted first")
+			return fmt.Errorf("other clusterpairs %v are dependent on this cluster pair and the objectstore location objects created by it", dependentClusterPairs)
 		}
 	}
 

@@ -2495,7 +2495,7 @@ func (p *portworx) GetPair(remoteStorageID string) (*api.ClusterPairInfo, error)
 
 	pair, err := clusterManager.GetPair(remoteStorageID)
 	if err != nil {
-		if !strings.Contains(err.Error(), "not found") {
+		if strings.Contains(err.Error(), "not found") {
 			// for not found errors return nil with no error
 			// for everything else return the error back to the caller
 			return nil, nil
