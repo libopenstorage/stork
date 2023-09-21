@@ -249,6 +249,9 @@ func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
 		if val, ok := secretConfig.Data["storageClass"]; ok && val != nil {
 			bl.Location.S3Config.StorageClass = strings.TrimSuffix(string(val), "\n")
 		}
+		if val, ok := secretConfig.Data["sse"]; ok && val != nil {
+			bl.Location.S3Config.SSE = strings.TrimSuffix(string(val), "\n")
+		}
 	}
 	return nil
 }
