@@ -359,8 +359,8 @@ var (
 
 var (
 	errPureFileSnapshotNotSupported    = errors.New("snapshot feature is not supported for pure_file volumes")
-	errPureCloudsnapNotSupported       = errors.New("cloudsnap feature is not supported for pure volumes")
-	errPureGroupsnapNotSupported       = errors.New("groupsnap feature is not supported for pure volumes")
+	errPureCloudsnapNotSupported       = errors.New("not supported")
+	errPureGroupsnapNotSupported       = errors.New("not supported")
 	errUnexpectedSizeChangeAfterPureIO = errors.New("the size change in bytes is not expected after write to Pure volume")
 )
 
