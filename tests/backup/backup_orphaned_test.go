@@ -1216,6 +1216,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 							}
 							wg.Add(1)
 							go func(backup *api.BackupObject, ctx context.Context) {
+								defer GinkgoRecover()
 								defer wg.Done()
 								_, err := DeleteBackup(backup.GetName(), backup.GetUid(), orgID, ctx)
 								if err != nil {
@@ -1428,6 +1429,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 							}
 							wg.Add(1)
 							go func(restore *api.RestoreObject, ctx context.Context) {
+								defer GinkgoRecover()
 								defer wg.Done()
 								err := DeleteRestoreWithUID(restore.GetName(), restore.GetUid(), orgID, ctx)
 								if err != nil {

@@ -3142,6 +3142,7 @@ func TaskHandler(taskInputs interface{}, task interface{}, executionMode Executi
 		for i := 0; i < length; i++ {
 			wg.Add(1)
 			go func(i int) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				if isMap {
 					callTask(keys[i], v.MapIndex(keys[i]))
