@@ -762,7 +762,7 @@ func GetPxCentralAdminToken() (string, error) {
 	return token, nil
 }
 
-// GetCtxWithToken getx ctx with passed token
+// GetCtxWithToken gets ctx with passed token
 func GetCtxWithToken(token string) context.Context {
 	ctx := context.Background()
 	md := metadata.New(map[string]string{
@@ -1178,7 +1178,7 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to fetch user name/email: [%v]", err)
+		return "", "", fmt.Errorf("failed to fetch user name/email with user id [%v]: [%v]", userID, err)
 	}
 
 	return userName, email, nil

@@ -284,6 +284,7 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
+	clusterDeleteTimeout              = 10 * time.Minute
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -2743,6 +2744,18 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error
 	return err
 }
 
+// DeleteCloudCredentialWithContext deletes the cloud credential with the given context
+func DeleteCloudCredentialWithContext(cloudCredName string, orgID string, cloudCredUID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	credDeleteRequest := &api.CloudCredentialDeleteRequest{
+		Name:  cloudCredName,
+		OrgId: orgID,
+		Uid:   cloudCredUID,
+	}
+	_, err := backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+	return err
+}
+
 // ValidateVolumeParametersGetErr validates volume parameters using volume driver and returns err instead of failing
 func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error {
 	var err error
@@ -3468,7 +3481,7 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 	return nil
 }
 
-// DeleteRestore creates restore
+// DeleteRestore deletes restore
 func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	dash.VerifyFatal(backupDriver != nil, true, "Getting the backup driver")
@@ -3481,7 +3494,18 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	// TODO: validate createClusterResponse also
 }
 
-// DeleteBackup deletes backup
+// DeleteRestoreWithUID deletes restore with the given restore name and uid
+func DeleteRestoreWithUID(restoreName string, restoreUID string, orgID string, ctx context1.Context) error {
+	deleteRestoreReq := &api.RestoreDeleteRequest{
+		Name:  restoreName,
+		Uid:   restoreUID,
+		OrgId: orgID,
+	}
+	_, err := Inst().Backup.DeleteRestore(ctx, deleteRestoreReq)
+	return err
+}
+
+// DeleteBackup deletes a backup with the given backup reference without checking the cluster reference, suitable for normal backup deletion where the cluster reference is not needed.
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
 	var backupObj *api.BackupObject
@@ -3501,15 +3525,35 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 			break
 		}
 	}
+	if backupObj == nil {
+		return nil, fmt.Errorf("unable to find backup [%s] with uid [%s]", backupName, backupUID)
+	}
 
 	bkpDeleteRequest := &api.BackupDeleteRequest{
-		Name:    backupName,
-		OrgId:   orgID,
-		Uid:     backupUID,
-		Cluster: backupObj.Cluster,
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
+}
+
+// DeleteBackupWithClusterUID deletes a backup using the specified cluster name and UID, ensuring the cluster reference is checked before deletion, suitable for cases where the cluster reference is necessary (e.g., for same-name or deleted clusters).
+func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
+	backupDeleteRequest := &api.BackupDeleteRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+	}
+	backupDeleteResponse, err := Inst().Backup.DeleteBackup(ctx, backupDeleteRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupDeleteResponse, nil
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
@@ -3524,6 +3568,27 @@ func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBacku
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
+}
+
+// DeleteClusterWithUID deletes cluster with the given cluster name and uid
+func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
+	backupDriver := Inst().Backup
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId:          orgID,
+		Name:           name,
+		Uid:            uid,
+		DeleteBackups:  cleanupBackupsRestores,
+		DeleteRestores: cleanupBackupsRestores,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	if err != nil {
+		return err
+	}
+	err = backupDriver.WaitForClusterDeletion(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteBackupLocation deletes backup location
@@ -3547,6 +3612,22 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 	// TODO: validate createBackupLocationResponse also
 	return nil
 
+}
+
+// DeleteBackupLocationWithContext deletes backup location with the given context
+func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+		Name:          name,
+		Uid:           backupLocationUID,
+		OrgId:         orgID,
+		DeleteBackups: DeleteExistingBackups,
+	}
+	_, err := backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteSchedule deletes backup schedule
@@ -3585,6 +3666,59 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 		clusterObj,
 		backupLocationDeleteTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteScheduleWithUID deletes backup schedule with the given backup schedule name and uid
+func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteScheduleWithUIDAndWait deletes backup schedule with the given backup schedule name and uid and waits for its deletion
+func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid string, clusterName string, clusterUid string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	clusterReq := &api.ClusterInspectRequest{
+		OrgId:          orgID,
+		Name:           clusterName,
+		Uid:            clusterUid,
+		IncludeSecrets: true,
+	}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(
+		ctx, backupScheduleName, namespace, orgID, clusterObj,
+		backupLocationDeleteTimeoutMin*time.Minute,
+		RetrySeconds*time.Second,
+	)
 	if err != nil {
 		return err
 	}
@@ -4017,7 +4151,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
-		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider", credName, orgID, provider)
+		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
 	return nil

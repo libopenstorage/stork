@@ -190,6 +190,17 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.owners",
+            "description": "Filter to use owner uids on objects. Any object that contains the\nfilter will be returned.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
           }
         ],
         "tags": [
@@ -278,6 +289,18 @@
           },
           {
             "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "cluster_ref.name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "cluster_ref.uid",
             "in": "query",
             "required": false,
             "type": "string"
@@ -687,6 +710,74 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.max_objects",
+            "description": "max objects to fetch.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "enumerate_options.time_range.start_time",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "enumerate_options.time_range.end_time",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "enumerate_options.name_filter",
+            "description": "Filter to use for name of objects. Any object that contains the filter\nwill be returned.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "enumerate_options.cluster_name_filter",
+            "description": "Filter to use for cluster name of objects. Any object that contains the\nfilter will be returned.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "enumerate_options.object_index",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "enumerate_options.include_detailed_resources",
+            "description": "Ths option will be set to true by the caller, when they want to have\ncomplete backup object. That means the backupObject's\nresource list will be set to complete list of resources.\nIf this option is set to false, resource list will be\nset to nil and rest of the backupObject details will be returned in the\nresponse.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "enumerate_options.cluster_uid_filter",
+            "description": "Filter to use with cluster uid on objects. Any object that contains the\nfilter will be returned\nCurrently backup enumerate request should pass this along with cluster\nname.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "enumerate_options.owners",
+            "description": "Filter to use owner uids on objects. Any object that contains the\nfilter will be returned.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
           }
         ],
         "tags": [
@@ -1170,47 +1261,6 @@
       }
     },
     "/v1/cluster/{org_id}/{name}": {
-      "get": {
-        "summary": "Inspect returns detail information about a specified cluster",
-        "operationId": "Cluster_Inspect",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/ClusterInspectResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/runtimeError"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "org_id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "include_secrets",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          }
-        ],
-        "tags": [
-          "Cluster"
-        ]
-      },
       "delete": {
         "summary": "Delete removes a cluster",
         "operationId": "Cluster_Delete",
@@ -1251,6 +1301,62 @@
           {
             "name": "delete_restores",
             "description": "delete_restores indicates whether the restore related to cluster  need to\nbe deleted or retained.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "uid",
+            "description": "indicate the uid of the particular object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Cluster"
+        ]
+      }
+    },
+    "/v1/cluster/{org_id}/{name}/{uid}": {
+      "get": {
+        "summary": "Inspect returns detail information about a specified cluster",
+        "operationId": "Cluster_Inspect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ClusterInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "include_secrets",
             "in": "query",
             "required": false,
             "type": "boolean"
@@ -1489,6 +1595,13 @@
             "default": "Invalid"
           },
           {
+            "name": "uid",
+            "description": "indicate the uid of the particular object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
             "name": "aws_config.region",
             "description": "Region for scanning clusters.",
             "in": "query",
@@ -1648,6 +1761,35 @@
         "tags": [
           "Organization"
         ]
+      },
+      "delete": {
+        "operationId": "Organization_Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/OrganizationDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "description": "Name of the org to be deleted",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Organization"
+        ]
       }
     },
     "/v1/restore": {
@@ -1796,6 +1938,17 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.owners",
+            "description": "Filter to use owner uids on objects. Any object that contains the\nfilter will be returned.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
           }
         ],
         "tags": [
@@ -1866,6 +2019,18 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "cluster_ref.name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "cluster_ref.uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -1903,6 +2068,13 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "uid",
+            "description": "indicate the uid of the particular object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -1937,6 +2109,13 @@
             "name": "name",
             "in": "path",
             "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "description": "indicate the uid of the particular object.",
+            "in": "query",
+            "required": false,
             "type": "string"
           }
         ],
@@ -2119,6 +2298,17 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.owners",
+            "description": "Filter to use owner uids on objects. Any object that contains the\nfilter will be returned.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
           }
         ],
         "tags": [
@@ -2991,6 +3181,14 @@
             "type": "string"
           },
           "title": "Name of rancher projects associated with resources"
+        },
+        "target_namespace": {
+          "type": "string",
+          "title": "Target namespace of CR"
+        },
+        "large_resource_enabled": {
+          "type": "boolean",
+          "title": "this flag signifies if the backup involves large number of resources or not"
         }
       }
     },
@@ -3189,14 +3387,14 @@
         "cloud_credential_ref": {
           "$ref": "#/definitions/ObjectRef"
         },
+        "object_lock_enabled": {
+          "type": "boolean"
+        },
         "s3_config": {
           "$ref": "#/definitions/S3Config"
         },
         "nfs_config": {
           "$ref": "#/definitions/NFSConfig"
-        },
-        "object_lock_enabled": {
-          "type": "boolean"
         }
       }
     },
@@ -3402,6 +3600,9 @@
         },
         "ns_label_selectors": {
           "type": "string"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
@@ -3431,6 +3632,10 @@
           "items": {
             "$ref": "#/definitions/BackupScheduleObject"
           }
+        },
+        "total_count": {
+          "type": "string",
+          "format": "uint64"
         }
       },
       "title": "Define BackupScheduleEnumerateResponse struct"
@@ -3529,6 +3734,13 @@
         "ns_label_selectors": {
           "type": "string",
           "title": "Label selectors to choose namespaces"
+        },
+        "target_namespace": {
+          "type": "string",
+          "title": "Target namespace of CR"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       }
     },
@@ -3969,9 +4181,38 @@
         },
         "platform_credential_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "teleport_cluster_id": {
+          "type": "string",
+          "title": "Teleport cluster ID"
+        },
+        "tenant_id": {
+          "type": "string",
+          "title": "Tenant ID of the user account (aka PDS account)"
+        },
+        "service_token": {
+          "type": "string",
+          "title": "PDS account service token to fetch rest.Config for\nteleport based cluster"
+        },
+        "provider": {
+          "$ref": "#/definitions/ClusterCreateRequestProvider",
+          "title": "This is optional field and used by BaaS only"
         }
       },
       "title": "Define ClusterCreateRequest struct"
+    },
+    "ClusterCreateRequestProvider": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AWS",
+        "Azure",
+        "Google",
+        "IBM",
+        "Rancher"
+      ],
+      "default": "Invalid",
+      "title": "Cloud provider type"
     },
     "ClusterCreateResponse": {
       "type": "object",
@@ -4040,6 +4281,20 @@
         },
         "platform_credential_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "teleport_cluster_id": {
+          "type": "string",
+          "title": "Teleport cluster ID"
+        },
+        "tenant_id": {
+          "type": "string",
+          "title": "Tenant ID"
+        },
+        "service_token": {
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/definitions/ClusterInfoProvider"
         }
       }
     },
@@ -4066,6 +4321,19 @@
       ],
       "default": "Invalid",
       "description": " - InProgress: InProgress if backupshare is going on for backups belonging to\nthe cluster\n - Failed: Failed if backupshare fails for some backups belonging to the\ncluster\n - Success: Success if backupshare is successful for all current backups\nbelonging to the cluster\n - PartialSuccess: Parital Success if backupshare is successful for only few\nbackups."
+    },
+    "ClusterInfoProvider": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AWS",
+        "Azure",
+        "Google",
+        "IBM",
+        "Rancher"
+      ],
+      "default": "Invalid",
+      "title": "Cloud provider type"
     },
     "ClusterInfoStatusInfo": {
       "type": "object",
@@ -4212,6 +4480,13 @@
         "cluster_uid_filter": {
           "type": "string",
           "description": "Filter to use with cluster uid on objects. Any object that contains the\nfilter will be returned\nCurrently backup enumerate request should pass this along with cluster\nname."
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Filter to use owner uids on objects. Any object that contains the\nfilter will be returned"
         }
       }
     },
@@ -4694,6 +4969,9 @@
         "num_schedules": {
           "type": "string",
           "format": "uint64"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       }
     },
@@ -4734,6 +5012,10 @@
     "OrganizationCreateResponse": {
       "type": "object",
       "title": "Define OrganizationCreateResponse struct"
+    },
+    "OrganizationDeleteResponse": {
+      "type": "object",
+      "title": "Define OrganizationDeleteResponse struct"
     },
     "OrganizationEnumerateResponse": {
       "type": "object",
@@ -4944,6 +5226,9 @@
             "type": "string"
           },
           "title": "mapping of source rancher project display names to target rancher project display names"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       },
       "title": "Define RestoreCreateRequest struct"
@@ -5073,9 +5358,33 @@
             "type": "string"
           },
           "title": "mapping of source rancher project display names to target rancher project display names"
+        },
+        "large_resource_enabled": {
+          "type": "boolean",
+          "title": "flag signifies if the restored backup involves large number of resources or not"
+        },
+        "restored_resource_count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "counter to show number of already restored resources"
+        },
+        "restore_status": {
+          "$ref": "#/definitions/RestoreInfoRestoreResourceState",
+          "title": "current activity while doing resource restore"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
         }
       },
       "title": "Message for restore info"
+    },
+    "RestoreInfoRestoreResourceState": {
+      "type": "object",
+      "properties": {
+        "restore_status": {
+          "$ref": "#/definitions/RestoreResourceStateResourceStatus"
+        }
+      }
     },
     "RestoreInfoRestoredResource": {
       "type": "object",
@@ -5186,6 +5495,16 @@
         }
       },
       "description": "Message for Restore object which will be stored in Datastore."
+    },
+    "RestoreResourceStateResourceStatus": {
+      "type": "string",
+      "enum": [
+        "Preparing",
+        "Deleting",
+        "Verifying",
+        "Applying"
+      ],
+      "default": "Preparing"
     },
     "RestoreUpdateRequest": {
       "type": "object",
@@ -5507,8 +5826,7 @@
             "$ref": "#/definitions/SchedulePolicyObject"
           }
         }
-      },
-      "title": "Define SchedulePolicyEnumerateResponse struct"
+      }
     },
     "SchedulePolicyInfo": {
       "type": "object",
