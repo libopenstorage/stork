@@ -2459,6 +2459,30 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 	return nil
 }
 
+func (p *portworx) GetPair(remoteStorageID string) (*api.ClusterPairInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	pair, err := clusterManager.GetPair(remoteStorageID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			// for not found errors return nil with no error
+			// for everything else return the error back to the caller
+			return nil, nil
+		}
+		return nil, err
+	}
+	return pair.PairInfo, nil
+}
+
 func (p *portworx) Failover(action *storkapi.Action) error {
 	namespace := action.Namespace
 	logrus.Infof("volumeDriver failover for namespace %s", namespace)
