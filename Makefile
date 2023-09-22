@@ -1,7 +1,7 @@
 DOCKER_HUB_REPO ?= openstorage
 
 DOCKER_HUB_STORK_IMAGE ?= stork
-DOCKER_HUB_STORK_TAG ?= dev
+DOCKER_HUB_STORK_TAG ?= ppc
 
 DOCKER_HUB_CMD_EXECUTOR_IMAGE ?= cmdexecutor
 DOCKER_HUB_CMD_EXECUTOR_TAG ?= dev
@@ -136,7 +136,7 @@ stork:
 	@echo "Building the stork binary"
 	docker run --rm $(SECCOMP_OPTIONS)  -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
            /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/stork && \
-		   CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/stork;'
+		   CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/stork;'
 
 cmdexecutor:
 	@echo "Building command executor binary"
@@ -148,7 +148,7 @@ storkctl:
 	@echo "Building storkctl"
 	docker run --rm $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		/bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/storkctl; \
-		CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/linux/storkctl; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/linux/storkctl; \
 		CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/darwin/storkctl; \
 		CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o /go/src/github.com/libopenstorage/stork/bin/windows/storkctl.exe;'
 
