@@ -381,7 +381,27 @@ if [ -n "${K8S_VENDOR}" ]; then
     esac
 fi
 
-cat > torpedo.yaml <<EOF
+echo '' > torpedo.yaml
+
+if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
+  echo "Adding Docker registry secret ..."
+  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
+  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
+  cat >> torpedo.yaml <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: torpedo
+type: docker-registry
+data:
+  .dockerconfigjson: $secret
+
+EOF
+  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
+fi
+
+cat >> torpedo.yaml <<EOF
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -701,24 +721,6 @@ spec:
 
 
 EOF
-
-if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
-  echo "Adding Docker registry secret ..."
-  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
-  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
-  cat >> torpedo.yaml <<EOF
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: torpedo
-type: docker-registry
-data:
-  .dockerconfigjson: $secret
-
-EOF
-  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
-fi
 
 cat torpedo.yaml
 
