@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -20,6 +19,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -70,6 +71,7 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 	t.Run("backupSyncController", applicationBackupSyncControllerTest)
+	t.Run("applicationBackupRestoreWithoutNMTest", applicationBackupRestoreWithoutNMTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -165,6 +167,11 @@ func triggerBackupRestoreTest(
 			require.NoError(t, err, "Error waiting for back-up to complete.")
 			logrus.Infof("Backup completed.")
 
+			appBackedup, err := storkops.Instance().GetApplicationBackup(appBackupKey[0], ctx.GetID())
+			require.NoError(t, err, "Failed to get application backup: %s in namespace: %v", appBackupKey[0], ctx.GetID())
+
+			resourcesBackedup := appBackedup.Status.ResourceCount
+
 			// Delete apps so that they can be restored
 			destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
 
@@ -179,6 +186,13 @@ func triggerBackupRestoreTest(
 			require.NoError(t, err, "Error waiting for restore to complete.")
 
 			logrus.Infof("Restore completed.")
+
+			appRestored, err := storkops.Instance().GetApplicationRestore(appRestoreKey[0], ctx.GetID())
+			require.NoError(t, err, "Failed to get application restore: %s in namespace: %v", appRestoreKey[0], ctx.GetID())
+
+			resourcesRestored := appRestored.Status.RestoredResourceCount
+			logrus.Infof("resourcesBackedup: %v, resourcesRestored: %v", resourcesBackedup, resourcesRestored)
+			require.Equal(t, resourcesBackedup, resourcesRestored, "Restore unsuccessful as backup resources are %v and restore resources are %v", resourcesBackedup, resourcesRestored)
 
 			// Validate that restore results in restoration of correct apps based on whether all apps were expected or not
 			err = schedulerDriver.WaitForRunning(preBackupCtx, defaultWaitTimeout, defaultWaitInterval)
@@ -488,6 +502,27 @@ func applicationBackupRestoreTest(t *testing.T) {
 		[]string{testKey + "-simple-backup"},
 		[]string{},
 		[]string{"mysql-simple-restore"},
+		allConfigMap,
+		true,
+		true,
+		true,
+	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func applicationBackupRestoreWithoutNMTest(t *testing.T) {
+	var testrailID, testResult = 50849, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-simple-backup"},
+		[]string{},
+		[]string{"mysql-simple-restore-without-nm"},
 		allConfigMap,
 		true,
 		true,
