@@ -15,12 +15,12 @@ import (
 )
 
 var _ = Describe("{PerformRestoreValidatingHA}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform restore while validating HA.", pdsLabels, 0)
+		StartTorpedoTest("PerformRestoreValidatingHA", "Perform restore while validating HA.", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
@@ -42,6 +42,10 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				if ds.Name != postgresql {
+					continue
+				}
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -124,9 +128,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 						log.InfoD("Restored successfully. Deployment- %v", restoredModel.GetClusterResourceName())
 					}
 				})
-
 				// TODO trigger workload for restored deployment
-
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
 				})
@@ -135,19 +137,18 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		defer CleanupDeployments(deploymentsToBeCleaned)
 		err := bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformRestorePDSPodsDown}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform restore while simultaneously deleting backup controller manager & target controller pods", pdsLabels, 0)
+		StartTorpedoTest("PerformRestorePDSPodsDown", "Perform restore while simultaneously deleting backup controller manager & target controller pods", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
@@ -169,6 +170,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -253,12 +255,12 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 })
 
 var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Delete a running backup job and trigger a restore.", pdsLabels, 0)
+		StartTorpedoTest("DeleteBackupJobTriggerRestore", "Delete a running backup job and trigger a restore.", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
@@ -280,6 +282,7 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -304,6 +307,7 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 					log.FailOnError(err, "Failed while performing adhoc backup")
 				})
 
+				log.Info("Simultaneous backup delete and restores working as expected.")
 				var wg sync.WaitGroup
 				wg.Add(2)
 				go func() {
@@ -340,7 +344,6 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 				}()
 
 				wg.Wait()
-				log.Info("Simultaneous backup delete and restores working as expected.")
 
 				// TODO trigger workload for restored deployment
 

@@ -63,6 +63,23 @@ var _ = Describe("{DeleteResourceSettingsTemplates}", func() {
 	})
 })
 
+var _ = Describe("{DeleteBackUpTargets}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteBackUpTargets",
+			"Deletes the automation created backuptargets", pdsLabels, 0)
+	})
+	It("Deletes the automation created backuptargets", func() {
+		stepLog := "Delete backup Targets"
+		Step(stepLog, func() {
+			err := CleanUpBackUpTargets(projectID, "automation--")
+			log.FailOnError(err, "error occured while deleting backup target")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{DeleteUnhealthyDeploymentTargets}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteUnhealthyDeploymentTargets",

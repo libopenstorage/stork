@@ -2,16 +2,15 @@ package controlplane
 
 import (
 	"fmt"
-	"net"
-	"net/url"
-	"strings"
-
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"net"
+	"net/url"
+	"strings"
 )
 
 // ControlPlane PDS

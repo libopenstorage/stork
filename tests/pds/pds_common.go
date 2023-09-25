@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"net/http"
 	"strings"
 	"time"
@@ -221,6 +222,13 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	return err
 }
 
+func CleanMapEntries(deleteMapEntries map[string]string) {
+	for hash := range deleteMapEntries {
+		delete(deleteMapEntries, hash)
+	}
+	log.Debugf("size of map post deletion %d", len(deleteMapEntries))
+}
+
 // CleanupWorkloadDeployments will clean up the wldeployment based on the kubeconfigs
 func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
 	if isSrc {
@@ -285,6 +293,22 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 	return pvcCapacity, err
 }
 
+func CleanUpBackUpTargets(projectID, prefix string) error {
+	bkpClient, err := pdsbkp.InitializePdsBackup()
+	if err != nil {
+		return err
+	}
+	bkpTargets, err := bkpClient.GetAllBackUpTargets(projectID, prefix)
+	for _, bkpTarget := range bkpTargets {
+		log.Debugf("Deleting bkptarget %s", bkpTarget.GetName())
+		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 	if len(dsInstances) < 1 {
 		log.Info("No DS left for deletion as part of this test run.")
@@ -294,8 +318,7 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
 		dsId := *dsInstance.Id
 		components.DataServiceDeployment.GetDeployment(dsId)
-		log.Infof("Delete Deployment %v ", dsInstance)
-		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
+		log.Infof("Deleting Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
 		if err != nil {
 			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())

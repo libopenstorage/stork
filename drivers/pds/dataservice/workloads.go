@@ -280,7 +280,7 @@ func (ds *DataserviceType) ValidateDataMd5Hash(deploymentHash, restoredDepHash m
 			}
 		}
 	}
-	if count != len(restoredDepHash) {
+	if count < len(restoredDepHash) {
 		return false
 	}
 	return true
