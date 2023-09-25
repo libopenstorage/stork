@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
@@ -34,6 +35,7 @@ import (
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
 	v1networking "k8s.io/api/networking/v1"
@@ -1342,9 +1344,22 @@ func (a *ApplicationBackupController) uploadObject(
 			return err
 		}
 	}
-
+	var options blob.WriterOptions
+	if backupLocation.Location.S3Config != nil {
+		sseType := backupLocation.Location.S3Config.SSE
+		if len(sseType) != 0 {
+			beforeWrite := func(asFunc func(interface{}) bool) error {
+				var input *s3manager.UploadInput
+				if asFunc(&input) {
+					input.ServerSideEncryption = &sseType
+				}
+				return nil
+			}
+			options = blob.WriterOptions{BeforeWrite: beforeWrite}
+		}
+	}
 	objectPath := GetObjectPath(backup)
-	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), &options)
 	if err != nil {
 		return err
 	}
