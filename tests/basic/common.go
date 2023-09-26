@@ -7,7 +7,6 @@ import (
 )
 
 const (
-	// defined in testing app path torpedo/scheduler/k8s/fio-low-io/pxd/px-storage-class.yaml
 	replicationUpdateTimeout         = 4 * time.Hour
 	retryTimeout                     = time.Minute * 2
 	addDriveUpTimeOut                = time.Minute * 15

@@ -6268,7 +6268,7 @@ func WaitForExpansionToStart(poolID string) error {
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 10*time.Second)
+	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 5*time.Second)
 	return err
 }
 

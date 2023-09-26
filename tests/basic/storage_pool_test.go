@@ -9556,7 +9556,7 @@ func pickPoolToResize() string {
 	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
-	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Found no pool used by persistent volumes. ")
 	poolIDToResize := poolIDsInUseByTestingApp[0]
 	return poolIDToResize
 }
