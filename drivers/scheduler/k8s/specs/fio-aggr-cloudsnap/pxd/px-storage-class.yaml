@@ -20,10 +20,6 @@ parameters:
   aggregation_level: "{{ .AggregationLevel }}"
   {{ else }}
   aggregation_level: "2"{{ end }}
-  {{ if .AggregationLevel }}
-  labels: "type=aggregated"
-  group: "fio-data"
-  {{ end }}
   snapshotschedule.stork.libopenstorage.org/interval-schedule: |
     schedulePolicyName: intervalpolicy
     annotations:
@@ -52,7 +48,7 @@ parameters:
   fs: {{ .Fs }}{{ end }}
   {{ if .AggregationLevel }}
   aggregation_level: "{{ .AggregationLevel }}"
-  { { else } }
+  {{ else }}
   aggregation_level: "2"{{ end }}
   snapshotschedule.stork.libopenstorage.org/interval-schedule: |
     schedulePolicyName: intervalpolicy

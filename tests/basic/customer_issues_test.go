@@ -626,14 +626,6 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
-			appList := Inst().AppList
-			defer func() {
-				Inst().AppList = appList
-
-			}()
-
-			Inst().AppList = []string{"fio-cloudsnap"}
-
 			for i := 0; i < appScale; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnap-%d", i))...)
 			}

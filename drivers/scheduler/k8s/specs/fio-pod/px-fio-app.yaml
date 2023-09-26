@@ -1,0 +1,55 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fio-pod
+  labels:
+    app: fio-pod
+spec:
+  serviceName: fio
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fio-pod
+  template:
+    metadata:
+      labels:
+        app: fio-pod
+    spec:
+      schedulerName: stork
+      containers:
+        - name: fio-pod
+          image: joshuarobinson/fio:3.19
+          command: ["sh"]
+          args: ["-c", "mkdir -p /scratch/$(POD_NAME) /output/$(POD_NAME) && fio /configs/fio.job --eta=never --directory=/scratch/$(POD_NAME) --output=/output/$(POD_NAME)/fio.log"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: fio-config-vol
+              mountPath: /configs
+            - name: fio-data
+              mountPath: /scratch
+            - name: fio-output
+              mountPath: /output
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "500m"
+              memory: 4Gi
+            requests:
+              cpu: "500m"
+              memory: 4Gi
+      restartPolicy: Always
+      volumes:
+        - name: fio-config-vol
+          configMap:
+            name: fio-job-config
+        - name: fio-data
+          persistentVolumeClaim:
+            claimName: fio-pvc
+        - name: fio-output
+          persistentVolumeClaim:
+            claimName: fio-output-pvc

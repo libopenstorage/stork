@@ -723,6 +723,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfigurationList); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*corev1.PersistentVolume); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
@@ -1951,6 +1953,23 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 		log.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
 		return snap, nil
+
+	} else if obj, ok := spec.(*corev1.PersistentVolume); ok {
+		obj.Spec.ClaimRef.Namespace = ns.Name
+		pv, err := k8sCore.CreatePersistentVolume(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if pv, err = k8sCore.GetPersistentVolume(obj.Name); err == nil {
+				log.Infof("[%v] Found existing PersistentVolume: %v", app.Key, pv.Name)
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create PersistentVolume: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created PersistentVolume: %v", app.Key, pv.Name)
+		return pv, nil
 
 	}
 	return nil, nil
@@ -3957,6 +3976,31 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			}
 
 			log.Infof("[%v] Destroyed PVCs for StatefulSet: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*corev1.PersistentVolume); ok {
+			pvcObj, err := k8sCore.GetPersistentVolume(obj.Name)
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					log.Infof("[%v] PV is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to get PV: %v. Err: %v", ctx.App.Key, obj.Name, err),
+				}
+			}
+
+			if err := k8sCore.DeletePersistentVolume(pvcObj.Name); err != nil {
+				if k8serrors.IsNotFound(err) {
+					log.Infof("[%v] PV is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to destroy PV: %v. Err: %v", ctx.App.Key, obj.Name, err),
+				}
+			}
+
+			log.Infof("[%v] Destroyed PV: %v", ctx.App.Key, obj.Name)
 		}
 	}
 

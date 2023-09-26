@@ -1401,6 +1401,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	setMetrics(*event)
 	stepLog := "get kvdb nodes bounce volume driver"
 	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		kvdbNodes, err := GetAllKvdbNodes()
 		if err != nil {
 			UpdateOutcome(event, err)

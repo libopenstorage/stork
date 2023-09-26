@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
+	"golang.org/x/sync/errgroup"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"math/rand"
@@ -36,8 +37,10 @@ const (
 	bufferedBW = 1130
 )
 const (
-	fio             = "fio-throttle-io"
-	fastpathAppName = "fastpath"
+	fio                     = "fio-throttle-io"
+	fastpathAppName         = "fastpath"
+	fioPVScheduleName       = "tc-cs-volsnapsched"
+	fioOutputPVScheduleName = "tc-cs-volsnapsched-2"
 )
 
 // Volume replication change
@@ -993,14 +996,6 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
-			appList := Inst().AppList
-
-			defer func() {
-				Inst().AppList = appList
-			}()
-
-			Inst().AppList = []string{"fio-cloudsnap"}
-
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnaprestore-%d", i))...)
 			}
@@ -1644,3 +1639,464 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
+	/*
+		1) Create volumes
+		2) Put the volume in resync state
+		3) While some volumes are in resync, delete all volumes.
+		4) Make sure all the volumes are in the trashcan.
+		5) Recover all volumes from trashcan and Verify the volumes are restored correctly.
+		6) Validate the data and verify cloudsnap schedules continues after restore
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("TrashcanRecoveryWithCloudsnap", "Validate the successful restore from Trashcan when volumes got deleted in resync state", nil, 0)
+	})
+
+	stepLog := "Validate the successful restore from Trashcan of volume in resync"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Enable Trashcan"
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				currNode := node.GetStorageDriverNodes()[0]
+				err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+					"--volume-expiration-minutes": "600",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully enabled")
+			})
+		stepLog = "Create schedule policy"
+		policyName := "intervalpolicy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				retain := 3
+				interval := 3
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+		})
+		fioPVC := "fio-pvc"
+		fioPVName := "fio-pv"
+		fioOutputPVC := "fio-output-pvc"
+		fioOutputPVName := "fio-output-pv"
+
+		appNamespace := fmt.Sprintf("tc-cs-%s", Inst().InstanceID)
+
+		stepLog = fmt.Sprintf("create volumes %s and %s using volume request", fioPVName, fioOutputPVName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Creating volume : %s", fioPVName)
+			pxctlCmdFull := fmt.Sprintf("v c %s -s 500 -r 2", fioPVName)
+			output, err := Inst().V.GetPxctlCmdOutput(node.GetStorageNodes()[0], pxctlCmdFull)
+			log.FailOnError(err, fmt.Sprintf("error creating volume %s", fioPVName))
+			log.Infof(output)
+
+			log.Infof("Creating volume : %s", fioOutputPVName)
+			pxctlCmdFull = fmt.Sprintf("v c %s -s 50 -r 2", fioOutputPVName)
+			output, err = Inst().V.GetPxctlCmdOutput(node.GetStorageNodes()[0], pxctlCmdFull)
+			log.FailOnError(err, fmt.Sprintf("error creating volume %s", fioOutputPVName))
+			log.Infof(output)
+		})
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"fio-pod"}
+
+		contexts = make([]*scheduler.Context, 0)
+		actRepls := make(map[string]int64)
+
+		log.InfoD("scheduling apps ")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, fmt.Sprintf("trashrec-%d", i))...)
+		}
+		stepLog = fmt.Sprintf("Create volume snapshot schedule %s and %s", fioPVScheduleName, fioOutputPVScheduleName)
+		Step(stepLog, func() {
+			annotations := make(map[string]string)
+			annotations["portworx/snapshot-type"] = "cloud"
+			suspend := false
+			log.InfoD(stepLog)
+
+			tcVolSnapSched := &storkv1.VolumeSnapshotSchedule{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name:        fioPVScheduleName,
+					Namespace:   appNamespace,
+					Annotations: annotations,
+				},
+				Spec: storkv1.VolumeSnapshotScheduleSpec{
+					SchedulePolicyName: policyName,
+					Suspend:            &suspend,
+					ReclaimPolicy:      storkv1.ReclaimPolicyDelete,
+					Template: storkv1.VolumeSnapshotTemplateSpec{
+						Spec: snapv1.VolumeSnapshotSpec{
+							PersistentVolumeClaimName: fioPVC,
+						},
+					},
+				},
+			}
+
+			volSnapshotSchedule, err := storkops.Instance().CreateSnapshotSchedule(tcVolSnapSched)
+			log.FailOnError(err, fmt.Sprintf("error creating volume snapshot schedule %s", fioPVScheduleName))
+			dash.VerifyFatal(volSnapshotSchedule.Name, fioPVScheduleName, "verify volume snapshot schedule is created successfully")
+
+			tcVolSnapSched = &storkv1.VolumeSnapshotSchedule{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name:        fioOutputPVScheduleName,
+					Namespace:   appNamespace,
+					Annotations: annotations,
+				},
+				Spec: storkv1.VolumeSnapshotScheduleSpec{
+					SchedulePolicyName: policyName,
+					Suspend:            &suspend,
+					ReclaimPolicy:      storkv1.ReclaimPolicyDelete,
+					Template: storkv1.VolumeSnapshotTemplateSpec{
+						Spec: snapv1.VolumeSnapshotSpec{
+							PersistentVolumeClaimName: fioOutputPVC,
+						},
+					},
+				},
+			}
+
+			volSnapshotSchedule, err = storkops.Instance().CreateSnapshotSchedule(tcVolSnapSched)
+			log.FailOnError(err, fmt.Sprintf("error creating volume snapshot schedule %s", fioOutputPVScheduleName))
+			dash.VerifyFatal(volSnapshotSchedule.Name, fioOutputPVScheduleName, "verify volume snapshot schedule is created successfully")
+		})
+
+		for _, ctx := range contexts {
+			ctx.SkipVolumeValidation = true
+			ValidateContext(ctx)
+		}
+
+		log.Infof("waiting for 10 mins for enough cloud snaps to be created.")
+		time.Sleep(10 * time.Minute)
+		initalSnaps, err := validateCloudSnaps(appNamespace)
+		log.FailOnError(err, "error validating cloudsnaps")
+
+		stepLog := "Scenario: Get volumes for cloudsnap apps in test,update replication factor,delete volumes then restore volumes from trashcan and validate cloudsnaps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, ctx := range contexts {
+
+				//waiting for the data to be written before performing ha-update
+				_, err := GetVolumeWithMinimumSize([]*scheduler.Context{ctx}, 50)
+				log.FailOnError(err, "error selecting volumes for resync")
+
+				testVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+				dash.VerifyFatal(len(testVolumes) > 0, true, "App volumes exist?")
+
+				appVolumes := make([]*volume.Volume, 0)
+				//Getting volumes for repl update having minimum size
+				for _, vol := range testVolumes {
+					appVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", vol.Name))
+					usedBytes := appVol.GetUsage()
+					usedGiB := usedBytes / units.GiB
+					if usedGiB >= 50 {
+						appVolumes = append(appVolumes, vol)
+					}
+				}
+
+				//Reducing the repl factor if volume as max replication factor enabled
+				stepLog = fmt.Sprintf("Adjusting the volume replications before increasing the repls for %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = replAdjust(appVolumes, actRepls)
+					log.FailOnError(err, "Failed to adjust the repls for volumes of the app %s", ctx.App.Key)
+				})
+
+				stepLog = fmt.Sprintf("Increasing the volume repls for %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					newRepls := make(map[*volume.Volume]int64)
+					for _, v := range appVolumes {
+						currRep, err := Inst().V.GetReplicationFactor(v)
+						log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+						currAggr, err := Inst().V.GetAggregationLevel(v)
+						log.FailOnError(err, "Failed to get volume  %s aggregate level", v.Name)
+						numStorageNodes := len(node.GetStorageNodes())
+						numStorageNodesRequired := int(currAggr * (currRep + 1))
+
+						if numStorageNodes < numStorageNodesRequired {
+							log.Warnf("skipping volume %s repl increase as numStorageNodesRequired is %d where as numStorageNodes is %d", v.Name, numStorageNodesRequired, numStorageNodes)
+							continue
+						}
+						newRepls[v] = currRep + 1
+					}
+					err = setVolumeRepl(newRepls, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("validate successful repl increase for %s", ctx.App.Key))
+				})
+
+				log.InfoD("waiting for volumes to be in resync state")
+				time.Sleep(2 * time.Minute)
+
+				//waiting for all the volume is resync state
+				for _, v := range appVolumes {
+
+					checkVolumeState := func() (interface{}, bool, error) {
+						runTimeState, err := GetVolumeReplicationStatus(v)
+						if err != nil {
+							return "", false, fmt.Errorf("error getting run time state for volume:%s. App : %s", v.Name, ctx.App.Key)
+						}
+						if strings.ToLower(runTimeState) == "resync" {
+							return "", false, nil
+						}
+
+						return nil, true, fmt.Errorf("waiting for volume %s run time state to change to resync, current state: %s", v.Name, runTimeState)
+					}
+					_, err = task.DoRetryWithTimeout(checkVolumeState, time.Duration(5)*defaultCommandTimeout, 1*time.Minute)
+					log.FailOnError(err, "error validating volume runtime state for %s", v.Name)
+
+				}
+
+				stepLog = fmt.Sprintf("Deleting app %s", ctx.App.Key)
+				Step(stepLog, func() {
+					DestroyApps(contexts, nil)
+					log.FailOnError(deletePXVolume(fioPVName), fmt.Sprintf("error deleting portworx volume %s", fioPVName))
+					log.FailOnError(deletePXVolume(fioOutputPVName), fmt.Sprintf("error deleting portworx volume %s", fioOutputPVName))
+				})
+
+				var trashcanVols []string
+				stepLog = "validate volumes in trashcan"
+				Step(stepLog, func() {
+					// wait for few seconds for pvc to get deleted and volume to get detached
+					time.Sleep(10 * time.Second)
+					node := node.GetStorageDriverNodes()[0]
+					log.InfoD(stepLog)
+					trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+					log.FailOnError(err, "error While getting trashcan volumes")
+					log.Infof("trashcan len: %d", len(trashcanVols))
+					dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+
+				})
+
+				stepLog = "Validating trashcan restore"
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						for _, tID := range trashcanVols {
+							if tID != "" {
+								vol, err := Inst().V.InspectVolume(tID)
+								log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", tID))
+								if strings.Contains(vol.Locator.Name, "fio-output-pv") {
+									err = trashcanRestore(vol.Id, "fio-output-pv")
+									log.FailOnError(err, fmt.Sprintf("error restoring volume %s from trashcan", vol.Id))
+								}
+								if strings.Contains(vol.Locator.Name, "fio-pv") {
+									err = trashcanRestore(vol.Id, "fio-pv")
+									log.FailOnError(err, fmt.Sprintf("error restoring volume %s from trashcan", vol.Id))
+								}
+							}
+						}
+
+					})
+				log.InfoD("scheduling apps ")
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, fmt.Sprintf("trashrec-%d", i))...)
+				}
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx)
+				}
+
+				log.Infof("waiting for 10 mins for enough cloud snaps to be created.")
+				time.Sleep(10 * time.Minute)
+				restoredSnaps, err := validateCloudSnaps(appNamespace)
+				log.FailOnError(err, "error validating cloudsnaps")
+				dash.VerifyFatal(len(restoredSnaps) > 0, true, "verify cloudsnaps are created.")
+				for k := range restoredSnaps {
+					dash.VerifySafely(initalSnaps[k] != restoredSnaps[k], true, fmt.Sprintf("verfiy new snaps are created for schedule %s", k))
+				}
+
+			}
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func replAdjust(appVolumes []*volume.Volume, actRepls map[string]int64) error {
+	setRepls := make(map[*volume.Volume]int64)
+
+	for _, v := range appVolumes {
+		currRep, err := Inst().V.GetReplicationFactor(v)
+		if err != nil {
+			return err
+		}
+		actRepls[v.ID] = currRep
+		if currRep == 3 {
+			setRepls[v] = currRep - 1
+		}
+	}
+	err := setVolumeRepl(setRepls, true)
+	return err
+}
+
+func setVolumeRepl(setRepls map[*volume.Volume]int64, waitToFinish bool) error {
+	eg := errgroup.Group{}
+
+	for v, r := range setRepls {
+		log.InfoD("setting repl for volume %s to %d", v.Name, r)
+		eg.Go(func() error {
+			err := Inst().V.SetReplicationFactor(v, r, nil, nil, waitToFinish)
+			return err
+		})
+	}
+	err := eg.Wait()
+	return err
+}
+
+func validateCloudSnaps(appNamespace string) (map[string]string, error) {
+
+	log.Infof("Verify that cloud snap status")
+	snapsMap := make(map[string]string, 0)
+
+	for _, ctx := range contexts {
+		var appVolumes []*volume.Volume
+		var err error
+
+		appVolumes, err = Inst().S.GetVolumes(ctx)
+		log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+		if err != nil {
+			return snapsMap, err
+		}
+
+		if len(appVolumes) == 0 {
+			return snapsMap, fmt.Errorf("no volumes found for [%s]", ctx.App.Key)
+		}
+
+		log.Infof("Got volume count : %v", len(appVolumes))
+
+		err = Inst().S.ValidateVolumes(ctx, 4*time.Minute, defaultRetryInterval, nil)
+		log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
+		if err != nil {
+			return snapsMap, err
+		}
+
+		for _, v := range appVolumes {
+
+			isPureVol, err := Inst().V.IsPureVolume(v)
+			if err != nil {
+				return snapsMap, err
+			}
+
+			if isPureVol {
+				log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
+				continue
+			}
+			snapshotScheduleName := ""
+			if v.Name == "fio-pvc" {
+				snapshotScheduleName = fioPVScheduleName
+			} else {
+				snapshotScheduleName = fioOutputPVScheduleName
+			}
+
+			log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+			resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+			if err != nil {
+
+				return snapsMap, err
+			}
+
+			dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
+			for _, snapshotStatuses := range resp.Status.Items {
+				if len(snapshotStatuses) > 0 {
+					status := snapshotStatuses[len(snapshotStatuses)-1]
+					if status == nil {
+
+						return snapsMap, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+
+					}
+					log.Infof("Snapshot %s has status %v", status.Name, status.Status)
+
+					if status.Status == snapv1.VolumeSnapshotConditionError {
+
+						return snapsMap, fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status)
+					}
+					if status.Status != snapv1.VolumeSnapshotConditionPending {
+						snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+
+						if err != nil {
+							return snapsMap, err
+						}
+
+						snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+						log.Infof("Snapshot Type: %v", snapType)
+						if snapType != "cloud" {
+							err = &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+							}
+							return snapsMap, err
+						}
+
+						snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+						log.Infof("Snapshot ID: %v", snapID)
+						if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+							len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+							err = &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+							}
+							return snapsMap, err
+						}
+
+					}
+					snapsMap[snapshotScheduleName] = status.Name
+
+				}
+			}
+
+		}
+	}
+	return snapsMap, nil
+}
+
+func trashcanRestore(volId, volName string) error {
+	log.InfoD("Restoring vol [%v] from trashcan", volId)
+	pxctlCmdFull := fmt.Sprintf("v r %s --trashcan %s", volName, volId)
+	output, err := Inst().V.GetPxctlCmdOutput(node.GetStorageNodes()[0], pxctlCmdFull)
+	if err != nil {
+		return err
+	}
+	log.Infof("output: %v", output)
+	if !strings.Contains(output, fmt.Sprintf("Successfully restored: %s", volName)) {
+		err = fmt.Errorf("volume %v, restore from trashcan failed, Err: %v", volId, output)
+		return err
+	}
+	return nil
+}
+
+func deletePXVolume(volName string) error {
+	delVol := func() (interface{}, bool, error) {
+		err := Inst().V.DeleteVolume(volName)
+		if err != nil {
+			return "", true, err
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(delVol, time.Duration(60)*defaultCommandTimeout, 2*time.Minute)
+	return err
+}
