@@ -106,7 +106,7 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
-	podReadyTimeout                           = 30 * time.Minute
+	podReadyTimeout                           = 10 * time.Minute
 	storkPodReadyTimeout                      = 20 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
@@ -117,6 +117,7 @@ const (
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
+	rancherProjectDescription                 = "new project"
 )
 
 var (
@@ -2597,7 +2598,7 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		}
 		for _, pod := range allPods.Items {
 			log.Infof("Checking status for pod - %s", pod.GetName())
-			err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+			err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
 			if err != nil {
 				// Collect mongoDB logs right after the command
 				ginkgoTest := CurrentGinkgoTestDescription()

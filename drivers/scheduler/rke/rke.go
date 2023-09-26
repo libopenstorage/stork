@@ -139,7 +139,7 @@ func (r *Rancher) GetActiveRancherClusterID(clusterName string) (string, error) 
 }
 
 // CreateRancherProject creates new project in rancher cluster
-func (r *Rancher) CreateRancherProject(projectName string, projectDescription string, clusterName string) (*rancherClient.Project, error) {
+func (r *Rancher) CreateRancherProject(projectName string, projectDescription string, clusterName string, label map[string]string, annotation map[string]string) (*rancherClient.Project, error) {
 	var clusterId string
 	var newProject *rancherClient.Project
 	clusterId, err := r.GetActiveRancherClusterID(clusterName)
@@ -150,6 +150,8 @@ func (r *Rancher) CreateRancherProject(projectName string, projectDescription st
 		Name:        projectName,
 		Description: projectDescription,
 		ClusterID:   clusterId,
+		Labels:      label,
+		Annotations: annotation,
 	}
 	newProject, err = r.client.Project.Create(projectRequest)
 	if err != nil {
