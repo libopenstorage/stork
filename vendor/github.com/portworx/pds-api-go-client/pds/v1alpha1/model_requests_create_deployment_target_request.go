@@ -18,6 +18,7 @@ import (
 type RequestsCreateDeploymentTargetRequest struct {
 	ClusterId *string `json:"cluster_id,omitempty"`
 	Name *string `json:"name,omitempty"`
+	TeleportAgentVersion *string `json:"teleport_agent_version,omitempty"`
 	TlsIssuer *string `json:"tls_issuer,omitempty"`
 	TlsRequired *bool `json:"tls_required,omitempty"`
 }
@@ -103,6 +104,38 @@ func (o *RequestsCreateDeploymentTargetRequest) SetName(v string) {
 	o.Name = &v
 }
 
+// GetTeleportAgentVersion returns the TeleportAgentVersion field value if set, zero value otherwise.
+func (o *RequestsCreateDeploymentTargetRequest) GetTeleportAgentVersion() string {
+	if o == nil || o.TeleportAgentVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.TeleportAgentVersion
+}
+
+// GetTeleportAgentVersionOk returns a tuple with the TeleportAgentVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsCreateDeploymentTargetRequest) GetTeleportAgentVersionOk() (*string, bool) {
+	if o == nil || o.TeleportAgentVersion == nil {
+		return nil, false
+	}
+	return o.TeleportAgentVersion, true
+}
+
+// HasTeleportAgentVersion returns a boolean if a field has been set.
+func (o *RequestsCreateDeploymentTargetRequest) HasTeleportAgentVersion() bool {
+	if o != nil && o.TeleportAgentVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTeleportAgentVersion gets a reference to the given string and assigns it to the TeleportAgentVersion field.
+func (o *RequestsCreateDeploymentTargetRequest) SetTeleportAgentVersion(v string) {
+	o.TeleportAgentVersion = &v
+}
+
 // GetTlsIssuer returns the TlsIssuer field value if set, zero value otherwise.
 func (o *RequestsCreateDeploymentTargetRequest) GetTlsIssuer() string {
 	if o == nil || o.TlsIssuer == nil {
@@ -174,6 +207,9 @@ func (o RequestsCreateDeploymentTargetRequest) MarshalJSON() ([]byte, error) {
 	}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
+	}
+	if o.TeleportAgentVersion != nil {
+		toSerialize["teleport_agent_version"] = o.TeleportAgentVersion
 	}
 	if o.TlsIssuer != nil {
 		toSerialize["tls_issuer"] = o.TlsIssuer

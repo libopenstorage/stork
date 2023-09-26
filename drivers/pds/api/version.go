@@ -6,7 +6,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // Version struct
@@ -17,7 +16,7 @@ type Version struct {
 // ListDataServiceVersions return pds versions models.
 func (v *Version) ListDataServiceVersions(dataServiceID string) ([]pds.ModelsVersion, error) {
 	versionClient := v.apiClient.VersionsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -31,7 +30,7 @@ func (v *Version) ListDataServiceVersions(dataServiceID string) ([]pds.ModelsVer
 // GetVersion return pds version model.
 func (v *Version) GetVersion(versionID string) (*pds.ModelsVersion, error) {
 	versionClient := v.apiClient.VersionsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

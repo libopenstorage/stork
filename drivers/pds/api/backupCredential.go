@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -17,7 +16,7 @@ type BackupCredential struct {
 // ListBackupCredentials return backup credentials model.
 func (backupCredential *BackupCredential) ListBackupCredentials(tenantID string) ([]pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -32,7 +31,7 @@ func (backupCredential *BackupCredential) ListBackupCredentials(tenantID string)
 // GetBackupCredential return back upo credential model.
 func (backupCredential *BackupCredential) GetBackupCredential(backupCredID string) (*pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -58,7 +57,7 @@ func (backupCredential *BackupCredential) CreateAzureBackupCredential(tenantID s
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -85,7 +84,7 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	log.Infof("Ctx: %v", ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -116,7 +115,7 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -145,7 +144,7 @@ func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -174,7 +173,7 @@ func (backupCredential *BackupCredential) UpdateAzureBackupCredential(backupCred
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -201,7 +200,7 @@ func (backupCredential *BackupCredential) UpdateS3BackupCredential(backupCredsID
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -228,7 +227,7 @@ func (backupCredential *BackupCredential) UpdateS3CompatibleBackupCredential(bac
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -254,7 +253,7 @@ func (backupCredential *BackupCredential) UpdateGoogleBackupCredential(backupCre
 		Credentials: &controllerCreds,
 		Name:        &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -271,7 +270,7 @@ func (backupCredential *BackupCredential) UpdateGoogleBackupCredential(backupCre
 // DeleteBackupCredential func
 func (backupCredential *BackupCredential) DeleteBackupCredential(backupCredsID string) (*status.Response, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -285,7 +284,7 @@ func (backupCredential *BackupCredential) DeleteBackupCredential(backupCredsID s
 // GetCloudCredentials func
 func (backupCredential *BackupCredential) GetCloudCredentials(backupCredsID string) (*pds.ControllersPartialCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

@@ -40,6 +40,16 @@ type PDSDataService struct {
 	OldImage      string "json:\"OldImage\""
 }
 
+type TestParams struct {
+	DeploymentTargetId string
+	DnsZone            string
+	StorageTemplateId  string
+	NamespaceId        string
+	TenantId           string
+	ProjectId          string
+	ServiceType        string
+}
+
 const (
 	pdsNamespace                     = "pds-system"
 	deploymentName                   = "qa"
@@ -116,6 +126,7 @@ var (
 // imports based on functionalities
 var (
 	dsTest        *dataservices.DataserviceType
+	dsWithRbac    *dataservices.DsWithRBAC
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
@@ -125,6 +136,21 @@ var (
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
 var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
+
+func DeployandValidateDataServicesWithSiAndTls(ds PDSDataService, namespaceName string, namespaceid, projectID string, resourceTemplateID string, appConfigID string, dsVersion string, dsImage string, dsID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+
+	log.InfoD("Data Service Deployment Triggered")
+	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespaceName, serviceType)
+
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsWithRbac.TriggerDeployDSWithSiAndTls(dataservices.PDSDataService(ds), namespaceName, projectID, true, resourceTemplateID, appConfigID, namespaceid, dsVersion, dsImage, dsID, dataservices.TestParams(TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType}))
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
+
+	Step("Validate Data Service Deployments", func() {
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespaceName)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
 
 func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, deployment *pds.ModelsDeployment, namespace string) (*corev1.Pod, *v1.Deployment, error) {
 	params.DataServiceName = ds.Name
@@ -334,6 +360,25 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		log.InfoD("Getting all PV and associated PVCs and deleting them")
 		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
 		log.FailOnError(err, "Error while deleting PV and PVCs")
+	}
+}
+
+func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
+	log.InfoD("Starting to delete the Iam Roles first...")
+	for _, iam := range iamRolesToBeCleaned {
+		resp, err := components.IamRoleBindings.DeleteIamRoleBinding(iam, actorID)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting IamRoles")
+		}
+		log.InfoD("Successfully deleted IAMRoles- %v", resp.StatusCode)
+	}
+	log.InfoD("Starting to delete the Service Identities...")
+	for _, si := range siToBeCleaned {
+		resp, err := components.ServiceIdentity.DeleteServiceIdentity(si)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting ServiceIdentities")
+		}
+		log.InfoD("Successfully deleted ServiceIdentities- %v", resp.StatusCode)
 	}
 }
 

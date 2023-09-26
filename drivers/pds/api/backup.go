@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // Backup struct
@@ -16,7 +15,7 @@ type Backup struct {
 // ListBackup return pds backup models.
 func (backup *Backup) ListBackup(deploymentID string) ([]pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,7 +29,7 @@ func (backup *Backup) ListBackup(deploymentID string) ([]pds.ModelsBackup, error
 // ListBackupsBelongToTarget return pds backup models specific to a backup target.
 func (backup *Backup) ListBackupsBelongToTarget(backupTargetID string) ([]pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -44,7 +43,7 @@ func (backup *Backup) ListBackupsBelongToTarget(backupTargetID string) ([]pds.Mo
 // GetBackup return pds backup model.
 func (backup *Backup) GetBackup(backupID string) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -68,7 +67,9 @@ func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, i
 		BackupTargetId: &backupTargetID,
 		BackupType:     &backupType,
 	}
-	ctx, err := pdsutils.GetContext()
+
+	ctx, err := GetContext()
+
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -85,7 +86,7 @@ func (backup *Backup) UpdateBackup(backupID string, jobHistoryLimit int32) (*pds
 	updateRequest := pds.ControllersUpdateBackupRequest{
 		JobHistoryLimit: &jobHistoryLimit,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -99,7 +100,7 @@ func (backup *Backup) UpdateBackup(backupID string, jobHistoryLimit int32) (*pds
 // DeleteBackupJobs delete the backup job and return the status.
 func (backup *Backup) DeleteBackupJobs(backupID string, jobName string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -113,7 +114,7 @@ func (backup *Backup) DeleteBackupJobs(backupID string, jobName string) (*status
 // DeleteBackup delete the backup and return the status.
 func (backup *Backup) DeleteBackup(backupID string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

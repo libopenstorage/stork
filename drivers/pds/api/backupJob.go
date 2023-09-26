@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // BackupJob struct
@@ -16,7 +15,7 @@ type BackupJob struct {
 // ListBackupJobs return back up jobs models.
 func (backupJob *BackupJob) ListBackupJobsBelongsToProject(projectID string) ([]pds.ModelsBackupJob, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -31,7 +30,7 @@ func (backupJob *BackupJob) ListBackupJobsBelongsToProject(projectID string) ([]
 // ListBackupJobs return back up jobs models.
 func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ModelsBackupJobStatusResponse, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -46,7 +45,7 @@ func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ModelsBackupJ
 // ListBackupJobsBelongToDeployment return back up jobs models associated to deployment.
 func (backupJob *BackupJob) ListBackupJobsBelongToDeployment(projectID, deploymentID string) ([]pds.ModelsBackupJob, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -60,7 +59,7 @@ func (backupJob *BackupJob) ListBackupJobsBelongToDeployment(projectID, deployme
 // GetBackupJob return backup job model.
 func (backupJob *BackupJob) GetBackupJob(backupJobID string) (*pds.ModelsBackupJob, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -75,7 +74,7 @@ func (backupJob *BackupJob) GetBackupJob(backupJobID string) (*pds.ModelsBackupJ
 // DeleteBackupJob delete deployment and return status.
 func (backupJob *BackupJob) DeleteBackupJob(backupJobID string) (*status.Response, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

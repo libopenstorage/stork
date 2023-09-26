@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -18,7 +17,7 @@ type StorageSettingsTemplate struct {
 func (st *StorageSettingsTemplate) ListTemplates(tenantID string) ([]pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Infof("Get list of storage templates for tenant ID - %v", tenantID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -33,7 +32,7 @@ func (st *StorageSettingsTemplate) ListTemplates(tenantID string) ([]pds.ModelsS
 func (st *StorageSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Infof("Get storage template details for UUID - %v", templateID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -49,7 +48,7 @@ func (st *StorageSettingsTemplate) CreateTemplate(tenantID string, fg bool, fs s
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Info("Create new storage template.")
 	createRequest := pds.ControllersCreateStorageOptionsTemplateRequest{Fg: &fg, Fs: &fs, Name: &name, Provisioner: &provisioner, Repl: &repl, Secure: &secure}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -65,7 +64,7 @@ func (st *StorageSettingsTemplate) UpdateTemplate(templateID string, fg bool, fs
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Info("Create new storage template.")
 	updateRequest := pds.ControllersUpdateStorageOptionsTemplateRequest{Fg: &fg, Fs: &fs, Name: &name, Repl: &repl, Secure: &secure}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -80,7 +79,7 @@ func (st *StorageSettingsTemplate) UpdateTemplate(templateID string, fg bool, fs
 func (st *StorageSettingsTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Infof("Delete strogae template: %v", templateID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

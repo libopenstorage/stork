@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // Image struct
@@ -16,7 +15,7 @@ type Image struct {
 // ListImages return images models for given version.
 func (img *Image) ListImages(versionID string) ([]pds.ModelsImage, error) {
 	imgClient := img.apiClient.ImagesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,7 +29,7 @@ func (img *Image) ListImages(versionID string) ([]pds.ModelsImage, error) {
 // GetImage return image model.
 func (img *Image) GetImage(imageID string) (*pds.ModelsImage, error) {
 	imgClient := img.apiClient.ImagesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

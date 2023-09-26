@@ -6,8 +6,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -20,7 +18,7 @@ type Account struct {
 func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
 	log.Info("Get list of Accounts.")
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -36,7 +34,7 @@ func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
 	log.Infof("Get the account detail having UUID: %v", accountID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -53,7 +51,7 @@ func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, err
 	client := account.apiClient.AccountsApi
 	accountInfo, _ := account.GetAccount(accountID)
 	log.Infof("Get the users belong to the account having name: %v", accountInfo.GetName())
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -69,7 +67,7 @@ func (account *Account) AcceptEULA(accountID string, eulaVersion string) error {
 	client := account.apiClient.AccountsApi
 	accountInfo, _ := account.GetAccount(accountID)
 	log.Infof("Get the users belong to the account having name: %v", accountInfo.GetName())
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

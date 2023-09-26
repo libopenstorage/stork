@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // ServiceAccount struct
@@ -16,7 +15,7 @@ type ServiceAccount struct {
 // ListServiceAccounts return service accounts models for a tenant.
 func (sa *ServiceAccount) ListServiceAccounts(tenantID string) ([]pds.ModelsServiceAccount, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,7 +29,7 @@ func (sa *ServiceAccount) ListServiceAccounts(tenantID string) ([]pds.ModelsServ
 // GetServiceAccount return service account model.
 func (sa *ServiceAccount) GetServiceAccount(serviceAccountID string) (*pds.ControllersServiceAccountResponse, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -45,7 +44,7 @@ func (sa *ServiceAccount) GetServiceAccount(serviceAccountID string) (*pds.Contr
 func (sa *ServiceAccount) CreateServiceAccountToken(tenantID string, name string) (*pds.ModelsServiceAccount, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
 	createRequest := pds.ControllersCreateServiceAccountRequest{Name: &name}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -59,7 +58,7 @@ func (sa *ServiceAccount) CreateServiceAccountToken(tenantID string, name string
 // GetServiceAccountToken return service account token.
 func (sa *ServiceAccount) GetServiceAccountToken(serviceAccountID string) (*pds.ControllersServiceAccountTokenResponse, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -73,7 +72,7 @@ func (sa *ServiceAccount) GetServiceAccountToken(serviceAccountID string) (*pds.
 // DeleteServiceAccount delete service account and return status.
 func (sa *ServiceAccount) DeleteServiceAccount(serviceAccountID string) (*status.Response, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

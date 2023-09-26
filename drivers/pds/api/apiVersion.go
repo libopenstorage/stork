@@ -6,7 +6,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // PDSVersion struct
@@ -17,7 +16,7 @@ type PDSVersion struct {
 // GetHelmChartVersion function return latest pds helm chart version.
 func (v *PDSVersion) GetHelmChartVersion() (string, error) {
 	versionClient := v.apiClient.APIVersionApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return "", fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

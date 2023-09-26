@@ -2674,8 +2674,8 @@ github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b h1:nP+m9tYQv2cWbN9wAwjlhJU9FZRs7GaYszhLJBLAg/I=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319 h1:dbazvw0l16+kgjHppXqYNT2kJETlCxLyF1Y8d+jYKXI=
-github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
+github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b h1:iY7G3zp6kbLYkc+NvtpH+rxa+dSNMuZYbUKzE8CrgWs=
+github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v1.2.2-0.20230904054048-eb1f23dd7431 h1:6yGw2UrA+I7PTHPaRjQK0DTIzxpFhfKQenqbAvfcSFw=
 github.com/portworx/px-backup-api v1.2.2-0.20230904054048-eb1f23dd7431/go.mod h1:EfKwa+/zkqajmoc3IvuusgmSg5K4VLphwN2DuOATe4k=

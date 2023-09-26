@@ -22,6 +22,7 @@ type RequestsPatchDeploymentTargetsAgentMetadataRequest struct {
 	PxCsiEnabled *string `json:"px_csi_enabled,omitempty"`
 	PxServiceNamespace *string `json:"px_service_namespace,omitempty"`
 	PxVersion *string `json:"px_version,omitempty"`
+	TeleportAgentVersion *string `json:"teleport_agent_version,omitempty"`
 }
 
 // NewRequestsPatchDeploymentTargetsAgentMetadataRequest instantiates a new RequestsPatchDeploymentTargetsAgentMetadataRequest object
@@ -233,6 +234,38 @@ func (o *RequestsPatchDeploymentTargetsAgentMetadataRequest) SetPxVersion(v stri
 	o.PxVersion = &v
 }
 
+// GetTeleportAgentVersion returns the TeleportAgentVersion field value if set, zero value otherwise.
+func (o *RequestsPatchDeploymentTargetsAgentMetadataRequest) GetTeleportAgentVersion() string {
+	if o == nil || o.TeleportAgentVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.TeleportAgentVersion
+}
+
+// GetTeleportAgentVersionOk returns a tuple with the TeleportAgentVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RequestsPatchDeploymentTargetsAgentMetadataRequest) GetTeleportAgentVersionOk() (*string, bool) {
+	if o == nil || o.TeleportAgentVersion == nil {
+		return nil, false
+	}
+	return o.TeleportAgentVersion, true
+}
+
+// HasTeleportAgentVersion returns a boolean if a field has been set.
+func (o *RequestsPatchDeploymentTargetsAgentMetadataRequest) HasTeleportAgentVersion() bool {
+	if o != nil && o.TeleportAgentVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTeleportAgentVersion gets a reference to the given string and assigns it to the TeleportAgentVersion field.
+func (o *RequestsPatchDeploymentTargetsAgentMetadataRequest) SetTeleportAgentVersion(v string) {
+	o.TeleportAgentVersion = &v
+}
+
 func (o RequestsPatchDeploymentTargetsAgentMetadataRequest) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.KubeApiVersion != nil {
@@ -252,6 +285,9 @@ func (o RequestsPatchDeploymentTargetsAgentMetadataRequest) MarshalJSON() ([]byt
 	}
 	if o.PxVersion != nil {
 		toSerialize["px_version"] = o.PxVersion
+	}
+	if o.TeleportAgentVersion != nil {
+		toSerialize["teleport_agent_version"] = o.TeleportAgentVersion
 	}
 	return json.Marshal(toSerialize)
 }

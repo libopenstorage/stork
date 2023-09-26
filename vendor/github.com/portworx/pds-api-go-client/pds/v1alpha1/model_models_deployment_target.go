@@ -29,6 +29,7 @@ type ModelsDeploymentTarget struct {
 	Metadata *ModelsDeploymentTargetMetadata `json:"metadata,omitempty"`
 	Name *string `json:"name,omitempty"`
 	Status *string `json:"status,omitempty"`
+	TeleportAgentVersion *string `json:"teleport_agent_version,omitempty"`
 	TenantId *string `json:"tenant_id,omitempty"`
 	TlsIssuer *string `json:"tls_issuer,omitempty"`
 	TlsRequired *bool `json:"tls_required,omitempty"`
@@ -405,6 +406,38 @@ func (o *ModelsDeploymentTarget) SetStatus(v string) {
 	o.Status = &v
 }
 
+// GetTeleportAgentVersion returns the TeleportAgentVersion field value if set, zero value otherwise.
+func (o *ModelsDeploymentTarget) GetTeleportAgentVersion() string {
+	if o == nil || o.TeleportAgentVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.TeleportAgentVersion
+}
+
+// GetTeleportAgentVersionOk returns a tuple with the TeleportAgentVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTarget) GetTeleportAgentVersionOk() (*string, bool) {
+	if o == nil || o.TeleportAgentVersion == nil {
+		return nil, false
+	}
+	return o.TeleportAgentVersion, true
+}
+
+// HasTeleportAgentVersion returns a boolean if a field has been set.
+func (o *ModelsDeploymentTarget) HasTeleportAgentVersion() bool {
+	if o != nil && o.TeleportAgentVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTeleportAgentVersion gets a reference to the given string and assigns it to the TeleportAgentVersion field.
+func (o *ModelsDeploymentTarget) SetTeleportAgentVersion(v string) {
+	o.TeleportAgentVersion = &v
+}
+
 // GetTenantId returns the TenantId field value if set, zero value otherwise.
 func (o *ModelsDeploymentTarget) GetTenantId() string {
 	if o == nil || o.TenantId == nil {
@@ -567,6 +600,9 @@ func (o ModelsDeploymentTarget) MarshalJSON() ([]byte, error) {
 	}
 	if o.Status != nil {
 		toSerialize["status"] = o.Status
+	}
+	if o.TeleportAgentVersion != nil {
+		toSerialize["teleport_agent_version"] = o.TeleportAgentVersion
 	}
 	if o.TenantId != nil {
 		toSerialize["tenant_id"] = o.TenantId

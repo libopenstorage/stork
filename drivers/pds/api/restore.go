@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // Restore struct
@@ -16,7 +15,7 @@ type Restore struct {
 // GetRestore return pds restore model.
 func (restore *Restore) GetRestore(restoreID string) (*pds.ModelsRestore, error) {
 	restoreClient := restore.apiClient.RestoresApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -35,7 +34,7 @@ func (restore *Restore) RestoreToNewDeployment(backupJobId, name, deploymentTarg
 		Name:               &name,
 		NamespaceId:        &namespaceId,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -54,7 +53,7 @@ func (restore *Restore) RetryRestoreToNewDeployment(restoreID, name, deploymentT
 		Name:               &name,
 		NamespaceId:        &namespaceId,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -68,7 +67,7 @@ func (restore *Restore) RetryRestoreToNewDeployment(restoreID, name, deploymentT
 // GetRestorabilityMatrix return the restore matrix
 func (restore *Restore) GetRestorabilityMatrix() (*map[string][]pds.ServiceRestoreCompatibilityCondition, error) {
 	restoreClient := restore.apiClient.RestoresApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

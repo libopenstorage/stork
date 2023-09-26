@@ -97,7 +97,8 @@
     "ClusterType": "onprem",
     "Namespace": "automation",
     "PxNamespace": "portworx",
-    "PDSNamespace": "pds-system"
+    "PDSNamespace": "pds-system",
+    "ServiceIdentityToken": false
   },
   "CleanUpParams": {
     "AppTemplatePrefix": ["integration-test"],

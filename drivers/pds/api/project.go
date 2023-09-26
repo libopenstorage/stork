@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -18,7 +17,7 @@ type Project struct {
 func (project *Project) GetprojectsList(tenantID string) ([]pds.ModelsProject, error) {
 	projectClient := project.apiClient.ProjectsApi
 	log.Info("Get list of Projects.")
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -33,7 +32,7 @@ func (project *Project) GetprojectsList(tenantID string) ([]pds.ModelsProject, e
 func (project *Project) Getproject(projectID string) (*pds.ModelsProject, error) {
 	projectClient := project.apiClient.ProjectsApi
 	log.Info("Get the project details.")
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

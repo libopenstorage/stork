@@ -6,7 +6,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // Namespace struct
@@ -17,7 +16,7 @@ type Namespace struct {
 // ListNamespaces return namespaces models in a target cluster.
 func (ns *Namespace) ListNamespaces(targetID string) ([]pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -32,7 +31,7 @@ func (ns *Namespace) ListNamespaces(targetID string) ([]pds.ModelsNamespace, err
 func (ns *Namespace) CreateNamespace(targetID string, name string) (*pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
 	createRequest := pds.ControllersCreateNamespace{Name: &name}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -46,7 +45,7 @@ func (ns *Namespace) CreateNamespace(targetID string, name string) (*pds.ModelsN
 // GetNamespace return namespaces model in the target cluster.
 func (ns *Namespace) GetNamespace(namespaceID string) (*pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -60,7 +59,7 @@ func (ns *Namespace) GetNamespace(namespaceID string) (*pds.ModelsNamespace, err
 // DeleteNamespace delete the namespace and return status.
 func (ns *Namespace) DeleteNamespace(namespaceID string) (*status.Response, error) {
 	nsClient := ns.apiClient.NamespacesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

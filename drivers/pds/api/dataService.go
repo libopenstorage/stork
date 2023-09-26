@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // DataService struct
@@ -16,7 +15,7 @@ type DataService struct {
 // ListDataServices return data services models.
 func (ds *DataService) ListDataServices() ([]pds.ModelsDataService, error) {
 	dsClient := ds.apiClient.DataServicesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,7 +29,7 @@ func (ds *DataService) ListDataServices() ([]pds.ModelsDataService, error) {
 // GetDataService return data service model.
 func (ds *DataService) GetDataService(dataServiceID string) (*pds.ModelsDataService, error) {
 	dsClient := ds.apiClient.DataServicesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

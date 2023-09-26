@@ -6,7 +6,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -15,10 +14,12 @@ type DataServiceDeployment struct {
 	apiClient *pds.APIClient
 }
 
+var ServiceIdFlag = false
+
 // ListDeployments return deployments models for a given project.
 func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -44,11 +45,36 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 		ServiceType:                        &serviceType,
 		StorageOptionsTemplateId:           &storageTemplateID,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	dsModel, res, err := dsClient.ApiProjectsIdDeploymentsPost(ctx, projectID).Body(createRequest).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
+	}
+	return dsModel, err
+}
+func (ds *DataServiceDeployment) CreateDeploymentWithRbac(deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, tlsEnable bool) (*pds.ModelsDeployment, error) {
+	dsClient := ds.apiClient.DeploymentsApi
+	createRequest := pds.RequestsCreateProjectDeploymentRequest{
+		ApplicationConfigurationTemplateId: &appConfigID,
+		DeploymentTargetId:                 &deploymentTargetID,
+		DnsZone:                            &dnsZone,
+		ImageId:                            &imageID,
+		Name:                               &name,
+		NamespaceId:                        &namespaceID,
+		NodeCount:                          &nodeCount,
+		ResourceSettingsTemplateId:         &resourceTemplateID,
+		ServiceType:                        &serviceType,
+		StorageOptionsTemplateId:           &storageTemplateID,
+		TlsEnabled:                         &tlsEnable,
+	}
+	ctx, err := GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	dsModel, res, err := dsClient.ApiDeploymentsPost(ctx).Body(createRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -75,7 +101,7 @@ func (ds *DataServiceDeployment) CreateDeploymentWithScheduleBackup(projectID st
 		ServiceType:                        &serviceType,
 		StorageOptionsTemplateId:           &storageTemplateID,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -90,7 +116,7 @@ func (ds *DataServiceDeployment) CreateDeploymentWithScheduleBackup(projectID st
 // GetDeployment return deployment model.
 func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -104,7 +130,7 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 // GetDeploymentStatus return deployment status.
 func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.ServiceDeploymentStatus, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -118,7 +144,7 @@ func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.
 // GetDeploymentCredentials return deployment credentials.
 func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (*pds.DeploymentsCredentials, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -133,7 +159,7 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string,
 	appConfigOverride map[string]string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -154,7 +180,7 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 // GetConnectionDetails return connection details for the given deployment.
 func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.DeploymentsConnectionDetails, map[string]interface{}, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return pds.DeploymentsConnectionDetails{}, nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -168,7 +194,7 @@ func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.
 // DeleteDeployment delete deployment and return status.
 func (ds *DataServiceDeployment) DeleteDeployment(deploymentID string) (*status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

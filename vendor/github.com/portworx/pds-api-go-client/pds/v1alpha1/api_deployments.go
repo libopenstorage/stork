@@ -762,6 +762,140 @@ func (a *DeploymentsApiService) ApiDeploymentsIdStatusGetExecute(r ApiApiDeploym
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
+type ApiApiDeploymentsPostRequest struct {
+	ctx context.Context
+	ApiService *DeploymentsApiService
+	body *RequestsCreateProjectDeploymentRequest
+	localOnly *bool
+}
+
+// Request body containing the deployment config
+func (r ApiApiDeploymentsPostRequest) Body(body RequestsCreateProjectDeploymentRequest) ApiApiDeploymentsPostRequest {
+	r.body = &body
+	return r
+}
+// Set to true to only create the Deployment object in the database (does not create any actual resources)
+func (r ApiApiDeploymentsPostRequest) LocalOnly(localOnly bool) ApiApiDeploymentsPostRequest {
+	r.localOnly = &localOnly
+	return r
+}
+
+func (r ApiApiDeploymentsPostRequest) Execute() (*ModelsDeployment, *http.Response, error) {
+	return r.ApiService.ApiDeploymentsPostExecute(r)
+}
+
+/*
+ApiDeploymentsPost Create Deployment
+
+Creates a new data service Deployment
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @return ApiApiDeploymentsPostRequest
+*/
+func (a *DeploymentsApiService) ApiDeploymentsPost(ctx context.Context) ApiApiDeploymentsPostRequest {
+	return ApiApiDeploymentsPostRequest{
+		ApiService: a,
+		ctx: ctx,
+	}
+}
+
+// Execute executes the request
+//  @return ModelsDeployment
+func (a *DeploymentsApiService) ApiDeploymentsPostExecute(r ApiApiDeploymentsPostRequest) (*ModelsDeployment, *http.Response, error) {
+	var (
+		localVarHTTPMethod   = http.MethodPost
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *ModelsDeployment
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentsApiService.ApiDeploymentsPost")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/api/deployments"
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.body == nil {
+		return localVarReturnValue, nil, reportError("body is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	if r.localOnly != nil {
+		localVarHeaderParams["Local-Only"] = parameterToString(*r.localOnly, "")
+	}
+	// body params
+	localVarPostBody = r.body
+	if r.ctx != nil {
+		// API Key Authentication
+		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
+			if apiKey, ok := auth["ApiKeyAuth"]; ok {
+				var key string
+				if apiKey.Prefix != "" {
+					key = apiKey.Prefix + " " + apiKey.Key
+				} else {
+					key = apiKey.Key
+				}
+				localVarHeaderParams["Authorization"] = key
+			}
+		}
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiApiProjectsIdDeploymentsGetRequest struct {
 	ctx context.Context
 	ApiService *DeploymentsApiService

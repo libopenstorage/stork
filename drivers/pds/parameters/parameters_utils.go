@@ -21,14 +21,15 @@ type Parameter struct {
 	} `json:"DataServiceToTest"`
 	ForceImageID bool
 	InfraToTest  struct {
-		ControlPlaneURL string `json:"ControlPlaneURL"`
-		AccountName     string `json:"AccountName"`
-		TenantName      string `json:"TenantName"`
-		ProjectName     string `json:"ProjectName"`
-		ClusterType     string `json:"ClusterType"`
-		Namespace       string `json:"Namespace"`
-		PxNamespace     string `json:"PxNamespace"`
-		PDSNamespace    string `json:"PDSNamespace"`
+		ControlPlaneURL      string `json:"ControlPlaneURL"`
+		AccountName          string `json:"AccountName"`
+		TenantName           string `json:"TenantName"`
+		ProjectName          string `json:"ProjectName"`
+		ClusterType          string `json:"ClusterType"`
+		Namespace            string `json:"Namespace"`
+		PxNamespace          string `json:"PxNamespace"`
+		PDSNamespace         string `json:"PDSNamespace"`
+		ServiceIdentityToken bool   `json:"ServiceIdentityToken"`
 	} `json:"InfraToTest"`
 	PDSHelmVersions struct {
 		LatestHelmVersion   string `json:"LatestHelmVersion"`
@@ -68,6 +69,9 @@ const (
 	pdsParamsConfigmap = "pds-params"
 	configmapNamespace = "default"
 )
+
+var ServiceIdFlag = false
+var ServiceIdToken string
 
 type Customparams struct{}
 
@@ -110,4 +114,30 @@ func (customparams *Customparams) ReadParams(filename string) (*Parameter, error
 		}
 	}
 	return &jsonPara, nil
+}
+
+func (customparams *Customparams) UpdatePdsParams(params *Parameter) {
+	json.Marshal(params)
+	return
+}
+
+func (customparams *Customparams) ReturnServiceIdentityFlag() bool {
+	return ServiceIdFlag
+}
+
+func (customparams *Customparams) SetServiceIdToken(siToken string) string {
+	ServiceIdToken = siToken
+	return ServiceIdToken
+}
+func (customparams *Customparams) ReturnServiceIdToken() string {
+	return ServiceIdToken
+}
+
+func (Customparams *Customparams) SetParamsForServiceIdentityTest(params *Parameter, value bool) (bool, error) {
+	params.InfraToTest.ServiceIdentityToken = value
+	json.Marshal(params)
+	ServiceIdFlag = true
+	log.InfoD("Successfully updated Infra params for ServiceIdentity and RBAC test")
+	log.InfoD("ServiceIdentity flag is set to- %v", ServiceIdFlag)
+	return true, nil
 }

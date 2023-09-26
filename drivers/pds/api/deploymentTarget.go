@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -17,7 +16,7 @@ type DeploymentTarget struct {
 // ListDeploymentTargetsBelongsToTenant return deployment targets models for a tenant.
 func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantID string) ([]pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -31,7 +30,7 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantID string
 // ListDeploymentTargetsBelongsToProject return deployment targets models for a project.
 func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectID string) ([]pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -46,7 +45,7 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectID stri
 func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -62,7 +61,7 @@ func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.Mod
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)
 	updateRequest := pds.ControllersUpdateDeploymentTargetRequest{Name: &name}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -77,7 +76,7 @@ func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.Mod
 func (dt *DeploymentTarget) DeleteTarget(targetID string) (*status.Response, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

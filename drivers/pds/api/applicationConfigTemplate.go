@@ -6,7 +6,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -18,7 +17,7 @@ type AppConfigTemplate struct {
 // ListTemplates return app configuration templates model.
 func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -33,7 +32,7 @@ func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplica
 func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Infof("Get list of application configuration templates for tenant ID - %v", templateID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -49,7 +48,7 @@ func (at *AppConfigTemplate) CreateTemplate(tenantID string, dataServiceID strin
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Info("Create new resource template.")
 	createRequest := pds.ControllersCreateApplicationConfigurationTemplateRequest{ConfigItems: data, DataServiceId: &dataServiceID, Name: &name}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -66,7 +65,7 @@ func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, 
 	log.Info("Create new resource template.")
 	data := []pds.ModelsConfigItem{{DeployTime: &deployTime, Key: &key, Value: &value}}
 	updateRequest := pds.ControllersUpdateApplicationConfigurationTemplateRequest{ConfigItems: data, Name: &name}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -81,7 +80,7 @@ func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, 
 func (at *AppConfigTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Infof("Get application configuration template for tenant ID - %v", templateID)
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err

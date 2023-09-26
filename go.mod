@@ -36,7 +36,7 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/portworx/pds-api-go-client v0.0.0-20230707180846-5e9c6e1eb319
+	github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b
 	github.com/portworx/px-backup-api v1.2.2-0.20230904054048-eb1f23dd7431
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20230802175859-ff4459c520ae
 	github.com/portworx/talisman v1.1.3

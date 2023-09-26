@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 )
 
 // BackupTarget struct
@@ -16,7 +15,7 @@ type BackupTarget struct {
 // ListBackupTarget return backup targets models.
 func (backupTarget *BackupTarget) ListBackupTargetBelongsToProject(projectId string) ([]pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,7 +29,7 @@ func (backupTarget *BackupTarget) ListBackupTargetBelongsToProject(projectId str
 // ListBackupTarget return backup targets models.
 func (backupTarget *BackupTarget) ListBackupTargetBelongsToTenant(tenantID string) ([]pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -44,7 +43,7 @@ func (backupTarget *BackupTarget) ListBackupTargetBelongsToTenant(tenantID strin
 // LisBackupsStateBelongToBackupTarget return backup targets state models w.r.t to particular target.
 func (backupTarget *BackupTarget) LisBackupsStateBelongToBackupTarget(backuptargetID string) ([]pds.ModelsBackupTargetState, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -58,7 +57,7 @@ func (backupTarget *BackupTarget) LisBackupsStateBelongToBackupTarget(backuptarg
 // GetBackupTarget return backup target model.
 func (backupTarget *BackupTarget) GetBackupTarget(backupTargetID string) (*pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -79,7 +78,7 @@ func (backupTarget *BackupTarget) CreateBackupTarget(tenantID string, name strin
 		Region:              &region,
 		Type:                &backupType,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -96,7 +95,7 @@ func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, nam
 	updateRequest := pds.ControllersUpdateBackupTargetRequest{
 		Name: &name,
 	}
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -111,7 +110,7 @@ func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, nam
 // SyncToBackupLocation returned synced backup target model.
 func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -125,7 +124,7 @@ func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string) (
 // DeleteBackupTarget delete backup target and return status.
 func (backupTarget *BackupTarget) DeleteBackupTarget(backupTargetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

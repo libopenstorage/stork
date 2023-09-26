@@ -5,7 +5,6 @@ import (
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -18,7 +17,7 @@ type Tenant struct {
 func (tenant *Tenant) GetTenantsList(accountID string) ([]pds.ModelsTenant, error) {
 	tenantClient := tenant.apiClient.TenantsApi
 	log.Info("Get list of tenants.")
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -33,7 +32,7 @@ func (tenant *Tenant) GetTenantsList(accountID string) ([]pds.ModelsTenant, erro
 func (tenant *Tenant) GetTenant(tenantID string) (*pds.ModelsTenant, error) {
 	tenantClient := tenant.apiClient.TenantsApi
 	log.Info("Get tenant.")
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -48,7 +47,7 @@ func (tenant *Tenant) GetTenant(tenantID string) (*pds.ModelsTenant, error) {
 func (tenant *Tenant) GetDNS(tenantID string) (*pds.ModelsDNSDetails, error) {
 	tenantClient := tenant.apiClient.TenantsApi
 	log.Info("Get tenant.")
-	ctx, err := pdsutils.GetContext()
+	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
