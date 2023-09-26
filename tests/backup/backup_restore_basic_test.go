@@ -1159,6 +1159,13 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
 		})
+		Step("Deleting all admin backups at the start of the testcase", func() {
+			log.InfoD("Deleting all admin backups at the start of the testcase")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = DeleteAllBackups(ctx, orgID)
+			log.FailOnError(err, "Deleting all admin backups at the start of the testcase")
+		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
 			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
@@ -1999,6 +2006,14 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Deleting all admin backups at the start of the testcase", func() {
+			log.InfoD("Deleting all admin backups at the start of the testcase")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = DeleteAllBackups(ctx, orgID)
+			log.FailOnError(err, "Deleting all admin backups at the start of the testcase")
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {

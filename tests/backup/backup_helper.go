@@ -4428,3 +4428,50 @@ func UpdateCluster(clusterName string, clusterUid string, kubeConfigPath string,
 	}
 	return status, err
 }
+
+// DeleteAllBackups deletes all backup from the given context and org
+func DeleteAllBackups(ctx context.Context, orgId string) error {
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	semaphore := make(chan int, 4)
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		wg.Add(1)
+		go func(bkp *api.BackupObject) {
+			semaphore <- 0
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			bkpDeleteRequest := &api.BackupDeleteRequest{
+				Name:  bkp.GetName(),
+				OrgId: bkp.GetOrgId(),
+				Uid:   bkp.GetUid(),
+			}
+			_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), backupDeleteTimeout, backupDeleteRetryTime)
+			if err != nil {
+				errChan <- err
+			}
+		}(bkp)
+	}
+	wg.Wait()
+	close(errChan)
+	close(semaphore)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	return nil
+}
