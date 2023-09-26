@@ -66,6 +66,8 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 )
 
+require go.uber.org/multierr v1.7.0 // indirect
+
 require (
 	cloud.google.com/go v0.110.7 // indirect
 	cloud.google.com/go/compute v1.23.0 // indirect

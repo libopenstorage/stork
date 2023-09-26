@@ -639,6 +639,14 @@ func (d *dcos) SetConfig(configPath string) error {
 	}
 }
 
+func (d *dcos) SetGkeConfig(configPath string, jsonKey string) error {
+	// TODO: Implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetGkeConfig()",
+	}
+}
+
 func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	// TODO: Implement this method
 	return "", &errors.ErrNotSupported{

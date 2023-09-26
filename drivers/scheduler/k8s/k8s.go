@@ -374,6 +374,46 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	return nil
 }
 
+// SetGkeConfig sets kubeconfig for cloud provider GKE
+func (k *K8s) SetGkeConfig(kubeconfigPath string, jsonKey string) error {
+
+	var clientConfig *rest.Config
+	var err error
+
+	if kubeconfigPath == "" {
+		clientConfig = nil
+	} else {
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	clientConfig.AuthProvider.Config["cred-json"] = jsonKey
+	if err != nil {
+		return err
+	}
+
+	k8sCore.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sStork.SetConfig(clientConfig)
+	k8sStorage.SetConfig(clientConfig)
+	k8sExternalStorage.SetConfig(clientConfig)
+	k8sAutopilot.SetConfig(clientConfig)
+	k8sRbac.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sPolicy.SetConfig(clientConfig)
+	k8sBatch.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sAdmissionRegistration.SetConfig(clientConfig)
+	k8sExternalsnap.SetConfig(clientConfig)
+	k8sApiExtensions.SetConfig(clientConfig)
+	k8sOperator.SetConfig(clientConfig)
+
+	return nil
+}
+
 // RescanSpecs Rescan the application spec file for spei
 func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 	var err error

@@ -344,8 +344,11 @@ type Driver interface {
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 
-	// SetConfig sets connnection config (e.g. kubeconfig in case of k8s) for scheduler driver
+	// SetConfig sets connection config (e.g. kubeconfig in case of k8s) for scheduler driver
 	SetConfig(configPath string) error
+
+	// SetGkeConfig sets connection config (e.g. kubeconfig in case of GKE cluster) for scheduler driver
+	SetGkeConfig(configPath string, jsonKey string) error
 
 	// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
 	UpgradeScheduler(version string) error
