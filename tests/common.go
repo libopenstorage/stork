@@ -8977,7 +8977,6 @@ func IsVolumeExits(volName string) bool {
 func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context, orgID string) error {
 	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
 	backupDriver := Inst().Backup
-	groups = append(groups, "px-admin-group")
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
 	for _, userName := range userNames {

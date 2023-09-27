@@ -3645,7 +3645,6 @@ func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
 func UpdateBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
 	log.Infof("UpdateBackupLocationOwnership for users %v", userNames)
 	backupDriver := Inst().Backup
-	groups = append(groups, "px-admin-group")
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
 	for _, userName := range userNames {
@@ -3778,7 +3777,6 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 func UpdateSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
 	log.Infof("UpdateScheduleOwnership for users %v", userNames)
 	backupDriver := Inst().Backup
-	groups = append(groups, "px-admin-group")
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
 	for _, userName := range userNames {
@@ -3841,7 +3839,6 @@ func UpdateSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid 
 func UpdateRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
 	log.Infof("UpdateruleOwnership for users %v", userNames)
 	backupDriver := Inst().Backup
-	groups = append(groups, "px-admin-group")
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
 	for _, userName := range userNames {
