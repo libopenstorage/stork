@@ -387,7 +387,6 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 		numberOfBackups                            = 1
 		invalidKubeconfig                          = "\"\""
 		infraAdminRole         backup.PxBackupRole = backup.InfrastructureOwner
-		deleteUserClusters                         = false
 	)
 
 	JustBeforeEach(func() {
@@ -503,6 +502,8 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 			}
 			err := TaskHandler([]string{infraAdminUsers[i]}, createObjectsFromUser, Parallel)
 			log.FailOnError(err, "failed to create objects from user")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, user := range []string{infraAdminUsers[i]} {
 				Step(fmt.Sprintf("Take restore of backups from the user %s", user), func() {
 					log.InfoD(fmt.Sprintf("Taking restore of backups from the user %s", user))
@@ -559,8 +560,25 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, user))
 						}
 					})
+					// In case of CSI, a cluster reference is mandatory to delete a backup. We are creating new clusters
+					// to refer them in the delete backup request, as the associated clusters have been deleted.
+					Step(fmt.Sprintf("Create source and destination cluster from the user %s", user), func() {
+						log.InfoD(fmt.Sprintf("Creating source and destination cluster from the user %s", user))
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+						log.FailOnError(err, "failed to fetch user %s ctx", user)
+						err = CreateApplicationClusters(orgID, "", "", nonAdminCtx)
+						log.FailOnError(err, "failed create source and destination cluster from the user %s", user)
+						clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, nonAdminCtx)
+						log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+						dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+						userClusterMap[user] = make(map[string]string)
+						for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
+							userClusterUID, err := Inst().Backup.GetClusterUID(nonAdminCtx, orgID, clusterName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+							userClusterMap[user][clusterName] = userClusterUID
+						}
+					})
 				} else {
-					deleteUserClusters = true
 					Step(fmt.Sprintf("Make source and destination cluster inactive from the user %s", user), func() {
 						log.InfoD(fmt.Sprintf("Making source and destination cluster inactive from the user %s", user))
 						nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -568,13 +586,24 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 						for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
 							clusterUID, err := Inst().Backup.GetClusterUID(nonAdminCtx, orgID, clusterName)
 							log.FailOnError(err, "failed to fetch cluster %s uid", clusterName)
+							clusterInspectRequest := &api.ClusterInspectRequest{
+								Name:           clusterName,
+								Uid:            clusterUID,
+								OrgId:          orgID,
+								IncludeSecrets: true,
+							}
+							clusterInspectResp, err := Inst().Backup.InspectCluster(nonAdminCtx, clusterInspectRequest)
+							log.FailOnError(err, "failed to inspect cluster %s with uid %s", clusterName, clusterUID)
 							clusterUpdateRequest := &api.ClusterUpdateRequest{
 								CreateMetadata: &api.CreateMetadata{
 									Name:  clusterName,
 									Uid:   clusterUID,
 									OrgId: orgID,
 								},
-								Kubeconfig: invalidKubeconfig,
+								Kubeconfig:            invalidKubeconfig,
+								CloudCredential:       clusterInspectResp.GetCluster().GetCloudCredential(),
+								CloudCredentialRef:    clusterInspectResp.GetCluster().GetCloudCredentialRef(),
+								PlatformCredentialRef: clusterInspectResp.GetCluster().GetPlatformCredentialRef(),
 							}
 							_, err = Inst().Backup.UpdateCluster(nonAdminCtx, clusterUpdateRequest)
 							if err != nil {
@@ -589,10 +618,24 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 							}
 						}
 					})
+					// In case of CSI, a cluster reference is mandatory to delete a backup. We are creating new clusters
+					// to refer them in the delete backup request, as the associated clusters have been inactive.
+					Step("Create source and destination cluster from the admin", func() {
+						log.InfoD("Creating source and destination cluster from the admin")
+						err = CreateApplicationClusters(orgID, "", "", ctx)
+						log.FailOnError(err, "failed create source and destination cluster from the admin")
+						clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+						log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+						dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+						userClusterMap[user] = make(map[string]string)
+						for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
+							userClusterUID, err := Inst().Backup.GetClusterUID(ctx, orgID, clusterName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+							userClusterMap[user][clusterName] = userClusterUID
+						}
+					})
 				}
 			}
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			cleanupUserObjectsFromAdmin := func(user string) {
 				defer GinkgoRecover()
 				Step(fmt.Sprintf("Delete user %s backups from the admin", user), func() {
@@ -600,10 +643,10 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					for backupName := range userBackupMap[user] {
 						backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 						log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-						_, err = DeleteBackup(backupName, backupUid, orgID, ctx)
+						_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], orgID, ctx)
 						log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
-						err = DeleteBackupAndWait(backupName, ctx)
-						log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+						err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, backupDeleteTimeout, backupDeleteRetryTime)
+						log.FailOnError(err, fmt.Sprintf("failed waiting for user %s backup %s deletion", user, backupName))
 					}
 				})
 				Step(fmt.Sprintf("Delete user %s restores from the admin", user), func() {
@@ -616,18 +659,14 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 			}
 			err = TaskHandler([]string{infraAdminUsers[i]}, cleanupUserObjectsFromAdmin, Parallel)
 			log.FailOnError(err, "failed to cleanup user objects from admin")
-			if deleteUserClusters {
-				for _, user := range []string{infraAdminUsers[i]} {
-					Step(fmt.Sprintf("Delete user %s source and destination cluster", user), func() {
-						log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster", user))
-						nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
-						log.FailOnError(err, "failed to fetch user %s ctx", user)
-						for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
-							err := DeleteClusterWithUID(clusterName, userClusterMap[user][clusterName], orgID, nonAdminCtx, false)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, user))
-						}
-					})
-				}
+			for _, user := range []string{infraAdminUsers[i]} {
+				Step(fmt.Sprintf("Delete user %s source and destination cluster", user), func() {
+					log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster", user))
+					for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
+						err := DeleteClusterWithUID(clusterName, userClusterMap[user][clusterName], orgID, ctx, false)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, user))
+					}
+				})
 			}
 		}
 	})
