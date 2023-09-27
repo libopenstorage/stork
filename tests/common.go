@@ -3606,7 +3606,7 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 	if err != nil {
 		return err
 	}
-	err = backupDriver.WaitForClusterDeletion(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}

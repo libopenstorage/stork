@@ -161,6 +161,16 @@ type Cluster interface {
 	WaitForClusterDeletion(
 		ctx context.Context,
 		clusterName,
+		orgID string,
+		timeout time.Duration,
+		timeBeforeRetry time.Duration,
+	) error
+
+	// WaitForClusterDeletionWithUID waits for cluster to be deleted successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration using cluster uid
+	WaitForClusterDeletionWithUID(
+		ctx context.Context,
+		clusterName,
 		clusterUid,
 		orgID string,
 		timeout time.Duration,
