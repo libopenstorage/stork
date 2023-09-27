@@ -62,6 +62,7 @@ type portworx struct {
 	ruleManager             api.RulesClient
 	versionManager          api.VersionClient
 	activityTimeLineManager api.ActivityTimeLineClient
+	metricsManager          api.MetricsClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -185,6 +186,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.ruleManager = api.NewRulesClient(conn)
 	p.versionManager = api.NewVersionClient(conn)
 	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
+	p.metricsManager = api.NewMetricsClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -2464,6 +2466,11 @@ func (p *portworx) GetAllRules(ctx context.Context, orgID string) ([]string, err
 		ruleNames = append(ruleNames, rule.Name)
 	}
 	return ruleNames, nil
+}
+
+// InspectMetrics gets the metrics data for the given org
+func (p *portworx) InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error) {
+	return p.metricsManager.Inspect(ctx, req)
 }
 
 func init() {
