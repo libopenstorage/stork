@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/onsi/ginkgo"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/onsi/ginkgo"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -175,6 +176,13 @@ type KeycloakGroupToUser struct {
 	UserID  string `json:"userId"`
 	GroupID string `json:"groupId"`
 	Realm   string `json:"realm"`
+}
+
+// KeycloakRole representation for creating role
+type KeycloakRole struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Attributes  []string `json:"attributes"`
 }
 
 // getOidcSecretName returns OIDC secret name
@@ -1231,4 +1239,54 @@ func GetRandomUserFromGroup(groupName string) (string, error) {
 	rand.Seed(time.Now().Unix())
 	userName := users[rand.Intn(len(users))]
 	return userName, nil
+}
+
+// CreateRole create new role to keycloak
+func CreateRole(role PxBackupRole, description string) error {
+	kRole := KeycloakRole{
+		Name:        string(role),
+		Description: description,
+	}
+	roleBytes, err := json.Marshal(&kRole)
+	if err != nil {
+		return err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/roles", keycloakEndPoint)
+	method := "POST"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteRole deletes role from keycloak
+func DeleteRole(role PxBackupRole) error {
+	roleId, err := GetRoleID(role)
+	if err != nil {
+		return err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/roles-by-id/%s", keycloakEndPoint, roleId)
+	method := "DELETE"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }

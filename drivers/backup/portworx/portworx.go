@@ -60,6 +60,7 @@ type portworx struct {
 	licenseManager          api.LicenseClient
 	healthManager           api.HealthClient
 	ruleManager             api.RulesClient
+	roleManager             api.RoleClient
 	versionManager          api.VersionClient
 	activityTimeLineManager api.ActivityTimeLineClient
 	metricsManager          api.MetricsClient
@@ -187,6 +188,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.versionManager = api.NewVersionClient(conn)
 	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
 	p.metricsManager = api.NewMetricsClient(conn)
+	p.roleManager = api.NewRoleClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -2508,6 +2510,26 @@ func (p *portworx) GetAllRules(ctx context.Context, orgID string) ([]string, err
 // InspectMetrics gets the metrics data for the given org
 func (p *portworx) InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error) {
 	return p.metricsManager.Inspect(ctx, req)
+}
+
+func (p *portworx) CreateRole(ctx context.Context, req *api.RoleCreateRequest) (*api.RoleCreateResponse, error) {
+	return p.roleManager.Create(ctx, req)
+}
+
+func (p *portworx) DeleteRole(ctx context.Context, req *api.RoleDeleteRequest) (*api.RoleDeleteResponse, error) {
+	return p.roleManager.Delete(ctx, req)
+}
+
+func (p *portworx) EnumerateRole(ctx context.Context, req *api.RoleEnumerateRequest) (*api.RoleEnumerateResponse, error) {
+	return p.roleManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) UpdateRole(ctx context.Context, req *api.RoleUpdateRequest) (*api.RoleUpdateResponse, error) {
+	return p.roleManager.Update(ctx, req)
+}
+
+func (p *portworx) InspectRole(ctx context.Context, req *api.RoleInspectRequest) (*api.RoleInspectResponse, error) {
+	return p.roleManager.Inspect(ctx, req)
 }
 
 func init() {
