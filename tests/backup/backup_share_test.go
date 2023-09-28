@@ -2882,8 +2882,12 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		for _, ctxNonAdmin := range userContexts {
 			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+			err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, SourceClusterName, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", SourceClusterName))
 			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+			err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, destinationClusterName, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", destinationClusterName))
 		}
 
 		err := backup.DeleteUser(userName)
@@ -3026,7 +3030,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		})
 
