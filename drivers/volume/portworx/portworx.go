@@ -4156,18 +4156,18 @@ func (p *portworx) verifyPortworxPv(pv *v1.PersistentVolume) error {
 func (p *portworx) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
 	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
 	if err != nil {
-		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %v", pvc.Namespace, pvc.Name, err)
+		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", pvc.Namespace, pvc.Name, err)
 	}
 	pvName := pvc.Spec.VolumeName
 
 	pv, err := core.Instance().GetPersistentVolume(pvName)
 	if err != nil {
-		return "", fmt.Errorf("error getting PV name %v: %v", pvName, err)
+		return "", fmt.Errorf("error getting PV %v: %w", pvName, err)
 	}
 
 	id, err := p.getVolumeIDFromPV(pv)
 	if err != nil {
-		return "", fmt.Errorf("error getting PV ID %v: %v", pvName, err)
+		return "", fmt.Errorf("error getting volume ID for PV %v: %w", pvName, err)
 
 	}
 
