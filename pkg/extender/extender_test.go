@@ -1674,7 +1674,7 @@ func preferRemoteNodeFalseAntiHyperConvergenceFilterTest(t *testing.T) {
 	pod := newPod("preferRemoteNodeFalseAntiHyperConvergenceFilterTest", map[string]bool{"preferRemoteNodeFalseAntiHyperConvergenceFilterTest": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("preferRemoteNodeFalseAntiHyperConvergenceFilterTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true", preferRemoteNodeParameter: "false"}, true, false); err != nil {
+	if err := driver.ProvisionVolume("preferRemoteNodeFalseAntiHyperConvergenceFilterTest", provNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true", preferRemoteNodeParameter: "false"}, true, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -1935,17 +1935,17 @@ func multiVolume4PreferRemoteNodeAntiHyperConvergenceTest(t *testing.T) {
 	pod := newPod("multiVolumeAntiHyperConvergenceTest", map[string]bool{"HyperConvergedVolumes4": false, "sharedV4Svc41": false, "sharedV4Svc42": false})
 
 	regularVolumeProvNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("HyperConvergedVolumes4", regularVolumeProvNodes, 3, nil, false, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedVolumes4", regularVolumeProvNodes, 3, nil, false, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcPreferRemoteFalseProvNodes := []int{3, 4, 5}
-	if err := driver.ProvisionVolume("sharedV4Svc41", sharedV4SvcPreferRemoteFalseProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true", preferRemoteNodeParameter: "false"}, true, false); err != nil {
+	if err := driver.ProvisionVolume("sharedV4Svc41", sharedV4SvcPreferRemoteFalseProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true", preferRemoteNodeParameter: "false"}, true, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
 	sharedV4SvcProvNodes := []int{2}
-	if err := driver.ProvisionVolume("sharedV4Svc42", sharedV4SvcProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true", preferRemoteNodeParameter: "true"}, true, false); err != nil {
+	if err := driver.ProvisionVolume("sharedV4Svc42", sharedV4SvcProvNodes, 3, map[string]string{preferRemoteNodeOnlyParameter: "true", preferRemoteNodeParameter: "true"}, true, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
