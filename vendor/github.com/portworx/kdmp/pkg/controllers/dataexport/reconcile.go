@@ -507,6 +507,13 @@ func appendPodLogToStork(jobName string, namespace string) {
 	}
 	for _, pod := range pods.Items {
 		numLogLines := int64(50)
+		podDescribe, err := core.Instance().GetPodByName(pod.Name, pod.Namespace)
+		if err != nil {
+			logrus.Infof("Error fetching description of job-pod[%s] :%v", pod.Name, err)
+		}
+		logrus.Infof("start of job-pod [%s]'s description", pod.Name)
+		logrus.Infof("Describe %v", podDescribe)
+		logrus.Infof("end of job-pod [%s]'s description", pod.Name)
 		podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
 		if err != nil {
 			logrus.Infof("error fetching log of job-pod %s: %v", pod.Name, err)
