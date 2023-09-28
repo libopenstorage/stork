@@ -25,7 +25,6 @@ var (
 	restoredDeployment     *pds.ModelsDeployment
 	restoredDeployments    []*pds.ModelsDeployment
 	deploymentsToBeCleaned []*pds.ModelsDeployment
-	//deploymentDSentityMap  = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
 )
 
 const (
