@@ -123,6 +123,7 @@ vendor-tidy:
 
 vendor:
 	go mod vendor
+	sed -i '1 i\// +build skipcompile\n' vendor/kubevirt.io/client-go/kubecli/kubevirt_test_utils.go
 
 install:
 	go install -tags "$(TAGS)" $(PKGS)

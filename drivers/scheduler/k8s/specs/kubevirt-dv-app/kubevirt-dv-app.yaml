@@ -1,0 +1,46 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    kubevirt.io/vm: ubuntu-vm-dvtemplate
+  name: ubuntu-vm-dvtemplate
+spec:
+  running: false
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: ubuntu-vm-dvtemplate
+    spec:
+      domain:
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: datavolumedisk1
+          interfaces:
+          - name: default
+            masquerade: {}
+        resources:
+          requests:
+            memory: 64M
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+      - dataVolume:
+          name: ubuntu-dv
+        name: datavolumedisk1
+  dataVolumeTemplates:
+  - metadata:
+      name: ubuntu-dv
+    spec:
+      pvc:
+        storageClassName: px-csi-db
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+      source:
+        http:
+          url: https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img

@@ -29,16 +29,16 @@ require (
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
 	github.com/libopenstorage/operator v0.0.0-20230814210648-7843b18f6ab0
-	github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
+	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.24.1
-	github.com/openshift/api v0.0.0-20230426193520-54a14470e5dc
+	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b
 	github.com/portworx/px-backup-api v1.2.2-0.20230904054048-eb1f23dd7431
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230802175859-ff4459c520ae
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230926074552-5a61e22be0a4
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.14.0
@@ -60,10 +60,22 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.6.0
-	k8s.io/api v0.26.3
-	k8s.io/apiextensions-apiserver v0.26.1
-	k8s.io/apimachinery v0.26.3
+	k8s.io/api v0.27.1
+	k8s.io/apiextensions-apiserver v0.26.3
+	k8s.io/apimachinery v0.27.1
 	k8s.io/client-go v12.0.0+incompatible
+	kubevirt.io/api v1.0.0
+)
+
+require (
+	github.com/coreos/prometheus-operator v0.38.0 // indirect
+	github.com/go-kit/kit v0.10.0 // indirect
+	github.com/go-logfmt/logfmt v0.5.1 // indirect
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
+	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	kubevirt.io/client-go v0.59.2 // indirect
+	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
+	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
 
 require go.uber.org/multierr v1.7.0 // indirect
@@ -135,10 +147,10 @@ require (
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-errors/errors v1.4.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.0.2 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
-	github.com/go-openapi/jsonpointer v0.19.5 // indirect
-	github.com/go-openapi/jsonreference v0.20.0 // indirect
+	github.com/go-openapi/jsonpointer v0.19.6 // indirect
+	github.com/go-openapi/jsonreference v0.20.1 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
@@ -198,7 +210,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
-	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.2.0 // indirect
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
@@ -289,10 +301,10 @@ require (
 	k8s.io/component-helpers v0.25.1 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
+	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
 	k8s.io/kubectl v0.25.2 // indirect
 	k8s.io/kubernetes v1.25.1 // indirect
-	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749 // indirect
+	k8s.io/utils v0.0.0-20230505201702-9f6742963106 // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
 	sigs.k8s.io/controller-runtime v0.14.5 // indirect
@@ -326,7 +338,6 @@ replace (
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency
@@ -360,7 +371,7 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.25.1
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.25.1
 	k8s.io/sample-controller => k8s.io/sample-controller v0.25.1
+	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 => kubevirt.io/containerized-data-importer-api v1.56.1
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
-
 )
