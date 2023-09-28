@@ -666,6 +666,16 @@ func (a *aws) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
 }
 
+// PodPrefersBindMount returns true if the Pod prefers local volume attachment
+func (a *aws) PodPrefersBindMount(pod *v1.Pod) bool {
+	// No preference for bind mount
+	return false
+}
+
+func (a *aws) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+	return "", nil
+}
+
 func init() {
 	a := &aws{}
 	err := a.Init(nil)

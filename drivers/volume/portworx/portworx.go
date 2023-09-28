@@ -537,6 +537,8 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 	info.VolumeSourceRef = vols[0]
 
+	info.AttachedOn = vols[0].AttachedOn
+
 	return info, nil
 }
 
@@ -4151,6 +4153,27 @@ func (p *portworx) verifyPortworxPv(pv *v1.PersistentVolume) error {
 	return err
 }
 
+func (p *portworx) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	if err != nil {
+		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %v", pvc.Namespace, pvc.Name, err)
+	}
+	pvName := pvc.Spec.VolumeName
+
+	pv, err := core.Instance().GetPersistentVolume(pvName)
+	if err != nil {
+		return "", fmt.Errorf("error getting PV name %v: %v", pvName, err)
+	}
+
+	id, err := p.getVolumeIDFromPV(pv)
+	if err != nil {
+		return "", fmt.Errorf("error getting PV ID %v: %v", pvName, err)
+
+	}
+
+	return id, err
+}
+
 func (p *portworx) getVolumeIDFromPV(pv *v1.PersistentVolume) (string, error) {
 	if pv == nil {
 		return "", fmt.Errorf("nil PV passed into getVolumeIDFromPV")
@@ -4252,8 +4275,16 @@ func (a *portworx) GetCSIPodPrefix() (string, error) {
 	return csiPodNamePrefix, nil
 }
 
+func (p *portworx) PodPrefersBindMount(pod *v1.Pod) bool {
+	return p.isVirtLauncherPod(pod)
+}
+
+func (e *portworx) isVirtLauncherPod(pod *v1.Pod) bool {
+	return pod.Labels["kubevirt.io"] == "virt-launcher"
+}
+
 func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
-	if pod.Labels["kubevirt.io"] != "virt-launcher" {
+	if !p.isVirtLauncherPod(pod) {
 		return nil, nil
 	}
 

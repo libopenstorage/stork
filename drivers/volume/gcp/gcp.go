@@ -665,8 +665,18 @@ func (g *gcp) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPa
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (a *gcp) GetCSIPodPrefix() (string, error) {
+func (g *gcp) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
+}
+
+func (g *gcp) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+	return "", nil
+}
+
+// PodPrefersBindMount returns true if the Pod prefers local volume attachment
+func (g *gcp) PodPrefersBindMount(pod *v1.Pod) bool {
+	// No preference for bind mount
+	return false
 }
 
 func init() {

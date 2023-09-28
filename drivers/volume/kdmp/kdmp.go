@@ -998,8 +998,18 @@ func (k *kdmp) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONP
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (a *kdmp) GetCSIPodPrefix() (string, error) {
+func (k *kdmp) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
+}
+
+// PodPrefersBindMount returns true if the Pod prefers local volume attachment
+func (k *kdmp) PodPrefersBindMount(pod *v1.Pod) bool {
+	// No preference for bind mount
+	return false
+}
+
+func (k *kdmp) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+	return "", nil
 }
 
 func init() {

@@ -462,8 +462,18 @@ func (l *linstor) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JS
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (a *linstor) GetCSIPodPrefix() (string, error) {
+func (l *linstor) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
+}
+
+// PodPrefersBindMount returns true if the Pod prefers local volume attachment
+func (l *linstor) PodPrefersBindMount(pod *v1.Pod) bool {
+	// No preference for bind mount
+	return false
+}
+
+func (l *linstor) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+	return "", nil
 }
 
 func init() {

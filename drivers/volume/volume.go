@@ -148,6 +148,12 @@ type Driver interface {
 	// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
 	GetCSIPodPrefix() (string, error)
 
+	// PodPrefersBindMount returns true if the Pod prefers local volume attachment
+	PodPrefersBindMount(pod *v1.Pod) bool
+
+	//GetVolumeIDFromPVC returns Volume ID for a PVC
+	GetVolumeIDFromPVC(pvcName string, namespace string) (string, error)
+
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface
 	// ClusterPairPluginInterface Interface to pair clusters
@@ -288,6 +294,8 @@ type Info struct {
 	NeedsAntiHyperconvergence bool
 	// WindowsVolume is a flag to indicate if the volume is being used by a windows Pod
 	WindowsVolume bool
+	// AttachedOn is the node instance identifier for clustered systems.
+	AttachedOn string
 }
 
 // NodeStatus Status of driver on a node

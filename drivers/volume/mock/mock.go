@@ -156,6 +156,7 @@ func (m *Driver) ProvisionVolume(
 	labels map[string]string,
 	needsAntiHyperconvergence bool,
 	windowsVolume bool,
+	attachedOn string,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
 		return fmt.Errorf("volume %v already exists", volumeName)
@@ -168,6 +169,7 @@ func (m *Driver) ProvisionVolume(
 		Labels:                    labels,
 		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
 		WindowsVolume:             windowsVolume,
+		AttachedOn:                attachedOn,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {
@@ -339,8 +341,17 @@ func (m *Driver) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSO
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (a *Driver) GetCSIPodPrefix() (string, error) {
+func (m *Driver) GetCSIPodPrefix() (string, error) {
 	return "px-csi-ext", nil
+}
+
+func (m *Driver) PodPrefersBindMount(pod *v1.Pod) bool {
+	return pod.Labels["kubevirt.io"] == "virt-launcher"
+}
+
+func (m *Driver) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+	// TODO
+	return "", nil
 }
 
 func init() {
