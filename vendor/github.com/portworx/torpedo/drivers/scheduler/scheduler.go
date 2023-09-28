@@ -8,7 +8,7 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/api"
@@ -78,6 +78,9 @@ type AppConfig struct {
 	Repl                 string   `yaml:"repl"`
 	Fs                   string   `yaml:"fs"`
 	AggregationLevel     string   `yaml:"aggregation_level"`
+	IoProfile            string   `yaml:"io_profile"`
+	Journal              string   `yaml:"journal"`
+	DataSize             string   `yaml:"data_size"`
 }
 
 // InitOptions initialization options
@@ -113,12 +116,18 @@ type InitOptions struct {
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
 	SecureApps []string
+	// AnthosAdminWorkStationNodeIP needed for anthos scheduler
+	AnthosAdminWorkStationNodeIP string
+	// AnthosInstancePath needed for anthos scheduler
+	AnthosInstancePath string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
 	AppKeys []string
+	// CsiAppKeys identified a list of applications keys that users wants to schedule with CSI provisioner
+	CsiAppKeys []string
 	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
@@ -161,6 +170,9 @@ type Driver interface {
 
 	// Schedule starts applications and returns a context for each one of them
 	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
+
+	// ScheduleWithCustomAppSpecs starts applications with custom app specs and returns a context for each one of them
+	ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options ScheduleOptions) ([]*Context, error)
 
 	// WaitForRunning waits for application to start running.
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
@@ -228,6 +240,9 @@ type Driver interface {
 
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)
+
+	// ResizePVC resizes given PVC
+	ResizePVC(*Context, *corev1.PersistentVolumeClaim, uint64) (*volume.Volume, error)
 
 	// GetSnapshots returns all storage snapshots for the given context
 	GetSnapshots(*Context) ([]*volume.Snapshot, error)
@@ -329,8 +344,11 @@ type Driver interface {
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 
-	// SetConfig sets connnection config (e.g. kubeconfig in case of k8s) for scheduler driver
+	// SetConfig sets connection config (e.g. kubeconfig in case of k8s) for scheduler driver
 	SetConfig(configPath string) error
+
+	// SetGkeConfig sets connection config (e.g. kubeconfig in case of GKE cluster) for scheduler driver
+	SetGkeConfig(configPath string, jsonKey string) error
 
 	// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
 	UpgradeScheduler(version string) error
@@ -348,13 +366,13 @@ type Driver interface {
 	RecycleNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
-	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
+	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
 	// to make the interface consistent
-	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
+	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error)
 
 	// CSISnapshotTest create csi snapshot and return a pvc using that snapshot
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
@@ -369,13 +387,13 @@ type Driver interface {
 	CSICloneTest(*Context, CSICloneRequest) error
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
-	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
+	CreateCsiSnapsForVolumes(*Context, string) (map[string]*volsnapv1.VolumeSnapshot, error)
 
 	// GetCsiSnapshots return snapshot lists for a volume
-	GetCsiSnapshots(string, string) ([]*v1beta1.VolumeSnapshot, error)
+	GetCsiSnapshots(string, string) ([]*volsnapv1.VolumeSnapshot, error)
 
 	// ValidateCsiSnapshots validate csi snapshots in the context
-	ValidateCsiSnapshots(*Context, map[string]*v1beta1.VolumeSnapshot) error
+	ValidateCsiSnapshots(*Context, map[string]*volsnapv1.VolumeSnapshot) error
 
 	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
 	RestoreCsiSnapAndValidate(*Context, map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error)
@@ -385,6 +403,9 @@ type Driver interface {
 
 	// DeleteCsiSnapshot delete a snapshots from namespace
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
+
+	// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
+	GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error)
 
 	// GetPodsRestartCount gets restart count maps for pods in given namespace
 	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
@@ -397,6 +418,9 @@ type Driver interface {
 
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
+
+	// ScaleCluster scale the cluster to the given replicas
+	ScaleCluster(replicas int) error
 }
 
 var (

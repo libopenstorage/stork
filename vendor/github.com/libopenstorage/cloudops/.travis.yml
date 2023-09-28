@@ -1,0 +1,20 @@
+sudo: required
+dist: xenial
+language: go
+go:
+  - 1.17.x
+cache:
+  directories:
+    - $GOPATH/pkg/mod
+before_install:
+  - sudo apt-get update -yq
+script:
+  - |
+    # TODO add pretest here too once it's fixed
+    make && make test
+notifications:
+  email:
+    on_success: always
+    on_failure: always
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

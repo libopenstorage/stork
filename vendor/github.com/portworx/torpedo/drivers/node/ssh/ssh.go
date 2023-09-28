@@ -280,7 +280,6 @@ func (s *SSH) initSSH() error {
 	} else {
 		return fmt.Errorf("Unknown auth type")
 	}
-
 	return nil
 }
 
@@ -662,14 +661,20 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 	defer session.Close()
 
+	// This is required to run runc commands
+	if strings.Contains(cmd, "runc exec") {
+		// Disable PTY allocation
+		session.RequestPty("dummy", 80, 40, ssh_pkg.TerminalModes{})
+	}
+
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return "", fmt.Errorf("fail to setup stderr")
+		return "", fmt.Errorf("fail to setup stderr, err: %v", err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return "", fmt.Errorf("fail to setup stdout")
+		return "", fmt.Errorf("fail to setup stdout, err: %v", err)
 	}
 	if options.Sudo {
 		cmd = fmt.Sprintf("sudo su -c '%s' -", cmd) // Hyphen necessary to preserve PATH for commands like "which pxctl"
@@ -688,9 +693,10 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 
 	if ignoreErr == false && err != nil {
+		log.Infof("SSH ERR: %v", err)
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.UsableAddr,
-			Cause: fmt.Sprintf("failed to run command due to: %v", sterr),
+			Cause: fmt.Sprintf("failed to run command. sterr: %v, err: %v", sterr, err),
 		}
 	}
 	return out, nil
@@ -828,7 +834,8 @@ func getExecPodNamespace() (string, error) {
 			return svc.Namespace, nil
 		}
 	}
-	return "", fmt.Errorf("can't find %s Portworx service from list of services.", schedops.PXServiceName)
+	log.Warnf("can't find %s Portworx service from list of services.", schedops.PXServiceName)
+	return "", nil
 }
 
 // New returns a new SSH object

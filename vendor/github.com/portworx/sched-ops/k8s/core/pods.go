@@ -242,6 +242,13 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 							break containerLoop
 						}
 					}
+					// adding check for rawblock volume devices
+					for _, device := range container.VolumeDevices {
+						if device.Name == v.Name {
+							retList = append(retList, p)
+							break containerLoop
+						}
+					}
 				}
 			}
 		}

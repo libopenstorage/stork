@@ -2,9 +2,8 @@ package node
 
 import (
 	"fmt"
-	"sync"
-
 	"github.com/pborman/uuid"
+	"sync"
 )
 
 var (

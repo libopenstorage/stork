@@ -4,11 +4,11 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -48,35 +48,77 @@ func (c *Client) ListEvents(namespace string, opts metav1.ListOptions) (*corev1.
 
 // RecorderOps is an interface to record k8s events
 type RecorderOps interface {
-	// RecordEvent records an event into k8s using client-go's EventRecorder inteface
+	// RecordEventf records a new-style event into k8s using client-go's new events.EventRecorder interface.
+	RecordEventf(
+		reportingController string, regarding runtime.Object, related runtime.Object, eventType, reason, action string,
+		note string, args ...interface{},
+	)
+
+	// RecordEvent is deprecated. Use RecordEventf instead.
+	// This function translates old-style event params to record a new-style event. Kept for backwards compatibility.
+	// New callers should use RecordEventf directly.
+	RecordEvent(source corev1.EventSource, object runtime.Object, eventtype, reason, message string)
+
+	// RecordEventLegacy records an old-style event into k8s using client-go's record.EventRecorder (deprecated) interface.
 	// It takes the event source and the object on which the event is being raised.
-	RecordEvent(source v1.EventSource, object runtime.Object, eventtype, reason, message string)
+	// Deprecated. Use RecordEventf instead.
+	RecordEventLegacy(source corev1.EventSource, object runtime.Object, eventtype, reason, message string)
 }
 
-// RecordEvent records an event into k8s using client-go's EventRecorder inteface
-func (c *Client) RecordEvent(source v1.EventSource, object runtime.Object, eventtype, reason, message string) {
+// RecordEventLegacy see RecorderOps interface
+func (c *Client) RecordEventLegacy(source corev1.EventSource, object runtime.Object, eventtype, reason, message string) {
 	if err := c.initClient(); err != nil {
 		return
 	}
 	c.eventRecordersLock.Lock()
-	if len(c.eventRecorders) == 0 {
-		c.eventRecorders = make(map[string]record.EventRecorder)
-		c.eventBroadcaster = record.NewBroadcaster()
-		c.eventBroadcaster.StartRecordingToSink(
+	if len(c.eventRecordersLegacy) == 0 {
+		c.eventRecordersLegacy = make(map[string]record.EventRecorder)
+		c.eventBroadcasterLegacy = record.NewBroadcaster()
+		c.eventBroadcasterLegacy.StartRecordingToSink(
 			&typedcorev1.EventSinkImpl{
 				Interface: c.kubernetes.CoreV1().Events(""), // use the namespace from the object
 			},
 		)
 	}
 	key := source.Component + "-" + source.Host
-	eventRecorder, exists := c.eventRecorders[key]
+	eventRecorder, exists := c.eventRecordersLegacy[key]
 	if !exists {
-		eventRecorder = c.eventBroadcaster.NewRecorder(
+		eventRecorder = c.eventBroadcasterLegacy.NewRecorder(
 			scheme.Scheme,
 			source,
 		)
-		c.eventRecorders[key] = eventRecorder
+		c.eventRecordersLegacy[key] = eventRecorder
 	}
 	c.eventRecordersLock.Unlock()
 	eventRecorder.Event(object, eventtype, reason, message)
+}
+
+// RecordEvent see RecorderOps interface
+func (c *Client) RecordEvent(source corev1.EventSource, object runtime.Object, eventtype, reason, message string) {
+	c.RecordEventf(source.Component, object, nil, eventtype, reason, "Unspecified", message)
+}
+
+// RecordEventf see RecorderOps interface
+func (c *Client) RecordEventf(
+	reportingController string, regarding runtime.Object, related runtime.Object, eventType, reason, action string,
+	note string, args ...interface{},
+) {
+	if err := c.initClient(); err != nil {
+		return
+	}
+	c.eventRecordersLock.Lock()
+	if c.eventRecordersNew == nil {
+		c.eventRecordersNew = make(map[string]events.EventRecorder)
+		eventSink := &events.EventSinkImpl{Interface: c.kubernetes.EventsV1()}
+		c.eventBroadcasterNew = events.NewBroadcaster(eventSink)
+		stopCh := make(chan struct{}) // TODO: should we use stopCh someplace before exiting?
+		c.eventBroadcasterNew.StartRecordingToSink(stopCh)
+	}
+	eventRecorder, exists := c.eventRecordersNew[reportingController]
+	if !exists {
+		eventRecorder = c.eventBroadcasterNew.NewRecorder(scheme.Scheme, reportingController)
+		c.eventRecordersNew[reportingController] = eventRecorder
+	}
+	c.eventRecordersLock.Unlock()
+	eventRecorder.Eventf(regarding, related, eventType, reason, action, note, args...)
 }

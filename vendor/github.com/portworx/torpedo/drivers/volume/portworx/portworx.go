@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -15,13 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/portworx/torpedo/pkg/log"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
-
-	"github.com/portworx/torpedo/pkg/s3utils"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
@@ -36,6 +31,7 @@ import (
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
@@ -46,11 +42,15 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -94,6 +94,9 @@ const (
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
+	envSkipPxOperatorUpgrade                  = "SKIP_PX_OPERATOR_UPGRADE"
+	pxCustomRegistryConfigmapName             = "px-custom-registry"
+	pxVersionsConfigmapName                   = "px-versions"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
@@ -121,6 +124,8 @@ const (
 	validateStoragePoolSizeInterval   = 30 * time.Second
 	validateRebalanceJobsTimeout      = 30 * time.Minute
 	validateRebalanceJobsInterval     = 30 * time.Second
+	validateDeploymentTimeout         = 3 * time.Minute
+	validateDeploymentInterval        = 5 * time.Second
 	getNodeTimeout                    = 3 * time.Minute
 	getNodeRetryInterval              = 5 * time.Second
 	stopDriverTimeout                 = 5 * time.Minute
@@ -135,6 +140,7 @@ const (
 	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
+	volumeUpdateTimeout               = 2 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -206,6 +212,7 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+	skipPxOperatorUpgrade bool
 	DiagsFile             string
 }
 
@@ -278,16 +285,29 @@ func (d *portworx) ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operati
 }
 
 // DeletePool deletes the pool with given poolID
-func (d *portworx) DeletePool(n node.Node, poolID string) error {
+func (d *portworx) DeletePool(n node.Node, poolID string, retry bool) error {
 	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
 	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
-	out, err := d.nodeDriver.RunCommand(
-		n,
-		cmd,
-		node.ConnectionOpts{
-			Timeout:         maintenanceWaitTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		})
+	var out string
+	var err error
+	if retry {
+		out, err = d.nodeDriver.RunCommand(
+			n,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         maintenanceWaitTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+	} else {
+		out, err = d.nodeDriver.RunCommandWithNoRetry(
+			n,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         maintenanceWaitTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+	}
+
 	if err != nil {
 		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
 	}
@@ -358,6 +378,11 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
 		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
+	}
+
+	// If true, will skip upgrade of PX Operator along with PX during upgrade hops
+	if skipStr := os.Getenv(envSkipPxOperatorUpgrade); skipStr != "" {
+		d.skipPxOperatorUpgrade, _ = strconv.ParseBool(skipStr)
 	}
 
 	d.token = token
@@ -746,6 +771,16 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) ListAllVolumes() ([]string, error) {
+	volDriver := d.getVolDriver()
+	volumes, err := volDriver.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return volumes.GetVolumeIds(), nil
+}
+
 func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
 	volDriver := d.getVolDriver()
 	resp, err := volDriver.Create(d.getContext(),
@@ -763,6 +798,26 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 
 	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
 	return resp.VolumeId, nil
+}
+
+// ResizeVolume resizes Volume to specific size provided
+func (d *portworx) ResizeVolume(volName string, size uint64) error {
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volName})
+	if err != nil {
+		return fmt.Errorf("failed to find volume %v due to %v", volName, err)
+	}
+	volumeSpecUpdate := &api.VolumeSpecUpdate{
+		SizeOpt: &api.VolumeSpecUpdate_Size{Size: size},
+	}
+	_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+		VolumeId: volumeInspectResponse.Volume.Id,
+		Spec:     volumeSpecUpdate,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest) (string, error) {
@@ -852,10 +907,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
-	defer cancel()
-
-	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
 	}
@@ -1016,16 +1068,17 @@ func (d *portworx) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority
 func (d *portworx) EnterMaintenance(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
+
 			return nil, true, err
 		}
 		return nil, false, nil
 	}
-	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
-	time.Sleep(3 * time.Minute)
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 	t = func() (interface{}, bool, error) {
 		apiNode, err := d.GetDriverNode(&n)
 		if err != nil {
@@ -1186,6 +1239,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 
 		vol := volumeInspectResponse.Volume
+
 		// Status
 		if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
 			return nil, true, &ErrFailedToInspectVolume{
@@ -1392,7 +1446,7 @@ func (d *portworx) ValidateVolumeTopology(vol *api.Volume, params map[string]str
 	zone := params[torpedok8s.TopologyZoneK8sNodeLabel]
 	nodes := node.GetNodesByTopologyZoneLabel(zone)
 	for _, node := range nodes {
-		if topoMatches, err = d.isVolumeAttachedOnNode(vol, node); err != nil {
+		if topoMatches, err = d.IsVolumeAttachedOnNode(vol, node); err != nil {
 			return err
 		}
 		if topoMatches {
@@ -1435,7 +1489,7 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 }
 
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(
 		nodes[0],
@@ -1598,6 +1652,41 @@ func constructSnapshotName(volumeName string) string {
 	return volumeName + "-snapshot"
 }
 
+// GetCloudsnaps returns all the cloud snaps of the given volume
+func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+
+	cloudSnapResponse, err := d.csbackupManager.EnumerateWithFilters(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupEnumerateWithFiltersRequest{})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloudsnap, Err: %v", err)
+	}
+	return cloudSnapResponse.GetBackups(), nil
+
+}
+
+// DeleteAllCloudsnaps delete all cloud snaps for a given volume
+func (d *portworx) DeleteAllCloudsnaps(volumeName, sourceVolumeID string, params map[string]string) error {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	_, err := d.csbackupManager.DeleteAll(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupDeleteAllRequest{SrcVolumeId: sourceVolumeID})
+
+	if err != nil {
+		return fmt.Errorf("failed to delete cloudsnap, Err: %v", err)
+	}
+
+	return nil
+}
+
 func (d *portworx) ValidateCreateCloudsnap(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1722,6 +1811,38 @@ func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps u
 	}
 	return nil
 }
+
+// UpdateVolumeSpec updates given volume with provided spec
+func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.VolumeSpecUpdate) error {
+	volumeName := d.schedOps.GetVolumeName(vol)
+	log.Infof("Updating volume spec for volume [%s]", volumeName)
+	log.Infof("Volume Spec : %+v", volumeSpec)
+	volDriver := d.getVolDriver()
+	_, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	if err != nil && errIsNotFound(err) {
+		return err
+	} else if err != nil {
+		return err
+	}
+	log.Debugf("Updating volume [%s]", volumeName)
+	t := func() (interface{}, bool, error) {
+
+		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
+			VolumeId: volumeName,
+			Spec:     volumeSpec,
+		})
+		if err != nil {
+			return nil, true, fmt.Errorf("volume [%s] not updated yet", volumeName)
+		}
+		log.Debugf("Updated volume [%s]", volumeName)
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, defaultRetryInterval); err != nil {
+		return fmt.Errorf("failed to set set IOps for volumeName [%s], Err: %v", volumeName, err)
+	}
+	return nil
+}
+
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
 	var token string
 	volumeName := d.schedOps.GetVolumeName(vol)
@@ -1852,7 +1973,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		}
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
-			ok, err := d.isVolumeAttachedOnNode(pxVol, n)
+			ok, err := d.IsVolumeAttachedOnNode(pxVol, n)
 			if err != nil {
 				return nil, false, err
 			}
@@ -1901,7 +2022,7 @@ func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
 }
 
 // check all the possible attachment options (node ID or node IP)
-func (d *portworx) isVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
+func (d *portworx) IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
 	log.Debugf("Volume [%s]attached on [%s]", volume.Id, volume.AttachedOn)
 	if node.VolDriverNodeID == volume.AttachedOn {
 		return true, nil
@@ -2005,7 +2126,7 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 				return nil, true, err
 			}
 			if nodeResponse.Node.MgmtIp == "" {
-				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest, response: %v", nodeResponse)
 			}
 			return nodeResponse, false, nil
 		}
@@ -2215,7 +2336,7 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
-	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+	log.InfoD("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
 
 	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -2224,13 +2345,14 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 			ResizeFactor: &api.SdkStoragePoolResizeRequest_Percentage{
 				Percentage: percentage,
 			},
-			OperationType: e,
+			OperationType:           e,
+			SkipWaitForCleanVolumes: true,
 		})
 		if err != nil {
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			log.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize response: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
@@ -2279,10 +2401,9 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 	sdkport, _ := d.getSDKPort()
 	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
-	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
-
 	}
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
 
@@ -2823,41 +2944,44 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	// If PX Operator based install, perform PX StorageCluster upgrade
 	isOperatorBasedInstall, _ := d.IsOperatorBasedInstall()
 	if isOperatorBasedInstall {
-		log.InfoD("Upgrading Portworx StorageCluster")
-		var k8sCore = core.Instance()
-		k8sVersion, err := k8sCore.GetVersion()
-		if err != nil {
-			return err
-		}
+		// Check to see if px-versions configmap exists in PX namespace
+		deployPxVersionsConfigMap := false
+		if doesConfigMapExist(pxVersionsConfigmapName, d.namespace) {
+			log.Infof("Configmap [%s] is found", pxVersionsConfigmapName)
 
-		imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
-		if err != nil {
-			return fmt.Errorf("failed to get image list from version URL [%s], Err: %v", specGenUrl, err)
-		}
-
-		// Get PX StorageCluster
-		cluster, err := d.GetDriver()
-		if err != nil {
-			return err
-		}
-
-		// Update PX Image and Env vars if needed
-		updateParamFunc := func(cluster *v1.StorageCluster) *v1.StorageCluster {
-			// Set oci-mon version
-			cluster.Spec.Image = imageList["version"]
-			var envVars []corev1.EnvVar
-			// Add Release Manifest URL incase of edge spec
-			envVars, err := configurePxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
-			if err != nil {
-				return nil
+			// Delete px-versions configmap
+			if err := core.Instance().DeleteConfigMap(pxVersionsConfigmapName, d.namespace); err != nil {
+				return fmt.Errorf("Failed to delete [%s] configmap", pxVersionsConfigmapName)
 			}
-			cluster.Spec.Env = envVars
-			return cluster
+			deployPxVersionsConfigMap = true
 		}
 
-		// Update and validate PX StorageCluster
-		if _, err := d.updateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false); err != nil {
-			return err
+		// Run air-gapped script to pull/push images for the new PX version hop, if custom registry configmap found
+		if doesConfigMapExist(pxCustomRegistryConfigmapName, d.namespace) {
+			if err := d.pullAndPushImagesToPrivateRegistry(specGenUrl); err != nil {
+				return err
+			}
+		}
+
+		// Create/Update px-version configmap to the new PX version hop only if it previously existed
+		if deployPxVersionsConfigMap {
+			if err := d.createPxVersionsConfigmap(specGenUrl, d.namespace); err != nil {
+				return err
+			}
+		}
+
+		// Upgrade PX operator, if not skipped
+		log.Debugf("Env var SKIP_PX_OPERATOR_UPGRADE is set to [%v]", d.skipPxOperatorUpgrade)
+		if !d.skipPxOperatorUpgrade {
+			log.InfoD("Will upgrade PX Operator, if new version is availabe for given PX endpoint [%s]", specGenUrl)
+			if err := d.upgradePortworxOperator(specGenUrl); err != nil {
+				return fmt.Errorf("failed to upgrade PX Operator, Err: %v", err)
+			}
+		}
+
+		log.InfoD("Will upgrade Portworx StorageCluster")
+		if err := d.upgradePortworxStorageCluster(specGenUrl); err != nil {
+			return fmt.Errorf("failed to upgrade PX StorageCluster, Err: %v", err)
 		}
 	} else {
 		log.InfoD("Upgrading Portworx DaemonSet")
@@ -2874,30 +2998,148 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	return nil
 }
 
-// configurePxReleaseManifestEnvVars configure PX Release Manifest URL for edge end production PX versions
+// configurePxReleaseManifestEnvVars configure PX Release Manifest URL for edge and production PX versions, if needed
 func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenURL string) ([]corev1.EnvVar, error) {
 	var newEnvVarList []corev1.EnvVar
 
-	// Set release manifest URL in case of edge-install.portworx.com
+	// Remove release manifest URLs from Env Vars, if any exist
+	for _, env := range origEnvVarList {
+		if env.Name == pxReleaseManifestURLEnvVarName {
+			continue
+		}
+		newEnvVarList = append(newEnvVarList, env)
+	}
+
+	// Set release manifest URL in case of edge
 	if strings.Contains(specGenURL, "edge") {
 		releaseManifestURL, err := optest.ConstructPxReleaseManifestURL(specGenURL)
 		if err != nil {
 			return nil, err
 		}
 
-		// Add release manifest URL to Env Vars incase of edge URL
-		newEnvVarList = origEnvVarList
+		// Add release manifest URL to Env Vars
 		newEnvVarList = append(newEnvVarList, corev1.EnvVar{Name: pxReleaseManifestURLEnvVarName, Value: releaseManifestURL})
-	} else {
-		for _, env := range origEnvVarList {
-			// Skip adding or remove release manifest URL to Env Vars incase of production URL
-			if env.Name == pxReleaseManifestURLEnvVarName {
-				continue
-			}
-			newEnvVarList = append(newEnvVarList, env)
-		}
 	}
+
 	return newEnvVarList, nil
+}
+
+// doesConfigMapExist returns true or false wether configmap exists or not
+func doesConfigMapExist(configmapName, namespace string) bool {
+	// Get configmap
+	_, err := core.Instance().GetConfigMap(configmapName, namespace)
+	if err != nil && k8serrors.IsNotFound(err) {
+		return false
+	}
+	return true
+}
+
+func (d *portworx) createPxVersionsConfigmap(specGenUrl, pxNamespace string) error {
+	// Get k8s version
+	k8sVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return err
+	}
+
+	// Construct PX versions URL
+	pxVersionURL, err := optest.ConstructVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return fmt.Errorf("Failed to construct PX version URL, Err: %v", err)
+	}
+
+	// Download PX versions URL content
+	pxVersionsFile := path.Join("/versions")
+	cmd := fmt.Sprintf("curl -o %s %s", pxVersionsFile, pxVersionURL)
+	_, strErr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to download versions file from URL [%s], Err: %v %v", pxVersionURL, strErr, err)
+	}
+
+	// Create px-versions configmap
+	log.InfoD("Creating px-versions configmap [%s] in [%s] namespace", pxVersionsConfigmapName, pxNamespace)
+	cmd = fmt.Sprintf("kubectl -n %s create configmap %s --from-file=%s", pxNamespace, pxVersionsConfigmapName, pxVersionsFile)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to create [%s] configmap in [%s] namespace, Err: %v", pxVersionsConfigmapName, pxNamespace, err)
+	}
+
+	return nil
+}
+
+// PpullAndPushImagesToPrivateRegistry will pull and push images to private registry using our air-gapped script
+func (d *portworx) pullAndPushImagesToPrivateRegistry(specGenUrl string) error {
+	// Get credentials for custom registry from px-custom-registry configmap
+	log.Debugf("Get all docker credentials from [%s] configmap in [%s] namespace", pxCustomRegistryConfigmapName, d.namespace)
+	pxCustomRegistryConfigmap, err := core.Instance().GetConfigMap(pxCustomRegistryConfigmapName, d.namespace)
+	if err != nil || k8serrors.IsNotFound(err) {
+		return fmt.Errorf("Failed to get [%s] configmap that should have been created by spawn or manually, Err: %v", pxCustomRegistryConfigmapName, err)
+	}
+
+	// Credentials for portworx and custom registry
+	portworxDockerRegistryUsername := pxCustomRegistryConfigmap.Data["portworxDockerRegistryUsername"]
+	portworxDockerRegistryPassword := pxCustomRegistryConfigmap.Data["portworxDockerRegistryPassword"]
+	customDockerRegistryName := pxCustomRegistryConfigmap.Data["customDockerRegistryName"]
+	customDockerRegistryUsername := pxCustomRegistryConfigmap.Data["customDockerRegistryUsername"]
+	customDockerRegistryPassword := pxCustomRegistryConfigmap.Data["customDockerRegistryPassword"]
+
+	if customDockerRegistryName == "" && customDockerRegistryUsername == "" && customDockerRegistryPassword == "" {
+		return fmt.Errorf("Failed to get custom docker registry info from [%s] configmap [%+v]", pxCustomRegistryConfigmapName, pxCustomRegistryConfigmap.Data)
+	}
+
+	if portworxDockerRegistryUsername == "" && portworxDockerRegistryPassword == "" {
+		return fmt.Errorf("Failed to get portworx docker registry info from [%s] configmap [%+v]", pxCustomRegistryConfigmapName, pxCustomRegistryConfigmap.Data)
+	}
+
+	log.InfoD("Pull and push PX images via air-gapped script to a private registry [%s]", customDockerRegistryName)
+
+	// Construct air-gapped URL to use to download script
+	pxAirgappedURL, err := d.constructPxAirgappedUrl(specGenUrl)
+	if err != nil {
+		return fmt.Errorf("Failed to construct air-gapped URL, Err: %v", err)
+	}
+
+	pxAgInstallBinary := path.Join("/px-ag-install.sh")
+	log.InfoD("Downloading air-gapped script from [%s] to [%s]", pxAirgappedURL, pxAgInstallBinary)
+	cmd := fmt.Sprintf("curl -o %s -L %s", pxAgInstallBinary, pxAirgappedURL)
+	_, strErr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to download [%s] script from URL [%s], Err: %v %v", pxAgInstallBinary, pxAirgappedURL, strErr, err)
+	}
+
+	// Docker login to pull images
+	log.InfoD("Login to pull images")
+	cmd = fmt.Sprintf("docker login -u %s -p %s", portworxDockerRegistryUsername, portworxDockerRegistryPassword)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to execute Docker login, Err: %v %v", strErr, err)
+	}
+
+	// Pull images via air-gapped script
+	log.InfoD("Pull images using air-gapped script")
+	cmd = fmt.Sprintf("sh %s pull", pxAgInstallBinary)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to pull images using [%s] script, Err: %v %v", pxAgInstallBinary, strErr, err)
+	}
+
+	// Docker login to push images
+	log.InfoD("Login to custom registry [%s] to push images", customDockerRegistryName)
+	cmd = fmt.Sprintf("docker login -u %s -p %s %s", customDockerRegistryUsername, customDockerRegistryPassword, customDockerRegistryName)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to execute Docker login, Err: %v %v", strErr, err)
+	}
+
+	// Push images to private registry
+	log.InfoD("Tag and push images using air-gapped script")
+	cmd = fmt.Sprintf("sh %s push %s", pxAgInstallBinary, customDockerRegistryName)
+	_, strErr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to push images using [%s] script, Err: %v %v", pxAgInstallBinary, strErr, err)
+	}
+
+	log.InfoD("Successfully pulled and pushed PX images via [%s] script to a private registry [%s]", pxAgInstallBinary, customDockerRegistryName)
+	return nil
 }
 
 // getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
@@ -2967,6 +3209,165 @@ func (d *portworx) upgradePortworxDaemonset(specGenUrl string) error {
 	return nil
 }
 
+// upgradePortworxStorageCluster upgrades PX StorageCluster based on the given Spec Generator URL
+func (d *portworx) upgradePortworxStorageCluster(specGenUrl string) error {
+	log.InfoD("Upgrading Portworx StorageCluster")
+
+	// Get k8s version
+	k8sVersion, err := k8sCore.GetVersion()
+	if err != nil {
+		return err
+	}
+
+	// Get images from version URL
+	imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return fmt.Errorf("failed to get image list from version URL [%s], Err: %v", specGenUrl, err)
+	}
+
+	// Get PX StorageCluster
+	cluster, err := d.GetDriver()
+	if err != nil {
+		return err
+	}
+
+	// Update PX Image and Env vars if needed
+	updateParamFunc := func(cluster *v1.StorageCluster) *v1.StorageCluster {
+		// Set oci-mon version
+		cluster.Spec.Image = imageList["version"]
+		var envVars []corev1.EnvVar
+		// Add Release Manifest URL incase of edge spec
+		envVars, err := configurePxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
+		if err != nil {
+			return nil
+		}
+		cluster.Spec.Env = envVars
+		return cluster
+	}
+
+	// Update and validate PX StorageCluster
+	if _, err := d.updateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false); err != nil {
+		return err
+	}
+
+	log.Infof("Successfully upgraded Portworx StorageCluster [%s] to [%s]", cluster.Name, specGenUrl)
+	return nil
+}
+
+// upgradePortworxOperator will upgrade PX Operator version
+func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
+	log.InfoD("Upgrading Portworx Operator")
+
+	pxOperatorSpecGenUrl, err := d.constructPxOperatorSpecGenUrl(specGenUrl)
+	if err != nil {
+		return fmt.Errorf("Failed to construct PX Operator spec gen URL, Err: %v", err)
+	}
+
+	resp, err := http.Get(pxOperatorSpecGenUrl)
+	if err != nil {
+		return fmt.Errorf("Failed to get data from [%s], Err: %v", pxOperatorSpecGenUrl, err)
+	}
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Failed to read data from [%s], Err: %v", pxOperatorSpecGenUrl, err)
+	}
+
+	// This regex will look for image: and will pull the tag after the colon : which should be match[1]
+	regexpString := "image:\\s\\S+:(\\S+)"
+	matchRegExp := regexp.MustCompile(regexpString)
+	match := matchRegExp.FindStringSubmatch(string(respBytes))
+	// Expecting match to contain 2 slices, one is full image and the other is just an image tag
+	if len(match) < 2 {
+		return fmt.Errorf("Expecting match [%s] to have 2 slices, only got %d ", match, len(match))
+	}
+	pxOperatorNewImageTag := fmt.Sprintf("%v", match[1])
+
+	// Get PX Operator deployment
+	opDep, err := apps.Instance().GetDeployment("portworx-operator", d.namespace)
+	if err != nil {
+		return fmt.Errorf("Failed to get PX Operator deployment [portworx-operator] in [%s] namespace, Err: %v", d.namespace, err)
+	}
+
+	for ind, container := range opDep.Spec.Template.Spec.Containers {
+		if container.Name == "portworx-operator" {
+			fmt.Printf("KOKADBG: IMAGE BEFORE: [%s]\n", container.Image)
+			container.Image = strings.Replace(container.Image, strings.Split(container.Image, ":")[1], pxOperatorNewImageTag, -1)
+			opDep.Spec.Template.Spec.Containers[ind] = container
+			fmt.Printf("KOKADBG: IMAGE AFTER: [%s]\n", opDep.Spec.Template.Spec.Containers[ind].Image)
+		}
+	}
+
+	// Update image for PX Operator deployment
+	log.InfoD("Updating PX Operator image tag to [%s]", pxOperatorNewImageTag)
+	opDep, err = apps.Instance().UpdateDeployment(opDep)
+	if err != nil {
+		return fmt.Errorf("Failed to update PX Operator deployment [%s] in [%s] namespace, Errr: %v", opDep.Name, opDep.Namespace, err)
+	}
+
+	// Validate PX Operator deployment
+	log.InfoD("Validating PX Operator deployment [%s] in [%s] namespace", opDep.Name, opDep.Namespace)
+	if err := apps.Instance().ValidateDeployment(opDep, validateDeploymentTimeout, validateDeploymentInterval); err != nil {
+		return fmt.Errorf("Failed to validate PX Operator deployment [%s] in [%s] namespace, Err: %v", opDep.Name, opDep.Namespace, err)
+	}
+
+	log.InfoD("Successfully upgraded Portworx Operator to [%s]", pxOperatorNewImageTag)
+	return nil
+}
+
+// constructPxOperatorSpecGenUrl constructs PX Operator spec gen URL
+func (d *portworx) constructPxOperatorSpecGenUrl(specGenUrl string) (string, error) {
+	// Get k8s version
+	kubeVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return "", err
+	}
+
+	// Construct PX Operator spec gen URL
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+	}
+	q := u.Query()
+	q.Set("kbver", kubeVersion.String())
+	q.Set("comp", "pxoperator")
+	q.Set("ns", d.namespace)
+	u.RawQuery = q.Encode()
+	pxOperatorSpecGenUrl := u.String()
+
+	return pxOperatorSpecGenUrl, nil
+}
+
+// constructPxAirgappedUrl constructs PX air-gapped URL
+func (d *portworx) constructPxAirgappedUrl(specGenUrl string) (string, error) {
+	// Get k8s version
+	kubeVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return "", err
+	}
+
+	// Convert k8s version into a specific format that is acceptable by air-gapped script
+	// NOTE: This is needed due to the bug in the air-gapped script, for more info please see https://portworx.atlassian.net/browse/PWX-30781
+	newK8sVersion, err := version.NewVersion(kubeVersion.String())
+	if err != nil {
+		return "", err
+	}
+	k8sVersion := newK8sVersion.Core().String()
+
+	// Construct PX air-gapped URL
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+	}
+	q := u.Query()
+	q.Set("kbver", k8sVersion)
+	u.Path = path.Join(u.Path, "air-gapped")
+	u.RawQuery = q.Encode()
+	pxAirgappedUrl := u.String()
+
+	return pxAirgappedUrl, nil
+}
+
 // UpgradeStork upgrades Stork based on the given Spec Generator URL
 func (d *portworx) UpgradeStork(specGenUrl string) error {
 	storkSpecFileName := "/stork.yaml"
@@ -3000,7 +3401,7 @@ func (d *portworx) UpgradeStork(specGenUrl string) error {
 	// Getting stork spec
 	u, err := url.Parse(specGenUrl)
 	if err != nil {
-		fmt.Printf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+		return fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
 	}
 	q := u.Query()
 	q.Set("kbver", kubeVersion.String())
@@ -3102,7 +3503,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	log.Infof("Waiting for a minute for node [%s] to transistion to maintenece mode", n.Name)
+	log.Infof("Waiting for a minute for node [%s] to transition to maintenance mode", n.Name)
 	time.Sleep(1 * time.Minute)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
@@ -3126,17 +3527,41 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	}
 	_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
-	// TODO replace when sdk supports node removal
-	if err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, true); err != nil {
-		if !strings.Contains(err.Error(), "Node remove is pending") {
-			return &ErrFailedToDecommissionNode{
-				Node:  n.Name,
-				Cause: err.Error(),
-			}
+	cmd := fmt.Sprintf("echo Y | %s cluster delete -f %s", d.getPxctlPath(*n), nodeResp.Node.Id)
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
+
+	var cmdNode node.Node
+	for _, cn := range node.GetStorageDriverNodes() {
+		if cn.Name != n.Name {
+			cmdNode = cn
+			break
 		}
 	}
 
-	log.Infof("Node [%s] remove is pending. Waiting for it to complete", nodeResp.Node.Id)
+	t = func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(cmdNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil && strings.Contains(err.Error(), "Node remove is pending") {
+
+			return out, false, nil
+
+		}
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+
+	if err != nil {
+		return err
+	}
+	outLines := strings.Split(out.(string), "\n")
+
+	log.Infof("Node [%s] remove is pending. Waiting for it to complete,output: %s", nodeResp.Node.Id, outLines)
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
@@ -4880,9 +5305,23 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
 		if poolID != -1 {
 			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+		} else {
+			stringMatch := false
+			matchType := []string{"metadata", "journal"}
+			for _, word := range matchType {
+				re := regexp.MustCompile(fmt.Sprintf(".*--%s", word))
+				match := re.MatchString(drivePath)
+				if match {
+					stringMatch = true
+				}
+			}
+			if !stringMatch {
+				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+			}
+
 		}
 	}
-
+	log.Infof("adding cloud drive with params [%v]", driveAddFlag)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -4954,16 +5393,25 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 // GetPoolsUsedSize returns map of pool id and current used size
 func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
 
-	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
-		Timeout:         2 * time.Minute,
-		TimeBeforeRetry: 10 * time.Second,
-	})
+	t := func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 
 	if err != nil {
 		return nil, err
 	}
-	outLines := strings.Split(out, "\n")
+	outLines := strings.Split(out.(string), "\n")
 
 	poolsData := make(map[string]string)
 	var poolId string
@@ -4988,6 +5436,35 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 		}
 	}
 	return poolsData, nil
+}
+
+// GetJournalDevicePath returns journal device path in the given node
+func (d *portworx) GetJournalDevicePath(n *node.Node) (string, error) {
+	for _, addr := range n.Addresses {
+		if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
+			log.Warnf("testAndSetEndpoint failed for %v: %v", addr, err)
+			continue
+		}
+	}
+
+	t := func() (interface{}, bool, error) {
+		storageSpec, err := d.GetStorageSpec()
+		if err != nil {
+			return "", true, err
+		}
+		if storageSpec.GetJournalDev() == "auto" {
+			return "", true, fmt.Errorf("journalDev not yet updated")
+		}
+
+		return storageSpec.GetJournalDev(), false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, upgradeTimeout, defaultRetryInterval)
+	if err != nil {
+		return "", err
+	}
+	return out.(string), nil
+
 }
 
 // IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
@@ -5198,4 +5675,8 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 	}
 
 	return alertsResp, nil
+}
+
+func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
+	return d.schedOps.IsPXReadyOnNode(n)
 }

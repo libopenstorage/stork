@@ -3,26 +3,26 @@ package externalsnapshotter
 import (
 	"context"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	v1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SnapshotClassOps is an interface to perform k8s VolumeSnapshotClass operations
 type SnapshotClassOps interface {
 	// CreateSnapshotClass creates the given snapshot class
-	CreateSnapshotClass(snap *v1beta1.VolumeSnapshotClass) (*v1beta1.VolumeSnapshotClass, error)
+	CreateSnapshotClass(snap *v1.VolumeSnapshotClass) (*v1.VolumeSnapshotClass, error)
 	// GetSnapshotClass returns the snapshot class for given name
-	GetSnapshotClass(name string) (*v1beta1.VolumeSnapshotClass, error)
+	GetSnapshotClass(name string) (*v1.VolumeSnapshotClass, error)
 	// ListSnapshotClasses lists all snapshot classes
-	ListSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error)
+	ListSnapshotClasses() (*v1.VolumeSnapshotClassList, error)
 	// UpdateSnapshotClass updates the given snapshot class
-	UpdateSnapshotClass(snap *v1beta1.VolumeSnapshotClass) (*v1beta1.VolumeSnapshotClass, error)
+	UpdateSnapshotClass(snap *v1.VolumeSnapshotClass) (*v1.VolumeSnapshotClass, error)
 	// DeleteSnapshotClass deletes the given snapshot class
 	DeleteSnapshotClass(name string) error
 }
 
 // CreateSnapshotClass creates the given snapshot class.
-func (c *Client) CreateSnapshotClass(snap *v1beta1.VolumeSnapshotClass) (*v1beta1.VolumeSnapshotClass, error) {
+func (c *Client) CreateSnapshotClass(snap *v1.VolumeSnapshotClass) (*v1.VolumeSnapshotClass, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (c *Client) CreateSnapshotClass(snap *v1beta1.VolumeSnapshotClass) (*v1beta
 }
 
 // GetSnapshotClass returns the snapshot class for given name
-func (c *Client) GetSnapshotClass(name string) (*v1beta1.VolumeSnapshotClass, error) {
+func (c *Client) GetSnapshotClass(name string) (*v1.VolumeSnapshotClass, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (c *Client) GetSnapshotClass(name string) (*v1beta1.VolumeSnapshotClass, er
 }
 
 // ListSnapshotClasses lists all snapshot classes
-func (c *Client) ListSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
+func (c *Client) ListSnapshotClasses() (*v1.VolumeSnapshotClassList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (c *Client) ListSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error)
 }
 
 // UpdateSnapshotClass updates the given snapshot class
-func (c *Client) UpdateSnapshotClass(snap *v1beta1.VolumeSnapshotClass) (*v1beta1.VolumeSnapshotClass, error) {
+func (c *Client) UpdateSnapshotClass(snap *v1.VolumeSnapshotClass) (*v1.VolumeSnapshotClass, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}

@@ -41,7 +41,7 @@ type ErrFailedToDestroyApp struct {
 }
 
 func (e *ErrFailedToDestroyApp) Error() string {
-	return fmt.Sprintf("Failed to destory app: %v due to err: %v", e.App.Key, e.Cause)
+	return fmt.Sprintf("Failed to destroy app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
 // ErrFailedToDestroyStorage error type for failing to destroy an app's storage
@@ -53,7 +53,7 @@ type ErrFailedToDestroyStorage struct {
 }
 
 func (e *ErrFailedToDestroyStorage) Error() string {
-	return fmt.Sprintf("Failed to destory storage for app: %v due to err: %v", e.App.Key, e.Cause)
+	return fmt.Sprintf("Failed to destroy storage for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
 // ErrFailedToValidateStorage error type for failing to validate an app's storage
