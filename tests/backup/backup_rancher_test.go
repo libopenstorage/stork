@@ -250,7 +250,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 		for _, ns := range restoreNamespacesAll {
-			err = core.Instance().DeleteNamespace(ns)
+			err = DeleteAppNamespace(ns)
 			log.FailOnError(err, "Deletion of namespace %s failed", ns)
 		}
 		for _, restoreName := range restoreList {
@@ -467,7 +467,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.Infof("Deleting restored namespace from destination cluster")
 		for _, ns := range restoreNamespaceList {
-			err = core.Instance().DeleteNamespace(ns)
+			err = DeleteAppNamespace(ns)
 			log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
 		}
 		log.Infof("Deleting projects from destination cluster")
@@ -801,7 +801,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		log.Infof("Deleting restored namespace from destination cluster")
 		destClusterRestoreNamespaceList = append(destClusterRestoreNamespaceList, appNamespaces...)
 		for _, ns := range destClusterRestoreNamespaceList {
-			err = core.Instance().DeleteNamespace(ns)
+			err = DeleteAppNamespace(ns)
 			log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
 		}
 		log.Infof("Deleting projects from destination cluster")
@@ -827,7 +827,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		}
 		log.Infof("Deleting restored namespace from source cluster")
 		for _, ns := range sourceClusterRestoreNamespaceList {
-			err = core.Instance().DeleteNamespace(ns)
+			err = DeleteAppNamespace(ns)
 			log.FailOnError(err, "Deletion of namespace %s from source cluster failed", ns)
 		}
 		log.Infof("Deleting projects from source cluster")

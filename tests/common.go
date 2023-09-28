@@ -4204,7 +4204,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
-		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
+		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
 	return nil
