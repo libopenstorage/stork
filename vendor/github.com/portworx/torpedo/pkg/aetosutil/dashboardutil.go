@@ -3,6 +3,8 @@ package aetosutil
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
+
 	"net/http"
 	"os"
 	"reflect"
@@ -15,7 +17,6 @@ import (
 
 	"github.com/onsi/gomega"
 	rest "github.com/portworx/torpedo/pkg/restutil"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -169,7 +170,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
 		os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 	}
-	logrus.Info(dashURL)
+	logrus.Infof(dashURL)
 }
 
 // TestSetEnd  end testset and update  to dashboard DB

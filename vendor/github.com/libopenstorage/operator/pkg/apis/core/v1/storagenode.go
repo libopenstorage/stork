@@ -76,6 +76,20 @@ type NodeStatus struct {
 	Conditions []NodeCondition `json:"conditions,omitempty"`
 	// Checks are a list of pre or post flight checks that are performed by the Operator
 	Checks []CheckResult `json:"checks,omitempty"`
+	// Operating system of the underlying host.
+	OperatingSystem string `json:"operatingSystem,omitempty"`
+	// Kernel version of the underlying host.
+	KernelVersion string `json:"kernelVersion,omitempty"`
+	// Attributes of the storage node.
+	NodeAttributes *NodeAttributes `json:"nodeAttributes,omitempty"`
+}
+
+// Attributes of the storage node.
+type NodeAttributes struct {
+	// Indicates whether the node is a storage node or not.
+	Storage *bool `json:"storage,omitempty"`
+	// Indicates whether the node is a kvdb node or not.
+	KVDB *bool `json:"kvdb,omitempty"`
 }
 
 // CheckResult captures result of a pre or post flight check
