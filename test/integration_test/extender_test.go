@@ -39,6 +39,7 @@ func TestExtender(t *testing.T) {
 	t.Run("poolMaintenanceTest", poolMaintenanceTest)
 	t.Run("antihyperconvergenceTest", antihyperconvergenceTest)
 	t.Run("antihyperconvergenceTestPreferRemoteOnlyTest", antihyperconvergenceTestPreferRemoteOnlyTest)
+	t.Run("preferRemoteNodeFalseHyperconvergenceTest", preferRemoteNodeFalseHyperconvergenceTest)
 	t.Run("equalPodSpreadTest", equalPodSpreadTest)
 
 	err = setRemoteConfig("")
@@ -447,6 +448,29 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 	// If we are here then the test has passed
 	testResult = testResultPass
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("preferremotenodefalsetest",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"test-sv4-svc-prefer-remote-node-false"},
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on 3 nodes")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	logrus.Infof("Verifying Pods scheduling favors hyperconvergence")
+	verifyScheduledNodesMultipleReplicas(t, scheduledNodes, volumeNames)
 }
 
 func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []string) {
