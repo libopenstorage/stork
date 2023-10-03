@@ -286,28 +286,28 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 
 	It("Bring Down Replica Node and perform backup and restore", func() {
 		var (
-			deploymentsToClean             []*pds.ModelsDeployment
-			nsName                         = params.InfraToTest.Namespace
-			flag                           bool
-			wlDeploymentsToBeCleanedinSrc  []*v1.Deployment
-			wlDeploymentsToBeCleanedinDest []*v1.Deployment
-			pdsdeploymentsmd5Hash          = make(map[string]string)
-			restoredDepsPostDriverStop     []*pds.ModelsDeployment
-			restoredDepsPostDriverStart    []*pds.ModelsDeployment
-			restoreClient                  restoreBkp.RestoreClient
+			deploymentsToClean            []*pds.ModelsDeployment
+			nsName                        = params.InfraToTest.Namespace
+			flag                          bool
+			wlDeploymentsToBeCleanedinSrc []*v1.Deployment
+			pdsdeploymentsmd5Hash         = make(map[string]string)
+			restoredDepsPostDriverStop    []*pds.ModelsDeployment
+			restoredDepsPostDriverStart   []*pds.ModelsDeployment
+			restoreClient                 restoreBkp.RestoreClient
 		)
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
-			//flag variable is to run test for only one volume of sts replica
-			flag = false
 
 			for _, ds := range params.DataServiceToTest {
 				//clearing up the previous entries
 				deploymentsToClean = []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleanedinSrc = []*v1.Deployment{}
 				CleanMapEntries(pdsdeploymentsmd5Hash)
+				//flag variable is to run test for only one volume of sts replica
+				flag = false
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
@@ -332,11 +332,6 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
 						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
 					})
-
-					defer func() {
-						err := CleanupWorkloadDeployments(wlDeploymentsToBeCleanedinSrc, true)
-						log.FailOnError(err, "Failed while deleting the workload deployment")
-					}()
 
 					stepLog = "Get the replica node and stop volume driver on the replica node"
 					Step(stepLog, func() {
@@ -389,13 +384,8 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 								stepLog = "Validate md5hash for the restored deployments"
 								Step(stepLog, func() {
 									log.InfoD(stepLog)
-									wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
-
-									log.InfoD("Cleaning up workload deployments")
-									for _, wlDep := range wlDeploymentsToBeCleanedinDest {
-										err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-										log.FailOnError(err, "Failed while deleting the workload deployment")
-									}
+									wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 								})
 
 								// Bring up the replica node
@@ -418,18 +408,22 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 									restoredDepsPostDriverStart = PerformRestore(restoreClient, dsEntity, projectID, deployment)
 									deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStart...)
 								})
-								stepLog = "Validate md5hash for the restored deployments"
+								stepLog = "Validate md5hash for the restored deployments and delete wkload deployments"
 								Step(stepLog, func() {
 									log.InfoD(stepLog)
-									wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 
 									log.InfoD("Cleaning up workload deployments")
-									for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+									for _, wlDep := range wlDeploymentsToBeCleanedinSrc {
+										log.Debugf("Deleting workload deployment [%s]", wlDep.Name)
 										err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
 										log.FailOnError(err, "Failed while deleting the workload deployment")
 									}
 								})
 								flag = true
+							} else {
+								log.Debugf("skipping tests for volume %s", v.Name)
 							}
 						}
 					})
