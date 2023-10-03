@@ -459,7 +459,7 @@ func getScoringBasedOnHyperconvergence(t *testing.T, driverNodes []*storkdriver.
 	return scores
 }
 
-// Verify nodes are scheduled on appropriate nodes based on hyperconvergence scoring
+// Verify pods are scheduled on appropriate nodes based on hyperconvergence scoring
 // This method assumes we have pod AntiAffinities set in the deployment to deploy each replica on a different node.
 func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, volumes []string) {
 	driverNodes, err := storkVolumeDriver.GetNodes()
@@ -479,8 +479,8 @@ func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, vo
 
 	//appNodeScores is a map of nodeName:score, in which we store the calculated scores of the set of scheduled nodes.
 	appNodeScores := make(map[string]int)
-	for _, value := range appNodes {
-		appNodeScores[value.Name] = scores[value.Name]
+	for _, appNode := range appNodes {
+		appNodeScores[appNode.Name] = scores[appNode.Name]
 	}
 	actualNodeScores := descendingSortBasedOnValue(appNodeScores)
 
