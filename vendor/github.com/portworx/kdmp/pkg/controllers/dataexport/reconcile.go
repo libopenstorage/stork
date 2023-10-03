@@ -466,7 +466,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		var cleanupErr error
 		// Need to retain the old reason present in the dataexport CR, so passing the reason again.
 		data := updateDataExportDetail{
-			stage: kdmpapi.DataExportStageFinal,
+			stage:  kdmpapi.DataExportStageFinal,
 			reason: dataExport.Status.Reason,
 		}
 		// Append the job-pod log to stork's pod log in case of failure
@@ -520,6 +520,13 @@ func appendPodLogToStork(jobName string, namespace string) {
 	}
 	for _, pod := range pods.Items {
 		numLogLines := int64(50)
+		podDescribe, err := core.Instance().GetPodByName(pod.Name, pod.Namespace)
+		if err != nil {
+			logrus.Infof("Error fetching description of job-pod[%s] :%v", pod.Name, err)
+		}
+		logrus.Infof("start of job-pod [%s]'s description", pod.Name)
+		logrus.Infof("Describe %v", podDescribe)
+		logrus.Infof("end of job-pod [%s]'s description", pod.Name)
 		podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
 		if err != nil {
 			logrus.Infof("error fetching log of job-pod %s: %v", pod.Name, err)
@@ -545,27 +552,6 @@ func (c *Controller) createJobCredCertSecrets(
 		blNamespace = vb.Spec.BackupLocation.Namespace
 	}
 	if driverName == drivers.KopiaBackup {
-		pods, err := core.Instance().GetPodsUsingPVC(srcPVCName, dataExport.Spec.Source.Namespace)
-		if err != nil {
-			msg := fmt.Sprintf("error fetching pods using PVC %s/%s: %v", dataExport.Spec.Source.Namespace, srcPVCName, err)
-			logrus.Errorf(msg)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: msg,
-			}
-			return data, err
-		}
-		// filter out the pods that are create by us
-		count := len(pods)
-		for _, pod := range pods {
-			labels := pod.ObjectMeta.Labels
-			if _, ok := labels[drivers.DriverNameLabel]; ok {
-				count--
-			}
-		}
-		if count > 0 {
-			namespace = utils.AdminNamespace
-		}
 		blName = dataExport.Spec.Destination.Name
 		blNamespace = dataExport.Spec.Destination.Namespace
 	}
