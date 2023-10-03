@@ -94,11 +94,19 @@ func (g *gke) DeleteNode(node node.Node, timeout time.Duration) error {
 }
 
 func (g *gke) GetZones() ([]string, error) {
-	asgInfo, err := g.ops.InspectInstanceGroupForInstance(g.ops.InstanceID())
-	if err != nil {
-		return []string{}, err
+	storageDriverNodes := node.GetStorageDriverNodes()
+	nZones := make(map[string]bool)
+	for _, sNode := range storageDriverNodes {
+		if _, ok := nZones[sNode.Zone]; !ok {
+			nZones[sNode.Zone] = true
+		}
+
 	}
-	return asgInfo.Zones, nil
+	asgZones := make([]string, 0)
+	for k := range nZones {
+		asgZones = append(asgZones, k)
+	}
+	return asgZones, nil
 }
 
 func init() {

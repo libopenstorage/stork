@@ -8531,10 +8531,17 @@ outer:
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 
-			poolID, err := GetPoolIDFromPoolUUID(poolUuid)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
 				errCh <- err
 				return
+			}
+			var poolID int32
+			for _, pool := range pools {
+				if pool.Uuid == poolUuid {
+					poolID = pool.ID
+					break
+				}
 			}
 
 			inspectVolume, err := Inst().V.InspectVolume(v.ID)
