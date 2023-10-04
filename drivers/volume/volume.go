@@ -148,11 +148,11 @@ type Driver interface {
 	// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
 	GetCSIPodPrefix() (string, error)
 
-	// PodPrefersBindMount returns true if the Pod prefers local volume attachment
-	PodPrefersBindMount(pod *v1.Pod) bool
+	// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+	IsVirtualMachineSupported() bool
 
-	//GetVolumeIDFromPVC returns Volume ID for a PVC
-	GetVolumeIDFromPVC(pvcName string, namespace string) (string, error)
+	//GetPVNameFromPVC returns PV name for a PVC
+	GetPVNameFromPVC(pvcName string, namespace string) (string, error)
 
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface

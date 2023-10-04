@@ -669,14 +669,14 @@ func (g *gcp) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
 }
 
-func (g *gcp) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
+// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+func (g *gcp) IsVirtualMachineSupported() bool {
+	return false
 }
 
-// PodPrefersBindMount returns true if the Pod prefers local volume attachment
-func (g *gcp) PodPrefersBindMount(pod *v1.Pod) bool {
-	// No preference for bind mount
-	return false
+// GetPVNameFromPVC returns PV name for a PVC
+func (g *gcp) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
+	return "", nil
 }
 
 func init() {

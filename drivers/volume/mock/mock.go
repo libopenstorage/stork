@@ -345,13 +345,14 @@ func (m *Driver) GetCSIPodPrefix() (string, error) {
 	return "px-csi-ext", nil
 }
 
-func (m *Driver) PodPrefersBindMount(pod *v1.Pod) bool {
-	return pod.Labels["kubevirt.io"] == "virt-launcher"
+// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+func (m *Driver) IsVirtualMachineSupported() bool {
+	return true
 }
 
-func (m *Driver) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
-	// TODO
-	return "", nil
+// GetPVNameFromPVC returns PV name for a PVC
+func (m *Driver) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
+	return pvcName, nil
 }
 
 func init() {

@@ -25,6 +25,9 @@ import (
 	schedulerapi "k8s.io/kube-scheduler/extender/v1"
 )
 
+//go:generate go run github.com/golang/mock/mockgen -destination=../mock/kubevirt.ops.mock.go -package=mock github.com/portworx/sched-ops/k8s/kubevirt-dynamic Ops
+//go:generate go run github.com/golang/mock/mockgen -destination=../mock/kubevirt.vmiops.mock.go -package=mock github.com/portworx/sched-ops/k8s/kubevirt-dynamic VirtualMachineInstanceOps
+
 const (
 	filter     = "filter"
 	prioritize = "prioritize"
@@ -579,10 +582,10 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	var err error
 
 	// Prioritize virt launcher pods on nodes to facilitate bind-mount
-	podPrefersBindMount := false
-	if e.Driver.PodPrefersBindMount(pod) {
-		storklog.PodLog(pod).Infof("Pod prefers bind mount")
-		podPrefersBindMount = true
+	isVirtLauncherPod := false
+	if e.isVirtLauncherPod(pod) {
+		storklog.PodLog(pod).Infof("It's a virt launcher pod")
+		isVirtLauncherPod = true
 		err := e.processVirtLauncherPodPrioritizeRequest(encoder, args)
 		if err != nil {
 			// Let the default scoring login decide the prioritize score
@@ -689,11 +692,9 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 					continue
 				}
 
-				// PodPrefersBindMount but volume NeedsAntiHyperconvergence is a possible(error) case for Virt launcher pods. If we have reached
-				// this part of the code means means processVirtLauncherPodPrioritizeRequest returned an error and we are relying on the default
-				// scoring logic. PodPrefersBindMount will take precedence  in such a scenario and we will try to hyperconverge pod with its
-				// volume replicas.
-				if !podPrefersBindMount &&
+				// If we reached this point for a virt launcher Pod means processVirtLauncherPodPrioritizeRequest returned
+				// an error and we are relying on the default scoring logic. Hyperconvergence is the default behavior.
+				if !isVirtLauncherPod &&
 					volume.NeedsAntiHyperconvergence &&
 					e.volumePrefersRemoteNode(volume) {
 					isAntihyperconvergenceRequired = true
@@ -761,6 +762,11 @@ func (e *Extender) isUsingBindMount(pod *v1.Pod, vol *volume.Info) bool {
 	return pod.Status.HostIP == vol.AttachedOn
 }
 
+// isVirtLauncherPod returns true if it is a virt launcher pod
+func (e *Extender) isVirtLauncherPod(pod *v1.Pod) bool {
+	return pod.Labels["kubevirt.io"] == "virt-launcher"
+}
+
 // getLiveMigrationInfo returns status of live migration
 func (e *Extender) getLiveMigrationInfo(refPod *v1.Pod, refVMIUID types.UID) (podBeingLiveMigrated *v1.Pod, err error) {
 	pods, err := core.Instance().GetPods(refPod.Namespace, nil)
@@ -768,11 +774,11 @@ func (e *Extender) getLiveMigrationInfo(refPod *v1.Pod, refVMIUID types.UID) (po
 		msg := "unable to get Pod list in the same namespace."
 		return nil, fmt.Errorf("err: %s", msg)
 	}
-	// If another Running Pod in the same namespace which also prefersBindMount and has the same VMI owner reference
-	// Then it can be concluded that this Pod is where the original VM was being hosted and is being live migrated to the refPod
+	// If another virt launcher pod is Running  the same namespace  and has the same VMI owner reference Then it can
+	// be concluded that this Pod is where the original VM was being hosted and is being live migrated to the refPod
 	for _, pod := range pods.Items {
 		if pod.Status.Phase != v1.PodRunning ||
-			!e.Driver.PodPrefersBindMount(&pod) {
+			!e.isVirtLauncherPod(&pod) {
 			continue
 		}
 		_, vmiUID := e.getVMIInfo(&pod)
@@ -929,26 +935,26 @@ func (e *Extender) processVirtLauncherPodPrioritizeRequest(
 	}
 
 	if podBeingLiveMigrated != nil {
-		storklog.PodLog(pod).Debugf("Live VM migration in progress: (vmiName: %v, podBeingLiveMigrated: %v)", vmiName, podBeingLiveMigrated.Name)
+		storklog.PodLog(pod).Infof("Live VM migration in progress: (vmiName: %v, podBeingLiveMigrated: %v)", vmiName, podBeingLiveMigrated.Name)
 	} else {
-		storklog.PodLog(pod).Debugf("No ongoing live VM migration in progress. vmiName: %v", vmiName)
+		storklog.PodLog(pod).Infof("No ongoing live VM migration in progress. vmiName: %v", vmiName)
 	}
 
 	vmi, err := kvd.Instance().GetVirtualMachineInstance(context.TODO(), pod.Namespace, vmiName)
 	if err != nil {
 		return fmt.Errorf("unable to find VMI Info: %w", err)
 	}
-	storklog.PodLog(pod).Debugf("VMI is using PVC %v: ", vmi.RootDiskPVC)
+	storklog.PodLog(pod).Debugf("VMI is using PVC: %v", vmi.RootDiskPVC)
 
-	pvId, err := e.Driver.GetVolumeIDFromPVC(vmi.RootDiskPVC, pod.Namespace)
+	pvName, err := e.Driver.GetPVNameFromPVC(vmi.RootDiskPVC, pod.Namespace)
 	if err != nil {
 		return fmt.Errorf("unable to inspect PVC: %v err: %w", vmi.RootDiskPVC, err)
 	}
-	storklog.PodLog(pod).Debugf("Volume id for scoring: %v", pvId)
+	storklog.PodLog(pod).Debugf("PV for scoring: %v", pvName)
 
-	volInfo, err := e.Driver.InspectVolume(pvId)
+	volInfo, err := e.Driver.InspectVolume(pvName)
 	if err != nil {
-		return fmt.Errorf("unable to inspect volume id: %v. err: %w", pvId, err)
+		return fmt.Errorf("unable to inspect PV: %v. err: %w", pvName, err)
 	}
 
 	if podBeingLiveMigrated != nil {

@@ -693,13 +693,13 @@ func (a *azure) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
 }
 
-// PodPrefersBindMount returns true if the Pod prefers local volume attachment
-func (a *azure) PodPrefersBindMount(pod *v1.Pod) bool {
-	// No preference for bind mount
+// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+func (a *azure) IsVirtualMachineSupported() bool {
 	return false
 }
 
-func (a *azure) GetVolumeIDFromPVC(pvcName string, namespace string) (string, error) {
+// GetPVNameFromPVC returns PV name for a PVC
+func (a *azure) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
 	return "", nil
 }
 

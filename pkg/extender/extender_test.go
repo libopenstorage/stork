@@ -13,12 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+
+	kubemock "github.com/libopenstorage/stork/pkg/mock"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s/core"
+	kvd "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/sched-ops/k8s/openshift"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -64,6 +68,7 @@ func setup(t *testing.T) {
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
+
 	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
 
 	// setup fake k8s instances
@@ -130,6 +135,7 @@ func newPod(podName string, volumes map[string]bool) *v1.Pod {
 		}
 	}
 	pod.Annotations = make(map[string]string)
+
 	return pod
 }
 
@@ -356,6 +362,7 @@ func TestExtender(t *testing.T) {
 	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
 	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
 	t.Run("skipScoringForWindowsPods", skipScoringForWindowsPods)
+	t.Run("kubevirtPodScheduling", kubevirtPodScheduling)
 	t.Run("teardown", teardown)
 }
 
@@ -2265,4 +2272,184 @@ func skipScoringForWindowsPods(t *testing.T) {
 			defaultScore,
 			defaultScore},
 		prioritizeResponse)
+}
+
+// Verify scoring for Kubevirt pods
+func kubevirtPodScheduling(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newKubevirtPod("KubevirtPod", map[string]bool{"KubevirtVolume": true})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("KubevirtVolume", provNodes, 3, map[string]string{"kubevirtPodScheduling": "true"}, false, false, "192.168.0.1"); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockKubevirtOps := kubemock.NewMockOps(mockCtrl)
+	kvd.SetInstance(mockKubevirtOps)
+
+	// New Pod
+	mockKubevirtOps.EXPECT().
+		GetVirtualMachineInstance(gomock.Any(), defaultNamespace, "testVMI").
+		Return(&kvd.VirtualMachineInstance{
+			RootDisk:       "testDisk",
+			RootDiskPVC:    "KubevirtVolume",
+			LiveMigratable: true}, nil)
+
+	// All nodes including offline nodes will be returned as scheduler is disabled for Windows Pods
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	// Hyperconvergence with preference to local attachment
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			2 * nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore,
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+
+	//Live Migration Scenario1: Existing Pod using bind mount
+	// Encode the Pod object to JSON
+	podJSON, err := json.Marshal(pod)
+	if err != nil {
+		t.Fatalf("Error marshalling pod: %v", err)
+	}
+
+	// Decode the JSON back to a new Pod object (deep copy)
+	// newPod is the Pod created for live migration
+	newPod := &v1.Pod{}
+	err = json.Unmarshal(podJSON, newPod)
+	if err != nil {
+		t.Fatalf("Error unmarshalling pod: %v", err)
+	}
+	newPod.Name = "newpod"
+
+	// Update status of existing Pod to be running and attach it to node1
+	pod.Status.Phase = v1.PodRunning
+	pod.Status.HostIP = "192.168.0.1"
+	pod, err = core.Instance().CreatePod(pod)
+	if err != nil {
+		t.Fatalf("Error creating pod: %v", err)
+	}
+
+	mockKubevirtOps.EXPECT().
+		GetVirtualMachineInstance(gomock.Any(), defaultNamespace, "testVMI").
+		Return(&kvd.VirtualMachineInstance{
+			RootDisk:       "testDisk",
+			RootDiskPVC:    "KubevirtVolume",
+			LiveMigratable: true}, nil)
+	prioritizeResponse, err = sendPrioritizeRequest(newPod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	// Anti hyperconvergence because existing Pod is using local attachment
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			defaultScore,
+			defaultScore,
+			defaultScore,
+			nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore},
+		prioritizeResponse)
+
+	//Live Migration Scenario 2: Existing Pod using NFS mount
+	pod.Status.HostIP = "192.168.0.2"
+	pod, err = core.Instance().UpdatePod(pod)
+	if err != nil {
+		t.Fatalf("Error updating pod: %v", err)
+
+	}
+	mockKubevirtOps.EXPECT().
+		GetVirtualMachineInstance(gomock.Any(), defaultNamespace, "testVMI").
+		Return(&kvd.VirtualMachineInstance{
+			RootDisk:       "testDisk",
+			RootDiskPVC:    "KubevirtVolume",
+			LiveMigratable: true}, nil)
+	prioritizeResponse, err = sendPrioritizeRequest(newPod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	// Antihyperconvergece but more priority to node with attached volume
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			2 * nodePriorityScore,
+			defaultScore,
+			defaultScore,
+			nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore},
+		prioritizeResponse)
+
+	//Live Migration Scenario 3: Error in extracting VMI info
+	mockKubevirtOps.EXPECT().
+		GetVirtualMachineInstance(gomock.Any(), defaultNamespace, "testVMI").
+		Return(nil, fmt.Errorf("unable to find vmi info"))
+	prioritizeResponse, err = sendPrioritizeRequest(newPod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	// Error in processVirtLauncherPodPrioritizeRequest path
+	// Fallback to default hyperconvergence logic since it's a kubevirt Pod
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{
+			nodePriorityScore,
+			nodePriorityScore,
+			nodePriorityScore,
+			rackPriorityScore,
+			rackPriorityScore,
+			rackPriorityScore},
+		prioritizeResponse)
+
+}
+
+func newKubevirtPod(podName string, volumes map[string]bool) *v1.Pod {
+	pod := newPod(podName, volumes)
+	pod.Labels = map[string]string{
+		"kubevirt.io": "virt-launcher",
+	}
+
+	ownerResource := metav1.OwnerReference{
+		APIVersion:         "kubevirt.io/v1",
+		Kind:               "VirtualMachineInstance",
+		Name:               "testVMI",
+		UID:                "testUID",
+		BlockOwnerDeletion: nil,
+	}
+
+	pod.SetOwnerReferences([]metav1.OwnerReference{
+		ownerResource,
+	})
+
+	return pod
 }
