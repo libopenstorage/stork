@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/tests"
 	"math/rand"
 	"net/http"
+	"regexp"
 )
 
 var (
@@ -40,6 +41,9 @@ func InitializeDrivers(c *gin.Context) {
 // GetNodes : This API will return list of all worker nodes in the Cluster
 func GetNodes(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetWorkerNodes()
@@ -55,6 +59,9 @@ func GetNodes(c *gin.Context) {
 // pxone/rebootnode/<nodename> - Reboots a node with specific node name
 func RebootNode(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetWorkerNodes()
@@ -114,6 +121,9 @@ func RebootNode(c *gin.Context) {
 // GetStorageNodes : Returns all Storage Node objects in the cluster
 func GetStorageNodes(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes, err := tests.GetStorageNodes()
@@ -131,6 +141,9 @@ func GetStorageNodes(c *gin.Context) {
 // GetStorageLessNodes : Returns all Storage less node objects in the cluster
 func GetStorageLessNodes(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetStorageLessNodes()
@@ -140,6 +153,9 @@ func GetStorageLessNodes(c *gin.Context) {
 // CollectSupport : This API collects the support bundle
 func CollectSupport(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	tests.CollectSupport()
@@ -150,6 +166,9 @@ func CollectSupport(c *gin.Context) {
 // context is created as a global context to be accessed later in further tests
 func ScheduleAppsAndValidate(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	appToRun := c.Param("appName")
@@ -174,6 +193,122 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Apps Created and Validated successfully",
+		})
+	}
+}
+
+// GetPxVersion This function returns the current Px Version in the Target Cluster
+func GetPxVersion(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	version, err := tests.Inst().V.GetDriverVersion()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"version": version,
+		})
+	}
+}
+
+// IsPxInstalled This funtion returns true if Px is Installed
+func IsPxInstalled(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	nodes := node.GetWorkerNodes()
+	var pxinstalled bool
+	var err error
+	for _, n := range nodes {
+		pxinstalled, err = tests.Inst().V.IsDriverInstalled(n)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err,
+			})
+			return
+		}
+		if !pxinstalled {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Px is not Installed",
+				"node":  n.Name,
+			})
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "Px installed on all nodes successfully",
+	})
+}
+
+// GetPxctlStatusOutput This function is used to return all elements in pxctl status output
+func GetPxctlStatusOutput(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	cmd := "status"
+	nodes := node.GetWorkerNodes()
+	out, err := tests.Inst().V.GetPxctlCmdOutput(nodes[0], cmd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err,
+		})
+	} else {
+		var status PxctlStatus
+		// Extract Status
+		re := regexp.MustCompile(`Status: (.+)`)
+		match := re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.Status = match[1]
+		}
+		// Extract Node ID
+		re = regexp.MustCompile(`Node ID: (.+)`)
+		match = re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.NodeID = match[1]
+		}
+		// Extract IP
+		re = regexp.MustCompile(`IP: (.+)`)
+		match = re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.IP = match[1]
+		}
+		// Extract Cluster ID
+		re = regexp.MustCompile(`Cluster ID: (.+)`)
+		match = re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.ClusterID = match[1]
+		}
+		// Extract Cluster UUID
+		re = regexp.MustCompile(`Cluster UUID: (.+)`)
+		match = re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.ClusterUUID = match[1]
+		}
+		// Extract Total Used
+		re = regexp.MustCompile(`Total Used\s+: (.+)`)
+		match = re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.TotalUsed = match[1]
+		}
+		// Extract Total Capacity
+		re = regexp.MustCompile(`Total Capacity\s+: (.+)`)
+		match = re.FindStringSubmatch(out)
+		if len(match) > 0 {
+			status.TotalCapacity = match[1]
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"output": status,
 		})
 	}
 }

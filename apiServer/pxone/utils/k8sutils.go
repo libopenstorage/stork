@@ -82,11 +82,18 @@ func GetNodeStatus(c *gin.Context) {
 		})
 		return
 	}
-	totalNodes := len(nodes.Items)
+	totalNodes := 0
 	healthyNodes := 0
 	unhealthyNodes := 0
 	degradedNodes := 0
 	for _, node := range nodes.Items {
+		if _, isMaster := node.Labels["node-role.kubernetes.io/master"]; isMaster {
+			continue
+		}
+		if _, isControlPlane := node.Labels["node-role.kubernetes.io/control-plane"]; isControlPlane {
+			continue
+		}
+		totalNodes += 1
 		for _, condition := range node.Status.Conditions {
 			if condition.Type == v1.NodeReady {
 				if condition.Status == v1.ConditionTrue {

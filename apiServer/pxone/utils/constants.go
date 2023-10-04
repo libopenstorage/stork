@@ -28,3 +28,13 @@ var (
 	errChan = make(chan error, 100)
 	k8sCore = core.Instance()
 )
+
+type PxctlStatus struct {
+	Status        string `json:"status,omitempty"`
+	NodeID        string `json:"nodeId,omitempty"`
+	IP            string `json:"ip,omitempty"`
+	ClusterID     string `json:"clusterId,omitempty"`
+	ClusterUUID   string `json:"clusterUUID,omitempty"`
+	TotalUsed     string `json:"totalUsed,omitempty"`
+	TotalCapacity string `json:"totalCapacity,omitempty"`
+}

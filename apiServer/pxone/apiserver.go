@@ -24,5 +24,8 @@ func main() {
 	router.GET("pxone/getclusterid/:namespace", utils.GetNamespaceID)
 	router.GET("pxone/getclusternodestatus", utils.GetNodeStatus)
 	router.POST("pxone/runhelmcmd", utils.ExecuteHelmCmd)
+	router.GET("pxone/pxversion", utils.GetPxVersion)
+	router.GET("pxone/ispxinstalled", utils.IsPxInstalled)
+	router.GET("pxone/getpxctloutput", utils.GetPxctlStatusOutput)
 	log.Fatal(router.Run(":8080"))
 }
