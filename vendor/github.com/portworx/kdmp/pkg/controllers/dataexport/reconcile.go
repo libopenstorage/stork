@@ -80,18 +80,18 @@ const (
 )
 
 type updateDataExportDetail struct {
-	stage                kdmpapi.DataExportStage
-	status               kdmpapi.DataExportStatus
-	transferID           string
-	reason               string
-	snapshotID           string
-	size                 uint64
-	progressPercentage   int
-	snapshotPVCName      string
-	snapshotPVCNamespace string
-	snapshotNamespace    string
-	removeFinalizer      bool
-	volumeSnapshot       string
+	stage                     kdmpapi.DataExportStage
+	status                    kdmpapi.DataExportStatus
+	transferID                string
+	reason                    string
+	snapshotID                string
+	size                      uint64
+	progressPercentage        int
+	snapshotPVCName           string
+	snapshotPVCNamespace      string
+	snapshotNamespace         string
+	removeFinalizer           bool
+	volumeSnapshot            string
 	resetLocalSnapshotRestore bool
 }
 
@@ -453,7 +453,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		var cleanupErr error
 		// Need to retain the old reason present in the dataexport CR, so passing the reason again.
 		data := updateDataExportDetail{
-			stage: kdmpapi.DataExportStageFinal,
+			stage:  kdmpapi.DataExportStageFinal,
 			reason: dataExport.Status.Reason,
 		}
 		// Append the job-pod log to stork's pod log in case of failure
@@ -1055,9 +1055,9 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 		}
 		// Already done with max retries, so moving to kdmp restore anyway
 		data := updateDataExportDetail{
-			stage:  kdmpapi.DataExportStageTransferScheduled,
-			status: kdmpapi.DataExportStatusInitial,
-			reason: "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
+			stage:                     kdmpapi.DataExportStageTransferScheduled,
+			status:                    kdmpapi.DataExportStatusInitial,
+			reason:                    "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
 			resetLocalSnapshotRestore: true,
 		}
 		logrus.Infof("%v: In stageLocalSnapshotRestore stage, local snapshot restore failed, trying KDMP restore.", dataExport.Name)
@@ -1209,10 +1209,10 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 		}
 		logrus.Infof("%v: In stageLocalSnapshotRestoreInProgress stage, local snapshot restore failed, trying KDMP restore.", dataExport.Name)
 		data := updateDataExportDetail{
-			stage:      kdmpapi.DataExportStageTransferScheduled,
-			status:     kdmpapi.DataExportStatusInitial,
-			reason:     "",
-			transferID: "", // Resetting transfer id if it has been set with nfs backuplocation job
+			stage:                     kdmpapi.DataExportStageTransferScheduled,
+			status:                    kdmpapi.DataExportStatusInitial,
+			reason:                    "",
+			transferID:                "", // Resetting transfer id if it has been set with nfs backuplocation job
 			resetLocalSnapshotRestore: true,
 		}
 		return false, c.updateStatus(dataExport, data)
@@ -1505,14 +1505,14 @@ func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExpor
 		}
 
 		// Get the Restore pvc spec.
-                rpvc, err := core.Instance().GetPersistentVolumeClaim(de.Status.RestorePVC.Name, de.Namespace)
-                if err != nil {
-                        if k8sErrors.IsNotFound(err) {
-                                return nil, false, nil;
-                        }
-                        logrus.Errorf("cleanupLocalRestoredSnapshotResources: failed to get restore pvc [%v] err: %v", de.Status.RestorePVC.Name, err)
-                        return nil, false, err
-                }
+		rpvc, err := core.Instance().GetPersistentVolumeClaim(de.Status.RestorePVC.Name, de.Namespace)
+		if err != nil {
+			if k8sErrors.IsNotFound(err) {
+				return nil, false, nil
+			}
+			logrus.Errorf("cleanupLocalRestoredSnapshotResources: failed to get restore pvc [%v] err: %v", de.Status.RestorePVC.Name, err)
+			return nil, false, err
+		}
 		if rpvc.Spec.DataSource != nil {
 			err = snapshotDriver.DeleteSnapshot(rpvc.Spec.DataSource.Name, de.Namespace, true)
 			if err != nil {
@@ -2120,6 +2120,7 @@ func createS3Secret(secretName string, backupLocation *storkapi.BackupLocation, 
 	credentialData["type"] = []byte(backupLocation.Location.Type)
 	credentialData["password"] = []byte(backupLocation.Location.RepositoryPassword)
 	credentialData["disablessl"] = []byte(strconv.FormatBool(backupLocation.Location.S3Config.DisableSSL))
+	credentialData["sse"] = []byte(backupLocation.Location.S3Config.SSE)
 	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err

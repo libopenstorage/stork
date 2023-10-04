@@ -37,6 +37,7 @@ const (
 	secretAccessKeyPath   = "/etc/cred-secret/secretAccessKey"
 	bucketPath            = "/etc/cred-secret/path"
 	endpointPath          = "/etc/cred-secret/endpoint"
+	sseTypePath           = "/etc/cred-secret/sse"
 	passwordPath          = "/etc/cred-secret/password"
 	regionPath            = "/etc/cred-secret/region"
 	disableSslPath        = "/etc/cred-secret/disablessl"
@@ -52,9 +53,9 @@ const (
 	// DefaultTimeout Max time a command will be retired before failing
 	DefaultTimeout = 1 * time.Minute
 	// BackupUID backup UID annotation
-	BackupUID  = "portworx.io/backup-uid"
-	retrySleep = 10 * time.Second
-	maxRetry   = 10
+	BackupUID         = "portworx.io/backup-uid"
+	retrySleep        = 10 * time.Second
+	maxRetry          = 10
 	lastKnownErrorLen = 1000
 )
 
@@ -90,6 +91,7 @@ type S3Config struct {
 	// Region will be defaulted to us-east-1 if not provided
 	Region     string
 	DisableSSL bool
+	SseType    string
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
@@ -345,6 +347,13 @@ func parseS3Creds() (*Repository, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	sseType, err := os.ReadFile(sseTypePath)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed reading data from file %s : %s", sseTypePath, err)
+		logrus.Errorf("%v", errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	disableSsl, err := os.ReadFile(disableSslPath)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed reading data from file %s : %s", disableSslPath, err)
@@ -361,6 +370,7 @@ func parseS3Creds() (*Repository, error) {
 	repository.S3Config.AccessKeyID = string(accessKey)
 	repository.S3Config.SecretAccessKey = string(secretAccessKey)
 	repository.S3Config.Endpoint = string(endpoint)
+	repository.S3Config.SseType = string(sseType)
 	repository.S3Config.DisableSSL = isSsl
 	repository.Type = storkapi.BackupLocationS3
 	region, err := os.ReadFile(regionPath)
