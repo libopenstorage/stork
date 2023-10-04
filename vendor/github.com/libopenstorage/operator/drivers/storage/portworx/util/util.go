@@ -79,6 +79,8 @@ const (
 	EssentialsOSBEndpointKey = "px-osb-endpoint"
 	// EnvKeyKubeletDir env var to set custom kubelet directory
 	EnvKeyKubeletDir = "KUBELET_DIR"
+	// OS name for windows node
+	WindowsOsName = "windows"
 
 	// AnnotationIsPKS annotation indicating whether it is a PKS cluster
 	AnnotationIsPKS = pxAnnotationPrefix + "/is-pks"
@@ -287,7 +289,7 @@ var (
 	// MinimumPxVersionMetricsCollector minimum PX version to install metrics collector
 	MinimumPxVersionMetricsCollector, _ = version.NewVersion("2.9.1")
 	// MinimumPxVersionAutoTLS is a minimal PX version that supports "auto-TLS" setup
-	MinimumPxVersionAutoTLS, _ = version.NewVersion("3.0.0")
+	MinimumPxVersionAutoTLS, _ = version.NewVersion("4.0.0")
 
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
@@ -371,6 +373,16 @@ func IsVsphere(cluster *corev1.StorageCluster) bool {
 	return false
 }
 
+// IsPure true if PURE_FLASHARRAY_SAN_TYPE is present in the spec
+func IsPure(cluster *corev1.StorageCluster) bool {
+	for _, env := range cluster.Spec.Env {
+		if env.Name == "PURE_FLASHARRAY_SAN_TYPE" && len(env.Value) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // IsPrivileged returns true "privileged" annotation is MISSING, or NOT set to FALSE
 func IsPrivileged(cluster *corev1.StorageCluster) bool {
 	enabled, err := strconv.ParseBool(cluster.Annotations[AnnotationIsPrivileged])
@@ -381,6 +393,10 @@ func IsPrivileged(cluster *corev1.StorageCluster) bool {
 func GetCloudProvider(cluster *corev1.StorageCluster) string {
 	if IsVsphere(cluster) {
 		return cloudops.Vsphere
+	}
+
+	if IsPure(cluster) {
+		return cloudops.Pure
 	}
 
 	if len(preflight.Instance().ProviderName()) > 0 {
@@ -1207,6 +1223,23 @@ func ApplyStorageClusterSettingsToPodSpec(cluster *corev1.StorageCluster, podSpe
 	}
 }
 
+func ApplyWindowsSettingsToPodSpec(podSpec *v1.PodSpec) {
+	for _, nodeselector := range podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+		for i := range nodeselector.MatchExpressions {
+			if nodeselector.MatchExpressions[i].Key == v1.LabelOSStable {
+				nodeselector.MatchExpressions[i].Values = []string{WindowsOsName}
+			}
+		}
+	}
+
+	toleration := v1.Toleration{
+		Key:   "os",
+		Value: WindowsOsName,
+	}
+
+	podSpec.Tolerations = append(podSpec.Tolerations, toleration)
+}
+
 // GetClusterID returns portworx instance cluster ID
 func GetClusterID(cluster *corev1.StorageCluster) string {
 	if cluster.Annotations[AnnotationClusterID] != "" {
@@ -1381,7 +1414,7 @@ func CleanupObject(obj client.Object) {
 
 // IsFreshInstall checks whether it's a fresh Portworx install
 func IsFreshInstall(cluster *corev1.StorageCluster) bool {
-	// To handle failures during fresh install e.g. validation falures,
+	// To handle failures during fresh install e.g. validation failures,
 	// extra check for px runtime states is added here to avoid unexpected behaviors
 	return cluster.Status.Phase == "" ||
 		cluster.Status.Phase == string(corev1.ClusterStateInit) ||
