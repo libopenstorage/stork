@@ -23,16 +23,15 @@ var (
 	isavailable                bool
 	isTemplateavailable        bool
 	isStorageTemplateAvailable bool
-
-	resourceTemplateID   string
-	appConfigTemplateID  string
-	storageTemplateID    string
-	resourceTemplateName = "Small"
+	resourceTemplateID         string
+	appConfigTemplateID        string
+	storageTemplateID          string
+	resourceTemplateName       = "Small"
 )
 
 const (
-	appConfigTemplateName = "QaDefault"
 	storageTemplateName   = "QaDefault"
+	appConfigTemplateName = "QaDefault"
 )
 
 var (

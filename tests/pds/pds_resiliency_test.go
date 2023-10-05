@@ -69,7 +69,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.FailOnError(err, "Error while getting resource setting template")
 				dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
 
-				updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+				updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
 					dataServiceDefaultAppConfigID, deployment.GetImageId(),
 					int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 				log.FailOnError(err, "Error while updating dataservices")

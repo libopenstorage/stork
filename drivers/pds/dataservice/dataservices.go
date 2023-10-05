@@ -193,6 +193,21 @@ func GetLatestVersionsImage(dsVersion string, dataServiceID string) (string, str
 	return versionID, imageID, dataServiceVersionBuildMap, nil
 }
 
+// UpdateDataServices modifies the existing deployment
+func (d *DataserviceType) UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
+	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		log.Debugf("Updating deployment [%s]", deploymentID)
+		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+
+	return deployment, nil
+}
+
 func (d *DataserviceType) GetDataServiceID(ds string) (string, error) {
 	var dataServiceID string
 	dsModel, err := components.DataService.ListDataServices()
@@ -434,7 +449,7 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 
 func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error {
 	var ss *v1.StatefulSet
-
+	log.Debugf("deployment name [%s] in namespace [%s]", deployment.GetClusterResourceName(), namespace)
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 		if err != nil {

@@ -2011,20 +2011,6 @@ func GetAllSupportedDataServices() map[string]string {
 	return dataServiceNameIDMap
 }
 
-// UpdateDataServices modifies the existing deployment
-func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
-	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
-	})
-
-	return deployment, nil
-}
-
 // ValidateDataServiceVolumes validates the volumes
 func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateID string, storageTemplateID string, namespace string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
 	var config StorageClassConfig

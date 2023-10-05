@@ -763,9 +763,9 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource setting template")
-					dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-					updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+					updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
 						dataServiceDefaultAppConfigID, deployment.GetImageId(),
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 					log.FailOnError(err, "Error while updating dataservices")

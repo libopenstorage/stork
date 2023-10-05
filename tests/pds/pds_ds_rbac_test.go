@@ -198,7 +198,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+						updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2)
 						log.FailOnError(err, "Error while updating dataservices")
