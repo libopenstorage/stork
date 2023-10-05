@@ -15,6 +15,10 @@ type AppSpec struct {
 	SpecList []interface{}
 	// Enabled indicates if the application is enabled in the factory
 	Enabled bool
+	// CSI app, use if the application needs to use CSI provisioner
+	IsCSI bool
+	// NameSpace is the namespace where the application is installed
+	NameSpace string
 }
 
 // GetID returns the unique ID for the app specs

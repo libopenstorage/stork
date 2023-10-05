@@ -23,6 +23,7 @@ var (
 type Ops interface {
 	StorageClusterOps
 	StorageNodeOps
+	PortworxDiagOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)

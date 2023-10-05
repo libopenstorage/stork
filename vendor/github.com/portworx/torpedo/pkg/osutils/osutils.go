@@ -158,10 +158,11 @@ func Kubectl(arguments []string) error {
 		return fmt.Errorf("no arguments supplied for kubectl command")
 	}
 	cmd := exec.Command("kubectl", arguments...)
+	log.Debugf("Executing command [%s]", cmd.String())
 	output, err := cmd.Output()
-	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	log.Debugf("%s", string(output))
 	if err != nil {
-		return fmt.Errorf("error on executing kubectl command, Err: %+v", err)
+		return fmt.Errorf("Failed to execute command [%s], Err: %v", cmd.String(), err)
 	}
 
 	return nil
@@ -176,13 +177,12 @@ func ExecShell(command string) (string, string, error) {
 func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
 	var stout, sterr []byte
 	cmd := exec.Command("bash", "-c", command)
-	log.Debugf("Command %s ", command)
+	log.Debugf("Executing command [%s]", command)
 	cmd.Env = append(cmd.Env, envVars...)
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
-		log.Debugf("Command %s failed to start. Cause: %v", command, err)
-		return "", "", err
+		return "", "", fmt.Errorf("Failed to execute command [%s], Err: %v", command, err)
 	}
 
 	var wg sync.WaitGroup

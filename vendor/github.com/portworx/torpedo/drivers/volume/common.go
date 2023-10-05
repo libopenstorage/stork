@@ -73,6 +73,7 @@ type MetadataNode struct {
 	DbSize     int      `json:"DbSize"`
 	IsHealthy  bool     `json:"IsHealthy"`
 	ID         string   `json:"ID"`
+	Name       string   `json:"Name"`
 }
 
 // DefaultDriver implements defaults for Driver interface
@@ -106,12 +107,27 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 
 }
 
+func (d *DefaultDriver) ListAllVolumes() ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListAllVolumes()",
+	}
+}
+
 // CreateVolume creates a volume with the given setting
 // returns volume_id of the new volume
 func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateVolume()",
+	}
+}
+
+// ResizeVolume resizes Volume to specific size provided
+func (d *DefaultDriver) ResizeVolume(volName string, size uint64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizeVolume()",
 	}
 }
 
@@ -264,7 +280,7 @@ func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
 }
 
 // DeletePool deletes the pool with given poolID
-func (d *DefaultDriver) DeletePool(n node.Node, poolID string) error {
+func (d *DefaultDriver) DeletePool(n node.Node, poolID string, retry bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeletePool()",
@@ -311,6 +327,24 @@ func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateSnapshotUsingPxctl()",
+	}
+}
+
+// GetCloudsnaps returns cloudsnap backups.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) GetCloudsnaps(name string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "Getloudsnaps()",
+	}
+}
+
+// DeleteAllCloudsnaps deletes all  cloudsnap backups
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteAllCloudsnaps()",
 	}
 }
 
@@ -378,6 +412,14 @@ func (d *DefaultDriver) SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, wr
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetIoBandwidth()",
+	}
+}
+
+// UpdateVolumeSpec update the given volume with the provided spec
+func (d *DefaultDriver) UpdateVolumeSpec(vol *Volume, volumeSpec *api.VolumeSpecUpdate) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateVolumeSpec()",
 	}
 }
 
@@ -1092,4 +1134,25 @@ func (d *DefaultDriver) GetAlertsUsingResourceTypeBySeverity(resourceType api.Re
 		Type:      "Function",
 		Operation: "GetAlertsUsingResourceTypeBySeverity()",
 	}
+}
+
+// GetJournalDevicePath returns journal device path in the given node
+func (d *DefaultDriver) GetJournalDevicePath(n *node.Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetJournalDevicePath()",
+	}
+
+}
+
+func (d *DefaultDriver) IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
+	return true, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsVolumeAttachedOnNode()",
+	}
+}
+
+// IsPxReadyOnNode returns true if px is ready on the node
+func (d *DefaultDriver) IsPxReadyOnNode(n node.Node) bool {
+	return false
 }

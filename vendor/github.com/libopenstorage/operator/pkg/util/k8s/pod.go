@@ -1,12 +1,17 @@
 package k8s
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	schedulehelper "k8s.io/component-helpers/scheduling/corev1"
 	affinityhelper "k8s.io/component-helpers/scheduling/corev1/nodeaffinity"
 	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/constants"
@@ -214,4 +219,52 @@ func CheckPredicatesForStoragePod(
 		return false, !shouldStopRunning, nil
 	}
 	return true, true, nil
+}
+
+// GetValueFromEnvVar returns the value of v1.EnvVar Value or ValueFrom
+func GetValueFromEnvVar(ctx context.Context, client client.Client, envVar *v1.EnvVar, namespace string) (string, error) {
+
+	if valueFrom := envVar.ValueFrom; valueFrom != nil {
+		if valueFrom.SecretKeyRef != nil {
+			key := valueFrom.SecretKeyRef.Key
+			secretName := valueFrom.SecretKeyRef.Name
+
+			// Get secret key
+			secret := &v1.Secret{}
+			err := client.Get(ctx, types.NamespacedName{
+				Name:      secretName,
+				Namespace: namespace,
+			}, secret)
+			if err != nil {
+				return "", err
+			}
+			value := secret.Data[key]
+			if len(value) == 0 {
+				return "", fmt.Errorf("failed to find env var value %s in secret %s in namespace %s", key, secretName, namespace)
+			}
+
+			return string(value), nil
+		} else if valueFrom.ConfigMapKeyRef != nil {
+			cmName := valueFrom.ConfigMapKeyRef.Name
+			key := valueFrom.ConfigMapKeyRef.Key
+			configMap := &v1.ConfigMap{}
+			if err := client.Get(ctx, types.NamespacedName{
+				Name:      cmName,
+				Namespace: namespace,
+			}, configMap); err != nil {
+				return "", err
+			}
+
+			value, ok := configMap.Data[key]
+			if !ok {
+				return "", fmt.Errorf("failed to find env var value %s in configmap %s in namespace %s", key, cmName, namespace)
+			}
+
+			return value, nil
+		}
+	} else {
+		return envVar.Value, nil
+	}
+
+	return "", nil
 }

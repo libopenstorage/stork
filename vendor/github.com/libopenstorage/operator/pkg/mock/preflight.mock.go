@@ -75,3 +75,15 @@ func (mr *MockCheckerOpsMockRecorder) ProviderName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProviderName", reflect.TypeOf((*MockCheckerOps)(nil).ProviderName))
 }
+
+// SetProvider mocks base method.
+func (m *MockCheckerOps) SetProvider(arg0 string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetProvider", arg0)
+}
+
+// SetProvider indicates an expected call of SetProvider.
+func (mr *MockCheckerOpsMockRecorder) SetProvider(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProvider", reflect.TypeOf((*MockCheckerOps)(nil).SetProvider), arg0)
+}
