@@ -151,9 +151,6 @@ type Driver interface {
 	// IsVirtualMachineSupported returns true if the driver supports VM scheduling
 	IsVirtualMachineSupported() bool
 
-	//GetPVNameFromPVC returns PV name for a PVC
-	GetPVNameFromPVC(pvcName string, namespace string) (string, error)
-
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface
 	// ClusterPairPluginInterface Interface to pair clusters

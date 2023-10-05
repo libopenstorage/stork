@@ -2312,7 +2312,6 @@ func kubevirtPodScheduling(t *testing.T) {
 			RootDiskPVC:    "KubevirtVolume",
 			LiveMigratable: true}, nil)
 
-	// All nodes including offline nodes will be returned as scheduler is disabled for Windows Pods
 	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
 
 	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)

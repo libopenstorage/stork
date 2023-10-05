@@ -471,11 +471,6 @@ func (l *linstor) IsVirtualMachineSupported() bool {
 	return false
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (l *linstor) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
-}
-
 func init() {
 	l := &linstor{}
 	if err := storkvolume.Register(storkvolume.LinstorDriverName, l); err != nil {

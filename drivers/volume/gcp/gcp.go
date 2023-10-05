@@ -674,11 +674,6 @@ func (g *gcp) IsVirtualMachineSupported() bool {
 	return false
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (g *gcp) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
-}
-
 func init() {
 	g := &gcp{}
 	err := g.Init(nil)

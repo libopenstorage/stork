@@ -1007,11 +1007,6 @@ func (k *kdmp) IsVirtualMachineSupported() bool {
 	return false
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (k *kdmp) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
-}
-
 func init() {
 	a := &kdmp{}
 

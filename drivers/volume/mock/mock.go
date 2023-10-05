@@ -350,11 +350,6 @@ func (m *Driver) IsVirtualMachineSupported() bool {
 	return true
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (m *Driver) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return pvcName, nil
-}
-
 func init() {
 	if err := storkvolume.Register(driverName, &Driver{}); err != nil {
 		logrus.Panicf("Error registering mock volume driver: %v", err)

@@ -698,11 +698,6 @@ func (a *azure) IsVirtualMachineSupported() bool {
 	return false
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (a *azure) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
-}
-
 func init() {
 	a := &azure{}
 	err := a.Init(nil)

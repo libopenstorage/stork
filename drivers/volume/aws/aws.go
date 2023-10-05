@@ -671,11 +671,6 @@ func (a *aws) IsVirtualMachineSupported() bool {
 	return false
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (a *aws) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
-}
-
 func init() {
 	a := &aws{}
 	err := a.Init(nil)

@@ -1981,11 +1981,6 @@ func (c *csi) IsVirtualMachineSupported() bool {
 	return false
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (c *csi) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	return "", nil
-}
-
 func init() {
 	c := &csi{}
 	err := c.Init(nil)
