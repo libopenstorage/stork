@@ -2381,7 +2381,7 @@ func kubevirtPodScheduling(t *testing.T) {
 
 	//Live Migration Scenario 2: Existing Pod using NFS mount
 	pod.Status.HostIP = "192.168.0.2"
-	pod, err = core.Instance().UpdatePod(pod)
+	_, err = core.Instance().UpdatePod(pod)
 	if err != nil {
 		t.Fatalf("Error updating pod: %v", err)
 
