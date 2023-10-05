@@ -10,7 +10,6 @@ import (
 	"time"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -37,6 +36,7 @@ func TestMigrationFeatures(t *testing.T) {
 
 	t.Run("testMigrationStashStrategyMongoDB", testMigrationStashStrategyMongoDB)
 	t.Run("testMigrationStashStrategyKafka", testMigrationStashStrategyKafka)
+	t.Run("testMigrationStashStrategyWithStartApplication", testMigrationStashStrategyWithStartApplication)
 }
 
 func testMigrationStashStrategyMongoDB(t *testing.T) {
@@ -85,21 +85,21 @@ func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "Error setting source kubeconfig")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret)
 	require.NoError(t, err, "Error creating cluster pair")
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "Error setting source kubeconfig")
 
-	suspendOptions := storkv1.SuspendOptions{}
-	stashStrategy := storkv1.StashStrategy{StashCR: true}
+	suspendOptions := storkapi.SuspendOptions{}
+	stashStrategy := storkapi.StashStrategy{StashCR: true}
 	err = updateAppReg(appName, suspendOptions, stashStrategy)
 	require.NoError(t, err, fmt.Sprintf("Error setting stash strategy in application registrations for app %s", appName))
 
 	logrus.Infof("Starting migration %s/%s with startApplication false", appData.Ns, migNamePref+appName)
 	startApplications := false
 	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
-	err = asyncdr.WaitForMigration([]*storkv1.Migration{mig})
+	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
 
@@ -239,4 +239,98 @@ func getStashedConfigMapCount(t *testing.T, namespace string) int {
 	require.NoError(t, err, fmt.Sprintf("error listing configmaps in namespace %s", namespace))
 
 	return len(configMaps.Items)
+}
+
+func testMigrationStashStrategyWithStartApplication(t *testing.T) {
+	var testrailID, testResult = 64408118, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %w", err)
+
+	appName := appNameMongo
+	appPath := appPathMongo
+	appData := asyncdr.GetAppData(appName)
+	podsCreated, err := asyncdr.PrepareApp(appName, appPath)
+	require.NoError(t, err, "Error creating pods")
+
+	podsCreatedLen := len(podsCreated.Items)
+	logrus.Infof("podsCreatedLen: %d", podsCreatedLen)
+	sourceClusterConfigPath, err := getClusterConfigPath(srcConfig)
+	require.NoError(t, err, "Error getting source config path")
+
+	destClusterConfigPath, err := getClusterConfigPath(destConfig)
+	require.NoError(t, err, "Error getting destination config path")
+
+	// validate CRD on source
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
+	require.NoError(t, err, "Error validating source crds")
+
+	// set stashstrategy
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "Error setting source kubeconfig")
+
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret)
+	require.NoError(t, err, "Error creating cluster pair")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "Error setting source kubeconfig")
+
+	suspendOptions := storkapi.SuspendOptions{}
+	stashStrategy := storkapi.StashStrategy{StashCR: true}
+	err = updateAppReg(appName, suspendOptions, stashStrategy)
+	require.NoError(t, err, fmt.Sprintf("Error setting stash strategy in application registrations for app %s", appName))
+
+	logrus.Infof("Starting migration %s/%s with startApplication true", appData.Ns, migNamePref+appName)
+	startApplications := true
+	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
+	require.NoError(t, err, "Error waiting for migration")
+	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
+
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "Error setting dest kubeconfig")
+
+	// validate CRD on destination
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, destClusterConfigPath)
+	require.NoError(t, err, "Error validating destination crds")
+
+	// validate that CR is not present as it is stashed
+	validated, err := validateCR(appName, appData.Ns, destClusterConfigPath)
+	require.NoError(t, err, fmt.Sprintf("Error validating CR for app %s in namespace %s", appName, appData.Ns))
+	require.True(t, validated, fmt.Sprintf("CR for app %s in namespace %s should have been present as startApplications is true", appName, appData.Ns))
+
+	// validate no stashed cm is present
+	stashedCMCount := getStashedConfigMapCount(t, appData.Ns)
+	expectedStashedCMCount := 0
+	require.Equal(t, expectedStashedCMCount, stashedCMCount, fmt.Sprintf("expected stashed configmap count %d got %d", expectedStashedCMCount, stashedCMCount))
+
+	podsMigrated, err := core.Instance().GetPods(appData.Ns, nil)
+	require.NoError(t, err, "Error getting migrated pods")
+
+	podsMigratedLen := len(podsMigrated.Items)
+	require.Equal(t, podsCreatedLen, podsMigratedLen, "Pods migration failed as len of pods found on source doesnt match with pods found on destination")
+
+	logrus.Infof("Delete Destination and Source Ns")
+	err = core.Instance().DeleteNamespace(appData.Ns)
+	if err != nil {
+		logrus.Errorf("Error deleting namespace %s: %v\n", appData.Ns, err)
+	}
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "Error setting source kubeconfig")
+
+	err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+	require.NoError(t, err, "Error deleting migration")
+
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	err = core.Instance().DeleteNamespace(appData.Ns)
+	if err != nil {
+		logrus.Errorf("Error deleting namespace %s: %v\n", appData.Ns, err)
+	}
+
+	logrus.Infof("Test %s ended", t.Name())
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
