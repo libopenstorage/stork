@@ -1,0 +1,152 @@
+# Enable HA mode
+
+sync:
+  services:
+    enabled: true
+  configmaps:
+    enabled: true
+  secrets:
+    enabled: true
+  endpoints:
+    enabled: true
+  pods:
+    enabled: true
+    ephemeralContainers: false
+    status: false
+  events:
+    enabled: true
+  persistentvolumeclaims:
+    enabled: true
+  ingresses:
+    enabled: true
+  fake-nodes:
+    enabled: true # will be ignored if nodes.enabled = true
+  fake-persistentvolumes:
+    enabled: true # will be ignored if persistentvolumes.enabled = true
+  nodes:
+    enabled: true
+    # If nodes sync is enabled, and syncAllNodes = true, the virtual cluster
+    # will sync all nodes instead of only the ones where some pods are running.
+    syncAllNodes: true
+    # nodeSelector is used to limit which nodes get synced to the vcluster,
+    # and which nodes are used to run vcluster pods.
+    # A valid string representation of a label selector must be used.
+    nodeSelector: ""
+    # syncNodeChanges allows vcluster user edits of the nodes to be synced down to the host nodes.
+    # Write permissions on node resource will be given to the vcluster.
+    syncNodeChanges: false
+  persistentvolumes:
+    enabled: true
+  storageclasses:
+    enabled: false
+  legacy-storageclasses:
+    enabled: true
+  priorityclasses:
+    enabled: true
+  networkpolicies:
+    enabled: true
+  volumesnapshots:
+    enabled: false
+  poddisruptionbudgets:
+    enabled: true
+  serviceaccounts:
+    enabled: true
+
+# Scale up etcd
+etcd:
+  replicas: 2
+  fsGroup: 12345
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsGroup: 12345
+    runAsNonRoot: true
+    runAsUser: 12345
+    seccompProfile:
+      type: RuntimeDefault
+
+
+# Scale up controller manager
+controller:
+  replicas: 2
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsGroup: 12345
+    runAsNonRoot: true
+    runAsUser: 12345
+    seccompProfile:
+      type: RuntimeDefault
+
+# Scale up api server
+api:
+  replicas: 2
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsGroup: 12345
+    runAsNonRoot: true
+    runAsUser: 12345
+    seccompProfile:
+      type: RuntimeDefault
+
+# Scale up DNS server
+coredns:
+  replicas: 2
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsGroup: 12345
+    runAsNonRoot: true
+    runAsUser: 12345
+    seccompProfile:
+      type: RuntimeDefault
+
+ingress:
+  # Enable ingress record generation
+  enabled: true
+  # Ingress path type
+  pathType: ImplementationSpecific
+  apiVersion: networking.k8s.io/v1
+  ingressClassName: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+init:
+  helm:
+    # public chart
+    - chart:
+        name: metrics-server
+        repo: https://kubernetes-sigs.github.io/metrics-server/
+        version: 3.9.0
+      # optional field
+      values: |-
+        replicas: 2
+        defaultArgs:
+          - --cert-dir=/tmp
+          - --kubelet-use-node-status-port
+          - --metric-resolution=15s
+        args:
+          - /metrics-server
+          - --kubelet-insecure-tls=true
+          - --kubelet-preferred-address-types=InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP
+      release:
+        name: metrics-server
+        namespace: kube-system
+
+  multiNamespaceMode:
+    enabled: true
