@@ -152,7 +152,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 				err = DeletePodWhileBackupInProgress(ctx, orgID, currentBackupName, namespace, nfsBackupExecutorPodLabel)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Delete nfs executor pod while backup %s of type %s is in progress", currentBackupName, backupType))
 				log.InfoD("Verifying backup %s status of type %s after deleting nfs executor pod", currentBackupName, backupType)
-				err = backupSuccessCheckWithValidation(ctx, currentBackupName, currentContext, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, resourceTypeFilter)
+				err = backupSuccessCheckWithValidation(ctx, currentBackupName, currentContext, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, resourceTypeFilter...)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of backup:[%s] status of type %s after deleting nfs executor pod", currentBackupName, backupType))
 			}
 		})
