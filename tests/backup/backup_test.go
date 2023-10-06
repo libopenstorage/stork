@@ -110,7 +110,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BasicBackupCreation", "Deploying backup", nil, 0)
+		StartTorpedoTest("BasicBackupCreation", "Deploying backup", nil, 84755)
 
 		appList = Inst().AppList
 		backupLocationMap = make(map[string]string)
