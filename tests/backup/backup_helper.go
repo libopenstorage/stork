@@ -4620,7 +4620,7 @@ func DeleteBackupSchedulePolicyWithContext(orgID string, policyList []string, ct
 }
 
 // DeletePodWhileBackupInProgress deletes pod with given label and in given namespace when backup is in progress
-func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupName string, namespace string, label map[string]string, clusterName string) error {
+func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupName string, namespace string, label map[string]string) error {
 	log.InfoD("Deleting pod while backup is in progress")
 	backupInProgressStatus := api.BackupInfo_StatusInfo_InProgress
 	backupPendingStatus := api.BackupInfo_StatusInfo_Pending
@@ -4652,17 +4652,6 @@ func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupNam
 	if err != nil {
 		return err
 	}
-	if clusterName == SourceClusterName {
-		err = SetSourceKubeConfig()
-		if err != nil {
-			return err
-		}
-	} else if clusterName == destinationClusterName {
-		err = SetDestinationKubeConfig()
-		if err != nil {
-			return err
-		}
-	}
 	err = DeletePodWithLabelInNamespace(namespace, label)
 	if err != nil {
 		return err
@@ -4671,7 +4660,7 @@ func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupNam
 }
 
 // DeletePodWhileRestoreInProgress deletes pod with given label and in given namespace when restore is in progress
-func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreName string, namespace string, label map[string]string, clusterName string) error {
+func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreName string, namespace string, label map[string]string) error {
 	log.InfoD("Deleting pod while restore is in progress")
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
@@ -4697,17 +4686,6 @@ func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreN
 	_, err := DoRetryWithTimeoutWithGinkgoRecover(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
 	if err != nil {
 		return err
-	}
-	if clusterName == SourceClusterName {
-		err = SetSourceKubeConfig()
-		if err != nil {
-			return err
-		}
-	} else if clusterName == destinationClusterName {
-		err = SetDestinationKubeConfig()
-		if err != nil {
-			return err
-		}
 	}
 	err = DeletePodWithLabelInNamespace(namespace, label)
 	if err != nil {
