@@ -451,6 +451,10 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 }
 
 func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
+	var testrailID, testResult = 92964, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule("preferremotenodefalsetest",
 		scheduler.ScheduleOptions{
 			AppKeys: []string{"test-sv4-svc-prefer-remote-node-false"},
