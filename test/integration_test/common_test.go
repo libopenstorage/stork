@@ -1007,7 +1007,7 @@ func activateAppUsingStorkctl(namespace string, runInSource bool) error {
 	}
 
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("activating apps in namespace with command: %v", cmdArgs)
+	logrus.Infof("Activating apps in namespace with command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("activating apps using storkctl failed: %v", err)
 	}
@@ -1068,7 +1068,7 @@ func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
 	}
 
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("deactivating apps in namespace with command: %v", cmdArgs)
+	logrus.Infof("Deactivating apps in namespace with command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("deactivating apps using storkctl failed: %v", err)
 	}

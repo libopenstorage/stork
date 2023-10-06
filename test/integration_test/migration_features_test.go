@@ -24,7 +24,7 @@ var (
 	StashCRLabel = "stash-cr"
 )
 
-func TestMigrationFeatures(t *testing.T) {
+func TestMigrationStashStrategy(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
@@ -63,7 +63,7 @@ func testMigrationStashStrategyKafka(t *testing.T) {
 
 func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %w", err)
+	require.NoError(t, err, "Failed to set kubeconfig to source cluster: %v", err)
 
 	appData := asyncdr.GetAppData(appName)
 	podsCreated, err := asyncdr.PrepareApp(appName, appPath)
@@ -144,12 +144,13 @@ func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 	require.NoError(t, err, "Error getting migrated pods")
 
 	podsMigratedLen := len(podsMigrated.Items)
-	require.Equal(t, podsCreatedLen, podsMigratedLen, "Pods migration failed as len of pods found on source doesnt match with pods found on destination")
+	require.Equal(t, podsCreatedLen, podsMigratedLen, "Pods migration failed as len of pods found on source doesn't match with pods found on destination")
 
-	logrus.Infof("Delete Destination and Source Ns")
+	logrus.Infof("Delete destination and source namespaces")
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	err = core.Instance().DeleteNamespace(appData.Ns)
 	if err != nil {
-		logrus.Errorf("Error deleting namespace %s: %v\n", appData.Ns, err)
+		logrus.Errorf("Error deleting namespace %s in destination: %v\n", appData.Ns, err)
 	}
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "Error setting source kubeconfig")
@@ -160,7 +161,7 @@ func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	err = core.Instance().DeleteNamespace(appData.Ns)
 	if err != nil {
-		logrus.Errorf("Error deleting namespace %s: %v\n", appData.Ns, err)
+		logrus.Errorf("Error deleting namespace %s in source: %v\n", appData.Ns, err)
 	}
 	logrus.Infof("Test %s ended", t.Name())
 }
@@ -176,7 +177,7 @@ func updateAppReg(appName string, suspendOptions storkapi.SuspendOptions, stashS
 		appregName := strings.ToLower(appResource.Kind)
 		reg, err := storkops.Instance().GetApplicationRegistration(appregName)
 		if err != nil {
-			return fmt.Errorf("error getting application registration %s: %w", appregName, err)
+			return fmt.Errorf("error getting application registration %s: %v", appregName, err)
 		}
 		for i, resource := range reg.Resources {
 			resource.SuspendOptions = suspendOptions
@@ -185,32 +186,32 @@ func updateAppReg(appName string, suspendOptions storkapi.SuspendOptions, stashS
 		}
 		_, err = storkops.Instance().UpdateApplicationRegistration(reg)
 		if err != nil {
-			return fmt.Errorf("error setting stash strategy in application registration %s, %w", appregName, err)
+			return fmt.Errorf("error setting stash strategy in application registration %s, %v", appregName, err)
 		}
 	}
 	return nil
 }
 
 func validateCR(appName string, namespace string, kubeConfig string) (bool, error) {
-	validated := true
 	operatorCRMap := getSupportedOperatorCRMapping()
 	if _, ok := operatorCRMap[appName]; !ok {
-		return validated, fmt.Errorf("app %s is not currently supported in test framework", appName)
+		return false, fmt.Errorf("app %s is not currently supported in test framework", appName)
 	}
 	resources := operatorCRMap[appName]
 
 	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
 	if err != nil {
-		return validated, fmt.Errorf("error building config from kubeconfig failed: %w", err)
+		return false, fmt.Errorf("error building config from kubeconfig failed: %v", err)
 	}
 	resourceCollector := resourcecollector.ResourceCollector{
 		Driver: nil,
 	}
 	err = resourceCollector.Init(config)
 	if err != nil {
-		return validated, fmt.Errorf("error initing resourcecollector while validating CR: %w", err)
+		return false, fmt.Errorf("error initing resourcecollector while validating CR: %v", err)
 	}
 
+	validated := true
 	for _, resource := range resources {
 		objects, _, err := resourceCollector.GetResourcesForType(
 			resource,
@@ -223,7 +224,7 @@ func validateCR(appName string, namespace string, kubeConfig string) (bool, erro
 			resourcecollector.Options{},
 		)
 		if err != nil {
-			return validated, fmt.Errorf("error fetching objects while validating CR: %w", err)
+			return false, fmt.Errorf("error fetching objects while validating CR: %v", err)
 		}
 		logrus.Infof("number of resources for app %s in namespace %s is %d", appName, namespace, len(objects.Items))
 		if len(objects.Items) != 1 {
@@ -247,7 +248,7 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %w", err)
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	appName := appNameMongo
 	appPath := appPathMongo
@@ -310,12 +311,13 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	require.NoError(t, err, "Error getting migrated pods")
 
 	podsMigratedLen := len(podsMigrated.Items)
-	require.Equal(t, podsCreatedLen, podsMigratedLen, "Pods migration failed as len of pods found on source doesnt match with pods found on destination")
+	require.Equal(t, podsCreatedLen, podsMigratedLen, "Pods migration failed as len of pods found on source doesn't match with pods found on destination")
 
-	logrus.Infof("Delete Destination and Source Ns")
+	logrus.Infof("Delete destination and source namespaces")
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	err = core.Instance().DeleteNamespace(appData.Ns)
 	if err != nil {
-		logrus.Errorf("Error deleting namespace %s: %v\n", appData.Ns, err)
+		logrus.Errorf("Error deleting namespace %s in destination: %v\n", appData.Ns, err)
 	}
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "Error setting source kubeconfig")
@@ -326,7 +328,7 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	err = core.Instance().DeleteNamespace(appData.Ns)
 	if err != nil {
-		logrus.Errorf("Error deleting namespace %s: %v\n", appData.Ns, err)
+		logrus.Errorf("Error deleting namespace %s in source: %v\n", appData.Ns, err)
 	}
 
 	logrus.Infof("Test %s ended", t.Name())
