@@ -262,6 +262,7 @@ func jobFor(
 	jobOption drivers.JobOpts,
 	jobName string,
 	resources corev1.ResourceRequirements,
+	nodeName string,
 ) (*batchv1.Job, error) {
 	backupName := jobName
 
@@ -375,6 +376,10 @@ func jobFor(
 		},
 	}
 
+	if len(nodeName) != 0 {
+		job.Spec.Template.Spec.NodeName = nodeName
+	}
+
 	// Add the image secret in job spec only if it is present in the stork deployment.
 	if len(imageRegistrySecret) != 0 {
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
@@ -462,49 +467,31 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	}
 	var resourceNamespace string
 	var live bool
+	var nodeName string
 	// filter out the pods that are create by us
-	count := len(pods)
 	for _, pod := range pods {
 		labels := pod.ObjectMeta.Labels
 		if _, ok := labels[drivers.DriverNameLabel]; ok {
-			count--
+			continue
+		}
+		if pod.Status.Phase == "Running" {
+			// get the nodeName, if the pods is in Running state, So that we can schedule
+			// kopia job on the same node.
+			nodeName = pod.Spec.NodeName
+			break
 		}
 	}
-	if count > 0 {
-		resourceNamespace = utils.AdminNamespace
-		live = true
-	} else {
-		resourceNamespace = jobOptions.Namespace
-		live = false
-	}
+	resourceNamespace = jobOptions.Namespace
 	if err := utils.SetupServiceAccount(jobName, resourceNamespace, roleFor(live)); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", resourceNamespace, jobName, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	// run a "live" backup if a pvc is mounted (mount a kubelet directory with pod volumes)
-	if live {
-		logrus.Debugf("buildJob: pod %v phase %v pvc: %v/%v", pods[0].Name, pods[0].Status.Phase, resourceNamespace, jobOptions.SourcePVCName)
-		if pods[0].Status.Phase == corev1.PodPending {
-			errMsg := fmt.Sprintf("pods %v is using pvc %v/%v but it is in pending state, backup is not possible", pods[0].Name, resourceNamespace, jobOptions.SourcePVCName)
-			logrus.Errorf("%s: %v", fn, errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-		pvcNamespace := jobOptions.Namespace
-		jobOptions.Namespace = resourceNamespace
-		return jobForLiveBackup(
-			jobOptions,
-			jobName,
-			pods[0],
-			resources,
-			pvcNamespace,
-		)
-	}
-
 	return jobFor(
 		jobOptions,
 		jobName,
 		resources,
+		nodeName,
 	)
 }
 
