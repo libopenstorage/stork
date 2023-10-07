@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -93,6 +94,8 @@ const (
 	StorkAPIVersion = "stork.libopenstorage.org/v1alpha1"
 	// BackupLocationKind CR kind
 	BackupLocationKind = "BackupLocation"
+	// PXServiceName is the name of the portworx service in kubernetes
+	PXServiceName = "portworx-service"
 )
 
 // ParseKeyValueList parses a list of key=values string into a map
@@ -261,4 +264,19 @@ func GetStashedConfigMapName(objKind string, group string, objName string) strin
 		cmName = cmName[:253]
 	}
 	return cmName
+}
+
+func GetPortworxNamespace() (string, error) {
+	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
+	if err != nil {
+		logrus.Errorf("error in getting list of all services")
+		return "", fmt.Errorf("failed to get list of services. Err: %v", err)
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == PXServiceName {
+			return svc.Namespace, nil
+		}
+	}
+	logrus.Warnf("unable to find [%s] service in cluster", PXServiceName)
+	return "", fmt.Errorf("can't find [%s] Portworx service from list of services", PXServiceName)
 }

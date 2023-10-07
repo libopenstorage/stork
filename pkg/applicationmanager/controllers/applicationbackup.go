@@ -221,9 +221,10 @@ func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.
 	if err != nil {
 		return fmt.Errorf("error updating with all namespaces for wildcard: %v", err)
 	}
+	pxNs, _ := utils.GetPortworxNamespace()
 	namespacesToBackup := make([]string, 0)
 	for _, ns := range namespaces.Items {
-		if ns.Name != "kube-system" {
+		if ns.Name != "kube-system" && ns.Name != pxNs {
 			namespacesToBackup = append(namespacesToBackup, ns.Name)
 		}
 	}
@@ -284,6 +285,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		return nil
 	}
 	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
+		var pxNs string
 		namespaces, err := core.Instance().ListNamespacesV2(labelSelector)
 		if err != nil {
 			errMsg := fmt.Sprintf("error listing namespaces with label selectors: %v, error: %v", labelSelector, err)
@@ -295,8 +297,11 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			return nil
 		}
 		var selectedNamespaces []string
+		if len(backup.Spec.Namespaces) == 0 {
+			pxNs, _ = utils.GetPortworxNamespace()
+		}
 		for _, namespace := range namespaces.Items {
-			if namespace.Name != "kube-system" {
+			if namespace.Name != "kube-system" && namespace.Name != pxNs {
 				selectedNamespaces = append(selectedNamespaces, namespace.Name)
 			}
 		}
