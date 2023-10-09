@@ -9,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"go.uber.org/multierr"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -8413,7 +8415,7 @@ func runDataIntegrityValidation(testName string) bool {
 	return false
 }
 
-func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
+func ValidateDataIntegrity(contexts *[]*scheduler.Context) (mError error) {
 	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
@@ -8432,6 +8434,7 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 	}
 
 	if !runDataIntegrityValidation(testName) {
+		log.Infof(fmt.Sprintf("skipping data integrity validation for %s is not the list %s", testName, dataIntegrityValidationTests))
 		return nil
 	}
 
@@ -8445,20 +8448,22 @@ outer:
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
 		//Waiting for all the apps in ctx are running
-		err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-		if err != nil {
-			return err
+		mError = Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+		if mError != nil {
+			return mError
 		}
-		appVolumes, err := Inst().S.GetVolumes(ctx)
-		if err != nil {
-			return err
+		var appVolumes []*volume.Volume
+		appVolumes, mError = Inst().S.GetVolumes(ctx)
+		if mError != nil {
+			return mError
 		}
 
 		//waiting for volumes replication status should be up before calculating md5sum
 		for _, v := range appVolumes {
-			replicaSets, err := Inst().V.GetReplicaSets(v)
-			if err != nil {
-				return err
+			var replicaSets []*opsapi.ReplicaSet
+			replicaSets, mError = Inst().V.GetReplicaSets(v)
+			if mError != nil {
+				return mError
 			}
 
 			//skipping the validation if volume is repl 2
@@ -8479,16 +8484,21 @@ outer:
 				}
 				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
 			}
-			_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
-			if err != nil {
-				return err
+			_, mError = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			if mError != nil {
+				return mError
 			}
 		}
 
 		log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+		defer func() {
+			if tempErr := revertAppScale(ctx); tempErr != nil {
+				mError = multierr.Append(mError, tempErr)
+			}
+		}()
 		applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
 		if err != nil {
-			return err
+			mError = multierr.Append(mError, err)
 		}
 
 		applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
@@ -8496,9 +8506,11 @@ outer:
 		for name := range applicationScaleMap {
 			applicationScaleDownMap[name] = 0
 		}
+
 		err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
 		if err != nil {
-			return err
+			mError = multierr.Append(mError, err)
+			return mError
 		}
 		//waiting for volumes to be detached after scale down
 		for _, v := range appVolumes {
@@ -8512,9 +8524,11 @@ outer:
 				}
 				return "", true, fmt.Errorf("volume %s is still attached to %s", v.ID, apiVol.AttachedOn)
 			}
-			_, err = task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 10*time.Second)
 			if err != nil {
-				return err
+				mError = multierr.Append(mError, err)
+				return mError
+
 			}
 		}
 
@@ -8523,7 +8537,9 @@ outer:
 
 		isDmthinSetup, err := IsDMthin()
 		if err != nil {
-			return err
+			mError = multierr.Append(mError, err)
+			return mError
+
 		}
 
 		//function to calulate md5sum of the given volume in the give pool
@@ -8534,6 +8550,7 @@ outer:
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
 				errCh <- err
+				close(errCh)
 				return
 			}
 			var poolID int32
@@ -8547,6 +8564,7 @@ outer:
 			inspectVolume, err := Inst().V.InspectVolume(v.ID)
 			if err != nil {
 				errCh <- err
+				close(errCh)
 				return
 			}
 			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
@@ -8558,6 +8576,7 @@ outer:
 				err = validateDmthinVolumeDataIntegrity(inspectVolume, nodeDetail, poolID, &dmthinPoolChecksumMap)
 				if err != nil {
 					errCh <- err
+					close(errCh)
 					return
 				}
 			} else {
@@ -8568,6 +8587,7 @@ outer:
 				})
 				if err != nil {
 					errCh <- err
+					close(errCh)
 					return
 				}
 				vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
@@ -8579,7 +8599,9 @@ outer:
 		for _, v := range appVolumes {
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err != nil {
-				return err
+				mError = multierr.Append(mError, err)
+				return mError
+
 			}
 
 			wGroup := new(sync.WaitGroup)
@@ -8590,24 +8612,23 @@ outer:
 				for _, poolUuid := range poolUuids {
 					nodeDetail, err := GetNodeWithGivenPoolID(poolUuid)
 					if err != nil {
-						return err
+						mError = multierr.Append(mError, err)
+						return mError
+
 					}
 					wGroup.Add(1)
 					go calChecksum(wGroup, v, nodeDetail, poolUuid, errCh)
 				}
 			}
 			wGroup.Wait()
-			close(errCh)
 
-			var errList []error
-
-			for err := range errCh {
-				errList = append(errList, err)
+			for mErr := range errCh {
+				mError = multierr.Append(mError, mErr)
 			}
 
-			if len(errList) != 0 {
+			if mError != nil {
 				// Combine all errors into one and return
-				return errors.New(fmt.Sprintf("multiple errors occurred while checking md5sum of volume [%s]", v.ID)).(error)
+				return mError
 			}
 
 			if isDmthinSetup {
@@ -8623,7 +8644,9 @@ outer:
 						eq := reflect.DeepEqual(primaryMap, m)
 
 						if !eq {
-							return fmt.Errorf("md5sum of volume [%s] having [%v] on node [%s] is not matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+							err = fmt.Errorf("md5sum of volume [%s] having [%v] on node [%s] is not matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+							mError = multierr.Append(mError, err)
+							return mError
 						}
 						log.InfoD("md5sum of volume [%s] having [%v] on node [%s] is matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
 
@@ -8643,7 +8666,9 @@ outer:
 						checksum = c
 					} else {
 						if c != checksum {
-							return fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+							err = fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+							mError = multierr.Append(mError, err)
+							return mError
 						}
 						log.InfoD("md5sum of volume [%s] having [%s] on pool [%s] is matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
 					}
@@ -8657,19 +8682,24 @@ outer:
 
 		}
 
-		//reverting application scale
-		applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
-
-		for name, scale := range applicationScaleMap {
-			log.InfoD(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, scale))
-			applicationScaleUpMap[name] = scale
-		}
-		err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
+}
+
+func revertAppScale(ctx *scheduler.Context) error {
+	//reverting application scale
+	applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
+
+	applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+	if err != nil {
+		return err
+	}
+	for name, scale := range applicationScaleMap {
+		log.InfoD(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, scale))
+		applicationScaleUpMap[name] = scale
+	}
+	err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+	return err
 }
 
 func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail *node.Node, poolID int32, dmthinPoolChecksumMap *map[string]map[string]string) error {
@@ -8782,7 +8812,7 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 			if err != nil {
 				return nil, err
 			}
-			if n.VolDriverNodeID == attachedNode.VolDriverNodeID {
+			if attachedNode != nil && (n.VolDriverNodeID == attachedNode.VolDriverNodeID) {
 				contextsOnNode = append(contextsOnNode, ctx)
 				break
 			}
@@ -9260,4 +9290,41 @@ func GetGkeSecret() (string, error) {
 		return "", err
 	}
 	return cm.Data["cloud-json"], nil
+}
+
+func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace string) (*storkapi.ScheduledVolumeSnapshotStatus, error) {
+
+	var schedVolumeSnapstatus *storkapi.ScheduledVolumeSnapshotStatus
+	delVol := func() (interface{}, bool, error) {
+		resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+		if err != nil {
+			return "", false, err
+		}
+	outer:
+		for _, snapshotStatuses := range resp.Status.Items {
+			for _, snapStatus := range snapshotStatuses {
+				if snapStatus.Name == snapshotName {
+					schedVolumeSnapstatus = snapStatus
+					break outer
+				}
+			}
+		}
+		if schedVolumeSnapstatus == nil {
+			return nil, false, fmt.Errorf("no scheduled volume snapshot status found with name [%s] with snapshot schedule [%s] in namespace [%s]", snapshotName, snapshotScheduleName, appNamespace)
+		}
+
+		if schedVolumeSnapstatus.Status == snapv1.VolumeSnapshotConditionError {
+			return nil, false, fmt.Errorf("snapshot: %s failed. status: %v", snapshotName, schedVolumeSnapstatus.Status)
+		}
+
+		if schedVolumeSnapstatus.Status == snapv1.VolumeSnapshotConditionPending {
+			return nil, true, fmt.Errorf("scheduled volume snapshot status found with name [%s] has status [%v]", snapshotName, schedVolumeSnapstatus.Status)
+		}
+
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(delVol, time.Duration(3)*appReadinessTimeout, 30*time.Second)
+
+	return schedVolumeSnapstatus, err
+
 }

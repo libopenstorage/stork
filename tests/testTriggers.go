@@ -309,7 +309,8 @@ func UpdateOutcome(event *EventRecord, err error) {
 
 	if err != nil && event != nil {
 		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
-		log.Errorf("Event [%s] failed with error: %v", event.Event.Type, err)
+		actualEvent := strings.Split(event.Event.Type, "<br>")[0]
+		log.Errorf("Event [%s] failed with error: %v", actualEvent, err)
 		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
 		er := fmt.Errorf(err.Error() + "<br>")
 		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
@@ -1277,8 +1278,9 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 }
 
 func validateContexts(event *EventRecord, contexts *[]*scheduler.Context) {
+	actualEvent := strings.Split(event.Event.Type, "<br>")[0]
 	for _, ctx := range *contexts {
-		stepLog := fmt.Sprintf("%s: validating app [%s]", event.Event.Type, ctx.App.Key)
+		stepLog := fmt.Sprintf("%s: validating app [%s]", actualEvent, ctx.App.Key)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			errorChan := make(chan error, errorChannelSize)
