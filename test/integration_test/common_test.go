@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -387,6 +388,21 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	}
 	require.Equal(t, true, found, "Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode)
 
+	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
+
+	highScore := 0
+	for _, score := range scores {
+		if score > highScore {
+			highScore = score
+		}
+	}
+
+	logrus.Infof("Scores: %v", scores)
+	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+}
+
+// Helper function to get scoring of driverNodes based on hyper-convergence
+func getScoringBasedOnHyperconvergence(t *testing.T, driverNodes []*storkdriver.NodeInfo, volumes []string) map[string]int {
 	scores := make(map[string]int)
 	idMap := make(map[string]*storkdriver.NodeInfo)
 	rackMap := make(map[string][]string)
@@ -440,16 +456,50 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 			}
 		}
 	}
+	return scores
+}
 
-	highScore := 0
-	for _, score := range scores {
-		if score > highScore {
-			highScore = score
-		}
+// Verify pods are scheduled on appropriate nodes based on hyperconvergence scoring
+// This method assumes we have pod AntiAffinities set in the deployment to deploy each replica on a different node.
+func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, volumes []string) {
+	driverNodes, err := storkVolumeDriver.GetNodes()
+	require.NoError(t, err, "Error getting nodes from stork driver")
+
+	//The scores are stored in a map where the keys are node names, and the values are the corresponding scores.
+	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
+	replicaCount := len(appNodes)
+
+	// The nodes are sorted based on their scores, from highest to lowest.
+	// From the nodeScores slice we want to select the top nodes with the highest scores.
+	// The actual nodes which the pods get scheduled on maybe different in case of multiple nodes having the same scores.
+	// However, the scheduled nodes should have the same scores as the top n highest scores where n is number of replicas.
+	nodeScores := descendingSortBasedOnValue(scores)
+	expectedNodeScores := nodeScores[0:replicaCount]
+	logrus.Infof("Expected nodescores are %v", expectedNodeScores)
+
+	//appNodeScores is a map of nodeName:score, in which we store the calculated scores of the set of scheduled nodes.
+	appNodeScores := make(map[string]int)
+	for _, appNode := range appNodes {
+		appNodeScores[appNode.Name] = scores[appNode.Name]
+	}
+	actualNodeScores := descendingSortBasedOnValue(appNodeScores)
+
+	//since we have sorted both the expectedNodeScores and actualNodeScores
+	//for scheduling to be correct these two arrays should be equal
+	require.Equal(t, expectedNodeScores, actualNodeScores, "Scheduled nodes do not have the highest scores")
+}
+
+// helper function to sort a map of nodeScores in descending order of scores
+func descendingSortBasedOnValue(scores map[string]int) []int {
+	var nodeScores []int
+
+	for _, value := range scores {
+		nodeScores = append(nodeScores, value)
 	}
 
-	logrus.Infof("Scores: %v", scores)
-	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+	// Sort the slice in descending order
+	sort.Sort(sort.Reverse(sort.IntSlice(nodeScores)))
+	return nodeScores
 }
 
 // write kubbeconfig file to /tmp/kubeconfig
@@ -954,6 +1004,124 @@ func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings stri
 		}
 	}
 
+	return nil
+}
+
+func activateAppUsingStorkctl(namespace string, runInSource bool) error {
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"activate", "migrations", "-n", namespace}
+	err := setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("setting kubeconfig to source failed during activate migrations %v", err)
+	}
+	if runInSource {
+		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
+		srcKubeConfig, err := os.Create(srcKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := srcKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting source config during activate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
+	} else {
+		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
+		destKubeConfig, err := os.Create(destKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := destKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			}
+		}()
+
+		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting destination config during activate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", destKubeconfigPath}...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Activating apps in namespace with command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("activating apps using storkctl failed: %v", err)
+	}
+	return nil
+}
+
+func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"deactivate", "migrations", "-n", namespace}
+
+	if runInSource {
+		err := setSourceKubeConfig()
+		if err != nil {
+			return fmt.Errorf("setting kubeconfig to source failed during deactivate migrations %v", err)
+		}
+		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
+		srcKubeConfig, err := os.Create(srcKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := srcKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting source config during deactivate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
+	} else {
+		err := setDestinationKubeConfig()
+		if err != nil {
+			return fmt.Errorf("setting kubeconfig to destination failed during deactivate migrations %v", err)
+		}
+		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
+		destKubeConfig, err := os.Create(destKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := destKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting destination config during deactivate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", destKubeconfigPath}...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Deactivating apps in namespace with command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("deactivating apps using storkctl failed: %v", err)
+	}
 	return nil
 }
 
@@ -1688,4 +1856,31 @@ func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, a
 			}
 		}
 	}
+}
+
+func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
+	operatorAppToCRMap := make(map[string][]meta_v1.APIResource)
+	// mongodbcommunity CR
+	operatorAppToCRMap[appNameMongo] = []meta_v1.APIResource{
+		{
+			Kind:       "MongoDBCommunity",
+			Version:    "v1",
+			Group:      "mongodbcommunity.mongodb.com",
+			Name:       "mongodbcommunity",
+			Namespaced: true,
+		},
+	}
+
+	// kafka CR
+	operatorAppToCRMap[appNameKafka] = []meta_v1.APIResource{
+		{
+			Kind:       "Kafka",
+			Version:    "v1beta2",
+			Group:      "kafka.strimzi.io",
+			Name:       "kafkas",
+			Namespaced: true,
+		},
+	}
+
+	return operatorAppToCRMap
 }
