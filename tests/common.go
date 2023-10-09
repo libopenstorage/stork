@@ -105,6 +105,7 @@ import (
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
 	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
@@ -2856,6 +2857,11 @@ func SetClusterContext(clusterConfigPath string) error {
 
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
 		err = ssh.RefreshDriver(sshNodeDriver)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	} else if ibmNodeDriver, ok := Inst().N.(*ibm.Ibm); ok {
+		err = ssh.RefreshDriver(&ibmNodeDriver.SSH)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
@@ -6042,6 +6048,13 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 
 // CollectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
 func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+
+	// Check to handle cloud based deployment with 0 master nodes
+	if len(node.GetMasterNodes()) == 0 {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		return
+	}
+
 	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
 	podList, err := core.Instance().GetPods(namespace, podLabel)
 	if err != nil {

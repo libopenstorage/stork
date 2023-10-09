@@ -47,7 +47,7 @@ const (
 	clusterStateRetryInterval = 2 * time.Minute
 )
 
-type ibm struct {
+type Ibm struct {
 	ssh.SSH
 	ops           cloudops.Ops
 	instanceGroup string
@@ -94,11 +94,11 @@ type ClusterConfig struct {
 	ClusterName string `json:"name"`
 }
 
-func (i *ibm) String() string {
+func (i *Ibm) String() string {
 	return DriverName
 }
 
-func (i *ibm) Init(nodeOpts node.InitOptions) error {
+func (i *Ibm) Init(nodeOpts node.InitOptions) error {
 	i.SSH.Init(nodeOpts)
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
@@ -128,7 +128,7 @@ func (i *ibm) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-func (i *ibm) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+func (i *Ibm) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	// IBM SDK requires per zone cluster size
 	err := i.ops.SetInstanceGroupSize(i.instanceGroup, perZoneCount, timeout)
 	if err != nil {
@@ -139,7 +139,7 @@ func (i *ibm) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 	return nil
 }
 
-func (i *ibm) GetASGClusterSize() (int64, error) {
+func (i *Ibm) GetASGClusterSize() (int64, error) {
 	nodeCount, err := i.ops.GetInstanceGroupSize(i.instanceGroup)
 	if err != nil {
 		log.Errorf("failed to get size of node pool %s. Error: %v", i.instanceGroup, err)
@@ -149,7 +149,7 @@ func (i *ibm) GetASGClusterSize() (int64, error) {
 	return nodeCount, nil
 }
 
-func (i *ibm) GetZones() ([]string, error) {
+func (i *Ibm) GetZones() ([]string, error) {
 	asgInfo, err := i.ops.InspectInstanceGroupForInstance(i.ops.InstanceID())
 	if err != nil {
 		return []string{}, err
@@ -157,7 +157,7 @@ func (i *ibm) GetZones() ([]string, error) {
 	return asgInfo.Zones, nil
 }
 
-func (i *ibm) DeleteNode(node node.Node, timeout time.Duration) error {
+func (i *Ibm) DeleteNode(node node.Node, timeout time.Duration) error {
 
 	err := loginToIBMCloud()
 	if err != nil {
@@ -173,7 +173,7 @@ func (i *ibm) DeleteNode(node node.Node, timeout time.Duration) error {
 	return nil
 }
 
-func (i *ibm) SetClusterVersion(version string, timeout time.Duration) error {
+func (i *Ibm) SetClusterVersion(version string, timeout time.Duration) error {
 
 	err := loginToIBMCloud()
 	if err != nil {
@@ -190,7 +190,7 @@ func (i *ibm) SetClusterVersion(version string, timeout time.Duration) error {
 	return nil
 }
 
-func (i *ibm) RebalanceWorkerPool() error {
+func (i *Ibm) RebalanceWorkerPool() error {
 
 	err := loginToIBMCloud()
 	if err != nil {
@@ -207,7 +207,7 @@ func (i *ibm) RebalanceWorkerPool() error {
 }
 
 // GetNodeState returns current state of the given node
-func (i *ibm) GetNodeState(node node.Node) (string, error) {
+func (i *Ibm) GetNodeState(node node.Node) (string, error) {
 	err := loginToIBMCloud()
 	if err != nil {
 		return "", err
@@ -351,7 +351,7 @@ func GetCluster() (Cluster, error) {
 }
 
 func init() {
-	i := &ibm{
+	i := &Ibm{
 		SSH: *ssh.New(),
 	}
 
