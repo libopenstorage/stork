@@ -1,0 +1,10 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: kubevirt-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "3"
+  io_profile: db_remote
+allowVolumeExpansion: true

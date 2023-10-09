@@ -1,0 +1,65 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-ubuntu-pvc-datavolume
+spec:
+  running: false
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            - name: datavolume
+              disk:
+                bus: virtio
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            memory: 2048M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: pvc-cdi-ubuntu
+        - name: datavolume
+          dataVolume:
+            name: pvc-data-volume
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False

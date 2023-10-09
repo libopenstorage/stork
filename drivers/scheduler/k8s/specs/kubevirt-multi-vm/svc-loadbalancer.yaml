@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubevirt-svc-lb
+spec:
+  externalTrafficPolicy: Cluster
+  ports:
+    - port: 27017
+      protocol: TCP
+      targetPort: 3389
+  selector:
+    special: key
+  type: LoadBalancer

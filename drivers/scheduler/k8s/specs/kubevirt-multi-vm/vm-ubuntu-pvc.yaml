@@ -1,0 +1,50 @@
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    kubevirt.io/os: linux
+  name: vm-ubuntu-pvc
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: vm-ubuntu-pvc
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          interfaces:
+            - name: default
+              masquerade: {}
+          disks:
+            - name: containerdisk
+              disk:
+                bus: virtio
+            - cdrom:
+                bus: sata
+                readonly: true
+              name: cloudinitdisk
+        machine:
+          type: q35
+        resources:
+          requests:
+            memory: 2048M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containerdisk
+          persistentVolumeClaim:
+            claimName: pvc-cdi-ubuntu
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False

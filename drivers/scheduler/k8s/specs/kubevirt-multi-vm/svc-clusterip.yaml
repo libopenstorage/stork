@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubevirt-svc-clusterip
+spec:
+  ports:
+    - port: 27017
+      protocol: TCP
+      targetPort: 22
+  selector:
+    kubevirt-key: kubevirt-val
+  type: ClusterIP
