@@ -244,6 +244,9 @@ var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
+// TestExecutionCountMap holds the count of executions for each test
+var TestExecutionCountMap = make(map[string]int)
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -2712,6 +2715,9 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
+		actualEvent := strings.Split(eventRecord.Event.Type, "<br>")[0]
+		TestExecutionCountMap[actualEvent] += 1
+		log.Infof("TestExecutionCountMap: %v", TestExecutionCountMap)
 		eventRing = eventRing.Next()
 	}
 }

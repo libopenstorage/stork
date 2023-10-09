@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -47,6 +48,9 @@ var (
 	// Pure Topology Label array
 	labels []map[string]string
 )
+
+// TriggerFunction represents function signature of a testTrigger
+type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
 var _ = Describe("{Longevity}", func() {
 	contexts := make([]*scheduler.Context, 0)
@@ -195,6 +199,216 @@ var _ = Describe("{Longevity}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{UpgradeLongevity}", func() {
+	var (
+		triggerLock                sync.Mutex
+		disruptiveTriggerLock      sync.Mutex
+		emailTriggerLock           sync.Mutex
+		populateDone               bool
+		triggerEventsChan          = make(chan *EventRecord, 100)
+		disruptiveTriggerFunctions = make(map[string]TriggerFunction)
+		upgradeTriggerFunction     = make(map[string]TriggerFunction)
+		wg                         sync.WaitGroup
+		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
+		upgradeExecutionThreshold int
+	)
+
+	JustBeforeEach(func() {
+		contexts = make([]*scheduler.Context, 0)
+		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
+			RestartVolDriver:     TriggerRestartVolDriver,
+			CloudSnapShot:        TriggerCloudSnapShot,
+			HAIncrease:           TriggerHAIncrease,
+			PoolAddDisk:          TriggerPoolAddDisk,
+			LocalSnapShot:        TriggerLocalSnapShot,
+			HADecrease:           TriggerHADecrease,
+			VolumeResize:         TriggerVolumeResize,
+			CloudSnapShotRestore: TriggerCloudSnapshotRestore,
+			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
+			AddStorageNode:       TriggerAddOCPStorageNode,
+		}
+		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
+			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+				triggerLock.Lock()
+				defer triggerLock.Unlock()
+				fn(contexts, recordChan)
+			}
+		}
+		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
+		disruptiveTriggerFunctions = map[string]TriggerFunction{
+			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
+			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
+			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
+			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
+			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+		}
+		// Creating a distinct trigger to make sure email triggers at regular intervals
+		emailTriggerFunction = map[string]func(){
+			EmailReporter: TriggerEmailReporter,
+		}
+		// Creating a distinct trigger to ensure upgrade is triggered after a specified number of events have occurred
+		upgradeTriggerFunction = map[string]TriggerFunction{
+			UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
+		}
+		if !populateDone {
+			tags := map[string]string{
+				"longevity": "true",
+			}
+			StartTorpedoTest("UpgradeLongevity", "Validate upgrade longevity workflow", tags, 0)
+			populateIntervals()
+			populateDisruptiveTriggers()
+			populateDone = true
+		}
+		if Inst().MinRunTimeMins != 0 {
+			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
+		}
+		upgradeExecutionThreshold = 4 // default value
+		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
+			upgradeExecutionThreshold = val
+		}
+	})
+
+	It("has to schedule app and register test triggers", func() {
+		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]", configMapNS, testTriggersConfigMap), func() {
+			log.InfoD("Starting watch on K8S configMap [%s/%s]", configMapNS, testTriggersConfigMap)
+			err := watchConfigMap()
+			log.FailOnError(err, "failed to watch on K8S configMap [%s/%s]. Err: %v", configMapNS, testTriggersConfigMap, err)
+		})
+
+		Step("Set topology labels on nodes", func() {
+			log.InfoD("Setting topology labels on nodes")
+			if pureTopologyEnabled {
+				var err error
+				labels, err = SetTopologyLabelsOnNodes()
+				if err != nil {
+					log.Fatalf("failed to set topology labels on nodes. Err: %v", err)
+				}
+				Inst().TopologyLabels = labels
+			}
+			Inst().IsHyperConverged = hyperConvergedTypeEnabled
+		})
+
+		Step("Deploy new apps", func() {
+			log.InfoD("Deploying new apps")
+			TriggerDeployNewApps(&contexts, &triggerEventsChan)
+			dash.VerifySafely(len(contexts) > 0, true, "Verifying if the new apps are deployed")
+		})
+
+		Step("Register test triggers", func() {
+			log.InfoD("Registering test triggers")
+			for triggerType, triggerFunc := range triggerFunctions {
+				log.InfoD("Registering trigger: [%v]", triggerType)
+				wg.Add(1)
+				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
+			}
+			log.InfoD("Finished registering test triggers")
+		})
+
+		Step("Register disruptive test triggers", func() {
+			log.InfoD("Registering disruptive test triggers")
+			for triggerType, triggerFunc := range disruptiveTriggerFunctions {
+				log.InfoD("Registering disruptive trigger: [%v]", triggerType)
+				wg.Add(1)
+				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
+			}
+			log.InfoD("Finished registering disruptive test triggers")
+		})
+
+		Step("Register email trigger", func() {
+			for triggerType, triggerFunc := range emailTriggerFunction {
+				log.InfoD("Registering email trigger: [%v]", triggerType)
+				wg.Add(1)
+				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
+			}
+			log.InfoD("Finished registering email trigger")
+		})
+
+		Step("Register upgrade trigger", func() {
+			log.InfoD("Registering upgrade trigger")
+			wg.Add(1)
+			for triggerType, triggerFunc := range upgradeTriggerFunction {
+				go func(triggerType string, triggerFunc TriggerFunction) {
+					defer wg.Done()
+					start := time.Now().Local()
+					timeout := Inst().MinRunTimeMins * 60
+					upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
+					currentEndpointIndex := 0
+					for {
+						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
+							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							break
+						}
+						if currentEndpointIndex >= len(upgradeEndpoints) {
+							log.Infof("All endpoints have been processed, exiting the trigger function for [%s]\n", triggerType)
+							break // break if all upgrade endpoints are processed
+						}
+						testExecSum := 0 // total test execution count
+						minTestExecCount := math.MaxInt32
+						// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
+						for trigger := range triggerFunctions {
+							count := TestExecutionCountMap[trigger]
+							testExecSum += count
+							if count < minTestExecCount {
+								minTestExecCount = count
+							}
+						}
+						// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
+						for trigger := range disruptiveTriggerFunctions {
+							count := TestExecutionCountMap[trigger]
+							testExecSum += count
+							if count < minTestExecCount {
+								minTestExecCount = count
+							}
+						}
+						// Determining whether to trigger based on minimum execution count
+						shouldTrigger := minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold
+						// Proceeding with upgrade if testExecSum is much higher than expected
+						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*(upgradeExecutionThreshold+1) {
+							shouldTrigger = true
+							// Logging a warning as TestExecutionCountMap might not be accurate
+							log.Warnf("Triggering %s based on testExecSum %v. The tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
+						}
+						if shouldTrigger {
+							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
+							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
+							disruptiveTriggerLock.Lock()
+							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+							triggerFunc(&contexts, &triggerEventsChan)
+							log.Infof("Trigger Function completed for [%s]\n", triggerType)
+							disruptiveTriggerLock.Unlock()
+							log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+							currentEndpointIndex++
+						}
+						time.Sleep(controlLoopSleepTime)
+					}
+				}(triggerType, triggerFunc)
+			}
+			log.InfoD("Finished registering upgrade trigger")
+		})
+
+		Step("Collect events while waiting for the triggers to be completed", func() {
+			log.InfoD("Collecting events while waiting for the triggers to be completed")
+			go CollectEventRecords(&triggerEventsChan)
+			wg.Wait()
+			close(triggerEventsChan)
+		})
+
+		Step("teardown all apps", func() {
+			log.InfoD("tearing down all apps")
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
@@ -1589,7 +1803,7 @@ func populateIntervals() {
 	triggerInterval[AddStorageNode][0] = 0
 	triggerInterval[AddStoragelessNode][0] = 0
 	triggerInterval[OCPStorageNodeRecycle][0] = 0
-
+	triggerInterval[NodeDecommission][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
