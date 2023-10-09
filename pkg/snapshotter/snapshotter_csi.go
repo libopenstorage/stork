@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	kSnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
@@ -1047,8 +1048,21 @@ func (c *csiDriver) UploadSnapshotObjects(
 			return err
 		}
 	}
-
-	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	var options blob.WriterOptions
+	if backupLocation.Location.S3Config != nil {
+		sseType := backupLocation.Location.S3Config.SSE
+		if len(sseType) != 0 {
+			beforeWrite := func(asFunc func(interface{}) bool) error {
+				var input *s3manager.UploadInput
+				if asFunc(&input) {
+					input.ServerSideEncryption = &sseType
+				}
+				return nil
+			}
+			options = blob.WriterOptions{BeforeWrite: beforeWrite}
+		}
+	}
+	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), &options)
 	if err != nil {
 		return err
 	}
