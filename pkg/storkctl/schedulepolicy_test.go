@@ -198,7 +198,7 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 
 	//Invalid Schedule Policy Type
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Invalid"}
-	expected = "error: need to provide a valid schedule policy type"
+	expected = "error: need to provide a valid schedule policy type. Valid Schedule Types are Interval, Daily, Weekly and Monthly"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid IntervalMinutes value for Interval Policy
@@ -369,7 +369,7 @@ func TestDeleteSchedulePolicyBeingUsedErrorCase(t *testing.T) {
 
 }
 
-func TestDeleteSchedulePolicyHappyCase(t *testing.T) {
+func TestDeleteSchedulePolicy(t *testing.T) {
 	defer resetTest()
 	schedulePolicy1 := &storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{

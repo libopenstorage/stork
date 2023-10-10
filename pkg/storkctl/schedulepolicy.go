@@ -86,18 +86,6 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				return
 			}
 			schedulePolicyName := args[0]
-			var validSchedulePolicyTypes = storkv1.GetValidSchedulePolicyTypes()
-			policyTypeIsValid := false
-			for i := 0; i < len(validSchedulePolicyTypes); i++ {
-				if storkv1.SchedulePolicyType(schedulePolicyType) == validSchedulePolicyTypes[i] {
-					policyTypeIsValid = true
-				}
-			}
-			if !policyTypeIsValid {
-				util.CheckErr(fmt.Errorf("need to provide a valid schedule policy type"))
-				return
-			}
-
 			var policyItem storkv1.SchedulePolicyItem
 			switch schedulePolicyType {
 			case "Interval":
@@ -160,6 +148,9 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 					return
 				}
 				policyItem.Monthly = &monthlyPolicy
+			default:
+				util.CheckErr(fmt.Errorf("need to provide a valid schedule policy type. Valid Schedule Types are Interval, Daily, Weekly and Monthly"))
+
 			}
 			var schedulePolicy storkv1.SchedulePolicy
 			schedulePolicy.Name = schedulePolicyName
