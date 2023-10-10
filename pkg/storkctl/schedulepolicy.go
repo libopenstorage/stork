@@ -150,6 +150,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				policyItem.Monthly = &monthlyPolicy
 			default:
 				util.CheckErr(fmt.Errorf("need to provide a valid schedule policy type. Valid Schedule Types are Interval, Daily, Weekly and Monthly"))
+				return
 
 			}
 			var schedulePolicy storkv1.SchedulePolicy
