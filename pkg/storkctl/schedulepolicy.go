@@ -203,7 +203,8 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			for i := 0; i < len(args); i++ {
 				//ensure that the schedule policy is not being used by any stork resource
 				// (MigrationSchedule / ApplicationBackups / Snapshot Schedule)
-				policyLinkedTo, err := isSchedulePolicyBeingUsed(args[i], namespaces)
+				scheduleTypes := []string{migrationSchedule, applicationBackupSchedule, volumeSnapshotSchedule}
+				policyLinkedTo, err := isSchedulePolicyBeingUsed(scheduleTypes, args[i], namespaces)
 				if err != nil {
 					util.CheckErr(fmt.Errorf("cannot delete the Schedule Policy: %s. Unable to verify if the schedulePolicy is linked to other resources. %w", args[i], err))
 					return
@@ -211,10 +212,10 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				if len(policyLinkedTo[migrationSchedule])+len(policyLinkedTo[applicationBackupSchedule])+len(policyLinkedTo[volumeSnapshotSchedule]) != 0 {
 					// Print the names of resources using the given schedule policy
 					message := "\nThe resource is linked to -> "
-					for key := range policyLinkedTo {
-						schedules := policyLinkedTo[key]
+					for _, scheduleType := range scheduleTypes {
+						schedules := policyLinkedTo[scheduleType]
 						if len(schedules) > 0 {
-							message += key + " : "
+							message += scheduleType + " : "
 							message += strings.Join(schedules, " , ")
 							message += "\n"
 						}
@@ -236,11 +237,11 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 	return deleteSchedulePolicyCommand
 }
 
-func isSchedulePolicyBeingUsed(policyName string, namespaces *v1.NamespaceList) (map[string][]string, error) {
+func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namespaces *v1.NamespaceList) (map[string][]string, error) {
 	policyInUseBy := make(map[string][]string)
-	policyInUseBy[migrationSchedule] = []string{}
-	policyInUseBy[applicationBackupSchedule] = []string{}
-	policyInUseBy[volumeSnapshotSchedule] = []string{}
+	for _, scheduleType := range scheduleTypes {
+		policyInUseBy[scheduleType] = []string{}
+	}
 
 	for _, ns := range namespaces.Items {
 		//Checking all the migration schedules for schedulePolicyName

@@ -342,15 +342,29 @@ func TestDeleteSchedulePolicyBeingUsedErrorCase(t *testing.T) {
 	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: meta.ObjectMeta{Name: "test-ns"}})
 	require.NoError(t, err, "Error creating namespace")
 
+	mSchedule := &storkv1.MigrationSchedule{ObjectMeta: meta.ObjectMeta{Name: "test-migration-schedule"}}
+	mSchedule.Spec.SchedulePolicyName = "test-policy"
+	mSchedule.Namespace = "test-ns"
+	_, err = storkops.Instance().CreateMigrationSchedule(mSchedule)
+	require.NoError(t, err, "Error creating migration schedule")
+
 	abSchedule := &storkv1.ApplicationBackupSchedule{ObjectMeta: meta.ObjectMeta{Name: "test-applicationBackup-schedule"}}
 	abSchedule.Spec.SchedulePolicyName = "test-policy"
 	abSchedule.Namespace = "test-ns"
 	_, err = storkops.Instance().CreateApplicationBackupSchedule(abSchedule)
 	require.NoError(t, err, "Error creating Application Backup schedule")
 
+	vsSchedule := &storkv1.VolumeSnapshotSchedule{ObjectMeta: meta.ObjectMeta{Name: "test-volumeSnapshot-schedule"}}
+	vsSchedule.Spec.SchedulePolicyName = "test-policy"
+	vsSchedule.Namespace = "test-ns"
+	_, err = storkops.Instance().CreateSnapshotSchedule(vsSchedule)
+	require.NoError(t, err, "Error creating Volume Snapshot schedule")
+
 	cmdArgs := []string{"delete", "schedulepolicy", "test-policy"}
 	expected := "error: cannot delete the Schedule Policy: test-policy \n" +
-		"The resource is linked to -> Application Backup Schedules : test-applicationBackup-schedule\n"
+		"The resource is linked to -> Migration Schedules : test-migration-schedule\n" +
+		"Application Backup Schedules : test-applicationBackup-schedule\n" +
+		"Volume Snapshot Schedules : test-volumeSnapshot-schedule\n"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 }
