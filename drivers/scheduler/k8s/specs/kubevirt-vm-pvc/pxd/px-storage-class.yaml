@@ -1,0 +1,30 @@
+##### Portworx storage class
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    params/aggregation_level: Specifies the number of replication sets the volume
+      can be aggregated from
+    params/block_size: Block size
+    params/docs: https://docs.portworx.com/scheduler/kubernetes/dynamic-provisioning.html
+    params/fs: 'Filesystem to be laid out: none|xfs|ext4'
+    params/io_profile: 'IO Profile can be used to override the I/O algorithm Portworx
+      uses for the volumes: db|sequential|random|cms'
+    params/journal: Flag to indicate if you want to use journal device for the volume's
+      metadata. This will use the journal device that you used when installing Portworx.
+      It is recommended to use a journal device to absorb PX metadata writes
+    params/priority_io: 'IO Priority: low|medium|high'
+    params/repl: 'Replication factor for the volume: 1|2|3'
+    params/secure: 'Flag to create an encrypted volume: true|false'
+    params/shared: 'Flag to create a globally shared namespace volume which can be
+      used by multiple pods: true|false'
+    params/sticky: Flag to create sticky volumes that cannot be deleted until the
+      flag is disabled
+  name: kubevirt-sc
+parameters:
+  io_profile: db_remote
+  repl: "3"
+provisioner: kubernetes.io/portworx-volume
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true

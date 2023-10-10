@@ -150,14 +150,17 @@ const (
 	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
-	autopilotDefaultNamespace     = "kube-system"
-	portworxServiceName           = "portworx-service"
-	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
-	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
-	pvcLabelsAnnotationKey        = "torpedo.io/pvclabels-enabled"
-	pvcNodesAnnotationKey         = "torpedo.io/pvcnodes-enabled"
-	deleteStrategyAnnotationKey   = "torpedo.io/delete-strategy"
-	specObjAppWorkloadSizeEnvVar  = "SIZE"
+	autopilotDefaultNamespace         = "kube-system"
+	portworxServiceName               = "portworx-service"
+	resizeSupportedAnnotationKey      = "torpedo.io/resize-supported"
+	autopilotEnabledAnnotationKey     = "torpedo.io/autopilot-enabled"
+	pvcLabelsAnnotationKey            = "torpedo.io/pvclabels-enabled"
+	pvcNodesAnnotationKey             = "torpedo.io/pvcnodes-enabled"
+	deleteStrategyAnnotationKey       = "torpedo.io/delete-strategy"
+	specObjAppWorkloadSizeEnvVar      = "SIZE"
+	cdiImportSuccessEvent             = "Import Successful"
+	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
+	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 )
 
 const (
@@ -1229,6 +1232,22 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		}
 	}
 
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVirtualMachineObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
 	return specObjects, nil
 }
 
@@ -2485,27 +2504,6 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 		log.Infof("[%v] Created Rule: %v", app.Key, rule.GetName())
 		return rule, nil
-	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		// Create VirtualMachine Spec
-		if obj.Namespace != "kube-system" {
-			obj.Namespace = ns.Name
-		}
-		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
-		if k8serrors.IsAlreadyExists(err) {
-			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
-				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
-				return vm, nil
-			}
-		}
-
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Virtualachine: %v, Err: %v", obj.Name, err),
-			}
-		}
-		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
-		return vm, nil
 	} else if obj, ok := spec.(*corev1.Pod); ok {
 		obj.Namespace = ns.Name
 		if options.Scheduler != "" {
@@ -4879,6 +4877,19 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", secret))
 			buf.WriteString(insertLineBreak("END Secret"))
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("VirtualMachine: [%s] %s", obj.Namespace, obj.Name)))
+			var virtualMachine *kubevirtv1.VirtualMachine
+			if virtualMachine, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get VirtualMachine: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", virtualMachine))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VirtualMachine", obj.Name)))
+			buf.WriteString(insertLineBreak("END VirtualMachine"))
 		} else {
 			log.Warnf("Object type unknown/not supported: %v", obj)
 		}
@@ -5132,6 +5143,88 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	}
 
 	return nil, nil
+}
+
+// createVirtualMachineObjects creates the kubevirt VirtualMachines using kubectl apply
+func (k *K8s) createVirtualMachineObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		// Validating to make sure the desired images are imported by CDI and volumes are ready to be used by Kubevirt VM
+		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
+		if len(virtualMachineVolumes) > 0 {
+			for _, v := range virtualMachineVolumes {
+				err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+				return vm, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create VirtualMachine: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
+		return vm, nil
+	}
+
+	return nil, nil
+}
+
+func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevirtv1.Volume) error {
+	// Validating Volume Source of type PersistentVolumeClaim is ready to be used by Kubevirt VM
+	if v.VolumeSource.PersistentVolumeClaim != nil {
+		pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
+		pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil {
+			return err
+		}
+		endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
+		if ok && endpointAnnotation != "" {
+			t := func() (interface{}, bool, error) {
+				events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{
+					FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
+				})
+				if err != nil {
+					return "", false, err
+				}
+				log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, namespace, vmName, events)
+				for _, event := range events.Items {
+					if strings.Contains(event.Message, cdiImportSuccessEvent) {
+						pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+						if err != nil {
+							return "", false, err
+						}
+						log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+						return "", false, nil
+					}
+				}
+				return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, namespace, vmName)
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// TODO: For other Volume Source types like Data Volumes, validation logic should come here
+	return nil
 }
 
 // createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library

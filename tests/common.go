@@ -11,6 +11,7 @@ import (
 	"fmt"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"go.uber.org/multierr"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -2391,6 +2392,9 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
@@ -2636,6 +2640,11 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			}
 		}
 		return nil
+	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
@@ -2726,6 +2735,8 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	}
 
