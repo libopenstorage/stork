@@ -22,7 +22,7 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20230814210648-7843b18f6ab0
+	github.com/libopenstorage/operator v0.0.0-20231004002935-494c2edc384a
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
@@ -66,6 +66,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	kubevirt.io/api v1.0.0
 )
 
 require (
@@ -106,6 +107,7 @@ require (
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
+	github.com/coreos/prometheus-operator v0.38.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -128,6 +130,8 @@ require (
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-errors/errors v1.4.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
+	github.com/go-kit/kit v0.10.0 // indirect
+	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.1 // indirect
@@ -192,6 +196,7 @@ require (
 	github.com/joho/godotenv v1.3.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
@@ -237,6 +242,7 @@ require (
 	github.com/opencontainers/runc v1.1.6 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
 	github.com/opencontainers/selinux v1.10.1 // indirect
+	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -298,6 +304,9 @@ require (
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
+	kubevirt.io/client-go v0.59.2 // indirect
+	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
+	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
@@ -326,7 +335,7 @@ replace (
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20231016183449-493b2f1cbbf1
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230927164041-818bdade92ff
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
@@ -357,6 +366,7 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.25.0
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.25.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.25.0
+	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 => kubevirt.io/containerized-data-importer-api v1.56.1
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )

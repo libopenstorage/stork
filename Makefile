@@ -61,6 +61,7 @@ vendor-update:
 vendor:
 	go mod tidy
 	go mod vendor
+	sed -i '1 i\// +build skipcompile\n' vendor/kubevirt.io/client-go/kubecli/kubevirt_test_utils.go
 
 lint:
 	GO111MODULE=off go get -u golang.org/x/lint/golint

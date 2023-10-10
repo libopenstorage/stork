@@ -263,6 +263,10 @@ github.com/coreos/go-oidc
 # github.com/coreos/go-systemd/v22 v22.3.2
 ## explicit; go 1.12
 github.com/coreos/go-systemd/v22/dbus
+# github.com/coreos/prometheus-operator v0.38.0
+## explicit; go 1.13
+github.com/coreos/prometheus-operator/pkg/apis/monitoring
+github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1
 # github.com/cpuguy83/go-md2man/v2 v2.0.2
 ## explicit; go 1.11
 github.com/cpuguy83/go-md2man/v2/md2man
@@ -383,6 +387,12 @@ github.com/go-errors/errors
 # github.com/go-gorp/gorp/v3 v3.1.0
 ## explicit; go 1.18
 github.com/go-gorp/gorp/v3
+# github.com/go-kit/kit v0.10.0
+## explicit; go 1.13
+github.com/go-kit/kit/log
+# github.com/go-logfmt/logfmt v0.5.1
+## explicit; go 1.17
+github.com/go-logfmt/logfmt
 # github.com/go-logr/logr v1.2.4
 ## explicit; go 1.16
 github.com/go-logr/logr
@@ -680,6 +690,10 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
+# github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111
+## explicit; go 1.12
+github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io
+github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1
 # github.com/klauspost/compress v1.15.9
 ## explicit; go 1.16
 github.com/klauspost/compress
@@ -802,7 +816,7 @@ github.com/libopenstorage/openstorage/volume/drivers/fake
 github.com/libopenstorage/openstorage/volume/drivers/nfs
 github.com/libopenstorage/openstorage/volume/drivers/pwx
 github.com/libopenstorage/openstorage/volume/drivers/vfs
-# github.com/libopenstorage/operator v0.0.0-20230814210648-7843b18f6ab0
+# github.com/libopenstorage/operator v0.0.0-20231004002935-494c2edc384a
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/drivers/storage/portworx/util
@@ -987,6 +1001,7 @@ github.com/opencontainers/selinux/pkg/pwalkdir
 github.com/openshift/api/apps/v1
 github.com/openshift/api/config/v1
 github.com/openshift/api/console/v1
+github.com/openshift/api/route/v1
 github.com/openshift/api/security/v1
 # github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 ## explicit; go 1.13
@@ -1000,11 +1015,16 @@ github.com/openshift/client-go/config/clientset/versioned/fake
 github.com/openshift/client-go/config/clientset/versioned/scheme
 github.com/openshift/client-go/config/clientset/versioned/typed/config/v1
 github.com/openshift/client-go/config/clientset/versioned/typed/config/v1/fake
+github.com/openshift/client-go/route/clientset/versioned/scheme
+github.com/openshift/client-go/route/clientset/versioned/typed/route/v1
 github.com/openshift/client-go/security/clientset/versioned
 github.com/openshift/client-go/security/clientset/versioned/fake
 github.com/openshift/client-go/security/clientset/versioned/scheme
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1/fake
+# github.com/openshift/custom-resource-status v1.1.2
+## explicit; go 1.12
+github.com/openshift/custom-resource-status/conditions/v1
 # github.com/pborman/uuid v1.2.1
 ## explicit
 github.com/pborman/uuid
@@ -1086,6 +1106,7 @@ github.com/portworx/sched-ops/k8s/errors
 github.com/portworx/sched-ops/k8s/externalsnapshotter
 github.com/portworx/sched-ops/k8s/externalstorage
 github.com/portworx/sched-ops/k8s/kdmp
+github.com/portworx/sched-ops/k8s/kubevirt
 github.com/portworx/sched-ops/k8s/kubevirt-dynamic
 github.com/portworx/sched-ops/k8s/networking
 github.com/portworx/sched-ops/k8s/openshift
@@ -1096,7 +1117,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20230927164041-818bdade92ff
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 ## explicit; go 1.19
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -1105,6 +1126,7 @@ github.com/portworx/torpedo/drivers/objectstore
 github.com/portworx/torpedo/drivers/scheduler
 github.com/portworx/torpedo/drivers/scheduler/k8s
 github.com/portworx/torpedo/drivers/scheduler/spec
+github.com/portworx/torpedo/drivers/vcluster
 github.com/portworx/torpedo/drivers/volume
 github.com/portworx/torpedo/drivers/volume/aws
 github.com/portworx/torpedo/drivers/volume/azure
@@ -2229,6 +2251,62 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
+# kubevirt.io/api v1.0.0
+## explicit; go 1.17
+kubevirt.io/api/clone
+kubevirt.io/api/clone/v1alpha1
+kubevirt.io/api/core
+kubevirt.io/api/core/v1
+kubevirt.io/api/export
+kubevirt.io/api/export/v1alpha1
+kubevirt.io/api/instancetype
+kubevirt.io/api/instancetype/v1alpha1
+kubevirt.io/api/instancetype/v1alpha2
+kubevirt.io/api/instancetype/v1beta1
+kubevirt.io/api/migrations
+kubevirt.io/api/migrations/v1alpha1
+kubevirt.io/api/pool
+kubevirt.io/api/pool/v1alpha1
+kubevirt.io/api/snapshot
+kubevirt.io/api/snapshot/v1alpha1
+# kubevirt.io/client-go v0.59.2
+## explicit; go 1.17
+kubevirt.io/client-go/generated/containerized-data-importer/clientset/versioned
+kubevirt.io/client-go/generated/containerized-data-importer/clientset/versioned/scheme
+kubevirt.io/client-go/generated/containerized-data-importer/clientset/versioned/typed/core/v1beta1
+kubevirt.io/client-go/generated/containerized-data-importer/clientset/versioned/typed/upload/v1beta1
+kubevirt.io/client-go/generated/external-snapshotter/clientset/versioned
+kubevirt.io/client-go/generated/external-snapshotter/clientset/versioned/scheme
+kubevirt.io/client-go/generated/external-snapshotter/clientset/versioned/typed/volumesnapshot/v1
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/scheme
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/clone/v1alpha1
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/export/v1alpha1
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/instancetype/v1alpha1
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/instancetype/v1alpha2
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/migrations/v1alpha1
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/pool/v1alpha1
+kubevirt.io/client-go/generated/kubevirt/clientset/versioned/typed/snapshot/v1alpha1
+kubevirt.io/client-go/generated/network-attachment-definition-client/clientset/versioned
+kubevirt.io/client-go/generated/network-attachment-definition-client/clientset/versioned/scheme
+kubevirt.io/client-go/generated/network-attachment-definition-client/clientset/versioned/typed/k8s.cni.cncf.io/v1
+kubevirt.io/client-go/generated/prometheus-operator/clientset/versioned
+kubevirt.io/client-go/generated/prometheus-operator/clientset/versioned/scheme
+kubevirt.io/client-go/generated/prometheus-operator/clientset/versioned/typed/monitoring/v1
+kubevirt.io/client-go/kubecli
+kubevirt.io/client-go/log
+kubevirt.io/client-go/subresources
+kubevirt.io/client-go/util
+kubevirt.io/client-go/version
+# kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 => kubevirt.io/containerized-data-importer-api v1.56.1
+## explicit; go 1.18
+kubevirt.io/containerized-data-importer-api/pkg/apis/core
+kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1
+kubevirt.io/containerized-data-importer-api/pkg/apis/upload
+kubevirt.io/containerized-data-importer-api/pkg/apis/upload/v1beta1
+# kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
+## explicit; go 1.17
+kubevirt.io/controller-lifecycle-operator-sdk/api
 # oras.land/oras-go v1.2.0
 ## explicit; go 1.17
 oras.land/oras-go/pkg/artifact
@@ -2404,7 +2482,7 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 # github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20231016183449-493b2f1cbbf1
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230927164041-818bdade92ff
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0
