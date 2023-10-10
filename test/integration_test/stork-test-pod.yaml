@@ -52,7 +52,7 @@ spec:
     - /stork.test 
     - -test.v
     - -test.short=SHORT_FLAG
-        FOCUS_TESTS
+    FOCUS_TESTS
     - -snapshot-scale-count=10
     - -migration-scale-count=10
     - -backup-scale-count=10
@@ -97,7 +97,7 @@ spec:
     - name: PX_NAMESPACE
       value: px_namespace
     - name: INTERNAL_AWS_LB 
-      value: internal_aws_lb
+      value: internal_aws_lb 
     - name: TESTRAIL_RUN_NAME
       value: testrail_run_name
     - name: TESTRAIL_RUN_ID
