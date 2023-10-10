@@ -51,8 +51,8 @@ spec:
     - -t
     - /stork.test 
     - -test.v
-    - -test.short=true
-    - -test.run=TestExtender
+    - -test.short=SHORT_FLAG
+        FOCUS_TESTS
     - -snapshot-scale-count=10
     - -migration-scale-count=10
     - -backup-scale-count=10
@@ -62,7 +62,7 @@ spec:
     - -bidirectional-cluster-pair=false
     - -unidirectional-cluster-pair=false
     imagePullPolicy: Always
-    image: olavangad077/stork_test:dev
+    image: openstorage/stork_test:latest
     securityContext:
       privileged: false
     volumeMounts:
@@ -71,47 +71,47 @@ spec:
     name: stork
     env:
     - name: TORPEDO_SSH_USER
-      value: root
+      value: username
     - name: TORPEDO_SSH_PASSWORD
-      value: Password1
+      value: password
     - name: LS_CONTROLLERS
       value: http://linstor-op-cs.default:3370/
     - name: ENABLE_CLUSTER_DOMAIN_TESTS
-      value: "" 
+      value: enable_cluster_domain
     - name: STORAGE_PROVISIONER 
-      value: portworx 
+      value: storage_provisioner
     - name: AUTH_SECRET_CONFIGMAP
-      value: ""
+      value: auth_secret_configmap
     - name: PX_SHARED_SECRET
       value: px_shared_secret_key
     - name: BACKUP_LOCATION_PATH 
-      value: test-24-restore-path 
+      value: backup_location_path
     - name: AWS_ACCESS_KEY_ID
-      value: 
+      value: aws_access_key_id
     - name: AWS_SECRET_ACCESS_KEY
-      value: 
+      value: aws_secret_access_key
     - name: EXTERNAL_TEST_CLUSTER 
-      value: ""
+      value: external_test_cluster
     - name: CLOUD_DELETION_VALIDATION
-      value: "true"
+      value: cloud_deletion_validation
     - name: PX_NAMESPACE
-      value: kube-system
+      value: px_namespace
     - name: INTERNAL_AWS_LB 
-      value: "false" 
+      value: internal_aws_lb
     - name: TESTRAIL_RUN_NAME
-      value: 
+      value: testrail_run_name
     - name: TESTRAIL_RUN_ID
-      value: ""
+      value: testrail_run_id
     - name: TESTRAIL_JENKINS_BUILD_URL
-      value: 
+      value: testrail_jenkins_build_url
     - name: TESTRAIL_HOST
-      value: 
+      value: testrail_host
     - name: TESTRAIL_USERNAME
-      value: 
+      value: testrail_uame
     - name: TESTRAIL_PASSWORD
-      value: 
+      value: testrail_pwd
     - name: TESTRAIL_MILESTONE
-      value: 
+      value: testrail_milestone
   hostNetwork: false
   hostNetwork: false
   hostPID: false
