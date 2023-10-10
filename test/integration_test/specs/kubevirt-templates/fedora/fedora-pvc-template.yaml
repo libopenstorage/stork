@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fedora-template-pvc
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: https://ftp-nyc.osuosl.org/pub/fedora/linux/releases/37/Cloud/x86_64/images/Fedora-Cloud-Base-37-1.7.x86_64.qcow2
+spec:
+  storageClassName: sc-sharedv4svc-nolock
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

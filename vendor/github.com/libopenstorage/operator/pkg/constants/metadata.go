@@ -37,6 +37,11 @@ const (
 	// the custom registry, there is a list of hardcoded common registries, however the list
 	// may not be complete, users can use this annotation to add more.
 	AnnotationCommonImageRegistries = OperatorPrefix + "/common-image-registries"
+	// OperatorLabelManagedByKey is a label key that is added to any object that is
+	// managed the Portworx operator.
+	OperatorLabelManagedByKey = OperatorPrefix + "/managed-by"
+	// OperatorLabelManagedByValue indicates that the object is managed by portworx.
+	OperatorLabelManagedByValue = "portworx"
 )
 
 const (

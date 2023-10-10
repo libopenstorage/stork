@@ -4432,7 +4432,7 @@ func validatePodTopologySpreadConstraints(deployment *appsv1.Deployment, timeout
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get deployment %s/%s", deployment.Namespace, deployment.Name)
 		}
-		expectedConstraints, err := util.GetTopologySpreadConstraintsFromNodes(nodeList, existingDeployment.Spec.Template.Labels)
+		expectedConstraints, err := util.GetTopologySpreadConstraintsFromNodes(nodeList, existingDeployment.Spec.Selector.MatchLabels)
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get expected pod topology spread constraints from %s/%s deployment template",
 				deployment.Namespace, deployment.Name)

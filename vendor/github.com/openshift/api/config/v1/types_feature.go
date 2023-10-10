@@ -177,6 +177,7 @@ var FeatureSets = map[FeatureSet]*FeatureGateEnabledDisabled{
 		with(dynamicResourceAllocation).
 		with(admissionWebhookMatchConditions).
 		with(azureWorkloadIdentity).
+		with(gateGatewayAPI).
 		toFeatures(defaultFeatures),
 	LatencySensitive: newDefaultFeatures().
 		toFeatures(defaultFeatures),
