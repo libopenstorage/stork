@@ -362,9 +362,9 @@ func TestDeleteSchedulePolicyBeingUsedErrorCase(t *testing.T) {
 
 	cmdArgs := []string{"delete", "schedulepolicy", "test-policy"}
 	expected := "error: cannot delete the Schedule Policy: test-policy \n" +
-		"The resource is linked to -> Migration Schedules : test-migration-schedule\n" +
-		"Application Backup Schedules : test-applicationBackup-schedule\n" +
-		"Volume Snapshot Schedules : test-volumeSnapshot-schedule\n"
+		"The resource is linked to -> Migration Schedules : test-ns/test-migration-schedule\n" +
+		"Application Backup Schedules : test-ns/test-applicationBackup-schedule\n" +
+		"Volume Snapshot Schedules : test-ns/test-volumeSnapshot-schedule\n"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 }

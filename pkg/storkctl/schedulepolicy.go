@@ -243,7 +243,8 @@ func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namesp
 		}
 		for _, schedule := range migrationSchedules.Items {
 			if schedule.Spec.SchedulePolicyName == policyName {
-				policyInUseBy[migrationSchedule] = append(policyInUseBy[migrationSchedule], schedule.Name)
+				scheduleName := ns.Name + "/" + schedule.Name
+				policyInUseBy[migrationSchedule] = append(policyInUseBy[migrationSchedule], scheduleName)
 			}
 		}
 
@@ -254,7 +255,8 @@ func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namesp
 		}
 		for _, schedule := range applicationBackupSchedules.Items {
 			if schedule.Spec.SchedulePolicyName == policyName {
-				policyInUseBy[applicationBackupSchedule] = append(policyInUseBy[applicationBackupSchedule], schedule.Name)
+				scheduleName := ns.Name + "/" + schedule.Name
+				policyInUseBy[applicationBackupSchedule] = append(policyInUseBy[applicationBackupSchedule], scheduleName)
 			}
 		}
 
@@ -265,7 +267,8 @@ func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namesp
 		}
 		for _, schedule := range snapshotSchedules.Items {
 			if schedule.Spec.SchedulePolicyName == policyName {
-				policyInUseBy[volumeSnapshotSchedule] = append(policyInUseBy[volumeSnapshotSchedule], schedule.Name)
+				scheduleName := ns.Name + "/" + schedule.Name
+				policyInUseBy[volumeSnapshotSchedule] = append(policyInUseBy[volumeSnapshotSchedule], scheduleName)
 			}
 		}
 	}
