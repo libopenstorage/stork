@@ -17,7 +17,8 @@ func IsGKE() bool {
 // RequiresCheck returns whether a preflight check is needed based on the platform
 func RequiresCheck() bool {
 	return Instance().ProviderName() == string(cloudops.AWS) ||
-		Instance().ProviderName() == string(cloudops.Vsphere)
+		Instance().ProviderName() == string(cloudops.Vsphere) ||
+		Instance().ProviderName() == string(cloudops.Pure)
 }
 
 // RunningOnCloud checks whether portworx is running on cloud

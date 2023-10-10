@@ -26,6 +26,8 @@ type ScOps interface {
 	// TODO: This is currently the same as GetStorageClass. If no one is using it,
 	// we should remove this method
 	ValidateStorageClass(name string) (*storagev1.StorageClass, error)
+	// AnnotateStorageClassAsDefault annotates a given storage class as default Storage class
+	AnnotateStorageClassAsDefault(name string) error
 }
 
 const (
@@ -105,4 +107,24 @@ func (c *Client) GetStorageClassParams(sc *storagev1.StorageClass) (map[string]s
 // ValidateStorageClass validates the given storage class
 func (c *Client) ValidateStorageClass(name string) (*storagev1.StorageClass, error) {
 	return c.GetStorageClass(name)
+}
+
+// AnnotateStorageClassAsDefault annotates a given storage class as default Storage class
+func (c *Client) AnnotateStorageClassAsDefault(name string) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+	sc, err := c.GetStorageClass(name)
+	if err != nil {
+		return err
+	}
+	if sc.Annotations == nil {
+		sc.Annotations = make(map[string]string)
+	}
+	sc.Annotations[defaultStorageclassAnnotationKey] = "true"
+	_, err = c.storage.StorageClasses().Update(context.TODO(), sc, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -1504,6 +1504,13 @@ func CreateOrUpdatePrometheus(
 		}
 	}
 
+	if prometheus.Spec.PodMetadata == nil {
+		prometheus.Spec.PodMetadata = &monitoringv1.EmbeddedObjectMetadata{}
+	}
+	if prometheus.Spec.PodMetadata.Labels == nil {
+		prometheus.Spec.PodMetadata.Labels = make(map[string]string)
+	}
+	prometheus.Spec.PodMetadata.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
 	if modified || len(prometheus.OwnerReferences) > len(existingPrometheus.OwnerReferences) {
 		prometheus.ResourceVersion = existingPrometheus.ResourceVersion
 		logrus.Infof("Updating Prometheus %s/%s", prometheus.Namespace, prometheus.Name)
@@ -1579,6 +1586,13 @@ func CreateOrUpdateAlertManager(
 		}
 	}
 
+	if alertManager.Spec.PodMetadata == nil {
+		alertManager.Spec.PodMetadata = &monitoringv1.EmbeddedObjectMetadata{}
+	}
+	if alertManager.Spec.PodMetadata.Labels == nil {
+		alertManager.Spec.PodMetadata.Labels = make(map[string]string)
+	}
+	alertManager.Spec.PodMetadata.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
 	if modified || len(alertManager.OwnerReferences) > len(existingAlertManager.OwnerReferences) {
 		alertManager.ResourceVersion = existingAlertManager.ResourceVersion
 		logrus.Infof("Updating AlertManager %s/%s", alertManager.Namespace, alertManager.Name)
@@ -2252,4 +2266,12 @@ func AppendObjectList(k8sClient client.Client, namespace string, list client.Obj
 	}
 
 	return nil
+}
+
+func AddManagedByOperatorLabel(om metav1.ObjectMeta) metav1.ObjectMeta {
+	if om.Labels == nil {
+		om.Labels = make(map[string]string)
+	}
+	om.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
+	return om
 }
