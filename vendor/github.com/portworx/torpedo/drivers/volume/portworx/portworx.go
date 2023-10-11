@@ -1160,6 +1160,8 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 		return fmt.Errorf("error when exiting pool maintenance on node [%s], Err: %v", n.Name, err)
 	}
 	log.Infof("Exit pool maintenance %s", out)
+	log.Infof("waiting for 3 mins allowing pool to completely transition out of maintenance mode")
+	time.Sleep(3 * time.Minute)
 	return nil
 }
 

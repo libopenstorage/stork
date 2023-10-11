@@ -76,8 +76,9 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 	}
 
 	// Start the VirtualMachine if its not Started yet
-	if !*vm.Spec.Running {
-		if err = instance.StartVirtualMachine(vm); err != nil {
+	if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopped ||
+		vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopping {
+		if err = c.StartVirtualMachine(vm); err != nil {
 			return fmt.Errorf("Failed to start VirtualMachine %v", err)
 		}
 	}

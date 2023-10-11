@@ -41,6 +41,8 @@ func TestKubevirt(t *testing.T) {
 	require.NoError(t, err, "Error creating template")
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
+	t.Run("kubeVirtHypercOneLiveMigration", kubeVirtHypercOneLiveMigration)
+	t.Run("kubeVirtHypercTwoLiveMigrations", kubeVirtHypercTwoLiveMigrations)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
@@ -58,6 +60,7 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 		deployedVMName,
 	)
 
+	logrus.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
 
 	// If we are here then the test has passed

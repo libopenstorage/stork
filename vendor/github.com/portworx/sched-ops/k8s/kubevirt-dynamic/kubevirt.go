@@ -167,6 +167,19 @@ func (c *Client) unstructuredGetValString(data map[string]interface{}, key strin
 	return val, true, nil
 }
 
+// unstructuredGetValTime returns a time.Time value for the specified key from the map
+func (c *Client) unstructuredGetValTime(data map[string]interface{}, key string) (time.Time, bool, error) {
+	val, found, err := c.unstructuredGetValString(data, key)
+	if err != nil || !found {
+		return time.Time{}, found, err
+	}
+	timeVal, err := time.Parse(time.RFC3339, val)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("failed to parse %s as time: %w", val, err)
+	}
+	return timeVal, true, nil
+}
+
 // unstructuredGetValString returns an int64 value for the specified key from the map
 func (c *Client) unstructuredGetValInt64(data map[string]interface{}, key string) (int64, bool, error) {
 	rawVal, ok := data[key]
