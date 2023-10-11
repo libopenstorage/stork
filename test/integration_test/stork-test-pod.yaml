@@ -77,15 +77,15 @@ spec:
     - name: LS_CONTROLLERS
       value: http://linstor-op-cs.default:3370/
     - name: ENABLE_CLUSTER_DOMAIN_TESTS
-      value: enable_cluster_domain
+      value: enable_cluster_domain 
     - name: STORAGE_PROVISIONER 
-      value: storage_provisioner
+      value: storage_provisioner 
     - name: AUTH_SECRET_CONFIGMAP
       value: auth_secret_configmap
     - name: PX_SHARED_SECRET
       value: px_shared_secret_key
     - name: BACKUP_LOCATION_PATH 
-      value: backup_location_path
+      value: backup_location_path 
     - name: AWS_ACCESS_KEY_ID
       value: aws_access_key_id
     - name: AWS_SECRET_ACCESS_KEY

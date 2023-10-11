@@ -198,7 +198,7 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 
 	//Invalid Schedule Policy Type
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Invalid"}
-	expected = "error: need to provide a valid schedule policy type. Valid Schedule Types are Interval, Daily, Weekly and Monthly"
+	expected = "error: need to provide a valid schedule policy type. Valid schedule types are Interval, Daily, Weekly and Monthly"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid IntervalMinutes value for Interval Policy
@@ -212,12 +212,12 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid Day value for Weekly Policy
-	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Weekly", "--time", "12:05PM", "--weekly-day", "SUNDAY"}
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Weekly", "--time", "12:05PM", "--day-of-week", "SUNDAY"}
 	expected = "error: Invalid day of the week (SUNDAY) in Weekly policy"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid Date value for Monthly Policy
-	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Monthly", "--monthly-date", "32"}
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Monthly", "--date-of-month", "32"}
 	expected = "error: Invalid date of the month (32) in Monthly policy"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
@@ -226,7 +226,7 @@ func TestCreateIntervalPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
 	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Interval", "--interval-minutes", "90", "--retain", "2"}
-	expected := "SchedulePolicy test-policy created successfully\n"
+	expected := "schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -250,7 +250,7 @@ func TestCreateDailyPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
 	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Daily", "--time", "12:30PM", "--retain", "2"}
-	expected := "SchedulePolicy test-policy created successfully\n"
+	expected := "schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -274,8 +274,8 @@ func TestCreateDailyPolicy(t *testing.T) {
 func TestCreateWeeklyPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
-	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Weekly", "--time", "1:30PM", "--weekly-day", "Friday", "--retain", "4"}
-	expected := "SchedulePolicy test-policy created successfully\n"
+	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Weekly", "--time", "1:30PM", "--day-of-week", "Friday", "--retain", "4"}
+	expected := "schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -299,8 +299,8 @@ func TestCreateWeeklyPolicy(t *testing.T) {
 func TestCreateMonthlyPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
-	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Monthly", "--time", "12:30PM", "--monthly-date", "12", "--retain", "2"}
-	expected := "SchedulePolicy test-policy created successfully\n"
+	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Monthly", "--time", "12:30PM", "--date-of-month", "12", "--retain", "2"}
+	expected := "schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -361,7 +361,7 @@ func TestDeleteSchedulePolicyBeingUsedErrorCase(t *testing.T) {
 	require.NoError(t, err, "Error creating Volume Snapshot schedule")
 
 	cmdArgs := []string{"delete", "schedulepolicy", "test-policy"}
-	expected := "error: cannot delete the Schedule Policy: test-policy \n" +
+	expected := "error: cannot delete the schedule policy test-policy.\n" +
 		"The resource is linked to -> Migration Schedules : test-ns/test-migration-schedule\n" +
 		"Application Backup Schedules : test-ns/test-applicationBackup-schedule\n" +
 		"Volume Snapshot Schedules : test-ns/test-volumeSnapshot-schedule\n"
@@ -401,6 +401,6 @@ func TestDeleteSchedulePolicy(t *testing.T) {
 	require.NoError(t, err, "Error creating schedulepolicy")
 
 	cmdArgs := []string{"delete", "schedulepolicy", "monthly-policy", "weekly-policy"}
-	expected := "SchedulePolicy monthly-policy deleted successfully\nSchedulePolicy weekly-policy deleted successfully\n"
+	expected := "schedule policy monthly-policy deleted successfully\nschedule policy weekly-policy deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }

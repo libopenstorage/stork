@@ -73,13 +73,13 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 	var retain int
 	var time string
 	var dailyForceFullSnapshotDay string
-	var weeklyDay string
-	var monthlyDate int
+	var dayOfWeek string
+	var dateOfMonth int
 
 	createSchedulePolicyCommand := &cobra.Command{
 		Use:     schedulePolicySubcommand,
 		Aliases: schedulePolicyAliases,
-		Short:   "Create schedule policies",
+		Short:   "Create schedule policy",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for schedule policy name"))
@@ -96,7 +96,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				} else {
 					intervalPolicy.Retain = storkv1.Retain(retain)
 				}
-				//Validate the input
+				// Validate the user input
 				err := intervalPolicy.Validate()
 				if err != nil {
 					util.CheckErr(err)
@@ -121,7 +121,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			case "Weekly":
 				var weeklyPolicy storkv1.WeeklyPolicy
 				weeklyPolicy.Time = time
-				weeklyPolicy.Day = weeklyDay
+				weeklyPolicy.Day = dayOfWeek
 				if retain == 0 {
 					weeklyPolicy.Retain = storkv1.DefaultWeeklyPolicyRetain
 				} else {
@@ -136,7 +136,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			case "Monthly":
 				var monthlyPolicy storkv1.MonthlyPolicy
 				monthlyPolicy.Time = time
-				monthlyPolicy.Date = monthlyDate
+				monthlyPolicy.Date = dateOfMonth
 				if retain == 0 {
 					monthlyPolicy.Retain = storkv1.DefaultMonthlyPolicyRetain
 				} else {
@@ -149,9 +149,8 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				}
 				policyItem.Monthly = &monthlyPolicy
 			default:
-				util.CheckErr(fmt.Errorf("need to provide a valid schedule policy type. Valid Schedule Types are Interval, Daily, Weekly and Monthly"))
+				util.CheckErr(fmt.Errorf("need to provide a valid schedule policy type. Valid schedule types are Interval, Daily, Weekly and Monthly"))
 				return
-
 			}
 			var schedulePolicy storkv1.SchedulePolicy
 			schedulePolicy.Name = schedulePolicyName
@@ -161,18 +160,18 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				util.CheckErr(err)
 				return
 			}
-			msg := fmt.Sprintf("SchedulePolicy %v created successfully", schedulePolicy.Name)
+			msg := fmt.Sprintf("schedule policy %v created successfully", schedulePolicy.Name)
 			printMsg(msg, ioStreams.Out)
 		},
 	}
-	//Picking up user inputs and setting the defaults for flags
-	createSchedulePolicyCommand.Flags().StringVarP(&schedulePolicyType, "policy-type", "t", "Interval", "Select Type of Schedule Policy to apply. Interval / Daily / Weekly / Monthly. ")
-	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, "interval-minutes", "", 30, "Specify the interval, in minutes, after which Portworx should trigger the operation. ")
-	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "For backup operations, specify how many backups Portworx should retain. ")
-	createSchedulePolicyCommand.Flags().StringVarP(&time, "time", "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Portworx should trigger the operation. ")
-	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, "force-full-snapshot-day", "", "MONDAY", "For daily scheduled backup operations, specify on which day to trigger a full backup. ")
-	createSchedulePolicyCommand.Flags().StringVarP(&weeklyDay, "weekly-day", "", "Sunday", "Specify the day of the week when Portworx should trigger the operation. You can use both the abbreviated or the full name of the day of the week")
-	createSchedulePolicyCommand.Flags().IntVarP(&monthlyDate, "monthly-date", "", 1, "Specify the day of the month when Portworx should trigger the operation")
+	// Picking up user inputs and setting the defaults for flags
+	createSchedulePolicyCommand.Flags().StringVarP(&schedulePolicyType, "policy-type", "t", "Interval", "Select Type of schedule policy to apply. Interval / Daily / Weekly / Monthly.")
+	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, "interval-minutes", "i", 30, "Specify the interval, in minutes, after which Portworx should trigger the operation.")
+	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "For backup operations, specify how many backups Portworx should retain.")
+	createSchedulePolicyCommand.Flags().StringVarP(&time, "time", "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Portworx should trigger the operation.")
+	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, "force-full-snapshot-day", "", "MONDAY", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
+	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, "day-of-week", "", "Sunday", "Specify the day of the week when Portworx should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
+	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, "date-of-month", "", 1, "Specify the day of the month when Portworx should trigger the operation.")
 	return createSchedulePolicyCommand
 }
 
@@ -193,16 +192,17 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				return
 			}
 			for i := 0; i < len(args); i++ {
-				//ensure that the schedule policy is not being used by any stork resource
-				// (MigrationSchedule / ApplicationBackups / Snapshot Schedule)
+				// ensure that the schedule policy is not being used by any stork resource
 				scheduleTypes := []string{migrationSchedule, applicationBackupSchedule, volumeSnapshotSchedule}
 				policyLinkedTo, err := isSchedulePolicyBeingUsed(scheduleTypes, args[i], namespaces)
 				if err != nil {
-					util.CheckErr(fmt.Errorf("cannot delete the Schedule Policy: %s. Unable to verify if the schedulePolicy is linked to other resources. %w", args[i], err))
+					util.CheckErr(fmt.Errorf("cannot delete the schedule policy %s. Unable to verify if the schedule policy is linked to other resources. %w", args[i], err))
 					return
 				}
-				if len(policyLinkedTo[migrationSchedule])+len(policyLinkedTo[applicationBackupSchedule])+len(policyLinkedTo[volumeSnapshotSchedule]) != 0 {
-					// Print the names of resources using the given schedule policy
+				if len(policyLinkedTo[migrationSchedule])+
+					len(policyLinkedTo[applicationBackupSchedule])+
+					len(policyLinkedTo[volumeSnapshotSchedule]) != 0 {
+					// Print the names of resources linked to the given schedule policy
 					message := "\nThe resource is linked to -> "
 					for _, scheduleType := range scheduleTypes {
 						schedules := policyLinkedTo[scheduleType]
@@ -212,16 +212,16 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 							message += "\n"
 						}
 					}
-					util.CheckErr(fmt.Errorf("cannot delete the Schedule Policy: %s %s", args[i], message))
+					util.CheckErr(fmt.Errorf("cannot delete the schedule policy %s.%s", args[i], message))
 					return
 				}
-				//Now we can try to delete the schedule policy since it's not linked to any other resource
+				// Now we can try to delete the schedule policy since it's not linked to any other resource
 				err = storkops.Instance().DeleteSchedulePolicy(args[i])
 				if err != nil {
 					util.CheckErr(err)
 					return
 				}
-				msg := fmt.Sprintf("SchedulePolicy %v deleted successfully", args[i])
+				msg := fmt.Sprintf("schedule policy %v deleted successfully", args[i])
 				printMsg(msg, ioStreams.Out)
 			}
 		},
@@ -236,7 +236,7 @@ func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namesp
 	}
 
 	for _, ns := range namespaces.Items {
-		//Checking all the migration schedules for schedulePolicyName
+		// Checking all the migration schedules for schedulePolicyName
 		migrationSchedules, err := storkops.Instance().ListMigrationSchedules(ns.Name)
 		if err != nil {
 			return nil, err
@@ -248,7 +248,7 @@ func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namesp
 			}
 		}
 
-		//Checking all applicationBackupSchedules for schedulePolicyName
+		// Checking all applicationBackupSchedules for schedulePolicyName
 		applicationBackupSchedules, err := storkops.Instance().ListApplicationBackupSchedules(ns.Name, metav1.ListOptions{})
 		if err != nil {
 			return nil, err
@@ -260,7 +260,7 @@ func isSchedulePolicyBeingUsed(scheduleTypes []string, policyName string, namesp
 			}
 		}
 
-		//Checking all VolumeSnapshotSchedules for schedulePolicyName
+		// Checking all VolumeSnapshotSchedules for schedulePolicyName
 		snapshotSchedules, err := storkops.Instance().ListSnapshotSchedules(ns.Name)
 		if err != nil {
 			return nil, err
