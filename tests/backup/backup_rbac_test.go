@@ -198,23 +198,23 @@ var _ = Describe("{VerifyRBACforInfraAdmin}", func() {
 			for _, provider := range providers {
 				if provider != drivers.ProviderNfs {
 					log.Infof("Update CloudAccount - %s ownership for users - [%v]", cloudCredentialNameMap[infraAdminUser], userNames)
-					err = UpdateCloudCredentialOwnership(cloudCredentialNameMap[infraAdminUser], cloudCredentialUIDMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx, orgID)
+					err = AddCloudCredentialOwnership(cloudCredentialNameMap[infraAdminUser], cloudCredentialUIDMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for CloudCredential- %s", cloudCredentialNameMap[infraAdminUser]))
 				}
 			}
 			log.InfoD("Update BackupLocation - %s ownership for users - [%v]", backupLocationNameMap[infraAdminUser], userNames)
-			err = UpdateBackupLocationOwnership(backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
+			err = AddBackupLocationOwnership(backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for backuplocation - %s", backupLocationNameMap[infraAdminUser]))
 			log.InfoD("Update SchedulePolicy - %s ownership for users - [%v]", periodicSchedulePolicyNameMap[infraAdminUser], userNames)
-			err = UpdateSchedulePolicyOwnership(periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
+			err = AddSchedulePolicyOwnership(periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", periodicSchedulePolicyNameMap[infraAdminUser]))
 			log.InfoD("Update Application Rules ownership for users - [%v]", userNames)
 			if preRuleNameMap[infraAdminUser] != "" {
-				err = UpdateRuleOwnership(preRuleNameMap[infraAdminUser], preRuleUidMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
+				err = AddRuleOwnership(preRuleNameMap[infraAdminUser], preRuleUidMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule of application"))
 			}
 			if postRuleNameMap[infraAdminUser] != "" {
-				err = UpdateRuleOwnership(postRuleNameMap[infraAdminUser], postRuleUidMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
+				err = AddRuleOwnership(postRuleNameMap[infraAdminUser], postRuleUidMap[infraAdminUser], userNames, nil, Read, Invalid, nonAdminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule of application"))
 			}
 		})

@@ -1953,7 +1953,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				if provider != drivers.ProviderNfs {
 					log.InfoD(fmt.Sprintf("Update ownership for cloud account from px-admin to users with role app.admin"))
 					log.Infof("Update CloudAccount - %s ownership for users - [%v]", adminCredName, appAdminUserNames)
-					err = UpdateCloudCredentialOwnership(adminCredName, adminCloudCredUID, appAdminUserNames, nil, Read, Invalid, adminCtx, orgID)
+					err = AddCloudCredentialOwnership(adminCredName, adminCloudCredUID, appAdminUserNames, nil, Read, Invalid, adminCtx, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for CloudCredential- %s", adminCredName))
 					for _, appAdminUserName := range appAdminUserNames {
 						userCredNameMap[appAdminUserName] = adminCredName
@@ -2642,20 +2642,20 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "fetching px-admin ctx")
 			log.InfoD("Update BackupLocation - %s ownership for users - [%v]", backupLocationName, userNames)
-			err = UpdateBackupLocationOwnership(backupLocationName, backupLocationUID, userNames, nil, Read, Invalid, ctx)
+			err = AddBackupLocationOwnership(backupLocationName, backupLocationUID, userNames, nil, Read, Invalid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for backuplocation - %s", backupLocationName))
 
 			log.InfoD("Update SchedulePolicy - %s ownership for users - [%v]", periodicSchedulePolicyName, userNames)
-			err = UpdateSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, ctx)
+			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", periodicSchedulePolicyName))
 
 			log.InfoD("Update Application Rules ownership for users - [%v]", userNames)
 			if preRuleName != "" {
-				err = UpdateRuleOwnership(preRuleName, preRuleUid, userNames, nil, Read, Invalid, ctx)
+				err = AddRuleOwnership(preRuleName, preRuleUid, userNames, nil, Read, Invalid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule of application"))
 			}
 			if postRuleName != "" {
-				err = UpdateRuleOwnership(postRuleName, postRuleUid, userNames, nil, Read, Invalid, ctx)
+				err = AddRuleOwnership(postRuleName, postRuleUid, userNames, nil, Read, Invalid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule of application"))
 			}
 		})
@@ -3410,7 +3410,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 				log.FailOnError(err, "Failed to create cloud credential - %s", err)
 				log.Infof("Updating cloud credential ownership for non-admin users")
 				if provider != drivers.ProviderNfs {
-					err = UpdateCloudCredentialOwnership(adminCredName, adminCloudCredUID, []string{appAdminUserName}, nil, Read, Invalid, adminCtx, orgID)
+					err = AddCloudCredentialOwnership(adminCredName, adminCloudCredUID, []string{appAdminUserName}, nil, Read, Invalid, adminCtx, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying ownership update for cloud credential %s to user %s", adminCredName, []string{appAdminUserName}))
 				}
 			}
@@ -3426,7 +3426,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 				err := CreateBackupLocationWithContext(provider, backupLocationName, backupLocationUID, adminCredName, adminCloudCredUID, getGlobalBucketName(provider), orgID, "", "", adminCtx)
 				log.FailOnError(err, "Failed to add backup location %s using provider %s for px-admin user", backupLocationName, provider)
 				log.Infof("Updating backup location ownership for non-admin users")
-				err = UpdateBackupLocationOwnership(backupLocationName, backupLocationUID, []string{appUserName}, nil, Read, Invalid, adminCtx)
+				err = AddBackupLocationOwnership(backupLocationName, backupLocationUID, []string{appUserName}, nil, Read, Invalid, adminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying ownership update for backup location %s to user %s", backupLocationName, []string{appUserName}))
 				backupLocationUserMap[appUserName] = backupLocationName
 				backupLocationUidUserMap[appUserName] = backupLocationUID
@@ -3477,7 +3477,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 			periodicSchedulePolicyInterval = 15
 			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] for px-admin ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
-			err = UpdateSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, adminCtx)
+			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for SchedulePolicy- %s", periodicSchedulePolicyName))
 
 		})
