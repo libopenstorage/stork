@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 	"fmt"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"math/rand"
 	"strings"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +40,7 @@ const (
 	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
 	RestoreDSDuringPXPoolExpansion    = "restore-ds-during-px-pool-expansion"
 	RestoreDSDuringKVDBFailOver       = "restore-ds-during-kvdb-fail-over"
+	RestoreDuringAllNodesReboot       = "restore-ds-during-node-reboot"
 	poolResizeTimeout                 = time.Minute * 120
 	retryTimeout                      = time.Minute * 2
 )
@@ -57,6 +58,7 @@ var (
 	restoredDeployment        *pds.ModelsDeployment
 	dsEntity                  restoreBkp.DSEntity
 	DynamicDeployments        []*pds.ModelsDeployment
+	RestoredDeployments       []*pds.ModelsDeployment
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -210,7 +212,15 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
-
+	case RestoreDuringAllNodesReboot:
+		log.InfoD("Entering to restore the Data service, while the nodes are rebooted")
+		func1 := func() {
+			RestoreAndValidateConfiguration(namespace, deployment)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
 	}
 
 	var aggregatedError error
@@ -290,6 +300,7 @@ func RestartPXDuringDSScaleUp(ns string, deployment *pds.ModelsDeployment) error
 // RestoreAndValidateConfiguration triggers restore of DS and validates configuration post restore
 func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment) (bool, error) {
 	//Get Cluster context and create restoreClient obj
+	RestoredDeployments = []*pds.ModelsDeployment{}
 	ctx, err := tests.GetSourceClusterConfigPath()
 	log.FailOnError(err, "failed while getting src cluster path")
 	restoreTarget := tc.NewTargetCluster(ctx)
@@ -322,7 +333,8 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 			return false, error
 		}
 		DynamicDeployments = append(DynamicDeployments, restoredDeployment)
-		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+		RestoredDeployments = append(RestoredDeployments, restoredDeployment)
+		log.InfoD("Restored successfully. Details: Deployment- %v", restoredDeployment.GetClusterResourceName())
 	}
 	return true, nil
 }
@@ -332,6 +344,11 @@ func GetDynamicDeployments() []*pds.ModelsDeployment {
 	log.InfoD("Dynamically created deployments are - %v", DynamicDeployments)
 	return DynamicDeployments
 
+}
+
+func GetRestoredDeployment() []*pds.ModelsDeployment {
+	log.InfoD("Length of Restored deployment - %v", len(RestoredDeployments))
+	return RestoredDeployments
 }
 
 func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment) error {
@@ -482,6 +499,17 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 		}
 	}
 	return testError
+}
+
+// Reboot All Worker Nodes while restore is ongoing
+func RebootWorkernodesDuringRestore(ns string, deployment *pds.ModelsDeployment, testType string) error {
+	// Static sleep to make sure busy box pod is scheduled
+	time.Sleep(20 * time.Second)
+	err = RebootWorkerNodesDuringDeployment(ns, deployment, testType)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Reboot All Worker Nodes while deployment is ongoing
