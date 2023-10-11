@@ -1069,8 +1069,8 @@ func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
 	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
 	cmdArgs := []string{"deactivate", "migrations", "-n", namespace}
 
+	err := setSourceKubeConfig()
 	if runInSource {
-		err := setSourceKubeConfig()
 		if err != nil {
 			return fmt.Errorf("setting kubeconfig to source failed during deactivate migrations %v", err)
 		}
@@ -1093,7 +1093,6 @@ func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
 		}
 		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
 	} else {
-		err := setDestinationKubeConfig()
 		if err != nil {
 			return fmt.Errorf("setting kubeconfig to destination failed during deactivate migrations %v", err)
 		}

@@ -55,13 +55,11 @@ SECCOMP_OPTIONS := --security-opt seccomp=unconfined
 
 all: stork storkctl cmdexecutor pretest px-statfs
 
-vendor-tidy:
-	go mod tidy
-
 vendor-update:
 	go mod download
 
 vendor:
+	go mod tidy
 	go mod vendor
 
 lint:
@@ -165,7 +163,6 @@ px-statfs:
 		   /bin/bash -c 'cd $(PX_STATFS_SRC_DIR) &&  \
            gcc -g -shared -fPIC -o $(PX_STATFS_DEST_DIR)/px_statfs.so px_statfs.c -ldl -D__USE_LARGEFILE64 && \
            sha256sum $(PX_STATFS_DEST_DIR)/px_statfs.so | cut -d " " -f 1 > $(PX_STATFS_DEST_DIR)/px_statfs.so.sha256;'
-
 
 container: help
 	@echo "Building container: docker build --build-arg VERSION=$(DOCKER_HUB_STORK_TAG) --build-arg RELEASE=$(DOCKER_HUB_STORK_TAG) --tag $(STORK_IMG) -f Dockerfile . "
