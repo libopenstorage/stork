@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -29,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+var pathRegexp = regexp.MustCompile(`^([a-zA-Z_/][a-zA-Z0-9_/]*(\[[0-9]+\])?\.)*[a-zA-Z_/][a-zA-Z0-9_/]*$`)
 
 const (
 	// ResourceTransformationControllerName of resource transformation CR handler
@@ -173,6 +176,9 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 				path.Type == stork_api.KeyPairResourceType) {
 				return fmt.Errorf("unsupported type for resource %s, path %s, type: %s", kind, path.Path, path.Type)
 			}
+			if !pathRegexp.MatchString(path.Path) {
+				return fmt.Errorf("invalid path for resource %s, path %s, type: %s", kind, path.Path, path.Type)
+			}
 		}
 	}
 	log.TransformLog(transform).Infof("validated paths ")
@@ -250,6 +256,7 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			log.TransformLog(transform).Errorf("Error getting resources kind:%s, err: %v", kind, err)
 			return err
 		}
+		//TODO: why iteration on all the again. this is already done in transform resources.
 		for _, path := range spec.Paths {
 			// This can be handle by CRD validation- v1 version crd support
 			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath ||
