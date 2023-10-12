@@ -4751,7 +4751,7 @@ func AddSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid str
 }
 
 // RemoveSchedulePolicyOwnership removes ownership from the existing schedulePolicy object.
-func RemoveSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+func RemoveSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context) error {
 	backupDriver := Inst().Backup
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
@@ -4818,7 +4818,7 @@ func RemoveSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid 
 }
 
 // RemoveRuleOwnership removes ownership from to the existing rule object
-func RemoveRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+func RemoveRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context) error {
 	backupDriver := Inst().Backup
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
@@ -4885,7 +4885,7 @@ func RemoveRuleOwnership(ruleName string, ruleUid string, userNames []string, gr
 }
 
 // RemoveBackupLocationOwnership removes ownership from the existing backup location object.
-func RemoveBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+func RemoveBackupLocationOwnership(name string, uid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context) error {
 	backupDriver := Inst().Backup
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
@@ -4952,7 +4952,7 @@ func RemoveBackupLocationOwnership(name string, uid string, userNames []string, 
 }
 
 // RemoveCloudCredentialOwnership removes ownership from the existing CloudCredential object.
-func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context, orgID string) error {
+func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context, orgID string) error {
 	backupDriver := Inst().Backup
 	userIDs := make([]string, 0)
 	groupIDs := make([]string, 0)
