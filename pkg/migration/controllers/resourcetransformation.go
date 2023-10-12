@@ -250,57 +250,50 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			log.TransformLog(transform).Errorf("Error getting resources kind:%s, err: %v", kind, err)
 			return err
 		}
-		for _, path := range spec.Paths {
-			// This can be handle by CRD validation- v1 version crd support
-			if !(path.Operation == stork_api.AddResourcePath || path.Operation == stork_api.DeleteResourcePath ||
-				path.Operation == stork_api.ModifyResourcePathValue) {
-				return fmt.Errorf("unsupported operation type for given path : %s", path.Operation)
+		for _, object := range objects.Items {
+			metadata, err := meta.Accessor(object)
+			if err != nil {
+				log.TransformLog(transform).Errorf("Unable to read metadata for resource %v, err: %v", kind, err)
+				return err
 			}
-			for _, object := range objects.Items {
-				metadata, err := meta.Accessor(object)
-				if err != nil {
-					log.TransformLog(transform).Errorf("Unable to read metadata for resource %v, err: %v", kind, err)
-					return err
-				}
-				resInfo := &stork_api.TransformResourceInfo{
-					Name:             metadata.GetName(),
-					Namespace:        metadata.GetNamespace(),
-					GroupVersionKind: metav1.GroupVersionKind(object.GetObjectKind().GroupVersionKind()),
-					Specs:            spec,
-				}
-				if err := resourcecollector.TransformResources(object, []stork_api.TransformResourceInfo{*resInfo}, metadata.GetName(), metadata.GetNamespace()); err != nil {
-					log.TransformLog(transform).Errorf("Unable to apply patch path %s during validation on resource kind : %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
-					resInfo.Status = stork_api.ResourceTransformationStatusFailed
-					resInfo.Reason = err.Error()
-					return err
-				}
-				unstructured, ok := object.(*unstructured.Unstructured)
-				if !ok {
-					return fmt.Errorf("unable to cast object to unstructured: %v", object)
-				}
-				resource := &metav1.APIResource{
-					Name:       strings.ToLower(ruleset.Pluralize(strings.ToLower(kind))),
-					Namespaced: len(metadata.GetNamespace()) > 0,
-				}
-				dynamicClient := localInterface.Resource(
-					object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(getTransformNamespace(transform.Namespace))
+			resInfo := &stork_api.TransformResourceInfo{
+				Name:             metadata.GetName(),
+				Namespace:        metadata.GetNamespace(),
+				GroupVersionKind: metav1.GroupVersionKind(object.GetObjectKind().GroupVersionKind()),
+				Specs:            spec,
+			}
+			if err := resourcecollector.TransformResources(object, []stork_api.TransformResourceInfo{*resInfo}, metadata.GetName(), metadata.GetNamespace()); err != nil {
+				log.TransformLog(transform).Errorf("Unable to transform resource: %s/%s having group version kind:%v with error: %v", resInfo.Namespace, resInfo.Name, resInfo.GroupVersionKind, err)
+				resInfo.Status = stork_api.ResourceTransformationStatusFailed
+				resInfo.Reason = err.Error()
+				return err
+			}
+			unstructured, ok := object.(*unstructured.Unstructured)
+			if !ok {
+				return fmt.Errorf("unable to cast object to unstructured: %v", object)
+			}
+			resource := &metav1.APIResource{
+				Name:       strings.ToLower(ruleset.Pluralize(strings.ToLower(kind))),
+				Namespaced: len(metadata.GetNamespace()) > 0,
+			}
+			dynamicClient := localInterface.Resource(
+				object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(getTransformNamespace(transform.Namespace))
 
-				unstructured.SetNamespace(getTransformNamespace(transform.Namespace))
-				log.TransformLog(transform).Infof("Applying object %s, %s",
-					object.GetObjectKind().GroupVersionKind().Kind,
-					metadata.GetName())
-				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{DryRun: []string{"All"}})
-				if err != nil {
-					log.TransformLog(transform).Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, kind, resInfo.Namespace, resInfo.Name, err)
-					resInfo.Status = stork_api.ResourceTransformationStatusFailed
-					resInfo.Reason = err.Error()
-				} else {
-					log.TransformLog(transform).Infof("Applied patch path %s on resource kind: %s/,%s/%s", path, kind, resInfo.Namespace, resInfo.Name)
-					resInfo.Status = stork_api.ResourceTransformationStatusReady
-					resInfo.Reason = ""
-				}
-				transform.Status.Resources = append(transform.Status.Resources, resInfo)
+			unstructured.SetNamespace(getTransformNamespace(transform.Namespace))
+			log.TransformLog(transform).Infof("Applying object %s, %s",
+				object.GetObjectKind().GroupVersionKind().Kind,
+				metadata.GetName())
+			_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{DryRun: []string{"All"}})
+			if err != nil {
+				log.TransformLog(transform).Errorf("Error while DryRun of resource: %s/%s having group version kind:%v with error: %v", resInfo.Namespace, resInfo.Name, resInfo.GroupVersionKind, err)
+				resInfo.Status = stork_api.ResourceTransformationStatusFailed
+				resInfo.Reason = err.Error()
+			} else {
+				log.TransformLog(transform).Infof("DryRun is successfull for resource: %s/%s having group version kind:%v ", resInfo.Namespace, resInfo.Name, resInfo.GroupVersionKind)
+				resInfo.Status = stork_api.ResourceTransformationStatusReady
+				resInfo.Reason = ""
 			}
+			transform.Status.Resources = append(transform.Status.Resources, resInfo)
 		}
 	}
 
