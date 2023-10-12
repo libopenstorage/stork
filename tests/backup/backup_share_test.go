@@ -3975,6 +3975,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
+			log.Infof("List of users are %v", users)
 		})
 		Step(fmt.Sprintf("Adding Credentials and Registering Backup Location for %s and %s", users[0], users[1]), func() {
 			log.InfoD(fmt.Sprintf("Creating cloud credentials and backup location for %s and %s", users[0], users[1]))
@@ -4025,8 +4026,9 @@ var _ = Describe("{SwapShareBackup}", func() {
 
 				backupDriver := Inst().Backup
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+				log.FailOnError(err, "Failed to get backup UID for backup %s for user %s", backupName, user)
 				backupUIDList = append(backupUIDList, backupUID)
-				log.FailOnError(err, "Failed getting backup uid for backup name %s", backupName)
+				log.Infof("Backup uid of backup: %s is %s for user %s", backupName, backupUID, user)
 			})
 		}
 		Step(fmt.Sprintf("Share backup with %s", users[1]), func() {
@@ -4089,13 +4091,6 @@ var _ = Describe("{SwapShareBackup}", func() {
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 
-		Step("Delete all synced backups from the admin", func() {
-			log.InfoD("Delete all synced backups from the admin")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = DeleteAllBackups(ctx, orgID)
-			log.FailOnError(err, "Delete all synced backups from the admin")
-		})
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
@@ -4108,7 +4103,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}
 		}
 
-		log.InfoD("Delete all backups")
+		log.InfoD("Delete backups of users")
 		for i := numberOfUsers - 1; i >= 0; i-- {
 			ctx, err := backup.GetNonAdminCtx(users[i], commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
