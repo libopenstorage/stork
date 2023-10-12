@@ -462,13 +462,8 @@ func (l *linstor) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JS
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (l *linstor) GetCSIPodPrefix() (string, error) {
+func (a *linstor) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
-}
-
-// IsVirtualMachineSupported returns true if the driver supports VM scheduling
-func (l *linstor) IsVirtualMachineSupported() bool {
-	return false
 }
 
 func init() {

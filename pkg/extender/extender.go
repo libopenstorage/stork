@@ -14,19 +14,14 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
-	kvd "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kube-scheduler/extender/v1"
 )
-
-//go:generate go run github.com/golang/mock/mockgen -destination=../mock/kubevirt.ops.mock.go -package=mock github.com/portworx/sched-ops/k8s/kubevirt-dynamic Ops
-//go:generate go run github.com/golang/mock/mockgen -destination=../mock/kubevirt.vmiops.mock.go -package=mock github.com/portworx/sched-ops/k8s/kubevirt-dynamic VirtualMachineInstanceOps
 
 const (
 	filter     = "filter"
@@ -581,21 +576,6 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	disableHyperconvergence := false
 	var err error
 
-	// Prioritize virt launcher pods on nodes to facilitate local volume attachment
-	isVirtLauncherPod := false
-	if e.isVirtLauncherPod(pod) {
-		storklog.PodLog(pod).Infof("Processing a virt launcher pod")
-		isVirtLauncherPod = true
-		err := e.processVirtLauncherPodPrioritizeRequest(encoder, args)
-		if err != nil {
-			// Let the default scoring logic decide the prioritize score
-			storklog.PodLog(pod).Errorf("Failed to process special prioritization for virt launcher pod; will prioritize normally: %v", err)
-		} else {
-			// Done populating encoded priority score output
-			return
-		}
-	}
-
 	// Prioritize csi pods on nodes where PX is online
 	csiPodPrefix, err := e.Driver.GetCSIPodPrefix()
 	if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
@@ -691,14 +671,9 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
 					continue
 				}
-
-				// If we reached this point for a virt launcher pod means processVirtLauncherPodPrioritizeRequest returned
-				// an error and we are relying on the default scoring logic. Hyperconvergence is the default behavior.
-				if !isVirtLauncherPod &&
-					volume.NeedsAntiHyperconvergence &&
-					e.volumePrefersRemoteNode(volume) {
+				if volume.NeedsAntiHyperconvergence && e.volumePrefersRemoteNode(volume) {
 					isAntihyperconvergenceRequired = true
-					storklog.PodLog(pod).Debugf("Volume %v configured with a requirement of anti hyperconvergence, skipping scoring", volume.VolumeName)
+					storklog.PodLog(pod).Debugf("Skipping NeedsAntiHyperconvergence volume %v from scoring based on hyperconvergence", volume.VolumeName)
 					continue
 				}
 				storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
@@ -753,62 +728,6 @@ sendResponse:
 	if err := encoder.Encode(respList); err != nil {
 		storklog.PodLog(pod).Errorf("Failed to encode response: %v", err)
 	}
-}
-
-// isPodRunningOnVolAttachedNode returns true if the pod is running node where volume is attached
-func (e *Extender) isPodRunningOnVolAttachedNode(pod *v1.Pod, vol *volume.Info) bool {
-	log.Debugf("Pod Name: %v, Pod Node IP: %v,  Volume Node IP: %v", pod.Name, pod.Status.HostIP, vol.AttachedOn)
-	return pod.Status.HostIP == vol.AttachedOn
-}
-
-// isVirtLauncherPod returns true if it is a virt launcher pod
-func (e *Extender) isVirtLauncherPod(pod *v1.Pod) bool {
-	return pod.Labels["kubevirt.io"] == "virt-launcher"
-}
-
-// getLiveMigrationInfo returns status of LiveMigration
-func (e *Extender) getLiveMigrationInfo(refPod *v1.Pod, refVMIUID types.UID) (podBeingLiveMigrated *v1.Pod, err error) {
-	pods, err := core.Instance().GetPods(refPod.Namespace, nil)
-	if err != nil {
-		msg := "unable to get Pod list in the same namespace."
-		return nil, fmt.Errorf("err: %s", msg)
-	}
-	// If another virt launcher pod is Running in the same namespace and has the same VMI owner reference Then it can
-	// be concluded that this Pod is where the original VM was being hosted and is being LiveMigrated to the refPod
-	for _, pod := range pods.Items {
-		if pod.Status.Phase != v1.PodRunning ||
-			!e.isVirtLauncherPod(&pod) {
-			continue
-		}
-		_, vmiUID := e.getVMIInfo(&pod)
-		if vmiUID == "" {
-			continue
-		}
-		if vmiUID == refVMIUID {
-			return &pod, nil
-		}
-	}
-	return nil, nil
-}
-
-// getVMIInfo returns the name and UID of the VirtualMachineInstance for the given pod
-func (e *Extender) getVMIInfo(refPod *v1.Pod) (string, types.UID) {
-	for _, owner := range refPod.OwnerReferences {
-		if owner.Kind == "VirtualMachineInstance" {
-			return owner.Name, owner.UID
-		}
-	}
-	return "", ""
-}
-
-// GetPVNameFromPVC returns PV name for a PVC
-func (e *Extender) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
-	if err != nil || pvc == nil {
-		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", pvcName, namespace, err)
-	}
-
-	return pvc.Spec.VolumeName, err
 }
 
 func (e *Extender) updateForAntiHyperconvergence(
@@ -910,175 +829,6 @@ func (e *Extender) processCSIExtPodPrioritizeRequest(
 						score = 0
 					} else {
 						score = int64(nodePriorityScore * (storageDownNodeScorePenaltyPercentage / 100))
-					}
-					hostPriority := schedulerapi.HostPriority{Host: knode.Name, Score: int64(score)}
-					respList = append(respList, hostPriority)
-					break
-				}
-			}
-		}
-	}
-
-	storklog.PodLog(pod).Debugf("Nodes in prioritize response:")
-	for _, node := range respList {
-		storklog.PodLog(pod).Debugf("%+v", node)
-	}
-
-	if err := encoder.Encode(respList); err != nil {
-		storklog.PodLog(pod).Errorf("Failed to encode response: %v", err)
-	}
-}
-
-func (e *Extender) processVirtLauncherPodPrioritizeRequest(
-	encoder *json.Encoder,
-	args schedulerapi.ExtenderArgs) error {
-	pod := args.Pod
-
-	vmiName, vmiUID := e.getVMIInfo(pod)
-	if vmiName == "" {
-		return fmt.Errorf("unable to find vmiName for pod: %v", pod.Name)
-	}
-	podBeingLiveMigrated, err := e.getLiveMigrationInfo(pod, vmiUID)
-	if err != nil {
-		return fmt.Errorf("unable to find liveMigrationInfo: %w", err)
-	}
-
-	if podBeingLiveMigrated != nil {
-		storklog.PodLog(pod).Infof("Live VM migration in progress: (vmiName: %v, podBeingLiveMigrated: %v)", vmiName, podBeingLiveMigrated.Name)
-	} else {
-		storklog.PodLog(pod).Infof("No ongoing live VM migration in progress. vmiName: %v", vmiName)
-	}
-
-	vmi, err := kvd.Instance().GetVirtualMachineInstance(context.TODO(), pod.Namespace, vmiName)
-	if err != nil {
-		return fmt.Errorf("unable to find VMI Info: %w", err)
-	}
-	storklog.PodLog(pod).Debugf("VMI is using PVC: %v", vmi.RootDiskPVC)
-
-	pvName, err := e.GetPVNameFromPVC(vmi.RootDiskPVC, pod.Namespace)
-	if err != nil {
-		return fmt.Errorf("unable to inspect PVC: %v err: %w", vmi.RootDiskPVC, err)
-	}
-	storklog.PodLog(pod).Debugf("PV for scoring: %v", pvName)
-
-	volInfo, err := e.Driver.InspectVolume(pvName)
-	if err != nil {
-		return fmt.Errorf("unable to inspect PV: %v. err: %w", pvName, err)
-	}
-
-	if podBeingLiveMigrated != nil {
-		// We give lower score to replica nodes so that if a pod is unable to schedule on the node
-		// where the volume is attached we can run it on a non replica node, so that a subsequent
-		// LiveMigration can move the pod back to the replica node in a single hop.
-		podIsRunningOnVolAttachedNode := e.isPodRunningOnVolAttachedNode(podBeingLiveMigrated, volInfo)
-
-		if podIsRunningOnVolAttachedNode {
-			// LiveMigration in progress and existing pod is running on node with volume attached => Antihyperconvergence
-			// i.e. Give lower scores to nodes with volume replicas
-			storklog.PodLog(pod).Infof("Pod %v is running with same VMI owner reference is using localAttachment.", podBeingLiveMigrated.Name)
-			e.updateVirtLauncherPodPrioritizeScores(encoder,
-				args,
-				volInfo,
-				false, /*preferLocalAttachment*/
-				true /*antihyperconvergence*/)
-		} else {
-			// LiveMigration in progress but existing pod is using NFS.
-			// Use Antihyperconvergence to give lower score to replica nodes without volume attachment
-			// Use preferLocalAttachment to give highest score to node with volume attachment
-
-			e.updateVirtLauncherPodPrioritizeScores(encoder,
-				args,
-				volInfo,
-				true, /*preferLocalAttachment*/
-				true /*antihyperconvergence*/)
-		}
-	} else {
-		// Default behavior for LiveMigration not in progress is hyperconvergence
-		// We should still give a higher score to node with volume attachment. We might not
-		// have attachment info avilable in this scenario and the same score will be
-		// applied for all the replica nodes. However, if volume attachment info is available
-		// that node should get higher score. All non replica nodes will get lower score.
-		e.updateVirtLauncherPodPrioritizeScores(encoder,
-			args,
-			volInfo,
-			true, /*preferLocalAttachment*/
-			false /*antihyperconvergence*/)
-	}
-	return nil
-}
-
-func (e *Extender) updateVirtLauncherPodPrioritizeScores(
-	encoder *json.Encoder,
-	args schedulerapi.ExtenderArgs,
-	volInfo *volume.Info,
-	preferLocalAttachment bool,
-	antihyperconvergence bool) {
-	pod := args.Pod
-
-	// Default behavior is no special preference to local attachment
-	localNodeScore := int64(nodePriorityScore)
-	// Default behavior is hyperconvergence
-	replicaNodeScore := int64(nodePriorityScore)
-	remoteNodeScore := int64(defaultScore)
-
-	if antihyperconvergence {
-		remoteNodeScore = int64(nodePriorityScore)
-		replicaNodeScore = int64(defaultScore)
-	}
-
-	// preferLocalAttachment = true but AttachedOn = "" can occur if there is just one pod
-	// getting scheduled and there is no LiveMigration ongoing
-	if preferLocalAttachment && volInfo.AttachedOn != "" {
-		storklog.PodLog(pod).Debugf("Prioritize for volume attachedOn: %v", volInfo.AttachedOn)
-		localNodeScore = int64(2 * nodePriorityScore)
-	}
-
-	respList := schedulerapi.HostPriorityList{}
-	driverNodes, err := e.Driver.GetNodes()
-	if err != nil || len(driverNodes) == 0 || volInfo == nil {
-		storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
-		for _, knode := range args.Nodes.Items {
-			hostPriority := schedulerapi.HostPriority{Host: knode.Name, Score: int64(defaultScore)}
-			respList = append(respList, hostPriority)
-		}
-	} else {
-		driverNodes = volume.RemoveDuplicateOfflineNodes(driverNodes)
-		for _, dnode := range driverNodes {
-			for _, knode := range args.Nodes.Items {
-				var score int64
-				isUpdated := false
-				if volume.IsNodeMatch(&knode, dnode) {
-					isUpdated = false
-					// Score replica nodes
-					for _, dataNodes := range volInfo.DataNodes {
-						if dataNodes == dnode.StorageID {
-							score = replicaNodeScore
-							isUpdated = true
-							break
-						}
-					}
-
-					if preferLocalAttachment && volInfo.AttachedOn != "" {
-						// Update score of node for volume attachment
-						for _, nodeIP := range dnode.IPs {
-							if nodeIP == volInfo.AttachedOn {
-								// Local attachment
-								storklog.PodLog(pod).Debugf("Updating score of node: %v for local attachment", dnode.StorageID)
-								score = localNodeScore
-								isUpdated = true
-							}
-						}
-					}
-
-					if !isUpdated {
-						// Update score of non replica nodes
-						score = remoteNodeScore
-					}
-
-					if dnode.Status == volume.NodeOffline {
-						score = 0
-					} else if dnode.Status != volume.NodeOnline {
-						score = int64(float64(score) * (storageDownNodeScorePenaltyPercentage / 100))
 					}
 					hostPriority := schedulerapi.HostPriority{Host: knode.Name, Score: int64(score)}
 					respList = append(respList, hostPriority)
