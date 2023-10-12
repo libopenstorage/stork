@@ -293,7 +293,8 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
-	clusterDeleteTimeout              = 10 * time.Minute
+	clusterDeleteTimeout              = 60 * time.Minute
+	clusterDeleteRetryTime            = 30 * time.Second
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -3629,7 +3630,7 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 	if err != nil {
 		return err
 	}
-	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
 	if err != nil {
 		return err
 	}
@@ -4020,7 +4021,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 }
 
 // CreateBackupLocationWithContext creates backup location using the given context
-func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, subPath string, ctx context1.Context) error {
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, ctx context1.Context) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
@@ -4030,7 +4031,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
+		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, true)
 	}
 	return err
 }

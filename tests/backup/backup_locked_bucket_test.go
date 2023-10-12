@@ -21,7 +21,7 @@ import (
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var (
-		appList = Inst().AppList
+		appList  = Inst().AppList
 		credName string
 	)
 	var preRuleNameList []string
@@ -752,7 +752,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 						lockedBucketName := fmt.Sprintf("%s-%s-%s-locked", provider, getGlobalLockedBucketName(provider), strings.ToLower(mode))
 						err := CreateS3Bucket(lockedBucketName, true, 3, mode)
 						log.FailOnError(err, "failed to create locked s3 bucket %s", lockedBucketName)
-						err = CreateBackupLocationWithContext(provider, userBackupLocationName, userBackupLocationUID, userCloudCredentialName, userCloudCredentialUID, lockedBucketName, orgID, "", "", nonAdminCtx)
+						err = CreateBackupLocationWithContext(provider, userBackupLocationName, userBackupLocationUID, userCloudCredentialName, userCloudCredentialUID, lockedBucketName, orgID, "", nonAdminCtx)
 						log.FailOnError(err, "failed to create locked bucket backup location %s using provider %s for the user", userBackupLocationName, provider)
 						userBackupLocationMap[user] = map[string]string{userBackupLocationUID: userBackupLocationName}
 					}
