@@ -2722,11 +2722,11 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].", initialRestoreName, restoreResponseStatus.GetStatus())
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress]", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						}
 
-						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [InProgress]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [InProgress]", initialRestoreName, restoreResponseStatus.GetStatus())
 						return "", true, err
 					}
 					_, err = DoRetryWithTimeoutWithGinkgoRecover(restoreInProgressCheck, 10*time.Minute, 4*time.Second)
@@ -2767,11 +2767,11 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'.", restoreLaterName, restoreResponseStatus.GetStatus())
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'", restoreLaterName, restoreResponseStatus.GetStatus())
 							return restoreResponseStatus.GetStatus(), false, err
 						}
 
-						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for 'PartialSuccess' or 'Success'...", restoreLaterName, restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for 'PartialSuccess' or 'Success'", restoreLaterName, restoreResponseStatus.GetStatus())
 						return "", true, err
 					}
 					laterRestoreStatus, restoreLaterStatusErr = DoRetryWithTimeoutWithGinkgoRecover(restorePartialSuccessOrSuccessCheck, 10*time.Minute, 30*time.Second)
@@ -2808,11 +2808,11 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'.", initialRestoreName, restoreResponseStatus.GetStatus())
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected 'PartialSuccess' or 'Success'", initialRestoreName, restoreResponseStatus.GetStatus())
 							return restoreResponseStatus.GetStatus(), false, err
 						}
 
-						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for 'PartialSuccess' or 'Success'...", initialRestoreName, restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for 'PartialSuccess' or 'Success'", initialRestoreName, restoreResponseStatus.GetStatus())
 						return "", true, err
 					}
 					initialRestoreStatus, initialRestoreError := DoRetryWithTimeoutWithGinkgoRecover(restoreSuccessOrPartialSuccessCheck, 10*time.Minute, 30*time.Second)
@@ -3270,8 +3270,13 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 				s3CloudCredUID = uuid.New()
 				s3BackupLocationUID = uuid.New()
 				backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
-				err = CreateCloudCredential(provider, s3CloudCredName, s3CloudCredUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "AWS"))
+				if provider == drivers.ProviderNfs {
+					err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "AWS"))
+				} else {
+					err = CreateCloudCredential(provider, s3CloudCredName, s3CloudCredUID, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "AWS"))
+				}
 				err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", s3BackupLocationName))
 			}
@@ -3546,5 +3551,164 @@ var _ = Describe("{BackupNamespaceInNfsRestoredFromS3}", func() {
 			err = DeleteAppNamespace(ns)
 			log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
 		}
+	})
+})
+
+// DeleteS3ScheduleAndCreateNfsSchedule deletes s3 schedule and starts NFS schedule or vice-versa
+var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
+	var (
+		s3CloudCredName          string
+		s3CloudCredUID           string
+		firstBkpLocationName     string
+		firstBackupLocationUID   string
+		secondBackupLocationName string
+		secondBackupLocationUID  string
+		schedulePolicyName       string
+		schedulePolicyUID        string
+		secondScheduleName       string
+		firstScheduleName        string
+		firstSchBackupName       string
+		scheduleUid              string
+		srcClusterUid            string
+		providers                []string
+		appNamespaces            []string
+		scheduledAppContexts     []*scheduler.Context
+		contexts                 []*scheduler.Context
+		appContexts              []*scheduler.Context
+		schedulePolicyInterval   = int64(15)
+	)
+	backupLocationMap := make(map[string]string)
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteS3ScheduleAndCreateNfsSchedule", "Take a schedule backup of namespace in S3 backup location,delete the s3 schedule, create new schedule backup with NFS backup location or vice-versa", nil, 86099)
+		log.InfoD("Scheduling Applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 5; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		log.Infof("The list of namespaces deployed are", appNamespaces)
+		providers = getProviders()
+	})
+
+	It("Take a schedule backup of namespace in S3 backup location, delete the s3 schedule, create new schedule backup with NFS backup location or vice-versa", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Adding cloud credential and backup locations", func() {
+			log.InfoD("Adding cloud credential and backup locations")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, RandomString(5))
+				s3CloudCredUID = uuid.New()
+				firstBkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), RandomString(5))
+				firstBackupLocationUID = uuid.New()
+				err = CreateCloudCredential(provider, s3CloudCredName, s3CloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential:[%s] for org [%s] for %s backup location", s3CloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, firstBkpLocationName, firstBackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating %s backup location: %s", provider, firstBkpLocationName))
+				backupLocationMap[firstBackupLocationUID] = firstBkpLocationName
+				if provider != drivers.ProviderNfs {
+					secondBackupLocationName = fmt.Sprintf("%s-%s-%v", "nfs", getGlobalBucketName(provider), RandomString(5))
+					secondBackupLocationUID = uuid.New()
+					err = CreateNFSBackupLocation(secondBackupLocationName, secondBackupLocationUID, orgID, "", getGlobalBucketName(provider), true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location [%s]", secondBackupLocationName))
+					backupLocationMap[secondBackupLocationUID] = secondBackupLocationName
+				} else {
+					// Creating cloud cred again because in case of NFS as provider, cloud cred will not be created above
+					err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential:[%s] for org [%s] for s3 backup location", s3CloudCredName, orgID))
+					secondBackupLocationName = fmt.Sprintf("%s-%s-%v", "s3", getGlobalBucketName(provider), RandomString(5))
+					secondBackupLocationUID = uuid.New()
+					err = CreateS3BackupLocation(secondBackupLocationName, secondBackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(provider), orgID, "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", secondBackupLocationName))
+					backupLocationMap[secondBackupLocationUID] = secondBackupLocationName
+				}
+			}
+		})
+
+		Step("Registering application clusters for backup", func() {
+			log.InfoD("Registering application clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			log.InfoD("Verifying cluster status for both source and destination clusters")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating schedule policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			schedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(5))
+			schedulePolicyUID = uuid.New()
+			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
+		})
+
+		Step(fmt.Sprintf("Creating schedule backup for %s backup location and deleting it", firstBkpLocationName), func() {
+			log.InfoD("Creating schedule backup for %s backup location and deleting it", firstBkpLocationName)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(5))
+			firstSchBackupName, err = CreateScheduleBackupWithValidation(ctx, firstScheduleName, SourceClusterName, firstBkpLocationName, firstBackupLocationUID, scheduledAppContexts, make(map[string]string), orgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
+			err = IsFullBackup(firstSchBackupName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", firstSchBackupName, firstBkpLocationName))
+			_, err = GetNextPeriodicScheduleBackupName(firstScheduleName, 15, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
+			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, firstScheduleName, orgID)
+			log.FailOnError(err, "failed to fetch backup schedule: %s uid", firstScheduleName)
+			err = DeleteScheduleWithUIDAndWait(firstScheduleName, scheduleUid, SourceClusterName, srcClusterUid, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule %s for backup location %s", firstScheduleName, firstBkpLocationName))
+		})
+
+		Step(fmt.Sprintf("Creating second schedule backup for %s backup location and deleting it", secondBackupLocationName), func() {
+			log.InfoD("Creating second schedule backup for %s backup location and deleting it", secondBackupLocationName)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			secondScheduleName = fmt.Sprintf("second-schedule-%v", RandomString(5))
+			firstSchBackupName, err = CreateScheduleBackupWithValidation(ctx, secondScheduleName, SourceClusterName, secondBackupLocationName, secondBackupLocationUID, scheduledAppContexts, make(map[string]string), orgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", secondScheduleName, secondBackupLocationName))
+			err = IsFullBackup(firstSchBackupName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", firstSchBackupName, secondBackupLocationName))
+			_, err = GetNextPeriodicScheduleBackupName(secondScheduleName, 15, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", secondScheduleName, secondBackupLocationName))
+			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, secondScheduleName, orgID)
+			log.FailOnError(err, "failed to fetch backup schedule: %s uid", secondScheduleName)
+			err = DeleteScheduleWithUIDAndWait(secondScheduleName, scheduleUid, SourceClusterName, srcClusterUid, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule %s for backup location %s", secondScheduleName, secondBackupLocationName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		err = DeleteBackupSchedulePolicyWithContext(orgID, []string{schedulePolicyName}, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s]", schedulePolicyName))
+		log.InfoD("Deleting the px-backup objects")
+		CleanupCloudSettingsAndClusters(backupLocationMap, s3CloudCredName, s3CloudCredUID, ctx)
 	})
 })
