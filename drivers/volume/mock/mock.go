@@ -89,6 +89,8 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 			Status:      storkvolume.NodeOnline,
 		}
 		node.IPs = append(node.IPs, "192.168.0."+strconv.Itoa(i+1))
+		node.IPs = append(node.IPs, "100.155.209."+strconv.Itoa(i+1))
+
 		for _, n := range nodes.Items {
 			found := false
 			if node.StorageID == n.Name {
@@ -133,9 +135,12 @@ func (m *Driver) GetClusterID() (string, error) {
 }
 
 // NewPVC Create a new PVC reference
-func (m *Driver) NewPVC(volumeName string) *v1.PersistentVolumeClaim {
+func (m *Driver) NewPVC(volumeName, namespace string) *v1.PersistentVolumeClaim {
 	pvc := &v1.PersistentVolumeClaim{}
 	pvc.Name = volumeName
+	if namespace != "" {
+		pvc.Namespace = namespace
+	}
 	pvc.Spec.VolumeName = volumeName
 	storageClassName := m.GetStorageClassName()
 	pvc.Spec.StorageClassName = &storageClassName
