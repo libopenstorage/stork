@@ -87,8 +87,9 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			}
 			schedulePolicyName := args[0]
 			var policyItem storkv1.SchedulePolicyItem
+			schedulePolicyType = strings.ToLower(schedulePolicyType)
 			switch schedulePolicyType {
-			case "Interval":
+			case "interval":
 				var intervalPolicy storkv1.IntervalPolicy
 				intervalPolicy.IntervalMinutes = intervalMinutes
 				if retain == 0 {
@@ -103,7 +104,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 					return
 				}
 				policyItem.Interval = &intervalPolicy
-			case "Daily":
+			case "daily":
 				var dailyPolicy storkv1.DailyPolicy
 				dailyPolicy.Time = time
 				dailyPolicy.ForceFullSnapshotDay = dailyForceFullSnapshotDay
@@ -118,7 +119,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 					return
 				}
 				policyItem.Daily = &dailyPolicy
-			case "Weekly":
+			case "weekly":
 				var weeklyPolicy storkv1.WeeklyPolicy
 				weeklyPolicy.Time = time
 				weeklyPolicy.Day = dayOfWeek
@@ -133,7 +134,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 					return
 				}
 				policyItem.Weekly = &weeklyPolicy
-			case "Monthly":
+			case "monthly":
 				var monthlyPolicy storkv1.MonthlyPolicy
 				monthlyPolicy.Time = time
 				monthlyPolicy.Date = dateOfMonth
