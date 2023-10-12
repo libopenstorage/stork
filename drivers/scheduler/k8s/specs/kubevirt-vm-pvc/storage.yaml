@@ -5,7 +5,7 @@ metadata:
   labels:
     app: containerized-data-importer
   annotations:
-    cdi.kubevirt.io/storage.import.endpoint: "http://download.cirros-cloud.net/0.3.0/cirros-0.3.0-x86_64-disk.img"
+    cdi.kubevirt.io/storage.import.endpoint: "http://kubevirt-disk-registry.pwx.dev.purestorage.com/cirros-0.3.0-x86_64-disk.img"
 spec:
   storageClassName: kubevirt-sc
   accessModes:
