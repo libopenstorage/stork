@@ -68,7 +68,8 @@ func TransformResources(
 							return err
 						}
 					} else if path.Type == stork_api.SliceResourceType {
-						err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
+						updateSlice := value.([]string)
+						err := unstructured.SetNestedStringSlice(content, updateSlice, strings.Split(path.Path, ".")...)
 						if err != nil {
 							logrus.Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, patch.Kind, patch.Namespace, patch.Name, err)
 							return err
