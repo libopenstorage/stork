@@ -22,6 +22,7 @@ func newDeleteCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 		newDeleteApplicationBackupScheduleCommand(cmdFactory, ioStreams),
 		newDeleteApplicationRestoreCommand(cmdFactory, ioStreams),
 		newDeleteApplicationCloneCommand(cmdFactory, ioStreams),
+		newDeleteSchedulePolicyCommand(cmdFactory, ioStreams),
 	)
 	return deleteCommands
 }
