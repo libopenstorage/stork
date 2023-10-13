@@ -338,6 +338,18 @@ func (targetCluster *TargetCluster) GetClusterID() (string, error) {
 	return output, nil
 }
 
+// GetClusterID of target cluster.
+func (targetCluster *TargetCluster) GetClusterIDFromKubePath(kubePath string) (string, error) {
+	log.Infof("Fetch Cluster id ")
+	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", kubePath)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		log.Error(err)
+		return "Unable to fetch the cluster ID.", err
+	}
+	return output, nil
+}
+
 // SetConfig sets kubeconfig for the target cluster
 func (targetCluster *TargetCluster) SetConfig() error {
 	var config *rest.Config

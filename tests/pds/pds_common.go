@@ -140,12 +140,12 @@ var (
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
 var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
 
-func DeployandValidateDataServicesWithSiAndTls(ds PDSDataService, namespaceName string, namespaceid, projectID string, resourceTemplateID string, appConfigID string, dsVersion string, dsImage string, dsID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployandValidateDataServicesWithSiAndTls(ds PDSDataService, namespaceName string, namespaceid, projectID string, resourceTemplateID string, appConfigID string, dsVersion string, dsImage string, dsID string, enableTls bool) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespaceName, serviceType)
 
-	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsWithRbac.TriggerDeployDSWithSiAndTls(dataservices.PDSDataService(ds), namespaceName, projectID, true, resourceTemplateID, appConfigID, namespaceid, dsVersion, dsImage, dsID, dataservices.TestParams(TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType}))
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsWithRbac.TriggerDeployDSWithSiAndTls(dataservices.PDSDataService(ds), namespaceName, projectID, enableTls, resourceTemplateID, appConfigID, namespaceid, dsVersion, dsImage, dsID, dataservices.TestParams(TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType}))
 	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
 
 	Step("Validate Data Service Deployments", func() {
@@ -422,11 +422,11 @@ func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
 func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
 	log.InfoD("Starting to delete the Iam Roles first...")
 	for _, iam := range iamRolesToBeCleaned {
-		resp, err := components.IamRoleBindings.DeleteIamRoleBinding(iam, actorID)
+		resp, err := components.IamRoleBindings.DeleteIamRoleBinding(accountID, actorID)
 		if err != nil {
 			log.FailOnError(err, "Error while deleting IamRoles")
 		}
-		log.InfoD("Successfully deleted IAMRoles- %v", resp.StatusCode)
+		log.InfoD("Successfully deleted IAMRoles with ID- %v and ResponseStatus is- %v", iam, resp.StatusCode)
 	}
 	log.InfoD("Starting to delete the Service Identities...")
 	for _, si := range siToBeCleaned {

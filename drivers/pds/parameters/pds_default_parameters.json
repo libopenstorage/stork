@@ -100,11 +100,15 @@
     "PDSNamespace": "pds-system",
     "ServiceIdentityToken": false
   },
-  "CleanUpParams": {
-    "AppTemplatePrefix": ["integration-test"],
-    "ResourceTemplatePrefix": ["integration-test"],
-    "StorageTemplatePrefix": ["integration-test"],
-    "SkipTargetClusterCheck": true
+  "LoadGen": {
+    "LoadGenDepName": "workload",
+    "FailOnError": "false",
+    "Mode": "write",
+    "TableName": "wltesting",
+    "NumOfRows": "100",
+    "Iterations": "1",
+    "Timeout": "120s",
+    "Replicas": 1
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1

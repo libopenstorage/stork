@@ -136,7 +136,11 @@ func (customparams *Customparams) ReturnServiceIdToken() string {
 func (Customparams *Customparams) SetParamsForServiceIdentityTest(params *Parameter, value bool) (bool, error) {
 	params.InfraToTest.ServiceIdentityToken = value
 	json.Marshal(params)
-	ServiceIdFlag = true
+	if value == true {
+		ServiceIdFlag = true
+	} else {
+		ServiceIdFlag = false
+	}
 	log.InfoD("Successfully updated Infra params for ServiceIdentity and RBAC test")
 	log.InfoD("ServiceIdentity flag is set to- %v", ServiceIdFlag)
 	return true, nil

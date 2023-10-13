@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -65,8 +66,9 @@ func (iam *IamRoleBindings) UpdateIamRoleBindings(accountId string, actorId stri
 	}
 	iamModels, res, err := iamClient.ApiAccountsIdIamPut(ctx, accountId).Body(updateRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiAccountsIdIamPost`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `ApiAccountsIdIamPut`: %v\n.Full HTTP response: %v", err, res)
 	}
+	log.InfoD("Successfully updated the IAM Roles")
 	return iamModels, nil
 }
 
@@ -85,13 +87,13 @@ func (iam *IamRoleBindings) GetIamRoleBindingByID(iamId string, actorId string) 
 }
 
 // DeleteIamRoleBinding delete IAM RoleBinding and return status.
-func (iam *IamRoleBindings) DeleteIamRoleBinding(iamId string, actorId string) (*status.Response, error) {
+func (iam *IamRoleBindings) DeleteIamRoleBinding(accountId string, actorId string) (*status.Response, error) {
 	iamClient := iam.apiClient.IAMApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	res, err := iamClient.ApiAccountsIdIamActorIdDelete(ctx, iamId, actorId).Execute()
+	res, err := iamClient.ApiAccountsIdIamActorIdDelete(ctx, accountId, actorId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiAccountsIdIamActorIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
