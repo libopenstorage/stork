@@ -715,6 +715,12 @@ spec:
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
     - name: VOLUME_SNAPSHOT_CLASS
       value: "${VOLUME_SNAPSHOT_CLASS}"
+    - name: S3_SSE_TYPE
+      value: "${S3_SSE_TYPE}"
+    - name: S3_POLICY_SID
+      value: "${S3_POLICY_SID}"
+    - name: S3_ENCRYPTION_POLICY
+      value: "${S3_ENCRYPTION_POLICY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
