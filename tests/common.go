@@ -5270,12 +5270,13 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 }
 
 func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	//TODO enhance the method to work with NFS server on cloud
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
-	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	// Mount the NFS share to the worker node.
+	masterNode := node.GetWorkerNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
