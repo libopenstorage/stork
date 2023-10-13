@@ -2722,16 +2722,6 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		log.Infof("[%v] Destroyed AutopilotRule: %v", app.Key, obj.Name)
-	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
-		if err != nil {
-			return pods, &scheduler.ErrFailedToDestroyApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
-			}
-		}
-
-		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -3296,6 +3286,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyPodDisruptionBudgetObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVirtualMachineObjects(appSpec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			}
@@ -5146,7 +5150,7 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	return nil, nil
 }
 
-// createVirtualMachineObjects creates the kubevirt VirtualMachines using kubectl apply
+// createVirtualMachineObjects creates the kubevirt VirtualMachines
 func (k *K8s) createVirtualMachineObjects(
 	spec interface{},
 	ns *corev1.Namespace,
@@ -5220,6 +5224,24 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 		}
 	}
 	// TODO: For other Volume Source types like Data Volumes, validation logic should come here
+	return nil
+}
+
+// destroyVirtualMachineObjects deletes the kubevirt VirtualMachines
+func (k *K8s) destroyVirtualMachineObjects(
+	spec interface{},
+	app *spec.AppSpec,
+) error {
+	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
+	}
 	return nil
 }
 

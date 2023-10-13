@@ -453,7 +453,7 @@ func (c *Client) GetReadyWindowsNodes() (*corev1.NodeList, error) {
 	return c.getTaggedNodes("kubernetes.io/os", "windows", true)
 }
 
-// GetNodesUsingVolume: Returns the list of nodes using a Pv.
+// GetNodesUsingVolume Returns the list of nodes using a Pv.
 func (c *Client) GetNodesUsingVolume(pvName string, readyNodesOnly bool) (*corev1.NodeList, error) {
 	allNodes, err := c.getTaggedNodes("", "", readyNodesOnly)
 	if err != nil {

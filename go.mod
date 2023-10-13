@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b
 	github.com/portworx/px-backup-api v1.2.2-0.20230904054048-eb1f23dd7431
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230926074552-5a61e22be0a4
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20231013094113-8ca7856dbe86
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.14.0
@@ -78,7 +78,7 @@ require (
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
 
-require go.uber.org/multierr v1.7.0 // indirect
+require go.uber.org/multierr v1.7.0
 
 require (
 	cloud.google.com/go v0.110.7 // indirect
