@@ -666,11 +666,6 @@ func (a *aws) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
 }
 
-// IsVirtualMachineSupported returns true if the driver supports VM scheduling
-func (a *aws) IsVirtualMachineSupported() bool {
-	return false
-}
-
 func init() {
 	a := &aws{}
 	err := a.Init(nil)
