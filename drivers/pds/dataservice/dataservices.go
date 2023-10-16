@@ -65,11 +65,12 @@ const (
 
 // PDS const
 const (
-	deploymentName   = "qa"
-	driverName       = "pds"
-	maxtimeInterval  = 30 * time.Second
-	timeOut          = 30 * time.Minute
-	pdsWorkloadImage = "portworx/pds-loadtests:sample-load-pds-qa"
+	deploymentName                 = "qa"
+	driverName                     = "pds"
+	maxtimeInterval                = 30 * time.Second
+	validateDeploymentTimeInterval = 60 * time.Second
+	timeOut                        = 30 * time.Minute
+	pdsWorkloadImage               = "portworx/pds-loadtests:sample-load-pds-qa"
 )
 
 // PDS packages
@@ -450,7 +451,7 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error {
 	var ss *v1.StatefulSet
 	log.Debugf("deployment name [%s] in namespace [%s]", deployment.GetClusterResourceName(), namespace)
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+	err = wait.Poll(validateDeploymentTimeInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
@@ -470,7 +471,6 @@ func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDe
 		return err
 	}
 
-	//validate the deployments in pds
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
