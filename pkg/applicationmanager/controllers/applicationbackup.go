@@ -222,9 +222,16 @@ func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.
 		return fmt.Errorf("error updating with all namespaces for wildcard: %v", err)
 	}
 	pxNs, _ := utils.GetPortworxNamespace()
+	// Create a map to store the namespaces to be ignored for fast lookup
+	ignoreNamespaces := map[string]bool{
+		pxNs:              true,
+		"kube-system":     true,
+		"kube-public":     true,
+		"kube-node-lease": true,
+	}
 	namespacesToBackup := make([]string, 0)
 	for _, ns := range namespaces.Items {
-		if ns.Name != "kube-system" && ns.Name != pxNs {
+		if _, found := ignoreNamespaces[ns.Name]; !found {
 			namespacesToBackup = append(namespacesToBackup, ns.Name)
 		}
 	}
@@ -300,8 +307,15 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		if len(backup.Spec.Namespaces) == 0 {
 			pxNs, _ = utils.GetPortworxNamespace()
 		}
+		// Create a map to store the namespaces to be ignored for fast lookup
+		ignoreNamespaces := map[string]bool{
+			pxNs:              true,
+			"kube-system":     true,
+			"kube-public":     true,
+			"kube-node-lease": true,
+		}
 		for _, namespace := range namespaces.Items {
-			if namespace.Name != "kube-system" && namespace.Name != pxNs {
+			if _, found := ignoreNamespaces[namespace.Name]; !found {
 				selectedNamespaces = append(selectedNamespaces, namespace.Name)
 			}
 		}
