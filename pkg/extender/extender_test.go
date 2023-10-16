@@ -2449,7 +2449,7 @@ func kubevirtPodSchedulingAttachedOnMismatch(t *testing.T) {
 	pod := newKubevirtPod("KubevirtPod2", "KubevirtNS2", map[string]bool{"KubevirtVolume2": false})
 
 	provNodes := []int{0, 1, 2}
-	if err := driver.ProvisionVolume("KubevirtVolume2", provNodes, 3, map[string]string{"kubevirtPodScheduling": "true"}, false, false, "192.168.0.1"); err != nil {
+	if err := driver.ProvisionVolume("KubevirtVolume2", provNodes, 3, map[string]string{"kubevirtPodScheduling": "true"}, false, false, "192.168.0.2"); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -2496,8 +2496,8 @@ func kubevirtPodSchedulingAttachedOnMismatch(t *testing.T) {
 		t,
 		nodes,
 		[]float64{
-			2 * nodePriorityScore,
 			defaultScore,
+			2 * nodePriorityScore,
 			defaultScore,
 			nodePriorityScore,
 			nodePriorityScore,
@@ -2507,7 +2507,7 @@ func kubevirtPodSchedulingAttachedOnMismatch(t *testing.T) {
 	// Live Migration Scenario2:
 	// Existing Pod is running on a with volume attachment but pod.Status.HostIP != vol.AttachedOn
 	// Determination if this Pod is using a local volume attachment is done based on driver node IPs.
-	pod.Status.HostIP = "100.155.209.1"
+	pod.Status.HostIP = "100.155.209.2"
 	_, err = core.Instance().UpdatePod(pod)
 	if err != nil {
 		t.Fatalf("Error creating pod: %v", err)

@@ -757,7 +757,7 @@ sendResponse:
 
 // nodeHasAttachedVolume returns true if the node has local attachement for the volume
 func (e *Extender) nodeHasAttachedVolume(dNode *volume.NodeInfo, vol *volume.Info) bool {
-	if dNode == nil || vol == nil {
+	if dNode == nil || vol == nil || vol.AttachedOn == "" {
 		return false
 	}
 	for _, nodeIP := range dNode.IPs {
@@ -774,24 +774,28 @@ func (e *Extender) isPodUsingLocallyAttachedVolume(pod *v1.Pod, vol *volume.Info
 	if pod == nil || vol == nil || driverNodes == nil {
 		return false
 	}
-	log.Infof("PodName: %v, PodNodeIP: %v,  VolumeNodeIP: %v", pod.Name, pod.Status.HostIP, vol.AttachedOn)
 	if pod.Status.HostIP == vol.AttachedOn {
+		log.Debugf("Pod %v/%v is using locally attached volume on node %v", pod.Namespace, pod.Name, pod.Status.HostIP)
 		return true
 	}
-	// If pod.Status.HostIP doesn't match vol.AttachedOn, we need to check all IPs on the driver node on which volume is attached
+	var volAttachedNode *volume.NodeInfo
 	for _, dNode := range driverNodes {
 		if e.nodeHasAttachedVolume(dNode, vol) {
-			for _, nodeIP := range dNode.IPs {
-				if nodeIP == pod.Status.HostIP {
-					log.Infof("PodNodeIP: %v is in the list of IPs associated with Node %v", pod.Status.HostIP, dNode.Hostname)
-					// Local attachment
-					return true
-				}
-			}
-		} else {
-			return false
+			volAttachedNode = dNode
+			break
 		}
 	}
+	// If pod.Status.HostIP doesn't match vol.AttachedOn, we need to check all IPs on the driver node on which volume is attached
+	if volAttachedNode != nil {
+		for _, nodeIP := range volAttachedNode.IPs {
+			if nodeIP == pod.Status.HostIP {
+				log.Debugf("Pod %v/%v is using locally attached volume on node %v", pod.Namespace, pod.Name, volAttachedNode.Hostname)
+				// Local attachment
+				return true
+			}
+		}
+	}
+
 	return false
 }
 
