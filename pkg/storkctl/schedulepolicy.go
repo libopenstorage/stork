@@ -88,6 +88,12 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			schedulePolicyName := args[0]
 			var policyItem storkv1.SchedulePolicyItem
 			schedulePolicyType = strings.ToLower(schedulePolicyType)
+			dayOfWeek = strings.ToLower(dayOfWeek)
+			//Validate user input for retain
+			if c.Flags().Changed("retain") && retain <= 0 {
+				util.CheckErr(fmt.Errorf("need to provide a valid value for retain. It should be a positive integer"))
+				return
+			}
 			switch schedulePolicyType {
 			case "interval":
 				var intervalPolicy storkv1.IntervalPolicy
@@ -107,7 +113,12 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			case "daily":
 				var dailyPolicy storkv1.DailyPolicy
 				dailyPolicy.Time = time
-				dailyPolicy.ForceFullSnapshotDay = dailyForceFullSnapshotDay
+				dailyPolicy.ForceFullSnapshotDay = strings.ToLower(dailyForceFullSnapshotDay)
+				//Validate ForceFullSnapshotDay is a valid weekday
+				if _, present := storkv1.Days[dailyPolicy.ForceFullSnapshotDay]; !present {
+					util.CheckErr(fmt.Errorf("invalid day of the week (%v) in policy.daily.forceFullSnapshotDay", dailyPolicy.ForceFullSnapshotDay))
+					return
+				}
 				if retain == 0 {
 					dailyPolicy.Retain = storkv1.DefaultDailyPolicyRetain
 				} else {
@@ -161,18 +172,18 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				util.CheckErr(err)
 				return
 			}
-			msg := fmt.Sprintf("schedule policy %v created successfully", schedulePolicy.Name)
+			msg := fmt.Sprintf("Schedule policy %v created successfully", schedulePolicy.Name)
 			printMsg(msg, ioStreams.Out)
 		},
 	}
 	// Picking up user inputs and setting the defaults for flags
 	createSchedulePolicyCommand.Flags().StringVarP(&schedulePolicyType, "policy-type", "t", "Interval", "Select Type of schedule policy to apply. Interval / Daily / Weekly / Monthly.")
-	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, "interval-minutes", "i", 30, "Specify the interval, in minutes, after which Portworx should trigger the operation.")
-	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "For backup operations, specify how many backups Portworx should retain.")
-	createSchedulePolicyCommand.Flags().StringVarP(&time, "time", "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Portworx should trigger the operation.")
-	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, "force-full-snapshot-day", "", "MONDAY", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
-	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, "day-of-week", "", "Sunday", "Specify the day of the week when Portworx should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
-	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, "date-of-month", "", 1, "Specify the day of the month when Portworx should trigger the operation.")
+	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, "interval-minutes", "i", 30, "Specify the interval, in minutes, after which Stork should trigger the operation.")
+	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "Specify how many backups triggered as part of this schedule should be retained.")
+	createSchedulePolicyCommand.Flags().StringVarP(&time, "time", "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Stork should trigger the operation.")
+	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, "force-full-snapshot-day", "", "Monday", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
+	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, "day-of-week", "", "Sunday", "Specify the day of the week when Stork should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
+	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, "date-of-month", "", 1, "Specify the day of the month when Stork should trigger the operation.")
 	return createSchedulePolicyCommand
 }
 
@@ -222,7 +233,7 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 					util.CheckErr(err)
 					return
 				}
-				msg := fmt.Sprintf("schedule policy %v deleted successfully", args[i])
+				msg := fmt.Sprintf("Schedule policy %v deleted successfully", args[i])
 				printMsg(msg, ioStreams.Out)
 			}
 		},
