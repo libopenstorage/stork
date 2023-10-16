@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"reflect"
 	"strconv"
@@ -397,7 +398,11 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				dEP = destPXEndpoint
 			}
 
-			dIP, dPort := getHostPortFromEndPoint(dEP, ioStreams)
+			dIP, dPort, err := getHostPortFromEndPoint(dEP)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error parsing destination px endpoint %s: %v", dEP, err), ioStreams.Out)
+				return
+			}
 
 			if len(destToken) == 0 {
 				pxAuthTokenDest, pxAuthSecretNamespaceDest, err = getPXAuthToken(dFile)
@@ -407,7 +412,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				if len(pxAuthTokenDest) > 0 {
 					printMsg("Fetching px token with auth token in destination cluster", ioStreams.Out)
 				}
-				token, err := getPXToken(dEP, pxAuthTokenDest)
+				token, err := getPXToken(fmt.Sprintf("%s:%s", dIP, dPort), pxAuthTokenDest)
 				if err != nil {
 					err = fmt.Errorf("got error while fetching px token in destination cluster %s. Err: %v", dEP, err)
 					util.CheckErr(err)
@@ -613,7 +618,11 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 
 			// Create clusterpair in destination only if unidirectional flag is not set
 			if !unidirectional {
-				sIP, sPort := getHostPortFromEndPoint(sEP, ioStreams)
+				sIP, sPort, err := getHostPortFromEndPoint(sEP)
+				if err != nil {
+					printMsg(fmt.Sprintf("Error parsing source px endpoint %s: %v", sEP, err), ioStreams.Out)
+					return
+				}
 
 				if len(srcToken) == 0 {
 					pxAuthTokenSrc, pxAuthSecretNamespaceSrc, err = getPXAuthToken(sFile)
@@ -623,7 +632,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					if len(pxAuthTokenSrc) > 0 {
 						printMsg("Fetching px token with auth token in source cluster", ioStreams.Out)
 					}
-					token, err := getPXToken(sEP, pxAuthTokenSrc)
+					token, err := getPXToken(fmt.Sprintf("%s:%s", sIP, sPort), pxAuthTokenSrc)
 					if err != nil {
 						err := fmt.Errorf("got error while fetching px token in source cluster %s. Err: %v", sEP, err)
 						util.CheckErr(err)
@@ -886,8 +895,7 @@ func getPXEndPointDetails(config string) (string, error) {
 }
 
 func getPXToken(pxEndpoint, pxToken string) (token string, err error) {
-	// TODO: support https as well
-	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
+	clnt, err := clusterclient.NewInsecureTLSAuthClusterClient(pxEndpoint, "v1", pxToken, "")
 	if err != nil {
 		return token, err
 	}
@@ -936,14 +944,53 @@ func getPXAuthToken(configFile string) (authToken string, authSecretNamespace st
 	return authToken, authSecretNamespace, nil
 }
 
-func getHostPortFromEndPoint(ep string, ioStreams genericclioptions.IOStreams) (string, string) {
-	host, port, err := net.SplitHostPort(ep)
+// check if ep is like a url (basically with scheme http or https)
+// if it has scheme, get the port details or assign default port as 80 or 443 based on the scheme.
+// if it does not have any scheme, use splitHostPort to get host and port details.
+func getHostPortFromEndPoint(ep string) (string, string, error) {
+	var host, port string
+	u, err := url.Parse(ep)
+	// error gets hit for if ep is ip:port
 	if err != nil {
-		// In case of error consider ep as the host
-		printMsg(fmt.Sprintf("Unable to parse the endpoint %s to get host/ip and port. Err: %v", ep, err), ioStreams.Out)
-		host = ep
+		host, port, err = net.SplitHostPort(ep)
+		if err != nil {
+			return host, port, fmt.Errorf("unable to parse endpoint %s, err: %v", ep, err)
+		}
+	} else {
+		// for cases only hostname or ip (ex: abc.com or 170.160.150.140)
+		if len(u.Scheme) == 0 && len(u.Host) == 0 {
+			if net.ParseIP(ep) == nil { //  not supporting only ip address
+				host = ep
+				port = "80"
+			} else {
+				return host, port, fmt.Errorf("port is needed along with ip address %s", ep)
+			}
+		} else if len(u.Host) == 0 { // for cases abc.com:9090
+			host, port, err = net.SplitHostPort(ep)
+			if err != nil {
+				return host, port, fmt.Errorf("unable to parse endpoint %s, err: %v", ep, err)
+			}
+		} else if u.Scheme == "http" || u.Scheme == "https" {
+			port = u.Port()
+			if len(port) == 0 { // for cases http://abc.com or https://abc.com
+				host = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+				if u.Scheme == "http" {
+					port = "80"
+				} else if u.Scheme == "https" {
+					port = "443"
+				}
+			} else {
+				host, port, err = net.SplitHostPort(u.Host) // for cases http://abc.com:9090 or https://abc.com:9090
+				if err != nil {
+					return host, port, fmt.Errorf("unable to parse endpoint %s, err: %v", ep, err)
+				}
+				host = fmt.Sprintf("%s://%s", u.Scheme, host)
+			}
+		} else { // ht://abc.com
+			return host, port, fmt.Errorf("invalid endpoint %s", ep)
+		}
 	}
-	return host, port
+	return host, port, nil
 }
 
 func getMissingParameterError(param string, desc string) error {

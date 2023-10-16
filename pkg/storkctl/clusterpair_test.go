@@ -4,6 +4,7 @@
 package storkctl
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -153,6 +154,62 @@ func TestCreateUniDirectionalClusterPairMissingParameters(t *testing.T) {
 	expected = "error: source kubeconfig and destination kubeconfig file should be different"
 	testCommon(t, cmdArgs, nil, expected, true)
 
+}
+
+func TestGetHostPortFromEndPoint(t *testing.T) {
+	ep := "http://px-ep1.com"
+	host, port, err := getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "http://px-ep1.com", host)
+	require.Equal(t, "80", port)
+
+	ep = "https://px-ep1.com"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "https://px-ep1.com", host)
+	require.Equal(t, "443", port)
+
+	ep = "http://px-ep1.com:10000"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "http://px-ep1.com", host)
+	require.Equal(t, "10000", port)
+
+	ep = "https://px-ep1.com:10001"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "https://px-ep1.com", host)
+	require.Equal(t, "10001", port)
+
+	ep = "px-ep1.com"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "px-ep1.com", host)
+	require.Equal(t, "80", port)
+
+	ep = "px-ep1.com:500"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "px-ep1.com", host)
+	require.Equal(t, "500", port)
+
+	ep = "10.123.146.176"
+	_, _, err = getHostPortFromEndPoint(ep)
+	require.Error(t, err, fmt.Sprintf("Received unexpected error:\nport is needed along with ip address %s", ep))
+
+	ep = "10.123.146.176:9001"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "10.123.146.176", host)
+	require.Equal(t, "9001", port)
+
+	ep = "htt://px-ep1.com"
+	_, _, err = getHostPortFromEndPoint(ep)
+	require.Error(t, err, "Received unexpected error:\ninvalid url scheme px-ep1.com, expected http or https only")
+
+	ep = "htt://px-ep1.com:80"
+	_, _, err = getHostPortFromEndPoint(ep)
+	require.Error(t, err, "Received unexpected error:\ninvalid url scheme px-ep1.com, expected http or https only")
 }
 
 func createTempFile(t *testing.T, fileName string, fileContent string) *os.File {
