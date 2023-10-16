@@ -18,18 +18,18 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-version v1.6.0
 	github.com/heptio/ark v1.0.0
-	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
+	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.2.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
 	github.com/libopenstorage/operator v0.0.0-20230814210648-7843b18f6ab0
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 	github.com/mitchellh/hashstructure v1.1.0
-	github.com/openshift/api v0.0.0-20230426193520-54a14470e5dc
+	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230922202555-69648f749f5a
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20231016183449-493b2f1cbbf1
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
@@ -46,9 +46,9 @@ require (
 	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.57.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.26.3
-	k8s.io/apiextensions-apiserver v0.26.1
-	k8s.io/apimachinery v0.26.3
+	k8s.io/api v0.27.1
+	k8s.io/apiextensions-apiserver v0.26.3
+	k8s.io/apimachinery v0.27.1
 	k8s.io/apiserver v0.25.4
 	k8s.io/cli-runtime v0.25.2
 	k8s.io/client-go v12.0.0+incompatible
@@ -65,7 +65,7 @@ require (
 require (
 	github.com/golang/mock v1.6.0
 	github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
-	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 )
 
 require (
@@ -128,9 +128,9 @@ require (
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-errors/errors v1.4.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
-	github.com/go-openapi/jsonpointer v0.19.5 // indirect
-	github.com/go-openapi/jsonreference v0.20.0 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
+	github.com/go-openapi/jsonpointer v0.19.6 // indirect
+	github.com/go-openapi/jsonreference v0.20.1 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gobuffalo/envy v1.7.1 // indirect
 	github.com/gobuffalo/packd v1.0.1 // indirect
@@ -297,7 +297,7 @@ require (
 	k8s.io/gengo v0.0.0-20220913193501-391367153a38 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
+	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
@@ -325,7 +325,7 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230922202555-69648f749f5a
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20231016183449-493b2f1cbbf1
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230927164041-818bdade92ff
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3

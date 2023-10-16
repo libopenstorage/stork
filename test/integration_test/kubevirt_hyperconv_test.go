@@ -4,6 +4,7 @@
 package integrationtest
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
+	kubevirt "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -19,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -62,7 +65,6 @@ func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
 		err = schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for app %s to get to running state", appCtx.App.Key)
 
-		// TODO: spec has only DataVolume which GetVolumes() does not understand today
 		vols, err := schedulerDriver.GetVolumes(appCtx)
 		require.NoError(t, err, "failed to get volumes for context %s", appCtx.App.Key)
 
@@ -78,22 +80,30 @@ func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
 		log.Infof("volume %s (%s) is attached to node %s", vol.ID, apiVol.Id, attachedNode.Name)
 
 		// VMs should have a bind-mount initially
-		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode,
+		vmPod, err := getVMPod(appCtx, vol)
+		require.NoError(t, err)
+
+		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode, vmPod,
 			false, /* expectAttachedNodeChanged  */
 			true,  /* expectBindMount */
 			true /* expectReplicaNode */)
 
-		// TODO: get VMI, verify running phase and note down UID, phase last transition time
+		vmiName, vmiUID, vmiPhase, transitionTime, err := getVMIDetails(vmPod)
+		require.NoError(t, err)
+		require.Equal(t, "Running", vmiPhase)
 
 		// Simulate OCP node upgrade by:
 		// 1. Live migrate the VM to another node
 		// 2. Restart PX on the original node where the volume should still be attached
 
-		// TODO: start a live migration and wait for it to finish
+		// start a live migration and wait for it to finish
+		startAndWaitForVMIMigration(t, vmPod.Namespace, vmiName)
 
 		// VM should be using NFS mount after live migration and should be running on a non-replica node
 		// No change to the volume attachment.
-		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode,
+		vmPod, err = getVMPod(appCtx, vol)
+		require.NoError(t, err)
+		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode, vmPod,
 			false, /* expectAttachedNodeChanged */
 			false, /* expectBindMount */
 			false /* expectReplicaNode */)
@@ -110,9 +120,15 @@ func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
 		// VM should use a bind-mount eventually
 		verifyBindMountEventually(t, appCtx, vol, apiVol)
 
-		// TODO:
 		// Verify that VM stayed up the whole time
 		// get VMI, verify that the uid is the same, the phase is running, and phaseTransitionTime is the same
+		vmPod, err = getVMPod(appCtx, vol)
+		require.NoError(t, err)
+		_, vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, err := getVMIDetails(vmPod)
+		require.NoError(t, err)
+		require.Equal(t, "Running", vmiPhaseAfter)
+		require.Equal(t, vmiUID, vmiUIDAfter)
+		require.Equal(t, transitionTime, transitionTimeAfter)
 	}
 
 	logrus.Infof("Destroying apps")
@@ -157,6 +173,7 @@ func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
 		err = schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for app %s to get to running state", appCtx.App.Key)
 
+		// TODO: need to merge the torpedo PR #1747 and vendor it into the stork repo
 		vols, err := schedulerDriver.GetVolumes(appCtx)
 		require.NoError(t, err, "failed to get volumes for context %s", appCtx.App.Key)
 
@@ -172,10 +189,18 @@ func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
 		log.Infof("volume %s (%s) is attached to node %s", vol.ID, apiVol.Id, attachedNode.Name)
 
 		// VMs should have a bind-mount initially
-		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode,
+		vmPod, err := getVMPod(appCtx, vol)
+		require.NoError(t, err)
+
+		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode, vmPod,
 			false, /* expectAttachedNodeChanged  */
 			true,  /* expectBindMount */
 			true /* expectReplicaNode */)
+
+		// get VMI, verify running phase and note down UID, phase last transition time
+		vmiName, vmiUID, vmiPhase, transitionTime, err := getVMIDetails(vmPod)
+		require.NoError(t, err)
+		require.Equal(t, "Running", vmiPhase)
 
 		// Cordon off all non-replica nodes so that the next live migration moves the VM pod to a replica node
 		cordonedNodes := cordonNonReplicaNodes(t, apiVol, allNodes)
@@ -187,16 +212,17 @@ func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
 			}
 		}()
 
-		// TODO: get VMI, verify running phase and note down UID, phase last transition time
-
 		// Simulate OCP node upgrade by:
 		// 1. Live migrate the VM to another node
 		// 2. Restart PX on the original node where the volume should still be attached
 
-		// TODO: start a live migration and wait for it to finish
+		// start a live migration and wait for it to finish
+		startAndWaitForVMIMigration(t, vmPod.Namespace, vmiName)
 
 		// VM should be using NFS mount after live migration
-		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode,
+		vmPod, err = getVMPod(appCtx, vol)
+		require.NoError(t, err)
+		verifyVMProperties(t, appCtx, allNodes, vol, apiVol, attachedNode, vmPod,
 			false, /* expectAttachedNodeChanged  */
 			false, /* expectBindMount */
 			true /* expectReplicaNode */)
@@ -220,9 +246,15 @@ func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
 		// VM should use a bind-mount eventually
 		verifyBindMountEventually(t, appCtx, vol, apiVol)
 
-		// TODO:
 		// Verify that VM stayed up the whole time
 		// get VMI, verify that the uid is the same, the phase is running, and phaseTransitionTime is the same
+		vmPodAfter, err := getVMPod(appCtx, vol)
+		require.NoError(t, err)
+		_, vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, err := getVMIDetails(vmPodAfter)
+		require.NoError(t, err)
+		require.Equal(t, "Running", vmiPhaseAfter)
+		require.Equal(t, vmiUID, vmiUIDAfter)
+		require.Equal(t, transitionTime, transitionTimeAfter)
 	}
 
 	logrus.Infof("Destroying apps")
@@ -235,7 +267,7 @@ func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
 
 func verifyVMProperties(
 	t *testing.T, appCtx *scheduler.Context, allNodes map[string]node.Node, vol *volume.Volume, apiVol *api.Volume,
-	previousAttachedNode *node.Node, expectAttachedNodeChanged, expectBindMount, expectReplicaNode bool,
+	previousAttachedNode *node.Node, vmPod *corev1.Pod, expectAttachedNodeChanged, expectBindMount, expectReplicaNode bool,
 ) {
 	// verify attached node
 	attachedNode, err := volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
@@ -248,30 +280,26 @@ func verifyVMProperties(
 
 	// verify replica node
 	replicaNodeIDs := getReplicaNodeIDs(apiVol)
-
-	pod, err := getVMPod(appCtx, vol)
-	require.NoError(t, err)
-
-	podNamespacedName := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	podNamespacedName := fmt.Sprintf("%s/%s", vmPod.Namespace, vmPod.Name)
 	var podNodeID string
 	for nodeID, node := range allNodes {
-		if pod.Spec.NodeName == node.Name {
+		if vmPod.Spec.NodeName == node.Name {
 			podNodeID = nodeID
 			break
 		}
 	}
 	require.NotEmpty(t, podNodeID, "could not find nodeID for node %s where pod %s is running",
-		pod.Spec.NodeName, podNamespacedName)
+		vmPod.Spec.NodeName, podNamespacedName)
 	if expectReplicaNode {
 		require.True(t, replicaNodeIDs[podNodeID], "pod is running on node %s (%s) which is not a replica node",
-			pod.Spec.NodeName, podNodeID)
+			vmPod.Spec.NodeName, podNodeID)
 	} else {
 		require.False(t, replicaNodeIDs[podNodeID], "pod is running on node %s (%s) which is a replica node",
-			pod.Spec.NodeName, podNodeID)
+			vmPod.Spec.NodeName, podNodeID)
 	}
 
 	// verify rootdisk mount type
-	mountType, err := getVMRootDiskMountType(pod, apiVol)
+	mountType, err := getVMRootDiskMountType(vmPod, apiVol)
 	require.NoError(t, err)
 
 	if expectBindMount {
@@ -280,6 +308,39 @@ func verifyVMProperties(
 		require.Equal(t, mountTypeNFS, mountType, "root disk was not nfs-mounted")
 	}
 	logrus.Infof("Verified root disk mount type %q for volume %s (%s)", mountType, vol.ID, apiVol.Id)
+}
+
+// getVMIDetails returns VMI name, UID, phase and time when VMI transitioned to that phase.
+func getVMIDetails(vmPod *corev1.Pod) (string, string, string, time.Time, error) {
+	podNamespacedName := fmt.Sprintf("%s/%s", vmPod.Namespace, vmPod.Name)
+	// get VMI name from ownerRef
+	var vmiRef *metav1.OwnerReference
+	for _, ownerRef := range vmPod.OwnerReferences {
+		if ownerRef.Kind == "VirtualMachineInstance" {
+			vmiRef = &ownerRef
+			break
+		}
+	}
+	if vmiRef == nil {
+		return "", "", "", time.Time{}, fmt.Errorf("did not find VMI ownerRef in pod %s", podNamespacedName)
+	}
+	vmi, err := kubevirt.Instance().GetVirtualMachineInstance(context.TODO(), vmPod.Namespace, vmiRef.Name)
+	if err != nil {
+		return "", "", "", time.Time{}, fmt.Errorf("failed to get VMI for pod %s", podNamespacedName)
+	}
+
+	var transitionTime time.Time
+	for _, vmiPhaseTransition := range vmi.PhaseTransitions {
+		if vmiPhaseTransition.Phase == vmi.Phase && vmiPhaseTransition.TransitionTime.After(transitionTime) {
+			transitionTime = vmiPhaseTransition.TransitionTime
+		}
+	}
+	if transitionTime.IsZero() {
+		return "", "", "", time.Time{}, fmt.Errorf(
+			"failed to determine when VMI for pod %s transitioned to phase %s", podNamespacedName, vmi.Phase)
+
+	}
+	return vmi.Name, vmi.UID, vmi.Phase, transitionTime, nil
 }
 
 // Get mount type (nfs or bind) of the root disk volume. This function assumes that the volume name inside
@@ -402,4 +463,31 @@ func verifyBindMountEventually(t *testing.T, appCtx *scheduler.Context, vol *vol
 		}
 		return mountType == mountTypeBind
 	}, 5*time.Minute, 30*time.Second, "VM vol %s (%s) did not switch to a bind-mount", vol.ID, apiVol.Id)
+}
+
+func startAndWaitForVMIMigration(t *testing.T, vmiNamespace, vmiName string) {
+	ctx := context.TODO()
+
+	// start migration
+	migration, err := kubevirt.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
+	require.NoError(t, err)
+
+	// wait for completion
+	var migr *kubevirt.VirtualMachineInstanceMigration
+	require.Eventuallyf(t, func() bool {
+		migr, err = kubevirt.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
+		if err != nil {
+			logrus.Warnf("Failed to get migration %s/%s: %v", vmiNamespace, migration.Name, err)
+			return false
+		}
+		if !migr.Completed {
+			logrus.Warnf("VMI migration %s/%s is still not completed", vmiNamespace, migration.Name)
+			return false
+		}
+		return true
+	}, 10*time.Minute, 10*time.Second, "migration for VMI %s/%s is stuck", vmiNamespace, migration.Name)
+
+	// verify that the migration was successful
+	require.Equal(t, "Succeeded", migr.Phase)
+	require.False(t, migr.Failed)
 }
