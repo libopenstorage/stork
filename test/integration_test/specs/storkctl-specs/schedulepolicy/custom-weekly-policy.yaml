@@ -1,0 +1,11 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+policy:
+  daily: null
+  interval: null
+  monthly: null
+  weekly:
+    day: "friday"
+    options: null
+    retain: 3
+    time: "2:00AM"
