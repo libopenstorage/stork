@@ -3712,3 +3712,251 @@ var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, s3CloudCredName, s3CloudCredUID, ctx)
 	})
 })
+
+// KubeAndPxNamespacesSkipOnAllNSBackup check if namespaces like kube-system and px namespace
+// are backed up while taking a backup
+var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		cloudCredUID         string
+		cloudCredName        string
+		backupLocationName   string
+		backupLocationUID    string
+		backupLocationMap    map[string]string
+		schedulePolicyName   string
+		schedulePolicyUid    string
+		scheduleName         string
+		appNamespaces        []string
+		backupNames          []string
+		restoreNames         []string
+		restoreName          string
+		intervalInMins       int
+		numDeployments       int
+		ctx                  context.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858)
+
+		var err error
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		numDeployments = Inst().GlobalScaleFactor
+		if len(Inst().AppList) == 1 && numDeployments < 3 {
+			numDeployments = 3
+		}
+	})
+
+	It("Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", func() {
+
+		Step("Schedule applications in destination cluster", func() {
+			log.InfoD("Scheduling applications in destination cluster")
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			for i := 0; i < numDeployments; i++ {
+				taskName := fmt.Sprintf("dst-%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplications(taskName)
+				for index, ctx := range appContexts {
+					appName := Inst().AppList[index]
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					log.InfoD("Scheduled application [%s] in destination cluster in namespace [%s]", appName, namespace)
+					appNamespaces = append(appNamespaces, namespace)
+					scheduledAppContexts = append(scheduledAppContexts, ctx)
+				}
+			}
+		})
+
+		Step("Validate app namespaces in destination cluster", func() {
+			ValidateApplications(scheduledAppContexts)
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Create cloud credentials and backup locations", func() {
+			log.InfoD("Creating cloud credentials and backup locations")
+			providers := getProviders()
+			backupLocationMap = make(map[string]string)
+			for _, provider := range providers {
+
+				cloudCredUID = uuid.New()
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+
+				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudCredUID, cloudCredName, provider)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location named [%s] with uid [%s] of [%s] as provider", backupLocationName, backupLocationUID, provider))
+			}
+		})
+		Step("Add source and destination clusters with px-central-admin ctx", func() {
+			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
+			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName)
+
+			err := CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
+
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			srcClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+
+			dstClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+
+			dstClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", destinationClusterName, dstClusterUid)
+		})
+		Step("Create a schedule policy", func() {
+			intervalInMins = 15
+			log.InfoD("Creating a schedule policy with interval [%v] mins", intervalInMins)
+			schedulePolicyName = fmt.Sprintf("interval-%v-%v", intervalInMins, time.Now().Unix())
+			schedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(7, int64(intervalInMins), 6)
+
+			err := Inst().Backup.BackupSchedulePolicy(schedulePolicyName, uuid.New(), orgID, schedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy [%s] with interval [%v] mins", schedulePolicyName, intervalInMins))
+
+			schedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schedulePolicyName)
+			log.FailOnError(err, "Fetching uid of schedule policy [%s]", schedulePolicyName)
+			log.Infof("Schedule policy [%s] uid: [%s]", schedulePolicyName, schedulePolicyUid)
+		})
+
+		Step("Create a manual backup", func() {
+			log.InfoD("Creating a manual backup")
+			backupName := fmt.Sprintf("%s-all-%v", BackupNamePrefix, time.Now().Unix())
+
+			namespaces := []string{"*"}
+			labelSelectors := make(map[string]string)
+			destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
+
+			err = CreateBackup(backupName, destinationClusterName, backupLocationName, backupLocationUID, namespaces, labelSelectors, orgID, destinationClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+			backupNames = append(backupNames, backupName)
+
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			err = backupSuccessCheckWithValidation(ctx, backupName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of the manual backup [%s]", backupName))
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Check if kube-system and px namespace was backed up or not", func() {
+			err := checkBackupObjectForNonExpectedNS(ctx, backupNames[0])
+			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
+		})
+
+		Step("Restore manual backup and validate status post restore", func() {
+			log.InfoD("Restoring new application namespaces from next schedule backup in source cluster")
+			oldNamespaceAge, err := getNamespaceAge()
+			dash.VerifyFatal(err, nil, "Getting namespace age")
+			restoreName = fmt.Sprintf("%s-%s", "test-restore-manual", RandomString(4))
+			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			restoreNames = append(restoreNames, restoreName)
+
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			ValidateApplications(scheduledAppContexts)
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+
+			err = compareNamespaceAge(oldNamespaceAge)
+			dash.VerifyFatal(err, nil, "Comparing namespace age namespace age")
+		})
+
+		Step("Create schedule backup", func() {
+			log.InfoD("Creating a schedule backup")
+			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
+			namespaces := []string{"*"}
+			labelSelectors := make(map[string]string)
+			err := CreateScheduleBackup(scheduleName, destinationClusterName, backupLocationName, backupLocationUID, namespaces,
+				labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			err = backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of the first schedule backup [%s]", firstScheduleBackupName))
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Check if kube-system and px namespace was backed up or not", func() {
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			err = checkBackupObjectForNonExpectedNS(ctx, firstScheduleBackupName)
+			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
+		})
+
+		Step("Restore schedule backup and validate post restpre", func() {
+			log.InfoD("Restore schedule backup")
+			oldNamespaceAge, err := getNamespaceAge()
+			dash.VerifyFatal(err, nil, "Getting namespace age")
+
+			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+
+			err = CreateRestoreWithReplacePolicy(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			restoreNames = append(restoreNames, restoreName)
+
+			ValidateApplications(scheduledAppContexts)
+			err = compareNamespaceAge(oldNamespaceAge)
+			dash.VerifyFatal(err, nil, "Comparing namespace age")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "failed to switch context to source cluster")
+		}()
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
+		ValidateAndDestroy(scheduledAppContexts, opts)
+
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+
+		err = DeleteSchedule(scheduleName, destinationClusterName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		log.Infof("Deleting backup schedule policy")
+
+		policyList := []string{schedulePolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+
+		for _, restoreName = range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
