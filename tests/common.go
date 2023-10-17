@@ -4249,6 +4249,11 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	// Get SSE S3 Encryption Type
+	sseS3EncryptionType, err := GetSseS3EncryptionType()
+	if err != nil {
+		return err
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4268,6 +4273,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
 				},
 			},
 		},
@@ -4289,6 +4295,11 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	// Get SSE S3 Encryption Type
+	sseS3EncryptionType, err := GetSseS3EncryptionType()
+	if err != nil {
+		return err
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4308,12 +4319,13 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
 				},
 			},
 		},
 	}
 
-	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return err
 	}
@@ -9509,4 +9521,25 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
 
 	return policy, nil
+}
+
+// GetSseS3EncryptionType fetches SSE type for S3 bucket from the environment variable
+func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
+	var sseType api.S3Config_Sse
+	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
+	if s3SseTypeEnv != "" {
+		sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+		if err != nil {
+			return sseType, err
+		}
+		switch sseDetails.SseType {
+		case s3utils.SseS3:
+			sseType = api.S3Config_SSE_S3
+		default:
+			return sseType, fmt.Errorf("failed to sse s3 encryption type not valid: [%v]", sseDetails.SseType)
+		}
+	} else {
+		sseType = api.S3Config_Invalid
+	}
+	return sseType, nil
 }

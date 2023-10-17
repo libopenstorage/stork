@@ -158,6 +158,16 @@ message S3Config {
     bool disable_ssl = 3;
     bool disable_path_style = 4;
     string storage_class = 5;
+    // Server side encryption type name
+    // Currently supporting only SSE-S3 and SSE-KMS type alone.
+    Sse sse_type = 6;
+    enum Sse {
+        Invalid = 0;
+        // Server-side encryption with AWS S3 managed keys
+        SSE_S3 = 1;
+        // Server-side encryption with AWS Key Management Service
+        SSE_KMS = 2;
+    }
 }
 
 message AzureConfig {
