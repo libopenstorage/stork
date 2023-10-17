@@ -755,10 +755,48 @@ sendResponse:
 	}
 }
 
-// isPodRunningOnVolAttachedNode returns true if the pod is running node where volume is attached
-func (e *Extender) isPodRunningOnVolAttachedNode(pod *v1.Pod, vol *volume.Info) bool {
-	log.Debugf("Pod Name: %v, Pod Node IP: %v,  Volume Node IP: %v", pod.Name, pod.Status.HostIP, vol.AttachedOn)
-	return pod.Status.HostIP == vol.AttachedOn
+// nodeHasAttachedVolume returns true if the node has local attachement for the volume
+func (e *Extender) nodeHasAttachedVolume(dNode *volume.NodeInfo, vol *volume.Info) bool {
+	if dNode == nil || vol == nil || vol.AttachedOn == "" {
+		return false
+	}
+	for _, nodeIP := range dNode.IPs {
+		if nodeIP == vol.AttachedOn {
+			// Local attachment
+			return true
+		}
+	}
+	return false
+}
+
+// isPodUsingLocallyAttachedVolume returns true if the pod is running node where volume is attached
+func (e *Extender) isPodUsingLocallyAttachedVolume(pod *v1.Pod, vol *volume.Info, driverNodes []*volume.NodeInfo) bool {
+	if pod == nil || vol == nil || driverNodes == nil {
+		return false
+	}
+	if pod.Status.HostIP == vol.AttachedOn {
+		log.Debugf("Pod %v/%v is using locally attached volume on node %v", pod.Namespace, pod.Name, pod.Status.HostIP)
+		return true
+	}
+	var volAttachedNode *volume.NodeInfo
+	for _, dNode := range driverNodes {
+		if e.nodeHasAttachedVolume(dNode, vol) {
+			volAttachedNode = dNode
+			break
+		}
+	}
+	// If pod.Status.HostIP doesn't match vol.AttachedOn, we need to check all IPs on the driver node on which volume is attached
+	if volAttachedNode != nil {
+		for _, nodeIP := range volAttachedNode.IPs {
+			if nodeIP == pod.Status.HostIP {
+				log.Debugf("Pod %v/%v is using locally attached volume on node %v", pod.Namespace, pod.Name, volAttachedNode.Hostname)
+				// Local attachment
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // isVirtLauncherPod returns true if it is a virt launcher pod
@@ -770,8 +808,7 @@ func (e *Extender) isVirtLauncherPod(pod *v1.Pod) bool {
 func (e *Extender) getLiveMigrationInfo(refPod *v1.Pod, refVMIUID types.UID) (podBeingLiveMigrated *v1.Pod, err error) {
 	pods, err := core.Instance().GetPods(refPod.Namespace, nil)
 	if err != nil {
-		msg := "unable to get Pod list in the same namespace."
-		return nil, fmt.Errorf("err: %s", msg)
+		return nil, fmt.Errorf("unable to get pod list in the same namespace")
 	}
 	// If another virt launcher pod is Running in the same namespace and has the same VMI owner reference Then it can
 	// be concluded that this Pod is where the original VM was being hosted and is being LiveMigrated to the refPod
@@ -781,9 +818,6 @@ func (e *Extender) getLiveMigrationInfo(refPod *v1.Pod, refVMIUID types.UID) (po
 			continue
 		}
 		_, vmiUID := e.getVMIInfo(&pod)
-		if vmiUID == "" {
-			continue
-		}
 		if vmiUID == refVMIUID {
 			return &pod, nil
 		}
@@ -805,7 +839,7 @@ func (e *Extender) getVMIInfo(refPod *v1.Pod) (string, types.UID) {
 func (e *Extender) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
 	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
 	if err != nil || pvc == nil {
-		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", pvcName, namespace, err)
+		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", namespace, pvcName, err)
 	}
 
 	return pvc.Spec.VolumeName, err
@@ -936,7 +970,7 @@ func (e *Extender) processVirtLauncherPodPrioritizeRequest(
 
 	vmiName, vmiUID := e.getVMIInfo(pod)
 	if vmiName == "" {
-		return fmt.Errorf("unable to find vmiName for pod: %v", pod.Name)
+		return fmt.Errorf("unable to find vmiName for pod %v", pod.Name)
 	}
 	podBeingLiveMigrated, err := e.getLiveMigrationInfo(pod, vmiUID)
 	if err != nil {
@@ -953,57 +987,23 @@ func (e *Extender) processVirtLauncherPodPrioritizeRequest(
 	if err != nil {
 		return fmt.Errorf("unable to find VMI Info: %w", err)
 	}
-	storklog.PodLog(pod).Debugf("VMI is using PVC: %v", vmi.RootDiskPVC)
+	storklog.PodLog(pod).Debugf("VMI is using PVC %v", vmi.RootDiskPVC)
 
 	pvName, err := e.GetPVNameFromPVC(vmi.RootDiskPVC, pod.Namespace)
 	if err != nil {
-		return fmt.Errorf("unable to inspect PVC: %v err: %w", vmi.RootDiskPVC, err)
+		return fmt.Errorf("unable to inspect PVC %v: %w", vmi.RootDiskPVC, err)
 	}
-	storklog.PodLog(pod).Debugf("PV for scoring: %v", pvName)
+	storklog.PodLog(pod).Debugf("PV for scoring %v", pvName)
 
 	volInfo, err := e.Driver.InspectVolume(pvName)
 	if err != nil {
-		return fmt.Errorf("unable to inspect PV: %v. err: %w", pvName, err)
+		return fmt.Errorf("unable to inspect PV %v: %w", pvName, err)
 	}
 
-	if podBeingLiveMigrated != nil {
-		// We give lower score to replica nodes so that if a pod is unable to schedule on the node
-		// where the volume is attached we can run it on a non replica node, so that a subsequent
-		// LiveMigration can move the pod back to the replica node in a single hop.
-		podIsRunningOnVolAttachedNode := e.isPodRunningOnVolAttachedNode(podBeingLiveMigrated, volInfo)
-
-		if podIsRunningOnVolAttachedNode {
-			// LiveMigration in progress and existing pod is running on node with volume attached => Antihyperconvergence
-			// i.e. Give lower scores to nodes with volume replicas
-			storklog.PodLog(pod).Infof("Pod %v is running with same VMI owner reference is using localAttachment.", podBeingLiveMigrated.Name)
-			e.updateVirtLauncherPodPrioritizeScores(encoder,
-				args,
-				volInfo,
-				false, /*preferLocalAttachment*/
-				true /*antihyperconvergence*/)
-		} else {
-			// LiveMigration in progress but existing pod is using NFS.
-			// Use Antihyperconvergence to give lower score to replica nodes without volume attachment
-			// Use preferLocalAttachment to give highest score to node with volume attachment
-
-			e.updateVirtLauncherPodPrioritizeScores(encoder,
-				args,
-				volInfo,
-				true, /*preferLocalAttachment*/
-				true /*antihyperconvergence*/)
-		}
-	} else {
-		// Default behavior for LiveMigration not in progress is hyperconvergence
-		// We should still give a higher score to node with volume attachment. We might not
-		// have attachment info avilable in this scenario and the same score will be
-		// applied for all the replica nodes. However, if volume attachment info is available
-		// that node should get higher score. All non replica nodes will get lower score.
-		e.updateVirtLauncherPodPrioritizeScores(encoder,
-			args,
-			volInfo,
-			true, /*preferLocalAttachment*/
-			false /*antihyperconvergence*/)
-	}
+	e.updateVirtLauncherPodPrioritizeScores(encoder,
+		args,
+		volInfo,
+		podBeingLiveMigrated)
 	return nil
 }
 
@@ -1011,26 +1011,19 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 	encoder *json.Encoder,
 	args schedulerapi.ExtenderArgs,
 	volInfo *volume.Info,
-	preferLocalAttachment bool,
-	antihyperconvergence bool) {
+	podBeingLiveMigrated *v1.Pod) {
 	pod := args.Pod
-
-	// Default behavior is no special preference to local attachment
-	localNodeScore := int64(nodePriorityScore)
 	// Default behavior is hyperconvergence
 	replicaNodeScore := int64(nodePriorityScore)
 	remoteNodeScore := int64(defaultScore)
 
-	if antihyperconvergence {
+	// If this is a pod being live migrated then we prefer antihyperconvergence
+	// We give lower score to replica nodes so that if a pod is unable to schedule on the node
+	// where the volume is attached we can run it on a non replica node, so that a subsequent
+	// LiveMigration can move the pod back to the replica node in a single hop.
+	if podBeingLiveMigrated != nil {
 		remoteNodeScore = int64(nodePriorityScore)
 		replicaNodeScore = int64(defaultScore)
-	}
-
-	// preferLocalAttachment = true but AttachedOn = "" can occur if there is just one pod
-	// getting scheduled and there is no LiveMigration ongoing
-	if preferLocalAttachment && volInfo.AttachedOn != "" {
-		storklog.PodLog(pod).Debugf("Prioritize for volume attachedOn: %v", volInfo.AttachedOn)
-		localNodeScore = int64(2 * nodePriorityScore)
 	}
 
 	respList := schedulerapi.HostPriorityList{}
@@ -1043,38 +1036,41 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 		}
 	} else {
 		driverNodes = volume.RemoveDuplicateOfflineNodes(driverNodes)
+		isExistingPodUsingLocallyAttachedVolume := e.isPodUsingLocallyAttachedVolume(podBeingLiveMigrated, volInfo, driverNodes)
+		if isExistingPodUsingLocallyAttachedVolume {
+			storklog.PodLog(pod).Infof("Existing pod is using locally attached volume")
+		}
+
 		for _, dnode := range driverNodes {
 			for _, knode := range args.Nodes.Items {
-				var score int64
-				isUpdated := false
+				// Initialize with score to with score for remote node
+				// It would be updated if the node being score is a replica node
+				score := remoteNodeScore
 				if volume.IsNodeMatch(&knode, dnode) {
-					isUpdated = false
 					// Score replica nodes
-					for _, dataNodes := range volInfo.DataNodes {
-						if dataNodes == dnode.StorageID {
+					for _, dataNode := range volInfo.DataNodes {
+						if dataNode == dnode.StorageID {
+							// Current node has the volume replica
 							score = replicaNodeScore
-							isUpdated = true
-							break
-						}
-					}
+							nodeHasAttachedVolume := e.nodeHasAttachedVolume(dnode, volInfo)
 
-					if preferLocalAttachment && volInfo.AttachedOn != "" {
-						// Update score of node for volume attachment
-						for _, nodeIP := range dnode.IPs {
-							if nodeIP == volInfo.AttachedOn {
-								// Local attachment
-								storklog.PodLog(pod).Debugf("Updating score of node: %v for local attachment", dnode.StorageID)
-								score = localNodeScore
-								isUpdated = true
+							if podBeingLiveMigrated != nil {
+								// LiveMigration in progress
+								// If existing pod is not using attached volume and current node has attached volume, assign a higher score to it
+								if !isExistingPodUsingLocallyAttachedVolume && nodeHasAttachedVolume {
+									storklog.PodLog(pod).Infof("Node %v has attached volume", dataNode)
+									score = int64(2 * nodePriorityScore)
+								}
+							} else {
+								if nodeHasAttachedVolume {
+									// There is no LiveMigration in progress
+									// When a new pod gets scheduling request
+									// assign a higher score for local volume attachment
+									score = int64(2 * nodePriorityScore)
+								}
 							}
 						}
 					}
-
-					if !isUpdated {
-						// Update score of non replica nodes
-						score = remoteNodeScore
-					}
-
 					if dnode.Status == volume.NodeOffline {
 						score = 0
 					} else if dnode.Status != volume.NodeOnline {
