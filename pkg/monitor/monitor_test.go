@@ -250,7 +250,7 @@ func newPod(podName string, volumes []string) *v1.Pod {
 		ObjectMeta: metav1.ObjectMeta{Name: podName},
 	}
 	for _, volume := range volumes {
-		pvc := driver.NewPVC(volume)
+		pvc := driver.NewPVC(volume, "")
 		podVolume := v1.Volume{}
 		podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
 			ClaimName: pvc.Name,
