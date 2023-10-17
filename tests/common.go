@@ -853,18 +853,27 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step("validate mount options for pure volumes", func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			processError(err, errChan...)
+		}
 
-		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		// Ignore mount path check if current version is < 3.0.0 (https://portworx.atlassian.net/browse/PWX-34000)
+		log.InfoD("Validate current Version [%v]", driverVersion)
+		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+		if !re.MatchString(driverVersion) {
+			Step("validate mount options for pure volumes", func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
 
+			Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
+		}
 	})
 }
 
@@ -1422,6 +1431,7 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 		} else {
 			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
 		}
+
 	}
 }
 
