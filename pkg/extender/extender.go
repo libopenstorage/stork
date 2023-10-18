@@ -1006,7 +1006,6 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 		}
 	} else {
 		driverNodes = volume.RemoveDuplicateOfflineNodes(driverNodes)
-
 		for _, dnode := range driverNodes {
 			for _, knode := range args.Nodes.Items {
 				// Initialize with score to with score for remote node
@@ -1018,11 +1017,7 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 						if dataNode == dnode.StorageID {
 							// Current node has the volume replica
 							score = replicaNodeScore
-							nodeHasAttachedVolume := e.nodeHasAttachedVolume(dnode, volInfo)
-							if nodeHasAttachedVolume {
-								// There is no LiveMigration in progress
-								// When a new pod gets scheduling request
-								// assign a higher score for local volume attachment
+							if e.nodeHasAttachedVolume(dnode, volInfo) {
 								score = int64(2 * nodePriorityScore)
 							}
 						}
