@@ -19,6 +19,61 @@ var (
 	storageNode   *node.Node
 	err           error
 )
+var _ = Describe("{PoolExpandMultipleTimes}", func() {
+	BeforeEach(func() {
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToBeResized = getStoragePool(poolIDToResize)
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("Select a pool and expand it by 100 GiB 3 time with add-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskAdd3Times",
+			"Validate storage pool expansion 3 times with type=add-disk", nil, 0)
+		for i := 0; i < 3; i++ {
+			poolToBeResized = getStoragePool(poolIDToResize)
+			originalSizeInBytes = poolToBeResized.TotalSize
+			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type add-disk...",
+				poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		}
+	})
+
+	It("Select a pool and expand it by 100 GiB 3 times with resize-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskResize3Times",
+			"Validate storage pool expansion with type=resize-disk", nil, 0)
+		for i := 0; i < 3; i++ {
+			originalSizeInBytes = poolToBeResized.TotalSize
+			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type resize-disk...",
+				poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		}
+	})
+})
 
 var _ = Describe("{PoolExpandSmoky}", func() {
 	BeforeEach(func() {
