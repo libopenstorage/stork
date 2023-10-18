@@ -2371,7 +2371,7 @@ func kubevirtPodScheduling(t *testing.T) {
 		t,
 		nodes,
 		[]float64{
-			defaultScore,
+			2 * nodePriorityScore,
 			defaultScore,
 			defaultScore,
 			nodePriorityScore,
@@ -2528,7 +2528,7 @@ func kubevirtPodSchedulingAttachedOnMismatch(t *testing.T) {
 		nodes,
 		[]float64{
 			defaultScore,
-			defaultScore,
+			2 * nodePriorityScore,
 			defaultScore,
 			nodePriorityScore,
 			nodePriorityScore,
