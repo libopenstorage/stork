@@ -61,7 +61,6 @@ func GetContext() (context.Context, error) {
 		serviceIdToken := siID.ReturnServiceIdToken()
 		if serviceIdToken == "" {
 			token, err = getBearerToken()
-			log.InfoD("Non-ServiceIdentity Token being used ")
 		} else {
 			token = serviceIdToken
 			log.InfoD("ServiceIdentity Token being used")
@@ -72,7 +71,6 @@ func GetContext() (context.Context, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.InfoD("Non-ServiceIdentity Token being used ")
 	}
 	ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: token, Prefix: "Bearer"}})
 	return ctx, nil

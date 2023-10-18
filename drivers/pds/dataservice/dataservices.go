@@ -71,6 +71,7 @@ const (
 	validateDeploymentTimeInterval = 60 * time.Second
 	timeOut                        = 30 * time.Minute
 	pdsWorkloadImage               = "portworx/pds-loadtests:sample-load-pds-qa"
+	PdsDeploymentAvailable         = "Available"
 )
 
 // PDS packages
@@ -483,7 +484,7 @@ func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDe
 			log.Errorf("Full HTTP response: %v\n", res)
 			return false, err
 		}
-		if status.GetHealth() != "Healthy" {
+		if status.GetHealth() != PdsDeploymentAvailable {
 			return false, nil
 		}
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())

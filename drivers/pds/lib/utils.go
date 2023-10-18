@@ -171,7 +171,7 @@ type StorageClassConfig struct {
 const (
 	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
-	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
+	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Available"
 
 	errorChannelSize             = 50
 	defaultCommandRetry          = 5 * time.Second
