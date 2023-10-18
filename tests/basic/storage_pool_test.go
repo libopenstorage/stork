@@ -1513,7 +1513,7 @@ func getPoolWithLeastSize() *api.StoragePool {
 	return selectedPool
 }
 
-func getNodeWithLeastSize() *node.Node {
+func GetNodeWithLeastSize() *node.Node {
 	stNodes := node.GetStorageNodes()
 	var selectedNode node.Node
 	var currLowestSize uint64
@@ -4347,7 +4347,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedNode := getNodeWithLeastSize()
+		selectedNode := GetNodeWithLeastSize()
 		log.Infof(fmt.Sprintf("Node %s is marked for repl 1", selectedNode.Name))
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
@@ -4574,7 +4574,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedNode := getNodeWithLeastSize()
+		selectedNode := GetNodeWithLeastSize()
 
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
@@ -4686,7 +4686,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedNode := getNodeWithLeastSize()
+		selectedNode := GetNodeWithLeastSize()
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {

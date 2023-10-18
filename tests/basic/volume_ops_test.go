@@ -1974,7 +1974,7 @@ func validateCloudSnaps(appNamespace string) (map[string]string, error) {
 	snapsMap := make(map[string]string, 0)
 
 	for _, ctx := range contexts {
-		if strings.Contains(ctx.App.Key, "cloudsnap") {
+		if strings.Contains(ctx.App.Key, "cloudsnap") || strings.Contains(ctx.App.Key, "fastpath") {
 
 			var appVolumes []*volume.Volume
 			var err error
@@ -2474,6 +2474,258 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolFullCloudsnap}", func() {
+
+	/*
+			Priority: P1
+		1. Selected a node and a pool
+		2. Deploy cloudsnap apps and make sure volumes are attached to the pool selected above
+		2. Fill up the pool and validate cloudsnaps
+		3. Do pool expansion and validate cloudsnaps
+	*/
+
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolFullCloudsnap",
+			"Make pool full and validate cloudsnaps",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Make pool full and validate cloudsnaps"
+	It(stepLog, func() {
+
+		stepLog = "Create cloudsnap schedule and validate cloud cred"
+
+		Step(stepLog, func() {
+
+			log.InfoD(stepLog)
+			n := node.GetStorageDriverNodes()[0]
+			uuidCmd := "pxctl cred list -j | grep uuid"
+			output, err := runCmd(uuidCmd, n)
+			log.FailOnError(err, "error getting uuid for cloudsnap credential")
+			if output == "" {
+				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+			}
+
+			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+			credUUID = strings.ReplaceAll(credUUID, "\"", "")
+			log.Infof("Got Cred UUID: %s", credUUID)
+			contexts = make([]*scheduler.Context, 0)
+			policyName := "intervalpolicy"
+
+			stepLog = fmt.Sprintf("create schedule policy %s", policyName)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+				if err != nil {
+					retain := 4
+					interval := 2
+					log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+					schedPolicy = &storkv1.SchedulePolicy{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name: policyName,
+						},
+						Policy: storkv1.SchedulePolicyItem{
+							Interval: &storkv1.IntervalPolicy{
+								Retain:          storkv1.Retain(retain),
+								IntervalMinutes: interval,
+							},
+						}}
+
+					_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+					log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+				}
+			})
+
+		})
+
+		log.InfoD(stepLog)
+		existingAppList := Inst().AppList
+
+		selectedNode := GetNodeWithLeastSize()
+
+		stNodes := node.GetStorageNodes()
+		var secondReplNode node.Node
+		for _, stNode := range stNodes {
+			if stNode.Name != selectedNode.Name {
+				secondReplNode = stNode
+			}
+		}
+
+		if selectedNode.Name == "" {
+			log.FailOnError(fmt.Errorf("no node with multiple pools exists"), "error identifying node with more than one pool")
+
+		}
+		log.Infof("Identified node [%s] for pool expansion", selectedNode.Name)
+
+		repl1PoolUUID := selectedNode.Pools[0].Uuid
+
+		repl1Pool, err := GetStoragePoolByUUID(repl1PoolUUID)
+		log.FailOnError(err, "error getting storage pool with UUID [%s]", repl1PoolUUID)
+
+		repl2Pool := secondReplNode.Pools[0]
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
+		//expanding to repl2 pool so that it won't go to storage down state
+		if (repl2Pool.TotalSize / units.GiB) <= (repl1Pool.TotalSize/units.GiB)*2 {
+			expectedSize := (repl2Pool.TotalSize / units.GiB) * 2
+			log.InfoD("Current Size of the pool %s is %d", repl2Pool.Uuid, repl2Pool.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(repl2Pool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			resizeErr := waitForPoolToBeResized(expectedSize, repl2Pool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", repl2Pool.Uuid, secondReplNode.Name))
+		}
+
+		stepLog = fmt.Sprintf("Fill up  pool [%s] in node [%s] and validate cloudsnaps", repl1Pool.Uuid, selectedNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolLabelToUpdate := make(map[string]string)
+			nodesToDisableProvisioning := make([]string, 0)
+			poolsToDisableProvisioning := make([]string, 0)
+
+			defer func() {
+				//Reverting the provisioning changes done for the test
+				Inst().AppList = existingAppList
+				err = Inst().V.SetClusterOpts(*selectedNode, map[string]string{
+					"--disable-provisioning-labels": ""})
+				log.FailOnError(err, fmt.Sprintf("error removing cluster options disable-provisioning-labels"))
+				err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+				err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+
+				poolLabelToUpdate[k8s.NodeType] = ""
+				poolLabelToUpdate["provision"] = ""
+				// Update the pool label
+				for _, p := range selectedNode.Pools {
+					err = Inst().V.UpdatePoolLabels(*selectedNode, p.Uuid, poolLabelToUpdate)
+					log.FailOnError(err, "Failed to update the label [%v] on the pool [%s] on node [%s]", poolLabelToUpdate, repl1Pool.Uuid, selectedNode.Name)
+				}
+
+			}()
+
+			//Disabling provisioning on the other nodes/pools  and enabling only on selected pools for making sure the metadata node is full
+			err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+			err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
+
+			for _, n := range stNodes {
+				if n.VolDriverNodeID != selectedNode.VolDriverNodeID && n.VolDriverNodeID != secondReplNode.VolDriverNodeID {
+					nodesToDisableProvisioning = append(nodesToDisableProvisioning, n.VolDriverNodeID)
+				}
+			}
+
+			for _, p := range selectedNode.Pools {
+				if p.Uuid != repl1Pool.Uuid {
+					poolsToDisableProvisioning = append(poolsToDisableProvisioning, p.Uuid)
+				}
+
+			}
+			for _, p := range secondReplNode.Pools {
+				if p.Uuid != repl2Pool.Uuid {
+					poolsToDisableProvisioning = append(poolsToDisableProvisioning, p.Uuid)
+				}
+
+			}
+
+			poolLabelToUpdate[k8s.NodeType] = ""
+			poolLabelToUpdate["provision"] = "disable"
+			for _, p := range selectedNode.Pools {
+				if p.Uuid != repl1Pool.Uuid {
+					err = Inst().V.UpdatePoolLabels(*selectedNode, p.Uuid, poolLabelToUpdate)
+					log.FailOnError(err, "Failed to update the label [%v] on the pool [%s] on node [%s]", poolLabelToUpdate, repl1Pool.Uuid, selectedNode.Name)
+
+				}
+			}
+
+			clusterOptsVal := fmt.Sprintf("\"node=%s;provision=disable\"", strings.Join(nodesToDisableProvisioning, ","))
+			err = Inst().V.SetClusterOpts(*selectedNode, map[string]string{
+				"--disable-provisioning-labels": clusterOptsVal})
+			log.FailOnError(err, fmt.Sprintf("error update cluster options disable-provisioning-labels with value [%s]", clusterOptsVal))
+
+			Inst().AppList = []string{"fio-fastpath"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plflcs-%d", i))...)
+			}
+			ValidateApplications(contexts)
+			defer appsValidateAndDestroy(contexts)
+			nsList, err := core.Instance().ListNamespaces(map[string]string{"creator": "torpedo"})
+			log.FailOnError(err, "error getting all namespaces")
+			log.Infof("%v", nsList)
+			appNamespaces := make([]string, 0)
+			for _, ns := range nsList.Items {
+				if strings.Contains(ns.Name, "plflcs") {
+					appNamespaces = append(appNamespaces, ns.Name)
+				}
+			}
+
+			if len(appNamespaces) == 0 {
+				log.FailOnError(fmt.Errorf("no namespaces found to validate cloudsnaps"), "error getting cloudsnap namespaces")
+			}
+
+			stepLog = "validate cloudsnaps"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ns := range appNamespaces {
+					_, err = validateCloudSnaps(ns)
+					log.FailOnError(err, fmt.Sprintf("error validating cloudsnaps in namespace [%s]", ns))
+				}
+			})
+
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to make pool [%s] offline", repl1Pool.Uuid))
+
+			stepLog = "validate cloudsnaps after pool full"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.Infof("waiting for 2 mins to create new cloudsnaps")
+				time.Sleep(2 * time.Minute)
+				for _, ns := range appNamespaces {
+					_, err = validateCloudSnaps(ns)
+					log.FailOnError(err, fmt.Sprintf("error validating cloudsnaps in namespace [%s] after pool full", ns))
+				}
+			})
+
+			expectedSize := (repl1Pool.TotalSize / units.GiB) * 2
+
+			log.InfoD("Current Size of the pool %s is %d", repl1Pool.Uuid, repl1Pool.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(repl1Pool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			resizeErr := waitForPoolToBeResized(expectedSize, repl1Pool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", repl1Pool.Uuid, selectedNode.Name))
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s. Current status: [%s]", selectedNode.Name, status.String()))
+
+			stepLog = "validate cloudsnaps after pool resize"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.Infof("waiting for 2 mins to create new cloudsnaps")
+				time.Sleep(2 * time.Minute)
+				for _, ns := range appNamespaces {
+					_, err = validateCloudSnaps(ns)
+					log.FailOnError(err, fmt.Sprintf("error validating cloudsnaps in namespace [%s] after pool resize", ns))
+				}
+			})
+
+		})
+
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
