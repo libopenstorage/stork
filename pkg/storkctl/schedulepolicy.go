@@ -82,7 +82,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 		Short:   "Create schedule policy",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for schedule policy name"))
+				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for schedule policy name"))
 				return
 			}
 			schedulePolicyName := args[0]
@@ -91,7 +91,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			dayOfWeek = strings.ToLower(dayOfWeek)
 			//Validate user input for retain
 			if c.Flags().Changed("retain") && retain <= 0 {
-				util.CheckErr(fmt.Errorf("need to provide a valid value for retain. It should be a positive integer"))
+				util.CheckErr(fmt.Errorf("Need to provide a valid value for retain. It should be a positive integer"))
 				return
 			}
 			switch schedulePolicyType {
@@ -116,7 +116,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				dailyPolicy.ForceFullSnapshotDay = strings.ToLower(dailyForceFullSnapshotDay)
 				//Validate ForceFullSnapshotDay is a valid weekday
 				if _, present := storkv1.Days[dailyPolicy.ForceFullSnapshotDay]; !present {
-					util.CheckErr(fmt.Errorf("invalid day of the week (%v) in policy.daily.forceFullSnapshotDay", dailyPolicy.ForceFullSnapshotDay))
+					util.CheckErr(fmt.Errorf("Invalid day of the week (%v) in policy.daily.forceFullSnapshotDay", dailyPolicy.ForceFullSnapshotDay))
 					return
 				}
 				if retain == 0 {
@@ -161,7 +161,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				}
 				policyItem.Monthly = &monthlyPolicy
 			default:
-				util.CheckErr(fmt.Errorf("need to provide a valid schedule policy type. Valid schedule types are Interval, Daily, Weekly and Monthly"))
+				util.CheckErr(fmt.Errorf("Need to provide a valid schedule policy type. Valid schedule types are Interval, Daily, Weekly and Monthly"))
 				return
 			}
 			var schedulePolicy storkv1.SchedulePolicy
@@ -208,7 +208,7 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				scheduleTypes := []string{migrationSchedule, applicationBackupSchedule, volumeSnapshotSchedule}
 				policyLinkedTo, err := isSchedulePolicyBeingUsed(scheduleTypes, args[i], namespaces)
 				if err != nil {
-					util.CheckErr(fmt.Errorf("cannot delete the schedule policy %s. Unable to verify if the schedule policy is linked to other resources. %w", args[i], err))
+					util.CheckErr(fmt.Errorf("Cannot delete the schedule policy %s. Unable to verify if the schedule policy is linked to other resources. %w", args[i], err))
 					return
 				}
 				if len(policyLinkedTo[migrationSchedule])+
@@ -224,7 +224,7 @@ func newDeleteSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 							message += "\n"
 						}
 					}
-					util.CheckErr(fmt.Errorf("cannot delete the schedule policy %s.%s", args[i], message))
+					util.CheckErr(fmt.Errorf("Cannot delete the schedule policy %s.%s", args[i], message))
 					return
 				}
 				// Now we can try to delete the schedule policy since it's not linked to any other resource

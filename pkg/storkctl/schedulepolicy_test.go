@@ -193,12 +193,12 @@ func TestMonthlySchedulePolicy(t *testing.T) {
 func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 	defer resetTest()
 	cmdArgs := []string{"create", "schedulepolicy"}
-	expected := "error: exactly one name needs to be provided for schedule policy name"
+	expected := "error: Exactly one name needs to be provided for schedule policy name"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid Schedule Policy Type
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Invalid"}
-	expected = "error: need to provide a valid schedule policy type. Valid schedule types are Interval, Daily, Weekly and Monthly"
+	expected = "error: Need to provide a valid schedule policy type. Valid schedule types are Interval, Daily, Weekly and Monthly"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid IntervalMinutes value for Interval Policy
@@ -223,12 +223,12 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 
 	//Invalid retain value
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "--retain", "0"}
-	expected = "error: need to provide a valid value for retain. It should be a positive integer"
+	expected = "error: Need to provide a valid value for retain. It should be a positive integer"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid daily.fullSnapshotDay value
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Daily", "--retain", "1", "--force-full-snapshot-day", "Funday"}
-	expected = "error: invalid day of the week (funday) in policy.daily.forceFullSnapshotDay"
+	expected = "error: Invalid day of the week (funday) in policy.daily.forceFullSnapshotDay"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 }
@@ -372,7 +372,7 @@ func TestDeleteSchedulePolicyBeingUsedErrorCase(t *testing.T) {
 	require.NoError(t, err, "Error creating Volume Snapshot schedule")
 
 	cmdArgs := []string{"delete", "schedulepolicy", "test-policy"}
-	expected := "error: cannot delete the schedule policy test-policy.\n" +
+	expected := "error: Cannot delete the schedule policy test-policy.\n" +
 		"The resource is linked to -> Migration Schedules : test-ns/test-migration-schedule\n" +
 		"Application Backup Schedules : test-ns/test-applicationBackup-schedule\n" +
 		"Volume Snapshot Schedules : test-ns/test-volumeSnapshot-schedule\n"
