@@ -769,36 +769,6 @@ func (e *Extender) nodeHasAttachedVolume(dNode *volume.NodeInfo, vol *volume.Inf
 	return false
 }
 
-// isPodUsingLocallyAttachedVolume returns true if the pod is running node where volume is attached
-func (e *Extender) isPodUsingLocallyAttachedVolume(pod *v1.Pod, vol *volume.Info, driverNodes []*volume.NodeInfo) bool {
-	if pod == nil || vol == nil || driverNodes == nil {
-		return false
-	}
-	if pod.Status.HostIP == vol.AttachedOn {
-		log.Debugf("Pod %v/%v is using locally attached volume on node %v", pod.Namespace, pod.Name, pod.Status.HostIP)
-		return true
-	}
-	var volAttachedNode *volume.NodeInfo
-	for _, dNode := range driverNodes {
-		if e.nodeHasAttachedVolume(dNode, vol) {
-			volAttachedNode = dNode
-			break
-		}
-	}
-	// If pod.Status.HostIP doesn't match vol.AttachedOn, we need to check all IPs on the driver node on which volume is attached
-	if volAttachedNode != nil {
-		for _, nodeIP := range volAttachedNode.IPs {
-			if nodeIP == pod.Status.HostIP {
-				log.Debugf("Pod %v/%v is using locally attached volume on node %v", pod.Namespace, pod.Name, volAttachedNode.Hostname)
-				// Local attachment
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // isVirtLauncherPod returns true if it is a virt launcher pod
 func (e *Extender) isVirtLauncherPod(pod *v1.Pod) bool {
 	return pod.Labels["kubevirt.io"] == "virt-launcher"
@@ -1036,11 +1006,6 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 		}
 	} else {
 		driverNodes = volume.RemoveDuplicateOfflineNodes(driverNodes)
-		isExistingPodUsingLocallyAttachedVolume := e.isPodUsingLocallyAttachedVolume(podBeingLiveMigrated, volInfo, driverNodes)
-		if isExistingPodUsingLocallyAttachedVolume {
-			storklog.PodLog(pod).Infof("Existing pod is using locally attached volume")
-		}
-
 		for _, dnode := range driverNodes {
 			for _, knode := range args.Nodes.Items {
 				// Initialize with score to with score for remote node
@@ -1052,22 +1017,8 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 						if dataNode == dnode.StorageID {
 							// Current node has the volume replica
 							score = replicaNodeScore
-							nodeHasAttachedVolume := e.nodeHasAttachedVolume(dnode, volInfo)
-
-							if podBeingLiveMigrated != nil {
-								// LiveMigration in progress
-								// If existing pod is not using attached volume and current node has attached volume, assign a higher score to it
-								if !isExistingPodUsingLocallyAttachedVolume && nodeHasAttachedVolume {
-									storklog.PodLog(pod).Infof("Node %v has attached volume", dataNode)
-									score = int64(2 * nodePriorityScore)
-								}
-							} else {
-								if nodeHasAttachedVolume {
-									// There is no LiveMigration in progress
-									// When a new pod gets scheduling request
-									// assign a higher score for local volume attachment
-									score = int64(2 * nodePriorityScore)
-								}
+							if e.nodeHasAttachedVolume(dnode, volInfo) {
+								score = int64(2 * nodePriorityScore)
 							}
 						}
 					}
