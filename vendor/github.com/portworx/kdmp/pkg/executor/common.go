@@ -349,9 +349,12 @@ func parseS3Creds() (*Repository, error) {
 
 	sseType, err := os.ReadFile(sseTypePath)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed reading data from file %s : %s", sseTypePath, err)
-		logrus.Errorf("%v", errMsg)
-		return nil, fmt.Errorf(errMsg)
+		// sseTypePath field in the secret is optional, So ignoring if the file does not exists.
+		if !os.IsNotExist(err) {
+			errMsg := fmt.Sprintf("failed reading data from file %s : %s", sseTypePath, err)
+			logrus.Errorf("%v", errMsg)
+			return nil, fmt.Errorf(errMsg)
+		}
 	}
 
 	disableSsl, err := os.ReadFile(disableSslPath)

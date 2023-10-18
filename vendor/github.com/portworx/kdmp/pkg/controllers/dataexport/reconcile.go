@@ -539,27 +539,6 @@ func (c *Controller) createJobCredCertSecrets(
 		blNamespace = vb.Spec.BackupLocation.Namespace
 	}
 	if driverName == drivers.KopiaBackup {
-		pods, err := core.Instance().GetPodsUsingPVC(srcPVCName, dataExport.Spec.Source.Namespace)
-		if err != nil {
-			msg := fmt.Sprintf("error fetching pods using PVC %s/%s: %v", dataExport.Spec.Source.Namespace, srcPVCName, err)
-			logrus.Errorf(msg)
-			data := updateDataExportDetail{
-				status: kdmpapi.DataExportStatusFailed,
-				reason: msg,
-			}
-			return data, err
-		}
-		// filter out the pods that are create by us
-		count := len(pods)
-		for _, pod := range pods {
-			labels := pod.ObjectMeta.Labels
-			if _, ok := labels[drivers.DriverNameLabel]; ok {
-				count--
-			}
-		}
-		if count > 0 {
-			namespace = utils.AdminNamespace
-		}
 		blName = dataExport.Spec.Destination.Name
 		blNamespace = dataExport.Spec.Destination.Namespace
 	}
