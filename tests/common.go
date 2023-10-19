@@ -4241,12 +4241,31 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 // CreateS3BackupLocation creates backup location for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
-	time.Sleep(60 * time.Second)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	// Get SSE S3 Encryption Type
@@ -4277,11 +4296,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 				},
 			},
 		},
-	}
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
 	}
 
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -9401,7 +9415,25 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 	_, err := task.DoRetryWithTimeout(delVol, time.Duration(3)*appReadinessTimeout, 30*time.Second)
 
 	return schedVolumeSnapstatus, err
+}
 
+// IsCloudCredPresent checks whether the Cloud Cred is present or not
+func IsCloudCredPresent(cloudCredName string, ctx context1.Context, orgID string) (bool, error) {
+	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredentialByUser(ctx, cloudCredEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
+		if cloudCredObj.GetName() == cloudCredName {
+			log.Infof("Cloud Credential [%s] is present", cloudCredName)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // GetAllPoolsPresent returns list of all pools present in the cluster

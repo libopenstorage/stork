@@ -2171,25 +2171,6 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 	return false, nil
 }
 
-// IsCloudCredPresent checks whether the Cloud Cred is present or not
-func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string) (bool, error) {
-	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
-		OrgId:          orgID,
-		IncludeSecrets: false,
-	}
-	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredential(ctx, cloudCredEnumerateRequest)
-	if err != nil {
-		return false, err
-	}
-	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
-		if cloudCredObj.GetName() == cloudCredName {
-			log.Infof("Cloud Credential [%s] is present", cloudCredName)
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.
 func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string, namespace string) (deploymentName string, err error) {
