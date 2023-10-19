@@ -55,6 +55,8 @@ func createMigrationScheduleAndVerify(
 	})
 	require.True(t, err == nil || errors.IsAlreadyExists(err), "Error creating schedulepolicy")
 
+	createClusterPair(t, clusterpair, namespace, "async-dr")
+
 	expected := "MigrationSchedule " + name + " created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
@@ -67,6 +69,7 @@ func createMigrationScheduleAndVerify(
 	require.Equal(t, namespaces, migration.Spec.Template.Spec.Namespaces, "MigrationSchedule namespace mismatch")
 	require.Equal(t, preExecRule, migration.Spec.Template.Spec.PreExecRule, "MigrationSchedule preExecRule mismatch")
 	require.Equal(t, postExecRule, migration.Spec.Template.Spec.PostExecRule, "MigrationSchedule postExecRule mismatch")
+	require.Equal(t, true, *migration.Spec.Template.Spec.IncludeVolumes, "MigrationSchedule includeVolumes mismatch")
 }
 
 func TestGetMigrationSchedulesOneMigrationSchedule(t *testing.T) {
@@ -204,20 +207,34 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 }
 
 func TestCreateMigrationSchedulesNoNamespace(t *testing.T) {
-	cmdArgs := []string{"create", "migrationschedules", "-c", "clusterPair1", "migration1"}
+	defer resetTest()
+	clusterPairName := "clusterPair1"
+	createClusterPair(t, clusterPairName, "default", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-c", clusterPairName, "migration1"}
 
 	expected := "error: need to provide atleast one namespace to migrate"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreateMigrationSchedulesNoClusterPair(t *testing.T) {
+	defer resetTest()
 	cmdArgs := []string{"create", "migrationschedules", "migration1"}
 
 	expected := "error: ClusterPair name needs to be provided for migration schedule"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
+func TestCreateMigrationSchedulesInvalidClusterPair(t *testing.T) {
+	defer resetTest()
+	clusterPairName := "clusterPair1"
+	cmdArgs := []string{"create", "migrationschedule", "-c", clusterPairName, "migration1"}
+
+	expected := "error: unable to find the cluster pair in the given namespace"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
 func TestCreateMigrationSchedulesNoName(t *testing.T) {
+	defer resetTest()
 	cmdArgs := []string{"create", "migrationschedules"}
 
 	expected := "error: exactly one name needs to be provided for migration schedule name"
@@ -229,6 +246,62 @@ func TestCreateMigrationSchedules(t *testing.T) {
 	createMigrationScheduleAndVerify(t, "createmigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 }
 
+func TestCreateMigrationScheduleSyncDrIncludeVolumesTrue(t *testing.T) {
+	defer resetTest()
+	clusterPair := "clusterpair1"
+	namespace := "namespace1"
+	name := "createmigrationschedule"
+	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
+		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace, "--includeVolumes=" + strconv.FormatBool(true)}
+	expected := "error: IncludeVolumes can only be set to false because the volumes are already present on the destination cluster as we deal with a single Portworx cluster in sync-dr usecases"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationScheduleWithIntervalAndVerify(t *testing.T) {
+	defer resetTest()
+	clusterPair := "clusterpair1"
+	namespace := "namespace1"
+	name := "createmigrationschedule"
+	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
+		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace}
+	expected := "MigrationSchedule createmigrationschedule created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	// Make sure it was created correctly
+	migration, err := storkops.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migration schedule")
+	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(name)
+	require.NoError(t, err, "Error getting schedule policy")
+	require.Equal(t, name, migration.Name, "MigrationSchedule name mismatch")
+	require.Equal(t, namespace, migration.Namespace, "MigrationSchedule namespace mismatch")
+	require.Equal(t, clusterPair, migration.Spec.Template.Spec.ClusterPair, "MigrationSchedule clusterpair mismatch")
+	require.Equal(t, []string{namespace}, migration.Spec.Template.Spec.Namespaces, "MigrationSchedule namespace mismatch")
+	//verifying includeVolumes default for syncDR usecase is false
+	require.Equal(t, false, *migration.Spec.Template.Spec.IncludeVolumes, "MigrationSchedule includeVolumes mismatch")
+	require.Equal(t, 15, schedulePolicy.Policy.Interval.IntervalMinutes, "MigrationSchedule schedulePolicy interval mismatch")
+	require.Equal(t, map[string]string{"key1": "value1"}, migration.Annotations, "MigrationSchedule annotations mismatch")
+}
+
+func TestCreateMigrationScheduleWithBothIntervalAndPolicyName(t *testing.T) {
+	defer resetTest()
+	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-s", "test-policy", "-c", "clusterPair1",
+		"--namespaces", "namespace1", "migrationschedule", "-n", "namespace1"}
+	expected := "error: must provide only one of schedulePolicyName or interval values"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationScheduleWithInvalidInterval(t *testing.T) {
+	defer resetTest()
+	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "-15", "-c", "clusterPair1",
+		"--namespaces", "namespace1", "migrationschedule", "-n", "namespace1"}
+	expected := "error: could not create a schedule policy with specified interval. Invalid intervalMinutes (-15) in Interval policy"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
 func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "createmigrationschedule", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
@@ -238,6 +311,28 @@ func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
+func TestDefaultMigrationSchedulePolicy(t *testing.T) {
+	defer resetTest()
+	// Create schedule without the default policy present
+	createClusterPair(t, "clusterpair1", "default", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "defaultpolicy", "-n", "test", "-c", "clusterpair1", "--namespaces", "test", "-n", "default"}
+	expected := "error: unable to get schedulepolicy default-migration-policy: schedulepolicies.stork.libopenstorage.org \"default-migration-policy\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	// Create again adding default policy
+	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default-migration-policy",
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	require.NoError(t, err, "Error creating schedulepolicy")
+	expected = "MigrationSchedule defaultpolicy created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
 func TestDeleteMigrationSchedulesNoMigrationName(t *testing.T) {
 	cmdArgs := []string{"delete", "migrationschedules"}
 
@@ -279,30 +374,6 @@ func TestDeleteMigrationSchedules(t *testing.T) {
 	cmdArgs = []string{"delete", "migrationschedules", "-c", "clusterpair1"}
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
 	expected += "MigrationSchedule deletemigration2 deleted successfully\n"
-	testCommon(t, cmdArgs, nil, expected, false)
-}
-
-func TestDefaultMigrationSchedulePolicy(t *testing.T) {
-	defer resetTest()
-	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", false)
-
-	// Create schedule without the default policy present
-	cmdArgs := []string{"create", "migrationschedules", "defaultpolicy", "-n", "test", "-c", "clusterpair", "--namespaces", "test"}
-	expected := "error: error getting schedulepolicy default-migration-policy: schedulepolicies.stork.libopenstorage.org \"default-migration-policy\" not found"
-	testCommon(t, cmdArgs, nil, expected, true)
-
-	// Create again adding default policy
-	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "default-migration-policy",
-		},
-		Policy: storkv1.SchedulePolicyItem{
-			Interval: &storkv1.IntervalPolicy{
-				IntervalMinutes: 1,
-			}},
-	})
-	require.NoError(t, err, "Error creating schedulepolicy")
-	expected = "MigrationSchedule defaultpolicy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -362,4 +433,26 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	expected = "MigrationSchedule " + name + " resumed successfully\nMigrationSchedule " + name1 + " resumed successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
+}
+
+func createClusterPair(t *testing.T, clusterPairName string, namespace string, mode string) {
+	options := make(map[string]string)
+	if mode == "async-dr" {
+		options["backuplocation"] = "value1"
+		options["ip"] = "value2"
+		options["port"] = "value3"
+		options["token"] = "value4"
+	}
+	clusterPair := &storkv1.ClusterPair{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterPairName,
+			Namespace: namespace,
+		},
+
+		Spec: storkv1.ClusterPairSpec{
+			Options: options,
+		},
+	}
+	_, err := storkops.Instance().CreateClusterPair(clusterPair)
+	require.True(t, err == nil || errors.IsAlreadyExists(err), "Error creating cluster pair")
 }
