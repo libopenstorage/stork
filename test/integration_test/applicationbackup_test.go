@@ -60,6 +60,7 @@ func TestApplicationBackup(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
+	t.Run("applicationBackupRestoreWithoutNMTest", applicationBackupRestoreWithoutNMTest)
 	t.Run("applicationBackupDelBackupLocation", applicationBackupDelBackupLocation)
 	t.Run("applicationBackupMultiple", applicationBackupMultiple)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
@@ -71,7 +72,6 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 	t.Run("backupSyncController", applicationBackupSyncControllerTest)
-	t.Run("applicationBackupRestoreWithoutNMTest", applicationBackupRestoreWithoutNMTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
