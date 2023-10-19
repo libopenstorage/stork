@@ -212,21 +212,32 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid Day value for Weekly Policy
-	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Weekly", "--time", "12:05PM", "--day-of-week", "SUNDAY"}
-	expected = "error: Invalid day of the week (SUNDAY) in Weekly policy"
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Weekly", "--time", "12:05PM", "--day-of-week", "FUNDAY"}
+	expected = "error: Invalid day of the week (funday) in Weekly policy"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid Date value for Monthly Policy
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Monthly", "--date-of-month", "32"}
 	expected = "error: Invalid date of the month (32) in Monthly policy"
 	testCommon(t, cmdArgs, nil, expected, true)
+
+	//Invalid retain value
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "--retain", "0"}
+	expected = "error: need to provide a valid value for retain. It should be a positive integer"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	//Invalid daily.fullSnapshotDay value
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Daily", "--retain", "1", "--force-full-snapshot-day", "Funday"}
+	expected = "error: invalid day of the week (funday) in policy.daily.forceFullSnapshotDay"
+	testCommon(t, cmdArgs, nil, expected, true)
+
 }
 
 func TestCreateIntervalPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
 	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Interval", "--interval-minutes", "90", "--retain", "2"}
-	expected := "schedule policy test-policy created successfully\n"
+	expected := "Schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -250,7 +261,7 @@ func TestCreateDailyPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
 	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Daily", "--time", "12:30PM", "--retain", "2"}
-	expected := "schedule policy test-policy created successfully\n"
+	expected := "Schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -265,7 +276,7 @@ func TestCreateDailyPolicy(t *testing.T) {
 			Daily: &storkv1.DailyPolicy{
 				Time:                 "12:30PM",
 				Retain:               2,
-				ForceFullSnapshotDay: "MONDAY", //default value of policy.daily.forceFullSnapshotDay
+				ForceFullSnapshotDay: "monday", //default value of policy.daily.forceFullSnapshotDay
 			}},
 	}
 	require.Equal(t, expectedPolicy, *actualPolicy, "Schedule Daily Policy mismatch")
@@ -275,7 +286,7 @@ func TestCreateWeeklyPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
 	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Weekly", "--time", "1:30PM", "--day-of-week", "Friday", "--retain", "4"}
-	expected := "schedule policy test-policy created successfully\n"
+	expected := "Schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -288,7 +299,7 @@ func TestCreateWeeklyPolicy(t *testing.T) {
 		},
 		Policy: storkv1.SchedulePolicyItem{
 			Weekly: &storkv1.WeeklyPolicy{
-				Day:    "Friday",
+				Day:    "friday",
 				Time:   "1:30PM",
 				Retain: 4,
 			}},
@@ -300,7 +311,7 @@ func TestCreateMonthlyPolicy(t *testing.T) {
 	defer resetTest()
 	policyName := "test-policy"
 	cmdArgs := []string{"create", "schedulepolicy", policyName, "--policy-type", "Monthly", "--time", "12:30PM", "--date-of-month", "12", "--retain", "2"}
-	expected := "schedule policy test-policy created successfully\n"
+	expected := "Schedule policy test-policy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
@@ -401,6 +412,6 @@ func TestDeleteSchedulePolicy(t *testing.T) {
 	require.NoError(t, err, "Error creating schedulepolicy")
 
 	cmdArgs := []string{"delete", "schedulepolicy", "monthly-policy", "weekly-policy"}
-	expected := "schedule policy monthly-policy deleted successfully\nschedule policy weekly-policy deleted successfully\n"
+	expected := "Schedule policy monthly-policy deleted successfully\nSchedule policy weekly-policy deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
