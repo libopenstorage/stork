@@ -80,7 +80,7 @@ spec:
             add:
               - IPC_LOCK
               - SYS_RESOURCE
-        image: docker.elastic.co/elasticsearch/elasticsearch:6.5.0
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.2.0
         imagePullPolicy: IfNotPresent
         env:
         - name: ES_JAVA_OPTS
