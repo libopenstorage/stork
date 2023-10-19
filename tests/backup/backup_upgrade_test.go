@@ -250,7 +250,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 58021)
+		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 84757)
 		log.Infof("Scheduling applications")
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
