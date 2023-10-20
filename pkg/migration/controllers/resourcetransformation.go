@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -29,6 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+// pathRegexp is used to validate the transform spec path using a regular expression.
+// To check whether the path is formed with valid identifiers delimeted with '.' character where each element can optionally hold an index at the end.
+var pathRegexp = regexp.MustCompile(`^([a-zA-Z_/][a-zA-Z0-9_/]*(\[[0-9]+\])?\.)*[a-zA-Z_/][a-zA-Z0-9_/]*(\[[0-9]+\])?$`)
 
 const (
 	// ResourceTransformationControllerName of resource transformation CR handler
@@ -172,6 +177,10 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 				path.Type == stork_api.StringResourceType || path.Type == stork_api.SliceResourceType ||
 				path.Type == stork_api.KeyPairResourceType) {
 				return fmt.Errorf("unsupported type for resource %s, path %s, type: %s", kind, path.Path, path.Type)
+			}
+			//Path Validation
+			if !pathRegexp.MatchString(path.Path) {
+				return fmt.Errorf("invalid path for resource %s, path %s, type: %s", kind, path.Path, path.Type)
 			}
 		}
 	}
