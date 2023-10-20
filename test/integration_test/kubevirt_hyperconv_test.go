@@ -34,6 +34,10 @@ const (
 //
 // PX would have performed a single live migration in this test.
 func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
+	var testrailID, testResult = 93196, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
@@ -113,6 +117,10 @@ func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
 
 	logrus.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // This test simulates OCP upgrade by live-migrating VM to a *replica* node and
@@ -121,6 +129,10 @@ func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
 //
 // PX would have performed two back-to-back live migrations in this test.
 func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
+	var testrailID, testResult = 93197, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
@@ -215,6 +227,10 @@ func TestKubeVirtHyperConvTwoLiveMigrations(t *testing.T) {
 
 	logrus.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func verifyVMProperties(
