@@ -156,7 +156,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
 	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedulePolicyName", "s", "default-migration-policy", "Name of the schedule policy to use. If you want to create a new interval policy, use the interval flag instead")
 	createMigrationScheduleCommand.Flags().BoolVar(&suspend, "suspend", false, "Flag to denote whether schedule should be suspended on creation")
-	createMigrationScheduleCommand.Flags().BoolVar(&autoSuspend, "auto-suspend", true, "In case of a disaster, Stork will automatically suspend DR migration schedules on your source cluster, enabling migration to an active Kubernetes cluster")
+	createMigrationScheduleCommand.Flags().BoolVar(&autoSuspend, "autoSuspend", true, "In case of a disaster, Stork will automatically suspend DR migration schedules on your source cluster, enabling migration to an active Kubernetes cluster")
 	createMigrationScheduleCommand.Flags().IntVarP(&intervalMinutes, "interval", "i", 30, "Specify the periodic interval, in minutes, after which Stork should trigger the migration")
 	createMigrationScheduleCommand.Flags().StringToStringVar(&annotations, "annotations", map[string]string{}, "Add required annotations to the resource in the format key1=value1,key2=value2,... ")
 	return createMigrationScheduleCommand

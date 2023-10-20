@@ -282,6 +282,7 @@ func TestCreateMigrationScheduleWithIntervalAndVerify(t *testing.T) {
 	require.Equal(t, false, *migration.Spec.Template.Spec.IncludeVolumes, "MigrationSchedule includeVolumes mismatch")
 	require.Equal(t, 15, schedulePolicy.Policy.Interval.IntervalMinutes, "MigrationSchedule schedulePolicy interval mismatch")
 	require.Equal(t, map[string]string{"key1": "value1"}, migration.Annotations, "MigrationSchedule annotations mismatch")
+	require.Equal(t, true, migration.Spec.AutoSuspend, "MigrationSchedule annotations mismatch")
 }
 
 func TestCreateMigrationScheduleWithBothIntervalAndPolicyName(t *testing.T) {
