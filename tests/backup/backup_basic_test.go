@@ -267,7 +267,7 @@ var _ = AfterSuite(func() {
 							log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
 						}
 					}
-					err = DeleteCluster(clusterName, orgID, ctx, true)
+					err = DeleteCluster(clusterName, orgID, ctx, false)
 					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 					clusterDeleteStatus := func() (interface{}, bool, error) {
 						status, err := IsClusterPresent(clusterName, ctx, orgID)
