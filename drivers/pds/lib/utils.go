@@ -180,7 +180,7 @@ type StorageClassConfig struct {
 
 // PDS const
 const (
-	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
+	PDS_Health_Status_DOWN     PDS_Health_Status = "Partially Available"
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
 	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Available"
 
