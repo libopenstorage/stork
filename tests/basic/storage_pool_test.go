@@ -6251,10 +6251,9 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		}
 
-		err = nil
 		re := regexp.MustCompile("Requires pool maintenance mode")
-		if re.MatchString(fmt.Sprintf("%v", err)) == false {
-			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
+		if re.MatchString(fmt.Sprintf("%v", err)) == true {
+			err = nil
 		}
 		log.FailOnError(err, "pool delete successful?")
 
@@ -6740,7 +6739,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 
 		// Add multiple Drives to Storage less node
 		maxDrivesToAdd := 6
-		for i := 0; i < maxDrivesToAdd; i++ {
+		for i := 1; i < maxDrivesToAdd+1; i++ {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(AddCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
