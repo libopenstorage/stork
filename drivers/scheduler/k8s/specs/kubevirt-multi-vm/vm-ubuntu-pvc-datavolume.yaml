@@ -63,3 +63,5 @@ spec:
                   ubuntu:ubuntu
                   root:toor
                 expire: False
+              scripts-user:
+                -  /usr/bin/python3 /home/ubuntu/mysql_data.python &
