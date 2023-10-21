@@ -537,6 +537,8 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 	info.VolumeSourceRef = vols[0]
 
+	info.AttachedOn = vols[0].AttachedOn
+
 	return info, nil
 }
 
@@ -4250,6 +4252,11 @@ func (p *portworx) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.J
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
 func (a *portworx) GetCSIPodPrefix() (string, error) {
 	return csiPodNamePrefix, nil
+}
+
+// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+func (p *portworx) IsVirtualMachineSupported() bool {
+	return true
 }
 
 func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
