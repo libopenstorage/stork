@@ -254,7 +254,7 @@ func TestCreateMigrationScheduleSyncDrIncludeVolumesTrue(t *testing.T) {
 	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
 		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace, "--includeVolumes=" + strconv.FormatBool(true)}
-	expected := "error: IncludeVolumes can only be set to false because the volumes are already present on the destination cluster as we deal with a single Portworx cluster in sync-dr usecases"
+	expected := "error: IncludeVolumes can only be set to false in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 

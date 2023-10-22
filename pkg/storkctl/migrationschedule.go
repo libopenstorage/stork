@@ -65,8 +65,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			// Default value of includeVolumes for syncDr is false and for async DR is true
 			if isSyncDr {
 				if c.Flags().Changed("includeVolumes") && includeVolumes {
-					util.CheckErr(fmt.Errorf("IncludeVolumes can only be set to false because the volumes are already present " +
-						"on the destination cluster as we deal with a single Portworx cluster in sync-dr usecases"))
+					util.CheckErr(fmt.Errorf("IncludeVolumes can only be set to false in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"))
 					return
 				}
 				includeVolumes = false
@@ -77,13 +76,17 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 
-			//Allow the user to only add one of the flags schedulePolicyName or interval
+			//There are 4 possible cases for schedulePolicyName and interval flags
+			//user provides both schedulePolicyName and interval value -> we throw an error saying you can only fill one of the values
+			//user provides interval value only -> we will create a new schedule policy and use that in the migrationSchedule
+			//user provides schedulePolicyName only -> we will check if such a schedule policy exists and if yes use that schedulePolicy.
+			//user doesn't provide schedulePolicyName nor interval value -> we go ahead with the "default-migration-policy"
+
 			if c.Flags().Changed("schedulePolicyName") && c.Flags().Changed("interval") {
 				util.CheckErr(fmt.Errorf("must provide only one of schedulePolicyName or interval values"))
 				return
 			}
 
-			//If value for interval is explicitly set by the user, we will ignore schedulePolicyName
 			if c.Flags().Changed("interval") {
 				var policyItem storkv1.SchedulePolicyItem
 				var intervalPolicy storkv1.IntervalPolicy
@@ -96,7 +99,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 					return
 				}
 				policyItem.Interval = &intervalPolicy
-				//name of the schedule policy created will be same as the migration schedule name provided as an input.
+				//name of the schedule policy created will be same as the migration schedule name provided in the input.
 				schedulePolicyName = migrationScheduleName
 				var schedulePolicy storkv1.SchedulePolicy
 				schedulePolicy.Name = schedulePolicyName
@@ -107,8 +110,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 					return
 				}
 			} else {
-				//we reach here if user has not set the interval flag value.
-				//So we take either the user input for schedulePolicyName or the default schedulePolicyName
+				// case 3 and 4 are covered in this branch
 				logrus.Infof("schedulePolicy name is %s", schedulePolicyName)
 				_, err := storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 				if err != nil {
@@ -147,18 +149,18 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			printMsg(msg, ioStreams.Out)
 		},
 	}
-	createMigrationScheduleCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Comma separated list of namespaces to migrate")
-	createMigrationScheduleCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "ClusterPair name for migration")
-	createMigrationScheduleCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Include resources in the migration")
-	createMigrationScheduleCommand.Flags().BoolVarP(&includeVolumes, "includeVolumes", "", true, "Include volumes in the migration")
-	createMigrationScheduleCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", false, "Start applications on the destination cluster after migration")
-	createMigrationScheduleCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
-	createMigrationScheduleCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
+	createMigrationScheduleCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Specify the comma-separated list of namespaces to be included in the migration")
+	createMigrationScheduleCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "Specify the name of the ClusterPair in the same namespace to be used for the migration")
+	createMigrationScheduleCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Specify whether Kubernetes resources should be migrated")
+	createMigrationScheduleCommand.Flags().BoolVarP(&includeVolumes, "includeVolumes", "", true, "Specify whether the underlying Portworx volumes should be migratedSpecifies whether Kubernetes resources should be migrated")
+	createMigrationScheduleCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", false, "Specify whether the applications should be scaled up on the target cluster after a successful migration")
+	createMigrationScheduleCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Specify the name of the rule to be executed before every migration is triggered")
+	createMigrationScheduleCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Specify the name of the rule to be executed after every migration is triggered")
 	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedulePolicyName", "s", "default-migration-policy", "Name of the schedule policy to use. If you want to create a new interval policy, use the interval flag instead")
 	createMigrationScheduleCommand.Flags().BoolVar(&suspend, "suspend", false, "Flag to denote whether schedule should be suspended on creation")
-	createMigrationScheduleCommand.Flags().BoolVar(&autoSuspend, "autoSuspend", true, "In case of a disaster, Stork will automatically suspend DR migration schedules on your source cluster, enabling migration to an active Kubernetes cluster")
-	createMigrationScheduleCommand.Flags().IntVarP(&intervalMinutes, "interval", "i", 30, "Specify the periodic interval, in minutes, after which Stork should trigger the migration")
-	createMigrationScheduleCommand.Flags().StringToStringVar(&annotations, "annotations", map[string]string{}, "Add required annotations to the resource in the format key1=value1,key2=value2,... ")
+	createMigrationScheduleCommand.Flags().BoolVar(&autoSuspend, "autoSuspend", true, "In case of a disaster, Stork will automatically suspend DR migration schedules on your source cluster")
+	createMigrationScheduleCommand.Flags().IntVarP(&intervalMinutes, "interval", "i", 30, "Specify the time interval, in minutes, at which Stork should trigger migrations")
+	createMigrationScheduleCommand.Flags().StringToStringVar(&annotations, "annotations", map[string]string{}, "Add required annotations to the resource in comma-separated key value pairs. key1=value1,key2=value2,... ")
 	return createMigrationScheduleCommand
 }
 
