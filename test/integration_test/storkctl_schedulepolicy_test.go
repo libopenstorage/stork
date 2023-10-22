@@ -7,19 +7,20 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"testing"
+	"time"
+
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"os"
-	"testing"
-	"time"
 )
 
 func TestStorkCtlSchedulePolicy(t *testing.T) {
@@ -55,9 +56,9 @@ func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]s
 	}
 	cmd.SetArgs(cmdArgs)
 	//execute the command
-	logrus.Infof("The command being executed is %v", cmdArgs)
+	logrus.Infof("The storkctl command being executed is %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Execute storkctl failed: %v", err)
+		logrus.Errorf("Storkctl execution failed: %v", err)
 		return
 	}
 	// Get the captured output as a string
@@ -106,7 +107,7 @@ func deleteSchedulePolicyTest(t *testing.T) {
 	cmd.SetArgs(cmdArgs)
 	logrus.Infof("The command being executed is %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Execute storkctl failed: %v", err)
+		logrus.Errorf("Storkctl execution failed: %v", err)
 		return
 	}
 	actualOutput := outputBuffer.String()
@@ -213,7 +214,7 @@ func ValidateSchedulePolicy(t *testing.T, schedulePolicy *storkv1.SchedulePolicy
 		logrus.Errorf("Unable to get the schedule policy")
 		return err
 	}
-	logrus.Info("Trying to validate if the created policy is per expectations")
+	logrus.Info("Trying to validate the created policy")
 	//Validating schedulePolicy.Policy because schedulePolicy.metadata cannot be validated
 	require.Equal(t, schedulePolicy.Policy, actualPolicy.Policy, "Created schedule policy doesn't match the expected specification")
 	return nil
@@ -225,7 +226,6 @@ func SchedulePolicyCleanup(t *testing.T, policyName string) {
 	if err != nil {
 		logrus.Errorf("Unable to delete schedule policy %s", policyName)
 	}
-	waitInterval := 2 * time.Second
 	//check if the schedulePolicy is successfully deleted
 	f := func() (interface{}, bool, error) {
 		logrus.Infof("Checking if schedule policy resource is successfully deleted")
@@ -238,9 +238,9 @@ func SchedulePolicyCleanup(t *testing.T, policyName string) {
 			return "", true, err
 		}
 		//deletion done
-		logrus.Infof("schedule policy %s successfully deleted", policyName)
+		logrus.Infof("Schedule policy %s successfully deleted", policyName)
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, waitInterval)
+	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, 2*time.Second)
 	require.NoError(t, err, "Unable to delete schedule policy %s", policyName)
 }
