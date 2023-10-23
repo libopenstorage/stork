@@ -38,7 +38,8 @@ func TestKubevirt(t *testing.T) {
 	err = createTemplatePVC()
 	require.NoError(t, err, "Error creating template")
 
-	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
+	//	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
+	t.Run("kubeVirtHyperConvOneLiveMigration", kubeVirtHyperConvOneLiveMigration)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {

@@ -36,33 +36,25 @@ const (
 // should end up with a bind-mount.
 //
 // PX would have performed a single live migration in this test.
-func TestKubeVirtHyperConvOneLiveMigration(t *testing.T) {
+func kubeVirtHyperConvOneLiveMigration(t *testing.T) {
 	var testrailID, testResult = 93196, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "kubevirt-hyperconv-one-live-migration"
+	appKey := "kubevirt-fedora"
+	deployedVMName := "test-vm-csi"
 
-	// reset mock time before running any tests
-	err := setMockTime(nil)
-	require.NoError(t, err, "Error resetting mock time")
-
-	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
-
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-
-	appKeys := []string{"kubevirt"}
-
-	ctxs, err := schedulerDriver.Schedule("kubevirt-hyperconv-one-live-migration",
-		scheduler.ScheduleOptions{
-			AppKeys: appKeys,
-		})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, len(appKeys), len(ctxs))
+	ctxs := kubevirtVMDeployAndValidate(
+		t,
+		instanceID,
+		appKey,
+		deployedVMName,
+	)
 
 	allNodes := node.GetNodesByVoDriverNodeID()
 
 	for _, appCtx := range ctxs {
-		err = schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
+		err := schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for app %s to get to running state", appCtx.App.Key)
 
 		vols, err := schedulerDriver.GetVolumes(appCtx)
