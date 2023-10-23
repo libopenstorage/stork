@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 
@@ -6164,7 +6165,13 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 
 	// Check to handle cloud based deployment with 0 master nodes
 	if len(node.GetMasterNodes()) == 0 {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
+		return
+	}
+
+	// In case of ocp skip log collection
+	if Inst().S.String() == openshift.SchedName {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
 		return
 	}
 
