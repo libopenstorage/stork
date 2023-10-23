@@ -323,11 +323,13 @@ func (c *csi) OwnsPVCForBackup(
 func (c *csi) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	// Try to get info from the PV since storage class could be deleted
 	pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
+	_ = pv
 	if err != nil {
 		log.PVCLog(pvc).Warnf("error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 		return false
 	}
-	return c.OwnsPV(pv)
+	// return c.OwnsPV(pv)
+	return true
 }
 
 func (c *csi) HasNativeVolumeDriverSupport(driverName string) bool {
