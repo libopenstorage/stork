@@ -26,7 +26,6 @@ const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
-	podDestroyTimeout     = 5 * time.Minute
 )
 
 var (
@@ -810,7 +809,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
 	log.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
 
-	if err := deletePXPods(volumeDriverNamespace); err != nil {
+	if err := DeletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)
 	}
 
@@ -826,16 +825,6 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	}
 
 	return topologyLabels, nil
-}
-
-// deletePXPods delete px pods
-func deletePXPods(nameSpace string) error {
-	pxLabel := make(map[string]string)
-	pxLabel["name"] = "portworx"
-	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
-		return err
-	}
-	return nil
 }
 
 func populateIntervals() {

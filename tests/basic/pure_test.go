@@ -173,6 +173,10 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			e.x : --app-list nginx-fa-davol --provisioner csi --storage-driver pure
 		*/
 
+		//https://portworx.atlassian.net/browse/PWX-33551
+		err := UpdateDriverVariables(map[string]string{"PURE_REST_TIMEOUT": "60"}, map[string]string{"execution_timeout_sec": "180"})
+		log.FailOnError(err, "error update storage cluster spec with env variables")
+
 		var wg sync.WaitGroup
 		var terminate bool = false
 
@@ -313,7 +317,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			}
 			return nil, false, nil
 		}
-		_, err := task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
+		_, err = task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Error checking pool rebalance")
 
 		for _, eachVol := range allVolumes {

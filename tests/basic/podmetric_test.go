@@ -367,7 +367,7 @@ func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval stri
 	}
 
 	log.InfoD("Deleting PX pods for reloading the runtime Opts")
-	err = deletePXPods(storageSpec.Namespace)
+	err = DeletePXPods(storageSpec.Namespace)
 	if err != nil {
 		return err
 	}
