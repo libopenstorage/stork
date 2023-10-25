@@ -17,7 +17,7 @@ kind: VirtualMachine
 metadata:
   name: vm-ubuntu-pvc-datavolume
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:
@@ -50,7 +50,7 @@ spec:
       volumes:
         - name: containervolume
           persistentVolumeClaim:
-            claimName: pvc-cdi-ubuntu
+            claimName: pvc-cdi-ubuntu-app
         - name: datavolume
           dataVolume:
             name: pvc-data-volume

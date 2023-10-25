@@ -7,7 +7,6 @@ spec:
   externalTrafficPolicy: Cluster
   ports:
     - name: nodeport
-      nodePort: 30000
       port: 27017
       protocol: TCP
       targetPort: 22

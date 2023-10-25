@@ -400,8 +400,8 @@ PodLoop:
 				}
 				symlinkPath = strings.TrimSpace(symlinkPath)
 				if symlinkPath != "" && symlinkPath != path {
-					paths = append(paths[:i], paths[i+1:]...)
-					paths = append(paths, symlinkPath)
+					log.Infof("Linked path found for [%s] -> [%s]", path, symlinkPath)
+					paths[i] = symlinkPath
 				}
 			}
 			log.Infof("container [%s] and paths [%v] after checking sym links", containerName, paths)

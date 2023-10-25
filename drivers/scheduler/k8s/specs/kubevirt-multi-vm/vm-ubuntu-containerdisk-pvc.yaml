@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pvc-data-volume
+  name: pvc-data-volume-containerdisk
 spec:
   storageClassName: kubevirt-sc
   accessModes:
@@ -55,7 +55,7 @@ spec:
             image: docker.pwx.dev.purestorage.com/portworx/ubuntu-container-disk:20.0
         - name: datavolume
           dataVolume:
-            name: pvc-data-volume
+            name: pvc-data-volume-containerdisk
         - name: cloudinitvolume
           cloudInitNoCloud:
             userData: |-

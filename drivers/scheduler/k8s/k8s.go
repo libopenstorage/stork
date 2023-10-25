@@ -165,6 +165,8 @@ const (
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 	cdiImportComplete                 = "Import Complete"
+	cdiImageImportTimeout             = 20 * time.Minute
+	cdiImageImportRetry               = 30 * time.Second
 )
 
 const (
@@ -1748,6 +1750,12 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		return obj, nil
 	} else if specObj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
 		obj, err := k8sAdmissionRegistration.GetValidatingWebhookConfiguration(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		obj, err := k8sKubevirt.GetVirtualMachine(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -5233,7 +5241,7 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName)
 				}
 			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			if err != nil {
 				return err
 			}

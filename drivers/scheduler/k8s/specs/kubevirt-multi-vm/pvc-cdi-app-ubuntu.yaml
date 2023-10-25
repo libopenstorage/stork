@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pvc-cdi-ubuntu
+  name: pvc-cdi-ubuntu-app
   labels:
     app: containerized-data-importer
   annotations:

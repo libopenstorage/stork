@@ -26,6 +26,8 @@ type VirtualMachineOps interface {
 	StartVirtualMachine(*kubevirtv1.VirtualMachine) error
 	// StopVirtualMachine Stop VirtualMachine
 	StopVirtualMachine(*kubevirtv1.VirtualMachine) error
+	// RestartVirtualMachine restarts VirtualMachine
+	RestartVirtualMachine(*kubevirtv1.VirtualMachine) error
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -120,4 +122,12 @@ func (c *Client) StopVirtualMachine(vm *kubevirtv1.VirtualMachine) error {
 	}
 
 	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Stop(vm.GetName(), &kubevirtv1.StopOptions{})
+}
+
+// RestartVirtualMachine restarts VirtualMachine
+func (c *Client) RestartVirtualMachine(vm *kubevirtv1.VirtualMachine) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Restart(vm.GetName(), &kubevirtv1.RestartOptions{})
 }
