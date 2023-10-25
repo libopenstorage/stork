@@ -127,6 +127,9 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+
+	//ReplVPS volume placement strategy node label value
+	ReplVPS = "replvps"
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
@@ -1833,6 +1836,19 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		vpsSpec := "/torpedo/deployments/customconfigs/fastpath-vps.yaml"
 		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
 			log.Warnf("Cannot find fastpath-vps.yaml in path %s", vpsSpec)
+		} else {
+			cmdArgs := []string{"apply", "-f", vpsSpec}
+			err = osutils.Kubectl(cmdArgs)
+			if err != nil {
+				log.Errorf("Error applying spec %s", vpsSpec)
+			}
+		}
+	}
+
+	if strings.Contains(app.Key, "repl-vps") {
+		vpsSpec := "/torpedo/deployments/customconfigs/repl-vps.yaml"
+		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find repl-vps.yaml in path %s", vpsSpec)
 		} else {
 			cmdArgs := []string{"apply", "-f", vpsSpec}
 			err = osutils.Kubectl(cmdArgs)

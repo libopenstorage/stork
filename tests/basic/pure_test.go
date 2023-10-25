@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -162,7 +163,6 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 				"FADA/Generic Volumes while kvdb failover in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "Validate no panics when creating more number of pods on FADA/Generic " +
 		"Volumes while kvdb failover in progress"
@@ -337,5 +337,90 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// This test validates volume token timeout for FADA-volumes
+var _ = Describe("{FADAVolTokenTimout}", func() {
+	/*
+					https://portworx.atlassian.net/browse/PTX-18941
+
+					PWX :
+					https://portworx.atlassian.net/browse/PWX-33632
+
+					Bug Description :
+						The current token manager timeout is 3 minutes. This is not sufficient for FADA volumes since as part of FADA operations a REST call is made to FA.
+		                We have seen slowness in these APIs taking upto 15s to complete. This causes the token timeout to hit and PX to panic.
+
+			1. Deploying nginx pods using two FADA volumes with volume placement strategy, creating volumes on  node-1
+		    2. Deploy nginx pods using two FADA volumes creating 40 volumes at same time on the node-1
+		    3. After that verify volumes are created successfully
+	*/
+	JustBeforeEach(func() {
+
+		StartTorpedoTest("FADAVolTokenTimout", "Validate FADA volumes token timeout when multiple requests hit same node at same time", nil, 0)
+	})
+	stepLog := "Deploy and attach multiple FADA volumes on the same node and validate token request crash"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+		stepLog = "Schedule apps and attach 200+ volumes"
+		i := 0
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			appScale := 200
+
+			for i = 1; i < appScale; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fadavoltkn-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		var wg sync.WaitGroup
+
+		stepLog = "Attaching 40 volumes at same time"
+		scheduleCount := 40
+		Step(stepLog, func() {
+			scheduleAppParallel := func(c int) {
+				defer wg.Done()
+				defer GinkgoRecover()
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf(fmt.Sprintf("fadavoltkn-%d", c)))...)
+
+			}
+
+			// Create apps in parallel
+			for count := 0; count < scheduleCount; count++ {
+				wg.Add(1)
+				go scheduleAppParallel(i)
+				i++
+			}
+			wg.Wait()
+			ValidateApplications(contexts)
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

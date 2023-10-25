@@ -8,4 +8,4 @@ spec:
         - key: node-type
           operator: In
           values:
-            - fastpath
+            - "fastpath"

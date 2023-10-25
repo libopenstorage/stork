@@ -1,0 +1,32 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mount-fa-sc
+parameters:
+  backend: "pure_block"
+  csi.storage.k8s.io/fstype: xfs
+  placement_strategy: "repl-affinity-vps"
+  createoptions: -b size=2048
+provisioner: pxd.portworx.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+mountOptions:
+  - nosuid
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: createoption-fa-ext4-sc
+parameters:
+  backend: "pure_block"
+  csi.storage.k8s.io/fstype: ext4
+  placement_strategy: "repl-affinity-vps"
+  createoptions: -b 2048
+provisioner: pxd.portworx.com 
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+mountOptions:
+  - nosuid

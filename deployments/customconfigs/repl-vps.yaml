@@ -1,0 +1,12 @@
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: repl-affinity-vps
+spec:
+  replicaAffinity:
+    - enforcement: required
+      matchExpressions:
+        - key: "node-type"
+          operator: In
+          values:
+            - "replvps"
