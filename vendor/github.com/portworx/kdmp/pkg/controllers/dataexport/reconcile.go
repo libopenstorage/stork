@@ -195,7 +195,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			data := updateDataExportDetail{
 				stage:  kdmpapi.DataExportStageCleanup,
 				status: dataExport.Status.Status,
-				reason: "",
+				reason: dataExport.Status.Reason,
 			}
 			return false, c.updateStatus(dataExport, data)
 		}
@@ -1605,7 +1605,6 @@ func (c *Controller) restoreSnapshot(ctx context.Context, snapshotDriver snapsho
 	if err != nil {
 		return nil, err
 	}
-
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      toSnapshotPVCName(srcPvc.Name, string(de.UID)),
