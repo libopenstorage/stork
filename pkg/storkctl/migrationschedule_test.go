@@ -38,10 +38,10 @@ func createMigrationScheduleAndVerify(
 ) {
 	cmdArgs := []string{"create", "migrationschedules", "-s", schedulePolicyName, "-n", namespace, "-c", clusterpair, "--namespaces", strings.Join(namespaces, ","), name, "--suspend=" + strconv.FormatBool(suspend)}
 	if preExecRule != "" {
-		cmdArgs = append(cmdArgs, "--preExecRule", preExecRule)
+		cmdArgs = append(cmdArgs, "--pre-exec-rule", preExecRule)
 	}
 	if postExecRule != "" {
-		cmdArgs = append(cmdArgs, "--postExecRule", postExecRule)
+		cmdArgs = append(cmdArgs, "--post-exec-rule", postExecRule)
 	}
 
 	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
@@ -246,15 +246,15 @@ func TestCreateMigrationSchedules(t *testing.T) {
 	createMigrationScheduleAndVerify(t, "createmigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 }
 
-func TestCreateMigrationScheduleSyncDrIncludeVolumesTrue(t *testing.T) {
+func TestCreateMigrationScheduleSyncDrExcludeVolumesFalse(t *testing.T) {
 	defer resetTest()
 	clusterPair := "clusterpair1"
 	namespace := "namespace1"
 	name := "createmigrationschedule"
 	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
-		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace, "--includeVolumes=" + strconv.FormatBool(true)}
-	expected := "error: IncludeVolumes can only be set to false in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"
+		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace, "--exclude-volumes=" + strconv.FormatBool(false)}
+	expected := "error: the flag exclude-volumes can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -290,7 +290,7 @@ func TestCreateMigrationScheduleWithBothIntervalAndPolicyName(t *testing.T) {
 	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-s", "test-policy", "-c", "clusterPair1",
 		"--namespaces", "namespace1", "migrationschedule", "-n", "namespace1"}
-	expected := "error: must provide only one of schedulePolicyName or interval values"
+	expected := "error: must provide only one of schedule-policy-name or interval values"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
