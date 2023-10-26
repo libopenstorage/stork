@@ -181,6 +181,7 @@ func TestStorkCbt(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("cmdExecutorTest", cmdExecutorTest)
+	t.Run("dataExportTest", TestDataExportRsync)
 }
 
 func TestStorkCbtBackup(t *testing.T) {
