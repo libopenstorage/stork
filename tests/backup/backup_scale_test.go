@@ -37,7 +37,7 @@ var _ = Describe("{MutipleBackupLocationWithSameEndpoint}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("MutipleBackupLocationWithSameEndpoint", "Create Backup and Restore for Mutiple backup location added using same endpoint", nil, 86088)
+		StartTorpedoTest("MutipleBackupLocationWithSameEndpoint", "Create Backup and Restore for Mutiple backup location added using same endpoint", nil, 84902)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

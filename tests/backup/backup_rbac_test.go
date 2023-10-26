@@ -217,9 +217,7 @@ var _ = Describe("{VerifyRBACforInfraAdmin}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule of application"))
 			}
 		})
-
-		createObjectsFromUser := func(user string) {
-			defer GinkgoRecover()
+		for _, user := range userNames {
 			Step(fmt.Sprintf("Create source and destination cluster from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Creating source and destination cluster from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -236,6 +234,9 @@ var _ = Describe("{VerifyRBACforInfraAdmin}", func() {
 					userClusterMap[user][clusterName] = userClusterUID
 				}
 			})
+		}
+		createObjectsFromUser := func(user string) {
+			defer GinkgoRecover()
 			Step(fmt.Sprintf("Take backup of applications from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Taking backup of applications from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -702,9 +703,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 			err = DeleteRestore(adminRestoreName, orgID, ctx)
 			log.FailOnError(err, "failed to delete restore %s of the px-admin", adminRestoreName)
 		})
-
-		createObjectsFromUser := func(user string) {
-			defer GinkgoRecover()
+		for _, user := range userNames {
 			Step(fmt.Sprintf("Create source and destination cluster from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Creating source and destination cluster from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -721,6 +720,9 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 					userClusterMap[user][clusterName] = userClusterUID
 				}
 			})
+		}
+		createObjectsFromUser := func(user string) {
+			defer GinkgoRecover()
 			Step(fmt.Sprintf("Take backup of applications from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Taking backup of applications from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -1056,8 +1058,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule of application"))
 			}
 		})
-
-		createObjectsFromUser := func(user string) {
+		for _, user := range userNames {
 			Step(fmt.Sprintf("Create source and destination cluster from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Creating source and destination cluster from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -1074,6 +1075,8 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 					userClusterMap[user][clusterName] = userClusterUID
 				}
 			})
+		}
+		createObjectsFromUser := func(user string) {
 			Step(fmt.Sprintf("Take backup of applications from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Taking backup of applications from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
