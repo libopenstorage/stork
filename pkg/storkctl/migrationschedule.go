@@ -6,7 +6,6 @@ import (
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -116,7 +115,6 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				}
 			} else {
 				// case 3 and 4 are covered in this branch
-				logrus.Infof("schedulePolicy name is %s", schedulePolicyName)
 				_, err := storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 				if err != nil {
 					util.CheckErr(fmt.Errorf("unable to get schedulepolicy %v: %v", schedulePolicyName, err))
