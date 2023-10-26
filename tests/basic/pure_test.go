@@ -2,7 +2,13 @@ package tests
 
 import (
 	"fmt"
+
 	"math/rand"
+
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/osutils"
+	v1 "k8s.io/api/core/v1"
+
 	"strings"
 	"sync"
 	"time"
@@ -419,6 +425,187 @@ var _ = Describe("{FADAVolTokenTimout}", func() {
 		}
 
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{FADARemoteDetach}", func() {
+
+	/*
+								https://portworx.atlassian.net/browse/PTX-20624
+
+
+								PWX :
+								https://portworx.atlassian.net/browse/PWX-33898
+								https://portworx.atlassian.net/browse/PWX-34277
+
+								Bug Description :
+									pod is in to ContainerCreation state for longer time when tried to move deployment from one node to other after cordoning the node
+
+							1. Deploying nginx pod with RWO FADA volumes on node-1
+					        2. Cordon the node-1 and rollout another pod consuming same FADA volume in node-2
+				            3. Validate pod is stuck in container creating state.
+							4. Stop PX on node-1, pod running on node-1 should go to Terminating state and pod on node-2 should be in running
+		                    5. Uncordon node-1 and start PX
+							6. pod node-1 should be terminated
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADARemoteDetach", "Validate FADA volume remote detach when px is down", nil, 0)
+	})
+
+	It("create and attach RWO volume. preform remote detach and attach to new pod", func() {
+
+		applist := Inst().AppList
+		var podNode node.Node
+		appPodName := "test-mount-error"
+		var appPod *v1.Pod
+		var newPod *v1.Pod
+
+		var appNamespace string
+		contexts = make([]*scheduler.Context, 0)
+		defer func() {
+			Inst().AppList = applist
+			if podNode.Name != "" {
+				err = Inst().S.EnableSchedulingOnNode(podNode)
+				log.FailOnError(err, "error enabling scheduling on node [%s]", podNode.Name)
+				StartVolDriverAndWait([]node.Node{podNode})
+			}
+
+		}()
+		Inst().AppList = []string{"nginx-fada-deploy"}
+
+		stepLog = "Deploy nginx pod and with RWO FADA Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = append(contexts, ScheduleApplications("fadavoldetach")...)
+
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Disable scheduling on the node where pod is running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nsList, err := core.Instance().ListNamespaces(map[string]string{"creator": "torpedo"})
+			log.FailOnError(err, "error getting all namespaces")
+
+			for _, ns := range nsList.Items {
+				if strings.Contains(ns.Name, "fadavoldetach") {
+					appNamespace = ns.Name
+					break
+				}
+			}
+			log.Infof("App deployed in namespace %s", appNamespace)
+			appPods, err := core.Instance().GetPods(appNamespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pods in namespace %s", appNamespace))
+			for _, p := range appPods.Items {
+				if strings.Contains(p.Name, appPodName) {
+					appPod = &p
+					break
+				}
+			}
+			if appPod == nil {
+				log.FailOnError(fmt.Errorf("pod with name [%s] not availalbe", appPodName), "error getting app pod")
+			}
+			podNodeName := appPod.Spec.NodeName
+			log.InfoD("pod [%s] is deployed on node %s", appPodName, podNodeName)
+			podNode, err = node.GetNodeByName(podNodeName)
+			log.FailOnError(err, fmt.Sprintf("error getting node with name %s", podNodeName))
+			log.InfoD("Disabling scheduling on node %s", podNodeName)
+			err = Inst().S.DisableSchedulingOnNode(podNode)
+			log.FailOnError(err, fmt.Sprintf("error cordoning the node %s", podNodeName))
+		})
+
+		podVolClaimName := appPod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName
+		stepLog = fmt.Sprintf("Do a rollout restart and create new replacement pod using volume [%s]", podVolClaimName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cmd := fmt.Sprintf("kubectl -n %s rollout restart deploy test-mount-error", appNamespace)
+			output, _, err := osutils.ExecShell(cmd)
+			log.FailOnError(err, "failed to run deployment rollout command")
+			if !strings.Contains(output, "restarted") {
+				log.FailOnError(fmt.Errorf("deployment restart failed with error : %s", output), "deployment restart failed")
+			}
+			appPods, err := core.Instance().GetPods(appNamespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pods in namespace %s", appNamespace))
+			for _, p := range appPods.Items {
+				if strings.Contains(p.Name, appPodName) && p.Name != appPod.Name {
+					newPod = &p
+					break
+				}
+			}
+			if newPod == nil {
+				log.FailOnError(fmt.Errorf("new pod with name [%s] is not availalbe", appPodName), "error getting new app pod")
+			}
+
+			err = core.Instance().ValidatePod(newPod, 2*time.Minute, 20*time.Second)
+			if err != nil {
+				currPod, err := core.Instance().GetPodByUID(newPod.UID, newPod.Namespace)
+				log.FailOnError(err, fmt.Sprintf("error getting current pod with UID[%s] in namespace [%s]", newPod.UID, newPod.Namespace))
+				containerState := currPod.Status.ContainerStatuses[0].State
+				if containerState.Waiting != nil {
+					dash.VerifyFatal(containerState.Waiting.Reason, "ContainerCreating", "verify new pod container is in ContainerCreating state")
+				} else {
+					err = fmt.Errorf("current state of pod is %v where as Waiting state is expected", containerState)
+					dash.VerifyFatal(err, nil, "validate new pod state")
+				}
+			}
+		})
+
+		stepLog = fmt.Sprintf("Stop Portworx on node [%s] and validate new pod", podNode.Name)
+		Step(stepLog, func() {
+			StopVolDriverAndWait([]node.Node{podNode})
+			err = core.Instance().ValidatePod(newPod, 5*time.Minute, 10*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify new pod [%s] is in ready state", newPod.Name))
+
+			// Waiting for original pod to be in terminating state
+			waitForPodTerminatingState := func() (interface{}, bool, error) {
+				orgPod, err := core.Instance().GetPodByUID(appPod.UID, appPod.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				containerState := orgPod.Status.ContainerStatuses[0].State
+				if containerState.Running != nil {
+					return nil, true, fmt.Errorf("container is still in running state")
+				}
+				log.Infof("current state is %v", containerState)
+
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodTerminatingState, 5*time.Minute, 10*time.Second)
+			log.FailOnError(err, fmt.Sprintf("error validating pod with UID[%s] status in namespace [%s]", newPod.UID, newPod.Namespace))
+			StartVolDriverAndWait([]node.Node{podNode})
+			// Waiting for original pod to be in terminating state
+			waitForPodTerminated := func() (interface{}, bool, error) {
+				appPods, err := core.Instance().GetPods(appNamespace, nil)
+				if err != nil {
+					return nil, true, err
+				}
+
+				for _, p := range appPods.Items {
+					if p.Name == appPod.Name {
+						return nil, true, fmt.Errorf("pod [%s] still not terminated. Current state [%v]", appPod.Name, p.Status.ContainerStatuses[0].State)
+					}
+				}
+
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodTerminated, 5*time.Minute, 10*time.Second)
+
+			dash.VerifyFatal(err, nil, "validate original pod is deleted after px is started.")
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)

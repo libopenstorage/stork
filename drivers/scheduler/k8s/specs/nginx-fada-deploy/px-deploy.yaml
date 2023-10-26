@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: poc1
+  name: test-mount-error
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: poc1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: poc1
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+      containers:
+        - command:
+            - /bin/sh
+          image: nginx
+          imagePullPolicy: Always
+          name: test-mount-pod
+          stdin: true
+          tty: true
+          volumeMounts:
+            - mountPath: /testvol
+              name: testvol
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - effect: NoSchedule
+          key: stateful
+          operator: Exists
+      volumes:
+        - name: testvol
+          persistentVolumeClaim:
+            claimName: nginx-fa-mount-pvc
