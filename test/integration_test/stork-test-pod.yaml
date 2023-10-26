@@ -41,7 +41,7 @@ spec:
   - command: ["gotestsum"]
     args:
     - --junitfile
-    - /testresults/junit.xml 
+    - /junit.xml 
     - --format
     - standard-verbose 
     - --raw-command
@@ -65,9 +65,6 @@ spec:
     image: openstorage/stork_test:latest
     securityContext:
       privileged: false
-    volumeMounts:
-    - mountPath: /testresults/
-      name: testresults
     name: stork
     env:
     - name: TORPEDO_SSH_USER
@@ -115,10 +112,5 @@ spec:
   hostNetwork: false
   hostNetwork: false
   hostPID: false
-  volumes:
-  - hostPath:
-      path: /testresults/
-      type: DirectoryOrCreate
-    name: testresults  
   serviceAccountName: stork-test-account
   restartPolicy: Never
