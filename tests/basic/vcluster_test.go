@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("CreateAndRunFioOnVcluster", func() {
+var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -37,8 +37,9 @@ var _ = Describe("CreateAndRunFioOnVcluster", func() {
 	}
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateAndRunFioOnVcluster", "Create, Connect and run FIO Application on Vcluster", nil, 0)
-		vc = vcluster.NewVCluster("my-vcluster1")
-		err := vc.CreateAndWaitVCluster()
+		vc, err := vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
 		log.FailOnError(err, "Failed to create VCluster")
 	})
 	It("Create FIO app on VCluster and run it for 10 minutes", func() {
@@ -69,7 +70,7 @@ var _ = Describe("CreateAndRunFioOnVcluster", func() {
 	})
 })
 
-var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
+var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
@@ -89,8 +90,9 @@ var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
 	}
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateAndRunMultipleFioOnVcluster", "Create, Connect and run Multiple FIO Applications on Same Vcluster", nil, 0)
-		vc = vcluster.NewVCluster("my-vcluster1")
-		err := vc.CreateAndWaitVCluster()
+		vc, err := vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
 		log.FailOnError(err, "Failed to create VCluster")
 	})
 	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
@@ -139,15 +141,16 @@ var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
 	})
 })
 
-var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
+var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
 	var appNS string
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUpScaleDownAppOnVcluster", "Creates Nginx Deployment on Vcluster, Scales it up and then scale it down", nil, 0)
-		vc = vcluster.NewVCluster("my-vcluster1")
-		err := vc.CreateAndWaitVCluster()
+		vc, err := vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
 		log.FailOnError(err, "Failed to create VCluster")
 	})
 	It("Create Nginx Deployment on VCluster, Sclae it up, Scale it down and Delete it from Vcluster", func() {
@@ -158,7 +161,7 @@ var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
 		log.Infof("Successfully created StorageClass with name: %v", scName)
 		// Create PVC on VCluster
 		appNS = scName + "-ns"
-		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		pvcName, err = vc.CreatePVC("", scName, appNS, "RWX")
 		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
 		log.Infof("Successfully created PVC with name: %v", pvcName)
 		deploymentName := "nginx-deployment"
@@ -202,7 +205,7 @@ var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
 	})
 })
 
-var _ = Describe("CreateAndRunFioOnVclusterRWX", func() {
+var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -221,8 +224,9 @@ var _ = Describe("CreateAndRunFioOnVclusterRWX", func() {
 	}
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateAndRunFioOnVclusterRWX", "Create, Connect and run 2 FIO Applications on Vcluster on RWX PVC", nil, 0)
-		vc = vcluster.NewVCluster("my-vcluster1")
-		err := vc.CreateAndWaitVCluster()
+		vc, err := vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
 		log.FailOnError(err, "Failed to create VCluster")
 	})
 	It("Create FIO app on VCluster and run it for 10 minutes", func() {
@@ -266,7 +270,7 @@ var _ = Describe("CreateAndRunFioOnVclusterRWX", func() {
 	})
 })
 
-var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
+var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
 	const totalVclusters = 3
 	var vClusters []*vcluster.VCluster
 	var scName string
@@ -289,9 +293,10 @@ var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
 		StartTorpedoTest("CreateAndRunMultipleFioOnManyVclusters", "Create, Connect and run Multiple FIO Applications on Many Vclusters in Parallel", nil, 0)
 		for i := 0; i < totalVclusters; i++ {
 			vClusterName := fmt.Sprintf("my-vcluster%d", i+1)
-			vc := vcluster.NewVCluster(vClusterName)
+			vc, err := vcluster.NewVCluster(vClusterName)
+			log.FailOnError(err, "Failed to initialise VCluster")
 			vClusters = append(vClusters, vc)
-			err := vc.CreateAndWaitVCluster()
+			err = vc.CreateAndWaitVCluster()
 			log.FailOnError(err, fmt.Sprintf("Failed to create VCluster %s", vClusterName))
 		}
 	})
@@ -350,15 +355,16 @@ var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
 	})
 })
 
-var _ = Describe("VolumeDriverDownVCluster", func() {
+var _ = Describe("{VolumeDriverDownVCluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
 	var appNS string
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolumeDriverDownVCluster", "Creates Nginx Deployment on Vcluster, Brings Down Portworx on All nodes and then brings it up, Validates Nginx Deployment", nil, 0)
-		vc = vcluster.NewVCluster("my-vcluster1")
-		err := vc.CreateAndWaitVCluster()
+		vc, err := vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
 		log.FailOnError(err, "Failed to create VCluster")
 	})
 	It("Create Nginx Deployment on VCluster, bring down Px on all nodes and once it is up, validate Nginx again", func() {

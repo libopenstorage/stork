@@ -70,9 +70,14 @@ type FIOOptions struct {
 }
 
 // NewVCluster Creates instance of Vcluster
-func NewVCluster(name string) *VCluster {
-	namespace := "vcluster-" + name
-	return &VCluster{Namespace: namespace, Name: name}
+func NewVCluster(name string) (*VCluster, error) {
+	err := SetDefaultStorageClass()
+	if err != nil {
+		return nil, err
+	}
+	namespace := fmt.Sprintf("ns-%v-%v", name, time.Now().Unix())
+	log.Infof("Namespace for Vcluster %v is : %v", name, namespace)
+	return &VCluster{Namespace: namespace, Name: name}, nil
 }
 
 // ExecuteVClusterCommand executes any generic vCluster command
@@ -92,12 +97,33 @@ func (v *VCluster) TerminateVCluster() error {
 }
 
 // CreateVCluster This method creates a vcluster. This requires vcluster.yaml saved in a specific location.
-func CreateVCluster(vclusterName string, absPath string) error {
-	_, err := ExecuteVClusterCommand("create", vclusterName, "-f", absPath, "--connect=false")
+func CreateVCluster(vclusterName, absPath, namespace string) error {
+	_, err := ExecuteVClusterCommand("create", vclusterName, "-n", namespace, "-f", absPath, "--connect=false")
 	if err != nil {
 		return err
 	}
 	log.Infof("vCluster with the name %v created successfully", vclusterName)
+	return nil
+}
+
+// SetDefaultStorageClass This method sets a default storage class if there is none set already
+func SetDefaultStorageClass() error {
+	// Check if there is already a default storage class
+	defaultSCs, err := k8sStorage.GetDefaultStorageClasses()
+	if err != nil {
+		return err
+	}
+	// If there is no default storage class, set "px-db" as the default
+	if len(defaultSCs.Items) == 0 {
+		log.Infof("No default StorageClass set. Setting 'px-db' as default StorageClass.")
+		err := k8sStorage.AnnotateStorageClassAsDefault("px-db")
+		if err != nil {
+			return err
+		}
+		log.Infof("'px-db' successfully set as default StorageClass.")
+	} else {
+		log.Infof("Default StorageClass already exists. No changes made.")
+	}
 	return nil
 }
 
@@ -177,14 +203,14 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 		}
 	}
 	log.Infof("Control Node IP: %v", ControlNodeIP)
-	sampleVclusterConfig := filepath.Join(currentDir, "..", "..", "deployments", "customconfigs", "vcluster.yaml")
+	sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
 	sampleVclusterConfigAbsPath, err := filepath.Abs(sampleVclusterConfig)
 	if err != nil {
 		return err
 	}
 
 	vcluster_config_filename := "vcluster-" + v.Name + ".yaml"
-	vClusterPath := filepath.Join(currentDir, "..", "..", "deployments", "customconfigs", vcluster_config_filename)
+	vClusterPath := filepath.Join(currentDir, vcluster_config_filename)
 	absPath, err := filepath.Abs(vClusterPath)
 	if err != nil {
 		return err
@@ -204,7 +230,7 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 	if err = v.CreateNodePortService(); err != nil {
 		return err
 	}
-	if err = CreateVCluster(v.Name, absPath); err != nil {
+	if err = CreateVCluster(v.Name, absPath, v.Namespace); err != nil {
 		return err
 	}
 	if err = v.SetClientSetForVCluster(); err != nil {

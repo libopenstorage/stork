@@ -21,6 +21,10 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
     ibmcloud plugin install -f vpc-infrastructure && \
     ibmcloud plugin install -f container-service
 
+# Install vCluster binary
+RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64"  \
+    && install -c -m 0755 vcluster /usr/local/bin  \
+    && rm -f vcluster
 
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
@@ -72,6 +76,7 @@ COPY --from=build /go/bin/ginkgo /bin/ginkgo
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
 COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
+COPY --from=build /usr/local/bin/vcluster /bin/vcluster
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 
