@@ -5091,9 +5091,9 @@ func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) er
 	return nil
 }
 
-// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
+// checkBackupObjectForUnexpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
 // is backed up or not
-func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) error {
+func checkBackupObjectForUnexpectedNS(ctx context.Context, backupName string) error {
 
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 
@@ -5147,37 +5147,45 @@ func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) e
 	return nil
 }
 
-// getNamespaceAge gets the namespace age of all the namespaces on the cluster
-func getNamespaceAge() (map[string]time.Time, error) {
-	var namespaceAge = make(map[string]time.Time)
+type nsPodAge map[string]time.Time
+
+// getPodAge gets the pod age of all pods on all the namespaces on the cluster
+func getPodAge() (map[string]nsPodAge, error) {
+	var podAge = make(map[string]nsPodAge)
 	err := SetDestinationKubeConfig()
 	if err != nil {
-		return namespaceAge, fmt.Errorf("failed to switch destination cluster context")
+		return podAge, fmt.Errorf("failed to switch destination cluster context")
 	}
 
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	for _, namespace := range allNamespaces.Items {
-		namespaceAge[namespace.ObjectMeta.GetName()] = namespace.ObjectMeta.GetCreationTimestamp().Time
+		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
+		if err != nil {
+			return podAge, fmt.Errorf("failed to get pods for namespace")
+		}
+		for _, pod := range pods.Items {
+			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetName(): pod.ObjectMeta.GetCreationTimestamp().Time}
+		}
 	}
 
 	err = SetSourceKubeConfig()
 	if err != nil {
-		return namespaceAge, fmt.Errorf("switching context to source cluster failed")
+		return podAge, fmt.Errorf("switching context to source cluster failed")
 	}
 
-	return namespaceAge, nil
+	return podAge, nil
 }
 
-// compareNamespaceAge checks the status of namespaces on clusters where the restore was done
-func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
+// comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
+func comparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 	err := SetDestinationKubeConfig()
 	if err != nil {
 		return fmt.Errorf("failed to switch destination cluster context")
 	}
 
-	namespaceNamesAge, err := getNamespaceAge()
+	podAge, err := getPodAge()
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
@@ -5193,12 +5201,18 @@ func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
 	for _, namespace := range allNamespaces.Items {
 		for _, skipCase := range namespacesToSkip {
 			if skipCase == namespace.GetName() {
-				if namespaceNamesAge[namespace.GetName()] != oldNamespaceAge[namespace.GetName()] {
-					return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+				pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
+				if err != nil {
+					return fmt.Errorf("failed to get pods for namespace")
 				}
-			} else {
-				if !namespaceNamesAge[namespace.GetName()].After(oldNamespaceAge[namespace.GetName()]) {
-					return fmt.Errorf("namespace[%s] not restored but was expected to be restored", namespace.GetName())
+				for _, pod := range pods.Items {
+					if podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] != oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] {
+						return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+					} else {
+						if !podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()].After(oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()]) {
+							return fmt.Errorf("namespace[%s] was not to be restored but was expected to be restored due to pod [%s] ", namespace.GetName(), pod.ObjectMeta.GetName())
+						}
+					}
 				}
 			}
 		}
