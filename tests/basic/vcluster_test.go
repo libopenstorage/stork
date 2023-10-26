@@ -2,15 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"strings"
+	"github.com/portworx/torpedo/drivers/node"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/log"
@@ -52,11 +49,12 @@ var _ = Describe("CreateAndRunFioOnVcluster", func() {
 		log.Infof("Successfully created StorageClass with name: %v", scName)
 		// Create PVC on VCluster
 		appNS = scName + "-ns"
-		pvcName, err = vc.CreatePVC(scName, appNS)
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
 		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
 		log.Infof("Successfully created PVC with name: %v", pvcName)
+		jobName := "fio-job"
 		// Create FIO Deployment on VCluster using the above PVC
-		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions)
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
 		log.FailOnError(err, "Error in creating FIO Application")
 		log.Infof("Successfully ran FIO on Vcluster")
 	})
@@ -71,112 +69,360 @@ var _ = Describe("CreateAndRunFioOnVcluster", func() {
 	})
 })
 
-var _ = Describe("CreateNginxAppOnVcluster", func() {
-	const vclusterCount = 1
-	vclusterNames := make([]string, vclusterCount)
+var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var appNS string
+	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
+	const batchCount = 5      // Number of FIO Pods to run in parallel in a single iteration
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   "100s",
+		Filename:  "/data/fiotest",
+		EndFsync:  1,
+	}
 	JustBeforeEach(func() {
-		StartTorpedoTest("VclusterOperations", "Create, Connect and execute a method on Vcluster", nil, 0)
-		vclusterNames, err = vcluster.CreateAndWaitForVCluster(vclusterCount)
-		log.FailOnError(err, "Failed in vcluster prep")
+		StartTorpedoTest("CreateAndRunMultipleFioOnVcluster", "Create, Connect and run Multiple FIO Applications on Same Vcluster", nil, 0)
+		vc = vcluster.NewVCluster("my-vcluster1")
+		err := vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
 	})
-	It("Bring up Nginx Application", func() {
-		for _, name := range vclusterNames {
-			log.Infof("Trying to connect to %v", name)
-			err := ConnectVClusterAndExecute(name, RunNginxAppOnVcluster, name, vcluster.NginxApp)
-			log.FailOnError(err, fmt.Sprintf("Failed to connect and execute method on cluster %v", name))
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		appNS = scName + "-ns"
+		for i := 0; i < totalIterations; i++ {
+			var wg sync.WaitGroup
+			var jobNames []string
+			for j := 0; j < batchCount; j++ {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					pvcNameSuffix := fmt.Sprintf("-pvc-%d-%d-%d", i, j, idx)
+					jobName := fmt.Sprintf("fio-job-%d-%d-%d", i, j, idx)
+					jobNames = append(jobNames, jobName)
+					pvcName, err := vc.CreatePVC(scName+pvcNameSuffix, scName, appNS, "")
+					log.FailOnError(err, fmt.Sprintf("Error creating PVC %v with Storageclass name %v", pvcName, scName))
+					log.Infof("Successfully created PVC with name: %v", pvcName)
+					// Create FIO Deployment on VCluster using the above PVC
+					err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+					log.FailOnError(err, "Error in creating FIO Application for PVC "+pvcName)
+				}(i + j)
+			}
+			wg.Wait()
+			log.Infof("Successfully ran FIO on Vcluster for batch starting at %d", i)
+			for _, jobName := range jobNames {
+				err := vc.DeleteJobOnVcluster(appNS, jobName)
+				log.FailOnError(err, fmt.Sprintf("Error deleting FIO Job: %v", jobName))
+				log.Infof("Removed FIO Job : %v successfully from vcluster %v", jobName, vc.Name)
+			}
+			log.Infof("Successfully removed all FIO Jobs from Vcluster")
 		}
 	})
 	JustAfterEach(func() {
-		for _, name := range vclusterNames {
-			vcluster.DeleteVCluster(name)
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
 		}
 	})
 })
 
-// This method connects to a vcluster and executes a test function that a testcase wants to run
-func ConnectVClusterAndExecute(vclusterName string, testFunc func([]interface{}) []interface{}, args ...interface{}) error {
-	killChan := make(chan bool)
-	// Running the vcluster connect in the background
-	go func() {
-		cmd := exec.Command("vcluster", "connect", vclusterName)
-		cmd.Start()
-		<-killChan
-		cmd.Process.Signal(os.Interrupt)
-		cmd.Wait()
-	}()
-	f := func() (interface{}, bool, error) {
-		cmd := exec.Command("kubectl", "config", "current-context")
-		out, err := cmd.Output()
+var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUpScaleDownAppOnVcluster", "Creates Nginx Deployment on Vcluster, Scales it up and then scale it down", nil, 0)
+		vc = vcluster.NewVCluster("my-vcluster1")
+		err := vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create Nginx Deployment on VCluster, Sclae it up, Scale it down and Delete it from Vcluster", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("nginx-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		deploymentName := "nginx-deployment"
+		// Create Nginx Deployment on VCluster using the above PVC
+		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
+		log.FailOnError(err, "Error in creating Nginx Application")
+		log.Infof("Successfully created Nginx App on Vcluster")
+		log.Infof("Hard Sleep for 10 seconds after creation of Nginx Deployment")
+		time.Sleep(10 * time.Second)
+		// Trying to Scale up the Deployment
+		log.Infof("Trying to Scale up this Nginx Deployment to 3 replicas")
+		err = vc.ScaleVclusterDeployment(appNS, deploymentName, 3)
+		log.FailOnError(err, "Failed to Scale up the Nginx Deployment")
+		log.Infof("Successfully triggered scale up of Nginx Deployment %v Running on Vcluster %v to 3 replicas", deploymentName, vc.Name)
+		// Validating if Nginx App has really scaled up
+		err = vc.ValidateDeploymentScaling(appNS, deploymentName, 3)
+		log.FailOnError(err, "Failed to Scale up the Nginx Deployment")
+		log.Infof("Successfully Scaled Nginx Deployment %v Running on Vcluster %v to 3 replicas", deploymentName, vc.Name)
+		// Trying to Scale Down the Deployment
+		log.Infof("Trying to Scale up this Nginx Deployment to 1 replicas")
+		err = vc.ScaleVclusterDeployment(appNS, deploymentName, 1)
+		log.FailOnError(err, "Failed to Scale down the Nginx Deployment")
+		log.Infof("Successfully triggered scale down of Nginx Deployment %v Running on Vcluster %v to 1 replicas", deploymentName, vc.Name)
+		// Validating if Nginx App has really scaled down
+		err = vc.ValidateDeploymentScaling(appNS, deploymentName, 1)
+		log.FailOnError(err, "Failed to Scale down the Nginx Deployment")
+		log.Infof("Successfully Scaled down Nginx Deployment %v Running on Vcluster %v to 1 replicas", deploymentName, vc.Name)
+		// Trying to Delete NGinx Deployment now
+		err = vc.DeleteDeploymentOnVCluster(appNS, deploymentName)
+		log.FailOnError(err, "Failed to delete Nginx Deployment name %v on Vcluster %v", deploymentName, vc.Name)
+		log.Infof("Successfully deleted Nginx deployment %v on Vcluster %v", deploymentName, vc.Name)
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
 		if err != nil {
-			return nil, true, fmt.Errorf("Failed to get current context: %v", err)
-		}
-		prefix := fmt.Sprintf("vcluster_%s_", vclusterName)
-		curContext := strings.TrimSpace(string(out))
-		log.Infof("current context is: %v", curContext)
-		log.Infof("prefix is: %v", prefix)
-		if !strings.Contains(curContext, prefix) {
-			return nil, true, fmt.Errorf("Context not yet switched to %v. Retrying", curContext)
+			log.Errorf("Problem in Cleanup: %v", err)
 		} else {
-			log.Infof("Successfully switched to context: %v", strings.TrimSpace(string(out)))
-			return nil, false, nil
+			log.Infof("Cleanup successfully done.")
 		}
-		return nil, true, fmt.Errorf("Context not yet switched")
-	}
-	_, err := task.DoRetryWithTimeout(f, vcluster.VclusterConnectionTimeout, vcluster.VClusterRetryInterval)
-	if err != nil {
-		killChan <- true
-		return err
-	}
+	})
+})
 
-	results := testFunc(args)
-	killChan <- true
-	if resError, ok := results[0].(error); ok && resError != nil {
-		return resError
+var _ = Describe("CreateAndRunFioOnVclusterRWX", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   "100s",
+		Filename:  "/data/fiotest",
+		EndFsync:  1,
 	}
-	return nil
-}
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndRunFioOnVclusterRWX", "Create, Connect and run 2 FIO Applications on Vcluster on RWX PVC", nil, 0)
+		vc = vcluster.NewVCluster("my-vcluster1")
+		err := vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create FIO app on VCluster and run it for 10 minutes", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "RWX")
+		log.FailOnError(err, fmt.Sprintf("Error creating RWX PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created RWX PVC with name: %v", pvcName)
+		jobName1 := "fio-job-1"
+		jobName2 := "fio-job-2"
 
-// This method tries to run nginx app within a vcluster
-func RunNginxAppOnVcluster(args []interface{}) []interface{} {
-	clusterName, ok := args[0].(string)
-	if !ok {
-		return []interface{}{fmt.Errorf("Expected the first argument type to be string")}
-	}
-	appToRun, ok := args[1].(string)
-	if !ok {
-		return []interface{}{fmt.Errorf("Expected the second argument type to be string")}
-	}
-	log.Infof("Trying to Run App %v within the vCluster: %v", appToRun, clusterName)
-	Inst().AppList = []string{appToRun}
-	vcluster.ContextChange = true
-	vcluster.CurrentClusterContext = clusterName
-	vcluster.UpdatedClusterContext = "host"
-	context := ScheduleApplications("vcluster-test-app")
-	errChan := make(chan error, 100)
-	for _, ctx := range context {
-		ValidateContext(ctx, &errChan)
-	}
-	var errors []error
-	for err := range errChan {
-		errors = append(errors, err)
-	}
-	errStrings := make([]string, 0)
-	for _, err := range errors {
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName1)
+			log.FailOnError(err, "Error in creating first FIO Application")
+		}()
+		go func() {
+			defer wg.Done()
+			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName2)
+			log.FailOnError(err, "Error in creating second FIO Application")
+		}()
+		wg.Wait()
+		log.Infof("Successfully ran 2 FIO jobs on Vcluster using a single RWX PVC")
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
 		if err != nil {
-			errStrings = append(errStrings, err.Error())
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
 		}
-	}
-	if len(errStrings) > 0 {
-		return []interface{}{errStrings}
-	}
-	opts := make(map[string]bool)
-	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+	})
+})
 
-	for _, ctx := range context {
-		TearDownContext(ctx, opts)
+var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
+	const totalVclusters = 3
+	var vClusters []*vcluster.VCluster
+	var scName string
+	var appNS string
+	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
+	const batchCount = 2      // Number of FIO Pods to run in parallel in a single iteration
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   "100s",
+		Filename:  "/data/fiotest",
+		EndFsync:  1,
 	}
-	return []interface{}{nil}
-}
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndRunMultipleFioOnManyVclusters", "Create, Connect and run Multiple FIO Applications on Many Vclusters in Parallel", nil, 0)
+		for i := 0; i < totalVclusters; i++ {
+			vClusterName := fmt.Sprintf("my-vcluster%d", i+1)
+			vc := vcluster.NewVCluster(vClusterName)
+			vClusters = append(vClusters, vc)
+			err := vc.CreateAndWaitVCluster()
+			log.FailOnError(err, fmt.Sprintf("Failed to create VCluster %s", vClusterName))
+		}
+	})
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		appNS = scName + "-ns"
+
+		var wgVClusters sync.WaitGroup
+		wgVClusters.Add(totalVclusters)
+
+		for _, vc := range vClusters {
+			go func(vc *vcluster.VCluster) {
+				defer wgVClusters.Done()
+				for i := 0; i < totalIterations; i++ {
+					var wg sync.WaitGroup
+					var jobNames []string
+					for j := 0; j < batchCount; j++ {
+						wg.Add(1)
+						go func(idx int) {
+							defer wg.Done()
+							pvcNameSuffix := fmt.Sprintf("-pvc-%d-%d-%d", i, j, idx)
+							jobName := fmt.Sprintf("fio-job-%d-%d-%d", i, j, idx)
+							jobNames = append(jobNames, jobName)
+							pvcName, err := vc.CreatePVC(scName+pvcNameSuffix, scName, appNS, "")
+							log.FailOnError(err, fmt.Sprintf("Error creating PVC %v with Storageclass name %v", pvcName, scName))
+							log.Infof("Successfully created PVC with name: %v", pvcName)
+							// Create FIO Deployment on VCluster using the above PVC
+							err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+							log.FailOnError(err, "Error in creating FIO Application for PVC "+pvcName)
+						}(i + j)
+					}
+					wg.Wait()
+					log.Infof("Successfully ran FIO on Vcluster for batch starting at %d", i)
+					for _, jobName := range jobNames {
+						err := vc.DeleteJobOnVcluster(appNS, jobName)
+						log.FailOnError(err, fmt.Sprintf("Error deleting FIO Job: %v", jobName))
+						log.Infof("Removed FIO Job : %v successfully from vcluster %v", jobName, vc.Name)
+					}
+					log.Infof("Successfully removed all FIO Jobs from Vcluster")
+				}
+			}(vc)
+		}
+		wgVClusters.Wait()
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		for _, vc := range vClusters {
+			vc.TerminateVCluster()
+			vcluster.DeleteNSFromHost(vc.Namespace)
+		}
+		vcluster.DeleteStorageclassFromHost(scName)
+	})
+})
+
+var _ = Describe("VolumeDriverDownVCluster", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeDriverDownVCluster", "Creates Nginx Deployment on Vcluster, Brings Down Portworx on All nodes and then brings it up, Validates Nginx Deployment", nil, 0)
+		vc = vcluster.NewVCluster("my-vcluster1")
+		err := vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create Nginx Deployment on VCluster, bring down Px on all nodes and once it is up, validate Nginx again", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("nginx-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		deploymentName := "nginx-deployment"
+		// Create Nginx Deployment on VCluster using the above PVC
+		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
+		log.FailOnError(err, "Error in creating Nginx Application")
+		log.Infof("Successfully created Nginx App on Vcluster")
+		log.Infof("Hard Sleep for 10 seconds after creation of Nginx Deployment")
+		time.Sleep(10 * time.Second)
+		// Validate if Nginx Deployment is healthy or not
+		err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+		log.FailOnError(err, "Looks like Nginx Deployment is not healthy")
+		log.Infof("Nginx Deployment %s is healthy. Will kill Px and wait for its restart on all nodes now", deploymentName)
+		Step("get nodes bounce volume driver", func() {
+			for _, appNode := range node.GetStorageDriverNodes() {
+				stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StopVolDriverAndWait([]node.Node{appNode})
+					})
+
+				stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StartVolDriverAndWait([]node.Node{appNode})
+					})
+
+				stepLog = "Giving few seconds for volume driver to stabilize"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(20 * time.Second)
+				})
+				// Validate if Nginx Deployment is healthy or not
+				err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+				log.FailOnError(err, "Looks like Nginx Deployment is not healthy")
+				log.Infof("Nginx Deployment %s is healthy. Will kill Px and wait for its restart on all nodes now", deploymentName)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
+		}
+	})
+})
 
 // CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
 func CreateStorageClass(scName string) error {

@@ -59,7 +59,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	vcluster "github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -1891,13 +1890,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				log.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
 			}
 		}
-		// Change Context only in case of vCluster tests
-		if vcluster.ContextChange {
-			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
-			if err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext); err != nil {
-				return nil, err
-			}
-		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
@@ -1922,15 +1914,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
-		if vcluster.ContextChange {
-			log.Infof("Changing context back to vcluster: %v", vcluster.CurrentClusterContext)
-			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
-			// Changing ContextChange flag to false to not trigger unnecessary context change further
-			vcluster.ContextChange = false
-			if err != nil {
-				return nil, err
-			}
-		}
 		return sc, nil
 
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {

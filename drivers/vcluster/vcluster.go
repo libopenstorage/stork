@@ -18,9 +18,11 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -73,59 +75,6 @@ func NewVCluster(name string) *VCluster {
 	return &VCluster{Namespace: namespace, Name: name}
 }
 
-// SwitchKubeContext This method switches kube context between host and any vcluster
-func SwitchKubeContext(target string) error {
-	cmd := exec.Command("kubectl", "config", "get-contexts", "-o", "name")
-	out, err := cmd.Output()
-	if err != nil {
-		return err
-	}
-	contexts := strings.Split(string(out), "\n")
-	var desiredContext string
-	if target == "host" {
-		for _, ctx := range contexts {
-			if ctx == "kubernetes-admin@cluster.local" {
-				desiredContext = ctx
-				break
-			}
-		}
-	} else {
-		prefix := fmt.Sprintf("vcluster_%s_", target)
-		for _, ctx := range contexts {
-			if strings.HasPrefix(ctx, prefix) {
-				desiredContext = ctx
-				break
-			}
-		}
-	}
-	if desiredContext == "" {
-		return fmt.Errorf("Context for %s not found", target)
-	}
-	log.Infof("Desired Context is : %v", desiredContext)
-	cmd = exec.Command("kubectl", "config", "use-context", desiredContext)
-	if _, err = cmd.CombinedOutput(); err != nil {
-		return err
-	}
-	cmd = exec.Command("kubectl", "config", "current-context")
-	out, err = cmd.Output()
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(string(out)) != desiredContext {
-		return fmt.Errorf("Failed to switch to the desired context: %s", desiredContext)
-	}
-	return nil
-}
-
-// DeleteVCluster This method deletes a vcluster
-func DeleteVCluster(vclusterName string) error {
-	cmd := exec.Command("vcluster", "delete", vclusterName)
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return nil
-}
-
 // ExecuteVClusterCommand executes any generic vCluster command
 func ExecuteVClusterCommand(args ...string) (string, error) {
 	cmd := exec.Command("vcluster", args...)
@@ -166,45 +115,6 @@ func WaitForVClusterRunning(vclusterName string, timeout time.Duration) error {
 	}
 	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
 	return err
-}
-
-func CreateAndWaitForVCluster(vclusterCount int) ([]string, error) {
-	vclusterNames := make([]string, vclusterCount)
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	controlIp, err := GetControlNodeIP()
-	if err != nil {
-		return nil, err
-	}
-	sampleVclusterConfig := filepath.Join(currentDir, "..", "..", "deployments", "customconfigs", "vcluster.yaml")
-	sampleVclusterConfigAbsPath, err := filepath.Abs(sampleVclusterConfig)
-	if err != nil {
-		return nil, err
-	}
-	for i := 0; i < vclusterCount; i++ {
-		vclusterNames[i] = fmt.Sprintf("my-vcluster%d", i+1)
-	}
-	for _, name := range vclusterNames {
-		vcluster_config_filename := "vcluster-" + name + ".yaml"
-		vClusterPath := filepath.Join(currentDir, "..", "..", "deployments", "customconfigs", vcluster_config_filename)
-		absPath, err := filepath.Abs(vClusterPath)
-		if err != nil {
-			return nil, err
-		}
-		err = UpdateVClusterConfig(sampleVclusterConfigAbsPath, absPath, controlIp)
-		if err != nil {
-			return nil, err
-		}
-		if err = CreateVCluster(name, absPath); err != nil {
-			return nil, err
-		}
-		if err = WaitForVClusterRunning(name, 10*time.Minute); err != nil {
-			return nil, err
-		}
-	}
-	return vclusterNames, nil
 }
 
 // GetControlNodeIP fetches the control node IP of host cluster to add it in vcluster config yaml file.
@@ -365,15 +275,26 @@ func (v *VCluster) SetClientSetForVCluster() error {
 }
 
 // CreatePVC creates a PVC in vcluster
-func (v *VCluster) CreatePVC(svcName, appNs string) (string, error) {
-	pvcName := v.Name + "-" + svcName + "-pvc"
+func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string, error) {
+	if pvcName == "" {
+		pvcName = v.Name + "-" + svcName + "-pvc"
+	}
+	var mode corev1.PersistentVolumeAccessMode
+	switch accessMode {
+	case "RWO":
+		mode = corev1.ReadWriteOnce
+	case "RWX":
+		mode = corev1.ReadWriteMany
+	default:
+		mode = corev1.ReadWriteOnce
+	}
 	createOpts := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Namespace: appNs,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			AccessModes:      []corev1.PersistentVolumeAccessMode{mode},
 			StorageClassName: &svcName,
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -389,7 +310,10 @@ func (v *VCluster) CreatePVC(svcName, appNs string) (string, error) {
 	}
 	// Creating Namespace in VCluster first before creating PVC
 	if _, err := v.Clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{}); err != nil {
-		return "", err
+		if !apierrors.IsAlreadyExists(err) {
+			return "", err
+		}
+		log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
 	}
 	_, err := v.Clientset.CoreV1().PersistentVolumeClaims(appNs).Create(context.TODO(), createOpts, metav1.CreateOptions{})
 	if err != nil {
@@ -402,7 +326,7 @@ func (v *VCluster) CreatePVC(svcName, appNs string) (string, error) {
 func int32Ptr(i int32) *int32 { return &i }
 
 // CreateFIODeployment creates a FIO Batch Job on given PVC
-func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions) error {
+func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string) error {
 	fioCmd := []string{
 		"fio",
 		"--name=" + fioOpts.Name,
@@ -420,7 +344,7 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	fioCmd = append(fioCmd, "--runtime="+fioOpts.Runtime)
 	fioJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "fio-job",
+			Name:      jobName,
 			Namespace: appNS,
 		},
 		Spec: batchv1.JobSpec{
@@ -463,7 +387,7 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	if _, err := v.Clientset.BatchV1().Jobs(appNS).Create(context.TODO(), fioJob, metav1.CreateOptions{}); err != nil {
 		return err
 	}
-	if err := v.WaitForFIOCompletion(appNS); err != nil {
+	if err := v.WaitForFIOCompletion(appNS, jobName); err != nil {
 		return err
 	}
 
@@ -492,20 +416,30 @@ func (v *VCluster) VClusterCleanup(scName string) error {
 	if err := v.TerminateVCluster(); err != nil {
 		return err
 	}
-	if err := k8sCore.DeleteNamespace(v.Namespace); err != nil {
+	if err := DeleteNSFromHost(v.Namespace); err != nil {
 		return err
 	}
-	if err := k8sStorage.DeleteStorageClass(scName); err != nil {
+	if err := DeleteStorageclassFromHost(scName); err != nil {
 		return err
 	}
 	return nil
 }
 
+// DeleteNSFromHost delete a namespace from host cluster
+func DeleteNSFromHost(ns string) error {
+	return k8sCore.DeleteNamespace(ns)
+}
+
+// DeleteStorageclassFromHost deletes a storageclass from host cluster
+func DeleteStorageclassFromHost(sc string) error {
+	return k8sStorage.DeleteStorageClass(sc)
+}
+
 // WaitForFIOCompletion checks for FIO pod completion in vcluster context
-func (v *VCluster) WaitForFIOCompletion(namespace string) error {
+func (v *VCluster) WaitForFIOCompletion(namespace, jobName string) error {
 	f := func() (interface{}, bool, error) {
 		log.Infof("Entering to see if FIO Job has completed")
-		job, err := v.Clientset.BatchV1().Jobs(namespace).Get(context.TODO(), "fio-job", metav1.GetOptions{})
+		job, err := v.Clientset.BatchV1().Jobs(namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
 		if err != nil {
 			return nil, false, err
 		}
@@ -536,4 +470,163 @@ func (v *VCluster) FetchFIOLogs(podName, namespace string) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// DeleteJobOnVcluster deletes the Job on Vcluster
+func (v *VCluster) DeleteJobOnVcluster(appNS string, jobName string) error {
+	deletePolicy := metav1.DeletePropagationForeground
+	return v.Clientset.BatchV1().Jobs(appNS).Delete(context.TODO(), jobName, metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+}
+
+// CreateNginxDeployment Deploys an Nginx Deployment on Vcluster
+func (v *VCluster) CreateNginxDeployment(pvcName string, appNS string, deploymentName string) error {
+	nginxDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: appNS,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": deploymentName,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": deploymentName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx-container",
+							Image: "nginx:latest",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/usr/share/nginx/html",
+									Name:      "nginx-volume",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "nginx-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Going ahead to deploy Nginx Application on VCluster %v", v.Name)
+	if _, err := v.Clientset.AppsV1().Deployments(appNS).Create(context.TODO(), nginxDeployment, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ScaleVclusterDeployment Scales a deployment on VCluster to set replicas
+func (v *VCluster) ScaleVclusterDeployment(appNS string, deploymentName string, replicas int32) error {
+	deployment, err := v.Clientset.AppsV1().Deployments(appNS).Get(context.TODO(), deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	deployment.Spec.Replicas = &replicas
+	_, err = v.Clientset.AppsV1().Deployments(appNS).Update(context.TODO(), deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Infof("Successfully scaled Deployment %s to %d replicas.", deploymentName, replicas)
+	return nil
+}
+
+// ListDeploymentPods This method lists all pods in a deployment in vcluster context
+func (v *VCluster) ListDeploymentPods(appNS, deploymentName string) (*v1.PodList, error) {
+	pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "app=" + deploymentName,
+	})
+	return pods, err
+}
+
+// ValidateDeploymentScaling Validates if a deployment on Vcluster is having expected number of Replicas or not
+func (v *VCluster) ValidateDeploymentScaling(appNS string, deploymentName string, expectedReplicas int32) error {
+	checkDeploymentScaling := func() (interface{}, bool, error) {
+		pods, err := v.ListDeploymentPods(appNS, deploymentName)
+		if err != nil {
+			return nil, true, err
+		}
+		runningPods := 0
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == corev1.PodRunning {
+				runningPods++
+			}
+		}
+		if int32(runningPods) == expectedReplicas {
+			log.Infof("Deployment %s has successfully scaled to %d replicas.", deploymentName, expectedReplicas)
+			return nil, false, nil
+		} else {
+			log.Infof("Deployment %s has %d replicas. Expected: %d", deploymentName, runningPods, expectedReplicas)
+			return nil, true, fmt.Errorf("Deployment %s has not scaled to expected replicas", deploymentName)
+		}
+	}
+	_, err := task.DoRetryWithTimeout(checkDeploymentScaling, VclusterAppTimeout, VClusterAppRetryInterval)
+	return err
+}
+
+// DeleteDeploymentOnVCluster deletes a deployment on the Vcluister
+func (v *VCluster) DeleteDeploymentOnVCluster(appNS string, deploymentName string) error {
+	deletePolicy := metav1.DeletePropagationForeground
+	return v.Clientset.AppsV1().Deployments(appNS).Delete(context.TODO(), deploymentName, metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+}
+
+// IsDeploymentHealthy validates if a deployment is healthy in a vcluster
+func (v *VCluster) IsDeploymentHealthy(appNS string, deploymentName string, expectedReplicas int32) error {
+	checkDeploymentHealth := func() (interface{}, bool, error) {
+		pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "app=" + deploymentName,
+		})
+		if err != nil {
+			return nil, true, err
+		}
+		healthyPods := 0
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == corev1.PodRunning {
+				allContainersReady := true
+				for _, containerStatus := range pod.Status.ContainerStatuses {
+					if !containerStatus.Ready {
+						allContainersReady = false
+						break
+					}
+				}
+				if allContainersReady {
+					healthyPods++
+				}
+			}
+		}
+		if int32(healthyPods) == expectedReplicas {
+			log.Infof("Deployment %s is healthy with %d healthy replicas.", deploymentName, expectedReplicas)
+			return nil, false, nil
+		} else {
+			log.Infof("Deployment %s has %d healthy replicas. Expected: %d", deploymentName, healthyPods, expectedReplicas)
+			return nil, true, fmt.Errorf("Deployment %s is not yet healthy", deploymentName)
+		}
+	}
+	_, err := task.DoRetryWithTimeout(checkDeploymentHealth, VclusterAppTimeout, VClusterAppRetryInterval)
+	return err
 }
