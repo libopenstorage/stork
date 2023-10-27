@@ -4124,6 +4124,31 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
+func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeClaim) ([]*volume.Volume, error) {
+	shouldAdd, err := k.filterPureVolumesIfEnabled(pvc)
+	if err != nil {
+		return nil, err
+	}
+	if !shouldAdd {
+		return vols, nil
+	}
+
+	pvcSizeObj := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	pvcSize, _ := pvcSizeObj.AsInt64()
+	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
+	vol := &volume.Volume{
+		ID:          string(pvc.Spec.VolumeName),
+		Name:        pvc.Name,
+		Namespace:   pvc.Namespace,
+		Shared:      k.isPVCShared(pvc),
+		Annotations: pvc.Annotations,
+		Labels:      pvc.Labels,
+		Size:        uint64(pvcSize),
+		Raw:         isRaw,
+	}
+	return append(vols, vol), nil
+}
+
 // GetVolumes  Get the volumes
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
@@ -4134,31 +4159,10 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
-			shouldAdd, err := k.filterPureVolumesIfEnabled(pvcObj)
+			vols, err = k.appendVolForPVC(vols, pvcObj)
 			if err != nil {
 				return nil, err
 			}
-			if !shouldAdd {
-				continue
-			}
-
-			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
-			pvcSize, _ := pvcSizeObj.AsInt64()
-			isRaw := *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock
-			vol := &volume.Volume{
-				ID:          string(pvcObj.Spec.VolumeName),
-				Name:        obj.Name,
-				Namespace:   obj.Namespace,
-				Shared:      k.isPVCShared(obj),
-				Annotations: make(map[string]string),
-				Labels:      pvcObj.Labels,
-				Size:        uint64(pvcSize),
-				Raw:         isRaw,
-			}
-			for key, val := range obj.Annotations {
-				vol.Annotations[key] = val
-			}
-			vols = append(vols, vol)
 		} else if pdsobj, ok := specObj.(*pds.ModelsDeployment); ok {
 			ss, err := k8sApps.GetStatefulSet(*pdsobj.ClusterResourceName, *pdsobj.Namespace.Name)
 			if err != nil {
@@ -4175,17 +4179,11 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v, Namespace: %s. Err: %v", ss.Name, ss.Namespace, err),
 				}
 			}
-
 			for _, pvc := range pvcList.Items {
-				vols = append(vols, &volume.Volume{
-					ID:        pvc.Spec.VolumeName,
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-					Shared:    k.isPVCShared(&pvc),
-				})
-			}
-			for _, vol := range vols {
-				log.Infof("In Get Volume method, vol name %s", vol.Name)
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
@@ -4205,16 +4203,37 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				vols = append(vols, &volume.Volume{
-					ID:        pvc.Spec.VolumeName,
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-					Shared:    k.isPVCShared(&pvc),
-				})
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if vm, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(vm.Namespace, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", vm.Namespace, err)
+			}
+			for _, pvc := range pvcList.Items {
+				// check if the pvc has our VM as the owner
+				want := false
+				for _, ownerRef := range pvc.OwnerReferences {
+					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
+						want = true
+					}
+				}
+				if !want {
+					continue
+				}
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
-
+	for _, vol := range vols {
+		log.Infof("K8s.GetVolumes() found volume %s for app %s", vol.Name, ctx.App.Key)
+	}
 	return vols, nil
 }
 
