@@ -5,7 +5,6 @@ package integrationtest
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
@@ -29,7 +27,9 @@ const (
 	importerPodCompletionTimeout = 20 * time.Minute
 	importerPodRetryInterval     = 10 * time.Second
 
-	kubevirtTemplateNamespace = "openshift-virtualization-os-images"
+	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
+	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
+	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
 )
 
 func TestKubevirt(t *testing.T) {
@@ -37,7 +37,7 @@ func TestKubevirt(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
 
-	err = createTemplatePVC()
+	err = createTemplatePVC(t)
 	require.NoError(t, err, "Error creating template")
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
@@ -51,12 +51,14 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	appKey := "kubevirt-fedora"
 	deployedVMName := "test-vm-csi"
 
-	kubevirtVMDeployAndValidate(
+	ctxs := kubevirtVMDeployAndValidate(
 		t,
 		instanceID,
 		appKey,
 		deployedVMName,
 	)
+
+	destroyAndWait(t, ctxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -97,54 +99,36 @@ func validateVM(t *testing.T, virtualMachine kubevirtv1.VirtualMachine, vmName s
 	// TODO add more validations here if required
 }
 
-func createTemplatePVC() error {
+func createTemplatePVC(t *testing.T) error {
 	_, err := schedulerDriver.Schedule("",
 		scheduler.ScheduleOptions{
 			AppKeys:   []string{"kubevirt-templates"},
 			Namespace: kubevirtTemplateNamespace,
 		})
-	if err != nil {
-		return fmt.Errorf("error deploying kubevirt templates")
-	}
-	waitForImporterPodStart := func() (interface{}, bool, error) {
-		allPods, err := core.Instance().GetPods(kubevirtTemplateNamespace, nil)
-		if err != nil || len(allPods.Items) == 0 {
-			return nil, true, fmt.Errorf("no importer pod not started yet. Retrying")
-		}
-		for _, pod := range allPods.Items {
-			if strings.Contains(pod.Name, importerPodPrefix) {
-				logrus.Infof("importer pod found: %s. Status: %s", pod.Name, pod.Status.Phase)
-				return nil, false, nil
+	require.NoErrorf(t, err, "error deploying kubevirt templates")
+
+	// if new templates are deployed, this function will wait for them to get imported else it will exit
+	waitForCompletedAnnotations := func() (interface{}, bool, error) {
+		// Loop through all PVCs and check for annotations that signify existing downloaded templates
+		pvcTemplates, err := core.Instance().GetPersistentVolumeClaims(kubevirtTemplateNamespace, nil)
+		require.NoErrorf(t, err, "error getting PVCs in %s namespace", kubevirtTemplateNamespace)
+		for _, pvc := range pvcTemplates.Items {
+			if pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation] != "Completed" {
+				return nil, true, fmt.Errorf("storage condition is not completed on pvc %s. Status: %s. Retrying.",
+					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation])
+			}
+			if pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation] != "Succeeded" {
+				return nil, true, fmt.Errorf("pod phase has not succeeded on pvc %s. Phase: %s. Retrying.",
+					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation])
 			}
 		}
-		return nil, false, nil
+		logrus.Infof("All templates are downloaded.")
+		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(waitForImporterPodStart, importerPodStartTimeout, importerPodRetryInterval)
+	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)
 	if err != nil {
 		return err
 	}
 
-	// Importer pod has begun, now wait for it to get completed and to disappear
-	waitForImporterPodCompletion := func() (interface{}, bool, error) {
-		allPods, err := core.Instance().GetPods(kubevirtTemplateNamespace, nil)
-		if err != nil {
-			return "", false, nil
-		}
-		for _, pod := range allPods.Items {
-			if strings.Contains(pod.Name, importerPodPrefix) {
-				if pod.Status.Phase == corev1.PodRunning {
-					return "", true, fmt.Errorf("importer pod %s found but not completed yet. Status: %s", pod.Name, pod.Status.Phase)
-				} else {
-					logrus.Infof("Importer pod: %s completed successfully", pod.Name)
-					return "", false, nil
-				}
-			}
-		}
-		return "", false, nil
-	}
-	_, err = task.DoRetryWithTimeout(waitForImporterPodCompletion, importerPodCompletionTimeout, importerPodRetryInterval)
-	if err != nil {
-		return err
-	}
 	return err
 }
