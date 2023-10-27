@@ -2,7 +2,7 @@ FROM postgres:latest
 
 RUN apt-get update 
 
-COPY scripts/pgbench.sh /entry-point.sh
+COPY --chmod=777 scripts/pgbench.sh /entry-point.sh
 
 RUN chmod u+x /entry-point.sh
 

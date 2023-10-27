@@ -76,6 +76,8 @@ spec:
         volumeMounts:
         - name: postgredb
           mountPath: /var/lib/postgresql/data
+        - name: postgresvolume
+          mountPath: /pgbench
       volumes:
       - name: postgredb
         persistentVolumeClaim:
