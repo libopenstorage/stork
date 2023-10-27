@@ -1443,6 +1443,7 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
 	var pods *corev1.PodList
 	var err error
+	// TODO: Revisit this function and remove the below code if not needed
 	podList := func() (interface{}, bool, error) {
 		pods, err = core.Instance().GetPods(namespace, label)
 		if err != nil {
@@ -1461,6 +1462,13 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 	if err != nil {
 		return err
 	}
+
+	// fetch the newest set of pods post wait for pods to come up
+	pods, err = core.Instance().GetPods(namespace, label)
+	if err != nil {
+		return err
+	}
+
 	for _, pod := range pods.Items {
 		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
 		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
