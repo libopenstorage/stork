@@ -66,10 +66,11 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				isSyncDr = true
 			}
 
-			// Default value of includeVolumes for syncDr is false and for async DR is true
+			// Default value of includeVolumes for asyncDr is true and for sync DR is false
 			if isSyncDr {
+				//covers the unlikely scenario where user sets the --exclude-volumes=false value in the command for a sync-dr migration use case
 				if c.Flags().Changed("exclude-volumes") && includeVolumes {
-					util.CheckErr(fmt.Errorf("the flag exclude-volumes can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"))
+					util.CheckErr(fmt.Errorf("the --exclude-volumes flag can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"))
 					return
 				}
 				includeVolumes = false
@@ -99,7 +100,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				// Validate the user input
 				err := intervalPolicy.Validate()
 				if err != nil {
-					util.CheckErr(fmt.Errorf("could not create a schedule policy with specified interval. %v", err))
+					util.CheckErr(fmt.Errorf("could not create a schedule policy with specified interval: %v", err))
 					return
 				}
 				policyItem.Interval = &intervalPolicy
@@ -110,7 +111,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				schedulePolicy.Policy = policyItem
 				_, err = storkops.Instance().CreateSchedulePolicy(&schedulePolicy)
 				if err != nil {
-					util.CheckErr(fmt.Errorf("could not create a schedule policy with specified interval. %v", err))
+					util.CheckErr(fmt.Errorf("could not create a schedule policy with specified interval: %v", err))
 					return
 				}
 			} else {
@@ -159,7 +160,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().BoolVarP(&startApplications, "start-applications", "a", false, "If present, the applications will be scaled up on the target cluster after a successful migration")
 	createMigrationScheduleCommand.Flags().StringVarP(&preExecRule, "pre-exec-rule", "", "", "Specify the name of the rule to be executed before every migration is triggered")
 	createMigrationScheduleCommand.Flags().StringVarP(&postExecRule, "post-exec-rule", "", "", "Specify the name of the rule to be executed after every migration is triggered")
-	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedule-policy-name", "s", "default-migration-policy", "Name of the schedule policy to use. If you want to create a new interval policy, use the interval flag instead")
+	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedule-policy-name", "s", "default-migration-policy", "Name of the schedule policy to use. If you want to create a new interval policy, use the --interval flag instead")
 	createMigrationScheduleCommand.Flags().BoolVar(&suspend, "suspend", false, "Flag to denote whether schedule should be suspended on creation")
 	createMigrationScheduleCommand.Flags().BoolVar(&disableAutoSuspend, "disable-auto-suspend", false, "Prevent automatic suspension of DR migration schedules on the source cluster in case of a disaster")
 	createMigrationScheduleCommand.Flags().IntVarP(&intervalMinutes, "interval", "i", 30, "Specify the time interval, in minutes, at which Stork should trigger migrations")
