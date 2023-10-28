@@ -84,7 +84,11 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 				applicationRestore.Spec.IncludeResources = objects
 			}
 
-			applicationRestore.Spec.NamespaceMapping = getNamespaceMapping(backup, nsMapping)
+			applicationRestore.Spec.NamespaceMapping, err = getNamespaceMapping(backup, nsMapping)
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
 			applicationRestore.Name = applicationRestoreName
 			applicationRestore.Namespace = cmdFactory.GetNamespace()
 			_, err = storkops.Instance().CreateApplicationRestore(applicationRestore)
@@ -294,24 +298,26 @@ func waitForApplicationRestore(name, namespace string, ioStreams genericclioptio
 	return msg, err
 }
 
-func getNamespaceMapping(backup *storkv1.ApplicationBackup, inputMappings string) map[string]string {
+func getNamespaceMapping(backup *storkv1.ApplicationBackup, inputMappings string) (map[string]string, error) {
 	inputMappingMap := make(map[string]string)
+	outputNSMapping := make(map[string]string)
 	if len(inputMappings) > 0 {
 		for _, inputMapping := range strings.Split(inputMappings, ",") {
 			nsMapping := strings.Split(inputMapping, ":")
 			if len(nsMapping) == 2 {
 				inputMappingMap[nsMapping[0]] = nsMapping[1]
+			} else {
+				return outputNSMapping, fmt.Errorf("invalid input namespace mapping %s", inputMapping)
 			}
 		}
 	}
-	nsMapping := make(map[string]string)
 	for _, ns := range backup.Spec.Namespaces {
-		nsMapping[ns] = ns
+		outputNSMapping[ns] = ns
 		if newNS, ok := inputMappingMap[ns]; ok {
-			nsMapping[ns] = newNS
+			outputNSMapping[ns] = newNS
 		}
 	}
-	return nsMapping
+	return outputNSMapping, nil
 }
 
 func getBackupObjectsMap(backup *storkv1.ApplicationBackup) map[string]*storkv1.ApplicationBackupResourceInfo {
