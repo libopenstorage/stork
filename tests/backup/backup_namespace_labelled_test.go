@@ -1657,6 +1657,8 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of next namespace labelled schedule backup %s with namespace included", scheduleBackupWithNamespace))
 			err = NamespaceLabelBackupSuccessCheck(scheduleBackupWithNamespace, ctx, bkpNamespaces, labelForNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if labelled namespace %s are included in this schedule backup %s ", bkpNamespaces, nextScheduleBackupName))
+			err = backupSuccessCheckWithValidation(ctx, scheduleBackupWithNamespace, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of schedule backup named [%s]", scheduleBackupWithNamespace))
 		})
 
 		Step("Restoring schedule backup with namespace included", func() {
