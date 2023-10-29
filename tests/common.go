@@ -2901,6 +2901,9 @@ func SetClusterContext(clusterConfigPath string) error {
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+		if !strings.HasPrefix(clusterConfigPath, "/tmp/") {
+			return fmt.Errorf("clusterConfigPath cannot be an empty string for %s cluster provider", drivers.ProviderRke)
+		}
 		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
