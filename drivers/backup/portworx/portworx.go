@@ -372,14 +372,7 @@ func (p *portworx) UpdateCluster(ctx context.Context, req *api.ClusterUpdateRequ
 }
 
 func (p *portworx) InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
-	reqInterface, err := p.SetMissingClusterUID(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if reqWithClusterUID, ok := reqInterface.(*api.ClusterInspectRequest); ok {
-		return p.clusterManager.Inspect(ctx, reqWithClusterUID)
-	}
-	return nil, fmt.Errorf("expected *api.ClusterInspectRequest type after filling missing UID, but received %T", reqInterface)
+	return p.clusterManager.Inspect(ctx, req)
 }
 
 func (p *portworx) EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
@@ -407,14 +400,7 @@ func (p *portworx) EnumerateAllCluster(ctx context.Context, req *api.ClusterEnum
 }
 
 func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error) {
-	reqInterface, err := p.SetMissingClusterUID(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if reqWithClusterUID, ok := reqInterface.(*api.ClusterDeleteRequest); ok {
-		return p.clusterManager.Delete(ctx, reqWithClusterUID)
-	}
-	return nil, fmt.Errorf("expected *api.ClusterDeleteRequest type after filling missing UID, but received %T", reqInterface)
+	return p.clusterManager.Delete(ctx, req)
 }
 
 func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
