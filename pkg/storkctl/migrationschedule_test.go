@@ -299,7 +299,7 @@ func TestCreateMigrationScheduleWithInvalidInterval(t *testing.T) {
 	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-i", "-15", "-c", "clusterPair1",
 		"--namespaces", "namespace1", "migrationschedule", "-n", "namespace1"}
-	expected := "error: could not create a schedule policy with specified interval. Invalid intervalMinutes (-15) in Interval policy"
+	expected := "error: could not create a schedule policy with specified interval: Invalid intervalMinutes (-15) in Interval policy"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
