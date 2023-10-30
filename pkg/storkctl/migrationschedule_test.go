@@ -254,7 +254,7 @@ func TestCreateMigrationScheduleSyncDrExcludeVolumesFalse(t *testing.T) {
 	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
 		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace, "--exclude-volumes=" + strconv.FormatBool(false)}
-	expected := "error: the --exclude-volumes flags can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"
+	expected := "error: --exclude-volumes can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 

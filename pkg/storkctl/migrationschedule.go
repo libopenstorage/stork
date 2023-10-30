@@ -70,7 +70,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			if isSyncDr {
 				//covers the unlikely scenario where user sets the --exclude-volumes=false value in the command for a sync-dr migration use case
 				if c.Flags().Changed("exclude-volumes") && includeVolumes {
-					util.CheckErr(fmt.Errorf("the --exclude-volumes flag can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"))
+					util.CheckErr(fmt.Errorf("--exclude-volumes can only be set to true in case of a sync-dr usecase as there is a single stretched cluster from storage perspective"))
 					return
 				}
 				includeVolumes = false
