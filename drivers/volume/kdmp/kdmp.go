@@ -1000,8 +1000,13 @@ func (k *kdmp) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONP
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (a *kdmp) GetCSIPodPrefix() (string, error) {
+func (k *kdmp) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
+}
+
+// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+func (k *kdmp) IsVirtualMachineSupported() bool {
+	return false
 }
 
 func init() {
