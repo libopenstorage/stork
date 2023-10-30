@@ -9,9 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -2902,9 +2902,16 @@ func SetClusterContext(clusterConfigPath string) error {
 	// To update the rancher client for current cluster context
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		if !strings.HasPrefix(clusterConfigPath, "/tmp/") {
-			return fmt.Errorf("clusterConfigPath cannot be an empty string for %s cluster provider", drivers.ProviderRke)
+			if clusterConfigPath == "" {
+				err = Inst().S.(*rke.Rancher).UpdateRancherClient("source-config")
+				if err != nil {
+					return fmt.Errorf("failed to update rancher client for default source cluster context with error: [%v]", err)
+				}
+				return nil
+			}
+			return fmt.Errorf("invalid clusterConfigPath: %s for %s cluster provider", clusterConfigPath, drivers.ProviderRke)
 		}
-		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		err = Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
