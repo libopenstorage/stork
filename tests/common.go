@@ -340,6 +340,7 @@ const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
 	defaultVolScaleTimeout    = 4 * time.Minute
+	defaultIbmVolScaleTimeout = 8 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
@@ -995,7 +996,12 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			// If provisioner is IBM increase the timeout to 8 min
+			if Inst().Provisioner == "ibm" {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+			} else {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			}
 			if err != nil {
 				PrintDescribeContext(ctx)
 				processError(err, errChan...)
