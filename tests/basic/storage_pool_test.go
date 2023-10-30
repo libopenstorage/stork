@@ -1992,12 +1992,14 @@ var _ = Describe("{AddWithPXRestart}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
-		pickPoolToResize()
+
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+
+		pickPoolToResize()
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
