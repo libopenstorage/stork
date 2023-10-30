@@ -1987,8 +1987,13 @@ func (c *csi) GetPodPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPa
 }
 
 // GetCSIPodPrefix returns prefix for the csi pod names in the deployment
-func (a *csi) GetCSIPodPrefix() (string, error) {
+func (c *csi) GetCSIPodPrefix() (string, error) {
 	return "", &errors.ErrNotSupported{}
+}
+
+// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+func (c *csi) IsVirtualMachineSupported() bool {
+	return false
 }
 
 func init() {
