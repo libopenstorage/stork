@@ -148,6 +148,9 @@ type Driver interface {
 	// GetCSIPodPrefix returns prefix for the csi pod names in the deployment
 	GetCSIPodPrefix() (string, error)
 
+	// IsVirtualMachineSupported returns true if the driver supports VM scheduling
+	IsVirtualMachineSupported() bool
+
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface
 	// ClusterPairPluginInterface Interface to pair clusters
@@ -288,6 +291,8 @@ type Info struct {
 	NeedsAntiHyperconvergence bool
 	// WindowsVolume is a flag to indicate if the volume is being used by a windows Pod
 	WindowsVolume bool
+	// AttachedOn is the node instance identifier for clustered systems.
+	AttachedOn string
 }
 
 // NodeStatus Status of driver on a node
