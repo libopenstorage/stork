@@ -65,6 +65,7 @@ require (
 require (
 	github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	kubevirt.io/api v1.0.0
 )
 
 require (
@@ -303,7 +304,6 @@ require (
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
-	kubevirt.io/api v1.0.0 // indirect
 	kubevirt.io/client-go v0.59.2 // indirect
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
