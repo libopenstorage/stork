@@ -3711,7 +3711,7 @@ func (p *portworx) getCloudBackupRestoreSpec(
 	}
 	var restoreSpec *api.RestoreVolumeSpec
 	destStorageClass := storageClassMapping[sourceStorageClass]
-	if len(destStorageClass) == 0 {
+	if len(destStorageClass) == 0 && len(destinationNamespace) == 0 {
 		restoreSpec = &api.RestoreVolumeSpec{
 			IoProfileBkupSrc: true, // setting this for backward compatibility
 		}
@@ -3720,31 +3720,35 @@ func (p *portworx) getCloudBackupRestoreSpec(
 	}
 	var sc *storagev1.StorageClass
 	var err error
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
-		sc, err = storkcache.Instance().GetStorageClass(destStorageClass)
-	} else {
-		sc, err = storage.Instance().GetStorageClass(destStorageClass)
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
-	}
+	if len(destStorageClass) != 0 {
+		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+			sc, err = storkcache.Instance().GetStorageClass(destStorageClass)
+		} else {
+			sc, err = storage.Instance().GetStorageClass(destStorageClass)
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
+		}
 
-	restoreSpec, locator, err = spec.NewSpecHandler().RestoreSpecFromOpts(sc.Parameters)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse storage class %v: %v", destStorageClass, err)
+		restoreSpec, locator, err = spec.NewSpecHandler().RestoreSpecFromOpts(sc.Parameters)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse storage class %v: %v", destStorageClass, err)
+		}
+		// Special handling for io_profile
+		// The default volumeSpec.IoProfile is set to sequential
+		// Check in storage class if an io profile is set. If not set use
+		// the io profile from the source
+		if _, ok := sc.Parameters[api.SpecIoProfile]; !ok {
+			// io profile not specified in storage class
+			restoreSpec.IoProfileBkupSrc = true
+		}
 	}
-	if locator.VolumeLabels == nil {
-		locator.VolumeLabels = make(map[string]string)
-	}
-	locator.VolumeLabels[pvcNameLabel] = pvcName
-	locator.VolumeLabels[namespaceLabel] = destinationNamespace
-	// Special handling for io_profile
-	// The default volumeSpec.IoProfile is set to sequential
-	// Check in storage class if an io profile is set. If not set use
-	// the io profile from the source
-	if _, ok := sc.Parameters[api.SpecIoProfile]; !ok {
-		// io profile not specified in storage class
-		restoreSpec.IoProfileBkupSrc = true
+	if len(destinationNamespace) != 0 {
+		if locator.VolumeLabels == nil {
+			locator.VolumeLabels = make(map[string]string)
+		}
+		locator.VolumeLabels[pvcNameLabel] = pvcName
+		locator.VolumeLabels[namespaceLabel] = destinationNamespace
 	}
 
 	return locator, restoreSpec, nil
