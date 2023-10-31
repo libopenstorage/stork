@@ -51,7 +51,7 @@ var _ = Describe("{VerifyRBACforInfraAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("VerifyRBACforInfraAdmin", "Validates the RBAC operation for infra-admin user.", nil, 87886)
+		StartPxBackupTorpedoTest("VerifyRBACforInfraAdmin", "Validates the RBAC operation for infra-admin user.", nil, 87886, Ak, Q3FY24)
 		backupLocationMap = make(map[string]string)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -532,7 +532,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("VerifyRBACForPxAdmin", "Validates the RBAC operation for px-admin group user.", nil, 87887)
+		StartPxBackupTorpedoTest("VerifyRBACForPxAdmin", "Validates the RBAC operation for px-admin group user.", nil, 87887, Ak, Q3FY24)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -862,7 +862,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("VerifyRBACForAppAdmin", "Validates the RBAC operation for app-admin user.", nil, 87888)
+		StartPxBackupTorpedoTest("VerifyRBACForAppAdmin", "Validates the RBAC operation for app-admin user.", nil, 87888, Ak, Q3FY24)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1285,7 +1285,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("VerfiyRBACforAppUser", "To verify all the RBAC operations for an app-user", nil, 87889)
+		StartPxBackupTorpedoTest("VerfiyRBACforAppUser", "To verify all the RBAC operations for an app-user", nil, 87889, Sabrarhussaini, Q3FY24)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

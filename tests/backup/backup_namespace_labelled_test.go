@@ -42,8 +42,8 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 	accessUserBackupContext := make(map[userAccessContext]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("NamespaceLabelledBackupSharedWithDifferentAccessMode",
-			"Take namespace labelled backup and share with users having different access mode", nil, 85040)
+		StartPxBackupTorpedoTest("NamespaceLabelledBackupSharedWithDifferentAccessMode",
+			"Take namespace labelled backup and share with users having different access mode", nil, 85040, Sagrawal, Q3FY24)
 		log.Infof("Deploy applications needed for backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		// Here we have deployed 2*numberOfUsers namespaces/application
@@ -239,7 +239,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 	bkpNamespaces = make([]string, 0)
 	initialNSCount = 3
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupScheduleForOldAndNewNS", "Schedule backup with old and new namespace using namespace label", nil, 84852)
+		StartPxBackupTorpedoTest("BackupScheduleForOldAndNewNS", "Schedule backup with old and new namespace using namespace label", nil, 84852, Vpinisetti, Q2FY24)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < initialNSCount; i++ {
@@ -459,7 +459,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ManualAndScheduledBackupUsingNamespaceAndResourceLabel", "Manual, schedule backup and restore, using namespace label and resource label", nil, 84850)
+		StartPxBackupTorpedoTest("ManualAndScheduledBackupUsingNamespaceAndResourceLabel", "Manual, schedule backup and restore, using namespace label and resource label", nil, 84850, Vpinisetti, Q2FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {
@@ -653,7 +653,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 	namespaceMapping := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupWithAdditionAndRemovalOfNS", "Perform schedule backup during which remove and add namespace and verify restoration of removed namespace", nil, 84848)
+		StartPxBackupTorpedoTest("ScheduleBackupWithAdditionAndRemovalOfNS", "Perform schedule backup during which remove and add namespace and verify restoration of removed namespace", nil, 84848, Vpinisetti, Q2FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
@@ -895,7 +895,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit", "Manual, schedule backup and restore of single, multiple and all namespaces with namespace labeled as max character limit", nil, 84853)
+		StartPxBackupTorpedoTest("ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit", "Manual, schedule backup and restore of single, multiple and all namespaces with namespace labeled as max character limit", nil, 84853, Vpinisetti, Q2FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {
@@ -1245,7 +1245,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ManualAndScheduleBackupUsingNamespaceLabel", "Namespace labeled manual and schedule backup of single and multiple namespaces along with default and custom restore", nil, 84842)
+		StartPxBackupTorpedoTest("ManualAndScheduleBackupUsingNamespaceLabel", "Namespace labeled manual and schedule backup of single and multiple namespaces along with default and custom restore", nil, 84842, Apimpalgaonkar, Q2FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {
@@ -1535,7 +1535,7 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 	bkpNamespaces = make([]string, 0)
 	schPolicyInterval = 15
 	JustBeforeEach(func() {
-		StartTorpedoTest("NamespaceLabelledBackupOfEmptyNamespace", "NamespaceLabelledBackupOfEmptyNamespace takes namespace labelled backup of empty namespace and restores it", nil, 86693)
+		StartPxBackupTorpedoTest("NamespaceLabelledBackupOfEmptyNamespace", "NamespaceLabelledBackupOfEmptyNamespace takes namespace labelled backup of empty namespace and restores it", nil, 86693, Sagrawal, Q3FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {

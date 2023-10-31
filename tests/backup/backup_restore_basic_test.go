@@ -56,7 +56,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		numDeployments = 6 // For this test case to have relevance, it is necessary to raise the number of deployments.
 		providers = getProviders()
 
-		StartTorpedoTest("BasicSelectiveRestore", "All namespace backup and restore selective namespaces", nil, 83717)
+		StartPxBackupTorpedoTest("BasicSelectiveRestore", "All namespace backup and restore selective namespaces", nil, 83717, KPhalgun, Q1FY24)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
@@ -173,7 +173,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 83720)
+		StartPxBackupTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 83720, Kshithijiyer, Q4FY23)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -320,7 +320,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 	namespaceMapping = make(map[string]string)
 	intervalName := fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteAllBackupObjects", "Create the backup Objects and Delete", nil, 58088)
+		StartPxBackupTorpedoTest("DeleteAllBackupObjects", "Create the backup Objects and Delete", nil, 58088, Skonda, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -526,7 +526,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, 58014)
+		StartPxBackupTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, 58014, Vpinisetti, Q4FY23)
 		log.Infof("Application installation")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -666,7 +666,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, 58015)
+		StartPxBackupTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, 58015, Vpinisetti, Q4FY23)
 		log.Infof("Application installation")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -800,7 +800,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CustomResourceRestore", "Create custom resource restore", nil, 58041)
+		StartPxBackupTorpedoTest("CustomResourceRestore", "Create custom resource restore", nil, 58041, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -946,7 +946,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("AllNSBackupWithIncludeNewNSOption", "Verification of schedule backups created with include new namespaces option", nil, 84760)
+		StartPxBackupTorpedoTest("AllNSBackupWithIncludeNewNSOption", "Verification of schedule backups created with include new namespaces option", nil, 84760, KPhalgun, Q1FY24)
 
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
@@ -1137,8 +1137,8 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupSyncBasicTest",
-			"Validate that the backup sync syncs all the backups present in bucket", nil, 58040)
+		StartPxBackupTorpedoTest("BackupSyncBasicTest",
+			"Validate that the backup sync syncs all the backups present in bucket", nil, 58040, Kshithijiyer, Q1FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1356,7 +1356,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 	namespaceMapping := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupMultipleNsWithSameLabel", "Taking backup and restoring multiple namespace having same labels", nil, 84851)
+		StartPxBackupTorpedoTest("BackupMultipleNsWithSameLabel", "Taking backup and restoring multiple namespace having same labels", nil, 84851, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 10; i++ {
@@ -1486,8 +1486,8 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 	params := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultipleCustomRestoreSameTimeDiffStorageClassMapping",
-			"Issue multiple custom restores at the same time using different storage class mapping", nil, 58052)
+		StartPxBackupTorpedoTest("MultipleCustomRestoreSameTimeDiffStorageClassMapping",
+			"Issue multiple custom restores at the same time using different storage class mapping", nil, 58052, Sn, Q1FY24)
 		log.InfoD("Deploy applications needed for backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1646,7 +1646,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 	backupLocationMap := make(map[string]string)
 	scheduleRestoreMapping = make(map[string]string)
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddMultipleNamespaceLabels", "Add multiple labels to namespaces, perform manual backup, schedule backup using namespace labels and restore", nil, 85583)
+		StartPxBackupTorpedoTest("AddMultipleNamespaceLabels", "Add multiple labels to namespaces, perform manual backup, schedule backup using namespace labels and restore", nil, 85583, Apimpalgaonkar, Q2FY24)
 		log.InfoD("Deploy applications")
 		batchSize = 10
 		desiredNumLabels = 1000
@@ -1825,8 +1825,8 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 	sleepToGetUniqueTimeStamp := 2 * time.Second
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultipleInPlaceRestoreSameTime",
-			"Issue multiple in-place restores at the same time", nil, 58051)
+		StartPxBackupTorpedoTest("MultipleInPlaceRestoreSameTime",
+			"Issue multiple in-place restores at the same time", nil, 58051, Sn, Q1FY24)
 		log.InfoD("Deploy applications needed for backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
@@ -1985,8 +1985,8 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CloudSnapsSafeWhenBackupLocationDeleteTest",
-			"Validate if cloud snaps present if backup location is deleted", nil, 58069)
+		StartPxBackupTorpedoTest("CloudSnapsSafeWhenBackupLocationDeleteTest",
+			"Validate if cloud snaps present if backup location is deleted", nil, 58069, Kshithijiyer, Q1FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2221,7 +2221,7 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("SetUnsetNSLabelDuringScheduleBackup", "Create multiple namespaces and set unset namespace labels during the backup schedule", nil, 84849)
+		StartPxBackupTorpedoTest("SetUnsetNSLabelDuringScheduleBackup", "Create multiple namespaces and set unset namespace labels during the backup schedule", nil, 84849, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {
@@ -2384,7 +2384,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 	namespaceMapping := make(map[string]string)
 	duplicateBackupNameMap := make(map[string]string)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestoreOnDifferentK8sVersions", "Restoring from a duplicate backup on a cluster with a different kubernetes version", nil, 83721)
+		StartPxBackupTorpedoTest("BackupRestoreOnDifferentK8sVersions", "Restoring from a duplicate backup on a cluster with a different kubernetes version", nil, 83721, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2535,7 +2535,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "Deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716)
+		StartPxBackupTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "Deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716, Tthurlapati, Q2FY24)
 
 		log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
 		Inst().AppList = appsWithCRDsAndWebhooks
@@ -2856,7 +2856,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "fetching px-central-admin ctx")
@@ -2908,7 +2908,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupDeleteAndRecreateNS", "Verification of schedule backups when namespaces are deleted and recreated", nil, 58037)
+		StartPxBackupTorpedoTest("ScheduleBackupDeleteAndRecreateNS", "Verification of schedule backups when namespaces are deleted and recreated", nil, 58037, Ak, Q2FY24)
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
 			numDeployments = 2
@@ -3077,7 +3077,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteNSDeleteClusterRestore", "Delete namespace from application cluster and delete cluster and add it back then restore for last backup", nil, 58061)
+		StartPxBackupTorpedoTest("DeleteNSDeleteClusterRestore", "Delete namespace from application cluster and delete cluster and add it back then restore for last backup", nil, 58061, Sn, Q2FY24)
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
 			numDeployments = 2
@@ -3229,7 +3229,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("AlternateBackupBetweenNfsAndS3", "To perform alternate backups between NFS and S3, and then perform the restore", nil, 86088)
+		StartPxBackupTorpedoTest("AlternateBackupBetweenNfsAndS3", "To perform alternate backups between NFS and S3, and then perform the restore", nil, 86088, Sabrarhussaini, Q3FY24)
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		log.InfoD("scheduling applications")
@@ -3387,7 +3387,7 @@ var _ = Describe("{BackupNamespaceInNfsRestoredFromS3}", func() {
 	destinationClusterNamespaceMapping := make(map[string]string)
 	restoredAppContexts := make([]*scheduler.Context, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupNamespaceInNfsRestoredFromS3", "Take a backup of namespace in NFS which is restored from s3 bucket or vice-versa", nil, 86089)
+		StartPxBackupTorpedoTest("BackupNamespaceInNfsRestoredFromS3", "Take a backup of namespace in NFS which is restored from s3 bucket or vice-versa", nil, 86089, Sagrawal, Q3FY24)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
@@ -3579,7 +3579,7 @@ var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
 	)
 	backupLocationMap := make(map[string]string)
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteS3ScheduleAndCreateNfsSchedule", "Take a schedule backup of namespace in S3 backup location,delete the s3 schedule, create new schedule backup with NFS backup location or vice-versa", nil, 86099)
+		StartPxBackupTorpedoTest("DeleteS3ScheduleAndCreateNfsSchedule", "Take a schedule backup of namespace in S3 backup location,delete the s3 schedule, create new schedule backup with NFS backup location or vice-versa", nil, 86099, Sagrawal, Q3FY24)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
@@ -3736,7 +3736,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858)
+		StartPxBackupTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858, Ak, Q3FY24)
 
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()

@@ -44,7 +44,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818)
+		StartPxBackupTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -209,7 +209,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var backupNames []string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
+		StartPxBackupTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -402,7 +402,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	userContextsList := make([]context.Context, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartBackupPodDuringBackupSharing", "Restart backup pod during backup sharing", nil, 82948)
+		StartPxBackupTorpedoTest("RestartBackupPodDuringBackupSharing", "Restart backup pod during backup sharing", nil, 82948, Skonda, Q4FY23)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -632,8 +632,8 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 	numberOfBackups := 4
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CancelAllRunningBackupJobs",
-			"Cancel all the running backup jobs while backups are in progress", nil, 58045)
+		StartPxBackupTorpedoTest("CancelAllRunningBackupJobs",
+			"Cancel all the running backup jobs while backups are in progress", nil, 58045, Sagrawal, Q1FY24)
 
 		log.InfoD("Deploying applications required for the testcase")
 		contexts = make([]*scheduler.Context, 0)
@@ -825,8 +825,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	scaledDownReplica := int32(0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleMongoDBWhileBackupAndRestore",
-			"Scale down MongoDB to repl=0 when backups and restores are in progress", nil, 58075)
+		StartPxBackupTorpedoTest("ScaleMongoDBWhileBackupAndRestore",
+			"Scale down MongoDB to repl=0 when backups and restores are in progress", nil, 58075, Sagrawal, Q1FY24)
 		log.InfoD("Deploying applications required for the testcase")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1095,8 +1095,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	newAppContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
-			"Reboots node when backup is in progress", nil, 55817)
+		StartPxBackupTorpedoTest("RebootNodesWhenBackupsAreInProgress",
+			"Reboots node when backup is in progress", nil, 55817, Sagrawal, Q1FY24)
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -1349,8 +1349,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 	scaledDownReplica := int32(0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress",
-			"Scale down px-backup deployment to 0 when backups and restores are in progress", nil, 58074)
+		StartPxBackupTorpedoTest("ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress",
+			"Scale down px-backup deployment to 0 when backups and restores are in progress", nil, 58074, Sagrawal, Q1FY24)
 		log.InfoD("Deploying applications required for the testcase")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1611,7 +1611,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 	numberOfBackups := 4
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CancelAllRunningRestoreJobs", "Cancel all the running restore jobs while restores are in progress", nil, 58058)
+		StartPxBackupTorpedoTest("CancelAllRunningRestoreJobs", "Cancel all the running restore jobs while restores are in progress", nil, 58058, Ak, Q1FY24)
 		log.InfoD("Deploying applications required for the testcase")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

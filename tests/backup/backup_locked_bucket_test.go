@@ -37,7 +37,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Deploying backup", nil, 60018)
+		StartPxBackupTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Deploying backup", nil, 60018, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -233,7 +233,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("LockedBucketResizeOnRestoredVolume", "Resize after the volume is restored from a backup from locked bucket", nil, 59904)
+		StartPxBackupTorpedoTest("LockedBucketResizeOnRestoredVolume", "Resize after the volume is restored from a backup from locked bucket", nil, 59904, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -466,7 +466,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 	volListAfterSizeMap := make(map[string]int)
 	modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 	JustBeforeEach(func() {
-		StartTorpedoTest("LockedBucketResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress for locked bucket", nil, 59899)
+		StartPxBackupTorpedoTest("LockedBucketResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress for locked bucket", nil, 59899, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -705,7 +705,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteLockedBucketUserObjectsFromAdmin", "Delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin", nil, 87566)
+		StartPxBackupTorpedoTest("DeleteLockedBucketUserObjectsFromAdmin", "Delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin", nil, 87566, Kshithijiyer, Q3FY24)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)

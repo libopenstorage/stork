@@ -47,8 +47,8 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 	projectAnnotation := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject",
-			"Take backup of single namespace and restore to namespace in same and different project", nil, 84872)
+		StartPxBackupTorpedoTest("SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject",
+			"Take backup of single namespace and restore to namespace in same and different project", nil, 84872, Sagrawal, Q2FY24)
 		log.InfoD("Deploying applications required for the testcase")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -306,8 +306,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 	projectAnnotation := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("NamespaceMoveFromProjectToProjectToNoProjectWhileRestore",
-			"Take backup and move the namespace from project to project to no project during restore", nil, 84881)
+		StartPxBackupTorpedoTest("NamespaceMoveFromProjectToProjectToNoProjectWhileRestore",
+			"Take backup and move the namespace from project to project to no project during restore", nil, 84881, Sagrawal, Q3FY24)
 		log.InfoD("Deploying applications required for the testcase")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -537,8 +537,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 	projectAnnotation := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultipleProjectsAndNamespacesBackupAndRestore",
-			"Take backups and restores of multiple namespaces belonging to multiple projects", nil, 84874)
+		StartPxBackupTorpedoTest("MultipleProjectsAndNamespacesBackupAndRestore",
+			"Take backups and restores of multiple namespaces belonging to multiple projects", nil, 84874, Sagrawal, Q3FY24)
 		log.InfoD("Deploying multiple instances of applications required for the testcase")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 4; i++ {

@@ -44,8 +44,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("IssueDeleteOfIncrementalBackupsAndRestore",
-			"Issue delete of incremental backups and try to restore the newest backup", nil, 58056)
+		StartPxBackupTorpedoTest("IssueDeleteOfIncrementalBackupsAndRestore",
+			"Issue delete of incremental backups and try to restore the newest backup", nil, 58056, Kshithijiyer, Q1FY24)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -222,8 +222,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
-			"Delete incremental Backups and re-create them", nil, 58039)
+		StartPxBackupTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
+			"Delete incremental Backups and re-create them", nil, 58039, Kshithijiyer, Q1FY24)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -375,7 +375,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBucketVerifyCloudBackupMissing", "Validates the backup state (CloudBackupMissing) when bucket is deleted.", nil, 58070)
+		StartPxBackupTorpedoTest("DeleteBucketVerifyCloudBackupMissing", "Validates the backup state (CloudBackupMissing) when bucket is deleted.", nil, 58070, Ak, Q1FY24)
 		log.Infof("Deploying applications required for the testcase")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -601,8 +601,8 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBackupAndCheckIfBucketIsEmpty",
-			"Delete backups and verify if contents are deleted from backup location or not", nil, 58071)
+		StartPxBackupTorpedoTest("DeleteBackupAndCheckIfBucketIsEmpty",
+			"Delete backups and verify if contents are deleted from backup location or not", nil, 58071, Kshithijiyer, Q2FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

@@ -20,7 +20,7 @@ import (
 var _ = Describe("{UpgradePxBackup}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradePxBackup", "Upgrading backup", nil, 0)
+		StartPxBackupTorpedoTest("UpgradePxBackup", "Upgrading backup", nil, 0, Mkoppal, Q1FY24)
 	})
 	It("Upgrade Px Backup", func() {
 		Step("Upgrade Px Backup", func() {
@@ -63,7 +63,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("StorkUpgradeWithBackup", "Validates the scheduled backups and creation of new backup after stork upgrade", nil, 58023)
+		StartPxBackupTorpedoTest("StorkUpgradeWithBackup", "Validates the scheduled backups and creation of new backup after stork upgrade", nil, 58023, Ak, Q1FY24)
 		log.Infof("Application installation")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -250,7 +250,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 84757)
+		StartPxBackupTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 84757, KPhalgun, Q1FY24)
 		log.Infof("Scheduling applications")
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {

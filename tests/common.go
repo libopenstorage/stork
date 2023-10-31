@@ -475,6 +475,13 @@ type PlatformCredentialStruct struct {
 	credUID  string
 }
 
+type (
+	// TestcaseAuthor represents the owner of a Testcase
+	TestcaseAuthor string
+	// TestcaseQuarter represents the fiscal quarter during which the Testcase is automated
+	TestcaseQuarter string
+)
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
@@ -6827,6 +6834,11 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
+func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail

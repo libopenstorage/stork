@@ -43,7 +43,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states", nil, 93011)
+		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states", nil, 93011, Mkoppal, Q3FY24)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)

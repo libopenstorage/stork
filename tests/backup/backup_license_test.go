@@ -25,8 +25,8 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		destClusterStatus             api.ClusterInfo_StatusInfo_Status
 	)
 	JustBeforeEach(func() {
-		StartTorpedoTest("NodeCountForLicensing",
-			"Verify worker node on application cluster with label portworx.io/nobackup=true is not counted for licensing", nil, 82777)
+		StartPxBackupTorpedoTest("NodeCountForLicensing",
+			"Verify worker node on application cluster with label portworx.io/nobackup=true is not counted for licensing", nil, 82777, Sagrawal, Q1FY24)
 	})
 
 	It("Verify worker node on application cluster with label portworx.io/nobackup=true is not counted for licensing", func() {
@@ -148,8 +148,8 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 	)
 	backupLocationMap := make(map[string]string)
 	JustBeforeEach(func() {
-		StartTorpedoTest("LicensingCountWithNodeLabelledBeforeClusterAddition",
-			"Applies label portworx.io/nobackup=true before adding of application cluster to backup and verifies the license count", nil, 82954)
+		StartPxBackupTorpedoTest("LicensingCountWithNodeLabelledBeforeClusterAddition",
+			"Applies label portworx.io/nobackup=true before adding of application cluster to backup and verifies the license count", nil, 82954, Sagrawal, Q1FY24)
 		log.InfoD("Deploy applications needed for taking backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -325,8 +325,8 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		contexts                      []*scheduler.Context
 	)
 	JustBeforeEach(func() {
-		StartTorpedoTest("LicensingCountBeforeAndAfterBackupPodRestart",
-			"Verifies the license count before and after the backup pod restarts", nil, 82956)
+		StartPxBackupTorpedoTest("LicensingCountBeforeAndAfterBackupPodRestart",
+			"Verifies the license count before and after the backup pod restarts", nil, 82956, Sagrawal, Q1FY24)
 	})
 
 	It("Verify the license count before and after the backup pod restarts", func() {

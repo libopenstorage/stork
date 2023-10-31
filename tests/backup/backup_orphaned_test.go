@@ -42,7 +42,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteSameNameObjectsByMultipleUsersFromAdmin", "Delete backups, backup schedules, restore and cluster objects created by multiple user with same name from the admin", nil, 87563)
+		StartPxBackupTorpedoTest("DeleteSameNameObjectsByMultipleUsersFromAdmin", "Delete backups, backup schedules, restore and cluster objects created by multiple user with same name from the admin", nil, 87563, KPhalgun, Q3FY24)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -390,7 +390,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin", "Delete user backups and restores of the deleted and inactive cluster from the admin", nil, 87569)
+		StartPxBackupTorpedoTest("DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin", "Delete user backups and restores of the deleted and inactive cluster from the admin", nil, 87569, KPhalgun, Q3FY24)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -718,7 +718,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteObjectsByMultipleUsersFromNewAdmin", "Delete backups, backup schedules, restore and cluster objects created by multiple user from the new admin", nil, 87567)
+		StartPxBackupTorpedoTest("DeleteObjectsByMultipleUsersFromNewAdmin", "Delete backups, backup schedules, restore and cluster objects created by multiple user from the new admin", nil, 87567, KPhalgun, Q3FY24)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -1124,7 +1124,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin", "Delete failed and in-progress backups and restores of user from the admin side", nil, 87564)
+		StartPxBackupTorpedoTest("DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin", "Delete failed and in-progress backups and restores of user from the admin side", nil, 87564, KPhalgun, Q3FY24)
 		log.InfoD("Scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1609,7 +1609,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteSharedBackupOfUserFromAdmin", "Delete backups shared by the user from the admin", nil, 87562)
+		StartPxBackupTorpedoTest("DeleteSharedBackupOfUserFromAdmin", "Delete backups shared by the user from the admin", nil, 87562, KPhalgun, Q3FY24)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -1886,8 +1886,8 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 	backupDriver := Inst().Backup
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBackupOfUserNonSharedRBAC",
-			"Delete backups,restores,schedules,clusters created by non-admin user with non-shared RBAC resources from px-admin ", nil, 87561)
+		StartPxBackupTorpedoTest("DeleteBackupOfUserNonSharedRBAC",
+			"Delete backups,restores,schedules,clusters created by non-admin user with non-shared RBAC resources from px-admin ", nil, 87561, Ak, Q3FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < numOfNS; i++ {
@@ -2544,8 +2544,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBackupOfUserSharedRBAC",
-			"Delete backups,restores,schedules,clusters created by non-admin user with shared RBAC resources from px-admin", nil, 87560)
+		StartPxBackupTorpedoTest("DeleteBackupOfUserSharedRBAC",
+			"Delete backups,restores,schedules,clusters created by non-admin user with shared RBAC resources from px-admin", nil, 87560, Ak, Q3FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < numOfNS; i++ {
@@ -3115,8 +3115,8 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpdatesBackupOfUserFromAdmin",
-			"Updates backups of non admin user from px-admin with valid/in-valid account", nil, 87568)
+		StartPxBackupTorpedoTest("UpdatesBackupOfUserFromAdmin",
+			"Updates backups of non admin user from px-admin with valid/in-valid account", nil, 87568, Ak, Q3FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3357,8 +3357,8 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBackupSharedByMultipleUsersFromAdmin",
-			"Delete backups of non admin user from px-admin when backup is shared by multiple users", nil, 87565)
+		StartPxBackupTorpedoTest("DeleteBackupSharedByMultipleUsersFromAdmin",
+			"Delete backups of non admin user from px-admin when backup is shared by multiple users", nil, 87565, Ak, Q3FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

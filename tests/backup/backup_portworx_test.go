@@ -44,7 +44,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating Backup Location with Encryption Keys", nil, 79918)
+		StartPxBackupTorpedoTest("BackupLocationWithEncryptionKey", "Creating Backup Location with Encryption Keys", nil, 79918, Skonda, Q4FY23)
 
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -157,7 +157,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	var scName string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58065)
+		StartPxBackupTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58065, Kshithijiyer, Q4FY23)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -314,7 +314,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064)
+		StartPxBackupTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -498,7 +498,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 79915)
+		StartPxBackupTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 79915, Skonda, Q4FY23)
 
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -677,7 +677,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	scheduledAppContexts = make([]*scheduler.Context, 0)
 	appNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress", nil, 58050)
+		StartPxBackupTorpedoTest("ResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress", nil, 58050, Sn, Q1FY24)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
