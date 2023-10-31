@@ -16,7 +16,7 @@ import (
 )
 
 // VerifyRBACforInfraAdmin Validates the RBAC operation for infra-admin user.
-var _ = Describe("{VerifyRBACforInfraAdmin}", func() {
+var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 	var (
 		scheduledAppContexts          []*scheduler.Context
 		backupLocationMap             = make(map[string]string)
@@ -51,7 +51,7 @@ var _ = Describe("{VerifyRBACforInfraAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("VerifyRBACforInfraAdmin", "Validates the RBAC operation for infra-admin user.", nil, 87886, Ak, Q3FY24)
+		StartPxBackupTorpedoTest("VerifyRBACForInfraAdmin", "Validates the RBAC operation for infra-admin user.", nil, 87886, Ak, Q3FY24)
 		backupLocationMap = make(map[string]string)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -1259,8 +1259,8 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 	})
 })
 
-// VerfiyRBACforAppUser To verify all the RBAC operations for an app-user
-var _ = Describe("{VerfiyRBACforAppUser}", func() {
+// VerifyRBACForAppUser To verify all the RBAC operations for an app-user
+var _ = Describe("{VerifyRBACForAppUser}", func() {
 	var (
 		scheduledAppContexts       []*scheduler.Context
 		userNames                  = make([]string, 0)
@@ -1285,7 +1285,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("VerfiyRBACforAppUser", "To verify all the RBAC operations for an app-user", nil, 87889, Sabrarhussaini, Q3FY24)
+		StartPxBackupTorpedoTest("VerifyRBACForAppUser", "To verify all the RBAC operations for an app-user", nil, 87889, Sabrarhussaini, Q3FY24)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1357,7 +1357,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating role", appUser))
 		})
 
-		Step(fmt.Sprintf("Verfiy if App-User doesn't have permission to create pre and post exec rules for applications"), func() {
+		Step(fmt.Sprintf("Verify if App-User doesn't have permission to create pre and post exec rules for applications"), func() {
 			log.InfoD("Verify if App-User doesn't have permission to create pre and post exec rules for applications")
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)

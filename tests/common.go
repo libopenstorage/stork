@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -3641,15 +3642,19 @@ func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName
 
 // DeleteCluster deletes/de-registers cluster from px-backup
 func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
-
 	backupDriver := Inst().Backup
+	clusterUid, err := backupDriver.GetClusterUID(ctx, orgID, name)
+	if err != nil {
+		return err
+	}
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
 		DeleteBackups:  cleanupBackupsRestores,
 		DeleteRestores: cleanupBackupsRestores,
+		Uid:            clusterUid,
 	}
-	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	_, err = backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
 }
 
@@ -3738,7 +3743,11 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	if err != nil {
 		return err
 	}
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err

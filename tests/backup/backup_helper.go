@@ -726,7 +726,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	}
 
 	clusterBackupShareStatusCheck := func() (interface{}, bool, error) {
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 		if err != nil {
 			return "", true, err

@@ -14,8 +14,8 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-// MutipleBackupLocationWithSameEndpoint Create Backup and Restore for Mutiple backup location added using same endpoint.
-var _ = Describe("{MutipleBackupLocationWithSameEndpoint}", func() {
+// MultipleBackupLocationWithSameEndpoint Create Backup and Restore for Multiple backup location added using same endpoint.
+var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 	var (
 		scheduledAppContexts          []*scheduler.Context
 		backupLocationNameMap         = make(map[int]string)
@@ -37,7 +37,7 @@ var _ = Describe("{MutipleBackupLocationWithSameEndpoint}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("MutipleBackupLocationWithSameEndpoint", "Create Backup and Restore for Mutiple backup location added using same endpoint", nil, 84902, Ak, Q3FY24)
+		StartPxBackupTorpedoTest("MultipleBackupLocationWithSameEndpoint", "Create Backup and Restore for Multiple backup location added using same endpoint", nil, 84902, Ak, Q3FY24)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -52,7 +52,7 @@ var _ = Describe("{MutipleBackupLocationWithSameEndpoint}", func() {
 		}
 	})
 
-	It("Create Backup and Restore for Mutiple backup location added using same endpoint", func() {
+	It("Create Backup and Restore for Multiple backup location added using same endpoint", func() {
 		Step("Validate applications", func() {
 			ValidateApplications(scheduledAppContexts)
 		})
