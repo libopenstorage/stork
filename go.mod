@@ -63,7 +63,7 @@ require (
 )
 
 require (
-	github.com/portworx/kdmp v0.4.1-0.20231018012553-2d0a147a7c4f
+	github.com/portworx/kdmp v0.4.1-0.20231031054404-6e0b519e8ef2
 	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 )
 
@@ -303,7 +303,7 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/onsi/gomega => github.com/onsi/gomega v1.21.1
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231026055159-0f6b430931ed
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231031054404-6e0b519e8ef2
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230426231724-8d9f2c104721
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20230818042152-e0873055fc17
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7

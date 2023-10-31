@@ -552,7 +552,7 @@ func (c *Controller) createJobCredCertSecrets(
 
 	// Check if the above env is present and read the certs file contents and
 	// secret for the job pod for kopia to access the same
-	err := createCertificateSecret(utils.GetCertSecretName(dataExport.Name), namespace, dataExport.Labels)
+	err := createCertificateSecret(utils.GetCertSecretName(dataExport.Name), namespace, blName, blNamespace, dataExport.Labels)
 	if err != nil {
 		msg := fmt.Sprintf("error in creating certificate secret[%v/%v]: %v", namespace, dataExport.Name, err)
 		logrus.Errorf(msg)
@@ -2128,7 +2128,15 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	return err
 }
 
-func createCertificateSecret(secretName, namespace string, labels map[string]string) error {
+func createCertificateSecret(secretName, namespace, blName, blNamespace string, labels map[string]string) error {
+	backupLocation, err := readBackupLocation(blName, blNamespace, "")
+	if err != nil {
+		return err
+	}
+	// when DisableSSL is true, dont create job cert secrets.
+	if backupLocation.Location.Type == storkapi.BackupLocationS3 && backupLocation.Location.S3Config.DisableSSL {
+		return nil
+	}
 	drivers.CertFilePath = os.Getenv(drivers.CertDirPath)
 	if drivers.CertFilePath != "" {
 		certificateData, err := os.ReadFile(filepath.Join(drivers.CertFilePath, drivers.CertFileName))
