@@ -637,7 +637,7 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 	var wlDeploymentsToBeCleaned []*v1.Deployment
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
+		StartTorpedoTest("PerformRestoreAfterHelmUpgrade", "Perform multiple restore within same cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		credName := targetName + pdsbkp.RandString(8)

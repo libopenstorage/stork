@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // ControlPlane PDS
@@ -334,6 +335,8 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	log.Debugf("sleeping for 5 min, before validating dns endpoint")
+	time.Sleep(5 * time.Minute)
 	_, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)

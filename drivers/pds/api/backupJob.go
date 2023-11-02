@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -37,6 +38,7 @@ func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ModelsBackupJ
 	backupJobModels, res, err := backupJobClient.ApiBackupsIdJobsGet(ctx, backupID).Execute()
 
 	if res.StatusCode != status.StatusOK {
+		log.Debugf("response body %+v", res.Body)
 		return nil, fmt.Errorf("Error when calling `ApiBackupsIdJobsGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return backupJobModels.GetData(), err
