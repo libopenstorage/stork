@@ -946,25 +946,28 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 }
 
 // CreateRestoreWithValidation creates restore, waits and checks for success and validates the backup
-func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) (err error) {
-	err = CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
+func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
+	err := CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
 	if err != nil {
-		return
+		return err
 	}
 	originalClusterConfigPath := CurrentClusterConfigPath
 	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
 		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
-		return
+		return err
 	} else {
 		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
 		err = SetClusterContext(clusterConfigPath)
 		if err != nil {
-			return
+			return err
 		}
 	}
 	defer func() {
 		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		err = SetClusterContext(originalClusterConfigPath)
+		err := SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		}
 	}()
 	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
@@ -976,7 +979,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 	}
 	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
-	return
+	return err
 }
 
 func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
@@ -1677,12 +1680,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 					continue volloop
 				}
 
-				sched, ok := Inst().S.(*k8s.K8s)
-				if !ok {
-					continue volloop
-				}
-
-				updatedSpec, err := sched.GetUpdatedSpec(pvcSpecObj)
+				updatedSpec, err := k8s.GetUpdatedSpec(pvcSpecObj)
 				if err != nil {
 					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
 					errors = append(errors, err)
@@ -1948,16 +1946,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 							}
 						}
 
-						if k8s, ok := Inst().S.(*k8s.K8s); ok {
-							_, err := k8s.GetUpdatedSpec(specObj)
-							if err == nil {
-								log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
-							} else {
-								err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
-								errors = append(errors, err)
-							}
+						_, err := k8s.GetUpdatedSpec(specObj)
+						if err == nil {
+							log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 						} else {
-							err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
+							err := fmt.Errorf("presence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 							errors = append(errors, err)
 						}
 
@@ -1999,7 +1992,18 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		// looping over the list of volumes that PX-Backup says it restored, to run some checks
 		for _, restoredVolInfo := range apparentlyRestoredVolumes {
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
-				if restoredVolInfo.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
+				switch restoredVolInfo.Status.Status {
+				case api.RestoreInfo_StatusInfo_Success:
+					log.Infof("in restore [%s], the status of the restored volume [%s] was Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+				case api.RestoreInfo_StatusInfo_Retained:
+					if theRestore.ReplacePolicy == api.ReplacePolicy_Retain {
+						log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+					} else {
+						err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Retained. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+						errors = append(errors, err)
+						continue
+					}
+				default:
 					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					errors = append(errors, err)
 					continue
