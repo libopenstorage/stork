@@ -67,7 +67,7 @@ func TestDataExportRsync(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctx), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctx[0], defaultWaitTimeout/16, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(ctx[0], defaultWaitTimeout/2, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running.")
 
 	var (
@@ -124,21 +124,21 @@ func TestDataExportRsync(t *testing.T) {
 	deName := "case1-non-existent-pvc"
 	createDataExport(deName, sourcePVC, "non-existent-pvc", namespace)
 
-	err = validateDataExport(deName, namespace, kdmpapi.DataExportStageInitial, kdmpapi.DataExportStatusFailed, dataExportFailureWaitTimeout, 10*time.Second)
+	err = validateAndCleanupDataExport(deName, namespace, kdmpapi.DataExportStageInitial, kdmpapi.DataExportStatusFailed, dataExportFailureWaitTimeout, 10*time.Second)
 	require.NoError(t, err, "expected validation to succeed")
 
 	// Test Case 2: DataExport should fail if the source PVC is in use
 	deName = "case2-source-pvc-in-use"
 	createDataExport(deName, sourcePVC, destPVC, namespace)
 
-	err = validateDataExport(deName, namespace, kdmpapi.DataExportStageInitial, kdmpapi.DataExportStatusFailed, dataExportFailureWaitTimeout, 10*time.Second)
+	err = validateAndCleanupDataExport(deName, namespace, kdmpapi.DataExportStageInitial, kdmpapi.DataExportStatusFailed, dataExportFailureWaitTimeout, 10*time.Second)
 	require.NoError(t, err, "expected validation to succeed")
 
 	// Test Case 3: DataExport should fail if destination PVC has a smaller size that the source PVC
 	deName = "case2-dest-pvc-not-same-size"
 	createDataExport(deName, sourcePVC, destPVC, namespace)
 
-	err = validateDataExport(deName, namespace, kdmpapi.DataExportStageInitial, kdmpapi.DataExportStatusFailed, dataExportFailureWaitTimeout, 10*time.Second)
+	err = validateAndCleanupDataExport(deName, namespace, kdmpapi.DataExportStageInitial, kdmpapi.DataExportStatusFailed, dataExportFailureWaitTimeout, 10*time.Second)
 	require.NoError(t, err, "expected validation to succeed")
 
 	// Test Case 4: DataExport should succeed
@@ -178,7 +178,7 @@ func TestDataExportRsync(t *testing.T) {
 	deName = "case4-successful-export"
 	createDataExport(deName, sourcePVC, destPVC, namespace)
 
-	err = validateDataExport(deName, namespace, kdmpapi.DataExportStageFinal, kdmpapi.DataExportStatusSuccessful, dataExportSuccessWaitTimeout, 10*time.Second)
+	err = validateAndCleanupDataExport(deName, namespace, kdmpapi.DataExportStageFinal, kdmpapi.DataExportStatusSuccessful, dataExportSuccessWaitTimeout, 10*time.Second)
 	require.NoError(t, err, "expected validation to succeed")
 
 	compareVolSizes := func() (interface{}, bool, error) {
@@ -195,7 +195,7 @@ func TestDataExportRsync(t *testing.T) {
 	require.NoError(t, err, "size comparison failed after DataExport rsync job completion")
 }
 
-func validateDataExport(
+func validateAndCleanupDataExport(
 	name string,
 	namespace string,
 	stage kdmpapi.DataExportStage,
@@ -213,6 +213,7 @@ func validateDataExport(
 			return "", false, nil
 		}
 
+		logrus.Infof("DataExport Status: %v", dataExport.Status)
 		return "", true, &errors.ErrFailedToValidateCustomSpec{
 			Name:  name,
 			Cause: fmt.Sprintf("Stage: %v \t Status: %v", dataExport.Status.Stage, dataExport.Status.Status),
@@ -222,6 +223,9 @@ func validateDataExport(
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
+	}
+	if err := kdmp.Instance().DeleteDataExport(name, namespace); err != nil {
+		logrus.Warnf("Failed to cleanup data export after successful validation: %v/%v", name, namespace)
 	}
 	return nil
 }

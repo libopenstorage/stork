@@ -39,7 +39,7 @@ spec:
   - metadata:
       name: fio-data
     spec:
-      # use default storage class
+      storageClassName: fio-sc
       accessModes:
       - ReadWriteOnce
       resources:
@@ -51,8 +51,19 @@ apiVersion: v1
 metadata:
    name: dest-pvc-for-import
 spec:
+   storageClassName: fio-sc
    accessModes:
      - ReadWriteOnce
    resources:
      requests:
        storage: 20Gi
+---
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "2"
+allowVolumeExpansion: true

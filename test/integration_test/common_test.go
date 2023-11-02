@@ -176,12 +176,12 @@ func TestSnapshot(t *testing.T) {
 
 func TestStorkCbt(t *testing.T) {
 	t.Run("deploymentTest", deploymentMigrationTest)
+	t.Run("dataExportTest", TestDataExportRsync)
 	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("cmdExecutorTest", cmdExecutorTest)
-	t.Run("dataExportTest", TestDataExportRsync)
 }
 
 func TestStorkCbtBackup(t *testing.T) {
