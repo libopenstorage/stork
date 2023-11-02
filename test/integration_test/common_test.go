@@ -4,8 +4,10 @@
 package integrationtest
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -1882,4 +1884,20 @@ func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
 	}
 
 	return operatorAppToCRMap
+}
+
+// extract data from a file in []byte format
+func getByteDataFromFile(filePath string) ([]byte, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("empty file path")
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file %v: %v", filePath, err)
+	}
+	data, err := io.ReadAll(bufio.NewReader(file))
+	if err != nil {
+		return nil, fmt.Errorf("error reading file %v: %v", filePath, err)
+	}
+	return data, nil
 }

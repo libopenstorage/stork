@@ -1,0 +1,20 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: MigrationSchedule
+metadata:
+  annotations:
+    openstorage.io/auth-secret-namespace: value1
+    openstorage.io/auth-secret-name: value2
+  name: automation-test-migration-schedule
+  namespace: default
+spec:
+  autoSuspend: true
+  schedulePolicyName: default-migration-policy
+  suspend: false
+  template:
+    spec:
+      clusterPair: automation-test-async-cluster-pair
+      includeResources: true
+      includeVolumes: false
+      namespaces:
+        - default
+      startApplications: false

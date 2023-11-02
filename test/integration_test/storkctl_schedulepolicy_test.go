@@ -4,10 +4,8 @@
 package integrationtest
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"testing"
 	"time"
@@ -40,12 +38,13 @@ func TestStorkCtlSchedulePolicy(t *testing.T) {
 }
 
 func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]string, specFileName string, testrailID int) {
+	schedulePolicyName := "automation-test-policy"
 	var testResult = testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer SchedulePolicyCleanup(t, schedulePolicyName)
 
 	factory := storkctl.NewFactory()
-	schedulePolicyName := "automation-test-policy"
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
 	cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName, "-t", policyType}
@@ -71,8 +70,6 @@ func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]s
 	specFile := "specs/storkctl-specs/schedulepolicy/" + specFileName
 	err := ValidateSchedulePolicyFromFile(t, specFile, schedulePolicyName)
 	require.NoError(t, err, "Error validating the created resource")
-
-	SchedulePolicyCleanup(t, schedulePolicyName)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -184,16 +181,9 @@ func createCustomMonthlySchedulePolicyTest(t *testing.T) {
 }
 
 func ValidateSchedulePolicyFromFile(t *testing.T, specFile string, policyName string) error {
-	if specFile == "" {
-		return fmt.Errorf("empty file path")
-	}
-	file, err := os.Open(specFile)
+	data, err := getByteDataFromFile(specFile)
 	if err != nil {
-		return fmt.Errorf("error opening file %v: %v", specFile, err)
-	}
-	data, err := io.ReadAll(bufio.NewReader(file))
-	if err != nil {
-		return fmt.Errorf("error reading file %v: %v", specFile, err)
+		return err
 	}
 	policy := &storkv1.SchedulePolicy{}
 	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(data)), len(data))
@@ -222,25 +212,29 @@ func ValidateSchedulePolicy(t *testing.T, schedulePolicy *storkv1.SchedulePolicy
 
 func SchedulePolicyCleanup(t *testing.T, policyName string) {
 	logrus.Info("Cleaning up created resources")
-	err := storkops.Instance().DeleteSchedulePolicy(policyName)
+	DeleteAndWaitForSchedulePolicyDeletion(t, policyName)
+}
+
+func DeleteAndWaitForSchedulePolicyDeletion(t *testing.T, name string) {
+	err := storkops.Instance().DeleteSchedulePolicy(name)
 	if err != nil {
-		logrus.Errorf("Unable to delete schedule policy %s", policyName)
+		logrus.Errorf("Unable to delete schedule policy %s", name)
 	}
 	//check if the schedulePolicy is successfully deleted
 	f := func() (interface{}, bool, error) {
 		logrus.Infof("Checking if schedule policy resource is successfully deleted")
-		_, err := storkops.Instance().GetSchedulePolicy(policyName)
+		_, err := storkops.Instance().GetSchedulePolicy(name)
 		if err == nil {
-			return "", true, fmt.Errorf("get schedule policy: %s should have failed", policyName)
+			return "", true, fmt.Errorf("get schedule policy: %s should have failed", name)
 		}
 		if !errors.IsNotFound(err) {
-			logrus.Infof("unexpected err: %v when checking deleted schedulePolicy: %s", err, policyName)
+			logrus.Infof("unexpected err: %v when checking deleted schedulePolicy: %s", err, name)
 			return "", true, err
 		}
 		//deletion done
-		logrus.Infof("Schedule policy %s successfully deleted", policyName)
+		logrus.Infof("Schedule policy %s successfully deleted", name)
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, 2*time.Second)
-	require.NoError(t, err, "Unable to delete schedule policy %s", policyName)
+	require.NoError(t, err, "Unable to delete schedule policy %s", name)
 }
