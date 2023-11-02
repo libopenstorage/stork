@@ -37,7 +37,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
-		poolToBeResized = getStoragePool(poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
 		isJournalEnabled, _ = IsJournalEnabled()
 		bufferSizeInGB = uint64(0)
 		if isJournalEnabled {
@@ -48,12 +48,12 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	testName = "StoragePoolExpandDiskResize"
 	testDescription = "Validate storage pool expansion using resize-disk option"
 	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
-		originalSizeInBytes = poolToBeResized.TotalSize
+		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
 		targetSizeGiB := targetSizeInBytes / units.GiB
 
 		log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
-			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
@@ -699,9 +699,9 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			}
 		}
 		log.Infof("selected node %s, pool %s", nodeSelected.Name, poolIDToResize)
-		poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+		poolToResize, err = GetStoragePoolByUUID(poolIDToResize)
 		log.FailOnError(err, fmt.Sprintf("unable to get pool using UUID and vol %+v", volSelected))
-		currentTotalPoolSize = poolToBeResized.TotalSize / units.GiB
+		currentTotalPoolSize = poolToResize.TotalSize / units.GiB
 		pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "error getting storage pools")
 		existingPoolsCount := len(pools)
@@ -741,7 +741,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		stepLog = fmt.Sprintf("Verify that pool %s can be expanded", poolIDToResize)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			isPoolHealthy, err := poolResizeIsInProgress(poolToBeResized)
+			isPoolHealthy, err := poolResizeIsInProgress(poolToResize)
 			log.FailOnError(err, fmt.Sprintf("pool [%s] cannot be expanded due to error: %v", poolIDToResize, err))
 			dash.VerifyFatal(isPoolHealthy, true, "Verify pool before expansion")
 		})

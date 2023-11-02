@@ -17,7 +17,7 @@ const (
 
 var contexts []*scheduler.Context
 var poolIDToResize string
-var poolToBeResized *api.StoragePool
+var poolToResize *api.StoragePool
 var isJournalEnabled bool
 var bufferSizeInGB uint64
 var targetSizeInBytes uint64
