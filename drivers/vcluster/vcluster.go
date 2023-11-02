@@ -13,9 +13,14 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
+	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
+	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -38,6 +43,7 @@ var (
 	NginxApp              = "nginx"
 	k8sCore               = core.Instance()
 	k8sStorage            = storage.Instance()
+	k8sExternalStorage    = externalstorage.Instance()
 	ControlNodeIP         string
 )
 
@@ -47,26 +53,32 @@ const (
 	VclusterConnectionTimeout = 60 * time.Second
 	VclusterAppTimeout        = 30 * time.Minute
 	VClusterAppRetryInterval  = 30 * time.Second
+	ClusterWideSecretKey      = "cluster-wide-secret-key"
+	PxNamespace               = "kube-system"
 )
 
 type VCluster struct {
-	Namespace string
-	Name      string
-	NodePort  int32
-	Clientset *kubernetes.Clientset
+	Namespace  string
+	Name       string
+	NodePort   int32
+	Clientset  *kubernetes.Clientset
+	SnapClient *snapclientset.Clientset
 }
 
 type FIOOptions struct {
-	Name      string
-	IOEngine  string
-	RW        string
-	BS        string
-	NumJobs   int
-	Size      string
-	TimeBased bool
-	Runtime   string
-	Filename  string
-	EndFsync  int
+	Name       string
+	IOEngine   string
+	RW         string
+	BS         string
+	NumJobs    int
+	Size       string
+	TimeBased  bool
+	Runtime    string
+	Filename   string
+	EndFsync   int
+	DoVerify   *int
+	Verify     *string
+	VerifyOnly bool
 }
 
 // NewVCluster Creates instance of Vcluster
@@ -297,6 +309,11 @@ func (v *VCluster) SetClientSetForVCluster() error {
 		return err
 	}
 	v.Clientset = clientset
+	snapClient, err := snapclientset.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	v.SnapClient = snapClient
 	return nil
 }
 
@@ -368,6 +385,15 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 		fioCmd = append(fioCmd, "--time_based")
 	}
 	fioCmd = append(fioCmd, "--runtime="+fioOpts.Runtime)
+	if fioOpts.DoVerify != nil {
+		fioCmd = append(fioCmd, fmt.Sprintf("--do_verify=%v", *fioOpts.DoVerify))
+	}
+	if fioOpts.Verify != nil {
+		fioCmd = append(fioCmd, fmt.Sprintf("--verify=%v", *fioOpts.Verify))
+	}
+	if fioOpts.VerifyOnly {
+		fioCmd = append(fioCmd, "--verify_only")
+	}
 	fioJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -410,6 +436,7 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 		},
 	}
 	log.Infof("Going ahead to run FIO Application on VCluster %v for %v ", v.Name, fioOpts.Runtime)
+	log.Infof("%v", fioCmd)
 	if _, err := v.Clientset.BatchV1().Jobs(appNS).Create(context.TODO(), fioJob, metav1.CreateOptions{}); err != nil {
 		return err
 	}
@@ -469,8 +496,11 @@ func (v *VCluster) WaitForFIOCompletion(namespace, jobName string) error {
 		if err != nil {
 			return nil, false, err
 		}
-		if job.Status.Succeeded == 1 {
+		if job.Status.Succeeded >= 1 {
 			return nil, false, nil
+		}
+		if job.Status.Failed >= 1 {
+			return nil, false, fmt.Errorf("FIO Job has failed")
 		}
 		return nil, true, fmt.Errorf("Still not completed. Looks like we have to wait for 30 seconds")
 	}
@@ -655,4 +685,131 @@ func (v *VCluster) IsDeploymentHealthy(appNS string, deploymentName string, expe
 	}
 	_, err := task.DoRetryWithTimeout(checkDeploymentHealth, VclusterAppTimeout, VClusterAppRetryInterval)
 	return err
+}
+
+// GetDeploymentPodNodes returns the names of the nodes on which pods of this deployment are running
+func (v *VCluster) GetDeploymentPodNodes(appNS string, deploymentName string) ([]string, error) {
+	pods, err := v.ListDeploymentPods(appNS, deploymentName)
+	if err != nil {
+		return nil, fmt.Errorf("error listing pods: %v", err)
+	}
+	var nodeNames []string
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName != "" {
+			nodeNames = append(nodeNames, pod.Spec.NodeName)
+		}
+	}
+	return nodeNames, nil
+}
+
+// CreateClusterWideSecret method creates a cluster wide secret for creating secure storage classes
+func CreateClusterWideSecret(name string) error {
+	secretValue := "vcluster-tests-secret"
+	// Create a new secret object
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: PxNamespace,
+		},
+		StringData: map[string]string{
+			ClusterWideSecretKey: secretValue,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	if _, err := k8sCore.CreateSecret(secret); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteSecret deletes a secret
+func DeleteSecret(name, namespace string) error {
+	return k8sCore.DeleteSecret(name, namespace)
+}
+
+// CreateVolumeSnapshotClass Creates a VolumeSnapshotclass in Vcluster context
+func (v *VCluster) CreateVolumeSnapshotClass(snapClassName string, params map[string]string) error {
+	vsc := &snapshotv1.VolumeSnapshotClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: snapClassName,
+		},
+		Driver:         k8s.CsiProvisioner,
+		DeletionPolicy: snapshotv1.VolumeSnapshotContentDelete,
+		Parameters:     params,
+	}
+	if _, err := v.SnapClient.SnapshotV1().VolumeSnapshotClasses().Create(context.TODO(), vsc, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+	log.Infof("VolumeSnapshotClass %s created successfully", snapClassName)
+	return nil
+}
+
+// CreateSnapshot creates a volume snapshot for a given PVC in vcluster context
+func (v *VCluster) CreateSnapshot(snapshotName, pvcName, snapClassName, namespace string) error {
+	vs := &snapshotv1.VolumeSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      snapshotName,
+			Namespace: namespace,
+		},
+		Spec: snapshotv1.VolumeSnapshotSpec{
+			VolumeSnapshotClassName: &snapClassName,
+			Source: snapshotv1.VolumeSnapshotSource{
+				PersistentVolumeClaimName: &pvcName,
+			},
+		},
+	}
+	_, err := v.SnapClient.SnapshotV1().VolumeSnapshots(namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Infof("Snapshot %s created successfully", snapshotName)
+	return nil
+}
+
+// RestorePVCFromSnapshot restores a CSI PVC from a volume snapshot
+func (v *VCluster) RestorePVCFromSnapshot(restoredPvcName, snapshotName, appNS, storageClassName, accessMode string) error {
+	var restoredAccessMode corev1.PersistentVolumeAccessMode
+	switch accessMode {
+	case "RWO":
+		restoredAccessMode = corev1.ReadWriteOnce
+	case "RWX":
+		restoredAccessMode = corev1.ReadWriteMany
+	case "ROX":
+		restoredAccessMode = corev1.ReadOnlyMany
+	default:
+		restoredAccessMode = corev1.ReadWriteOnce
+	}
+	restorePVC := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      restoredPvcName,
+			Namespace: appNS,
+			Annotations: map[string]string{
+				"snapshot.alpha.kubernetes.io/snapshot": snapshotName,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			StorageClassName: &storageClassName,
+			AccessModes:      []corev1.PersistentVolumeAccessMode{restoredAccessMode},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("5Gi"),
+				},
+			},
+		},
+	}
+	_, err := v.Clientset.CoreV1().PersistentVolumeClaims(appNS).Create(context.TODO(), restorePVC, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Infof("Restored PVC %s from snapshot %s successfully", restoredPvcName, snapshotName)
+	return nil
+}
+
+// ListSnapshots lists all snapshots in the Vcluster namespace on Host Context
+func (v *VCluster) ListSnapshots() (*snapv1.VolumeSnapshotList, error) {
+	snapshotList, err := k8sExternalStorage.ListSnapshots(v.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return snapshotList, nil
 }
