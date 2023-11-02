@@ -1662,7 +1662,10 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 						reason := resp.GetBackup().GetStatus().Reason
 						if actual == deletePendingStatus || actual == deletingStatus {
 							log.Infof("Ignoring the backup from user access as the backup is in [%s] state ,Reason:[%s]", actual, reason)
-							RemoveElementByValue(&userBackups, backupName)
+							err := RemoveElementByValue(&userBackups, backupName)
+							if err != nil {
+								return nil, false, err
+							}
 							continue
 						} else {
 							return "", true, fmt.Errorf("waiting for backup access - [%v] to be revoked for user = [%s], The backup is in [%s] state",

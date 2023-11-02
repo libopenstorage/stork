@@ -570,33 +570,33 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 					namePrefix          string
 					namespaceMapping    map[string]string
 					storageClassMapping map[string]string
-					replacePolicy       ReplacePolicy_Type
+					replacePolicy       ReplacePolicyType
 				}{
 					{
 						"test-restore-single-ns",
 						make(map[string]string, 0),
 						make(map[string]string, 0),
-						ReplacePolicy_Retain,
+						ReplacePolicyRetain,
 					},
 					{
 						"test-custom-restore-single-ns",
 						map[string]string{namespace: "custom-" + namespace},
 						make(map[string]string, 0),
-						ReplacePolicy_Retain,
+						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
 						make(map[string]string, 0),
 						make(map[string]string, 0),
-						ReplacePolicy_Delete,
+						ReplacePolicyDelete,
 					},
 				}
 				for _, config := range restoreConfigs {
 					restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(4))
 					log.InfoD("Restoring first single namespace schedule backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", firstSingleNSScheduleBackupName, destinationClusterName, restoreName, config.namespaceMapping)
-					if config.replacePolicy == ReplacePolicy_Retain {
+					if config.replacePolicy == ReplacePolicyRetain {
 						err = CreateRestore(restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping)
-					} else if config.replacePolicy == ReplacePolicy_Delete {
+					} else if config.replacePolicy == ReplacePolicyDelete {
 						err = CreateRestoreWithReplacePolicy(restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping, config.replacePolicy)
 					}
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first single namespace schedule backup [%s] in cluster [%s]", restoreName, firstSingleNSScheduleBackupName, restoreName))
@@ -617,33 +617,33 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 					namePrefix          string
 					namespaceMapping    map[string]string
 					storageClassMapping map[string]string
-					replacePolicy       ReplacePolicy_Type
+					replacePolicy       ReplacePolicyType
 				}{
 					{
 						"test-restore-single-ns",
 						make(map[string]string, 0),
 						make(map[string]string, 0),
-						ReplacePolicy_Retain,
+						ReplacePolicyRetain,
 					},
 					{
 						"test-custom-restore-single-ns",
 						map[string]string{namespace: "custom" + namespace},
 						make(map[string]string, 0),
-						ReplacePolicy_Retain,
+						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
 						make(map[string]string, 0),
 						make(map[string]string, 0),
-						ReplacePolicy_Delete,
+						ReplacePolicyDelete,
 					},
 				}
 				for _, config := range restoreConfigs {
 					restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(4))
 					log.InfoD("Restoring next single namespace schedule backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", nextScheduleBackupName, destinationClusterName, restoreName, config.namespaceMapping)
-					if config.replacePolicy == ReplacePolicy_Retain {
+					if config.replacePolicy == ReplacePolicyRetain {
 						err = CreateRestore(restoreName, nextScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping)
-					} else if config.replacePolicy == ReplacePolicy_Delete {
+					} else if config.replacePolicy == ReplacePolicyDelete {
 						err = CreateRestoreWithReplacePolicy(restoreName, nextScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping, config.replacePolicy)
 					}
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of next single namespace schedule backup [%s] in cluster [%s]", restoreName, nextScheduleBackupName, restoreName))

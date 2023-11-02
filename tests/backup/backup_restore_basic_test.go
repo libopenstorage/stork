@@ -500,146 +500,6 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 	})
 })
 
-// This testcase verifies schedule backup creation with a single namespace.
-var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
-	var (
-		scheduledAppContexts    []*scheduler.Context
-		backupLocationName      string
-		backupLocationUID       string
-		cloudCredUID            string
-		bkpNamespaces           []string
-		scheduleNames           []string
-		cloudAccountName        string
-		backupName              string
-		firstScheduleBackupName string
-		schPolicyUid            string
-		restoreName             string
-		clusterStatus           api.ClusterInfo_StatusInfo_Status
-	)
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58014
-	namespaceMapping := make(map[string]string)
-	labelSelectors := make(map[string]string)
-	cloudCredUIDMap := make(map[string]string)
-	backupLocationMap := make(map[string]string)
-	bkpNamespaces = make([]string, 0)
-	timeStamp := strconv.Itoa(int(time.Now().Unix()))
-	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
-
-	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, 58014, Vpinisetti, Q4FY23)
-		log.Infof("Application installation")
-		scheduledAppContexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts := ScheduleApplications(taskName)
-			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = appReadinessTimeout
-				namespace := GetAppNamespace(ctx, taskName)
-				bkpNamespaces = append(bkpNamespaces, namespace)
-				scheduledAppContexts = append(scheduledAppContexts, ctx)
-			}
-		}
-	})
-
-	It("Schedule Backup Creation with single namespace", func() {
-		Step("Validate deployed applications", func() {
-			ValidateApplications(scheduledAppContexts)
-		})
-		providers := getProviders()
-		Step("Adding Cloud Account", func() {
-			log.InfoD("Adding cloud account")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, provider := range providers {
-				cloudAccountName = fmt.Sprintf("%s-%v", provider, timeStamp)
-				cloudCredUID = uuid.New()
-				cloudCredUIDMap[cloudCredUID] = cloudAccountName
-				err := CreateCloudCredential(provider, cloudAccountName, cloudCredUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
-			}
-		})
-
-		Step("Adding Backup Location", func() {
-			log.InfoD("Adding Backup Location")
-			for _, provider := range providers {
-				cloudAccountName = fmt.Sprintf("%s-%v", provider, timeStamp)
-				backupLocationName = fmt.Sprintf("auto-bl-%v", time.Now().Unix())
-				backupLocationUID = uuid.New()
-				backupLocationMap[backupLocationUID] = backupLocationName
-				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudAccountName, cloudCredUID,
-					getGlobalBucketName(provider), orgID, "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of adding backup location - %s", backupLocationName))
-			}
-		})
-
-		Step("Creating Schedule Policies", func() {
-			log.InfoD("Creating Schedule Policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
-			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Verification of creating periodic schedule policy - %s", periodicPolicyName))
-		})
-
-		Step("Adding Clusters for backup", func() {
-			log.InfoD("Adding application clusters")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateApplicationClusters(orgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, destinationClusterName))
-			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-		})
-
-		Step("Creating schedule backups", func() {
-			log.InfoD("Creating schedule backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
-			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", backupName))
-				scheduleNames = append(scheduleNames, backupName)
-			}
-		})
-
-		Step("Restoring scheduled backups", func() {
-			log.InfoD("Restoring scheduled backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, firstScheduleBackupName)
-			err = CreateRestore(restoreName, firstScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Clean up objects after test execution")
-		log.Infof("Deleting backup schedules")
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		}
-		log.Infof("Deleting backup schedule policy")
-		policyList := []string{periodicPolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
-		log.Infof("Deleting restores")
-		err = DeleteRestore(restoreName, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restores - %s", restoreName))
-		log.Infof("Deleting the deployed apps after test execution")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
-	})
-})
-
 // This testcase verifies schedule backup creation with all namespaces.
 var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	var (
@@ -1927,7 +1787,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), ReplacePolicy_Delete)
+					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), ReplacePolicyDelete)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
 				}(bkpNameSpace, backupName)
 			}
@@ -3225,7 +3085,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		labelSelectors           map[string]string
 		backupNames              []string
 		restoreNames             []string
-		numberOfAlternateBackups int = 2
+		numberOfAlternateBackups = 2
 	)
 
 	JustBeforeEach(func() {

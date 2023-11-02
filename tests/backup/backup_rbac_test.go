@@ -139,7 +139,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 						cloudCredentialFromAdmin = append(cloudCredentialFromAdmin, cloudCredentialName)
 					}
 					if !IsPresent(cloudCredentialFromAdmin, cloudCredentialNameMap[infraAdminUser]) {
-						err := fmt.Errorf("Cloud Credential[%s] is not listed in cloud credentials from admin %s", cloudCredentialNameMap[infraAdminUser], cloudCredentialFromAdmin)
+						err := fmt.Errorf("cloud credential[%s] is not listed in cloud credentials from admin %s", cloudCredentialNameMap[infraAdminUser], cloudCredentialFromAdmin)
 						log.FailOnError(fmt.Errorf(""), err.Error())
 					}
 				}
@@ -856,7 +856,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 		userNames                     = make([]string, 0)
 		providers                     = getProviders()
 		bkpNamespaces                 []string
-		appAdminRole                  backup.PxBackupRole = backup.ApplicationOwner
+		appAdminRole                  = backup.ApplicationOwner
 		labelSelectors                map[string]string
 		mutex                         sync.Mutex
 	)

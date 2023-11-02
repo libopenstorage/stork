@@ -57,7 +57,7 @@ type Driver interface {
 	CloudCredential
 	// Cluster interface
 	Cluster
-	// Backup location interface
+	// BLocation interface
 	BLocation
 	// Backup interface
 	Backup
@@ -104,7 +104,7 @@ type Org interface {
 	// CreateOrganization creates Organization
 	CreateOrganization(ctx context.Context, req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error)
 
-	// GetOrganization enumerates organizations
+	// EnumerateOrganization enumerates organizations
 	EnumerateOrganization(ctx context.Context) (*api.OrganizationEnumerateResponse, error)
 }
 
@@ -253,7 +253,7 @@ type Backup interface {
 	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 
-	// WaitForBackupDeletion waits for restore to be deleted successfully
+	// WaitForRestoreDeletion waits for restore to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry
 	WaitForRestoreDeletion(ctx context.Context, restoreName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
@@ -374,7 +374,7 @@ type ScheduleBackup interface {
 	// DeleteBackupSchedule
 	DeleteBackupSchedule(ctx context.Context, req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error)
 
-	// BackupScheduleWaitForNBackupsCompletion, waits for backup schedule to complete successfully
+	// BackupScheduleWaitForNBackupsCompletion waits for backup schedule to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	BackupScheduleWaitForNBackupsCompletion(ctx context.Context, name, orgID string, count int,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
@@ -447,7 +447,7 @@ type Role interface {
 	// CreateRole creates role object
 	CreateRole(ctx context.Context, req *api.RoleCreateRequest) (*api.RoleCreateResponse, error)
 
-	// InspectRole inspects a rple object
+	// InspectRole inspects a role object
 	InspectRole(ctx context.Context, req *api.RoleInspectRequest) (*api.RoleInspectResponse, error)
 
 	// EnumerateRole enumerates all role objects

@@ -15,7 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NamespaceLabelledBackupSharedWithDifferentAccessMode takes namespace labelled backup and share with users having different access mode
@@ -285,7 +285,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 					err = AddLabelToResource(pvcItem, labelKey, labelValue)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, pvcItem))
 				}
-				cmList, err := core.Instance().ListConfigMap(namespace, meta_v1.ListOptions{})
+				cmList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap list [%v] from namespace [%s]", cmList, namespace))
 				for _, cm := range cmList.Items {
 					cmItem, err := core.Instance().GetConfigMap(cm.Name, namespace)
@@ -499,7 +499,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 					err = AddLabelToResource(pvcItem, labelKey, labelValue)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, pvcItem))
 				}
-				cmList, err := core.Instance().ListConfigMap(namespace, meta_v1.ListOptions{})
+				cmList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap list from namespace [%s]", namespace))
 				for _, cm := range cmList.Items {
 					cmItem, err := core.Instance().GetConfigMap(cm.Name, namespace)
@@ -930,7 +930,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 					err = AddLabelToResource(pvcItem, labelKey, labelValue)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, pvcItem))
 				}
-				cmList, err := core.Instance().ListConfigMap(namespace, meta_v1.ListOptions{})
+				cmList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap list from namespace [%s]", namespace))
 				for _, cm := range cmList.Items {
 					cmItem, err := core.Instance().GetConfigMap(cm.Name, namespace)

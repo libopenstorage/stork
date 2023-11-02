@@ -561,7 +561,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 						}
 					})
 					// In case of CSI, a cluster reference is mandatory to delete a backup. We are creating new clusters
-					// to refer them in the delete backup request, as the associated clusters have been deleted.
+					// to refer them in the delete-backup request, as the associated clusters have been deleted.
 					Step(fmt.Sprintf("Create source and destination cluster from the user %s", user), func() {
 						log.InfoD(fmt.Sprintf("Creating source and destination cluster from the user %s", user))
 						nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -619,7 +619,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 						}
 					})
 					// In case of CSI, a cluster reference is mandatory to delete a backup. We are creating new clusters
-					// to refer them in the delete backup request, as the associated clusters have been inactive.
+					// to refer them in the delete-backup request, as the associated clusters have been inactive.
 					Step("Create source and destination cluster from the admin", func() {
 						log.InfoD("Creating source and destination cluster from the admin")
 						err = CreateApplicationClusters(orgID, "", "", ctx)
@@ -1874,8 +1874,8 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 	postRuleNameMap := make(map[string]string)
 	postRuleUidMap := make(map[string]string)
 	singleNamespaceBackupsMap := make(map[string][]string)
-	mutipleNamespaceBackupsMap := make(map[string][]string)
-	mutipleNamespaceLabelBackupsMap := make(map[string][]string)
+	multipleNamespaceBackupsMap := make(map[string][]string)
+	multipleNamespaceLabelBackupsMap := make(map[string][]string)
 	backupNameMap := make(map[string]string)
 	scheduleNameMap := make(map[string]string)
 	restoreNameMap := make(map[string]string)
@@ -1956,7 +1956,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 					log.InfoD(fmt.Sprintf("Update ownership for cloud account from px-admin to users with role app.admin"))
 					log.Infof("Update CloudAccount - %s ownership for users - [%v]", adminCredName, appAdminUserNames)
 					err = AddCloudCredentialOwnership(adminCredName, adminCloudCredUID, appAdminUserNames, nil, Read, Invalid, adminCtx, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for CloudCredential- %s", adminCredName))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of owbership for CloudCredential- %s", adminCredName))
 					for _, appAdminUserName := range appAdminUserNames {
 						userCredNameMap[appAdminUserName] = adminCredName
 						userCloudCredUIDMap[appAdminUserName] = adminCloudCredUID
@@ -2091,7 +2091,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 					defer wg.Done()
 					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 					log.FailOnError(err, "Fetching non admin ctx")
-					log.InfoD("Taking manual backup of mutiple namespace as user : %s without-rules", nonAdminUserName)
+					log.InfoD("Taking manual backup of multiple namespace as user : %s without-rules", nonAdminUserName)
 					backupName = fmt.Sprintf("%s-manual-multiple-ns-%s-without-rules-%s", BackupNamePrefix, nonAdminUserName, RandomString(4))
 					backupNameMap[nonAdminUserName] = backupName
 					labelSelectors := make(map[string]string, 0)
@@ -2100,7 +2100,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 					err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[nonAdminUserName], SourceClusterName, backupLocationNameMap[nonAdminUserName], backupLocationUidMap[nonAdminUserName], appContextsToBackup,
 						labelSelectors, orgID, clusterUidMap[nonAdminUserName][SourceClusterName], "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupNameMap[nonAdminUserName]))
-					mutipleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, mutipleNamespaceBackupsMap[nonAdminUserName], backupNameMap[nonAdminUserName]).([]string)
+					multipleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceBackupsMap[nonAdminUserName], backupNameMap[nonAdminUserName]).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], backupNameMap[nonAdminUserName]).([]string)
 				}(nonAdminUserName)
 			}
@@ -2155,7 +2155,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 					scheduleBackupName, err := CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, backupLocationNameMap[nonAdminUserName], backupLocationUidMap[nonAdminUserName], appContextsToBackup,
 						labelSelectors, orgID, preRuleNameMap[nonAdminUserName], preRuleUidMap[nonAdminUserName], postRuleNameMap[nonAdminUserName], postRuleUidMap[nonAdminUserName], namespaceLabel, periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
-					mutipleNamespaceLabelBackupsMap[nonAdminUserName] = SafeAppend(&mutex, mutipleNamespaceLabelBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
+					multipleNamespaceLabelBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceLabelBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
 					err = suspendBackupSchedule(scheduleNameMap[nonAdminUserName], periodicSchedulePolicyNameMap[nonAdminUserName], orgID, nonAdminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", scheduleNameMap[nonAdminUserName], nonAdminUserName))
@@ -2179,19 +2179,19 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 						namePrefix          string
 						namespaceMapping    map[string]string
 						storageClassMapping map[string]string
-						replacePolicy       ReplacePolicy_Type
+						replacePolicy       ReplacePolicyType
 					}{
 						{
 							"test-restore-single-ns",
 							make(map[string]string, 0),
 							make(map[string]string, 0),
-							ReplacePolicy_Retain,
+							ReplacePolicyRetain,
 						},
 						{
 							"test-custom-restore-single-ns",
 							map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
 							make(map[string]string, 0),
-							ReplacePolicy_Retain,
+							ReplacePolicyRetain,
 						},
 					}
 					for _, config := range restoreConfigs {
@@ -2206,9 +2206,9 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 			wg.Wait()
 		})
 
-		// Restore a mutiple namespace backup
-		Step("Restore a mutiple namespace backups", func() {
-			log.InfoD("Restore a mutiple namespace backups")
+		// Restore a multiple namespace backup
+		Step("Restore a multiple namespace backups", func() {
+			log.InfoD("Restore a multiple namespace backups")
 			for _, nonAdminUserName := range userNames {
 				time.Sleep(timeBetweenConsecutiveBackups)
 				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
@@ -2217,17 +2217,17 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				go func(nonAdminUserName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					restoreName := fmt.Sprintf("%s-mutiple-ns-restore-%s", nonAdminUserName, RandomString(4))
+					restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring mutiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", mutipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
-					err = CreateRestore(restoreNameMap[nonAdminUserName], mutipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of mutiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], mutipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
+					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
+					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
 			wg.Wait()
 		})
 
-		// Restore a mutiple namespace backup
+		// Restore a multiple namespace backup
 		Step("Restore a namespace label backups", func() {
 			log.InfoD("Restore a namespace label backups")
 			for _, nonAdminUserName := range userNames {
@@ -2238,11 +2238,11 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				go func(nonAdminUserName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					restoreName := fmt.Sprintf("%s-mutiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
+					restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring mutiple namespace backup [%s] in cluster [%s] with restore name [%s] ", mutipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
-					err = CreateRestore(restoreNameMap[nonAdminUserName], mutipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of mutiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], mutipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
+					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
+					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
 			wg.Wait()
@@ -2504,43 +2504,43 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
 	var (
-		periodicSchedulePolicyName      string
-		periodicSchedulePolicyUid       string
-		scheduledAppContexts            []*scheduler.Context
-		backupLocationUID               string
-		credName                        string
-		cloudCredUID                    string
-		srcClusterUid                   string
-		backupLocationName              string
-		preRuleName                     string
-		postRuleName                    string
-		preRuleUid                      string
-		postRuleUid                     string
-		nsLabels                        map[string]string
-		periodicSchedulePolicyInterval  int64
-		namespaceLabel                  string
-		wg                              sync.WaitGroup
-		mutex                           sync.Mutex
-		bkpNamespaces                   = make([]string, 0)
-		userNames                       = make([]string, 0)
-		numOfNS                         = 2
-		numOfUsers                      = 6
-		timeBetweenConsecutiveBackups   = 10 * time.Second
-		namespaceMapping                = make(map[string]string)
-		storageClassMapping             = make(map[string]string)
-		userIdMap                       = make(map[string]string)
-		clusterUidMap                   = make(map[string]map[string]string)
-		backupLocationMap               = make(map[string]string)
-		singleNamespaceBackupsMap       = make(map[string][]string)
-		mutipleNamespaceBackupsMap      = make(map[string][]string)
-		mutipleNamespaceLabelBackupsMap = make(map[string][]string)
-		scheduleNameMap                 = make(map[string]string)
-		restoreNameMap                  = make(map[string]string)
-		userBackupNamesMap              = make(map[string][]string)
-		userBackupNamesMapFromAdmin     = make(map[string][]string)
-		userBackupSchedulesMap          = make(map[string][]string)
-		userRestoresMap                 = make(map[string][]string)
-		backupDriver                    = Inst().Backup
+		periodicSchedulePolicyName       string
+		periodicSchedulePolicyUid        string
+		scheduledAppContexts             []*scheduler.Context
+		backupLocationUID                string
+		credName                         string
+		cloudCredUID                     string
+		srcClusterUid                    string
+		backupLocationName               string
+		preRuleName                      string
+		postRuleName                     string
+		preRuleUid                       string
+		postRuleUid                      string
+		nsLabels                         map[string]string
+		periodicSchedulePolicyInterval   int64
+		namespaceLabel                   string
+		wg                               sync.WaitGroup
+		mutex                            sync.Mutex
+		bkpNamespaces                    = make([]string, 0)
+		userNames                        = make([]string, 0)
+		numOfNS                          = 2
+		numOfUsers                       = 6
+		timeBetweenConsecutiveBackups    = 10 * time.Second
+		namespaceMapping                 = make(map[string]string)
+		storageClassMapping              = make(map[string]string)
+		userIdMap                        = make(map[string]string)
+		clusterUidMap                    = make(map[string]map[string]string)
+		backupLocationMap                = make(map[string]string)
+		singleNamespaceBackupsMap        = make(map[string][]string)
+		multipleNamespaceBackupsMap      = make(map[string][]string)
+		multipleNamespaceLabelBackupsMap = make(map[string][]string)
+		scheduleNameMap                  = make(map[string]string)
+		restoreNameMap                   = make(map[string]string)
+		userBackupNamesMap               = make(map[string][]string)
+		userBackupNamesMapFromAdmin      = make(map[string][]string)
+		userBackupSchedulesMap           = make(map[string][]string)
+		userRestoresMap                  = make(map[string][]string)
+		backupDriver                     = Inst().Backup
 	)
 
 	JustBeforeEach(func() {
@@ -2645,20 +2645,20 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 			log.FailOnError(err, "fetching px-admin ctx")
 			log.InfoD("Update BackupLocation - %s ownership for users - [%v]", backupLocationName, userNames)
 			err = AddBackupLocationOwnership(backupLocationName, backupLocationUID, userNames, nil, Read, Invalid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for backuplocation - %s", backupLocationName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of owbership for backuplocation - %s", backupLocationName))
 
 			log.InfoD("Update SchedulePolicy - %s ownership for users - [%v]", periodicSchedulePolicyName, userNames)
 			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", periodicSchedulePolicyName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of ownership for schedulepolicy - %s", periodicSchedulePolicyName))
 
 			log.InfoD("Update Application Rules ownership for users - [%v]", userNames)
 			if preRuleName != "" {
 				err = AddRuleOwnership(preRuleName, preRuleUid, userNames, nil, Read, Invalid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule of application"))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of ownership for pre-rule of application"))
 			}
 			if postRuleName != "" {
 				err = AddRuleOwnership(postRuleName, postRuleUid, userNames, nil, Read, Invalid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule of application"))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of ownership for post-rule of application"))
 			}
 		})
 
@@ -2719,7 +2719,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					defer wg.Done()
 					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 					log.FailOnError(err, "Fetching non admin ctx")
-					log.InfoD("Taking schedule backup of mutiple namespace as user : %s with-rules", nonAdminUserName)
+					log.InfoD("Taking schedule backup of multiple namespace as user : %s with-rules", nonAdminUserName)
 					scheduleName := fmt.Sprintf("%s-schedule-multiple-ns-%s-with-rules-%s", BackupNamePrefix, nonAdminUserName, RandomString(4))
 					scheduleNameMap[nonAdminUserName] = scheduleName
 					labelSelectors := make(map[string]string, 0)
@@ -2728,7 +2728,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
 						labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
-					mutipleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, mutipleNamespaceBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
+					multipleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
 					err = suspendBackupSchedule(scheduleNameMap[nonAdminUserName], periodicSchedulePolicyName, orgID, nonAdminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", scheduleNameMap[nonAdminUserName], nonAdminUserName))
@@ -2756,7 +2756,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					scheduleBackupName, err := CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
 						labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
-					mutipleNamespaceLabelBackupsMap[nonAdminUserName] = SafeAppend(&mutex, mutipleNamespaceLabelBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
+					multipleNamespaceLabelBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceLabelBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
 					err = suspendBackupSchedule(scheduleNameMap[nonAdminUserName], periodicSchedulePolicyName, orgID, nonAdminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", scheduleNameMap[nonAdminUserName], nonAdminUserName))
@@ -2778,19 +2778,19 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 						namePrefix          string
 						namespaceMapping    map[string]string
 						storageClassMapping map[string]string
-						replacePolicy       ReplacePolicy_Type
+						replacePolicy       ReplacePolicyType
 					}{
 						{
 							"test-restore-single-ns",
 							make(map[string]string, 0),
 							make(map[string]string, 0),
-							ReplacePolicy_Retain,
+							ReplacePolicyRetain,
 						},
 						{
 							"test-custom-restore-single-ns",
 							map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
 							make(map[string]string, 0),
-							ReplacePolicy_Retain,
+							ReplacePolicyRetain,
 						},
 					}
 					for _, config := range restoreConfigs {
@@ -2804,8 +2804,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 			}
 			wg.Wait()
 		})
-		Step("Restore a mutiple namespace backups", func() {
-			log.InfoD("Restore a mutiple namespace backups")
+		Step("Restore a multiple namespace backups", func() {
+			log.InfoD("Restore a multiple namespace backups")
 			for _, nonAdminUserName := range userNames {
 				wg.Add(1)
 				go func(nonAdminUserName string) {
@@ -2813,11 +2813,11 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					defer wg.Done()
 					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-					restoreName := fmt.Sprintf("%s-mutiple-ns-restore-%s", nonAdminUserName, RandomString(4))
+					restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring mutiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", mutipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
-					err = CreateRestore(restoreNameMap[nonAdminUserName], mutipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of mutiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], mutipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
+					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
+					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
 			wg.Wait()
@@ -2831,11 +2831,11 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					defer wg.Done()
 					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-					restoreName := fmt.Sprintf("%s-mutiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
+					restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring mutiple namespace backup [%s] in cluster [%s] with restore name [%s] ", mutipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
-					err = CreateRestore(restoreNameMap[nonAdminUserName], mutipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of mutiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], mutipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
+					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
+					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
 			wg.Wait()
@@ -3221,8 +3221,8 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			log.FailOnError(err, "Failed to create invalid cloud credential - %s", err)
 		})
 
-		Step("Verifying listing and updation of backup of non-admin user from px-admin", func() {
-			log.InfoD("Verifying listing and updation of backup of non-admin user from px-admin")
+		Step("Verifying listing and update of backup of non-admin user from px-admin", func() {
+			log.InfoD("Verifying listing and update of backup of non-admin user from px-admin")
 			adminCtx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-admin ctx")
 			userUID, err := backup.FetchIDOfUser(nonAdminUserName)
@@ -3238,7 +3238,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			for _, backupName := range userBackupNames {
 				bkpUid, _ := Inst().Backup.GetBackupUID(adminCtx, backupName, orgID)
 				_, err = UpdateBackup(backupName, bkpUid, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of updation of backup [%v] of user [%s] from px-admin user", backupName, nonAdminUserName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of backup [%v] of user [%s] from px-admin user", backupName, nonAdminUserName))
 			}
 		})
 
@@ -3281,18 +3281,18 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			}
 		})
 
-		Step("Verifying updation of cluster of non-admin user from px-admin", func() {
-			log.InfoD("Verifying updation of cluster of non-admin user from px-admin")
+		Step("Verifying update of cluster of non-admin user from px-admin", func() {
+			log.InfoD("Verifying update of cluster of non-admin user from px-admin")
 			adminCtx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-admin ctx")
 			srcClusterConfigPath, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "Fetching source clusterconfigpath")
 			_, err = UpdateCluster(SourceClusterName, srcClusterUid, srcClusterConfigPath, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of updation of cluster [%v] of user [%s] from px-admin user", SourceClusterName, nonAdminUserName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", SourceClusterName, nonAdminUserName))
 			dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 			log.FailOnError(err, "Fetching destination clusterconfigpath")
 			_, err = UpdateCluster(destinationClusterName, destClusterUid, dstClusterConfigPath, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of updation of cluster [%v] of user [%s] from px-admin user", destinationClusterName, nonAdminUserName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", destinationClusterName, nonAdminUserName))
 		})
 
 		Step(fmt.Sprintf("Verifying  deletion of clusters of non-admin user from px-admin user"), func() {
@@ -3480,7 +3480,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] for px-admin ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, adminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for SchedulePolicy- %s", periodicSchedulePolicyName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of owbership for SchedulePolicy- %s", periodicSchedulePolicyName))
 
 		})
 
