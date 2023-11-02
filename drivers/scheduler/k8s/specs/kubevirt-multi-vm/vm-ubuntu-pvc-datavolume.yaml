@@ -23,6 +23,7 @@ spec:
       labels:
         kubevirt.io/domain: ubuntu-bionic
         kubevirt-key: kubevirt-val
+        app: vm-ubuntu-pvc-datavolume
     spec:
       domain:
         cpu:

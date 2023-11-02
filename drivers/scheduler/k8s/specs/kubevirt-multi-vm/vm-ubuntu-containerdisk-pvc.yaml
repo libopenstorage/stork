@@ -24,6 +24,7 @@ spec:
         kubevirt.io/size: small
         kubevirt.io/domain: ubuntu-bionic
         kubevirt-key: kubevirt-val
+        app: vm-ubuntu-containerdisk-pvc
     spec:
       domain:
         cpu:

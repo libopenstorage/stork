@@ -982,22 +982,46 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return err
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerName ...string) (int, error) {
 	var number int
-	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
+	var str string
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
-	for _, line := range strings.SplitAfter(ret, "\n") {
+	for _, line := range strings.SplitAfter(output, "\n") {
 		if strings.Contains(line, volumeMount) {
-			ret = strings.Fields(line)[3]
+			str = strings.Fields(line)[3]
+			break
 		}
 	}
-	number, err = strconv.Atoi(ret)
-	if err != nil {
-		return 0, err
+	if str == "" {
+		log.Infof("Could not find any mount points for the volume mount [%s] in the pod [%s] in namespace [%s] ", volumeMount, podName, namespace)
+		log.Infof("Trying to check if there is a sym link for [%s]", volumeMount)
+		if len(containerName) == 0 {
+			return number, err
+		}
+		symlinkPath, err := core.Instance().RunCommandInPod([]string{"readlink", "-f", volumeMount}, podName, containerName[0], namespace)
+		if err != nil {
+			return number, err
+		}
+		if symlinkPath == "" {
+			return 0, fmt.Errorf("no matching symlink for path [%s] was found in the pod [%s] in namespace [%s]", volumeMount, podName, namespace)
+		} else {
+			log.Infof("Symlink for volume mount [%s] found - [%s]", volumeMount, symlinkPath)
+		}
+		for _, line := range strings.SplitAfter(output, "\n") {
+			if strings.Contains(line, symlinkPath) {
+				str = strings.Fields(line)[3]
+				break
+			}
+		}
 	}
-	return number, nil
+	if str != "" {
+		number, err = strconv.Atoi(str)
+		return number, err
+	}
+	return 0, fmt.Errorf("no matching volume mount with path [%s] was found in the pod [%s] in namespace [%s]", volumeMount, podName, namespace)
 }
 
 func kubectlExec(arguments []string) (string, error) {
@@ -3662,12 +3686,19 @@ func ValidateBackupLocation(ctx context.Context, orgID string, backupLocationNam
 
 // GetAppLabelFromSpec gets the label of the pod from the spec
 func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]string, error) {
+	labelMap := make(map[string]string)
 	for _, specObj := range AppContextsMapping.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			return obj.Spec.Selector.MatchLabels, nil
+			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Selector.MatchLabels)
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Template.ObjectMeta.Labels)
 		}
 	}
-	return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+	log.Infof("labelMap - %+v", labelMap)
+	if len(labelMap) == 0 {
+		return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+	}
+	return labelMap, nil
 }
 
 // GetVolumeMounts gets the volume mounts from the spec

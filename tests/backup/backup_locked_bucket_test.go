@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/core/v1"
 )
 
 // This testcase verifies alternating backups between locked and unlocked bucket
@@ -219,7 +221,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		beforeSize           int
 		credName             string
 		volumeMounts         []string
-		podList              []string
+		podList              []v1.Pod
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -363,14 +365,16 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+				podList = pods.Items
 				for _, pod := range pods.Items {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-						volListBeforeSizeMap[volumeMount] = beforeSize
-						podList = append(podList, pod.Name)
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+							volListBeforeSizeMap[path] = beforeSize
+						}
 					}
 				}
 			})
@@ -406,13 +410,15 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				log.InfoD("Checking size of volume after resize")
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				for _, podName := range podList {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
-						volListAfterSizeMap[volumeMount] = afterSize
+				for _, pod := range podList {
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume after resizing %v from pod %v", afterSize, pod.GetName()))
+							volListAfterSizeMap[path] = afterSize
+						}
 					}
 				}
 				for _, volumeMount := range volumeMounts {
@@ -454,7 +460,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		appNamespaces              []string
 		clusterStatus              api.ClusterInfo_StatusInfo_Status
 		volumeMounts               []string
-		podList                    []string
+		podList                    []v1.Pod
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -574,14 +580,16 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+				podList = pods.Items
 				for _, pod := range pods.Items {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-						volListBeforeSizeMap[volumeMount] = beforeSize
-						podList = append(podList, pod.Name)
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+							volListBeforeSizeMap[path] = beforeSize
+						}
 					}
 				}
 			})
@@ -616,13 +624,15 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				log.InfoD("Checking size of volume after resize")
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				for _, podName := range podList {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
-						volListAfterSizeMap[volumeMount] = afterSize
+				for _, pod := range podList {
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume after resizing %v from pod %v", afterSize, pod.GetName()))
+							volListAfterSizeMap[path] = afterSize
+						}
 					}
 				}
 				for _, volumeMount := range volumeMounts {

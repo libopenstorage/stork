@@ -11,6 +11,7 @@ spec:
         kubevirt.io/size: small
         kubevirt.io/domain: vm-ubuntu-containerdisk
         kubevirt-key: kubevirt-val
+        app: vm-ubuntu-containerdisk
     spec:
       domain:
         cpu:

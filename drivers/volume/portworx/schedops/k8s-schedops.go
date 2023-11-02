@@ -321,7 +321,7 @@ func (k *k8sSchedOps) validateDevicesInPods(
 			return validatedDevicePods, err
 		}
 		log.Debugf("validating the devices in pod %s/%s", p.Namespace, p.Name)
-		containerPaths := getContainerPVCMountMap(*pod)
+		containerPaths := GetContainerPVCMountMap(*pod)
 		if len(containerPaths) == 0 {
 			return validatedDevicePods, fmt.Errorf("pod: [%s] %s does not have raw block devices.", pod.Namespace, pod.Name)
 		}
@@ -376,7 +376,7 @@ PodLoop:
 		}
 
 		log.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
-		containerPaths := getContainerPVCMountMap(*pod)
+		containerPaths := GetContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
 			log.Infof("container [%s] has paths [%v]", containerName, paths)
@@ -860,9 +860,9 @@ func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, erro
 	return remoteNodeList, nil
 }
 
-// getContainerPVCMountMap is a helper routine to return map of containers in the pod that
+// GetContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
-func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
+func GetContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 	containerPaths := make(map[string][]string)
 
 	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).

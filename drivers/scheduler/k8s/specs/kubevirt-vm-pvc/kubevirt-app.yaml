@@ -13,6 +13,7 @@ spec:
       creationTimestamp: null
       labels:
         kubevirt.io/domain: cirrosvm
+        app: kubevirt-vm-pvc
     spec:
       domain:
         cpu:

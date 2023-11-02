@@ -11,6 +11,7 @@ spec:
     metadata:
       labels:
         kubevirt.io/domain: vm-ubuntu-pvc
+        app: vm-ubuntu-pvc
     spec:
       domain:
         cpu:
