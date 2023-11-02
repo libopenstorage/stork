@@ -240,6 +240,7 @@ const (
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
+	defaultnamespace                   = "default"
 
 	milestoneFlag               = "testrail-milestone"
 	testrailRunNameFlag         = "testrail-run-name"
@@ -299,6 +300,8 @@ const (
 	BackupRestoreCompletionTimeoutMin = 20
 	clusterDeleteTimeout              = 60 * time.Minute
 	clusterDeleteRetryTime            = 30 * time.Second
+	poolExpandApplyTimeOut            = 15 * time.Minute
+	poolExpandApplyRetryTime          = 30 * time.Second
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -2043,6 +2046,45 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
 
+}
+
+// ValidateRuleNotApplied is validating storage pool, but expects the error to occur
+func ValidateRuleNotApplied(contexts []*scheduler.Context, name string) {
+
+	strExpansionEnabled, err := Inst().V.IsStorageExpansionEnabled()
+	expect(err).NotTo(haveOccurred())
+
+	if strExpansionEnabled {
+		log.InfoD("Validating Error shows up in events")
+		fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+		waitForActiveAction := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+			expect(err).NotTo(haveOccurred())
+			for _, e := range events.Items {
+				if strings.Contains(e.Message, "ActiveActionsInProgress") {
+					log.InfoD("Found Active action is in progress in autopilot events")
+					return e.Message, false, nil
+				}
+			}
+			return "", true, fmt.Errorf("Autopilot rule not applied yet")
+		}
+		_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+		checkRuleFailed := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+			expect(err).NotTo(haveOccurred())
+			for _, e := range events.Items {
+				if strings.Contains(e.Message, "cloud drive is not initialized") {
+					log.InfoD("Found the error, stating cloud drive is not initialized")
+					log.InfoD("Message in log is: %s", e.Message)
+					return e.Message, false, nil
+				}
+			}
+			return "", true, fmt.Errorf("Autopilot rule did not fail yet")
+		}
+		_, err = task.DoRetryWithTimeout(checkRuleFailed, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+		expect(err).NotTo(haveOccurred())
+	}
 }
 
 // ValidatePxPodRestartCount validates portworx restart count

@@ -850,6 +850,56 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	})
 })
 
+// This test suite is used to run pool expand on Non cloud drive setups, and the error is expected to happen
+var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName), func() {
+	var testrailID = 93319
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93319
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName), "Pool expand on non-cd setup", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	It("has to expand pool on non cloud drives based setup", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandInNonCD", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		storageNodes := node.GetStorageDriverNodes()
+
+		poolApRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
+		}
+
+		Step("schedule apps with autopilot rules for pool expand", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
+			Expect(err).NotTo(HaveOccurred())
+			contexts = scheduleAppsWithAutopilot(testName, 1, poolApRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+		})
+
+		Step("validate storage pools", func() {
+			ValidateRuleNotApplied(contexts, poolApRules[0].Name)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range poolApRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+
+			for k := range poolLabel {
+				Inst().S.RemoveLabelOnNode(storageNodes[0], k)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sEvents}", testSuiteName), "Events test on autopilot", nil, 0)
