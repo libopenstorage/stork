@@ -41,6 +41,7 @@ func TestKubevirt(t *testing.T) {
 	require.NoError(t, err, "Error creating template")
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
+	t.Run("kubevirtDeployWindowsServerWithClonePVC", kubevirtDeployWindowsServerWithClonePVC)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
@@ -49,7 +50,29 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vm"
 	appKey := "kubevirt-fedora"
-	deployedVMName := "test-vm-csi"
+	deployedVMName := "fedora-test-vm"
+
+	ctxs := kubevirtVMDeployAndValidate(
+		t,
+		instanceID,
+		appKey,
+		deployedVMName,
+	)
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
+	var testrailID, testResult = 50804, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "vm"
+	appKey := "kubevirt-windows-22k-server"
+	deployedVMName := "windows-test-vm"
 
 	ctxs := kubevirtVMDeployAndValidate(
 		t,
