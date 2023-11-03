@@ -5,7 +5,7 @@ metadata:
     app: fedora-vm
     vm.kubevirt.io/template: fedora-server-small
     vm.kubevirt.io/template.namespace: openshift
-  name: test-vm-csi
+  name: fedora-test-vm
 spec:
   running: true
   template:
