@@ -85,7 +85,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 				customBackupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = customBackupLocationName
-				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 			}
 		})
@@ -344,7 +344,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 				customBackupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = customBackupLocationName
-				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 			}
 		})
@@ -576,7 +576,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 				customBackupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = customBackupLocationName
-				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 			}
 		})

@@ -103,8 +103,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 				backupLocationName = fmt.Sprintf("auto-bl-%v", time.Now().Unix())
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
-				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudAccountName, cloudCredUID,
-					getGlobalBucketName(provider), orgID, "")
+				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudAccountName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of adding backup location - %s", backupLocationName))
 			}
 		})
@@ -326,7 +325,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				backupLocationMap[backupLocationUid] = backupLocationName
 				bucketName := getGlobalBucketName(provider)
 				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", backupLocationName, backupLocationUid, bucketName)
-				err = CreateBackupLocation(provider, backupLocationName, backupLocationUid, cloudAccountName, cloudAccountUid, bucketName, orgID, "")
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUid, cloudAccountName, cloudAccountUid, bucketName, orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", backupLocationName, backupLocationUid, bucketName))
 			}
 		})

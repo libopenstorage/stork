@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -311,6 +310,8 @@ const (
 	SchedulePolicyScaleName           = "schedule-policy-scale"
 	BucketNamePrefix                  = "tp-backup-bucket"
 	mongodbStatefulset                = "pxc-backup-mongodb"
+	AwsS3encryptionPolicy             = "s3:x-amz-server-side-encryption=AES256"
+	AwsS3Sid                          = "DenyNonAES256Uploads"
 )
 
 const (
@@ -4093,33 +4094,43 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 }
 
 // CreateBackupLocation creates backup location
-func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) error {
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, validate bool) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
+		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
-		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, validate)
 	}
 	return err
 }
 
 // CreateBackupLocationWithContext creates backup location using the given context
-func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
+		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
-		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
+		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, true)
+		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, validate)
+	}
+	return err
+}
+
+// UpdateBackupLocation updates s3 backup location with the provided values
+func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, ctx, sseS3EncryptionType, false)
 	}
 	return err
 }
@@ -4338,18 +4349,23 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 }
 
 // CreateS3BackupLocation creates backup location for S3
-func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
+func CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
 	}
-
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	// Get SSE S3 Encryption Type
-	sseS3EncryptionType, err := GetSseS3EncryptionType()
-	if err != nil {
-		return err
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
 	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4358,8 +4374,9 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4370,7 +4387,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
-					SseType:    sseS3EncryptionType,
+					SseType:    sseType,
 				},
 			},
 		},
@@ -4384,13 +4401,20 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 }
 
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
-func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	// Get SSE S3 Encryption Type
-	sseS3EncryptionType, err := GetSseS3EncryptionType()
-	if err != nil {
-		return err
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	var err error
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
 	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4399,8 +4423,45 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseType,
+				},
+			},
+		},
+	}
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// UpdateS3BackupLocation updates s3 backup location with the provided values
+func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
+
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationUpdateReq := &api.BackupLocationUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4417,7 +4478,7 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 		},
 	}
 
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationUpdateReq)
 	if err != nil {
 		return err
 	}
@@ -4425,7 +4486,7 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 }
 
 // CreateAzureBackupLocation creates backup location for Azure
-func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4435,8 +4496,9 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4456,7 +4518,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 }
 
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
-func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4465,8 +4527,9 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4482,7 +4545,7 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 }
 
 // CreateGCPBackupLocation creates backup location for Google cloud
-func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4492,8 +4555,9 @@ func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCre
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4513,7 +4577,7 @@ func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCre
 }
 
 // CreateGCPBackupLocationWithContext creates backup location for Google cloud
-func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context) error {
+func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4523,8 +4587,9 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,

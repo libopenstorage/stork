@@ -3665,7 +3665,7 @@ func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]strin
 // GetCustomBucketName creates a custom bucket and returns name
 func GetCustomBucketName(provider string, testName string) string {
 	var customBucket string
-	customBucket = fmt.Sprintf("%s-%s-%v", provider, testName, time.Now().Unix())
+	customBucket = fmt.Sprintf("%s-%s-%s-%v", provider, testName, RandomString(5), time.Now().Unix())
 	if provider == drivers.ProviderAws {
 		CreateBucket(provider, customBucket)
 	}

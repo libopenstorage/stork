@@ -161,7 +161,7 @@ func (s *SSH) updateDriver() error {
 	var err error
 
 	// The namespace of the portworx-service in the current context
-	execPodNamespace, err := getExecPodNamespace()
+	execPodNamespace, err := GetExecPodNamespace()
 	if err != nil {
 		return err
 	}
@@ -823,7 +823,7 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 	return drives, nil
 }
 
-func getExecPodNamespace() (string, error) {
+func GetExecPodNamespace() (string, error) {
 	var allServices *v1.ServiceList
 	var err error
 	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {

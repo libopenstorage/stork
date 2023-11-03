@@ -74,7 +74,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 					log.InfoD(fmt.Sprintf("Creating backup locations with index [%d]", i))
 					backupLocationNameMap[i] = fmt.Sprintf("%s-%d-%s", getGlobalBucketName(provider), i, RandomString(6))
 					backupLocationUIDMap[i] = uuid.New()
-					err := CreateBackupLocation(provider, backupLocationNameMap[i], backupLocationUIDMap[i], cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+					err := CreateBackupLocation(provider, backupLocationNameMap[i], backupLocationUIDMap[i], cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s]", backupLocationNameMap[i]))
 					backupLocationMap[backupLocationUIDMap[i]] = backupLocationNameMap[i]
 				}

@@ -179,7 +179,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				backupLocationMap[backupLocationUID] = backupLocationName
 				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
-				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, "Creating backup location")
 			}
 		})
