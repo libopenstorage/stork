@@ -224,7 +224,7 @@ type statusJSON struct {
 
 // ExpandPool resizes a pool of a given ID
 func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
-	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
+	log.Infof("Initiating pool %v resize by %v with operation type %v", poolUUID, size, operation.String())
 
 	// start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {

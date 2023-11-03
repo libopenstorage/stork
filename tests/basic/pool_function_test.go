@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -142,6 +143,76 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+	})
+
+})
+
+var _ = Describe("{PoolExpandRejectConcurrent}", func() {
+	BeforeEach(func() {
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Previous pool expansion(s) should not result in error")
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	// test resizing all pools on one storage node concurrently and ensure only the first one makes progress
+	It("Select all pools on a storage node and expand them concurrently. ", func() {
+		// TestRail:https://portworx.testrail.net/index.php?/tests/view/34542836&group_by=cases:custom_automated&group_order=desc&group_id=2
+		StartTorpedoTest("PoolExpandRejectConcurrent",
+			"Validate storage pool expansion rejects concurrent requests", nil, 34542836)
+		var pools []*api.StoragePool
+		Step("Verify multiple pools are present on this node", func() {
+			// collect all pools available
+			for _, p := range storageNode.Pools {
+				pools = append(pools, p)
+			}
+			dash.VerifyFatal(len(pools) > 1, true, "This test requires more than 1 pool.")
+		})
+
+		Step("Expand all pools concurrently. ", func() {
+			expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+			var wg sync.WaitGroup
+			for _, p := range pools {
+				wg.Add(1)
+				go func(p *api.StoragePool) {
+					defer wg.Done()
+					err = Inst().V.ExpandPool(p.Uuid, expandType, p.TotalSize/units.GiB+100, true)
+				}(p)
+			}
+			wg.Wait()
+		})
+
+		Step("Verify only one expansion is making progress at any given time", func() {
+			inProgressCount := 0
+			startTime := time.Now()
+			for time.Since(startTime) < 1*time.Minute {
+				inProgressCount = 0
+				time.Sleep(5)
+				storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+				for _, p := range storageNode.Pools {
+					if p.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
+						inProgressCount++
+					}
+					dash.VerifyFatal(inProgressCount <= 1, true, "Only one pool expansion should be in progress at any given time.")
+				}
+			}
+		})
 	})
 })
 

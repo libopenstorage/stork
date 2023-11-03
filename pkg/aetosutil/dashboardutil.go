@@ -427,6 +427,11 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	expect(err).NotTo(haveOccurred())
 }
 
+// VerifyNotNilFatal verify error is nil and abort operation upon failure
+func (d *Dashboard) VerifyNotNilFatal(err error, description string) {
+	d.VerifyFatal(err != nil, true, description)
+}
+
 // Info logging info message
 func (d *Dashboard) Info(message string) {
 	if d.IsEnabled {
