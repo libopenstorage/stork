@@ -12,7 +12,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/stretchr/testify/require"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
@@ -60,12 +60,12 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 		deployedVMName,
 	)
 
-	logrus.Infof("Destroying apps")
+	log.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func kubevirtVMDeployAndValidate(
@@ -125,7 +125,7 @@ func createTemplatePVC(t *testing.T) error {
 					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation])
 			}
 		}
-		logrus.Infof("All templates are downloaded.")
+		log.Infof("All templates are downloaded.")
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)

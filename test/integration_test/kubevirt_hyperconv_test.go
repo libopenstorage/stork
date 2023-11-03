@@ -18,7 +18,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -86,11 +85,11 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 		log.Infof("Waiting for the VM to return to the hyperconverged state again")
 		verifyBindMountEventually(t, testState)
 	}
-	logrus.Infof("Destroying apps")
+	log.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // This test simulates OCP upgrade by live-migrating VM to a *replica* node and
@@ -142,11 +141,11 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		uncordonFunc()
 		cordonedNodes = nil
 	}
-	logrus.Infof("Destroying apps")
+	log.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
@@ -167,7 +166,7 @@ func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 
 	testState.attachedNode, err = volumeDriver.GetNodeForVolume(testState.volume, cmdTimeout, cmdRetry)
 	require.NoError(t, err)
-	log.Infof("volume %s (%s) is attached to node %s",
+	log.Infof("Volume %s (%s) is attached to node %s",
 		testState.volume.ID, testState.apiVol.Id, testState.attachedNode.Name)
 
 	// VMs should have a bind-mount initially
@@ -201,21 +200,21 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 	require.Eventuallyf(t, func() bool {
 		migr, err = kubevirt.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
 		if err != nil {
-			logrus.Warnf("Failed to get migration %s/%s: %v", vmiNamespace, migration.Name, err)
+			log.Warnf("Failed to get migration %s/%s: %v", vmiNamespace, migration.Name, err)
 			return false
 		}
 		if !migr.Completed {
-			logrus.Warnf("VMI migration %s/%s is still not completed", vmiNamespace, migration.Name)
+			log.Warnf("VMI migration %s/%s is still not completed", vmiNamespace, migration.Name)
 			return false
 		}
 		// wait until there is only one pod in the running state
 		testState.vmPod, err = getVMPod(testState.appCtx, testState.volume)
 		if err != nil {
-			logrus.Warnf("Failed to get VM pod while waiting for live migration to finish for VMI %s/%s: %v",
+			log.Warnf("Failed to get VM pod while waiting for live migration to finish for VMI %s/%s: %v",
 				vmiNamespace, vmiName, err)
 			return false
 		}
-		logrus.Infof("VMI was live migrated to pod %s/%s", vmiNamespace, testState.vmPod.Name)
+		log.Infof("VMI was live migrated to pod %s/%s", vmiNamespace, testState.vmPod.Name)
 		return true
 	}, 10*time.Minute, 10*time.Second, "migration for VMI %s/%s is stuck", vmiNamespace, migration.Name)
 
@@ -246,7 +245,7 @@ func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kube
 	require.Eventuallyf(t, func() bool {
 		newAttachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
 		if err != nil {
-			logrus.Warnf("Failed to get the attached node for vol %s (%s) for context %s: %v",
+			log.Warnf("Failed to get the attached node for vol %s (%s) for context %s: %v",
 				vol.ID, apiVol.Id, appCtx.App.Key, err)
 			return false
 		}
@@ -270,13 +269,13 @@ func verifyBindMountEventually(t *testing.T, testState *kubevirtTestState) {
 		testState.vmPod, err = getVMPod(testState.appCtx, testState.volume)
 		if err != nil {
 			// this is expected while the live migration is running
-			logrus.Infof("Could not get VM pod for vol %s (%s) for context %s: %v",
+			log.Infof("Could not get VM pod for vol %s (%s) for context %s: %v",
 				testState.volume.ID, testState.apiVol.Id, testState.appCtx.App.Key, err)
 			return false
 		}
 		mountType, err := getVMRootDiskMountType(testState.vmPod, testState.apiVol)
 		if err != nil {
-			logrus.Warnf("Failed to get mount type of vol %s (%s) for context %s: %v",
+			log.Warnf("Failed to get mount type of vol %s (%s) for context %s: %v",
 				testState.volume.ID, testState.apiVol.Id, testState.appCtx.App.Key, err)
 			return false
 		}
@@ -296,7 +295,7 @@ func cordonNonReplicaNodes(t *testing.T, vol *api.Volume, allNodes map[string]no
 		if replicaNodeIDs[nodeID] {
 			continue
 		}
-		logrus.Infof("Cordoning non-replica node %s (%s)", node.Name, nodeID)
+		log.Infof("Cordoning non-replica node %s (%s)", node.Name, nodeID)
 		err := core.Instance().CordonNode(node.Name, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Failed to cordon node %s (%s)", node.Name, nodeID)
 		node := node
@@ -317,7 +316,7 @@ func getReplicaNodeIDs(vol *api.Volume) map[string]bool {
 
 func uncordonNodes(cordonedNodes []*node.Node) {
 	for _, cordonedNode := range cordonedNodes {
-		logrus.Infof("Uncordoning node %s", cordonedNode.Name)
+		log.Infof("Uncordoning node %s", cordonedNode.Name)
 		err := core.Instance().UnCordonNode(cordonedNode.Name, defaultWaitTimeout, defaultWaitInterval)
 		if err != nil {
 			log.Errorf("Failed to uncordon node %s: %v", cordonedNode.Name, err)
@@ -395,7 +394,7 @@ func verifyVMProperties(
 	} else {
 		require.Equal(t, mountTypeNFS, mountType, "root disk was not nfs-mounted")
 	}
-	logrus.Infof("Verified root disk mount type %q for volume %s (%s)", mountType, vol.ID, apiVol.Id)
+	log.Infof("Verified root disk mount type %q for volume %s (%s)", mountType, vol.ID, apiVol.Id)
 }
 
 // getVMIDetails returns VMI UID, phase and time when VMI transitioned to that phase.
@@ -427,7 +426,7 @@ func getVMIDetails(vmiNamespace, vmiName string) (string, string, time.Time, err
 //		  claimName: fedora-communist-toucan
 func getVMRootDiskMountType(pod *corev1.Pod, apiVol *api.Volume) (string, error) {
 	podNamespacedName := pod.Namespace + "/" + pod.Name
-	logrus.Infof("checking the rootdisk mount type in pod %s", podNamespacedName)
+	log.Infof("Checking the rootdisk mount type in pod %s", podNamespacedName)
 
 	// Sample output if the volume is bind-mounted:
 	// $ kubectl exec -it virt-launcher-fedora-communist-toucan-jfw7n -- mount
@@ -455,7 +454,7 @@ func getVMRootDiskMountType(pod *corev1.Pod, apiVol *api.Volume) (string, error)
 				return "", fmt.Errorf("multiple rootdisk mounts found: %s", output)
 			}
 			foundBindMount = true
-			logrus.Infof("found root disk bind mounted for VM pod %s: %s", podNamespacedName, line)
+			log.Infof("Found root disk bind mounted for VM pod %s: %s", podNamespacedName, line)
 		}
 
 		if nfsMountRE.MatchString(line) {
@@ -463,7 +462,7 @@ func getVMRootDiskMountType(pod *corev1.Pod, apiVol *api.Volume) (string, error)
 				return "", fmt.Errorf("multiple rootdisk mounts found: %s", output)
 			}
 			foundNFSMount = true
-			logrus.Infof("found root disk nfs mounted for VM pod %s: %s", podNamespacedName, line)
+			log.Infof("Found root disk nfs mounted for VM pod %s: %s", podNamespacedName, line)
 		}
 	}
 	if !foundBindMount && !foundNFSMount {
