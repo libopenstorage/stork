@@ -637,10 +637,11 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			log.InfoD("Taking default restore of the backups taken in destination cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, backupName := range backupList {
+			for i, backupName := range backupList {
 				restoreName = fmt.Sprintf("%s-%v-default", restoreNamePrefix, backupName)
 				restoreList = append(restoreList, restoreName)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList[i])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating default restore: %s from backup: %s", restoreName, backupName))
 			}
 		})
@@ -784,7 +785,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		Step("Restore the backup taken after all the namespaces are removed from the project", func() {
 			log.InfoD("Restore the backup taken after all the namespaces are removed from the project")
 			restoreName := fmt.Sprintf("%s-%v-no-project", restoreNamePrefix, RandomString(10))
-			err = CreateRestoreWithValidation(ctx, restoreName, noProjectBackup, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, restoreName, noProjectBackup, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, noProjectBackup))
 			restoreList = append(restoreList, restoreName)
 		})
