@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	driverName            = "pxb"
+	DriverName            = "pxb"
 	pxbRestPort           = 10001
 	defaultPxbServicePort = 10002
 	pxbServiceName        = "px-backup"
@@ -74,7 +74,7 @@ type portworx struct {
 }
 
 func (p *portworx) String() string {
-	return driverName
+	return DriverName
 }
 
 func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
@@ -2519,5 +2519,5 @@ func (p *portworx) InspectRole(ctx context.Context, req *api.RoleInspectRequest)
 }
 
 func init() {
-	backup.Register(driverName, &portworx{})
+	backup.Register(DriverName, &portworx{})
 }

@@ -1,8 +1,10 @@
 package rke
 
 import (
+	"flag"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
+	portworx2 "github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -44,20 +46,26 @@ func (r *Rancher) String() string {
 func (r *Rancher) Init(scheduleOpts scheduler.InitOptions) error {
 	var err error
 	err = r.K8s.Init(scheduleOpts)
-	rkeParametersValue, err := r.GetRancherClusterParametersValue()
 	if err != nil {
 		return err
 	}
-	rancherClientOpts := rancherClientBase.ClientOpts{
-		URL:       rkeParametersValue.Endpoint,
-		TokenKey:  rkeParametersValue.Token,
-		AccessKey: rkeParametersValue.AccessKey,
-		SecretKey: rkeParametersValue.SecretKey,
-		Insecure:  true,
-	}
-	r.client, err = rancherClient.NewClient(&rancherClientOpts)
-	if err != nil {
-		return err
+	// This is needed only in case of px-backup as other platforms do not create new RKE client
+	if flag.Lookup("backup-driver").Value.(flag.Getter).Get().(string) == portworx2.DriverName {
+		rkeParametersValue, err := r.GetRancherClusterParametersValue()
+		if err != nil {
+			return err
+		}
+		rancherClientOpts := rancherClientBase.ClientOpts{
+			URL:       rkeParametersValue.Endpoint,
+			TokenKey:  rkeParametersValue.Token,
+			AccessKey: rkeParametersValue.AccessKey,
+			SecretKey: rkeParametersValue.SecretKey,
+			Insecure:  true,
+		}
+		r.client, err = rancherClient.NewClient(&rancherClientOpts)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
