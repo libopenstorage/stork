@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/units"
 
 	"math/rand"
 
@@ -609,5 +610,163 @@ var _ = Describe("{FADARemoteDetach}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Reboots a Node while volume creation is in progress
+/*
+
+https://portworx.testrail.net/index.php?/tests/view/72615025
+
+*/
+
+var _ = Describe("{RebootNodeWhileVolCreate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootNodeWhileVolCreate", "Test creates multiple FADA volume and reboots a node while volume creation is in progress", nil, 72615025)
+	})
+	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerReboot) different namespaces and reboots a different node after every NumberOfDeploymentsPerReboot have been queued to schedule", func() {
+		//Provisioner for pure apps
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		n := 3
+		NumberOfDeploymentsPerReboot := 8
+		//Reboot a random storage node n number of times
+		for i := 0; i < n; i++ {
+			// Step 1: Schedule applications
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				Step("Schedule applications", func() {
+					log.InfoD("Scheduling applications")
+					for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
+						taskName := fmt.Sprintf("test-%v", (j+1)+NumberOfDeploymentsPerReboot*i)
+						context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+							AppKeys:            Inst().AppList,
+							StorageProvisioner: Provisioner,
+							PvcSize:            6 * units.GiB,
+						})
+						log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+						contexts = append(contexts, context...)
+					}
+				})
+			}()
+			// Step 2: Pick a random storage node and reboot
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stepLog := "Pick a random storage node and reboot"
+				Step(stepLog, func() {
+
+					log.Infof("Stopping node %s", selectedNode.Name)
+					err := Inst().N.RebootNode(selectedNode,
+						node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+					log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
+				})
+			}()
+
+			// Wait for both steps to complete
+			wg.Wait()
+
+			log.Infof("wait for node: %s to be back up", selectedNode.Name)
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(selectedNode)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+			log.FailOnError(err, "Failed to reboot node")
+			stepLog = "Validate the applications"
+			Step(stepLog, func() {
+				ValidateApplications(contexts)
+			})
+		}
+		for i := 0; i < n; i++ {
+			stepLog = "Reboot a random node,destroy scheduled apps and check if pvc's are deleted gracefully"
+
+			Step(stepLog, func() {
+				wg.Add(1)
+				// Step 1: Reboot one random storage node
+				go func() {
+					defer wg.Done()
+					stepLog := "Reboot one random storage node"
+					Step(stepLog, func() {
+						err := Inst().N.RebootNode(selectedNode, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						log.FailOnError(err, "Failed to reboot node")
+					})
+				}()
+				// Step 2: Destroy Application
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Destroy Application"
+					//this wait is added because while reboot some of the pods go to error state and takes time to comeback to normal state
+					log.InfoD("sleep for 2 and half minutes for pods to comeback to running state")
+					time.Sleep((5 / 2) * time.Minute)
+					Step(stepLog, func() {
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
+							TearDownContext(contexts[j+NumberOfDeploymentsPerReboot*i], opts)
+						}
+					})
+				}()
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog = "Wait for node to come up"
+					Step(stepLog, func() {
+						nodeReadyStatus := func() (interface{}, bool, error) {
+							err := Inst().S.IsNodeReady(selectedNode)
+							if err != nil {
+								return "", true, err
+							}
+							return "", false, nil
+						}
+						_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+						err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+					})
+				}()
+				//wait for both the steps to finish
+				wg.Wait()
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
