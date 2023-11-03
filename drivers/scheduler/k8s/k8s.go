@@ -3179,6 +3179,10 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	if apRule.Name != "" {
 		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
 			if err != nil {
+				if strings.Contains(err.Error(), "not found"){
+					log.Infof("deletion of AR failed: %s, expected since we dont deploy new AR", apRule.ObjectMeta.Name)
+					return nil
+				}
 				return err
 			}
 		}
