@@ -100,6 +100,22 @@
     "PDSNamespace": "pds-system",
     "ServiceIdentityToken": false
   },
+  "StorageConfigurations": {
+    "FSType": [
+      "ext4",
+      "xfs"
+    ],
+    "ReplFactor": [
+      2,
+      3
+    ],
+    "NewStorageSize": "500G",
+    "CpuLimit"  :     "2",
+    "CpuRequest":     "1",
+    "MemoryLimit":    "4G",
+    "MemoryRequest":  "2G",
+    "StorageRequest": "1G"
+  },
   "LoadGen": {
     "LoadGenDepName": "workload",
     "FailOnError": "false",

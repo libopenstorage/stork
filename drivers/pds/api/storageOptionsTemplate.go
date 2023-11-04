@@ -78,7 +78,7 @@ func (st *StorageSettingsTemplate) UpdateTemplate(templateID string, fg bool, fs
 // DeleteTemplate delete the storage option template and return the status
 func (st *StorageSettingsTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
-	log.Infof("Delete strogae template: %v", templateID)
+	log.Infof("Delete storage template: %v", templateID)
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)

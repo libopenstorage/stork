@@ -2,10 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/storage"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	"github.com/portworx/torpedo/drivers/volume"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,6 +139,11 @@ var (
 	controlPlane  *controlplane.ControlPlane
 	components    *api.Components
 	wkloadParams  pdsdriver.LoadGenParams
+)
+
+var (
+	k8sStorage    = storage.Instance()
+	apiExtentions = apiextensions.Instance()
 )
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
@@ -274,50 +283,99 @@ func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc
 	return nil
 }
 
+func GetPvsAndPVCsfromDeployment(namespace string, deployment *pds.ModelsDeployment) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
+	log.Infof("Get PVC List based on namespace and deployment")
+	k8sOps := k8sCore
+	var vols []*volume.Volume
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	pvcList, _ := k8sOps.GetPersistentVolumeClaims(namespace, labelSelector)
+	for _, pvc := range pvcList.Items {
+		vols = append(vols, &volume.Volume{
+			ID: pvc.Spec.VolumeName,
+		})
+	}
+	return pvcList, vols
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeployment) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return nil, true, err
+			}
+			pvcCapacity := appVol.Spec.Size / units.GiB
+			usedGiB := appVol.GetUsage() / units.GiB
+			threshold := pvcCapacity - 1
+			if usedGiB >= threshold {
+				log.Infof("The PVC is consumed upto threshold . PVC capacity was %vGB , the consumed PVC is %vGB", pvcCapacity, usedGiB)
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
+
+	return err
+}
+
 // Increase PVC by 1 gb
-func IncreasePVCby1Gig(context []*scheduler.Context) error {
+func IncreasePVCby1Gig(namespace string, deployment *pds.ModelsDeployment, sizeInGb uint64) (*volume.Volume, error) {
 	log.Info("Resizing of the PVC begins")
-	initialCapacity, err := GetVolumeCapacityInGB(context)
+	var vol *volume.Volume
+	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	initialCapacity, err := GetVolumeCapacityInGB(namespace, deployment)
 	log.Debugf("Initial volume storage size is : %v", initialCapacity)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, ctx := range context {
-		appVolumes, err := Inst().S.ResizeVolume(ctx, "")
-		log.FailOnError(err, "Volume resize successful ?")
-		log.InfoD(fmt.Sprintf("validating successful volume size increase on app %s's volumes: %v",
-			ctx.App.Key, appVolumes))
+	for _, pvc := range pvcList.Items {
+		k8sOps := k8sCore
+		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
+		storageSize.Add(extraAmount)
+		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
+		_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, err
+		}
+		sizeInt64, _ := storageSize.AsInt64()
+		vol = &volume.Volume{
+			Name:          pvc.Name,
+			RequestedSize: uint64(sizeInt64),
+		}
 	}
+
 	// wait for the resize to take effect
 	time.Sleep(30 * time.Second)
-	newcapacity, err := GetVolumeCapacityInGB(context)
+	newcapacity, err := GetVolumeCapacityInGB(namespace, deployment)
 	log.Infof("Resized volume storage size is : %v", newcapacity)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if newcapacity > initialCapacity {
 		log.InfoD("Successfully resized the pvc by 1gb")
-		return nil
+		return vol, nil
+	} else {
+		return vol, err
 	}
-	return nil
 }
 
 // Get volume capacity
-func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
+func GetVolumeCapacityInGB(namespace string, deployment *pds.ModelsDeployment) (uint64, error) {
 	var pvcCapacity uint64
-	for _, ctx := range context {
-		vols, err := Inst().S.GetVolumes(ctx)
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
 		if err != nil {
 			return 0, err
 		}
-		for _, vol := range vols {
-			appVol, err := Inst().V.InspectVolume(vol.ID)
-			if err != nil {
-				return 0, err
-			}
-			pvcCapacity = appVol.Spec.Size / units.GiB
-		}
+		pvcCapacity = appVol.Spec.Size / units.GiB
 	}
 	return pvcCapacity, err
 }
@@ -495,4 +553,26 @@ func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDepl
 		return "", false
 	}
 	return dbMaster, true
+}
+
+// ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64) error {
+	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
+	newResourceTemplateID := resConfigUpdated.GetId()
+	newStorageTemplateID := stConfigUpdated.GetId()
+	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+	log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
+	dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+	dash.VerifyFatal(config.Spec.StorageOptions.Filesystem, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
+	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
+	dash.VerifyFatal(config.Spec.StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
+	if updatedPvcSize > initialCapacity {
+		flag := true
+		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
+		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedPvcSize)
+	} else {
+		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
+	}
+	return nil
 }

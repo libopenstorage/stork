@@ -45,7 +45,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 			nsID2                  []string
 			serviceIdentityID      string
 			pdsRestoreNsName       string
-			//resDepId               string
 		)
 
 		Step("Deploy Data Services", func() {

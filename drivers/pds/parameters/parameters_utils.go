@@ -62,6 +62,16 @@ type Parameter struct {
 	ResiliencyTest struct {
 		CheckTillReplica int32 `json:"CheckTillReplica"`
 	} `json:"ResiliencyTest"`
+	StorageConfigurations struct {
+		FSType         []string
+		ReplFactor     []int32
+		NewStorageSize string
+		CpuLimit       string
+		CpuRequest     string
+		MemoryLimit    string
+		MemoryRequest  string
+		StorageRequest string
+	} `json:"StorageConfigurations"`
 }
 
 const (

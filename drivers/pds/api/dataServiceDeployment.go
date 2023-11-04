@@ -74,9 +74,10 @@ func (ds *DataServiceDeployment) CreateDeploymentWithRbac(deploymentTargetID str
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
+	
 	dsModel, res, err := dsClient.ApiDeploymentsPost(ctx).Body(createRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiProjectsIdDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return dsModel, err
 }
