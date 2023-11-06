@@ -260,6 +260,32 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	return err
 }
 
+func ScaleUpDeployments(tenantID string, deployments map[PDSDataService]*pds.ModelsDeployment) {
+	for ds, deployment := range deployments {
+		log.InfoD("Scaling up DataService %v ", ds.Name)
+
+		dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting app configuration template")
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting resource setting template")
+		dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+		updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
+			dataServiceDefaultAppConfigID, deployment.GetImageId(),
+			int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
+		log.FailOnError(err, "Error while updating dataservices")
+
+		err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
+		log.FailOnError(err, "Error while validating data service deployment")
+
+		_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+	}
+}
+
 func CleanMapEntries(deleteMapEntries map[string]string) {
 	for hash := range deleteMapEntries {
 		delete(deleteMapEntries, hash)

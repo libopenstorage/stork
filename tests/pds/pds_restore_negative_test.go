@@ -258,6 +258,111 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 	})
 })
 
+var _ = Describe("{ValidateDSHealthStatusOnNodeFailures}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateDSHealthStatusOnNodeFailures", "Bring down PX on ds hosted nodes and validate health status", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		ctx, err := GetSourceClusterConfigPath()
+		sourceTarget = tc.NewTargetCluster(ctx)
+		log.FailOnError(err, "failed while getting src cluster path")
+
+	})
+
+	It("Bring Down Replica Node and perform backup and restore", func() {
+		var nsName = params.InfraToTest.Namespace
+
+		stepLog := "Deploy data service and take adhoc backup."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+
+			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned := []*pds.ModelsDeployment{}
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					// TODO: Intermittent status needs to be validated after temporal changes are in place (DS-7001)
+					deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: deployment,
+					}
+
+					stepLog = "Perform adhoc backup and validate them"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+						err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+						log.FailOnError(err, "Failed while performing adhoc backup")
+					})
+					stepLog = "Perform restore for the backup jobs"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						dest_ctx, err := GetDestinationClusterConfigPath()
+						log.FailOnError(err, "failed while getting dest cluster path")
+						restoreTarget := tc.NewTargetCluster(dest_ctx)
+						restoreClient := restoreBkp.RestoreClient{
+							TenantId:             tenantID,
+							ProjectId:            projectID,
+							Components:           components,
+							Deployment:           deployment,
+							RestoreTargetCluster: restoreTarget,
+						}
+						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+						log.InfoD("setting destination kubeconfig")
+						err = SetDestinationKubeConfig()
+						log.FailOnError(err, "failed while setting dest cluster path")
+						for _, backupJob := range backupJobs {
+							log.InfoD("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+							_, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+
+							// TODO: Intermittent status needs to be validated after temporal changes are in place (DS-7001)
+							dash.VerifyFatal(err != nil, true, "Restore is failed as expected")
+						}
+					})
+
+					stepLog = "Get DS Nodes and stop the px drivers on all the nodes and validate the health status"
+					Step(stepLog, func() {
+						err = SetSourceKubeConfig()
+						log.FailOnError(err, "failed while setting src cluster path")
+						dsNodes, err := pdslib.GetAllDataServiceHostedNodes(deployment, namespace)
+						log.FailOnError(err, "Error occured while getting dsNodes")
+
+						Inst().V.StopDriver(dsNodes, false, nil)
+						// TODO: Intermittent status needs to be validated after temporal changes are in place (DS-7001)
+
+						for _, dsNode := range dsNodes {
+							Inst().V.StartDriver(dsNode)
+							// TODO: Intermittent status needs to be validated after temporal changes are in place (DS-7001)
+						}
+					})
+				})
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
+
 var _ = Describe("{BringDownPXReplicaNodes}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {

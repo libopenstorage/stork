@@ -2,6 +2,7 @@ package pdsrestore
 
 import (
 	"fmt"
+	"github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	ds "github.com/portworx/torpedo/drivers/pds/dataservice"
@@ -14,10 +15,11 @@ import (
 )
 
 const (
-	restoreTimeOut         = 30 * time.Minute
 	restoreTimeInterval    = 20 * time.Second
 	restoreMaxTimeInterval = 1 * time.Minute
 )
+
+var restoreTimeOut = 30 * time.Minute
 
 type RestoreClient struct {
 	TenantId             string
@@ -80,6 +82,16 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 
 // WaitForRestoreAndValidate will wait for the restore to complete and validate its configuration
 func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds.ModelsRestore, bkpDsEntity DSEntity, nsName string) error {
+
+	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
+	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	log.Debugf("Testcase Name %v", testName)
+
+	if testName == "{ValidateDSHealthStatusOnNodeFailures}" {
+		log.Debugf("Updating the restoreTimeout to 2min")
+		restoreTimeOut = 2 * time.Minute
+	}
+
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
 		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
 		state := restore.GetStatus()

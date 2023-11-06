@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -2007,6 +2008,35 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 
 	return deployment, nil
 
+}
+
+func GetAllDataServiceHostedNodes(deployment *pds.ModelsDeployment, namespace string) ([]node.Node, error) {
+	var dsNodes []string
+	var dsNodeList []node.Node
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if err != nil {
+		return nil, err
+	}
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods {
+		log.Infof("Node name of pod %v is %v and deletion timestamp is %v", pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+		if pod.DeletionTimestamp != nil {
+			nodeName := pod.Spec.NodeName
+			dsNodes = append(dsNodes, nodeName)
+		}
+	}
+	for _, currNode := range node.GetWorkerNodes() {
+		for _, dsNode := range dsNodes {
+			if currNode.Name == dsNode {
+				dsNodeList = append(dsNodeList, currNode)
+			}
+		}
+	}
+
+	return dsNodeList, nil
 }
 
 // GetAllSupportedDataServices get the supported datasservices and returns the map
