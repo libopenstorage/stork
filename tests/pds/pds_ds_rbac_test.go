@@ -219,10 +219,10 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 						log.InfoD("Update deploymnets params are- resDepId- %v, dataServiceDefaultAppConfigID- %v ,resDep.GetImageId()- %v ,int32(3)- %v ,dataServiceDefaultResourceTemplateID- %v", *resDep.Id,
 							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(3), dataServiceDefaultResourceTemplateID)
+							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID)
 						updatedDeployment, err := dsTest.UpdateDataServices(*resDep.Id,
 							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(3), dataServiceDefaultResourceTemplateID, ns2.Name)
+							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
