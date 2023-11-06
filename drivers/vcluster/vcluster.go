@@ -16,11 +16,13 @@ import (
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -234,6 +236,9 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: v.Namespace,
+			Labels: map[string]string{
+				"type": "vcluster",
+			},
 		},
 	}
 	if _, err = k8sCore.CreateNamespace(ns); err != nil {
@@ -368,8 +373,13 @@ func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string
 // int32Ptr converts integer to pointer
 func int32Ptr(i int32) *int32 { return &i }
 
-// CreateFIODeployment creates a FIO Batch Job on given PVC
+// CreateFIODeployment creates a FIO Batch Job on single PVC
 func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string) error {
+	return v.CreateFIOMultiPvcDeployment([]string{pvcName}, appNS, fioOpts, jobName)
+}
+
+// CreateFIOMultiPvcDeployment runs FIO Job on multiple PVCs
+func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, fioOpts FIOOptions, jobName string) error {
 	fioCmd := []string{
 		"fio",
 		"--name=" + fioOpts.Name,
@@ -378,7 +388,6 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 		"--bs=" + fioOpts.BS,
 		"--numjobs=" + strconv.Itoa(fioOpts.NumJobs),
 		"--size=" + fioOpts.Size,
-		"--filename=" + fioOpts.Filename,
 		"--end_fsync=" + strconv.Itoa(fioOpts.EndFsync),
 	}
 	if fioOpts.TimeBased {
@@ -393,6 +402,27 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	}
 	if fioOpts.VerifyOnly {
 		fioCmd = append(fioCmd, "--verify_only")
+	}
+	volumeMounts := make([]corev1.VolumeMount, len(pvcNames))
+	volumes := make([]corev1.Volume, len(pvcNames))
+	for i, pvcName := range pvcNames {
+		mountPath := fmt.Sprintf("/data%d", i)
+		fileName := fmt.Sprintf("file-%d", i)
+		mntPath := mountPath + "/" + fileName
+		fioCmd = append(fioCmd, "--filename="+mntPath)
+		volumeName := "fio-volume-" + strconv.Itoa(i)
+		volumeMounts[i] = corev1.VolumeMount{
+			MountPath: mountPath,
+			Name:      volumeName,
+		}
+		volumes[i] = corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcName,
+				},
+			},
+		}
 	}
 	fioJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -410,27 +440,14 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 					RestartPolicy: "Never",
 					Containers: []corev1.Container{
 						{
-							Name:    "fio-container",
-							Image:   "xridge/fio:latest",
-							Command: fioCmd,
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									MountPath: "/data",
-									Name:      "fio-volume",
-								},
-							},
+							Name:         "fio-container",
+							Image:        "xridge/fio:latest",
+							Command:      []string{"/bin/sh", "-c"},
+							Args:         []string{strings.Join(fioCmd, " ")},
+							VolumeMounts: volumeMounts,
 						},
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "fio-volume",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: pvcName,
-								},
-							},
-						},
-					},
+					Volumes: volumes,
 				},
 			},
 		},
@@ -443,7 +460,6 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	if err := v.WaitForFIOCompletion(appNS, jobName); err != nil {
 		return err
 	}
-
 	// Hard sleep to let fio pod finish up
 	time.Sleep(10 * time.Second)
 	pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
@@ -812,4 +828,79 @@ func (v *VCluster) ListSnapshots() (*snapv1.VolumeSnapshotList, error) {
 		return nil, err
 	}
 	return snapshotList, nil
+}
+
+// PVCRuleByUsageCapacityForVcluster Sets an Autopilot Rule for PVC in context of a Vcluster
+func PVCRuleByUsageCapacityForVcluster(usagePercentage int, scalePercentage int, maxSize string) apapi.AutopilotRule {
+	return apapi.AutopilotRule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-usage-%d-scale-%d-%v", usagePercentage, scalePercentage, time.Now().Unix()),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			NamespaceSelector: apapi.RuleObjectSelector{
+				LabelSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"type": "vcluster",
+					},
+				},
+			},
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      aututils.PxVolumeUsagePercentMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", usagePercentage)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: aututils.VolumeSpecAction,
+					Params: map[string]string{
+						aututils.RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+					},
+				},
+			},
+		},
+	}
+}
+
+// GetPVC returns PVC object of a PVC in vCluster Context
+func (v *VCluster) GetPVC(pvcName string, namespace string) (*corev1.PersistentVolumeClaim, error) {
+	return v.Clientset.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), pvcName, metav1.GetOptions{})
+}
+
+// GetPvcCapacitySize returns capacity of a Pvc object in GiB
+func GetPvcCapacitySize(pvc *corev1.PersistentVolumeClaim) float64 {
+	size := pvc.Status.Capacity[corev1.ResourceStorage]
+	sizeBytes := size.Value()
+	sizeGiB := float64(sizeBytes) / (1024 * 1024 * 1024)
+	return sizeGiB
+}
+
+// GetPvcOriginalSize returns original size of a PVC object in GiB
+func GetPvcOriginalSize(pvc *corev1.PersistentVolumeClaim) float64 {
+	size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	sizeBytes := size.Value()
+	sizeGiB := float64(sizeBytes) / (1024 * 1024 * 1024)
+	return sizeGiB
+}
+
+// ListNamespaceVcluster lists all namespaces within a vcluster
+func (v *VCluster) ListNamespaceVcluster() (*corev1.NamespaceList, error) {
+	return v.Clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+}
+
+// WaitForVClusterAccess method's purpose is to wait for 5 mins max to see if vcluster has become inaccessible
+func (v *VCluster) WaitForVClusterAccess() error {
+	f := func() (interface{}, bool, error) {
+		_, err := v.ListNamespaceVcluster()
+		if err != nil {
+			return nil, true, err
+		} else {
+			return nil, false, nil
+		}
+	}
+	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
+	return err
 }

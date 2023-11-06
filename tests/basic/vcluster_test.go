@@ -6,11 +6,13 @@ import (
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/vcluster"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/snapshotutils"
 	. "github.com/portworx/torpedo/tests"
@@ -34,7 +36,6 @@ var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
 		Size:      "500m",
 		TimeBased: true,
 		Runtime:   "600s",
-		Filename:  "/data/fiotest",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -87,7 +88,6 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 		Size:      "500m",
 		TimeBased: true,
 		Runtime:   "100s",
-		Filename:  "/data/fiotest",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -221,7 +221,6 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 		Size:      "500m",
 		TimeBased: true,
 		Runtime:   "100s",
-		Filename:  "/data/fiotest",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -288,7 +287,6 @@ var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
 		Size:      "500m",
 		TimeBased: true,
 		Runtime:   "100s",
-		Filename:  "/data/fiotest",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -554,6 +552,11 @@ var _ = Describe("{VolumeDriverAppDownVCluster}", func() {
 					}
 				}
 			}
+			// Validates if VCluster is still accessible or not by listing namespaces within it
+			err = vc.WaitForVClusterAccess()
+			log.FailOnError(err, "Even after waiting for 5 minutes, Could not access objects within vcluster after Px shutdown")
+			log.Infof("Vcluster has become responsive - going ahead with the test")
+			// Deleting Deployment from Vcluster now once it becomes accessible
 			err = vc.DeleteDeploymentOnVCluster(appNS, deploymentName)
 			log.FailOnError(err, "Failed to delete Nginx Deployment name %v on Vcluster %v", deploymentName, vc.Name)
 			log.Infof("Successfully deleted Nginx deployment %v on Vcluster %v", deploymentName, vc.Name)
@@ -618,6 +621,10 @@ var _ = Describe("{VolumeDriverDownVClusterOps}", func() {
 					StopVolDriverAndWait([]node.Node{nodes[0]})
 				})
 		})
+		// Validates if VCluster is still accessible or not by listing namespaces within it
+		err = vc.WaitForVClusterAccess()
+		log.FailOnError(err, "Even after waiting for 5 minutes, Could not access objects within vcluster after Px shutdown")
+		log.Infof("Vcluster has become responsive - going ahead with the test")
 		// Create PVC on VCluster
 		appNS = scName + "-ns"
 		pvcName, err = vc.CreatePVC("", scName, appNS, "")
@@ -667,7 +674,6 @@ var _ = Describe("{CreateEncryptedVolVCluster}", func() {
 		Size:      "500m",
 		TimeBased: true,
 		Runtime:   "100s",
-		Filename:  "/data/fiotest",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -808,7 +814,6 @@ var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
 		Size:      "500m",
 		TimeBased: true,
 		Runtime:   "100s",
-		Filename:  "/data/fiotest",
 		EndFsync:  1,
 		DoVerify:  &do_verify,
 		Verify:    &verify,
@@ -884,6 +889,309 @@ var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
 	})
 })
 
+var _ = Describe("{AutopilotPvcResizeTestVCluster}", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	var apRule apapi.AutopilotRule
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "1000m",
+		TimeBased: true,
+		Runtime:   "300s",
+		EndFsync:  1,
+	}
+	JustBeforeEach(func() {
+		StartTorpedoTest("AutopilotPvcResizeTestVCluster", "Create a PVC Resize Autopilot Rule, Create Connect and run FIO Application on Vcluster and validate Autopilot rule triggers successfully", nil, 0)
+		vc, err = vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create a PVC Expand Autopilot Rule, Create Connect and run FIO Application on Vcluster and validate Autopilot rule triggers successfully", func() {
+		apRule = vcluster.PVCRuleByUsageCapacityForVcluster(5, 50, "20Gi")
+		_, err := Inst().S.CreateAutopilotRule(apRule)
+		log.FailOnError(err, "Failed to set Autopilot rule")
+		log.Infof("Autopilot rule %v successfully set", apRule.Name)
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName, WithVolumeExpansion(true))
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		jobName := "fio-job"
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+			log.FailOnError(err, "Error in creating first FIO Application")
+		}()
+		go func() {
+			defer wg.Done()
+			err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.AnyToTriggeredEvent})
+			log.FailOnError(err, "Failed to trigger Autopilot event of PVC Expansion")
+			log.Infof("Autopilot event to trigger PVC Expansion successfully triggered")
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			log.FailOnError(err, "Failed to bring autopilot event to In Progress State")
+			log.Infof("Autopilot event of PVC Expansion is in progress")
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
+			log.FailOnError(err, "Failed to bring In Progress Autopilot action to Completed state")
+			log.Infof("Successfully resized PVC as per set Autopilot rule")
+			pvc, err := vc.GetPVC(pvcName, appNS)
+			log.FailOnError(err, "Failed to get PVC Object of PVC in Vcluster context")
+			originalSize := vcluster.GetPvcOriginalSize(pvc)
+			expandedSize := vcluster.GetPvcCapacitySize(pvc)
+			if expandedSize > originalSize {
+				log.Infof("New Size of PVC %v is %v GiB, whereas earlier size was %v GiB", pvcName, expandedSize, originalSize)
+				log.Infof("Successfully expanded PVC using Autopilot on vCluster")
+			} else {
+				err = fmt.Errorf("Something went wrong as expanded size of PVC %v is coming out to be %v and original size is %v", pvcName, expandedSize, originalSize)
+				log.FailOnError(err, "Autopilot failed to resize PVC")
+			}
+
+		}()
+		wg.Wait()
+
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
+		}
+		err = Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
+		log.FailOnError(err, fmt.Sprintf("Failed during deletion of Autopilot Rule %s", apRule.ObjectMeta.Name))
+	})
+})
+
+var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var appNS string
+	var apRule apapi.AutopilotRule
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "1000m",
+		TimeBased: true,
+		Runtime:   "300s",
+		EndFsync:  1,
+	}
+	JustBeforeEach(func() {
+		StartTorpedoTest("AutopilotMultiplePvcResizeTestVCluster", "Create a PVC Resize Autopilot Rule, Create Connect and run FIO Application on Vcluster that uses multiple PVCs and validate Autopilot rule triggers successfully", nil, 0)
+		vc, err = vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create a PVC Expand Autopilot Rule, Create Connect and run FIO Application on Vcluster and validate Autopilot rule triggers successfully", func() {
+		apRule = vcluster.PVCRuleByUsageCapacityForVcluster(5, 50, "20Gi")
+		_, err := Inst().S.CreateAutopilotRule(apRule)
+		log.FailOnError(err, "Failed to set Autopilot rule")
+		log.Infof("Autopilot rule %v successfully set", apRule.Name)
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName, WithVolumeExpansion(true))
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcNames := make([]string, 2)
+		for i := 0; i < len(pvcNames); i++ {
+			pvcName := fmt.Sprintf(vc.Name+"-"+scName+"-pvc-%d", i)
+			pvcName, err = vc.CreatePVC(pvcName, scName, appNS, "")
+			log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+			log.Infof("Successfully created PVC with name: %v", pvcName)
+			pvcNames[i] = pvcName
+		}
+		jobName := "fio-job"
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			err = vc.CreateFIOMultiPvcDeployment(pvcNames, appNS, fioOptions, jobName)
+			log.FailOnError(err, "Error in creating first FIO Application")
+		}()
+		go func() {
+			defer wg.Done()
+			err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.AnyToTriggeredEvent})
+			log.FailOnError(err, "Failed to trigger Autopilot event of PVC Expansion")
+			log.Infof("Autopilot event to trigger PVC Expansion successfully triggered")
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			log.FailOnError(err, "Failed to bring autopilot event to In Progress State")
+			log.Infof("Autopilot event of PVC Expansion is in progress")
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
+			log.FailOnError(err, "Failed to bring In Progress Autopilot action to Completed state")
+			log.Infof("Successfully resized PVC as per set Autopilot rule")
+			for i := 0; i < len(pvcNames); i++ {
+				pvc, err := vc.GetPVC(pvcNames[i], appNS)
+				log.FailOnError(err, "Failed to get PVC Object of PVC in Vcluster context")
+				originalSize := vcluster.GetPvcOriginalSize(pvc)
+				expandedSize := vcluster.GetPvcCapacitySize(pvc)
+				if expandedSize > originalSize {
+					log.Infof("New Size of PVC %v is %v GiB, whereas earlier size was %v GiB", pvcNames[i], expandedSize, originalSize)
+					log.Infof("Successfully expanded PVC using Autopilot on vCluster")
+				} else {
+					err = fmt.Errorf("Something went wrong as expanded size of PVC %v is coming out to be %v and original size is %v", pvcNames[i], expandedSize, originalSize)
+					log.FailOnError(err, "Autopilot failed to resize PVC")
+				}
+			}
+		}()
+		wg.Wait()
+
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
+		}
+		err = Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
+		log.FailOnError(err, fmt.Sprintf("Failed during deletion of Autopilot Rule %s", apRule.ObjectMeta.Name))
+	})
+})
+
+var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
+	const totalVclusters = 3
+	var vClusters []*vcluster.VCluster
+	var scName string
+	var appNS string
+	var apRules []apapi.AutopilotRule
+	const totalIterations = 1 // Number of Iterations we want to run the FIO Pods for
+	const batchCount = 2      // Number of FIO Pods to run in parallel in a single iteration
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "600m",
+		TimeBased: true,
+		Runtime:   "300s",
+		EndFsync:  1,
+	}
+	JustBeforeEach(func() {
+		StartTorpedoTest("AutopilotMultipleFioOnManyVclusters", "Create, Connect and run Multiple FIO Applications on Many Vclusters in Parallel", nil, 0)
+		for i := 0; i < totalVclusters; i++ {
+			vClusterName := fmt.Sprintf("my-vcluster%d", i+1)
+			vc, err := vcluster.NewVCluster(vClusterName)
+			log.FailOnError(err, "Failed to initialise VCluster")
+			vClusters = append(vClusters, vc)
+			err = vc.CreateAndWaitVCluster()
+			log.FailOnError(err, fmt.Sprintf("Failed to create VCluster %s", vClusterName))
+		}
+	})
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName, WithVolumeExpansion(true))
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		appNS = scName + "-ns"
+
+		var wgVClusters sync.WaitGroup
+		wgVClusters.Add(totalVclusters)
+
+		for _, vc := range vClusters {
+			go func(vc *vcluster.VCluster) {
+				defer wgVClusters.Done()
+				for i := 0; i < totalIterations; i++ {
+					var wg sync.WaitGroup
+					var jobNames []string
+					for j := 0; j < batchCount; j++ {
+						wg.Add(1)
+						go func(idx int) {
+							defer wg.Done()
+							var wginternal sync.WaitGroup
+							wginternal.Add(2)
+							var apRule apapi.AutopilotRule
+							apRule = vcluster.PVCRuleByUsageCapacityForVcluster(5, 50, "20Gi")
+							apRules = append(apRules, apRule)
+							_, err := Inst().S.CreateAutopilotRule(apRule)
+							log.FailOnError(err, "Failed to set Autopilot rule")
+							log.Infof("Autopilot rule %v successfully set", apRule.Name)
+							pvcNameSuffix := fmt.Sprintf("-pvc-%d-%d-%d", i, j, idx)
+							jobName := fmt.Sprintf("fio-job-%d-%d-%d", i, j, idx)
+							jobNames = append(jobNames, jobName)
+							pvcName, err := vc.CreatePVC(scName+pvcNameSuffix, scName, appNS, "")
+							log.FailOnError(err, fmt.Sprintf("Error creating PVC %v with Storageclass name %v", pvcName, scName))
+							log.Infof("Successfully created PVC with name: %v", pvcName)
+							go func() {
+								defer wginternal.Done()
+								// Create FIO Deployment on VCluster using the above PVC
+								err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+								log.FailOnError(err, "Error in creating FIO Application for PVC "+pvcName)
+							}()
+							go func() {
+								defer wginternal.Done()
+								err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.AnyToTriggeredEvent})
+								log.FailOnError(err, "Failed to trigger Autopilot event of PVC Expansion")
+								log.Infof("Autopilot event to trigger PVC Expansion successfully triggered")
+								err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
+								log.FailOnError(err, "Failed to bring autopilot event to Final State")
+								log.Infof("Autopilot event of PVC Expansion is successful")
+								pvc, err := vc.GetPVC(pvcName, appNS)
+								log.FailOnError(err, "Failed to get PVC Object of PVC in Vcluster context")
+								originalSize := vcluster.GetPvcOriginalSize(pvc)
+								expandedSize := vcluster.GetPvcCapacitySize(pvc)
+								if expandedSize > originalSize {
+									log.Infof("New Size of PVC %v is %v GiB, whereas earlier size was %v GiB", pvcName, expandedSize, originalSize)
+									log.Infof("Successfully expanded PVC using Autopilot on vCluster")
+								} else {
+									err = fmt.Errorf("Something went wrong as expanded size of PVC %v is coming out to be %v and original size is %v", pvcName, expandedSize, originalSize)
+									log.FailOnError(err, "Autopilot failed to resize PVC")
+								}
+
+							}()
+							wginternal.Wait()
+						}(i + j)
+					}
+					wg.Wait()
+					log.Infof("Successfully ran FIO on Vcluster for batch starting at %d", i)
+					for _, jobName := range jobNames {
+						err := vc.DeleteJobOnVcluster(appNS, jobName)
+						log.FailOnError(err, fmt.Sprintf("Error deleting FIO Job: %v", jobName))
+						log.Infof("Removed FIO Job : %v successfully from vcluster %v", jobName, vc.Name)
+					}
+					log.Infof("Successfully removed all FIO Jobs from Vcluster")
+				}
+			}(vc)
+		}
+		wgVClusters.Wait()
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		for _, vc := range vClusters {
+			vc.TerminateVCluster()
+			vcluster.DeleteNSFromHost(vc.Namespace)
+		}
+		vcluster.DeleteStorageclassFromHost(scName)
+		for _, apRule := range apRules {
+			Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
+			log.Errorf("Failed to delete Rule %v", apRule.ObjectMeta.Name)
+		}
+	})
+})
+
 // CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
 func CreateStorageClass(scName string, opts ...StorageClassOption) error {
 	params := make(map[string]string)
@@ -930,5 +1238,12 @@ func WithSnapshotSchedule(scheduleName, snapshotType string) StorageClassOption 
 	return func(sc *storageApi.StorageClass) {
 		yamlSnippet := fmt.Sprintf("schedulePolicyName: %s\nannotations:\n  portworx/snapshot-type: %s", scheduleName, snapshotType)
 		sc.Parameters["snapshotschedule.stork.libopenstorage.org/interval-schedule"] = yamlSnippet
+	}
+}
+
+// WithVolumeExpansion sets allowVolumeExpansion parameter to storageclass
+func WithVolumeExpansion(allowExpansion bool) StorageClassOption {
+	return func(sc *storageApi.StorageClass) {
+		sc.AllowVolumeExpansion = &allowExpansion
 	}
 }
