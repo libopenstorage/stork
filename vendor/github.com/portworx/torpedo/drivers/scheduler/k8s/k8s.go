@@ -59,7 +59,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	vcluster "github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -127,6 +126,9 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+
+	//ReplVPS volume placement strategy node label value
+	ReplVPS = "replvps"
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
@@ -162,6 +164,8 @@ const (
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 	cdiImportComplete                 = "Import Complete"
+	cdiImageImportTimeout             = 20 * time.Minute
+	cdiImageImportRetry               = 30 * time.Second
 )
 
 const (
@@ -1749,6 +1753,12 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 			return nil, err
 		}
 		return obj, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		obj, err := k8sKubevirt.GetVirtualMachine(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
@@ -1842,6 +1852,19 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 	}
 
+	if strings.Contains(app.Key, "repl-vps") {
+		vpsSpec := "/torpedo/deployments/customconfigs/repl-vps.yaml"
+		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find repl-vps.yaml in path %s", vpsSpec)
+		} else {
+			cmdArgs := []string{"apply", "-f", vpsSpec}
+			err = osutils.Kubectl(cmdArgs)
+			if err != nil {
+				log.Errorf("Error applying spec %s", vpsSpec)
+			}
+		}
+	}
+
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
@@ -1865,13 +1888,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				immediate := storageapi.VolumeBindingImmediate
 				obj.VolumeBindingMode = &immediate
 				log.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
-			}
-		}
-		// Change Context only in case of vCluster tests
-		if vcluster.ContextChange {
-			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
-			if err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext); err != nil {
-				return nil, err
 			}
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
@@ -1898,15 +1914,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
-		if vcluster.ContextChange {
-			log.Infof("Changing context back to vcluster: %v", vcluster.CurrentClusterContext)
-			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
-			// Changing ContextChange flag to false to not trigger unnecessary context change further
-			vcluster.ContextChange = false
-			if err != nil {
-				return nil, err
-			}
-		}
 		return sc, nil
 
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
@@ -4117,6 +4124,31 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
+func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeClaim) ([]*volume.Volume, error) {
+	shouldAdd, err := k.filterPureVolumesIfEnabled(pvc)
+	if err != nil {
+		return nil, err
+	}
+	if !shouldAdd {
+		return vols, nil
+	}
+
+	pvcSizeObj := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	pvcSize, _ := pvcSizeObj.AsInt64()
+	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
+	vol := &volume.Volume{
+		ID:          string(pvc.Spec.VolumeName),
+		Name:        pvc.Name,
+		Namespace:   pvc.Namespace,
+		Shared:      k.isPVCShared(pvc),
+		Annotations: pvc.Annotations,
+		Labels:      pvc.Labels,
+		Size:        uint64(pvcSize),
+		Raw:         isRaw,
+	}
+	return append(vols, vol), nil
+}
+
 // GetVolumes  Get the volumes
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
@@ -4127,31 +4159,10 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
-			shouldAdd, err := k.filterPureVolumesIfEnabled(pvcObj)
+			vols, err = k.appendVolForPVC(vols, pvcObj)
 			if err != nil {
 				return nil, err
 			}
-			if !shouldAdd {
-				continue
-			}
-
-			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
-			pvcSize, _ := pvcSizeObj.AsInt64()
-			isRaw := *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock
-			vol := &volume.Volume{
-				ID:          string(pvcObj.Spec.VolumeName),
-				Name:        obj.Name,
-				Namespace:   obj.Namespace,
-				Shared:      k.isPVCShared(obj),
-				Annotations: make(map[string]string),
-				Labels:      pvcObj.Labels,
-				Size:        uint64(pvcSize),
-				Raw:         isRaw,
-			}
-			for key, val := range obj.Annotations {
-				vol.Annotations[key] = val
-			}
-			vols = append(vols, vol)
 		} else if pdsobj, ok := specObj.(*pds.ModelsDeployment); ok {
 			ss, err := k8sApps.GetStatefulSet(*pdsobj.ClusterResourceName, *pdsobj.Namespace.Name)
 			if err != nil {
@@ -4168,17 +4179,11 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v, Namespace: %s. Err: %v", ss.Name, ss.Namespace, err),
 				}
 			}
-
 			for _, pvc := range pvcList.Items {
-				vols = append(vols, &volume.Volume{
-					ID:        pvc.Spec.VolumeName,
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-					Shared:    k.isPVCShared(&pvc),
-				})
-			}
-			for _, vol := range vols {
-				log.Infof("In Get Volume method, vol name %s", vol.Name)
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
@@ -4198,16 +4203,37 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				vols = append(vols, &volume.Volume{
-					ID:        pvc.Spec.VolumeName,
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-					Shared:    k.isPVCShared(&pvc),
-				})
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if vm, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(vm.Namespace, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", vm.Namespace, err)
+			}
+			for _, pvc := range pvcList.Items {
+				// check if the pvc has our VM as the owner
+				want := false
+				for _, ownerRef := range pvc.OwnerReferences {
+					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
+						want = true
+					}
+				}
+				if !want {
+					continue
+				}
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
-
+	for _, vol := range vols {
+		log.Infof("K8s.GetVolumes() found volume %s for app %s", vol.Name, ctx.App.Key)
+	}
 	return vols, nil
 }
 
@@ -5217,7 +5243,7 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName)
 				}
 			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			if err != nil {
 				return err
 			}

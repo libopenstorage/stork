@@ -14,7 +14,7 @@ var (
 	migrationResource = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstancemigrations"}
 )
 
-// VirtualMachineInstance represents "live migration" of KubeVirt VirtualMachineInstance
+// VirtualMachineInstanceMigration represents "live migration" of KubeVirt VirtualMachineInstance
 type VirtualMachineInstanceMigration struct {
 	// Namespace of the migration
 	NameSpace string
