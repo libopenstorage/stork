@@ -3720,11 +3720,19 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 
 		Step("Restore manual backup and validate status post restore", func() {
 			log.InfoD("Restoring new application namespaces from next schedule backup in source cluster")
+
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
 			oldPodAge, err := getPodAge()
-			dash.VerifyFatal(err, nil, "Getting namespace age")
+			dash.VerifyFatal(err, nil, "Getting pod age")
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+
 			restoreName = fmt.Sprintf("%s-%s", "test-restore-manual", RandomString(4))
 			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore manual [%s]", restoreName))
 			restoreNames = append(restoreNames, restoreName)
 
 			err = SetDestinationKubeConfig()
@@ -3732,11 +3740,11 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 
 			ValidateApplications(scheduledAppContexts)
 
+			err = comparePodAge(oldPodAge)
+			dash.VerifyFatal(err, nil, "Comparing pod age")
+
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
-
-			err = comparePodAge(oldPodAge)
-			dash.VerifyFatal(err, nil, "Comparing namespace age namespace age")
 		})
 
 		Step("Create schedule backup", func() {
@@ -3768,22 +3776,36 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
 		})
 
-		Step("Restore schedule backup and validate post restpre", func() {
+		Step("Restore schedule backup and validate post restore", func() {
 			log.InfoD("Restore schedule backup")
+
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
 			oldPodAge, err := getPodAge()
-			dash.VerifyFatal(err, nil, "Getting namespace age")
+			dash.VerifyFatal(err, nil, "Getting pod age")
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 
 			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 
 			err = CreateRestoreWithReplacePolicy(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore schedule [%s]", restoreName))
 			restoreNames = append(restoreNames, restoreName)
 
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
 			ValidateApplications(scheduledAppContexts)
+
 			err = comparePodAge(oldPodAge)
-			dash.VerifyFatal(err, nil, "Comparing namespace age")
+			dash.VerifyFatal(err, nil, "Comparing pod age")
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 	})
 
@@ -3794,12 +3816,14 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			log.FailOnError(err, "failed to switch context to source cluster")
 		}()
 
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
 		ValidateAndDestroy(scheduledAppContexts, opts)
 
-		err := SetSourceKubeConfig()
+		err = SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 
 		err = DeleteSchedule(scheduleName, destinationClusterName, orgID, ctx)
