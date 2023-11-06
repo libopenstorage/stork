@@ -1092,7 +1092,7 @@ github.com/portworx/px-object-controller/client/listers/objectservice/v1alpha1
 github.com/portworx/px-object-controller/pkg/client
 github.com/portworx/px-object-controller/pkg/controller
 github.com/portworx/px-object-controller/pkg/utils
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20231013094113-8ca7856dbe86 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20231018042450-4c290674cb5a => github.com/portworx/sched-ops v1.20.4-rc1.0.20231016183449-493b2f1cbbf1
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1117,7 +1117,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.0.0-20231029184953-177d7a43d822
 ## explicit; go 1.19
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -1126,7 +1126,6 @@ github.com/portworx/torpedo/drivers/objectstore
 github.com/portworx/torpedo/drivers/scheduler
 github.com/portworx/torpedo/drivers/scheduler/k8s
 github.com/portworx/torpedo/drivers/scheduler/spec
-github.com/portworx/torpedo/drivers/vcluster
 github.com/portworx/torpedo/drivers/volume
 github.com/portworx/torpedo/drivers/volume/aws
 github.com/portworx/torpedo/drivers/volume/azure
@@ -1493,14 +1492,14 @@ google.golang.org/appengine/internal/socket
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
+# google.golang.org/genproto v0.0.0-20230913181813-007df8e322eb
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/iam/credentials/v1
 google.golang.org/genproto/googleapis/type/date
 google.golang.org/genproto/googleapis/type/expr
 google.golang.org/genproto/internal
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d
+# google.golang.org/genproto/googleapis/api v0.0.0-20230913181813-007df8e322eb
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
@@ -2481,8 +2480,8 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 # github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 # github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231123040148-68149a57dc24
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20231016183449-493b2f1cbbf1
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231029184953-177d7a43d822
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0

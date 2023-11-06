@@ -36,6 +36,21 @@ func (m *MockOps) EXPECT() *MockOpsMockRecorder {
 	return m.recorder
 }
 
+// CreateVirtualMachineInstanceMigration mocks base method.
+func (m *MockOps) CreateVirtualMachineInstanceMigration(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.VirtualMachineInstanceMigration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateVirtualMachineInstanceMigration", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*kubevirtdynamic.VirtualMachineInstanceMigration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateVirtualMachineInstanceMigration indicates an expected call of CreateVirtualMachineInstanceMigration.
+func (mr *MockOpsMockRecorder) CreateVirtualMachineInstanceMigration(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVirtualMachineInstanceMigration", reflect.TypeOf((*MockOps)(nil).CreateVirtualMachineInstanceMigration), arg0, arg1, arg2)
+}
+
 // GetVirtualMachineInstance mocks base method.
 func (m *MockOps) GetVirtualMachineInstance(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.VirtualMachineInstance, error) {
 	m.ctrl.T.Helper()
@@ -49,6 +64,36 @@ func (m *MockOps) GetVirtualMachineInstance(arg0 context.Context, arg1, arg2 str
 func (mr *MockOpsMockRecorder) GetVirtualMachineInstance(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineInstance", reflect.TypeOf((*MockOps)(nil).GetVirtualMachineInstance), arg0, arg1, arg2)
+}
+
+// GetVirtualMachineInstanceMigration mocks base method.
+func (m *MockOps) GetVirtualMachineInstanceMigration(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.VirtualMachineInstanceMigration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVirtualMachineInstanceMigration", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*kubevirtdynamic.VirtualMachineInstanceMigration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVirtualMachineInstanceMigration indicates an expected call of GetVirtualMachineInstanceMigration.
+func (mr *MockOpsMockRecorder) GetVirtualMachineInstanceMigration(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineInstanceMigration", reflect.TypeOf((*MockOps)(nil).GetVirtualMachineInstanceMigration), arg0, arg1, arg2)
+}
+
+// ListVirtualMachineInstanceMigrations mocks base method.
+func (m *MockOps) ListVirtualMachineInstanceMigrations(arg0 context.Context, arg1 string) ([]*kubevirtdynamic.VirtualMachineInstanceMigration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVirtualMachineInstanceMigrations", arg0, arg1)
+	ret0, _ := ret[0].([]*kubevirtdynamic.VirtualMachineInstanceMigration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVirtualMachineInstanceMigrations indicates an expected call of ListVirtualMachineInstanceMigrations.
+func (mr *MockOpsMockRecorder) ListVirtualMachineInstanceMigrations(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVirtualMachineInstanceMigrations", reflect.TypeOf((*MockOps)(nil).ListVirtualMachineInstanceMigrations), arg0, arg1)
 }
 
 // SetConfig mocks base method.
