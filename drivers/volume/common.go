@@ -1152,6 +1152,14 @@ func (d *DefaultDriver) IsVolumeAttachedOnNode(volume *api.Volume, node node.Nod
 	}
 }
 
+// GetPxctlStatus returns the PX status
+func (d *DefaultDriver) GetPxctlStatus(n node.Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlStatus()",
+	}
+}
+
 // IsPxReadyOnNode returns true if px is ready on the node
 func (d *DefaultDriver) IsPxReadyOnNode(n node.Node) bool {
 	return false

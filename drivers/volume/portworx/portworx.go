@@ -2177,7 +2177,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
-			pxStatus, err := d.getPxctlStatus(n)
+			pxStatus, err := d.GetPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
@@ -4810,7 +4810,8 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	return strings.TrimSpace(out)
 }
 
-func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
+// GetPxctlStatus returns the PX status using pxctl
+func (d *portworx) GetPxctlStatus(n node.Node) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,

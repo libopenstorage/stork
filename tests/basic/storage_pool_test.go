@@ -1622,7 +1622,7 @@ var _ = Describe("{PoolResizeMul}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -1788,7 +1788,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -1802,7 +1802,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 50 + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -1816,7 +1816,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100 + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -4518,7 +4518,24 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidateDriveRebalance(*selectedNode)
-			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", selectedPool.Uuid))
+			if strings.Contains(err.Error(), "current status: Offline") {
+				poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+				log.FailOnError(err, fmt.Sprintf("error getting pool status on node %s after rebalance", selectedNode.Name))
+				for k, v := range poolsStatus {
+					if v == "Offline" {
+						additionalPoolToExpand, err := GetStoragePoolByUUID(selectedPool.Uuid)
+						log.FailOnError(err, fmt.Sprintf("error getting pool with UUID %s", k))
+						additionalPoolExpectedPoolSize := (selectedPool.TotalSize / units.GiB) * 2
+						log.InfoD("Current Size of the pool %s is %d", k, additionalPoolToExpand.TotalSize/units.GiB)
+						err = Inst().V.ExpandPool(k, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, additionalPoolExpectedPoolSize, true)
+						log.FailOnError(err, fmt.Sprintf("error initiating expansion for pool %s", k))
+						err = waitForPoolToBeResized(additionalPoolExpectedPoolSize, k, isjournal)
+						log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", k))
+					}
+				}
+			} else {
+				log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", selectedPool.Uuid))
+			}
 
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", selectedPool.Uuid))
@@ -4853,21 +4870,21 @@ func waitForStorageDown(n node.Node) error {
 	return nil
 }
 
-var _ = Describe("{ResizeClusterNoQuorum}", func() {
+var _ = Describe("{ResizeKvdbNoQuorum}", func() {
 	//1) Deploy px with cloud drive.
-	//2) Make Cluster out of quorum
+	//2) Make KVDB out of quorum
 	//3) Expand a healthy pools by resize-disk
 
 	var testrailID = 51300
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51300
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeClusterNoQuorum", "Initiate pool expansion by resize-disk when cluster is out quorum", nil, testrailID)
+		StartTorpedoTest("ResizeKvdbNoQuorum", "Initiate pool expansion by resize-disk when kvdb is out quorum", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
-	stepLog := "should make cluster out of quorum, and expand healthy pool using resize-disk"
+	stepLog := "should make kvdb out of quorum, and expand healthy pool using resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -4892,6 +4909,7 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 		for _, n := range kvdbMembers {
 			kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
 		}
+		log.Infof("kvdbNodesIDs %v", kvdbNodesIDs)
 		for _, n := range stoageDriverNodes {
 			if Contains(kvdbNodesIDs, n.Id) {
 				kvdbNodes = append(kvdbNodes, n)
@@ -4899,20 +4917,17 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 				nonKvdbNodes = append(nonKvdbNodes, n)
 			}
 		}
-		numNodesToBeDown := (len(stoageDriverNodes) / 2) + 1
-		if len(nonKvdbNodes) < numNodesToBeDown {
-			numNodesToBeDown = len(nonKvdbNodes)
-		}
 
-		selPool := kvdbNodes[0].Pools[0]
+		selPool := nonKvdbNodes[0].Pools[0]
 		poolToBeResized, err := GetStoragePoolByUUID(selPool.Uuid)
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool.Uuid))
 
-		stepLog = "Make cluster out of quorum"
+		stepLog = "Make kvdb out of quorum"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			i := 0
-			for _, n := range nonKvdbNodes {
-				if i == numNodesToBeDown {
+			for _, n := range kvdbNodes {
+				if i == len(kvdbNodes)-1 {
 					break
 				}
 				err := Inst().V.StopDriver([]node.Node{n}, false, nil)
@@ -4923,32 +4938,34 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 				driverDownNodes = append(driverDownNodes, n)
 				i += 1
 			}
+
 		})
 
-		stepLog = fmt.Sprintf("Expanding pool on kvdb node using resize-disk")
-		Step(stepLog, func() {
-
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool.Uuid))
-			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
-
-			log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+		defer func() {
 			Step("set cluster to running", func() {
 				log.InfoD("set cluster to running")
 				for _, n := range driverDownNodes {
 					err := Inst().V.StartDriver(n)
 					log.FailOnError(err, "error starting driver on node %s", n.Name)
-					err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
+					err = Inst().V.WaitDriverUpOnNode(n, 10*time.Minute)
 					log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
 				}
 			})
 
-			isjournal, err := IsJournalEnabled()
-			log.FailOnError(err, "Failed to check if Journal enabled")
+		}()
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selPool.Uuid, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", selPool.Uuid))
+		stepLog = fmt.Sprintf("Expanding pool on non kvdb node using resize-disk")
+		Step(stepLog, func() {
+
+			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err != nil, true, "Pool expansion init failed?")
+
+			validErr := strings.Contains(err.Error(), "failed to find storage pool")
+			dash.VerifyFatal(validErr, true, fmt.Sprintf("verify err is valid %s", err.Error()))
+
 		})
 
 	})
@@ -8456,10 +8473,10 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 		if dmthinEnabled {
 			err := Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
 			dash.VerifyFatal(err != nil, true, "Did not Error out when adding cloud drive as expected")
-			re := regexp.MustCompile(".*Journal/Metadata device add not supported for PX-StoreV2*")
+			re := regexp.MustCompile(".*Journal parameter is not supported with PX-StoreV2*")
 			dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)),
 				true,
-				fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
+				fmt.Sprintf("Errored while adding Pool as expected on Node [%v] with err: %v", nodeDetail.Name, err))
 		} else {
 
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)

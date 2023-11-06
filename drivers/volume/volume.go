@@ -481,6 +481,9 @@ type Driver interface {
 
 	// IsPxReadyOnNode returns true is Px is ready on the node
 	IsPxReadyOnNode(n node.Node) bool
+
+	// GetPxctlStatus returns the PX status using pxctl
+	GetPxctlStatus(n node.Node) (string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
