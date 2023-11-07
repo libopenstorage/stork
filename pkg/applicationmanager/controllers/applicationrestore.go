@@ -603,7 +603,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			continue
 		}
 		for _, volumeBackup := range backup.Status.Volumes {
-			if volumeBackup.Namespace != namespace {
+			if volumeBackup.Namespace != namespace || volumeBackup.Status == storkapi.ApplicationBackupStatusFailed || volumeBackup.Status == storkapi.ApplicationBackupStatusSkip {
 				continue
 			}
 			// If a list of resources was specified during restore check if
