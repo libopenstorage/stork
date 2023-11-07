@@ -71,6 +71,7 @@ type ApplicationBackupStatus struct {
 	TotalSize            uint64                           `json:"totalSize"`
 	ResourceCount        int                              `json:"resourceCount"`
 	LargeResourceEnabled bool                             `json:"largeResourceEnabled"`
+	FailedVolCount       int                              `json:"failedVolCount"`
 }
 
 // ObjectInfo contains info about an object being backed up or restored
@@ -83,6 +84,8 @@ type ObjectInfo struct {
 // ApplicationBackupResourceInfo is the info for the backup of a resource
 type ApplicationBackupResourceInfo struct {
 	ObjectInfo `json:",inline"`
+	Status     ApplicationBackupStatusType `json:"status"`
+	Reason     string                      `json:"reason"`
 }
 
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
@@ -120,6 +123,8 @@ const (
 	ApplicationBackupStatusPartialSuccess ApplicationBackupStatusType = "PartialSuccess"
 	// ApplicationBackupStatusSuccessful for when backup has completed successfully
 	ApplicationBackupStatusSuccessful ApplicationBackupStatusType = "Successful"
+	// ApplicationBackupStatusSkip for when backup has been skipped
+	ApplicationBackupStatusSkip ApplicationBackupStatusType = "Skipped"
 )
 
 // ApplicationBackupStageType is the stage of the backup
