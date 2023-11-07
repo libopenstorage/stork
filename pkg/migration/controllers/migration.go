@@ -334,6 +334,15 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			err.Error())
 		return nil
 	}
+	if len(migrationNamespaces) == 0 {
+		err := fmt.Errorf("no valid namespace found based on the provided 'Namespaces' and 'NamespaceSelectors'")
+		log.MigrationLog(migration).Errorf(err.Error())
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			err.Error())
+		return nil
+	}
 	// Check whether namespace is allowed to be migrated before each stage
 	// Restrict migration to only the namespace that the object belongs
 	// except for the namespace designated by the admin
