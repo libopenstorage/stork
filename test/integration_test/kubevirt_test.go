@@ -27,9 +27,12 @@ const (
 	importerPodCompletionTimeout = 20 * time.Minute
 	importerPodRetryInterval     = 10 * time.Second
 
+	kubevirtTemplates                     = "kubevirt-templates"
 	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
 	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
+
+	volumeBindingImmediate = "kubevirt-templates"
 )
 
 func TestKubevirt(t *testing.T) {
@@ -38,10 +41,12 @@ func TestKubevirt(t *testing.T) {
 	require.NoError(t, err, "Error resetting mock time")
 
 	err = createTemplatePVC(t)
-	require.NoError(t, err, "Error creating template")
+	require.NoError(t, err, "Error creating kubevirt templates")
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
 	t.Run("kubevirtDeployWindowsServerWithClonePVC", kubevirtDeployWindowsServerWithClonePVC)
+	t.Run("kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer", kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer)
+	t.Run("kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer", kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
@@ -114,6 +119,50 @@ func kubevirtVMDeployAndValidate(
 	return ctxs
 }
 
+func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
+	var testrailID, testResult = 50803, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "vm"
+	appKey := "kubevirt-fedora-wait-first-consumer"
+	deployedVMName := "fedora-test-vm-wait-first-consumer"
+
+	ctxs := kubevirtVMDeployAndValidate(
+		t,
+		instanceID,
+		appKey,
+		deployedVMName,
+	)
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
+	var testrailID, testResult = 50804, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "vm"
+	appKey := "kubevirt-windows-22k-server-wait-first-consumer"
+	deployedVMName := "windows-test-vm-wait-first-consumer"
+
+	ctxs := kubevirtVMDeployAndValidate(
+		t,
+		instanceID,
+		appKey,
+		deployedVMName,
+	)
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
 func validateVM(t *testing.T, virtualMachine kubevirtv1.VirtualMachine, vmName string) {
 	require.Equal(t, virtualMachine.Name, vmName, "VM %s has not been deployed", vmName)
 	require.Equal(t, virtualMachine.Status.Created, true, "VM %s created status is: %t", virtualMachine.Name, virtualMachine.Status.Created)
@@ -125,7 +174,7 @@ func validateVM(t *testing.T, virtualMachine kubevirtv1.VirtualMachine, vmName s
 func createTemplatePVC(t *testing.T) error {
 	_, err := schedulerDriver.Schedule("",
 		scheduler.ScheduleOptions{
-			AppKeys:   []string{"kubevirt-templates"},
+			AppKeys:   []string{kubevirtTemplates},
 			Namespace: kubevirtTemplateNamespace,
 		})
 	require.NoErrorf(t, err, "error deploying kubevirt templates")
