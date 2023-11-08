@@ -587,7 +587,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 			"resizeFixedSizeLabel":  {"autopilot": "resizefixedsize"},
 		}
 
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := node.GetStorageNodes()
 
 		testCases := []testCase{
 			{
