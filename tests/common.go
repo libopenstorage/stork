@@ -2088,6 +2088,45 @@ func ValidateRuleNotApplied(contexts []*scheduler.Context, name string) {
 	}
 }
 
+// ValidateRuleNotTriggered is validating PVC to see if rule is not triggered
+func ValidateRuleNotTriggered(contexts []*scheduler.Context, name string) {
+	log.InfoD("Validating rule is active")
+	fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+	waitForActiveAction := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Initializing => Normal") {
+				log.InfoD("Found rule which is initialized")
+				return e.Message, false, nil
+			}
+		}
+		return "", true, fmt.Errorf("Autopilot rule not applied yet")
+	}
+	_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+	checkCount := 0
+	checkRuleTriggered := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Triggered") {
+				log.InfoD("Message in log is: %s", e.Message)
+				return e.Message, false, fmt.Errorf("Triggered found in Autopilot rule.")
+			}
+		}
+		if checkCount <= 10 {
+			checkCount += 1
+			return "", true, fmt.Errorf("Autopilot rule did not trigger yet")
+		} else {
+			log.InfoD("Rule not triggered yet, which is expected")
+			return "", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkRuleTriggered, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+}
+
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 	context("Validating portworx pods restart count ...", func() {
