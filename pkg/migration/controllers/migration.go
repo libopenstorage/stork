@@ -1470,9 +1470,6 @@ func (m *MigrationController) prepareApplicationResource(
 			}
 		}
 	}
-	if *migration.Spec.StartApplications {
-		return nil
-	}
 
 	// Reset the replicas to 0 and store the current replicas in an annotation
 	replicas, found, err := unstructured.NestedInt64(content, "spec", "replicas")
@@ -1481,6 +1478,34 @@ func (m *MigrationController) prepareApplicationResource(
 	}
 	if !found {
 		replicas = 1
+	}
+
+	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+	if err != nil {
+		return err
+	}
+	if !found {
+		annotations = make(map[string]string)
+	}
+	migrationReplicasAnnotationValue, replicaAnnotationIsPresent := annotations[StorkMigrationReplicasAnnotation]
+	if replicas == 0 && replicaAnnotationIsPresent {
+		//We want to carry forward the value in migrationReplicas annotation in case it is non-zero
+		migrationReplicas, err := strconv.ParseInt(migrationReplicasAnnotationValue, 10, 64)
+		if err != nil {
+			return err
+		}
+		if migrationReplicas > 0 {
+			//override the replicas value with migrationReplicas
+			replicas = migrationReplicas
+			err = unstructured.SetNestedField(content, replicas, "spec", "replicas")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if *migration.Spec.StartApplications {
+		return nil
 	}
 
 	err = unstructured.SetNestedField(content, int64(0), "spec", "replicas")
@@ -1499,13 +1524,7 @@ func (m *MigrationController) prepareApplicationResource(
 	if err := unstructured.SetNestedStringMap(content, labels, "metadata", "labels"); err != nil {
 		return err
 	}
-	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
-	if err != nil {
-		return err
-	}
-	if !found {
-		annotations = make(map[string]string)
-	}
+
 	annotations[StorkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
@@ -1514,11 +1533,7 @@ func (m *MigrationController) prepareCRDClusterResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 	suspendOpts []stork_api.SuspendOptions,
-
 ) error {
-	if *migration.Spec.StartApplications {
-		return nil
-	}
 	if len(suspendOpts) == 0 {
 		return nil
 	}
@@ -1530,10 +1545,12 @@ func (m *MigrationController) prepareCRDClusterResource(
 	if !found {
 		annotations = make(map[string]string)
 	}
+
 	for _, suspend := range suspendOpts {
 		fields := strings.Split(suspend.Path, ".")
 		var currVal string
 		if len(fields) > 1 {
+			SuspendAnnotationValue, suspendAnnotationIsPresent := annotations[StorkAnnotationPrefix+suspend.Path]
 			var disableVersion interface{}
 			if suspend.Type == "bool" {
 				if val, err := strconv.ParseBool(suspend.Value); err != nil {
@@ -1547,6 +1564,20 @@ func (m *MigrationController) prepareCRDClusterResource(
 					return fmt.Errorf("unable to find suspend path, err: %v", err)
 				}
 				disableVersion = int64(0)
+				if curr == 0 && suspendAnnotationIsPresent {
+					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
+					intValue, err := strconv.ParseInt(annotationValue, 10, 64)
+					if err != nil {
+						return err
+					}
+					if intValue > 0 {
+						curr = intValue
+						err = unstructured.SetNestedField(content, fmt.Sprintf("%v", curr), fields...)
+						if err != nil {
+							return err
+						}
+					}
+				}
 				currVal = fmt.Sprintf("%v", curr)
 			} else if suspend.Type == "string" {
 				curr, _, err := unstructured.NestedString(content, fields...)
@@ -1554,11 +1585,27 @@ func (m *MigrationController) prepareCRDClusterResource(
 					return fmt.Errorf("unable to find suspend path, err: %v", err)
 				}
 				disableVersion = suspend.Value
+				if curr == suspend.Value && suspendAnnotationIsPresent {
+					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
+					if annotationValue != "" {
+						curr = annotationValue
+						err = unstructured.SetNestedField(content, curr, fields...)
+						if err != nil {
+							return err
+						}
+					}
+				}
 				currVal = curr
 			} else {
 				return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
 			}
 
+			//No need to scale down if StartApplications is set to True in the migration spec
+			if *migration.Spec.StartApplications {
+				return nil
+			}
+
+			//scale down the CRD resource by setting the suspendPath value to disableVersion
 			if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
 				return err
 			}
@@ -1566,6 +1613,10 @@ func (m *MigrationController) prepareCRDClusterResource(
 			// path : activate/deactivate value
 			annotations[StorkAnnotationPrefix+suspend.Path] = currVal + "," + suspend.Value
 		}
+	}
+
+	if *migration.Spec.StartApplications {
+		return nil
 	}
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
@@ -2261,6 +2312,7 @@ func (m *MigrationController) applyResources(
 			"Resource migrated successfully")
 	}
 
+	//map tells us if for this appKey group-version-kin
 	appRegsStashMap := make(map[string]bool)
 	if !*migration.Spec.StartApplications {
 		appRegsStashMap = getAppRegsStashMap(*crdList)
