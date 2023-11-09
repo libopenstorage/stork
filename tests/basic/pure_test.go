@@ -1141,3 +1141,128 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+// This test Kills the PX nodes where FADA volumes are attached, Deletes the pods and PVCs.
+/*
+https://portworx.testrail.net/index.php?/cases/view/92893
+
+*/
+var _ = Describe("{AppCleanUpWhenPxKill}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AppCleanUpWhenPxKill", "Test creates multiple FADA volume and kills px nodes while the pods and pvc's are being deleted", nil, 72760884)
+	})
+	It("Schedules apps that use FADA volumes, kill the nodes where these volumes are placed while the volumes are being deleted.", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the one storage node,one storageless node and one KVDB member node to place volumes and kill the nodes while apps are being destroyed
+		storageNodes := node.GetStorageNodes()
+		storageLessNodes := node.GetStorageLessNodes()
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Failed to get kvdb nodes")
+		var selectedNodes []node.Node
+		selectedNodes = append(selectedNodes, storageNodes[rand.Intn(len(storageNodes))])
+		selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
+		for _, kvdbNode := range kvdbNodes {
+			if kvdbNode.ID != selectedNodes[0].Id {
+				selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get kvdb node details")
+				log.InfoD("Selected kvdb node: %v", selectedKvdbNode.Name)
+				selectedNodes = append(selectedNodes, selectedKvdbNode)
+				break
+			}
+		}
+
+		defer func() {
+			Inst().AppList = applist
+			for _, node := range selectedNodes {
+				err = Inst().S.RemoveLabelOnNode(node, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", node.Name)
+			}
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		for _, node := range selectedNodes {
+			err = Inst().S.AddLabelOnNode(node, k8s.NodeType, k8s.ReplVPS)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", node.Name))
+		}
+
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		//Number of apps to be deployed
+		NumberOfAppsToBeDeployed := 300
+
+		stepLog = fmt.Sprintf("schedule application")
+		Step(stepLog, func() {
+			for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+				taskName := fmt.Sprintf("app-cleanup-when-px-kill-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = fmt.Sprintf("Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully")
+		Step(stepLog, func() {
+			// Step 1: Destroy Applications
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stepLog := "Destroy Applications"
+				Step(stepLog, func() {
+					opts := make(map[string]bool)
+					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+					for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+						TearDownContext(contexts[j], opts)
+					}
+				})
+			}()
+
+			// Step 2: kill px nodes
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				stepLog := fmt.Sprintf("Kill px nodes")
+				Step(stepLog, func() {
+					for _, selectedNode := range selectedNodes {
+						log.InfoD("Crashing node: %v", selectedNode.Name)
+						err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
+						})
+						log.FailOnError(err, "Failed to crash node:%v", selectedNode.Name)
+					}
+				})
+			}()
+			// Wait for both steps to complete
+			wg.Wait()
+		})
+		stepLog = fmt.Sprintf("Wait until all the nodes come up")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, selectedNode := range selectedNodes {
+				err = Inst().N.TestConnection(selectedNode, node.ConnectionOpts{
+					Timeout:         defaultTestConnectionTimeout,
+					TimeBeforeRetry: defaultWaitRebootRetry,
+				})
+				log.FailOnError(err, "node:%v Failed to come up?", selectedNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+				log.FailOnError(err, "Portworx not coming up on node:%v", selectedNode.Name)
+
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
