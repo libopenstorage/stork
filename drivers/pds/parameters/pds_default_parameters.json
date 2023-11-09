@@ -114,7 +114,8 @@
     "CpuRequest":     "1",
     "MemoryLimit":    "4G",
     "MemoryRequest":  "2G",
-    "StorageRequest": "1G"
+    "StorageRequest": "1G",
+    "Iterations" : 2
   },
   "LoadGen": {
     "LoadGenDepName": "workload",

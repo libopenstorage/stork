@@ -71,6 +71,7 @@ type Parameter struct {
 		MemoryLimit    string
 		MemoryRequest  string
 		StorageRequest string
+		Iterations     int
 	} `json:"StorageConfigurations"`
 }
 
