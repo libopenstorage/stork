@@ -34,6 +34,7 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
@@ -126,6 +127,14 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+	// PureDAVolumeLabel is the label added to a volume only if the volume is a Pure Direct Access (FADA/FBDA) volume
+	PureDAVolumeLabel = "pure_direct_access"
+	// PureDAVolumeLabelValueFA is the value added for the PureDAVolumeLabel key if the volume is an FADA volume
+	PureDAVolumeLabelValueFA = "fada"
+	// PureDAVolumeLabelValueFB is the value added for the PureDAVolumeLabel key if the volume is an FBDA volume
+	PureDAVolumeLabelValueFB = "fbda"
+	// FADAVolumeSerialLabel is the label added to a volume (only if FlashArray Direct Access) that holds the volume serial
+	FADAVolumeSerialLabel = "fada_volume_serial"
 
 	//ReplVPS volume placement strategy node label value
 	ReplVPS = "replvps"
@@ -3179,7 +3188,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	if apRule.Name != "" {
 		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
 			if err != nil {
-				if strings.Contains(err.Error(), "not found"){
+				if strings.Contains(err.Error(), "not found") {
 					log.Infof("deletion of AR failed: %s, expected since we dont deploy new AR", apRule.ObjectMeta.Name)
 					return nil
 				}
@@ -4137,6 +4146,37 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		return vols, nil
 	}
 
+	labels := pvc.Labels
+
+	if pvc.Spec.VolumeName != "" {
+		// If this is a Pure volume, run some extra checks to get more information.
+		// Store them as labels as they are not applicable to all volume types.
+		driver, err := volume.Get(k.VolDriverName)
+		if err != nil {
+			return nil, err
+		}
+
+		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
+		}
+
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		if inspectedVol.Spec.IsPureVolume() {
+			switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
+			case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+				labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
+				labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+			case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+				labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
+			default:
+				return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
+			}
+		}
+	}
+
 	pvcSizeObj := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 	pvcSize, _ := pvcSizeObj.AsInt64()
 	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
@@ -4146,7 +4186,7 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		Namespace:   pvc.Namespace,
 		Shared:      k.isPVCShared(pvc),
 		Annotations: pvc.Annotations,
-		Labels:      pvc.Labels,
+		Labels:      labels,
 		Size:        uint64(pvcSize),
 		Raw:         isRaw,
 	}

@@ -415,12 +415,6 @@ PodLoop:
 						log.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 						pxMountFound = true
 
-						// If we encounter a Pure volume, we should skip the host mount check as we can't get the
-						// volume serial to confirm which volume it is (which is what the path contains)
-						if regexp.MustCompile(pureMapperRegex).MatchString(line) {
-							skipHostMountCheck = true
-						}
-
 						// in case there are two pods running with non shared volume, one of them will be in read-only
 						if isMountReadOnly(line) {
 							skipHostMountCheck = true
@@ -453,8 +447,12 @@ PodLoop:
 			IgnoreError:     true,
 		}
 
+		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
+		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
+			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+		}
 		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_)' | grep %s", pvName), connOpts)
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), connOpts)
 		if len(volMount) == 0 {
 			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
 		}
