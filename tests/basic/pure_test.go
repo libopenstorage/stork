@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/pkg/units"
+	"strconv"
 
 	"math/rand"
 
@@ -1009,6 +1010,132 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 				wg.Wait()
 			})
 		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Stop PX on a Node, resize and validate pvc's,delete the apps and check if all the pods,pvc's and volumes are being deleted from the backend
+/*
+https://portworx.testrail.net/index.php?/cases/view/93034
+https://portworx.testrail.net/index.php?/cases/view/93035
+
+*/
+var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("StopPXAddDiskDeleteApps", "Test creates multiple FADA volume and stops px on a node,resize pvc and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
+	})
+	It("schedules multiple nginx fada volumes, stops portworx on a node where volumes are placed,resize pvc's and checks if all the resources created are deleted gracefully", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		requestedVols := make([]*volume.Volume, 0)
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the node to place volumes and PX will be stopped in this node
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+		//Number of apps to be deployed
+		NumberOfDeployments := 200
+
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for j := 0; j < NumberOfDeployments; j++ {
+				taskName := fmt.Sprintf("test-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = fmt.Sprintf("Stop portworx,resize and validate pvc,destroy apps and check if the pvc's are deleted gracefully")
+		Step(stepLog, func() {
+			stepLog := fmt.Sprintf("Stop Portworx")
+			Step(stepLog, func() {
+				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+				StopVolDriverAndWait([]node.Node{selectedNode})
+			})
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				var err error
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.Infof("len of app volumes is : %v", len(appVolumes))
+					if len(appVolumes) == 0 {
+						log.Errorf("found no volumes for app %s", ctx.App.Key)
+					}
+				})
+
+				stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+					Inst().V.String(), ctx.App.Key, appVolumes)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						pvcs, err := GetContextPVCs(ctx)
+						log.FailOnError(err, "Failed to get pvc's from context")
+						for _, pvc := range pvcs {
+							pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+							pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+							pvcSizeInt, err := strconv.Atoi(pvcSize)
+							log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+							log.InfoD("Vol uid %v", resizedVol.ID)
+							requestedVols = append(requestedVols, resizedVol)
+						}
+					})
+				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+					ctx.App.Key, appVolumes)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						for _, v := range requestedVols {
+							// Need to pass token before validating volume
+							params := make(map[string]string)
+							if Inst().ConfigMap != "" {
+								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+								log.FailOnError(err, "didn't get auth token")
+							}
+							err := Inst().V.ValidateUpdateVolume(v, params)
+							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+						}
+					})
+			}
+			stepLog = fmt.Sprintf("Destroy Application")
+			Step(stepLog, func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for j := 0; j < NumberOfDeployments; j++ {
+					TearDownContext(contexts[j], opts)
+				}
+			})
+			stepLog = fmt.Sprintf("start portworx and wait for it to come up")
+			Step(stepLog, func() {
+				log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+				StartVolDriverAndWait([]node.Node{selectedNode})
+			})
+		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
