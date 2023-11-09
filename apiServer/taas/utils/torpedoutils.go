@@ -54,9 +54,9 @@ func GetNodes(c *gin.Context) {
 }
 
 // RebootNode - API Call to Reboot node :
-// pxone/rebootnode/all - Reboots all nodes in cluster
-// pxone/rebootnode/random - Reboots a randomly selected node
-// pxone/rebootnode/<nodename> - Reboots a node with specific node name
+// taas/rebootnode/all - Reboots all nodes in cluster
+// taas/rebootnode/random - Reboots a randomly selected node
+// taas/rebootnode/<nodename> - Reboots a node with specific node name
 func RebootNode(c *gin.Context) {
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{

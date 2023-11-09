@@ -1,0 +1,49 @@
+FROM golang:1.19.5-alpine AS build
+LABEL maintainer="avinash@portworx.com"
+ARG MAKE_TARGET
+
+WORKDIR /go/src/github.com/portworx/torpedo
+
+# Install setup dependencies
+RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
+
+# No need to copy *everything*. This keeps the cache useful
+COPY vendor vendor
+COPY Makefile Makefile
+COPY go.mod go.mod
+COPY go.sum go.sum
+COPY pkg pkg
+COPY porx porx
+COPY scripts scripts
+COPY drivers drivers
+COPY deployments deployments
+COPY apiServer apiServer
+
+# Why? Errors if this is removed
+COPY .git .git
+
+# copy tests last to allow caching of the previous docker image layers
+COPY tests tests
+
+# Compile
+RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
+
+# Build a fresh container with just the binaries
+FROM alpine
+
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+
+# Install kubectl from Docker Hub.
+COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
+
+# Install helm from Docker Hub
+COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
+
+# Install docker
+RUN apk add --update --no-cache docker
+
+# Copy binaries over from previous container
+COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
+
+ENTRYPOINT []
+CMD []

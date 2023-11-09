@@ -15,7 +15,7 @@ const (
 	fio                          = "fio"
 	mongodb                      = "mongodb"
 	pgbench                      = "pgbench"
-	testName                     = "pxone-automation"
+	testName                     = "taas-automation"
 	pxNameSpace                  = "kube-system"
 	defaultWaitRebootRetry       = 10 * time.Second
 	defaultCommandRetry          = 5 * time.Second
