@@ -9718,11 +9718,16 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 }
 
 // GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
-func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) (string, error) {
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string, enforceServerSideEncryption ...bool) (string, error) {
 
 	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
 	if len(encryptionPolicyValues) < 2 {
 		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
+	}
+	var enforceSse string
+	if len(enforceServerSideEncryption) == 0 {
+		// If enableServerSideEncryption is not passed , default it to true
+		enforceSse = "true"
 	}
 	policy := `{
 	   "Version": "2012-10-17",
@@ -9731,19 +9736,31 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 "Sid": "%s",
 			 "Effect": "Deny",
 			 "Principal": "*",
-			 "Action": ["s3:PutObject"],
+			 "Action": "s3:PutObject",
 			 "Resource": "arn:aws:s3:::%s/*",
 			 "Condition": {
 				"StringNotEquals": {
 				   "%s":"%s"
 				}
 			 }
-		  }
+		  },
+		  {
+			"Sid": "DenyUnencryptedObjectUploads",
+			"Effect": "Deny",
+			"Principal": "*",
+			"Action": "s3:PutObject",
+			"Resource": "arn:aws:s3:::%s/*",
+			"Condition": {
+				"Null": {
+					"%s":"%s"
+				}
+			}
+		  }	
 	   ]
 	}`
 
 	// Replace the placeholders in the policy with the values passed to the function.
-	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1], bucketName, encryptionPolicyValues[0], enforceSse)
 
 	return policy, nil
 }

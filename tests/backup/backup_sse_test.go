@@ -65,6 +65,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 	params := make(map[string]string)
 	k8sStorage := storage.Instance()
 	backupLocationMap := make(map[string]string)
+	namespaceBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy",
@@ -280,6 +281,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 						appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
 						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup after setting sse to true [%s]", backupName))
+						namespaceBackupMap[backupName] = appContextsToBackup
 					}(backupNameSpace, backupName)
 					backupsAfterSettingSseTrue = append(backupsAfterSettingSseTrue, backupName)
 				}
@@ -290,7 +292,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				restoreName := fmt.Sprintf("%s-%s-%v", "restore-after-bl-sse-true", RandomString(randomStringLength), time.Now().Unix())
-				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, namespaceBackupMap[backupsAfterSettingSseTrue[0]])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
 			})
