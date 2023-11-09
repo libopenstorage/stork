@@ -1,0 +1,16 @@
+
+##### Persistent volume claim ,  sc portworx-proxy-volume-volume is created in test NFSProxyVolumeValidation with dynamic nfs endpoint
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nfs-data
+  labels:
+    app: nginx
+spec:
+  storageClassName: portworx-proxy-volume-volume
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+

@@ -24,6 +24,33 @@ var _ = Describe("{DecommissionNode}", func() {
 	testName := "decommissionnode"
 	stepLog := "has to decommission a node and check if node was decommissioned successfully"
 	It(stepLog, func() {
+
+		if Contains(Inst().AppList, "nginx-proxy-deployment") {
+			var masterNode node.Node
+			stepLog = "setup proxy server necessary for proxy volume"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				masterNodes := node.GetMasterNodes()
+				if len(masterNodes) == 0 {
+					log.FailOnError(fmt.Errorf("no master nodes found"), "Identifying master node of proxy server failed")
+				}
+
+				masterNode = masterNodes[0]
+				err = SetupProxyServer(masterNode)
+				log.FailOnError(err, fmt.Sprintf("error setting up proxy server on master node %s", masterNode.Name))
+
+			})
+			stepLog = "create storage class for proxy volumes"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				addresses := masterNode.Addresses
+				if len(addresses) == 0 {
+					log.FailOnError(fmt.Errorf("no addresses found for node [%s]", masterNode.Name), "error getting ip addresses ")
+				}
+				err = CreateNFSProxyStorageClass("portworx-proxy-volume-volume", addresses[0], "/exports/testnfsexportdir")
+				log.FailOnError(err, "error creating storage class for proxy volume")
+			})
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -145,6 +172,7 @@ var _ = Describe("{DecommissionNode}", func() {
 				TearDownContext(ctx, opts)
 			}
 		})
+		PerformSystemCheck()
 
 	})
 	JustAfterEach(func() {

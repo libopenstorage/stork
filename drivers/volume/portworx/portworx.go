@@ -3617,8 +3617,8 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 func (d *portworx) RejoinNode(n *node.Node) error {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		TimeBeforeRetry: podUpRetryInterval,
+		Timeout:         10 * time.Minute,
 	}
 
 	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
