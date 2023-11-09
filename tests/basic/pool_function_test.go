@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -213,6 +214,31 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 				}
 			}
 		})
+	})
+
+	// test expansion request on a pool while a previous expansion is in progress is rejected
+	It("Expand a pool while a previous expansion is in progress", func() {
+		expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+		targetSize := poolToResize.TotalSize/units.GiB + 100
+		err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
+		// wait for expansion to start
+		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
+		// when the expansion has already completed.
+		time.Sleep(1)
+		// verify pool expansion is in progress
+		isExpandInProgress, expandErr := poolResizeIsInProgress(poolToResize)
+		if expandErr != nil {
+			log.Fatalf("Error checking if pool expansion is in progress: %v", expandErr)
+		}
+		if !isExpandInProgress {
+			log.Warnf("Pool expansion already finished. Skipping this test. Using a testing app that writes " +
+				"more data which may slow down add-disk type expansion. ")
+			return
+		}
+		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToResize.Uuid, expandType, targetSize+100, true)
+		dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
+		dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
+			"Pool expansion failure reason should be communicated to the user	")
 	})
 })
 
