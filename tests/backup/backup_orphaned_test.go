@@ -1775,15 +1775,15 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			err := backup.DeleteUser(user1)
 			log.FailOnError(err, "failed to delete user %s", user1)
 		})
-		Step(fmt.Sprintf("Delete user %s backups from the admin", user2), func() {
+		Step(fmt.Sprintf("Delete user %s backups from the admin", user1), func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user2))
+			log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user1))
 			for backupName := range userBackupMap[user1] {
 				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-				log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user2)
-				_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user2][SourceClusterName], orgID, ctx)
-				log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user2)
+				log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user1)
+				_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user1][SourceClusterName], orgID, ctx)
+				log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user1)
 			}
 		})
 		Step(fmt.Sprintf("Wait for the backups to be deleted"), func() {
