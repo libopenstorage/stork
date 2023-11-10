@@ -4638,11 +4638,7 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Type: api.BackupLocationInfo_Google,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
