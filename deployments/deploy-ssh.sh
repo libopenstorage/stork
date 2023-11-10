@@ -218,11 +218,9 @@ if [ -z "$TORPEDO_JOB_NAME" ]; then
     TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 
-ANTHOS_ADMIN_WS_NODE=""
 if [ -n "$ANTHOS_ADMIN_WS_NODE" ]; then
     ANTHOS_ADMIN_WS_NODE="${ANTHOS_ADMIN_WS_NODE}"
 fi
-ANTHOS_INST_PATH=""
 if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
