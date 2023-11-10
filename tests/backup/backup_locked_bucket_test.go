@@ -23,8 +23,9 @@ import (
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var (
-		appList  = Inst().AppList
-		credName string
+		appList      = Inst().AppList
+		credName     string
+		restoreNames []string
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -168,9 +169,10 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for range bkpNamespaces {
 				for _, backupName := range backupList {
-					restoreName := fmt.Sprintf("%s-restore", backupName)
+					restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 					err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+					restoreNames = append(restoreNames, restoreName)
 				}
 			}
 		})
@@ -181,6 +183,13 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
 
 		log.InfoD("Deleting backup location and cloud setting")
 		for backupLocationUID, backupLocationName := range BackupLocationMap {
@@ -193,7 +202,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			err := DeleteCloudCredential(CredName, orgID, CloudCredUID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
@@ -220,6 +229,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		credName             string
 		volumeMounts         []string
 		podList              []v1.Pod
+		restoreNames         []string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -349,8 +359,10 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				for _, backupName = range backupList {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
-					err = CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
+					restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+					err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 					log.FailOnError(err, "%s restore failed", fmt.Sprintf("%s-restore", backupName))
+					restoreNames = append(restoreNames, restoreName)
 				}
 			})
 			Step("Getting size before resize", func() {
@@ -432,8 +444,15 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 
-		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+
+		log.InfoD("Deleting backup location, cloud creds and clusters")
+		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
@@ -708,6 +727,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		numberOfUsers                                  = 1
 		numberOfBackups                                = 1
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
+		restoreNames               []string
 	)
 
 	JustBeforeEach(func() {
@@ -871,8 +891,9 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 				}
 				for backupName, namespace := range userBackupMap[user] {
 					wg.Add(1)
-					restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+					restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 					go createRestore(backupName, restoreName, namespace)
+					restoreNames = append(restoreNames, restoreName)
 				}
 				wg.Wait()
 				log.Infof("The list of user restores taken are: %v", userRestoreMap)
@@ -1029,6 +1050,14 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+
 		cleanupUserObjects := func(user string) {
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user)
@@ -1039,7 +1068,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 			err = backup.DeleteUser(user)
 			log.FailOnError(err, "failed to delete user %s", user)
 		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
 		log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })
