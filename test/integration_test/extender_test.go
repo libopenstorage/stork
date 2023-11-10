@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
@@ -27,6 +28,7 @@ const (
 )
 
 func TestExtender(t *testing.T) {
+	dash.TestSetBegin(dash.TestSet)
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
@@ -274,10 +276,13 @@ func poolMaintenanceTest(t *testing.T) {
 }
 
 func pvcOwnershipTest(t *testing.T) {
+	dash.TestCaseBegin("PVC ownership", "Validating PVC ownership", "", nil)
+	defer dash.TestCaseEnd()
 	var testrailID, testResult = 50781, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
+	log.InfoD("Schedule mysql app")
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "ownershiptest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-repl-1"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -296,6 +301,7 @@ func pvcOwnershipTest(t *testing.T) {
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
 	for _, spec := range ctxs[0].App.SpecList {
+		log.InfoD("Delete storage class.")
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
 			err := storage.Instance().DeleteStorageClass(obj.Name)
 			require.NoError(t, err, "Error deleting storage class for mysql.")
@@ -303,12 +309,14 @@ func pvcOwnershipTest(t *testing.T) {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			updatePVC, err := core.Instance().GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			require.NoError(t, err, "Error getting persistent volume claim.")
+			log.InfoD("Delete storage class annotation on PVC: %s", updatePVC.Name)
 			delete(updatePVC.Annotations, annotationStorageProvisioner)
 			_, err = core.Instance().UpdatePersistentVolumeClaim(updatePVC)
 			require.NoError(t, err, "Error updating annotations in PVC.")
 		}
 	}
 
+	log.InfoD("Stop volume driver on scheduled node: %s", scheduledNodes[0].Name)
 	err = volumeDriver.StopDriver(scheduledNodes, false, nil)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	// make sure to start driver if test failed

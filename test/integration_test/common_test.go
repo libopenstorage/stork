@@ -4,8 +4,10 @@
 package integrationtest
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
 	"sort"
@@ -40,6 +42,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
@@ -135,6 +138,12 @@ const (
 	testrailUserNameVar        = "TESTRAIL_USERNAME"
 	testrailPasswordVar        = "TESTRAIL_PASSWORD"
 	testrailMilestoneVar       = "TESTRAIL_MILESTONE"
+
+	testUser        = "nouser"
+	testProduct     = "Stork"
+	testDescription = ""
+	testBranch      = ""
+	testType        = "stork integration test"
 )
 
 var nodeDriver node.Driver
@@ -165,6 +174,8 @@ var testrailPassword string
 var testrailSetupSuccessful bool
 var bidirectionalClusterpair bool
 var unidirectionalClusterpair bool
+
+var dash *aetosutil.Dashboard
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -321,6 +332,22 @@ func setup() error {
 		return fmt.Errorf("TEST_MODE environment variable not set for stork: %v", err)
 	}
 	SetupTestRail()
+	dash = aetosutil.Get()
+	if !isDashboardReachable() {
+		log.Infof("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+	}
+
+	dash.IsEnabled = true
+	testSet := aetosutil.TestSet{
+		User:        testUser,
+		Product:     testProduct,
+		Description: testDescription,
+		Branch:      testBranch,
+		TestType:    testType,
+		Tags:        make(map[string]string),
+		Status:      aetosutil.NOTSTARTED,
+	}
+	dash.TestSet = &testSet
 
 	return nil
 }
@@ -1890,4 +1917,28 @@ func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
 	}
 
 	return operatorAppToCRMap
+}
+
+func isDashboardReachable() bool {
+	timeout := 15 * time.Second
+	client := &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
+	log.Infof("Checking URL: %s", aboutURL)
+	response, err := client.Get(aboutURL)
+
+	if err != nil {
+		log.Warn(err.Error())
+		return false
+	}
+	if response.StatusCode == 200 {
+		return true
+	}
+	return false
 }
