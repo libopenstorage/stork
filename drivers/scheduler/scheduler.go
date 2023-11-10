@@ -120,6 +120,8 @@ type InitOptions struct {
 	AnthosAdminWorkStationNodeIP string
 	// AnthosInstancePath needed for anthos scheduler
 	AnthosInstancePath string
+	// UpgradeHops needed for a scheduler like Anthos to decide whether to upgrade admin cluster
+	UpgradeHops string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

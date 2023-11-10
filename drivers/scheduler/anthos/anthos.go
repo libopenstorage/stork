@@ -161,12 +161,13 @@ type AnthosInstance struct {
 type anthos struct {
 	version string
 	kube.K8s
-	adminWsSSHInstance *ssh.SSH
-	instances          []AnthosInstance
-	adminWsNode        *node.Node
-	adminWsKeyPath     string
-	instPath           string
-	confPath           string
+	adminWsSSHInstance  *ssh.SSH
+	instances           []AnthosInstance
+	adminWsNode         *node.Node
+	adminWsKeyPath      string
+	instPath            string
+	confPath            string
+	adminClusterUpgrade bool
 }
 
 // Init Initialize the driver
@@ -200,6 +201,10 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if err := anth.getVersion(); err != nil {
 		return err
 	}
+	if len(schedOpts.UpgradeHops) > 0 && len(strings.Split(schedOpts.UpgradeHops, ",")) > 1 {
+		anth.adminClusterUpgrade = true
+	}
+	log.Infof("Skip admin cluster upgrade is: [%t]", anth.adminClusterUpgrade)
 	return nil
 }
 
@@ -268,8 +273,10 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
 		return err
 	}
-	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
-		return err
+	if anth.adminClusterUpgrade {
+		if err := anth.invokeUpgradeAdminCluster(version); err != nil {
+			return err
+		}
 	}
 	return nil
 }

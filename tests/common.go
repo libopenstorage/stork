@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -510,6 +511,7 @@ func InitInstance() {
 		SecureApps:                       Inst().SecureAppList,
 		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
 		AnthosInstancePath:               Inst().AnthosInstPath,
+		UpgradeHops:                      Inst().SchedUpgradeHops,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
