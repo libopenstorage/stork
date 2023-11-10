@@ -721,6 +721,14 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: NUM_VCLUSTERS
+      value: "${NUM_VCLUSTERS}"
+    - name: VCLUSTER_PARALLEL_APPS
+      value: "${VCLUSTER_PARALLEL_APPS}"
+    - name: VCLUSTER_TOTAL_ITERATIONS
+      value: "${VCLUSTER_TOTAL_ITERATIONS}"
+
+
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

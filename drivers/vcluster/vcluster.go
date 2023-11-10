@@ -901,6 +901,15 @@ func (v *VCluster) WaitForVClusterAccess() error {
 			return nil, false, nil
 		}
 	}
-	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
+	_, err := task.DoRetryWithTimeout(f, VclusterAppTimeout, VClusterRetryInterval)
 	return err
+}
+
+// ReadEnvVariable reads env variable and returns the value
+func ReadEnvVariable(envVar string) string {
+	envValue, present := os.LookupEnv(envVar)
+	if present {
+		return envValue
+	}
+	return ""
 }
