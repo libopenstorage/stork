@@ -296,7 +296,7 @@ func TestCreateMigrationScheduleWithIntervalAndVerify(t *testing.T) {
 	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
 	//create admin cluster pair in default admin namespace
 	createClusterPair(t, adminClusterPair, "kube-system", "async-dr")
-	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair, "admin-cluster-pair", adminClusterPair,
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair, "--admin-cluster-pair", adminClusterPair,
 		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace}
 	expected := "MigrationSchedule createmigrationschedule created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
