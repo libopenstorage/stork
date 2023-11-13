@@ -89,7 +89,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 				ValidateDeployments(resourceTemp, storageOp, config, int(ds.ScaleReplicas), dsVersionBuildMap)
-				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
 
 			}
 		})
@@ -272,7 +272,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 				log.FailOnError(err, "Error while fetching versions/image information")
 
 				ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
-				dash.VerifyFatal(config.Spec.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
+				dash.VerifyFatal(config.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
 			}
 
 		})

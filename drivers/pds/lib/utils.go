@@ -1,11 +1,15 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"math/rand"
 	"net/http"
 	"os"
@@ -118,65 +122,422 @@ type StorageOptions struct {
 	VolumeGroup bool
 }
 
-type StorageClassConfig struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
+type DBConfig struct {
+	APIVersion string `yaml:"apiVersion"`
+	Kind       string `yaml:"kind"`
 	Metadata   struct {
 		Annotations struct {
-		} `json:"annotations"`
-		Labels struct {
-			Name                           string `json:"name"`
-			Namespace                      string `json:"namespace"`
-			PdsMutatorAdmit                string `json:"pds.mutator/admit"`
-			PdsMutatorInjectCustomRegistry string `json:"pds.mutator/injectCustomRegistry"`
-			PdsDeploymentID                string `json:"pds/deployment-id"`
-			PdsDeploymentName              string `json:"pds/deployment-name"`
-			PdsEnvironment                 string `json:"pds/environment"`
-			PdsProjectID                   string `json:"pds/project-id"`
-		} `json:"labels"`
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
-	} `json:"metadata"`
+			AdDatadoghqComElasticsearchCheckNames  string `yaml:"ad.datadoghq.com/elasticsearch.check_names"`
+			AdDatadoghqComElasticsearchInitConfigs string `yaml:"ad.datadoghq.com/elasticsearch.init_configs"`
+			AdDatadoghqComElasticsearchInstances   string `yaml:"ad.datadoghq.com/elasticsearch.instances"`
+			AdDatadoghqComElasticsearchLogs        string `yaml:"ad.datadoghq.com/elasticsearch.logs"`
+			StorkLibopenstorageOrgSkipResource     string `yaml:"stork.libopenstorage.org/skip-resource"`
+		} `yaml:"annotations"`
+		CreationTimestamp time.Time `yaml:"creationTimestamp"`
+		Finalizers        []string  `yaml:"finalizers"`
+		Generation        int       `yaml:"generation"`
+		Labels            struct {
+			Name                           string `yaml:"name"`
+			Namespace                      string `yaml:"namespace"`
+			PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+			PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+			PdsDeploymentID                string `yaml:"pds/deployment-id"`
+			PdsDeploymentName              string `yaml:"pds/deployment-name"`
+			PdsEnvironment                 string `yaml:"pds/environment"`
+			PdsProjectID                   string `yaml:"pds/project-id"`
+		} `yaml:"labels"`
+		Name            string `yaml:"name"`
+		Namespace       string `yaml:"namespace"`
+		OwnerReferences []struct {
+			APIVersion         string `yaml:"apiVersion"`
+			BlockOwnerDeletion bool   `yaml:"blockOwnerDeletion"`
+			Controller         bool   `yaml:"controller"`
+			Kind               string `yaml:"kind"`
+			Name               string `yaml:"name"`
+			UID                string `yaml:"uid"`
+		} `yaml:"ownerReferences"`
+		ResourceVersion string `yaml:"resourceVersion"`
+		UID             string `yaml:"uid"`
+	} `yaml:"metadata"`
 	Spec struct {
-		Capabilities struct {
-			PdsRestore     string `json:"pds_restore"`
-			PdsSystemUsers string `json:"pds_system_users"`
-		} `json:"capabilities"`
-		Configuration struct {
-			PGDATABASE string `json:"PG_DATABASE"`
-		} `json:"configuration"`
-		DNSZone    string      `json:"dnsZone"`
-		Image      string      `json:"image"`
-		ImageBuild string      `json:"imageBuild"`
-		Images     interface{} `json:"images"`
-		Initialize string      `json:"initialize"`
-		Nodes      int32       `json:"nodes"`
-		Resources  struct {
-			Limits struct {
-				CPU    string `json:"cpu"`
-				Memory string `json:"memory"`
-			} `json:"limits"`
-			Requests struct {
-				CPU     string `json:"cpu"`
-				Memory  string `json:"memory"`
-				Storage string `json:"storage"`
-			} `json:"requests"`
-		} `json:"resources"`
-		ServiceType  string `json:"serviceType"`
-		StorageClass struct {
-			Provisioner string `json:"provisioner"`
-		} `json:"storageClass"`
-		StorageOptions struct {
-			Filesystem  string `json:"filesystem"`
-			ForceSpread string `json:"forceSpread"`
-			Replicas    string `json:"replicas"`
-			Secure      string `json:"secure"`
-		} `json:"storageOptions"`
-		TLSEnabled  bool   `json:"tlsEnabled"`
-		TLSIssuer   string `json:"tlsIssuer"`
-		Version     string `json:"version"`
-		VersionName string `json:"versionName"`
-	} `json:"spec"`
+		Application      string `yaml:"application"`
+		ApplicationShort string `yaml:"applicationShort"`
+		Capabilities     struct {
+			ParallelPod    string `yaml:"parallel_pod"`
+			PdsRestore     string `yaml:"pds_restore"`
+			PdsSystemUsers string `yaml:"pds_system_users"`
+		} `yaml:"capabilities"`
+		ConfigMapData struct {
+			CLUSTERNAME        string `yaml:"CLUSTER_NAME"`
+			DESIREDREPLICAS    string `yaml:"DESIRED_REPLICAS"`
+			DISCOVERYSEEDHOSTS string `yaml:"DISCOVERY_SEED_HOSTS"`
+			HEAPSIZE           string `yaml:"HEAP_SIZE"`
+		} `yaml:"configMapData"`
+		Datastorage struct {
+			Name                 string `yaml:"name"`
+			NumVolumes           int    `yaml:"numVolumes"`
+			PersistentVolumeSpec struct {
+				Metadata struct {
+					Annotations struct {
+						StorkLibopenstorageOrgSkipResource string `yaml:"stork.libopenstorage.org/skip-resource"`
+						XPlacementStrategy                 string `yaml:"x-placement_strategy"`
+					} `yaml:"annotations"`
+					Name string `yaml:"name"`
+				} `yaml:"metadata"`
+				Spec struct {
+					AccessModes []string `yaml:"accessModes"`
+					Resources   struct {
+						Requests struct {
+							Storage string `yaml:"storage"`
+						} `yaml:"requests"`
+					} `yaml:"resources"`
+				} `yaml:"spec"`
+				Status struct {
+				} `yaml:"status"`
+			} `yaml:"persistentVolumeSpec"`
+			StorageClass struct {
+				AllowVolumeExpansion bool `yaml:"allowVolumeExpansion"`
+				Metadata             struct {
+					Annotations struct {
+						StorkLibopenstorageOrgSkipResource string `yaml:"stork.libopenstorage.org/skip-resource"`
+					} `yaml:"annotations"`
+					Name string `yaml:"name"`
+				} `yaml:"metadata"`
+				Parameters struct {
+					DisableIoProfileProtection string `yaml:"disable_io_profile_protection"`
+					Fg                         string `yaml:"fg"`
+					Fs                         string `yaml:"fs"`
+					Group                      string `yaml:"group"`
+					IoProfile                  string `yaml:"io_profile"`
+					PriorityIo                 string `yaml:"priority_io"`
+					Repl                       string `yaml:"repl"`
+				} `yaml:"parameters"`
+				Provisioner       string `yaml:"provisioner"`
+				ReclaimPolicy     string `yaml:"reclaimPolicy"`
+				VolumeBindingMode string `yaml:"volumeBindingMode"`
+			} `yaml:"storageClass"`
+		} `yaml:"datastorage"`
+		DisruptionBudget struct {
+			MaxUnavailable int `yaml:"maxUnavailable"`
+		} `yaml:"disruptionBudget"`
+		Environment string `yaml:"environment"`
+		Initialize  string `yaml:"initialize"`
+		RoleRules   []struct {
+			APIGroups     []string `yaml:"apiGroups"`
+			ResourceNames []string `yaml:"resourceNames"`
+			Resources     []string `yaml:"resources"`
+			Verbs         []string `yaml:"verbs"`
+		} `yaml:"roleRules"`
+		Service  string `yaml:"service"`
+		Services []struct {
+			DNSZone  string `yaml:"dnsZone"`
+			Metadata struct {
+			} `yaml:"metadata"`
+			Name    string `yaml:"name"`
+			Publish string `yaml:"publish"`
+			Spec    struct {
+				ClusterIP string `yaml:"clusterIP"`
+				Ports     []struct {
+					Name       string `yaml:"name"`
+					Port       int    `yaml:"port"`
+					Protocol   string `yaml:"protocol"`
+					TargetPort int    `yaml:"targetPort"`
+				} `yaml:"ports"`
+				PublishNotReadyAddresses bool   `yaml:"publishNotReadyAddresses"`
+				Type                     string `yaml:"type"`
+			} `yaml:"spec,omitempty"`
+		} `yaml:"services"`
+		SharedStorage struct {
+			PersistentVolumeClaim struct {
+				Metadata struct {
+					Annotations struct {
+						StorkLibopenstorageOrgSkipResource         string `yaml:"stork.libopenstorage.org/skip-resource"`
+						StorkLibopenstorageOrgSkipSchedulerScoring string `yaml:"stork.libopenstorage.org/skipSchedulerScoring"`
+					} `yaml:"annotations"`
+					Name string `yaml:"name"`
+				} `yaml:"metadata"`
+				Spec struct {
+					AccessModes []string `yaml:"accessModes"`
+					Resources   struct {
+						Requests struct {
+							Storage string `yaml:"storage"`
+						} `yaml:"requests"`
+					} `yaml:"resources"`
+					StorageClassName string `yaml:"storageClassName"`
+				} `yaml:"spec"`
+				Status struct {
+				} `yaml:"status"`
+			} `yaml:"persistentVolumeClaim"`
+			StorageClass struct {
+				AllowVolumeExpansion bool `yaml:"allowVolumeExpansion"`
+				Metadata             struct {
+					Annotations struct {
+						StorkLibopenstorageOrgSkipResource string `yaml:"stork.libopenstorage.org/skip-resource"`
+					} `yaml:"annotations"`
+					Name string `yaml:"name"`
+				} `yaml:"metadata"`
+				Parameters struct {
+					Fs       string `yaml:"fs"`
+					Repl     string `yaml:"repl"`
+					Sharedv4 string `yaml:"sharedv4"`
+				} `yaml:"parameters"`
+				Provisioner       string `yaml:"provisioner"`
+				ReclaimPolicy     string `yaml:"reclaimPolicy"`
+				VolumeBindingMode string `yaml:"volumeBindingMode"`
+			} `yaml:"storageClass"`
+		} `yaml:"sharedStorage"`
+		StatefulSet struct {
+			PodManagementPolicy string `yaml:"podManagementPolicy"`
+			Replicas            int    `yaml:"replicas"`
+			Selector            struct {
+				MatchLabels struct {
+					Name                           string `yaml:"name"`
+					Namespace                      string `yaml:"namespace"`
+					PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+					PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+					PdsDeploymentID                string `yaml:"pds/deployment-id"`
+					PdsDeploymentName              string `yaml:"pds/deployment-name"`
+					PdsEnvironment                 string `yaml:"pds/environment"`
+					PdsProjectID                   string `yaml:"pds/project-id"`
+				} `yaml:"matchLabels"`
+			} `yaml:"selector"`
+			ServiceName string `yaml:"serviceName"`
+			Template    struct {
+				Metadata struct {
+					Annotations struct {
+						AdDatadoghqComElasticsearchCheckNames  string `yaml:"ad.datadoghq.com/elasticsearch.check_names"`
+						AdDatadoghqComElasticsearchInitConfigs string `yaml:"ad.datadoghq.com/elasticsearch.init_configs"`
+						AdDatadoghqComElasticsearchInstances   string `yaml:"ad.datadoghq.com/elasticsearch.instances"`
+						AdDatadoghqComElasticsearchLogs        string `yaml:"ad.datadoghq.com/elasticsearch.logs"`
+						PdsPortworxComDataService              string `yaml:"pds.portworx.com/data_service"`
+						PrometheusIoPort                       string `yaml:"prometheus.io/port"`
+						PrometheusIoScrape                     string `yaml:"prometheus.io/scrape"`
+						StorkLibopenstorageOrgSkipResource     string `yaml:"stork.libopenstorage.org/skip-resource"`
+					} `yaml:"annotations"`
+					Labels struct {
+						Name                           string `yaml:"name"`
+						Namespace                      string `yaml:"namespace"`
+						PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+						PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+						PdsDeploymentID                string `yaml:"pds/deployment-id"`
+						PdsDeploymentName              string `yaml:"pds/deployment-name"`
+						PdsEnvironment                 string `yaml:"pds/environment"`
+						PdsProjectID                   string `yaml:"pds/project-id"`
+					} `yaml:"labels"`
+				} `yaml:"metadata"`
+				Spec struct {
+					Affinity struct {
+						NodeAffinity struct {
+							RequiredDuringSchedulingIgnoredDuringExecution struct {
+								NodeSelectorTerms []struct {
+									MatchExpressions []struct {
+										Key      string   `yaml:"key"`
+										Operator string   `yaml:"operator"`
+										Values   []string `yaml:"values"`
+									} `yaml:"matchExpressions"`
+								} `yaml:"nodeSelectorTerms"`
+							} `yaml:"requiredDuringSchedulingIgnoredDuringExecution"`
+						} `yaml:"nodeAffinity"`
+					} `yaml:"affinity"`
+					Containers []struct {
+						Env []struct {
+							Name  string `yaml:"name"`
+							Value string `yaml:"value"`
+						} `yaml:"env"`
+						EnvFrom []struct {
+							ConfigMapRef struct {
+								Name string `yaml:"name"`
+							} `yaml:"configMapRef"`
+						} `yaml:"envFrom,omitempty"`
+						Image           string `yaml:"image"`
+						ImagePullPolicy string `yaml:"imagePullPolicy,omitempty"`
+						Name            string `yaml:"name"`
+						Resources       struct {
+							Limits struct {
+								CPU              string `yaml:"cpu"`
+								EphemeralStorage string `yaml:"ephemeral-storage"`
+								Memory           string `yaml:"memory"`
+							} `yaml:"limits"`
+							Requests struct {
+								CPU              string `yaml:"cpu"`
+								EphemeralStorage string `yaml:"ephemeral-storage"`
+								Memory           string `yaml:"memory"`
+							} `yaml:"requests"`
+						} `yaml:"resources"`
+						SecurityContext struct {
+							AllowPrivilegeEscalation bool `yaml:"allowPrivilegeEscalation"`
+							Capabilities             struct {
+								Drop []string `yaml:"drop"`
+							} `yaml:"capabilities"`
+						} `yaml:"securityContext"`
+						StartupProbe struct {
+							Exec struct {
+								Command []string `yaml:"command"`
+							} `yaml:"exec"`
+							FailureThreshold int `yaml:"failureThreshold"`
+							TimeoutSeconds   int `yaml:"timeoutSeconds"`
+						} `yaml:"startupProbe,omitempty"`
+						VolumeMounts []struct {
+							MountPath string `yaml:"mountPath"`
+							Name      string `yaml:"name"`
+						} `yaml:"volumeMounts"`
+						LivenessProbe struct {
+							FailureThreshold int `yaml:"failureThreshold"`
+							HTTPGet          struct {
+								Path string `yaml:"path"`
+								Port int    `yaml:"port"`
+							} `yaml:"httpGet"`
+							PeriodSeconds    int `yaml:"periodSeconds"`
+							SuccessThreshold int `yaml:"successThreshold"`
+							TimeoutSeconds   int `yaml:"timeoutSeconds"`
+						} `yaml:"livenessProbe,omitempty"`
+						Ports []struct {
+							ContainerPort int    `yaml:"containerPort"`
+							Protocol      string `yaml:"protocol"`
+						} `yaml:"ports,omitempty"`
+						ReadinessProbe struct {
+							FailureThreshold int `yaml:"failureThreshold"`
+							HTTPGet          struct {
+								Path string `yaml:"path"`
+								Port int    `yaml:"port"`
+							} `yaml:"httpGet"`
+							PeriodSeconds    int `yaml:"periodSeconds"`
+							SuccessThreshold int `yaml:"successThreshold"`
+							TimeoutSeconds   int `yaml:"timeoutSeconds"`
+						} `yaml:"readinessProbe,omitempty"`
+					} `yaml:"containers"`
+					InitContainers []struct {
+						Env []struct {
+							Name  string `yaml:"name"`
+							Value string `yaml:"value"`
+						} `yaml:"env"`
+						EnvFrom []struct {
+							ConfigMapRef struct {
+								Name string `yaml:"name"`
+							} `yaml:"configMapRef"`
+						} `yaml:"envFrom"`
+						Image           string `yaml:"image"`
+						ImagePullPolicy string `yaml:"imagePullPolicy"`
+						Name            string `yaml:"name"`
+						Resources       struct {
+							Limits struct {
+								CPU              string `yaml:"cpu"`
+								EphemeralStorage string `yaml:"ephemeral-storage"`
+								Memory           string `yaml:"memory"`
+							} `yaml:"limits"`
+							Requests struct {
+								CPU              string `yaml:"cpu"`
+								EphemeralStorage string `yaml:"ephemeral-storage"`
+								Memory           string `yaml:"memory"`
+							} `yaml:"requests"`
+						} `yaml:"resources"`
+						SecurityContext struct {
+							AllowPrivilegeEscalation bool `yaml:"allowPrivilegeEscalation"`
+							Capabilities             struct {
+								Drop []string `yaml:"drop"`
+							} `yaml:"capabilities"`
+						} `yaml:"securityContext"`
+						VolumeMounts []struct {
+							MountPath string `yaml:"mountPath"`
+							Name      string `yaml:"name"`
+						} `yaml:"volumeMounts"`
+					} `yaml:"initContainers"`
+					SchedulerName   string `yaml:"schedulerName"`
+					SecurityContext struct {
+						FsGroup             int    `yaml:"fsGroup"`
+						FsGroupChangePolicy string `yaml:"fsGroupChangePolicy"`
+						RunAsGroup          int    `yaml:"runAsGroup"`
+						RunAsNonRoot        bool   `yaml:"runAsNonRoot"`
+						RunAsUser           int    `yaml:"runAsUser"`
+						SeccompProfile      struct {
+							Type string `yaml:"type"`
+						} `yaml:"seccompProfile"`
+					} `yaml:"securityContext"`
+					ServiceAccountName            string `yaml:"serviceAccountName"`
+					TerminationGracePeriodSeconds int    `yaml:"terminationGracePeriodSeconds"`
+					Volumes                       []struct {
+						EmptyDir struct {
+						} `yaml:"emptyDir,omitempty"`
+						Name                  string `yaml:"name"`
+						PersistentVolumeClaim struct {
+							ClaimName string `yaml:"claimName"`
+						} `yaml:"persistentVolumeClaim,omitempty"`
+						Secret struct {
+							SecretName string `yaml:"secretName"`
+						} `yaml:"secret,omitempty"`
+					} `yaml:"volumes"`
+				} `yaml:"spec"`
+			} `yaml:"template"`
+			UpdateStrategy struct {
+				Type string `yaml:"type"`
+			} `yaml:"updateStrategy"`
+		} `yaml:"statefulSet"`
+		Type string `yaml:"type"`
+	} `yaml:"spec"`
+	Status struct {
+		ConnectionDetails struct {
+			Nodes []string `yaml:"nodes"`
+			Ports struct {
+				Rest      int `yaml:"rest"`
+				Transport int `yaml:"transport"`
+			} `yaml:"ports"`
+		} `yaml:"connectionDetails"`
+		Health      string `yaml:"health"`
+		Initialized string `yaml:"initialized"`
+		Pods        []struct {
+			IP         string `yaml:"ip"`
+			Name       string `yaml:"name"`
+			WorkerNode string `yaml:"workerNode"`
+		} `yaml:"pods"`
+		ReadyReplicas  int `yaml:"readyReplicas"`
+		Replicas       int `yaml:"replicas"`
+		ResourceEvents []struct {
+			Resource struct {
+				APIGroup string `yaml:"apiGroup"`
+				Kind     string `yaml:"kind"`
+				Name     string `yaml:"name"`
+			} `yaml:"resource"`
+		} `yaml:"resourceEvents"`
+		Resources []struct {
+			Conditions []struct {
+				LastTransitionTime time.Time `yaml:"lastTransitionTime"`
+				Message            string    `yaml:"message"`
+				Reason             string    `yaml:"reason"`
+				Status             string    `yaml:"status"`
+				Type               string    `yaml:"type"`
+			} `yaml:"conditions"`
+			Resource struct {
+				Kind string `yaml:"kind"`
+				Name string `yaml:"name"`
+			} `yaml:"resource"`
+		} `yaml:"resources"`
+	} `yaml:"status"`
+}
+
+type StorageClassConfig struct {
+	Parameters struct {
+		DisableIoProfileProtection string `yaml:"disable_io_profile_protection"`
+		Fg                         string `yaml:"fg"`
+		Fs                         string `yaml:"fs"`
+		Group                      string `yaml:"group"`
+		IoProfile                  string `yaml:"io_profile"`
+		PriorityIo                 string `yaml:"priority_io"`
+		Repl                       string `yaml:"repl"`
+	} `yaml:"parameters"`
+	Replicas  int      `yaml:"replicas"`
+	Version   string   `yaml:"version"`
+	Resources struct { //custom struct
+		Limits struct {
+			CPU              string `yaml:"cpu"`
+			EphemeralStorage string `yaml:"ephemeral-storage"`
+			Memory           string `yaml:"memory"`
+		} `yaml:"limits"`
+		Requests struct {
+			CPU              string `yaml:"cpu"`
+			EphemeralStorage string `yaml:"ephemeral-storage"`
+			Memory           string `yaml:"memory"`
+		} `yaml:"requests"`
+	} `yaml:"resources"`
 }
 
 // PDS const
@@ -1906,71 +2267,6 @@ func GetDataServiceID(ds string) string {
 	return dataServiceID
 }
 
-// DeployAllDataServices deploys all dataservices, versions and images that are supported
-func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID string,
-	dataServiceNameDefaultAppConfigMap map[string]string, replicas int32, serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string,
-	storageTemplateID string, namespace string) (map[string][]*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
-
-	currentReplicas = replicas
-
-	for ds, id := range supportedDataServicesMap {
-		log.Infof("dataService: %v ", ds)
-		log.Infof(`Request params:
-				projectID- %v deploymentTargetID - %v,
-				dnsZone - %v,deploymentName - %v,namespaceID - %v
-				App config ID - %v,
-				num pods- %v, service-type - %v
-				Resource template id - %v, storageTemplateID - %v`,
-			projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[ds],
-			replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[ds], storageTemplateID)
-
-		if ds == zookeeper && replicas != 3 {
-			log.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
-			currentReplicas = 3
-		}
-		if ds == redis {
-			log.Infof("Replicas passed %v", replicas)
-			log.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
-		}
-
-		//clearing up the previous entries of dataServiceImageMap
-		for image := range dataServiceImageMap {
-			delete(dataServiceImageMap, image)
-		}
-
-		dataServiceVersionBuildMap, dataServiceImageMap, err = GetAllVersionsImages(id)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		for version := range dataServiceImageMap {
-			for index := range dataServiceImageMap[version] {
-				imageID := dataServiceImageMap[version][index]
-				log.Infof("VersionID %v ImageID %v", version, imageID)
-				components = pdsapi.NewComponents(apiClient)
-				deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
-					deploymentTargetID,
-					dnsZone,
-					deploymentName,
-					namespaceID,
-					dataServiceNameDefaultAppConfigMap[ds],
-					imageID,
-					currentReplicas,
-					serviceType,
-					dataServiceDefaultResourceTemplateIDMap[ds],
-					storageTemplateID)
-
-				if err != nil {
-					log.Warnf("An Error Occured while creating deployment %v", err)
-					return nil, nil, nil, err
-				}
-				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)
-			}
-		}
-	}
-	return deploymentsMap, dataServiceImageMap, dataServiceVersionBuildMap, nil
-}
-
 // UpdateDataServiceVerison modifies the existing deployment version/image
 func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, dsVersion string) (*pds.ModelsDeployment, error) {
 
@@ -2053,13 +2349,35 @@ func GetAllSupportedDataServices() map[string]string {
 	return dataServiceNameIDMap
 }
 
-// ValidateDataServiceVolumes validates the volumes
+// GetCRObject
+func GetCRObject(namespace, group, version, resource string) (*unstructured.UnstructuredList, error) {
+	_, config, err := pdsdriver.GetK8sContext()
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicClient := dynamic.NewForConfigOrDie(config)
+
+	// Get the GVR of the CRD.
+	gvr := metav1.GroupVersionResource{
+		Group:    group,
+		Version:  version,
+		Resource: resource,
+	}
+	objects, err := dynamicClient.Resource(schema.GroupVersionResource(gvr)).Namespace(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return objects, nil
+}
+
+// ValidateDataServiceVolumes validates the storage configurations
 func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateID string, storageTemplateID string, namespace string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
 	var config StorageClassConfig
 	var resourceTemp ResourceSettingTemplate
 	var storageOp StorageOptions
-
-	//TODO: Identity a way to validate PVC without statefulset
+	var dbConfig DBConfig
 
 	labelSelector := make(map[string]string)
 	labelSelector["name"] = deployment.GetClusterResourceName()
@@ -2068,23 +2386,49 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 		log.FailOnError(err, "An error occured while getting storage classes")
 	}
 
-	for _, sc := range storageClasses.Items {
-		if strings.Contains(sc.Name, deployment.GetClusterResourceName()) {
-			log.Debug("Getting config from storage class %v", sc.Name)
-			scAnnotation := sc.Annotations
-			for k, v := range scAnnotation {
-				if k == "kubectl.kubernetes.io/last-applied-configuration" {
-					log.Infof("Storage Options Values %v", v)
-					data := []byte(v)
-					err := json.Unmarshal(data, &config)
-					if err != nil {
-						log.Errorf("Error Occured while getting volume params %v", err)
-					}
-				}
+	objects, err := GetCRObject(namespace, "deployments.pds.io", "v1", "databases")
+
+	// Iterate over the CRD objects and print their names.
+	for _, object := range objects.Items {
+		log.Debugf("Objects created: %v", object.GetName())
+		if object.GetName() == deployment.GetClusterResourceName() {
+			crJsonObject, err := object.MarshalJSON()
+			if err != nil {
+				log.FailOnError(err, "An error occured while marshalling cr")
 			}
-			break
+			err = json.Unmarshal(crJsonObject, &dbConfig)
+			if err != nil {
+				log.FailOnError(err, "An error occured while unmarshalling cr")
+			}
 		}
 	}
+
+	//Get the ds version from the sts
+	docImage := dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Image
+	dsVersionImageTag := strings.Split(docImage, ":")
+	log.Debugf("version tag %v", dsVersionImageTag[1])
+
+	scJsonData, err := json.Marshal(storageClasses)
+	if err != nil {
+		log.FailOnError(err, "An error occured while marshalling statefulset")
+	}
+	err = json.Unmarshal(scJsonData, &config)
+	if err != nil {
+		log.FailOnError(err, "An error occured while unmarshalling storage class")
+	}
+
+	//Assigning values to the custom struct of storageclass config
+	config.Resources.Requests.CPU = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Requests.CPU
+	config.Resources.Requests.Memory = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Requests.Memory
+	config.Resources.Requests.EphemeralStorage = dbConfig.Spec.Datastorage.PersistentVolumeSpec.Spec.Resources.Requests.Storage
+	config.Resources.Limits.CPU = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Limits.CPU
+	config.Resources.Limits.Memory = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Limits.Memory
+	config.Replicas = dbConfig.Status.Replicas
+	config.Version = dsVersionImageTag[1]
+
+	config.Parameters.Fg = dbConfig.Spec.Datastorage.StorageClass.Parameters.Fg
+	config.Parameters.Fs = dbConfig.Spec.Datastorage.StorageClass.Parameters.Fs
+	config.Parameters.Repl = dbConfig.Spec.Datastorage.StorageClass.Parameters.Repl
 
 	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateID)
 	if err != nil {

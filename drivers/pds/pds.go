@@ -9,7 +9,11 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"net/url"
+	"os"
 )
 
 type LoadGenParams struct {
@@ -48,6 +52,23 @@ type Driver interface {
 var (
 	pdsschedulers = make(map[string]Driver)
 )
+
+func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
+	kubeconfigPath := os.Getenv("KUBECONFIG")
+
+	// Build the client configuration from the kubeconfig file.
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error creating client configuration from kubeconfig: %v\n", err)
+	}
+	// Create the Kubernetes client using the configuration.
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error creating clientset: %v\n", err)
+	}
+	return clientset, config, nil
+
+}
 
 func InitPdsApiComponents(ControlPlaneURL string) (*pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")

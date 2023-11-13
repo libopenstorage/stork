@@ -282,7 +282,7 @@ func ScaleUpDeployments(tenantID string, deployments map[PDSDataService]*pds.Mod
 
 		_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
 	}
 }
 
@@ -588,11 +588,11 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	newStorageTemplateID := stConfigUpdated.GetId()
 	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
 	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-	log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
-	dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
-	dash.VerifyFatal(config.Spec.StorageOptions.Filesystem, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
+	log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigUpdated.StorageRequest, config.Resources.Requests.EphemeralStorage)
+	dash.VerifyFatal(config.Resources.Requests.EphemeralStorage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+	dash.VerifyFatal(config.Parameters.Fs, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
 	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
-	dash.VerifyFatal(config.Spec.StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
+	dash.VerifyFatal(config.Parameters.Repl, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
 	if updatedPvcSize > initialCapacity {
 		flag := true
 		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")

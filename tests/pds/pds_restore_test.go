@@ -1182,7 +1182,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						}
 
 						ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dsVersionBuildMap)
-						dash.VerifyFatal(config.Spec.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
+						dash.VerifyFatal(config.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
 
 						versionUpdatedDsEntity = restoreBkp.DSEntity{
 							Deployment: updatedDeployment,
