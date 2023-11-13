@@ -22,7 +22,7 @@ spec:
             masquerade: {}
         resources:
           requests:
-            memory: 64M
+            memory: 1024M
       networks:
       - name: default
         pod: {}

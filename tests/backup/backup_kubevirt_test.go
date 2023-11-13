@@ -413,3 +413,209 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// This testcase verifies backup and restore of Kubevirt VMs after upgrading kubevirt version
+var _ = Describe("{KubevirtUpgradeTest}", func() {
+
+	var (
+		restoreNames         []string
+		backupPreUpgrade     string
+		backupPostUpgrade    string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		providers            []string
+		labelSelectors       map[string]string
+		namespaceMapping     map[string]string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 93013, Mkoppal, Q3FY24)
+
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = getProviders()
+		namespaceMapping = make(map[string]string)
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 93013, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = appReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify backup and restore of Kubevirt VMs in different states", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%s", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location - %s", backupLocationName))
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+
+		Step("Taking backup of kubevirt application pre-upgrade", func() {
+			log.InfoD("Taking backup of kubevirt application pre-upgrade")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupPreUpgrade = fmt.Sprintf("%s-%s", "auto-pre-upgrade-backup", RandomString(6))
+			err = CreateBackupWithValidation(ctx, backupPreUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPreUpgrade))
+		})
+
+		Step("Restoring kubevirt app using backup taken pre-upgrade", func() {
+			log.InfoD("Restoring kubevirt app using backup taken pre-upgrade")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restorePreUpgrade := fmt.Sprintf("%s-%s", "auto-restore", RandomString(6))
+			restoreNames = append(restoreNames, restorePreUpgrade)
+			log.InfoD("Restoring the [%s] backup", backupPreUpgrade)
+			err = CreateRestoreWithValidation(ctx, restorePreUpgrade, backupPreUpgrade, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restorePreUpgrade, backupPreUpgrade))
+		})
+
+		Step("Upgrading kubevirt", func() {
+			upgradeVersion := GetKubevirtVersionToUpgrade()
+			log.InfoD("Upgrading kubevirt on source cluster")
+			err := UpgradeKubevirt(upgradeVersion, true)
+			log.FailOnError(err, "Failed during kubevirt upgrade on source cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.InfoD("Upgrading kubevirt on destination cluster")
+			err = UpgradeKubevirt(upgradeVersion, true)
+			log.FailOnError(err, "Failed during kubevirt upgrade on destination cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Restoring kubevirt app using backup taken pre-upgrade - post-upgrade", func() {
+			log.InfoD("Restoring kubevirt app using backup taken pre-upgrade - post-upgrade")
+			for _, appCtx := range scheduledAppContexts {
+				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-new"
+			}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restorePostUpgrade := fmt.Sprintf("%s-%s", "auto-restore-post-upgrade", RandomString(6))
+			restoreNames = append(restoreNames, restorePostUpgrade)
+			log.InfoD("Restoring the [%s] backup", backupPreUpgrade)
+			err = CreateRestoreWithValidation(ctx, restorePostUpgrade, backupPreUpgrade, namespaceMapping, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore with namespace mapping %s from backup %s", restorePostUpgrade, backupPreUpgrade))
+		})
+
+		Step("Taking backup of kubevirt application post-upgrade", func() {
+			log.InfoD("Taking backup of kubevirt application post-upgrade")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupPostUpgrade = fmt.Sprintf("%s-%s", "auto-post-upgrade-backup", RandomString(6))
+			err = CreateBackupWithValidation(ctx, backupPostUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				nil, orgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPostUpgrade))
+		})
+
+		Step("Restoring kubevirt app using backup taken post-upgrade", func() {
+			log.InfoD("Restoring kubevirt app using backup taken post-upgrade")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreNewPostUpgrade := fmt.Sprintf("%s-%s", "auto-restore-new-post-upgrade", RandomString(6))
+			restoreNames = append(restoreNames, restoreNewPostUpgrade)
+			log.InfoD("Restoring the [%s] backup", backupPostUpgrade)
+			err = CreateRestoreWithValidation(ctx, restoreNewPostUpgrade, backupPostUpgrade, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreNewPostUpgrade, backupPostUpgrade))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+
+		log.Info("Destroying scheduled apps on source cluster")
+		DestroyApps(scheduledAppContexts, opts)
+
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		log.InfoD("Destroying restored apps on destination clusters")
+		restoredAppContexts := make([]*scheduler.Context, 0)
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		DestroyApps(restoredAppContexts, opts)
+
+		log.InfoD("switching to default context")
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+
+		log.Info("Deleting restored namespaces")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})

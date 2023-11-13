@@ -61,7 +61,7 @@ const (
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
 	upgradeStorkImage                         = "TARGET_STORK_VERSION"
-	latestStorkImage                          = "23.3.1"
+	latestStorkImage                          = "23.9.0"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -96,7 +96,7 @@ const (
 	backupLocationDeleteRetryTime             = 30 * time.Second
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
-	latestPxBackupVersion                     = "2.4.0"
+	latestPxBackupVersion                     = "2.6.0"
 	defaultPxBackupHelmBranch                 = "master"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
@@ -5431,6 +5431,131 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	wg.Wait()
 	if len(errors) > 0 {
 		return fmt.Errorf("Errors generated while restarting VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
+	}
+	return nil
+}
+
+// UpgradeKubevirt upgrades the kubevirt control plane to the given version
+// If workloadUpgrade is set to true, kubevirt workloads are upgraded to the given version
+func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	k8sCore := core.Instance()
+
+	// Checking current version
+	current, err := k8sKubevirt.GetVersion()
+	if err != nil {
+		return err
+	}
+	log.Infof("Current version is - %s", current)
+
+	// Compare and validate the upgrade path
+	currentKubevirtVersionSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(current, "v", "")))
+	if err != nil {
+		return err
+	}
+	versionToUpgradeSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(versionToUpgrade, "v", "")))
+	if err != nil {
+		return err
+	}
+	if currentKubevirtVersionSemVer.GreaterThanOrEqual(versionToUpgradeSemVer) {
+		return fmt.Errorf("kubevirt cannot be upgraded from [%s] to [%s]", currentKubevirtVersionSemVer.String(), versionToUpgradeSemVer.String())
+	} else {
+		log.InfoD("Upgrade path chosen (%s) ---> (%s)", current, versionToUpgrade)
+	}
+
+	// Generating the manifest URL and applying it to begin upgrade
+	manifestYamlURL := fmt.Sprintf("https://github.com/kubevirt/kubevirt/releases/download/%s/kubevirt-operator.yaml", versionToUpgrade)
+	_, err = kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "apply", "-f", manifestYamlURL})
+	if err != nil {
+		return err
+	}
+
+	// Waiting till the upgrade is complete
+	t := func() (interface{}, bool, error) {
+		upgradedVersion, err := k8sKubevirt.GetVersion()
+		if err != nil {
+			return "", false, err
+		}
+		if upgradedVersion != versionToUpgrade {
+			return "", true, fmt.Errorf("waiting for kubevirt control plane to be upgraded to [%s] but got [%s]", versionToUpgrade, upgradedVersion)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// Waiting for all pods in kubevirt namespace to be Ready
+	kubevirtCheck := func() (interface{}, bool, error) {
+		pods, err := k8sCore.GetPods(KubevirtNamespace, make(map[string]string))
+		if err != nil {
+			return "", false, err
+		}
+		allReady := true
+		for _, p := range pods.Items {
+			log.Infof("Checking status for pod - %s", p.GetName())
+			for _, condition := range p.Status.Conditions {
+				if condition.Type == corev1.PodReady {
+					log.Infof("Pod [%s] in [%s] namespace is in [%s] state", p.GetName(), KubevirtNamespace, condition.Type)
+					allReady = true
+					break
+				} else {
+					log.Infof("Pod [%s] in [%s] namespace expected state - [%s], but got [%s]", p.GetName(), KubevirtNamespace, corev1.PodReady, condition.Type)
+					allReady = false
+				}
+			}
+			if !allReady {
+				return "", true, fmt.Errorf("waiting for all the pods in %s namespace to be ready", KubevirtNamespace)
+			}
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(kubevirtCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Kubevirt control plane upgraded from [%s] to [%s]", current, versionToUpgrade)
+
+	// Workload upgrade
+	if workloadUpgrade {
+		patchString := `[
+  		{"op": "replace", "path": "/spec/imagePullPolicy", "value": "IfNotPresent"},
+  		{"op": "replace", "path": "/spec/workloadUpdateStrategy", "value": {"workloadUpdateMethods": ["Evict"], "batchEvictionSize": 10, "batchEvictionInterval": "1m"}}
+	]`
+
+		_, err = kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "patch", "kubevirt", "kubevirt", "-n", "kubevirt", "--type=json", fmt.Sprintf("-p=%s", patchString)})
+		if err != nil {
+			return err
+		}
+
+		// Adding sleep here to account for some for the kubectl patch to go through
+		time.Sleep(10 * time.Second)
+		namespaces, err := core.Instance().ListNamespaces(make(map[string]string))
+		if err != nil {
+			return err
+		}
+
+		// Validating if all the pods in namespace where kubevirt VMs are deployed are in running state
+		for _, n := range namespaces.Items {
+			vms, err := k8sKubevirt.ListVirtualMachines(n.GetName())
+			if err != nil {
+				return err
+			}
+			if len(vms.Items) == 0 {
+				continue
+			}
+			pods, err := k8sCore.GetPods(n.GetName(), make(map[string]string))
+			for _, p := range pods.Items {
+				log.Infof("Checking status for pod - %s", p.GetName())
+				err = core.Instance().ValidatePod(&p, podReadyTimeout, podReadyRetryTime)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
 	return nil
 }

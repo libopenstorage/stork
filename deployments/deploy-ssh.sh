@@ -725,8 +725,8 @@ spec:
       value: "${VCLUSTER_PARALLEL_APPS}"
     - name: VCLUSTER_TOTAL_ITERATIONS
       value: "${VCLUSTER_TOTAL_ITERATIONS}"
-
-
+    - name: KUBEVIRT_UPGRADE_VERSION
+      value: "${KUBEVIRT_UPGRADE_VERSION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

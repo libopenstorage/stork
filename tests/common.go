@@ -447,9 +447,11 @@ var (
 )
 
 const (
-	rootLogDir    = "/root/logs"
-	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
-	pxbLogDirPath = "/tmp/px-backup-test-logs"
+	rootLogDir            = "/root/logs"
+	diagsDirPath          = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath         = "/tmp/px-backup-test-logs"
+	KubevirtNamespace     = "kubevirt"
+	LatestKubevirtVersion = "v1.0.0"
 )
 
 type Weekday string
@@ -9849,4 +9851,12 @@ func DeletePXPods(nameSpace string) error {
 		return err
 	}
 	return nil
+}
+
+func GetKubevirtVersionToUpgrade() string {
+	kubevirtVersion, present := os.LookupEnv("KUBEVIRT_UPGRADE_VERSION")
+	if present {
+		return kubevirtVersion
+	}
+	return LatestKubevirtVersion
 }
