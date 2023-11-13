@@ -14,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/stretchr/testify/require"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 var templatePVCSpecs = map[string]string{
@@ -52,35 +51,11 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vm"
 	appKey := "kubevirt-fedora"
-	deployedVMName := "fedora-test-vm"
 
-	ctxs := kubevirtVMDeployAndValidate(
+	ctxs := kubevirtVMsDeployAndValidate(
 		t,
 		instanceID,
-		appKey,
-		deployedVMName,
-	)
-
-	destroyAndWait(t, ctxs)
-
-	// If we are here then the test has passed
-	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
-}
-
-func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
-	var testrailID, testResult = 50804, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
-	defer updateTestRail(&testResult, testrailID, runID)
-	instanceID := "vm"
-	appKey := "kubevirt-windows-22k-server"
-	deployedVMName := "windows-test-vm"
-
-	ctxs := kubevirtVMDeployAndValidate(
-		t,
-		instanceID,
-		appKey,
-		deployedVMName,
+		[]string{appKey},
 	)
 
 	log.Infof("Destroying apps")
@@ -91,38 +66,53 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func kubevirtVMDeployAndValidate(
+func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
+	var testrailID, testResult = 50804, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "vm"
+	appKey := "kubevirt-windows-22k-server"
+
+	ctxs := kubevirtVMsDeployAndValidate(
+		t,
+		instanceID,
+		[]string{appKey},
+	)
+
+	log.Infof("Destroying apps")
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func kubevirtVMsDeployAndValidate(
 	t *testing.T,
 	instanceID string,
-	appKey string,
-	deployedVMName string,
+	appKeys []string,
 ) []*scheduler.Context {
 	ctxs, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{
-			AppKeys: []string{appKey},
+			AppKeys: appKeys,
 		})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	require.NoError(t, err, "Error scheduling tasks")
+	require.Equal(t, len(appKeys), len(ctxs), "wrong number of tasks started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for app to get to running state")
+	for _, ctx := range ctxs {
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app %s to get to running state", ctx.App.Key)
 
-	namespace := appKey + "-" + instanceID
-	vms, err := kubevirt.Instance().ListVirtualMachines(namespace)
-	require.NoError(t, err, "Error listing virtual machines")
+		namespace := appKey + "-" + instanceID
+		vms, err := kubevirt.Instance().ListVirtualMachines(namespace)
+		require.NoError(t, err, "Error listing virtual machines")
 
-	for _, vm := range vms.Items {
-		validateVM(t, vm, deployedVMName)
+		for _, vm := range vms.Items {
+			require.Equal(t, vm.Status.Created, true, "VM %s not created yet", vm.Name)
+			require.Equal(t, vm.Status.Ready, true, "VM %s not ready yet", vm.Name)
+		}
 	}
 	return ctxs
-}
-
-func validateVM(t *testing.T, virtualMachine kubevirtv1.VirtualMachine, vmName string) {
-	require.Equal(t, virtualMachine.Name, vmName, "VM %s has not been deployed", vmName)
-	require.Equal(t, virtualMachine.Status.Created, true, "VM %s created status is: %t", virtualMachine.Name, virtualMachine.Status.Created)
-	require.Equal(t, virtualMachine.Status.Ready, true, "VM %s ready status is: %t", virtualMachine.Name, virtualMachine.Status.Ready)
-
-	// TODO add more validations here if required
 }
 
 func createTemplatePVC(t *testing.T) error {

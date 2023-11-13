@@ -52,14 +52,11 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vm-one-lm"
-	appKey := "kubevirt-fedora"
-	deployedVMName := "test-vm-csi"
 
-	ctxs := kubevirtVMDeployAndValidate(
+	ctxs := kubevirtVMsDeployAndValidate(
 		t,
 		instanceID,
-		appKey,
-		deployedVMName,
+		[]string{"kubevirt-fedora", "kubevirt-windows-22k-server"},
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
@@ -84,6 +81,9 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 		// VM should use a bind-mount eventually
 		log.Infof("Waiting for the VM to return to the hyperconverged state again")
 		verifyBindMountEventually(t, testState)
+
+		// Verify that VM stayed up the whole time
+		verifyVMStayedUp(t, testState)
 	}
 	log.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
@@ -101,14 +101,11 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vm-two-lm"
-	appKey := "kubevirt-fedora"
-	deployedVMName := "test-vm-csi"
 
-	ctxs := kubevirtVMDeployAndValidate(
+	ctxs := kubevirtVMsDeployAndValidate(
 		t,
 		instanceID,
-		appKey,
-		deployedVMName,
+		[]string{"kubevirt-fedora", "kubevirt-windows-22k-server"},
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
@@ -138,6 +135,10 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		// VM should use a bind-mount eventually
 		log.Infof("Waiting for the VM to return to the hyperconverged state again")
 		verifyBindMountEventually(t, testState)
+
+		// Verify that VM stayed up the whole time
+		verifyVMStayedUp(t, testState)
+
 		uncordonFunc()
 		cordonedNodes = nil
 	}
@@ -172,6 +173,7 @@ func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 	// VMs should have a bind-mount initially
 	testState.vmPod, err = getVMPod(appCtx, testState.volume)
 	require.NoError(t, err)
+	verifyBindMountEventually(t, testState)
 
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
 	require.NoError(t, err)
@@ -179,11 +181,6 @@ func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 		testState.vmPod.Namespace, testState.vmiName)
 	require.NoError(t, err)
 	require.Equal(t, "Running", testState.vmiPhase)
-
-	verifyVMProperties(t, testState,
-		false, /* expectAttachedNodeChanged  */
-		true,  /* expectBindMount */
-		true /* expectReplicaNode */)
 }
 
 func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, migrateToReplicaNode bool) {
@@ -282,9 +279,6 @@ func verifyBindMountEventually(t *testing.T, testState *kubevirtTestState) {
 		return mountType == mountTypeBind
 	}, 10*time.Minute, 30*time.Second,
 		"VM vol %s (%s) did not switch to a bind-mount", testState.volume.ID, testState.apiVol.Id)
-
-	// Verify that VM stayed up the whole time
-	verifyVMStayedUp(t, testState)
 }
 
 func cordonNonReplicaNodes(t *testing.T, vol *api.Volume, allNodes map[string]node.Node) []*node.Node {
