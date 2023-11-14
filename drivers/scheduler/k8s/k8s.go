@@ -4158,21 +4158,26 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 
 		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
-		}
-
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		if inspectedVol.Spec.IsPureVolume() {
-			switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
-			case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
-				labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
-				labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
-			case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
-				labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
-			default:
-				return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
+			if _, ok := err.(*errors.ErrNotSupported); !ok {
+				return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
+			}
+			// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
+		} else {
+			// If this is a Pure volume, run some extra checks to get more information.
+			// Store them as labels as they are not applicable to all volume types.
+			if labels == nil {
+				labels = make(map[string]string)
+			}
+			if inspectedVol.Spec.IsPureVolume() {
+				switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
+				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
+					labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
+				default:
+					return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
+				}
 			}
 		}
 	}
