@@ -72,7 +72,7 @@ spec:
           requests:
             memory: 4Gi
       evictionStrategy: LiveMigrate
-      terminationGracePeriodSeconds: 3600
+      terminationGracePeriodSeconds: 180
       volumes:
       - dataVolume:
           name: windows-2022-datavol

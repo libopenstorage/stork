@@ -6,6 +6,6 @@ parameters:
   repl: "2"
   sharedv4: "true"
   sharedv4_mount_options: vers=3.0,nolock
-provisioner: pxd.portworx.com 
+provisioner: pxd.portworx.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
