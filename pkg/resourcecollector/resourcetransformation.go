@@ -2,6 +2,8 @@ package resourcecollector
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -52,24 +54,31 @@ func TransformResources(
 		if patch.Name == objName && patch.Namespace == objNamespace {
 			content := object.UnstructuredContent()
 			for _, path := range patch.Specs.Paths {
+				logrus.Debugf("TransformResources: UnstructuredContent: %v", content)
+				logrus.Debugf("TransformResources: path %v, operation %v", path.Path, path.Operation)
 				switch path.Operation {
 				case stork_api.AddResourcePath:
-					value := getNewValueForPath(path.Value, string(path.Type))
+					value, err := getNewValueForPath(path.Value, path.Type)
+					if err != nil {
+						logrus.Errorf("Unable to parse the Value for the type %s specified, path %s on resource kind: %s/,%s/%s,  err: %v", path.Type, path, patch.Kind, patch.Namespace, patch.Name, err)
+						return err
+					}
 					if path.Type == stork_api.KeyPairResourceType {
 						updateMap := value.(map[string]string)
-						err := unstructured.SetNestedStringMap(content, updateMap, strings.Split(path.Path, ".")...)
+						err := SetNestedStringMap(content, updateMap, path.Path)
 						if err != nil {
 							logrus.Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, patch.Kind, patch.Namespace, patch.Name, err)
 							return err
 						}
 					} else if path.Type == stork_api.SliceResourceType {
-						err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
+						updateSlice := value.([]string)
+						err := SetNestedStringSlice(content, updateSlice, path.Path)
 						if err != nil {
 							logrus.Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, patch.Kind, patch.Namespace, patch.Name, err)
 							return err
 						}
 					} else {
-						err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
+						err := SetNestedField(content, value, path.Path)
 						if err != nil {
 							logrus.Errorf("Unable to perform operation %s on path %s on resource kind: %s/,%s/%s,  err: %v", path.Operation, path, patch.Kind, patch.Namespace, patch.Name, err)
 							return err
@@ -77,13 +86,13 @@ func TransformResources(
 					}
 
 				case stork_api.DeleteResourcePath:
-					unstructured.RemoveNestedField(content, strings.Split(path.Path, ".")...)
+					RemoveNestedField(content, strings.Split(path.Path, ".")...)
 					logrus.Debugf("Removed patch path %s on resource kind: %s/,%s/%s", path, patch.Kind, patch.Namespace, patch.Name)
 
 				case stork_api.ModifyResourcePathValue:
 					var value interface{}
 					if path.Type == stork_api.KeyPairResourceType {
-						currMap, _, err := unstructured.NestedMap(content, strings.Split(path.Path, ".")...)
+						currMap, _, err := NestedMap(content, strings.Split(path.Path, ".")...)
 						if err != nil || len(currMap) == 0 {
 							return fmt.Errorf("unable to find spec path, err: %v", err)
 						}
@@ -97,7 +106,7 @@ func TransformResources(
 						}
 						value = currMap
 					} else if path.Type == stork_api.SliceResourceType {
-						currList, _, err := unstructured.NestedSlice(content, strings.Split(path.Path, ".")...)
+						currList, _, err := NestedSlice(content, strings.Split(path.Path, ".")...)
 						if err != nil {
 							return fmt.Errorf("unable to find spec path, err: %v", err)
 						}
@@ -107,9 +116,14 @@ func TransformResources(
 						}
 						value = currList
 					} else {
-						value = path.Value
+						var err error
+						value, err = getNewValueForPath(path.Value, path.Type)
+						if err != nil {
+							logrus.Errorf("Unable to parse the Value for the type %s specified, path %s on resource kind: %s/,%s/%s,  err: %v", path.Type, path, patch.Kind, patch.Namespace, patch.Name, err)
+							return err
+						}
 					}
-					err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
+					err := SetNestedField(content, value, path.Path)
 					if err != nil {
 						logrus.Errorf("Unable to perform operation %s on path %s on resource kind: %s/,%s/%s,  err: %v", path.Operation, path, patch.Kind, patch.Namespace, patch.Name, err)
 						return err
@@ -137,9 +151,14 @@ func TransformResources(
 	return nil
 }
 
-func getNewValueForPath(oldVal, valType string) interface{} {
+func getNewValueForPath(oldVal string, valType stork_api.ResourceTransformationValueType) (interface{}, error) {
+	logrus.Debugf("oldVal %s,valType %v", oldVal, valType)
 	var updatedValue interface{}
-	if valType == string(stork_api.KeyPairResourceType) {
+	var err error
+
+	switch valType {
+	case stork_api.KeyPairResourceType:
+		//TODO: here we can accept map[string]interface{} because inside it is getting changed
 		newVal := make(map[string]string)
 		mapList := strings.Split(oldVal, ",")
 		for _, val := range mapList {
@@ -147,13 +166,217 @@ func getNewValueForPath(oldVal, valType string) interface{} {
 			newVal[keyPair[0]] = keyPair[1]
 		}
 		updatedValue = newVal
-	} else if valType == string(stork_api.SliceResourceType) {
+	case stork_api.SliceResourceType:
+		// TODO: SetNestedStringslice will slove the issue
 		newVal := []string{}
 		arrList := strings.Split(oldVal, ",")
 		newVal = append(newVal, arrList...)
 		updatedValue = newVal
-	} else {
+	case stork_api.IntResourceType:
+		updatedValue, err = strconv.ParseInt(oldVal, 10, 64)
+	case stork_api.BoolResourceType:
+		updatedValue, err = strconv.ParseBool(oldVal)
+	case stork_api.StringResourceType:
 		updatedValue = oldVal
 	}
-	return updatedValue
+	return updatedValue, err
+}
+
+func jsonPath(fields []string) string {
+	return "." + strings.Join(fields, ".")
+}
+
+var pathRegexpWithanArray = regexp.MustCompile(`^.+\[[0-9]+\](\.[a-zA-Z_/][a-zA-Z0-9_/]*)+$`)
+
+func NestedSlice(obj map[string]interface{}, fields ...string) ([]interface{}, bool, error) {
+	if !pathRegexpWithanArray.MatchString(strings.Join(fields, ".")) {
+		return unstructured.NestedSlice(obj, fields...)
+	}
+
+	val, found, err := NestedFieldNoCopy(obj, fields...)
+	if !found || err != nil {
+		return nil, found, err
+	}
+	_, ok := val.([]interface{})
+	if !ok {
+		return nil, false, fmt.Errorf("%v accessor error: %v is of the type %T, expected []interface{}", jsonPath(fields), val, val)
+	}
+	return runtime.DeepCopyJSONValue(val).([]interface{}), true, nil
+}
+
+func NestedMap(obj map[string]interface{}, fields ...string) (map[string]interface{}, bool, error) {
+	if !pathRegexpWithanArray.MatchString(strings.Join(fields, ".")) {
+		return unstructured.NestedMap(obj, fields...)
+	}
+
+	m, found, err := nestedMapNoCopy(obj, fields...)
+	if !found || err != nil {
+		return nil, found, err
+	}
+	return runtime.DeepCopyJSON(m), true, nil
+}
+
+func nestedMapNoCopy(obj map[string]interface{}, fields ...string) (map[string]interface{}, bool, error) {
+	val, found, err := NestedFieldNoCopy(obj, fields...)
+	if !found || err != nil {
+		return nil, found, err
+	}
+	m, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, false, fmt.Errorf("%v accessor error: %v is of the type %T, expected map[string]interface{}", jsonPath(fields), val, val)
+	}
+	return m, true, nil
+}
+
+func NestedFieldNoCopy(obj map[string]interface{}, fields ...string) (interface{}, bool, error) {
+	var val interface{} = obj
+
+	for i, field := range fields {
+		if val == nil {
+			return nil, false, nil
+		}
+		if m, ok := val.(map[string]interface{}); ok {
+			var err error
+			val, ok, err = getValueFromMapKey(m, field)
+			if !ok || err != nil {
+				return nil, false, err
+			}
+		} else {
+			return nil, false, fmt.Errorf("%v accessor error: %v is of the type %T, expected map[string]interface{}", jsonPath(fields[:i+1]), val, val)
+		}
+	}
+	return val, true, nil
+}
+
+func SetNestedStringSlice(obj map[string]interface{}, value []string, path string) error {
+	if !pathRegexpWithanArray.MatchString(path) {
+		return unstructured.SetNestedStringSlice(obj, value, strings.Split(path, ".")...)
+	}
+
+	m := make([]interface{}, 0, len(value)) // convert []string into []interface{}
+	for _, v := range value {
+		m = append(m, v)
+	}
+	return setNestedFieldNoCopy(obj, m, strings.Split(path, ".")...)
+}
+
+func SetNestedStringMap(obj map[string]interface{}, value map[string]string, path string) error {
+	if !pathRegexpWithanArray.MatchString(path) {
+		return unstructured.SetNestedStringMap(obj, value, strings.Split(path, ".")...)
+	}
+	m := make(map[string]interface{}, len(value)) // convert map[string]string into map[string]interface{}
+	for k, v := range value {
+		m[k] = v
+	}
+	return setNestedFieldNoCopy(obj, m, strings.Split(path, ".")...)
+}
+
+func SetNestedField(obj map[string]interface{}, value interface{}, path string) error {
+	if !pathRegexpWithanArray.MatchString(path) {
+		return unstructured.SetNestedField(obj, value, strings.Split(path, ".")...)
+	}
+	return setNestedFieldNoCopy(obj, runtime.DeepCopyJSONValue(value), strings.Split(path, ".")...)
+}
+
+func setNestedFieldNoCopy(obj map[string]interface{}, value interface{}, fields ...string) error {
+	m := obj
+
+	for index, field := range fields[:len(fields)-1] {
+		if val, ok, err := getValueFromMapKey(m, field); err != nil {
+			return err
+		} else if ok {
+			if valMap, ok := val.(map[string]interface{}); ok {
+				m = valMap
+			} else {
+				return fmt.Errorf("value cannot be set because %v is not a map[string]interface{}", jsonPath(fields[:index+1]))
+			}
+		} else {
+			newVal := make(map[string]interface{})
+			if err := setMapKeyWithValue(m, newVal, field); err != nil {
+				return err
+			}
+			m = newVal
+		}
+	}
+	m[fields[len(fields)-1]] = value
+	return nil
+}
+
+func RemoveNestedField(obj map[string]interface{}, fields ...string) error {
+	if !pathRegexpWithanArray.MatchString(strings.Join(fields, ".")) {
+		unstructured.RemoveNestedField(obj, fields...)
+		return nil
+	}
+	m := obj
+	for _, field := range fields[:len(fields)-1] {
+		if val, ok, err := getValueFromMapKey(m, field); err != nil {
+			return err
+		} else if ok {
+			if valMap, ok := val.(map[string]interface{}); ok {
+				m = valMap
+			} else {
+				return nil
+			}
+		} else {
+			return nil
+		}
+	}
+	delete(m, fields[len(fields)-1])
+	return nil
+}
+
+var indexDelimeter = func(c rune) bool {
+	return c == '[' || c == ']'
+}
+
+func setMapKeyWithValue(m, newVal map[string]interface{}, field string) error {
+	// check if an array index exists in the field
+	parts := strings.FieldsFunc(field, indexDelimeter)
+	if len(parts) != 2 {
+		m[field] = newVal
+		return nil
+	}
+
+	// if the parts[0] is not an array send an error
+	arr := m[parts[0]]
+	value, ok := arr.([]interface{})
+	if !ok {
+		return fmt.Errorf("value cannot be set because %v is not a []interface{}", arr)
+	}
+
+	// append the newVal to the existing array
+	value = append(value, newVal)
+	m[parts[0]] = value
+	return nil
+}
+
+func getValueFromMapKey(m map[string]interface{}, field string) (interface{}, bool, error) {
+	// check if an array index exists in the field
+	parts := strings.FieldsFunc(field, indexDelimeter)
+	if len(parts) != 2 {
+		value, ok := m[field]
+		return value, ok, nil
+	}
+
+	// if the parts[0] is not an array send an error
+	arr := m[parts[0]]
+	value, ok := arr.([]interface{})
+	if !ok {
+		return nil, false, fmt.Errorf("value cannot be set because %v is not a []interface{}", arr)
+	}
+
+	// Convert the array index to int
+	var arrIndex int
+	_, err := fmt.Sscanf(parts[1], "%d", &arrIndex)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// send the approriate array object
+	if arrIndex < len(value) {
+		return value[arrIndex], true, nil
+	} else if arrIndex > len(value) {
+		return nil, false, fmt.Errorf("value cannot be set because index %d is out of range in array %v with length %d", arrIndex, arr, len(value))
+	}
+	return nil, false, nil
 }
