@@ -1,0 +1,110 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    app: fedora-vm-multidisk
+    vm.kubevirt.io/template: fedora-server-small
+    vm.kubevirt.io/template.namespace: openshift
+  name: fedora-vm-multidisk
+spec:
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/flavor: small
+        vm.kubevirt.io/os: fedora
+        vm.kubevirt.io/workload: server
+      labels:
+        kubevirt.io/size: small
+    spec:
+      domain:
+        cpu:
+          cores: 1
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - bootOrder: 1
+            disk:
+              bus: virtio
+            name: rootdisk
+          - bootOrder: 2
+            disk:
+              bus: virtio
+            name: cloudinitdisk
+          networkInterfaceMultiqueue: true
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        firmware:
+          bootloader:
+            efi: {}
+        machine:
+          type: pc-q35-rhel9.2.0
+        resources:
+          requests:
+            memory: 2Gi
+      evictionStrategy: LiveMigrate
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - dataVolume:
+          name: fedora-root-disk
+        name: rootdisk
+      - dataVolume:
+          name: fedora-data-disk-1
+        name: fedora-datavol-disk
+      - name: fedora-data-disk-2
+        persistentVolumeClaim:
+          claimName: fedora-data-disk-2
+      - cloudInitNoCloud:
+          userData: |-
+            #cloud-config
+            user: fedora
+            password: password1
+            chpasswd: { expire: False }
+        name: cloudinitdisk
+  dataVolumeTemplates:      
+  - metadata:
+      name: fedora-root-disk
+    spec:
+      source:
+        pvc:
+          name: fedora-template-pvc
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: sc-sharedv4svc-nolock
+        volumeMode: Filesystem
+  - metadata:
+      name: fedora-data-disk-1
+    spec:
+      source:
+        pvc:
+          name: fedora-template-datadisk
+          namespace: openshift-virtualization-datadisk-templates
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 25Gi
+        storageClassName: sc-sharedv4svc-nolock
+        volumeMode: Filesystem
+---        
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fedora-data-disk-2
+spec:
+  storageClassName: sc-sharedv4svc-nolock
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
