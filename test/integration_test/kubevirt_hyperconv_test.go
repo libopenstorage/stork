@@ -18,6 +18,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,12 +31,22 @@ const (
 	mountTypeNFS  = "nfs"
 )
 
+type vmDisk struct {
+	diskName     string
+	pvcName      string
+	volume       *volume.Volume
+	apiVol       *api.Volume
+	attachedNode *node.Node
+}
+
+func (d *vmDisk) String() string {
+	return fmt.Sprintf("VM disk %s, volume %s (%s)", d.diskName, d.volume.ID, d.apiVol.Id)
+}
+
 type kubevirtTestState struct {
 	appCtx                 *scheduler.Context
 	allNodes               map[string]node.Node
-	volume                 *volume.Volume
-	apiVol                 *api.Volume
-	attachedNode           *node.Node
+	vmDisks                []*vmDisk
 	vmiName                string
 	vmiUID                 string
 	vmiPhase               string
@@ -118,8 +129,10 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		}
 		verifyInitialVMI(t, testState)
 
-		// Cordon off all non-replica nodes so that the next live migration moves the VM pod to a replica node
-		cordonedNodes := cordonNonReplicaNodes(t, testState.apiVol, allNodes)
+		// Cordon off all non-replica nodes so that the next live migration moves the VM pod to a replica node.
+		// verifyInitialVMI verifies that all vmDisks are using the same set of replica nodes. So, we can use
+		// the firt vmDisk below.
+		cordonedNodes := cordonNonReplicaNodes(t, testState.vmDisks[0].apiVol, allNodes)
 		uncordonFunc := func() { uncordonNodes(cordonedNodes) }
 		defer uncordonFunc()
 
@@ -160,21 +173,58 @@ func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 	vols, err := schedulerDriver.GetVolumes(appCtx)
 	require.NoError(t, err, "failed to get volumes for context %s", appCtx.App.Key)
 
-	// this test expects only one volume in the VM
-	require.Equal(t, len(vols), 1)
-	testState.volume = vols[0]
+	for _, vol := range vols {
+		vmDisk := &vmDisk{volume: vol}
+		testState.vmDisks = append(testState.vmDisks, vmDisk)
 
-	testState.apiVol, err = volumeDriver.InspectVolume(testState.volume.ID)
-	require.NoError(t, err, "Failed to inspect PV %s", testState.volume.ID)
+		vmDisk.apiVol, err = volumeDriver.InspectVolume(vol.ID)
+		require.NoError(t, err, "Failed to inspect PV %s", vol.ID)
 
-	testState.attachedNode, err = volumeDriver.GetNodeForVolume(testState.volume, cmdTimeout, cmdRetry)
-	require.NoError(t, err)
-	log.Infof("Volume %s (%s) is attached to node %s",
-		testState.volume.ID, testState.apiVol.Id, testState.attachedNode.Name)
+		vmDisk.attachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
+		require.NoError(t, err)
 
-	// VMs should have a bind-mount initially
-	testState.vmPod, err = getVMPod(appCtx, testState.volume)
-	require.NoError(t, err)
+		vmDisk.pvcName = vmDisk.apiVol.Locator.VolumeLabels["pvc"]
+		require.NotEmpty(t, vmDisk.pvcName)
+
+		if testState.vmPod == nil {
+			testState.vmPod, err = getVMPod(appCtx, vol)
+			require.NoError(t, err)
+		}
+
+		// Get the volume name inside the pod yaml e.g.
+		//	  volumes:
+		//	  - name: rootdisk
+		//	    persistentVolumeClaim:
+		//		  claimName: fedora-communist-toucan
+		for _, vmVol := range testState.vmPod.Spec.Volumes {
+			if vmVol.PersistentVolumeClaim != nil && vmVol.PersistentVolumeClaim.ClaimName == vmDisk.pvcName {
+				vmDisk.diskName = vmVol.Name
+				break
+			}
+		}
+		require.NotEmpty(t, vmDisk.diskName)
+		log.Infof("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
+	}
+
+	// verify all volumes are using the same set of repica nodes
+	var prevReplicaNodeIDs map[string]bool
+	var prevDisk *vmDisk
+	for _, vmDisk := range testState.vmDisks {
+		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
+		if prevReplicaNodeIDs != nil {
+			require.Equal(t, len(prevReplicaNodeIDs), len(replicaNodeIDs),
+				"different number of replicas for %s and %s", prevDisk, vmDisk)
+			for replicaNodeID := range replicaNodeIDs {
+				require.True(t, prevReplicaNodeIDs[replicaNodeID],
+					"%s and %s have replicas on different nodes", prevDisk, vmDisk)
+			}
+		} else {
+			prevReplicaNodeIDs = replicaNodeIDs
+			prevDisk = vmDisk
+		}
+	}
+
+	// VM should have a bind-mount initially
 	verifyBindMountEventually(t, testState)
 
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
@@ -207,7 +257,7 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 			return false
 		}
 		// wait until there is only one pod in the running state
-		testState.vmPod, err = getVMPod(testState.appCtx, testState.volume)
+		testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
 		if err != nil {
 			log.Warnf("Failed to get VM pod while waiting for live migration to finish for VMI %s/%s: %v",
 				vmiNamespace, vmiName, err)
@@ -229,58 +279,79 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 
 func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kubevirtTestState) {
 	var err error
-	var newAttachedNode *node.Node
+	var oldAttachedNode, newAttachedNode *node.Node
 
-	appCtx := testState.appCtx
-	oldAttachedNode := testState.attachedNode
-	vol := testState.volume
-	apiVol := testState.apiVol
+	// we expect all volumes to be attached on the same node
+	for _, vmDisk := range testState.vmDisks {
+		if oldAttachedNode == nil {
+			oldAttachedNode = vmDisk.attachedNode
+		} else {
+			require.Equal(t, oldAttachedNode.Name, vmDisk.attachedNode.Name, "vm disks attached on different nodes")
+		}
+	}
 
 	// restart px on the original node
 	log.Infof("Restarting volume driver on node %s", oldAttachedNode.Name)
 	err = volumeDriver.RestartDriver(*oldAttachedNode, nil)
 	require.NoError(t, err)
 
-	require.Eventuallyf(t, func() bool {
-		newAttachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-		if err != nil {
-			log.Warnf("Failed to get the attached node for vol %s (%s) for context %s: %v",
-				vol.ID, apiVol.Id, appCtx.App.Key, err)
-			return false
+	for _, vmDisk := range testState.vmDisks {
+		var attachedNode *node.Node
+
+		require.Eventuallyf(t, func() bool {
+			attachedNode, err = volumeDriver.GetNodeForVolume(vmDisk.volume, cmdTimeout, cmdRetry)
+			if err != nil {
+				log.Warnf("Failed to get the attached node for %s for context %s: %v",
+					vmDisk, testState.appCtx.App.Key, err)
+				return false
+			}
+			log.Infof("New attached node for %s is %s", vmDisk, attachedNode.Name)
+			return oldAttachedNode.Name != attachedNode.Name
+		}, 5*time.Minute, 30*time.Second, "Attached node did not change from %s for %s",
+			oldAttachedNode.Name, vmDisk)
+
+		log.Infof("%s: attachment changed from node %s to node %s after failover",
+			vmDisk, oldAttachedNode.Name, attachedNode.Name)
+
+		vmDisk.attachedNode = attachedNode
+
+		// Verify that all volume attachments move to the same replica node
+		if newAttachedNode == nil {
+			newAttachedNode = attachedNode
+		} else {
+			require.Equal(t, newAttachedNode.Name, attachedNode.Name,
+				"vm disks attached on different nodes after sharedv4 failover")
 		}
-		log.Infof("New attached node for volume %s (%s) is %s", vol.ID, apiVol.Id, newAttachedNode.Name)
-		return oldAttachedNode.Name != newAttachedNode.Name
-	}, 5*time.Minute, 30*time.Second, "Attached node did not change from %s for VM vol %s (%s)",
-		oldAttachedNode.Name, vol.ID, apiVol.Id)
-
-	log.Infof("Volume attachment changed from node %s to node %s after failover",
-		oldAttachedNode.Name, newAttachedNode.Name)
-	testState.attachedNode = newAttachedNode
-
+	}
 	// verify that vm stayed up
 	verifyVMStayedUp(t, testState)
 }
 
 func verifyBindMountEventually(t *testing.T, testState *kubevirtTestState) {
-	var err error
+	for _, vmDisk := range testState.vmDisks {
+		var err error
 
-	require.Eventuallyf(t, func() bool {
-		testState.vmPod, err = getVMPod(testState.appCtx, testState.volume)
-		if err != nil {
-			// this is expected while the live migration is running
-			log.Infof("Could not get VM pod for vol %s (%s) for context %s: %v",
-				testState.volume.ID, testState.apiVol.Id, testState.appCtx.App.Key, err)
-			return false
-		}
-		mountType, err := getVMRootDiskMountType(testState.vmPod, testState.apiVol)
-		if err != nil {
-			log.Warnf("Failed to get mount type of vol %s (%s) for context %s: %v",
-				testState.volume.ID, testState.apiVol.Id, testState.appCtx.App.Key, err)
-			return false
-		}
-		return mountType == mountTypeBind
-	}, 10*time.Minute, 30*time.Second,
-		"VM vol %s (%s) did not switch to a bind-mount", testState.volume.ID, testState.apiVol.Id)
+		require.Eventuallyf(t, func() bool {
+			testState.vmPod, err = getVMPod(testState.appCtx, vmDisk.volume)
+			if err != nil {
+				// this is expected while the live migration is running since there will be 2 VM pods
+				log.Infof("Could not get VM pod for %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
+				return false
+			}
+			logrus.Infof("Verifying bind mount for %s", vmDisk)
+			mountType, err := getVMDiskMountType(testState.vmPod, vmDisk)
+			if err != nil {
+				log.Warnf("Failed to get mount type of %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
+				return false
+			}
+			if mountType != mountTypeBind {
+				log.Warnf("Waiting for %s for context %s to switch to bind-mount from %q",
+					vmDisk, testState.appCtx.App.Key, mountType)
+				return false
+			}
+			return true
+		}, 10*time.Minute, 30*time.Second, "%s did not switch to a bind-mount", vmDisk)
+	}
 }
 
 func cordonNonReplicaNodes(t *testing.T, vol *api.Volume, allNodes map[string]node.Node) []*node.Node {
@@ -347,23 +418,10 @@ func verifyVMProperties(
 	t *testing.T, testState *kubevirtTestState, expectAttachedNodeChanged, expectBindMount, expectReplicaNode bool,
 ) {
 	var err error
-	previousAttachedNode := testState.attachedNode
-	vol := testState.volume
-	apiVol := testState.apiVol
+
 	vmPod := testState.vmPod
 	podNamespacedName := fmt.Sprintf("%s/%s", vmPod.Namespace, vmPod.Name)
 
-	// verify attached node
-	testState.attachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-	require.NoError(t, err)
-	if expectAttachedNodeChanged {
-		require.NotEqual(t, previousAttachedNode.Name, testState.attachedNode.Name, "attached node did not change")
-	} else {
-		require.Equal(t, previousAttachedNode.Name, testState.attachedNode.Name, "attached node changed")
-	}
-
-	// verify replica node
-	replicaNodeIDs := getReplicaNodeIDs(apiVol)
 	var podNodeID string
 	for nodeID, node := range testState.allNodes {
 		if vmPod.Spec.NodeName == node.Name {
@@ -373,24 +431,45 @@ func verifyVMProperties(
 	}
 	require.NotEmpty(t, podNodeID, "could not find nodeID for node %s where pod %s is running",
 		vmPod.Spec.NodeName, podNamespacedName)
-	if expectReplicaNode {
-		require.True(t, replicaNodeIDs[podNodeID], "pod is running on node %s (%s) which is not a replica node",
-			vmPod.Spec.NodeName, podNodeID)
-	} else {
-		require.False(t, replicaNodeIDs[podNodeID], "pod is running on node %s (%s) which is a replica node",
-			vmPod.Spec.NodeName, podNodeID)
-	}
 
-	// verify rootdisk mount type
-	mountType, err := getVMRootDiskMountType(vmPod, apiVol)
-	require.NoError(t, err)
+	for _, vmDisk := range testState.vmDisks {
+		logrus.Infof("Checking %s", vmDisk)
+		previousAttachedNode := vmDisk.attachedNode
 
-	if expectBindMount {
-		require.Equal(t, mountTypeBind, mountType, "root disk was not bind-mounted")
-	} else {
-		require.Equal(t, mountTypeNFS, mountType, "root disk was not nfs-mounted")
+		// verify attached node
+		vmDisk.attachedNode, err = volumeDriver.GetNodeForVolume(vmDisk.volume, cmdTimeout, cmdRetry)
+		require.NoError(t, err)
+		if expectAttachedNodeChanged {
+			require.NotEqual(t, previousAttachedNode.Name, vmDisk.attachedNode.Name,
+				"attached node did not change for %s", vmDisk)
+		} else {
+			require.Equal(t, previousAttachedNode.Name, vmDisk.attachedNode.Name,
+				"attached node changed for %s", vmDisk)
+		}
+
+		// verify replica node
+		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
+		if expectReplicaNode {
+			require.True(t, replicaNodeIDs[podNodeID],
+				"pod is running on node %s (%s) which is not a replica node for %s",
+				vmPod.Spec.NodeName, podNodeID, vmDisk)
+		} else {
+			require.False(t, replicaNodeIDs[podNodeID],
+				"pod is running on node %s (%s) which is a replica node for %s",
+				vmPod.Spec.NodeName, podNodeID, vmDisk)
+		}
+
+		// verify mount type
+		mountType, err := getVMDiskMountType(vmPod, vmDisk)
+		require.NoError(t, err)
+
+		if expectBindMount {
+			require.Equal(t, mountTypeBind, mountType, "%s was not bind-mounted", vmDisk)
+		} else {
+			require.Equal(t, mountTypeNFS, mountType, "%s was not nfs-mounted", vmDisk)
+		}
+		log.Infof("Verified mount type %q for %s", mountType, vmDisk)
 	}
-	log.Infof("Verified root disk mount type %q for volume %s (%s)", mountType, vol.ID, apiVol.Id)
 }
 
 // getVMIDetails returns VMI UID, phase and time when VMI transitioned to that phase.
@@ -413,30 +492,26 @@ func getVMIDetails(vmiNamespace, vmiName string) (string, string, time.Time, err
 	return vmi.UID, vmi.Phase, transitionTime, nil
 }
 
-// Get mount type (nfs or bind) of the root disk volume. This function assumes that the volume name inside
-// the pod yaml is "rootdisk". e.g.
-//
-//	  volumes:
-//	  - name: rootdisk
-//	    persistentVolumeClaim:
-//		  claimName: fedora-communist-toucan
-func getVMRootDiskMountType(pod *corev1.Pod, apiVol *api.Volume) (string, error) {
+// Get mount type (nfs or bind) of the VM disk
+func getVMDiskMountType(pod *corev1.Pod, vmDisk *vmDisk) (string, error) {
 	podNamespacedName := pod.Namespace + "/" + pod.Name
-	log.Infof("Checking the rootdisk mount type in pod %s", podNamespacedName)
+	log.Infof("Checking the mount type of %s in pod %s", vmDisk, podNamespacedName)
 
-	// Sample output if the volume is bind-mounted:
+	// Sample output if the volume is bind-mounted: (vmDisk.diskName is "rootdisk" in this example)
 	// $ kubectl exec -it virt-launcher-fedora-communist-toucan-jfw7n -- mount
 	// ...
 	// /dev/pxd/pxd365793461222635857 on /run/kubevirt-private/vmi-disks/rootdisk type ext4 (rw,relatime,seclabel,discard)
 	// ...
-	bindMountRE := regexp.MustCompile(fmt.Sprintf("/dev/pxd/pxd%s on .*rootdisk type (ext4|xfs)", apiVol.Id))
+	bindMountRE := regexp.MustCompile(fmt.Sprintf("/dev/pxd/pxd%s on .*%s type (ext4|xfs)",
+		vmDisk.apiVol.Id, vmDisk.diskName))
 
-	// Sample output if the volume is nfs-mounted:
+	// Sample output if the volume is nfs-mounted: (vmDisk.diskName is "rootdisk" in this example)
 	// $ kubectl exec -it virt-launcher-fedora-communist-toucan-bqcrp -- mount
 	// ...
 	// 172.30.194.11:/var/lib/osd/pxns/365793461222635857 on /run/kubevirt-private/vmi-disks/rootdisk type nfs (...)
 	// ...
-	nfsMountRE := regexp.MustCompile(fmt.Sprintf(":/var/lib/osd/pxns/%s on .*rootdisk type nfs", apiVol.Id))
+	nfsMountRE := regexp.MustCompile(fmt.Sprintf(":/var/lib/osd/pxns/%s on .*%s type nfs",
+		vmDisk.apiVol.Id, vmDisk.diskName))
 
 	cmd := []string{"mount"}
 	output, err := core.Instance().RunCommandInPod(cmd, pod.Name, "", pod.Namespace)
@@ -447,22 +522,22 @@ func getVMRootDiskMountType(pod *corev1.Pod, apiVol *api.Volume) (string, error)
 	for _, line := range strings.Split(output, "\n") {
 		if bindMountRE.MatchString(line) {
 			if foundBindMount || foundNFSMount {
-				return "", fmt.Errorf("multiple rootdisk mounts found: %s", output)
+				return "", fmt.Errorf("multiple mounts found for %s: %s", vmDisk, output)
 			}
 			foundBindMount = true
-			log.Infof("Found root disk bind mounted for VM pod %s: %s", podNamespacedName, line)
+			log.Infof("Found %s bind mounted for VM pod %s: %s", vmDisk, podNamespacedName, line)
 		}
 
 		if nfsMountRE.MatchString(line) {
 			if foundBindMount || foundNFSMount {
-				return "", fmt.Errorf("multiple rootdisk mounts found: %s", output)
+				return "", fmt.Errorf("multiple mounts found for %s: %s", vmDisk, output)
 			}
 			foundNFSMount = true
-			log.Infof("Found root disk nfs mounted for VM pod %s: %s", podNamespacedName, line)
+			log.Infof("Found %s nfs mounted for VM pod %s: %s", vmDisk, podNamespacedName, line)
 		}
 	}
 	if !foundBindMount && !foundNFSMount {
-		return "", fmt.Errorf("no root disk mount in pod %s: %s", podNamespacedName, output)
+		return "", fmt.Errorf("no mount for %s in pod %s: %s", vmDisk, podNamespacedName, output)
 	}
 	if foundBindMount {
 		return mountTypeBind, nil
