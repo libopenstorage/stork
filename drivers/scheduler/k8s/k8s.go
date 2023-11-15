@@ -3807,6 +3807,13 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					return err
 				}
 			}
+			autopilotLabels := make(map[string]string)
+			autopilotLabels["name"] = "autopilot"
+			pods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
+			if err != nil {
+				return err
+			}
+			autopilotEnabled = autopilotEnabled && !(len(pods.Items) == 0)
 			if autopilotEnabled {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {

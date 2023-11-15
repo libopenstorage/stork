@@ -2131,6 +2131,44 @@ func ValidateRuleNotTriggered(contexts []*scheduler.Context, name string) {
 	expect(err).NotTo(haveOccurred())
 }
 
+func ToggleAutopilotInStc() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating autopilot pod is deleted")
+	checkPodIsDeleted := func() (interface{}, bool, error) {
+		autopilotLabels := make(map[string]string)
+		autopilotLabels["name"] = "autopilot"
+		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
+		expect(err).NotTo(haveOccurred())
+		if stc.Spec.Autopilot.Enabled {
+			log.Infof("autopilot is active, checking is pod is present.")
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("autopilot pod is still not deployed")
+			}
+			return "autopilot pod deployed", false, nil
+		} else {
+			log.Infof("autopilot is inactive, checking if pod is deleted.")
+			if len(pods.Items) > 0 {
+				return "", true, fmt.Errorf("autopilot pod is still present")
+			}
+			return "autopilot pod is deleted", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+	log.InfoD("Update STC, is AutopilotEnabled Now?: %t", stc.Spec.Autopilot.Enabled)
+	return nil
+}
+
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 	context("Validating portworx pods restart count ...", func() {

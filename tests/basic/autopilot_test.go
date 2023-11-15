@@ -193,7 +193,84 @@ var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
 	})
 })
 
+// This testsuite is used applying autopilot rules on a detached volume and validates the size of PVC
+var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
+	var testrailID = 93323
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93323
+	var runID int
+	tags["volumeChange"] = "true"
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), "Toggles the autopilot from STC", tags, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	It("has to, toggle stc to disable autopilot, then enable it back", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sToggleAutopilot", testSuiteName))
+		Step("Toggle autopilot", func() {
+			err := ToggleAutopilotInStc()
+			Expect(err).NotTo(HaveOccurred())
+			time.Sleep(30 * time.Second)
+		})
+		Step("schedule applications", func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				for id, apRule := range autopilotPVCRule {
+					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
+					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
+					labels := map[string]string{
+						"autopilot": apRule.Name,
+					}
+					apRule.Spec.ActionsCoolDownPeriod = int64(60)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						AutopilotRule:      apRule,
+						Labels:             labels,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(context).NotTo(BeEmpty())
+					contexts = append(contexts, context...)
+				}
+			}
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
+			time.Sleep(unscheduledResizeTimeout)
+		})
+
+		Step("Toggle autopilot", func() {
+			err := ToggleAutopilotInStc()
+			Expect(err).NotTo(HaveOccurred())
+			time.Sleep(30 * time.Second)
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var pvcRule = aututils.PVCRuleByTotalSize(10, 100, "20Gi")
+
 // This test checks if removing the label from PVC will not trigger a rule, but when added back it should update the PVC
 var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 	var testrailID = 93307
@@ -231,10 +308,10 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 		})
 		msg := "Removing the label"
 		log.Infof(msg)
-		Step(msg, func(){
+		Step(msg, func() {
 			time.Sleep(5 * time.Second)
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] =  fmt.Sprintf("%s-No-OP", pvcRule.Name)
+			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s-No-OP", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -246,7 +323,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 		log.InfoD(msg)
 		Step(msg, func() {
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] =  fmt.Sprintf("%s", pvcRule.Name)
+			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
