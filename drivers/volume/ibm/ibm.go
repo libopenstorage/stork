@@ -2,9 +2,11 @@ package ibm
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -72,6 +74,15 @@ func (i *ibm) GetDriverVersion() (string, error) {
 func (i *ibm) RefreshDriverEndpoints() error {
 	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", i.String())
 	return nil
+}
+
+// InspectVolume inspects the volume with the given name
+func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
+	log.Warnf("InspectVolume function has not been implemented for volume driver - %s", i.String())
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InspectVolume()",
+	}
 }
 
 func init() {
