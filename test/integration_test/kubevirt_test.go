@@ -28,7 +28,9 @@ const (
 	importerPodRetryInterval     = 10 * time.Second
 
 	kubevirtTemplates                     = "kubevirt-templates"
+	kubevirtDatadiskTemplates             = "kubevirt-datadisk-templates"
 	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
+	kubevirtDatadiskNamespace             = "openshift-virtualization-datadisk-templates"
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
 	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
 
@@ -40,13 +42,17 @@ func TestKubevirt(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
 
-	err = createTemplatePVC(t)
+	err = createImageTemplates(t)
+	require.NoError(t, err, "Error creating kubevirt templates")
+
+	err = createDatadiskTemplates(t)
 	require.NoError(t, err, "Error creating kubevirt templates")
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
 	t.Run("kubevirtDeployWindowsServerWithClonePVC", kubevirtDeployWindowsServerWithClonePVC)
 	t.Run("kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer", kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer)
 	t.Run("kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer", kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer)
+	t.Run("kubevirtDeployFedoraVMMultiVolume", kubevirtDeployFedoraVMMultiVolume)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
@@ -62,6 +68,7 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 		instanceID,
 		appKey,
 		deployedVMName,
+		false,
 	)
 
 	destroyAndWait(t, ctxs)
@@ -84,6 +91,7 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 		instanceID,
 		appKey,
 		deployedVMName,
+		false,
 	)
 
 	destroyAndWait(t, ctxs)
@@ -98,6 +106,7 @@ func kubevirtVMDeployAndValidate(
 	instanceID string,
 	appKey string,
 	deployedVMName string,
+	multiVolume bool,
 ) []*scheduler.Context {
 	ctxs, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{
@@ -114,7 +123,7 @@ func kubevirtVMDeployAndValidate(
 	require.NoError(t, err, "Error listing virtual machines")
 
 	for _, vm := range vms.Items {
-		validateVM(t, vm, deployedVMName)
+		validateVM(t, vm, deployedVMName, multiVolume)
 	}
 	return ctxs
 }
@@ -132,6 +141,7 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 		instanceID,
 		appKey,
 		deployedVMName,
+		false,
 	)
 
 	destroyAndWait(t, ctxs)
@@ -154,6 +164,7 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 		instanceID,
 		appKey,
 		deployedVMName,
+		false,
 	)
 
 	destroyAndWait(t, ctxs)
@@ -163,15 +174,42 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func validateVM(t *testing.T, virtualMachine kubevirtv1.VirtualMachine, vmName string) {
+func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
+	var testrailID, testResult = 50803, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "vm"
+	appKey := "kubevirt-fedora-multiple-disks"
+	deployedVMName := "fedora-vm-multidisk"
+
+	ctxs := kubevirtVMDeployAndValidate(
+		t,
+		instanceID,
+		appKey,
+		deployedVMName,
+		true,
+	)
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func validateVM(t *testing.T, virtualMachine kubevirtv1.VirtualMachine, vmName string, multiVol bool) {
 	require.Equal(t, virtualMachine.Name, vmName, "VM %s has not been deployed", vmName)
 	require.Equal(t, virtualMachine.Status.Created, true, "VM %s created status is: %t", virtualMachine.Name, virtualMachine.Status.Created)
 	require.Equal(t, virtualMachine.Status.Ready, true, "VM %s ready status is: %t", virtualMachine.Name, virtualMachine.Status.Ready)
 
+	if multiVol {
+		// verify there are multiple volumes mounted by the virtual machine in case of multi volume config
+		require.Greater(t, len(virtualMachine.Spec.Template.Spec.Volumes), 2, "VM %s does not have the required data disks", virtualMachine.Name)
+	}
 	// TODO add more validations here if required
 }
 
-func createTemplatePVC(t *testing.T) error {
+func createImageTemplates(t *testing.T) error {
 	_, err := schedulerDriver.Schedule("",
 		scheduler.ScheduleOptions{
 			AppKeys:   []string{kubevirtTemplates},
@@ -203,4 +241,21 @@ func createTemplatePVC(t *testing.T) error {
 	}
 
 	return err
+}
+
+func createDatadiskTemplates(t *testing.T) error {
+	ctxs, err := schedulerDriver.Schedule("",
+		scheduler.ScheduleOptions{
+			AppKeys:   []string{kubevirtDatadiskTemplates},
+			Namespace: kubevirtDatadiskNamespace,
+		})
+	if err != nil {
+		return fmt.Errorf("error deploying kubevirt datadisk templates")
+	}
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	if err != nil {
+		return fmt.Errorf("error waiting to provision kubevirt data disk PVCs")
+	}
+	return nil
 }
