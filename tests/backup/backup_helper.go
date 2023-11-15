@@ -5446,7 +5446,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("Current version is - %s", current)
+	log.Infof("Current version is - %s. Trying to upgrade to - %s", current, versionToUpgrade)
 
 	// Compare and validate the upgrade path
 	currentKubevirtVersionSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(current, "v", "")))

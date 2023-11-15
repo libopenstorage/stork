@@ -9855,7 +9855,7 @@ func DeletePXPods(nameSpace string) error {
 
 func GetKubevirtVersionToUpgrade() string {
 	kubevirtVersion, present := os.LookupEnv("KUBEVIRT_UPGRADE_VERSION")
-	if present {
+	if present && kubevirtVersion != "" {
 		return kubevirtVersion
 	}
 	return LatestKubevirtVersion
