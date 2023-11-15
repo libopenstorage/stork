@@ -564,21 +564,22 @@ func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
 		return err
 	}
 	log.Debugf("User cluster node pool upgrade started at: [%v]", initNodeUpgradeTime.Format(time.UnixDate))
-	poolMap, err := getNodesSortByAge()
+	sortedNodes, err := getNodesSortByAge()
 	if err != nil {
 		return err
 	}
-	for _, sortedNodes := range poolMap {
-		startTime := initNodeUpgradeTime
-		for _, node := range sortedNodes {
-			diff := node.CreationTimestamp.Sub(startTime)
-			if diff > errorTimeDuration {
-				return fmt.Errorf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
-					node.Name, diff, errorTimeDuration)
-			}
-			log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
-			startTime = node.CreationTimestamp.Time
+
+	// As PX support one extra static IP across all node pool
+	// this means Anthos node upgrade will be sequential
+	startTime := initNodeUpgradeTime
+	for _, node := range sortedNodes {
+		diff := node.CreationTimestamp.Sub(startTime)
+		if diff > errorTimeDuration {
+			return fmt.Errorf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
+				node.Name, diff, errorTimeDuration)
 		}
+		log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
+		startTime = node.CreationTimestamp.Time
 	}
 	return nil
 }
@@ -642,30 +643,19 @@ func (anth *anthos) updateFileOwnership(dirPath string) error {
 	return nil
 }
 
-// getNodesSortByAge return pool node list map of sorted node list by their age
-func getNodesSortByAge() (map[string][]corev1.Node, error) {
-	poolMap := make(map[string][]corev1.Node)
+// getNodesSortByAge return sorted node list by their age
+func getNodesSortByAge() ([]corev1.Node, error) {
 	nodeList, err := k8sCore.GetNodes()
 	if err != nil {
 		return nil, err
 	}
-	nodeSlice := nodeList.Items
-	for _, node := range nodeSlice {
-		key, ok := node.Labels[labelKey]
-		if ok {
-			pool, _ := poolMap[key]
-			pool = append(pool, node)
-			poolMap[key] = pool
-		}
-	}
 
-	for _, poolList := range poolMap {
-		sort.Slice(poolList, func(i, j int) bool {
-			return poolList[i].CreationTimestamp.Before(&poolList[j].CreationTimestamp)
-		})
-	}
-	log.Info("Successfully retrieved sorted nodes")
-	return poolMap, nil
+	sort.Slice(nodeList.Items, func(i, j int) bool {
+		return nodeList.Items[i].CreationTimestamp.Before(&nodeList.Items[j].CreationTimestamp)
+	})
+
+	log.Infof("Successfully retrieved sorted nodes: [%v]", nodeList.Items)
+	return nodeList.Items, nil
 }
 
 // downloadAndInstallGsutils download and install gsutil for google cloud
