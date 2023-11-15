@@ -2,6 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"github.com/Masterminds/semver/v3"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"math"
 	"math/rand"
 	"reflect"
@@ -130,12 +133,15 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+			enterPoolMaintenanceAddDisk(poolIDToResize)
+			defer exitPoolMaintenance(poolIDToResize)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
+
 		})
 
 		Step("Ensure that new pool has been expanded to the expected size", func() {
@@ -425,6 +431,8 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
 			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+			enterPoolMaintenanceAddDisk(poolIDToResize)
+			defer enterPoolMaintenanceAddDisk(poolIDToResize)
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
@@ -484,6 +492,7 @@ var _ = Describe("{NodePoolsAddDisk}", func() {
 func nodePoolsExpansion(testName string) {
 
 	var operation api.SdkStoragePool_ResizeOperationType
+	var poolsExpectedSizeMap map[string]uint64
 	var option string
 	if testName == "NodePoolsResizeDisk" {
 		operation = api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
@@ -495,6 +504,7 @@ func nodePoolsExpansion(testName string) {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest(testName, fmt.Sprintf("Validate multi storage pools on the same node expansion  using %s option", option), nil, 0)
+		poolsExpectedSizeMap = make(map[string]uint64)
 	})
 
 	var (
@@ -561,7 +571,7 @@ func nodePoolsExpansion(testName string) {
 
 		var expectedSize uint64
 		var expectedSizeWithJournal uint64
-		poolsExpectedSizeMap := make(map[string]uint64)
+
 		isjournal, err := IsJournalEnabled()
 		log.FailOnError(err, "Failed to check is Journal Enabled")
 		stepLog = fmt.Sprintf("Calculate expected pool size and trigger pool resize for %s", nodePoolToExpanded.Name)
@@ -579,6 +589,10 @@ func nodePoolsExpansion(testName string) {
 					expectedSizeWithJournal = expectedSizeWithJournal - 3
 				}
 				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+				if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+					enterPoolMaintenanceAddDisk(poolToBeResized.Uuid)
+				}
+
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool %s expansion init succesful?", poolToBeResized.Uuid))
 				err = WaitForExpansionToStart(poolToBeResized.Uuid)
@@ -592,6 +606,9 @@ func nodePoolsExpansion(testName string) {
 					}
 				}
 				log.FailOnError(err, "pool expansion not started")
+				if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+					exitPoolMaintenance(poolToBeResized.Uuid)
+				}
 			}
 
 			for poolUUID, expectedSize := range poolsExpectedSizeMap {
@@ -628,6 +645,10 @@ func nodePoolsExpansion(testName string) {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		for poolUUID, _ := range poolsExpectedSizeMap {
+			exitPoolMaintenance(poolUUID)
+		}
+
 		AfterEachTest(contexts)
 	})
 }
@@ -749,7 +770,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		stepLog = fmt.Sprintf("Trigger pool %s resize by add-disk", poolIDToResize)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			dash.VerifyFatal(err, nil, "Validate is journal enabled check")
+			enterPoolMaintenanceAddDisk(poolIDToResize)
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, false)
 			log.FailOnError(err, "failed to initiate pool expansion")
 		})
@@ -794,6 +815,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			log.FailOnError(err, "is journal enabled check failed")
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
 			log.FailOnError(err, "Error waiting for pool resize")
+			exitPoolMaintenance(poolIDToResize)
 
 			//validating new pool rebalance
 			log.InfoD("Validate pool rebalance after drive add")
@@ -1422,11 +1444,13 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+			enterPoolMaintenanceAddDisk(poolToBeResized.Uuid)
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			log.FailOnError(err, fmt.Sprintf("Pool %s expansion init failed", poolToResize.Uuid))
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+			exitPoolMaintenance(poolToBeResized.Uuid)
 		})
 
 	})
@@ -1520,6 +1544,7 @@ func GetNodeWithLeastSize() *node.Node {
 	currLowestSize = 54975581388800 / units.GiB
 	for _, n := range stNodes {
 		plSize := getTotalPoolSize(n) / units.GiB
+		log.Debugf(fmt.Sprintf("Total pool size on node [%s] is [%d]Gib", n.Name, plSize))
 		if plSize < currLowestSize {
 			currLowestSize = plSize
 			selectedNode = n
@@ -1788,6 +1813,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			enterPoolMaintenanceAddDisk(selectedPool.Uuid)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
@@ -1807,6 +1833,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, selectedNode.Name))
+			exitPoolMaintenance(selectedPool.Uuid)
 		})
 
 		stepLog = fmt.Sprintf("Expanding pool 3rd time on node %s and pool UUID: %s using add-disk", selectedNode.Name, selectedPool.Uuid)
@@ -2020,6 +2047,7 @@ var _ = Describe("{AddWithPXRestart}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			enterPoolMaintenanceAddDisk(selectedPool.Uuid)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
@@ -2030,6 +2058,7 @@ var _ = Describe("{AddWithPXRestart}", func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
+			exitPoolMaintenance(selectedPool.Uuid)
 
 		})
 
@@ -2361,11 +2390,13 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			enterPoolMaintenanceAddDisk(selectedPool.Uuid)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
+			exitPoolMaintenance(selectedPool.Uuid)
 
 		})
 		err = ValidateReplFactorUpdate(volSelected, newRep+1)
@@ -4370,6 +4401,9 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		selectedNode := GetNodeWithLeastSize()
+		if selectedNode.Name == "" {
+			log.FailOnError(fmt.Errorf("unable get node with least size"), "error identifying the node with least size")
+		}
 		log.Infof(fmt.Sprintf("Node %s is marked for repl 1", selectedNode.Name))
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
@@ -6322,9 +6356,6 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
 			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 
-		//Wait till the Node goes down
-		log.FailOnError(Inst().V.WaitDriverDownOnNode(*nodeDetail), fmt.Sprintf("Failed while waiting node to become down [%v]", nodeDetail.Name))
-
 		// Delete the Pool with Invalid Pool ID
 		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID, false)
 		dash.VerifyFatal(err != nil, true,
@@ -6334,6 +6365,9 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		// Exit pool maintenance and see if px becomes operational
 		err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeDetail.Name)
+
+		nodeDetail, err = GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
 		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
 		log.FailOnError(err, "volume driver down on node %s", nodeDetail.Name)
@@ -9904,3 +9938,58 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 	})
 
 })
+
+func isMaintenanceModeRequiredForAddDisk() bool {
+	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+		cmd := "uname -r"
+
+		stNode := node.GetStorageDriverNodes()[0]
+		// Execute the command to generate kernel panic
+		log.Infof("Executing command on node, [%v]", stNode.Name)
+		versionOutput, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		log.FailOnError(err, "error getting kernal version")
+
+		parts := strings.Split(versionOutput, "-")
+
+		if len(parts) >= 1 {
+			kernelVersion := parts[0]
+			parsedVersion, err := semver.NewVersion(kernelVersion)
+			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", kernelVersion))
+			compareVersion, err := semver.NewVersion("5.9.0")
+			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", "5.9.0"))
+			if parsedVersion.LessThan(compareVersion) {
+				return true
+			}
+		} else {
+			log.FailOnError(fmt.Errorf("unable for extract major kernal version using version: %s", versionOutput), "error in validating kernal version")
+		}
+
+	}
+	return false
+}
+
+func enterPoolMaintenanceAddDisk(poolId string) {
+	if ok := isMaintenanceModeRequiredForAddDisk(); ok {
+		n, err := GetNodeWithGivenPoolID(poolId)
+		log.FailOnError(err, fmt.Sprintf("error getting node with pool uid [%s]", poolId))
+		err = Inst().V.EnterPoolMaintenance(*n)
+		log.FailOnError(err, fmt.Sprintf("error entering pool maintenance pool uid [%s]", poolId))
+	}
+}
+
+func exitPoolMaintenance(poolId string) {
+	n, err := GetNodeWithGivenPoolID(poolId)
+	log.FailOnError(err, fmt.Sprintf("error getting node with pool uid [%s]", poolId))
+	status, err := Inst().V.GetNodePoolsStatus(*n)
+	log.FailOnError(err, fmt.Sprintf("error getting node %s pool status", n.Name))
+	log.InfoD(fmt.Sprintf("Pool %s has status %s", n.Name, status[poolId]))
+	if status[poolId] == "In Maintenance" {
+		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", n.Name))
+		err = Inst().V.ExitPoolMaintenance(*n)
+		log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", n.Name))
+	}
+
+}

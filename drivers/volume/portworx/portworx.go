@@ -3498,15 +3498,22 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	if err := d.EnterMaintenance(*n); err != nil {
-		return &ErrFailedToDecommissionNode{
-			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to enter maintenence mode on node [%s], Err: %v", n.Name, err),
+	err := d.EnterMaintenance(*n)
+	//check for storageless node
+	if err != nil && len(n.StoragePools) == 0 {
+		log.Infof("validating status for storageless node [%s]", n.Name)
+		stNode, nodeStatusErr := d.GetDriverNode(n)
+		if nodeStatusErr != nil {
+			return nodeStatusErr
+		}
+		if stNode.Status == api.Status_STATUS_OFFLINE {
+			//setting nil as OFFLINE status is expected for storageless nodes
+			err = nil
 		}
 	}
-
-	log.Infof("Waiting for a minute for node [%s] to transition to maintenance mode", n.Name)
-	time.Sleep(1 * time.Minute)
+	if err != nil {
+		return err
+	}
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
@@ -3522,7 +3529,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		if err != nil {
 			return false, true, fmt.Errorf("failed getting node [%s] status", n.Name)
 		}
-		if stNode.Status == api.Status_STATUS_MAINTENANCE {
+		if stNode.Status == api.Status_STATUS_MAINTENANCE || stNode.Status == api.Status_STATUS_OFFLINE {
 			return true, false, nil
 		}
 		return false, true, fmt.Errorf("waiting for node [%s] to be in maintenence mode, current Status: %v", n.Name, stNode.Status)
