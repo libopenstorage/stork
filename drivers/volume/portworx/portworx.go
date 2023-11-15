@@ -1258,6 +1258,15 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 			}
 		}
+
+		// DevicePath
+		// TODO: remove this retry once PWX-27773 is fixed
+		// It is noted that the DevicePath is intermittently empty.
+		// The check below validates the response by ensuring the device path is not empty
+		if vol.DevicePath == "" {
+			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
+		}
+
 		return vol, false, nil
 	}
 
@@ -2488,7 +2497,7 @@ func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
 func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 	var proxySpec *api.ProxySpec
 	var err error
-	if proxySpec, err = d.getProxySpecForAVolume(volume); err != nil {
+	if proxySpec, err = d.GetProxySpecForAVolume(volume); err != nil {
 		return false, err
 	}
 
@@ -2505,8 +2514,8 @@ func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 	return false, nil
 }
 
-// getProxySpecForAVolume return proxy spec for a pure volumes
-func (d *portworx) getProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+// GetProxySpecForAVolume return proxy spec for a pure volumes
+func (d *portworx) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
 	name := d.schedOps.GetVolumeName(volume)
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: name})
@@ -2532,7 +2541,7 @@ func (d *portworx) getProxySpecForAVolume(volume *torpedovolume.Volume) (*api.Pr
 func (d *portworx) IsPureFileVolume(volume *torpedovolume.Volume) (bool, error) {
 	var proxySpec *api.ProxySpec
 	var err error
-	if proxySpec, err = d.getProxySpecForAVolume(volume); err != nil {
+	if proxySpec, err = d.GetProxySpecForAVolume(volume); err != nil {
 		return false, err
 	}
 	if proxySpec == nil {

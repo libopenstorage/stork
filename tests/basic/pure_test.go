@@ -7,10 +7,12 @@ import (
 
 	"math/rand"
 
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/osutils"
-	v1 "k8s.io/api/core/v1"
 
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/core"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 	"sync"
 	"time"
@@ -171,6 +173,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 				"FADA/Generic Volumes while kvdb failover in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
+	contexts := make([]*scheduler.Context, 0)
 
 	stepLog := "Validate no panics when creating more number of pods on FADA/Generic " +
 		"Volumes while kvdb failover in progress"
@@ -1264,5 +1267,291 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{ResizePVCToMaxLimit}", func() {
+
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20636
+			https://portworx.atlassian.net/browse/PTX-20637
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/87940
+			https://portworx.testrail.net/index.php?/tests/view/87941
+	*/
+
+	// Backend represents the cloud storage provider for volume provisioning
+	type Backend string
+
+	const (
+		BackendPure    Backend = "PURE"
+		BackendVSphere Backend = "VSPHERE"
+		BackendUnknown Backend = "UNKNOWN"
+	)
+
+	// VolumeType represents the type of provisioned volume
+	type VolumeType string
+
+	const (
+		VolumeFADA    VolumeType = "FADA"
+		VolumeFBDA    VolumeType = "FBDA"
+		VolumeFACD    VolumeType = "FACD"
+		VolumeVsCD    VolumeType = "VsCD"
+		VolumeUnknown VolumeType = "UNKNOWN"
+	)
+
+	var (
+		contexts            = make([]*scheduler.Context, 0)
+		backend             = BackendUnknown
+		volumeMap           = make(map[VolumeType][]*api.Volume)
+		volumeCtxMap        = make(map[string]*scheduler.Context)
+		steps        uint64 = 5
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizePVCToMaxLimit", "Validate PVC resize to max limit", nil, 87940)
+	})
+
+	It("Validates PVC resize to max limit", func() {
+		// getPureMaxVolSize returns the maximum volume size based on the given volume type on pure backend
+		getPureMaxVolSize := func(volType VolumeType) uint64 {
+			switch volType {
+			case VolumeFADA, VolumeFBDA:
+				return 100 * units.TiB
+			default:
+				return uint64(MaxVolumeSize) * units.TiB
+			}
+		}
+		// getMaxVolSize gets the maximum volume size based on the given backend and volume type
+		getMaxVolSize := func(backend Backend, volType VolumeType) uint64 {
+			switch backend {
+			case BackendPure:
+				return getPureMaxVolSize(volType)
+			default:
+				return 40 * units.TiB
+			}
+		}
+		// getResizeSequence generates a sequence of sizes to resize to, based on the start, max values and number of steps
+		getResizeSequence := func(start uint64, max uint64, steps uint64) []uint64 {
+			seq := make([]uint64, 0)
+			if steps == 0 {
+				return []uint64{max}
+			}
+			if start >= max {
+				log.Errorf("start value [%d] should be less than max value [%d]", start, max)
+				return nil
+			}
+			d := (max - start) / steps
+			for i := uint64(1); i <= steps; i++ {
+				value := start + i*d
+				seq = append(seq, value)
+			}
+			return seq
+		}
+		// getPureVolumeType determines the type of the volume based on the proxy spec
+		getPureVolumeType := func(vol *volume.Volume) (VolumeType, error) {
+			proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+			if err != nil {
+				return "", fmt.Errorf("failed to get proxy spec for the volume [%s/%s]. Err: [%v]", vol.Namespace, vol.Name, err)
+			}
+			if proxySpec != nil {
+				switch proxySpec.ProxyProtocol {
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					return VolumeFBDA, nil
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					return VolumeFADA, nil
+				default:
+					return VolumeUnknown, nil
+				}
+			} else {
+				return VolumeFACD, nil
+			}
+		}
+		// formatMaxVolSizeReachedErrorMessage formats the error message when the maximum volume size is reached
+		formatMaxVolSizeReachedErrorMessage := func(allowedSize uint64, requestedSize uint64) string {
+			return "rpc error: code = Internal desc = Failed to update volume: " +
+				"rpc error: code = Internal desc = Failed to update volume: " +
+				"Feature upgrade needed. Licensed maximum reached for " +
+				"'VolumeSize' feature (allowed " + fmt.Sprintf("%d", allowedSize/units.GiB) +
+				" GiB, requested " + fmt.Sprintf("%d", requestedSize/units.GiB) + " GiB)\n"
+		}
+		// getContextAndPVC retrieves the scheduler context and PVC spec associated with a given volume
+		getContextAndPVC := func(vol *api.Volume) (*scheduler.Context, *v1.PersistentVolumeClaim, error) {
+			pvcName := vol.Spec.VolumeLabels["pvc"]
+			namespace := vol.Spec.VolumeLabels["namespace"]
+			pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get PVC [%s/%s] spec", pvcName, namespace)
+			}
+			if ctx, ok := volumeCtxMap[vol.Id]; !ok {
+				return nil, nil, fmt.Errorf("context associated with PVC [%s/%s] not found", pvcName, namespace)
+			} else {
+				return ctx, pvc, nil
+			}
+		}
+		// getPVCSize returns the requested storage size of the given PVC in bytes
+		getPVCSize := func(pvc *v1.PersistentVolumeClaim) (uint64, error) {
+			storage, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+			if !ok {
+				return 0, fmt.Errorf("failed to get storage resource request from PVC [%v]", pvc)
+			}
+			return uint64(storage.Value()), nil
+		}
+		// resizePVC resizes the given PVC using K8s API
+		resizePVC := func(volType VolumeType, vol *api.Volume, newSize uint64) error {
+			ctx, pvc, err := getContextAndPVC(vol)
+			if err != nil {
+				return fmt.Errorf("failed to get pvc from contexts. Err: [%v]", err)
+			}
+			pvcSize, err := getPVCSize(pvc)
+			if err != nil {
+				return fmt.Errorf("failed to get pvc [%v] size. Err: [%v]", pvc, err)
+			}
+			// adjustedSize ensures ResizePVC sets the volume to newSize
+			adjustedSize := newSize - pvcSize
+			log.Infof("Adjusted size for resizing [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, adjustedSize)
+			_, err = Inst().S.ResizePVC(ctx, pvc, adjustedSize/units.GiB)
+			if err != nil {
+				return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, pvcSize, newSize, err)
+			}
+			return nil
+		}
+		// resizeVolume attempts to resize the volume to the maximum allowed size
+		resizeVolume := func(volType VolumeType, vol *api.Volume) error {
+			maxVolSize := getMaxVolSize(backend, volType)
+			previousSize := vol.Spec.Size
+			resizeSequence := getResizeSequence(vol.Spec.Size, maxVolSize, steps)
+			log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
+			waitForResizeCompletionBasedOnSize := func(newSize uint64) (interface{}, bool, error) {
+				vol, err = Inst().V.InspectVolume(vol.Id)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to inspect [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+				}
+				if vol.Spec.Size == newSize {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("volume size mismatch: inspected [%d], estimated [%d]", vol.Spec.Size, newSize)
+			}
+			for _, newSize := range resizeSequence {
+				log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, previousSize, newSize)
+				switch volType {
+				case VolumeFADA:
+					err = resizePVC(volType, vol, newSize)
+				default:
+					err = Inst().V.ResizeVolume(vol.Id, newSize)
+				}
+				if err != nil {
+					return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, previousSize, newSize, err)
+				}
+				waitForResizeCompletion := func() (interface{}, bool, error) {
+					return waitForResizeCompletionBasedOnSize(newSize)
+				}
+				_, err = task.DoRetryWithTimeout(waitForResizeCompletion, 10*time.Minute, 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to wait for volume [%s] resize completion. Err: [%v]", vol.Locator.Name, err)
+				}
+				previousSize = newSize
+			}
+			newSize := 2 * previousSize
+			log.Infof("Resizing [%s] volume [%s/%s] from [%d] to size [%d], which is over the limit [%d]", volType, vol.Id, vol.Locator.Name, previousSize, newSize, maxVolSize)
+			switch volType {
+			case VolumeFADA:
+				err = resizePVC(volType, vol, newSize)
+				waitForResizeCompletion := func() (interface{}, bool, error) {
+					return waitForResizeCompletionBasedOnSize(newSize)
+				}
+				_, err = task.DoRetryWithTimeout(waitForResizeCompletion, 10*time.Minute, 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to wait for volume [%s] resize completion. Err: [%v]", vol.Locator.Name, err)
+				}
+			default:
+				err = Inst().V.ResizeVolume(vol.Id, newSize)
+			}
+			if err != nil {
+				switch err.Error() {
+				case formatMaxVolSizeReachedErrorMessage(vol.Spec.Size, newSize):
+					log.InfoD("Skipping error [%v] as it falls within expected behavior", err)
+					return nil
+				default:
+					return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size, newSize, err)
+				}
+			}
+			return nil
+		}
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("pure-test-%d", i)
+				for _, ctx := range ScheduleApplications(taskName) {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+				}
+			}
+		})
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Identify backend and categorize volumes", func() {
+			log.InfoD("Identifying backend")
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
+			log.FailOnError(err, "failed to get secret list from namespace [%s]", volDriverNamespace)
+			for _, secret := range secretList.Items {
+				switch secret.Name {
+				case PX_PURE_SECRET_NAME:
+					backend = BackendPure
+					break
+				case PX_VSPHERE_SCERET_NAME:
+					backend = BackendVSphere
+					break
+				}
+			}
+			log.InfoD("Backend: %v", backend)
+			log.InfoD("Categorizing volumes")
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
+				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
+				// The CloudStorage.Provider in StorageCluster Spec is not accurate
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					switch backend {
+					case BackendPure:
+						volType, err := getPureVolumeType(vol)
+						log.FailOnError(err, "failed to get pure volume type for volume [%+v]", vol)
+						volumeMap[volType] = append(volumeMap[volType], apiVol)
+					case BackendVSphere:
+						volumeMap[VolumeVsCD] = append(volumeMap[VolumeVsCD], apiVol)
+					default:
+						volumeMap[VolumeUnknown] = append(volumeMap[VolumeUnknown], apiVol)
+					}
+					volumeCtxMap[apiVol.Id] = ctx
+				}
+			}
+		})
+		Step("Resize a random volume of each type to max limit", func() {
+			log.InfoD("Resizing a random volume of each type to max limit")
+			for volType, vols := range volumeMap {
+				if len(vols) > 0 {
+					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+					vol := vols[rand.Intn(len(vols))]
+					log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(backend, volType))
+					err := resizeVolume(volType, vol)
+					log.FailOnError(err, "failed to resize random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(backend, volType))
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Destroying applications")
+		DestroyApps(contexts, opts)
 	})
 })

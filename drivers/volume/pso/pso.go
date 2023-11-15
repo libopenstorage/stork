@@ -2,6 +2,7 @@ package pso
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 	"strings"
 
 	"github.com/portworx/sched-ops/k8s/core"
@@ -92,6 +93,11 @@ func (d *pso) GetDriverVersion() (string, error) {
 func (d *pso) RefreshDriverEndpoints() error {
 	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", d.String())
 	return nil
+}
+
+func (d *pso) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
 }
 
 // GetPsoNamespace returns namespace where PSO is running

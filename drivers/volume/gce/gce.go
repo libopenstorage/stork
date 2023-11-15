@@ -2,6 +2,7 @@ package gce
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -28,6 +29,11 @@ type gce struct {
 
 func (d *gce) String() string {
 	return string(GceStorage)
+}
+
+func (d *gce) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
 }
 
 func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {

@@ -3,6 +3,7 @@ package linstor
 import (
 	"context"
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 	"time"
 
 	lclient "github.com/LINBIT/golinstor/client"
@@ -120,6 +121,11 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 
 	log.Debugf("LINSTOR is fully operational on node: %s", n.Name)
 	return nil
+}
+
+func (d *linstor) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
 }
 
 func init() {

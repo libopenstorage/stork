@@ -2,6 +2,7 @@ package aws
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -35,6 +36,11 @@ func (d *aws) ValidateVolumeCleanup() error {
 
 func (d *aws) RefreshDriverEndpoints() error {
 	return nil
+}
+
+func (d *aws) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
 }
 
 func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {

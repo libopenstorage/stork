@@ -76,6 +76,11 @@ func (i *ibm) RefreshDriverEndpoints() error {
 	return nil
 }
 
+func (i *ibm) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", i.String())
+	return nil, nil
+}
+
 // InspectVolume inspects the volume with the given name
 func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 	log.Warnf("InspectVolume function has not been implemented for volume driver - %s", i.String())
