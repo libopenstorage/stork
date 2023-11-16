@@ -165,6 +165,10 @@ func (s *SSH) updateDriver() error {
 	if err != nil {
 		return err
 	}
+	if execPodNamespace == "" {
+		log.Warnf("Unable to find portworx namespace. Setting debug pod namespace to kube-system")
+		execPodNamespace = "kube-system"
+	}
 	s.execPodNamespace = execPodNamespace
 	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
 
