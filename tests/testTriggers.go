@@ -717,9 +717,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 				if !strings.Contains(cVol.DevicePath, "pxd/") {
 					return cVol, true, fmt.Errorf("path %s is not correct", cVol.DevicePath)
 				}
-				// It is noted that the DevicePath is intermittently empty.
-				// This check ensures the device path is not empty for volumes, bypassing the check for snapshots
-				if cVol.Source.Parent == "" && cVol.DevicePath == "" {
+				if cVol.DevicePath == "" {
 					return cVol, false, fmt.Errorf("device path is not present for volume: %s", vol)
 				}
 				return cVol, true, err
