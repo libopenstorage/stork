@@ -755,6 +755,9 @@ func (r *ResourceCollector) pruneOwnedResources(
 							objectType.GetKind() != "StatefulSet" &&
 							objectType.GetKind() != "ReplicaSet" &&
 							objectType.GetKind() != "DeploymentConfig" &&
+							objectType.GetKind() != "ServiceAccount" &&
+							objectType.GetKind() != "Role" &&
+							objectType.GetKind() != "RoleBinding" &&
 							objectType.GetKind() != "Service" {
 							continue
 						}
