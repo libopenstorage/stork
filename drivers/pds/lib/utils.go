@@ -2378,6 +2378,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	var resourceTemp ResourceSettingTemplate
 	var storageOp StorageOptions
 	var dbConfig DBConfig
+	var docImage string
 
 	labelSelector := make(map[string]string)
 	labelSelector["name"] = deployment.GetClusterResourceName()
@@ -2404,7 +2405,12 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	}
 
 	//Get the ds version from the sts
-	docImage := dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Image
+	if dataService == mssql {
+		docImage = dbConfig.Spec.StatefulSet.Template.Spec.Containers[1].Image
+	} else {
+		docImage = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Image
+	}
+	log.Debugf("docImage [%v]", docImage)
 	dsVersionImageTag := strings.Split(docImage, ":")
 	log.Debugf("version tag %v", dsVersionImageTag[1])
 
