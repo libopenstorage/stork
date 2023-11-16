@@ -162,24 +162,7 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
-	// Ignore CSI Snapshot object
-	if resource.Kind == "VolumeSnapshot" {
-		return false
-	}
-
-	// Include all namespaced CRDs
-	for _, res := range crdKinds {
-		if res.Kind == resource.Kind &&
-			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
-			return true
-		}
-	}
-
-	return GetSupportedK8SResources(resource.Kind, optionalResourceTypes)
-}
-
-func resourceToBeCollectedWithExcludeTypes(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string, exlcudeTypes []string) bool {
+func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string, exlcudeTypes []string) bool {
 	// Ignore CSI Snapshot object
 	if resource.Kind == "VolumeSnapshot" {
 		return false
@@ -194,7 +177,9 @@ func resourceToBeCollectedWithExcludeTypes(resource metav1.APIResource, grp sche
 	// Include all namespaced CRDs
 	for _, res := range crdKinds {
 		if res.Kind == resource.Kind &&
-			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
+			res.Group == grp.Group &&
+			res.Version == grp.Version &&
+			resource.Namespaced {
 			return true
 		}
 	}
@@ -278,7 +263,7 @@ func (r *ResourceCollector) GetResourceTypes(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, []string{}) {
 				continue
 			}
 			resource.Group = groupVersion.Group
@@ -389,7 +374,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
@@ -452,7 +437,7 @@ func (r *ResourceCollector) GetResourcesExcludingTypes(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollectedWithExcludeTypes(resource, groupVersion, crdResources, optionalResourceTypes, excludeResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, excludeResourceTypes) {
 				continue
 			}
 			objectsCollected, err := r.getParticularResourceInNamespaces(
@@ -489,7 +474,7 @@ func (r *ResourceCollector) GetResourcesExcludingTypes(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
@@ -553,7 +538,7 @@ func (r *ResourceCollector) GetResources(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, []string{}) {
 				continue
 			}
 			objectsCollected, err := r.getParticularResourceInNamespaces(
@@ -590,7 +575,7 @@ func (r *ResourceCollector) GetResources(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}

@@ -2826,7 +2826,14 @@ func getRelatedCRDListWRTGroupAndCategories(client *apiextensionsclient.Clientse
 	return filteredCRDList
 }
 
-func (m *MigrationController) getResources(namespaces []string, migration *stork_api.Migration, labelSelectors map[string]string, excludeSelectors map[string]string, resourceCollectorOpts resourcecollector.Options, remote bool) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
+func (m *MigrationController) getResources(
+	namespaces []string,
+	migration *stork_api.Migration,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	resourceCollectorOpts resourcecollector.Options,
+	remote bool,
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
 
 	var objects []runtime.Unstructured
 	var pvcs []v1.PersistentVolumeClaim
