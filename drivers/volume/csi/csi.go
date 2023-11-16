@@ -1409,22 +1409,37 @@ func (c *csi) restoreVolumeSnapshotClass(vsClass interface{}) (interface{}, erro
 	if c.v1SnapshotRequired {
 		vsClass.(*kSnapshotv1.VolumeSnapshotClass).ResourceVersion = ""
 		vsClass.(*kSnapshotv1.VolumeSnapshotClass).UID = ""
-		newVSClass, err = c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Create(context.TODO(), vsClass.(*kSnapshotv1.VolumeSnapshotClass), metav1.CreateOptions{})
+		_, err = c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Get(context.TODO(), vsClass.(*kSnapshotv1.VolumeSnapshotClass).Name, metav1.GetOptions{})
 		if err != nil {
-			if k8s_errors.IsAlreadyExists(err) {
-				return vsClass, nil
+			// did not find vs class, create one
+			if k8s_errors.IsNotFound(err) {
+				newVSClass, err = c.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Create(context.TODO(), vsClass.(*kSnapshotv1.VolumeSnapshotClass), metav1.CreateOptions{})
+				if err != nil {
+					if !k8s_errors.IsAlreadyExists(err) {
+						return nil, err
+					}
+				}
 			}
-			return nil, err
+		} else {
+			return vsClass, nil
 		}
+
 	} else {
 		vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).ResourceVersion = ""
 		vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).UID = ""
-		newVSClass, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass), metav1.CreateOptions{})
+		_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(context.TODO(), vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass).Name, metav1.GetOptions{})
 		if err != nil {
-			if k8s_errors.IsAlreadyExists(err) {
-				return vsClass, nil
+			// did not find vs class, create one
+			if k8s_errors.IsNotFound(err) {
+				newVSClass, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(context.TODO(), vsClass.(*kSnapshotv1beta1.VolumeSnapshotClass), metav1.CreateOptions{})
+				if err != nil {
+					if !k8s_errors.IsAlreadyExists(err) {
+						return nil, err
+					}
+				}
 			}
-			return nil, err
+		} else {
+			return vsClass, nil
 		}
 	}
 	return newVSClass, nil
