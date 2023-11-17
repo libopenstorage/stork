@@ -1,30 +1,37 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: MigrationSchedule
 metadata:
+  annotations:
+    openstorage.io/auth-secret-name: value2
+    openstorage.io/auth-secret-namespace: value1
   name: automation-test-migration-schedule
-  namespace: default
+  namespace: kube-system
 spec:
-  autoSuspend: true
-  schedulePolicyName: default-migration-policy
+  autoSuspend: false
+  schedulePolicyName: automation-test-migration-schedule
   suspend: false
   template:
     spec:
       adminClusterPair: ""
-      clusterPair: automation-test-async-cluster-pair
-      excludeSelectors: null
+      clusterPair: automation-test-async-admin-cluster-pair
+      excludeSelectors:
+        key2: value
       ignoreOwnerReferencesCheck: false
       includeNetworkPolicyWithCIDR: false
       includeOptionalResourceTypes: null
       includeResources: true
-      includeVolumes: true
-      namespaceSelectors: null
+      includeVolumes: false
+      namespaceSelectors:
+        nsKey: value
       namespaces:
         - default
       postExecRule: ""
       preExecRule: ""
       purgeDeletedResources: false
-      selectors: null
+      selectors:
+        key1: value
       skipDeletedNamespaces: true
       skipServiceUpdate: false
       startApplications: false
-      transformSpecs: null
+      transformSpecs:
+        - test-rt

@@ -5,13 +5,27 @@ metadata:
   namespace: default
 spec:
   autoSuspend: false
-  schedulePolicyName: automation-test-migration-schedule
-  suspend: false
+  schedulePolicyName: default-daily-policy
+  suspend: true
   template:
     spec:
+      adminClusterPair: automation-test-sync-admin-cluster-pair
       clusterPair: automation-test-sync-cluster-pair
+      excludeSelectors: null
+      ignoreOwnerReferencesCheck: true
+      includeNetworkPolicyWithCIDR: true
+      includeOptionalResourceTypes:
+        - xJob
       includeResources: true
       includeVolumes: false
+      namespaceSelectors: null
       namespaces:
         - default
-      startApplications: false
+      postExecRule: postExec
+      preExecRule: preExec
+      purgeDeletedResources: true
+      selectors: null
+      skipDeletedNamespaces: false
+      skipServiceUpdate: true
+      startApplications: true
+      transformSpecs: null
