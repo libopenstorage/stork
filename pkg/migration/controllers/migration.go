@@ -625,15 +625,16 @@ func (m *MigrationController) purgeMigratedResources(
 		excludeSelectors = migration.Spec.ExcludeSelectors
 	}
 	excludeSelectors[StashCRLabel] = "true"
-	destObjects, _, err := rc.GetResources(
+
+	destObjects, _, err := m.getResources(
 		migrationNamespaces,
+		migration,
 		migration.Spec.Selectors,
 		excludeSelectors,
-		nil,
-		migration.Spec.IncludeOptionalResourceTypes,
-		false,
 		resourceCollectorOpts,
+		true,
 	)
+
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -642,14 +643,13 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	srcObjects, _, err := m.resourceCollector.GetResources(
+	srcObjects, _, err := m.getResources(
 		migrationNamespaces,
+		migration,
 		migration.Spec.Selectors,
 		migration.Spec.ExcludeSelectors,
-		nil,
-		migration.Spec.IncludeOptionalResourceTypes,
-		false,
 		resourceCollectorOpts,
+		false,
 	)
 	if err != nil {
 		m.recorder.Event(migration,
@@ -994,15 +994,15 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, m
 			return err
 		}
 	} else {
-		allObjects, pvcsWithOwnerRef, err = m.resourceCollector.GetResources(
+		allObjects, pvcsWithOwnerRef, err = m.getResources(
 			migrationNamespaces,
+			migration,
 			migration.Spec.Selectors,
 			migration.Spec.ExcludeSelectors,
-			nil,
-			migration.Spec.IncludeOptionalResourceTypes,
-			false,
 			resourceCollectorOpts,
+			false,
 		)
+
 		if err != nil {
 			m.recorder.Event(migration,
 				v1.EventTypeWarning,
@@ -2886,4 +2886,63 @@ func getRelatedCRDListWRTGroupAndCategories(client *apiextensionsclient.Clientse
 	}
 
 	return filteredCRDList
+}
+
+func (m *MigrationController) getResources(
+	namespaces []string,
+	migration *stork_api.Migration,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	resourceCollectorOpts resourcecollector.Options,
+	remote bool,
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
+
+	var objects []runtime.Unstructured
+	var pvcs []v1.PersistentVolumeClaim
+	var err error
+
+	rc := m.resourceCollector
+	if remote {
+		rc = resourcecollector.ResourceCollector{
+			Driver: m.volDriver,
+		}
+		remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+		if err != nil {
+			return objects, pvcs, err
+		}
+
+		log.MigrationLog(migration).Infof("Setting context for getting resources in remote cluster")
+		// use seperate resource collector for collecting resources
+		// from destination cluster
+		err = rc.Init(remoteConfig)
+		if err != nil {
+			log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
+			return objects, pvcs, err
+		}
+	}
+
+	if len(migration.Spec.ExcludeResourceTypes) > 0 {
+		objects, pvcs, err = rc.GetResourcesExcludingTypes(
+			namespaces,
+			migration.Spec.ExcludeResourceTypes,
+			labelSelectors,
+			excludeSelectors,
+			nil,
+			migration.Spec.IncludeOptionalResourceTypes,
+			false,
+			resourceCollectorOpts,
+		)
+	} else {
+		objects, pvcs, err = rc.GetResources(
+			namespaces,
+			labelSelectors,
+			excludeSelectors,
+			nil,
+			migration.Spec.IncludeOptionalResourceTypes,
+			false,
+			resourceCollectorOpts,
+		)
+	}
+
+	return objects, pvcs, err
 }

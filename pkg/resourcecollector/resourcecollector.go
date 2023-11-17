@@ -162,16 +162,24 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
+func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string, exlcudeTypes []string) bool {
 	// Ignore CSI Snapshot object
 	if resource.Kind == "VolumeSnapshot" {
 		return false
 	}
 
+	for _, excludeType := range exlcudeTypes {
+		if strings.EqualFold(resource.Kind, excludeType) {
+			return false
+		}
+	}
+
 	// Include all namespaced CRDs
 	for _, res := range crdKinds {
 		if res.Kind == resource.Kind &&
-			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
+			res.Group == grp.Group &&
+			res.Version == grp.Version &&
+			resource.Namespaced {
 			return true
 		}
 	}
@@ -255,7 +263,7 @@ func (r *ResourceCollector) GetResourceTypes(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, []string{}) {
 				continue
 			}
 			resource.Group = groupVersion.Group
@@ -366,7 +374,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
@@ -377,6 +385,106 @@ func (r *ResourceCollector) GetResourcesForType(
 	}
 	objects.Items = modObjects
 	return objects, pvcsWithOwnerReference, nil
+}
+
+func (r *ResourceCollector) GetResourcesExcludingTypes(
+	namespaces []string,
+	excludeResourceTypes []string,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	optionalResourceTypes []string,
+	allDrivers bool,
+	opts Options,
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
+	err := r.discoveryHelper.Refresh()
+	if err != nil {
+		return nil, nil, err
+	}
+	allObjects := make([]runtime.Unstructured, 0)
+	// Map to prevent collection of duplicate objects
+	resourceMap := make(map[types.UID]bool)
+	var crdResources []metav1.GroupVersionKind
+	var crdList *stork_api.ApplicationRegistrationList
+	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	} else {
+		if crdList != nil {
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					crdResources = append(crdResources, kind.GroupVersionKind)
+				}
+			}
+		}
+	}
+
+	crbs, err := r.rbacOps.ListClusterRoleBindings()
+	if err != nil {
+		if !apierrors.IsForbidden(err) {
+			return nil, nil, err
+		}
+	}
+
+	for _, group := range r.discoveryHelper.Resources() {
+		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, resource := range group.APIResources {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, excludeResourceTypes) {
+				continue
+			}
+			objectsCollected, err := r.getParticularResourceInNamespaces(
+				resource,
+				crdResources,
+				groupVersion,
+				crbs,
+				namespaces,
+				labelSelectors,
+				excludeSelectors,
+				includeObjects,
+				optionalResourceTypes,
+				allDrivers,
+				opts,
+				resourceMap,
+			)
+
+			if err != nil {
+				return nil, nil, err
+			}
+			allObjects = append(allObjects, objectsCollected...)
+		}
+	}
+
+	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap, opts.IgnoreOwnerReferencesCheck)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Creating a list of PVCs with owner reference before calling prepareResourcesForCollection
+	// prepareResourcesForCollection can update the PVC metadata which is required when updating
+	// owner references on the destination PVC objects
+	var pvcsWithOwnerReference []v1.PersistentVolumeClaim
+	var pvc v1.PersistentVolumeClaim
+	for _, o := range pvcObjectsWithOwnerRef {
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
+		}
+		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
+	}
+
+	err = r.prepareResourcesForCollection(allObjects, namespaces, opts, crdList)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return allObjects, pvcsWithOwnerReference, nil
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
@@ -430,75 +538,28 @@ func (r *ResourceCollector) GetResources(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, []string{}) {
 				continue
 			}
-			for _, ns := range namespaces {
-				var dynamicClient dynamic.ResourceInterface
-				if !resource.Namespaced {
-					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name))
-				} else {
-					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
-				}
+			objectsCollected, err := r.getParticularResourceInNamespaces(
+				resource,
+				crdResources,
+				groupVersion,
+				crbs,
+				namespaces,
+				labelSelectors,
+				excludeSelectors,
+				includeObjects,
+				optionalResourceTypes,
+				allDrivers,
+				opts,
+				resourceMap,
+			)
 
-				var objectToInclude map[stork_api.ObjectInfo]bool
-				if !IsNsPresentInIncludeResource(includeObjects, ns) {
-					objectToInclude = make(map[stork_api.ObjectInfo]bool)
-				} else {
-					objectToInclude = includeObjects
-				}
-
-				var selectors string
-				// PVs don't get the labels from their PVCs, so don't use the label selector
-				switch resource.Kind {
-				case "PersistentVolume":
-				default:
-					selectors = labels.Set(labelSelectors).String()
-				}
-				objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
-				if err != nil {
-					if apierrors.IsForbidden(err) {
-						continue
-					}
-					return nil, nil, err
-				}
-				objects, err := meta.ExtractList(objectsList)
-				if err != nil {
-					return nil, nil, err
-				}
-				for _, o := range objects {
-					runtimeObject, ok := o.(runtime.Unstructured)
-					if !ok {
-						return nil, nil, fmt.Errorf("error casting object: %v", o)
-					}
-
-					var err error
-					var collect bool
-					// If a namespace is present in both namespace list and IncludeResource Object,
-					// IncludeResource takes priority and only those resources are backed up.
-					// If a ns is only present in namespace list, all resources in that ns
-					// is backed up.
-					// With this now a user can choose to backup all resources in a ns and some
-					// selected resources from different ns
-
-					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
-					if err != nil {
-						if apierrors.IsForbidden(err) {
-							continue
-						}
-						return nil, nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
-					}
-					if !collect {
-						continue
-					}
-					metadata, err := meta.Accessor(runtimeObject)
-					if err != nil {
-						return nil, nil, err
-					}
-					allObjects = append(allObjects, runtimeObject)
-					resourceMap[metadata.GetUID()] = true
-				}
+			if err != nil {
+				return nil, nil, err
 			}
+			allObjects = append(allObjects, objectsCollected...)
 		}
 	}
 
@@ -514,7 +575,7 @@ func (r *ResourceCollector) GetResources(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
@@ -525,6 +586,91 @@ func (r *ResourceCollector) GetResources(
 	}
 
 	return allObjects, pvcsWithOwnerReference, nil
+}
+
+func (r *ResourceCollector) getParticularResourceInNamespaces(
+	resource metav1.APIResource,
+	crdResources []metav1.GroupVersionKind,
+	groupVersion schema.GroupVersion,
+	crbs *rbacv1.ClusterRoleBindingList,
+	namespaces []string,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	optionalResourceTypes []string,
+	allDrivers bool,
+	opts Options,
+	resourceMap map[types.UID]bool,
+) ([]runtime.Unstructured, error) {
+	allObjects := make([]runtime.Unstructured, 0)
+
+	for _, ns := range namespaces {
+		var dynamicClient dynamic.ResourceInterface
+		if !resource.Namespaced {
+			dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name))
+		} else {
+			dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
+		}
+
+		var objectToInclude map[stork_api.ObjectInfo]bool
+		if !IsNsPresentInIncludeResource(includeObjects, ns) {
+			objectToInclude = make(map[stork_api.ObjectInfo]bool)
+		} else {
+			objectToInclude = includeObjects
+		}
+
+		var selectors string
+		// PVs don't get the labels from their PVCs, so don't use the label selector
+		switch resource.Kind {
+		case "PersistentVolume":
+		default:
+			selectors = labels.Set(labelSelectors).String()
+		}
+		objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
+		if err != nil {
+			if apierrors.IsForbidden(err) {
+				continue
+			}
+			return nil, err
+		}
+		objects, err := meta.ExtractList(objectsList)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range objects {
+			runtimeObject, ok := o.(runtime.Unstructured)
+			if !ok {
+				return nil, fmt.Errorf("error casting object: %v", o)
+			}
+
+			var err error
+			var collect bool
+			// If a namespace is present in both namespace list and IncludeResource Object,
+			// IncludeResource takes priority and only those resources are backed up.
+			// If a ns is only present in namespace list, all resources in that ns
+			// is backed up.
+			// With this now a user can choose to backup all resources in a ns and some
+			// selected resources from different ns
+
+			collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
+			if err != nil {
+				if apierrors.IsForbidden(err) {
+					continue
+				}
+				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+			}
+			if !collect {
+				continue
+			}
+			metadata, err := meta.Accessor(runtimeObject)
+			if err != nil {
+				return nil, err
+			}
+			allObjects = append(allObjects, runtimeObject)
+			resourceMap[metadata.GetUID()] = true
+		}
+	}
+	return allObjects, nil
 }
 
 // gatherResourceInChunks() collects all the resources present per ns or resource types.
