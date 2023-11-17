@@ -90,7 +90,7 @@ func createCustomSyncMigrationScheduleTest(t *testing.T) {
 		"schedule-policy-name":             "default-daily-policy",
 		"pre-exec-rule":                    "preExec",
 		"post-exec-rule":                   "postExec",
-		"include-optional-resource-types":  "xJob",
+		"include-jobs":                     "",
 		"ignore-owner-references-check":    "",
 		"purge-deleted-resources":          "",
 		"skip-service-update":              "",

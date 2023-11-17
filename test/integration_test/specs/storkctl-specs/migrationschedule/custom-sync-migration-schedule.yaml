@@ -15,7 +15,7 @@ spec:
       ignoreOwnerReferencesCheck: true
       includeNetworkPolicyWithCIDR: true
       includeOptionalResourceTypes:
-        - xJob
+        - Job
       includeResources: true
       includeVolumes: false
       namespaceSelectors: null
