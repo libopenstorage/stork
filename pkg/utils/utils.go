@@ -3,12 +3,14 @@ package utils
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/aquilax/truncate"
+	patch "github.com/evanphx/json-patch"
 	"github.com/libopenstorage/stork/drivers"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -17,6 +19,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -279,4 +283,47 @@ func GetPortworxNamespace() (string, error) {
 	}
 	logrus.Warnf("unable to find [%s] service in cluster", PXServiceName)
 	return "", fmt.Errorf("can't find [%s] Portworx service from list of services", PXServiceName)
+}
+
+// CreateVolumeSnapshotSchedulePatch will return the patch between two volumesnapshot schedule objects
+func CreateVolumeSnapshotSchedulePatch(snapshot *stork_api.VolumeSnapshotSchedule, updatedSnapshot *stork_api.VolumeSnapshotSchedule) ([]byte, error) {
+	oldData, err := runtime.Encode(unstructured.UnstructuredJSONScheme, snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal old data: %v", err)
+	}
+	newData, err := runtime.Encode(unstructured.UnstructuredJSONScheme, updatedSnapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal new data: %v", err)
+	}
+
+	patchBytes, err := patch.CreateMergePatch(oldData, newData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create merge patch: %v", err)
+	}
+
+	patchBytes, err = addResourceVersion(patchBytes, snapshot.ResourceVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add resource version: %v", err)
+	}
+
+	return patchBytes, nil
+}
+
+func addResourceVersion(patchBytes []byte, resourceVersion string) ([]byte, error) {
+	var patchMap map[string]interface{}
+	err := json.Unmarshal(patchBytes, &patchMap)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling patch: %v", err)
+	}
+	u := unstructured.Unstructured{Object: patchMap}
+	a, err := meta.Accessor(&u)
+	if err != nil {
+		return nil, fmt.Errorf("error creating accessor: %v", err)
+	}
+	a.SetResourceVersion(resourceVersion)
+	versionBytes, err := json.Marshal(patchMap)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling json patch: %v", err)
+	}
+	return versionBytes, nil
 }
