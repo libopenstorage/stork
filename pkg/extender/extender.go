@@ -673,7 +673,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				}
 				if volume.NeedsAntiHyperconvergence && e.volumePrefersRemoteNode(volume) {
 					isAntihyperconvergenceRequired = true
-					storklog.PodLog(pod).Debugf("Skipping NeedsAntiHyperconvergence volume %v from scoring based on hyperconvergence", volume.VolumeName)
+					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring based on hyperconvergence", volume.VolumeName)
 					continue
 				}
 				storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
