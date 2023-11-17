@@ -54,15 +54,6 @@ func createDefaultAsyncMigrationScheduleTest(t *testing.T) {
 	createMigrationScheduleTest(t, testrailID, cmdArgs, "default-async-migration-schedule.yaml", defaultNs)
 }
 
-func createDefaultSyncMigrationScheduleTest(t *testing.T) {
-	testrailID := 93468
-	cmdArgs := map[string]string{
-		"cluster-pair": syncDrClusterPair,
-		"namespaces":   defaultNs,
-	}
-	createMigrationScheduleTest(t, testrailID, cmdArgs, "default-sync-migration-schedule.yaml", defaultNs)
-}
-
 func createCustomAsyncMigrationScheduleTest(t *testing.T) {
 	testrailID := 93399
 	cmdArgs := map[string]string{
@@ -79,6 +70,15 @@ func createCustomAsyncMigrationScheduleTest(t *testing.T) {
 		"namespace":            adminNs,
 	}
 	createMigrationScheduleTest(t, testrailID, cmdArgs, "custom-async-migration-schedule.yaml", adminNs)
+}
+
+func createDefaultSyncMigrationScheduleTest(t *testing.T) {
+	testrailID := 93468
+	cmdArgs := map[string]string{
+		"cluster-pair": syncDrClusterPair,
+		"namespaces":   defaultNs,
+	}
+	createMigrationScheduleTest(t, testrailID, cmdArgs, "default-sync-migration-schedule.yaml", defaultNs)
 }
 
 func createCustomSyncMigrationScheduleTest(t *testing.T) {
@@ -181,7 +181,7 @@ func ValidateMigrationSchedule(t *testing.T, migrationSchedule *storkv1.Migratio
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.StartApplications, actualMigrationSchedule.Spec.Template.Spec.StartApplications, "MigrationSchedule StartApplications mismatch")
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.IncludeResources, actualMigrationSchedule.Spec.Template.Spec.IncludeResources, "MigrationSchedule IncludeResources mismatch")
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.ClusterPair, actualMigrationSchedule.Spec.Template.Spec.ClusterPair, "MigrationSchedule ClusterPair mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.AdminClusterPair, actualMigrationSchedule.Spec.Template.Spec.AdminClusterPair, "MigrationSchedule Admin ClusterPair mismatch")
+	require.Equal(t, migrationSchedule.Spec.Template.Spec.AdminClusterPair, actualMigrationSchedule.Spec.Template.Spec.AdminClusterPair, "MigrationSchedule AdminClusterPair mismatch")
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.Namespaces, actualMigrationSchedule.Spec.Template.Spec.Namespaces, "MigrationSchedule Namespaces mismatch")
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.NamespaceSelectors, actualMigrationSchedule.Spec.Template.Spec.NamespaceSelectors, "MigrationSchedule NamespaceSelectors mismatch")
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.Selectors, actualMigrationSchedule.Spec.Template.Spec.Selectors, "MigrationSchedule Selectors mismatch")
@@ -319,5 +319,5 @@ func createNamespace(t *testing.T) {
 			Labels: map[string]string{"nsKey": "value"},
 		},
 	})
-	require.NoError(t, err, "Error creating Namepace")
+	require.NoError(t, err, "Error creating Namespace")
 }
