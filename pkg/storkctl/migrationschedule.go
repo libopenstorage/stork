@@ -50,7 +50,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	var includeNetworkPolicyWithCIDR bool
 	var disableSkipDeletedNamespaces bool
 	var transformSpec string
-	var includeOptionalResourceTypes []string
+	var includeJobs bool
 	var selectors map[string]string
 	var excludeSelectors map[string]string
 
@@ -65,12 +65,13 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			var includeVolumes = !excludeVolumes
 			var skipDeletedNamespaces = !disableSkipDeletedNamespaces
 			var transformSpecs []string
+			var includeOptionalResourceTypes []string
 
-			//we fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
+			// We fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
 			adminNs, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, meta.NamespaceSystem, k8sutils.AdminNsKey)
 			if err != nil {
-				logrus.Warnf("error in reading %v cm for the key %v, switching to default value : %v",
-					k8sutils.StorkControllerConfigMapName, k8sutils.ResourceCountLimitKeyName, err)
+				logrus.Warnf("Error in reading %v cm for the key %v, switching to default value : %v",
+					k8sutils.StorkControllerConfigMapName, k8sutils.AdminNsKey, err)
 				adminNs = k8sutils.DefaultAdminNamespace
 			}
 
@@ -84,7 +85,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 
-			//verify the admin cluster pair exists in the admin namespace
+			// Verify the admin cluster pair exists in the admin namespace
 			if c.Flags().Changed("admin-cluster-pair") {
 				_, err := storkops.Instance().GetClusterPair(adminClusterPair, adminNs)
 				if err != nil {
@@ -100,17 +101,17 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 			isStorageOptionsProvided := true
-			//clusterPairObj.Spec.Options map is empty for syncDr and ideally should be non-empty for volume migration in asyncDR
+			// clusterPairObj.Spec.Options map is empty for syncDr and ideally should be non-empty for volume migration in asyncDR
 			if len(clusterPairObj.Spec.Options) == 0 {
 				isStorageOptionsProvided = false
 			}
 
 			// Default value of includeVolumes when StorageOptions are provided is true and else is false
 			if !isStorageOptionsProvided {
-				//covers the scenario where user sets the --exclude-volumes=false value in the command for a use-case where clusterPair's storage-status is Not Provided
-				//which is true if the cluster pair is created for a sync-dr use-case or if clusterPair was created without specifying storage options
+				// covers the scenario where user sets the --exclude-volumes=false value in the command for a use-case where clusterPair's storage-status is Not Provided
+				// which is true if the cluster pair is created for a sync-dr use-case or if clusterPair was created without specifying storage options
 				if c.Flags().Changed(excludeVolumesFlag) && includeVolumes {
-					util.CheckErr(fmt.Errorf("--exclude-volumes can only be set to true if it is a sync-dr use case or storage options are not provided in the cluster pair"))
+					util.CheckErr(fmt.Errorf("--exclude-volumes can only be set to true if it is a sync-dr use case or when storage options are not provided in the cluster pair"))
 					return
 				}
 				includeVolumes = false
@@ -118,7 +119,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 
 			migrationNamespaces := namespaceList
 			if len(namespaceSelectors) != 0 {
-				//update the migrationNamespaces list by fetching namespaces based on provided label selectors
+				// update the migrationNamespaces list by fetching namespaces based on provided label selectors
 				migrationNamespaces, err = getMigrationNamespaces(namespaceList, namespaceSelectors)
 				if err != nil {
 					util.CheckErr(fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err))
@@ -126,7 +127,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				}
 			}
 
-			//user has to provide at-least one namespace to migrate
+			// User must provide at-least one namespace to migrate
 			if len(migrationNamespaces) == 0 {
 				util.CheckErr(fmt.Errorf("no valid namespace found based on the provided --namespaces and --namespace-selectors"))
 				return
@@ -137,11 +138,11 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 
-			//There are 4 possible cases for schedulePolicyName and interval flags
-			//1. user provides both schedulePolicyName and interval value -> we throw an error saying you can only fill one of the values
-			//2. user provides interval value only -> we will create a new schedule policy and use that in the migrationSchedule
-			//3. user provides schedulePolicyName only -> we will check if such a schedule policy exists and if yes use that schedulePolicy.
-			//4. user doesn't provide schedulePolicyName nor interval value -> we go ahead with the "default-migration-policy"
+			// There are 4 possible cases for schedulePolicyName and interval flags
+			// 1. user provides both schedulePolicyName and interval value -> we throw an error saying you can only fill one of the values
+			// 2. user provides interval value only -> we will create a new schedule policy and use that in the migrationSchedule
+			// 3. user provides schedulePolicyName only -> we will check if such a schedule policy exists and if yes use that schedulePolicy.
+			// 4. user doesn't provide schedulePolicyName nor interval value -> we go ahead with the "default-migration-policy"
 
 			if c.Flags().Changed(schedulePolicyNameFlag) && c.Flags().Changed(intervalFlag) {
 				util.CheckErr(fmt.Errorf("must provide only one of schedule-policy-name or interval values"))
@@ -160,7 +161,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 					return
 				}
 				policyItem.Interval = &intervalPolicy
-				//name of the schedule policy created will be same as the migration schedule name provided in the input.
+				// Name of the schedule policy created will be same as the migration schedule name provided in the input.
 				schedulePolicyName = migrationScheduleName
 				var schedulePolicy storkv1.SchedulePolicy
 				schedulePolicy.Name = schedulePolicyName
@@ -180,15 +181,20 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			}
 
 			if transformSpec != "" {
-				//Validate the transformSpec
+				// Validate the transformSpec
 				if err := validateTransformSpec(migrationNamespaces, transformSpec); err != nil {
 					util.CheckErr(err)
 					return
 				}
-				//Create transformSpecs []string
-				//This is done because Migration.TransformSpecs is a []string and
-				//since current allowed maximum length of the array is 1 we only took a string as user input
+				// Create transformSpecs []string
+				// This is done because Migration.TransformSpecs is a []string and
+				// since current allowed maximum length of the array is 1 we only took a string as user input
 				transformSpecs = append(transformSpecs, transformSpec)
+			}
+
+			// We only support Job resources as part of includeOptionalResourceTypes as of now
+			if includeJobs {
+				includeOptionalResourceTypes = append(includeOptionalResourceTypes, "Job")
 			}
 
 			migrationSchedule := &storkv1.MigrationSchedule{
@@ -237,7 +243,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().StringVarP(&clusterPair, "cluster-pair", "c", "", "Specify the name of the ClusterPair in the same namespace to be used for the migration")
 	createMigrationScheduleCommand.Flags().StringVar(&adminClusterPair, "admin-cluster-pair", "", "Specify the name of the admin ClusterPair used to migrate cluster-scoped resources, if the ClusterPair is present in a non-admin namespace")
 	createMigrationScheduleCommand.Flags().BoolVarP(&excludeResources, "exclude-resources", "", false, "If present, Kubernetes resources will not be migrated")
-	createMigrationScheduleCommand.Flags().BoolVarP(&excludeVolumes, excludeVolumesFlag, "", false, "If present, the underlying Portworx volumes will not be migrated. This is the only allowed and default behaviour in sync-dr use-cases or if storage options are not provided in the cluster pair")
+	createMigrationScheduleCommand.Flags().BoolVarP(&excludeVolumes, excludeVolumesFlag, "", false, "If present, the underlying Portworx volumes will not be migrated. This is the only allowed and default behaviour in sync-dr use-cases or when storage options are not provided in the cluster pair")
 	createMigrationScheduleCommand.Flags().BoolVarP(&startApplications, "start-applications", "a", false, "If present, the applications will be scaled up on the target cluster after a successful migration")
 	createMigrationScheduleCommand.Flags().BoolVar(&ignoreOwnerReferencesCheck, "ignore-owner-references-check", false, "If set, resources with ownerReferences will also be migrated, even if the corresponding owners are getting migrated")
 	createMigrationScheduleCommand.Flags().BoolVar(&purgeDeletedResources, "purge-deleted-resources", false, "Set this flag to automatically delete Kubernetes resources in the target cluster when they are removed from the source cluster")
@@ -252,7 +258,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().IntVarP(&intervalMinutes, intervalFlag, "i", 30, "Specify the time interval, in minutes, at which Stork should trigger migrations")
 	createMigrationScheduleCommand.Flags().StringToStringVar(&annotations, "annotations", map[string]string{}, "Add required annotations to the resource in comma-separated key value pairs. key1=value1,key2=value2,... ")
 	createMigrationScheduleCommand.Flags().StringVar(&transformSpec, "transform-spec", "", "Specify the ResourceTransformation spec to be applied during migration")
-	createMigrationScheduleCommand.Flags().StringSliceVar(&includeOptionalResourceTypes, "include-optional-resource-types", nil, "Set this flag to ensure that the Kubernetes resources associated with k8s Jobs are migrated. By default, the Job resources are not migrated")
+	createMigrationScheduleCommand.Flags().BoolVar(&includeJobs, "include-jobs", false, "Set this flag to ensure that K8s Job resources are migrated. By default, the Job resources are not migrated")
 	createMigrationScheduleCommand.Flags().StringToStringVar(&selectors, "selectors", nil, "Only resources with the provided labels will be migrated. All the labels provided in this option will be OR'ed")
 	createMigrationScheduleCommand.Flags().StringToStringVar(&excludeSelectors, "exclude-selectors", nil, "Resources with the provided labels will be excluded from the migration. All the labels provided in this option will be OR'ed")
 	return createMigrationScheduleCommand
