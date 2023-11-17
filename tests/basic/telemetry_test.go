@@ -201,18 +201,15 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 					OnHost:        true,
 					Live:          true,
 				}
-				if !TelemetryEnabled(currNode) {
-					log.Debugf("Telemetry not enabled, sleeping for 5 mins")
-					time.Sleep(5 * time.Minute)
-				}
+
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false})
 				Expect(err).NotTo(HaveOccurred(), "Diags collected successfully")
-				if TelemetryEnabled(currNode) {
-					err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
-					Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
-				} else {
-					log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(currNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
 				}
+				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
+				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 			})
 		}
 		for _, ctx := range contexts {
@@ -267,14 +264,8 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				log.Warnf("PX is not installed on node [%s], skipping diags collection", currNode.Name)
 				continue
 			}
+			log.Infof("PX is installed on node [%s]", currNode.Name)
 
-			// Skip if Telemetry is not enabled
-			if !TelemetryEnabled(currNode) {
-				log.Warnf("Telemetry is not enabled on node [%s], skipping diags collection", currNode.Name)
-				continue
-			}
-
-			log.Infof("PX is installed and Telemetry is enabled on node [%s]", currNode.Name)
 			// Get the most recent profile diags for comparison
 			stepMsg := fmt.Sprintf("Check latest profile diags on node [%s]", currNode.Name)
 			Step(stepMsg, func() {
@@ -301,7 +292,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
 
-				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: true})
+				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: false, Async: true})
 				log.FailOnError(err, "failed to collect profile only diags on node [%s]", currNode.Name)
 				log.InfoD("Successfully collected profile only diags on node [%s]", currNode.Name)
 
@@ -315,7 +306,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				log.Debugf("Content of /var/cores/ on node [%s] after collecting profile only diags:\n%v\n", currNode.Name, out)
 
 			})
-			// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
+			// Get the latest files in the directory. The newly generated files will not equal the most recent. So you know they are new.
 			stepMsg = fmt.Sprintf("Get the new profile only diags on node [%s]", currNode.Name)
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
@@ -327,6 +318,8 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 					if err != nil {
 						return nil, true, fmt.Errorf("failed to execute [%s], Err: %v", cmd, err)
 					}
+					fmt.Printf("KOKADBG: NEW DIAGS: [%v]\n", newDiags)
+					fmt.Printf("KOKADBG: EXISTING DIAGS: [%v]\n", existingDiags)
 
 					if existingDiags != "" && existingDiags == newDiags {
 						return nil, true, fmt.Errorf("No new profile only diags were found on node [%s], current latest profile only diags are [%s]", currNode.Name, newDiags)
@@ -336,7 +329,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 						log.Infof("Found new profile diags [%s]", newDiags)
 						// Needs to contain both stack/heap
 						if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
-							diagsFiles = strings.Split(newDiags, "\n")
+							diagsFiles = strings.Split(strings.TrimSpace(newDiags), "\n")
 							log.InfoD("Files found on node [%s] [%v]", currNode.Name, diagsFiles)
 							return nil, false, nil
 						}
@@ -359,6 +352,10 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			stepMsg = "Validate diag files got uploaded to s3"
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(currNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
+				}
 				for _, file := range diagsFiles {
 					fileNameToCheck := path.Base(file)
 					log.InfoD("Validating diag file [%s] on s3", fileNameToCheck)
@@ -414,14 +411,14 @@ var _ = Describe("{DiagsClusterWide}", func() {
 				}
 			})
 			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
-				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
-				log.Debugf("Validating file %s", fileNameToCheck)
-				if TelemetryEnabled(currNode) {
-					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
-					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-				} else {
-					log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(currNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
 				}
+				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
+				log.Debugf("Validating file [%s]", fileNameToCheck)
+				err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+				Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
 			})
 			break
 		}
@@ -723,6 +720,10 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 			Expect(err).NotTo(HaveOccurred(), "Error getting new diags on Node %s", diagNode.Name)
 			if existingDiags != diagFile {
 				log.Infof("Found new diags %s", diagFile)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(diagNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
+				}
 				/// Need to validate new diags
 				err = Inst().V.ValidateDiagsOnS3(diagNode, path.Base(strings.TrimSpace(diagFile)))
 				Expect(err).NotTo(HaveOccurred())

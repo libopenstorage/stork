@@ -99,7 +99,7 @@ const (
 	pxVersionsConfigmapName                   = "px-versions"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
-	clusterIDFile                             = "/etc/pwx/cluster_uuid"
+	clusterUUIDFile                           = "/etc/pwx/cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
@@ -136,8 +136,10 @@ const (
 	upgradePerNodeTimeout             = 15 * time.Minute
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
-	asyncTimeout                      = 15 * time.Minute
-	timeToTryPreviousFolder           = 10 * time.Minute
+	sdkDiagCollectionTimeout          = 30 * time.Minute
+	sdkDiagCollectionRetryInterval    = 10 * time.Second
+	validateDiagsOnS3RetryTimeout     = 60 * time.Minute
+	validateDiagsOnS3RetryInterval    = 30 * time.Second
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
@@ -667,7 +669,7 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 		return nNode, false, nil
 	}
 
-	result, err := task.DoRetryWithTimeout(t, asyncTimeout, validateStoragePoolSizeInterval)
+	result, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, validateStoragePoolSizeInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -4043,66 +4045,76 @@ func GetTimeStamp() string {
 }
 
 func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps) error {
-
 	if diagOps.Async {
-		return collectAsyncDiags(n, config, diagOps, d)
+		// Diag collection is done via SDK request
+		return collectDiagsSdk(n, config, diagOps, d)
 	}
+	// Diag collection is done via CLI or API
 	return collectDiags(n, config, diagOps, d)
 }
 
 func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
-	log.Info("Validating diags uploaded on S3")
+	log.Infof("Validating diags got uploaded to the s3 bucket for node [%s]", n.Name)
+
+	// Diag file to look for
+	if diagsFile == "" {
+		return fmt.Errorf("Empty diag file was passed, cannot continue with validation")
+	}
+	d.DiagsFile = diagsFile
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	}
-	clusterUUID, err := d.GetClusterID(n, opts)
+
+	// Get cluster UUID to determine the S3 folder to look for
+	clusterUUID, err := d.GetClusterUUID(n, opts)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get cluster UUID, Err: %v", err)
 	}
 
-	//// Check S3 bucket for diags
-	log.Debugf("Node name [%s]", n.Name)
-	if diagsFile != "" {
-		d.DiagsFile = diagsFile
-	}
+	// Check S3 bucket for diags
+	log.Debugf("Validating diag file [%s] got uploaded to the s3 bucket", d.DiagsFile)
 	start := time.Now()
 	for {
-		if time.Since(start) >= asyncTimeout {
-			return fmt.Errorf("waiting for async diags job timed out")
+		if time.Since(start) >= validateDiagsOnS3RetryTimeout {
+			return fmt.Errorf("waiting for diags job timed out after [%v], failed to find diag file [%s] on s3 bucket", validateDiagsOnS3RetryTimeout, d.DiagsFile)
 		}
 		var objects []s3utils.Object
 		var err error
-		if time.Since(start) >= timeToTryPreviousFolder {
-			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
-			if err != nil {
-				return fmt.Errorf("Failed to get g3 objects, Err: %v", err)
-			}
-		} else {
-			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
-			if err != nil {
-				return fmt.Errorf("Failed to get g3 objects, Err: %v", err)
-			}
+
+		// Check latest s3 folder for diags
+		latestObjects, err := s3utils.GetS3Objects(clusterUUID, n.Name, false)
+		if err != nil {
+			return fmt.Errorf("Failed to get g3 objects from latest folder, Err: %v", err)
 		}
+		objects = append(objects, latestObjects...)
+
+		// Check previous s3 folder for diags, if exists, due to some race condition of how/when diags can occasionally be uploaded
+		previousObjects, err := s3utils.GetS3Objects(clusterUUID, n.Name, true)
+		if err != nil {
+			return fmt.Errorf("Failed to get g3 objects from previous folder, Err: %v", err)
+		}
+		objects = append(objects, previousObjects...)
+
 		for _, obj := range objects {
 			if strings.Contains(obj.Key, d.DiagsFile) {
-				log.Debugf("File validated on S3")
-				log.Debugf("Object Name is %s", obj.Key)
-				log.Debugf("Object Created on %s", obj.LastModified.String())
-				log.Debugf("Object Size %d", obj.Size)
+				log.Debugf("File validated on s3")
+				log.Debugf("Object Name is [%s]", obj.Key)
+				log.Debugf("Object Created on [%s]", obj.LastModified.String())
+				log.Debugf("Object Size [%d]", obj.Size)
 				return nil
-
 			}
 		}
-		log.Debugf("File [%s] not found in S3 yet, re-trying in 30s", d.DiagsFile)
-		time.Sleep(30 * time.Second)
+		log.Debugf("File [%s] not found in the s3 bucket yet, re-trying in [%v]", d.DiagsFile, validateDiagsOnS3RetryInterval)
+		time.Sleep(validateDiagsOnS3RetryInterval)
 	}
 }
 
-func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error) {
-	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterIDFile), opts)
+func (d *portworx) GetClusterUUID(n node.Node, opts node.ConnectionOpts) (string, error) {
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterUUIDFile), opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status, Err: %v", err)
 	}
@@ -4125,6 +4137,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		status = api.Status_STATUS_OFFLINE
 	}
 	log.InfoD("Collecting diags on node [%s]", hostname)
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -4136,6 +4149,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		log.Infof("Skip validate on node [%s] during diags collection", hostname)
 	}
 
+	// If PX status is OFFLINE, we collect diags via CLI
 	if status == api.Status_STATUS_OFFLINE {
 		log.Debugf("Node [%s] is offline, collecting diags using pxctl", hostname)
 
@@ -4144,7 +4158,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node [%s], Err: %v %v", hostname, err, out)
 		}
-	} else {
+	} else { // Collecting diags via API
 		diagsPort := 9014
 		// Need to get the diags server port based on the px mgmnt port for OCP its not the standard 9001
 		out, err := d.nodeDriver.RunCommand(n, "cat /etc/pwx/px_env", opts)
@@ -4166,7 +4180,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		if len(d.token) > 0 {
 			config.Token = d.token
-			log.Infof("Added securty token: %s", config.Token)
+			log.Infof("Added securty token [%s]", config.Token)
 		}
 
 		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
@@ -4184,25 +4198,12 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 	}
 
-	if diagOps.Validate {
+	// Validate diags, only works for none profile only diags, because OutputFile for the diags.tgz
+	if diagOps.Validate && !config.Profile {
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
 			return fmt.Errorf("failed to locate diags on node [%s], Err: %v %v", hostname, err, out)
-		}
-
-		out, err = d.GetPxctlCmdOutputConnectionOpts(n, "status | egrep ^Telemetry:", opts, true)
-		if err != nil {
-			return fmt.Errorf("failed to get pxctl status on node [%s], Err: %v", n.Name, err)
-		}
-		telStatus, err := regexp.MatchString(`Telemetry:.*Healthy`, out)
-		if err != nil {
-			return fmt.Errorf("Failed to check telemetry status on node [%s], Err: %v", n.Name, err)
-		}
-		log.Debugf("Status returned by pxctl [%s]", out)
-		if !telStatus {
-			log.Debugf("Telemetry not enabled in PX Status on node [%s]. Skipping validation on s3", n.Name)
-			return nil
 		}
 
 		log.Infof("Found diags file [%s]", config.OutputFile)
@@ -4213,7 +4214,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	return nil
 }
 
-func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
+func collectDiagsSdk(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
 	diagsMgr := d.getDiagsManager()
 	jobMgr := d.getDiagsJobManager()
 
@@ -4233,19 +4234,20 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		NodeIds: []string{pxNode.Id},
 	}
 
+	// Collect diags via SDK request
 	resp, err := diagsMgr.Collect(d.getContext(), req)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to collect diags, Err: %v", err)
 	}
 	if resp.Job == nil {
-		err = fmt.Errorf("diags collection request submitted but did not get a Job ID in response")
-		return err
+		return fmt.Errorf("diags collection SDK request submitted, but did not get a Job ID in response")
 	}
 
+	// Wait for diags job to finish
 	start := time.Now()
 	for {
-		if time.Since(start) >= asyncTimeout {
-			return fmt.Errorf("waiting for async diags job timed out")
+		if time.Since(start) >= sdkDiagCollectionTimeout {
+			return fmt.Errorf("waiting for diags job timed out after [%v]", sdkDiagCollectionTimeout)
 		}
 
 		resp, _ := jobMgr.GetStatus(d.getContext(), &api.SdkGetJobStatusRequest{
@@ -4254,22 +4256,18 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		})
 
 		state := resp.GetJob().GetState()
-
 		if state == api.Job_DONE || state == api.Job_FAILED || state == api.Job_CANCELLED {
+			log.Debugf("Diag job state is [%v]", state)
 			break
 		}
-		fmt.Println("Waiting 5 seconds to check job status again.")
-		// Sleep 5 seconds until we check jobs again.
-		time.Sleep(5 * time.Second)
+
+		// Sleep before checking state of diags job again
+		log.Debugf("Diag job state is [%v], waiting for [%v] to check job status again", state, sdkDiagCollectionRetryInterval)
+		time.Sleep(sdkDiagCollectionRetryInterval)
 	}
 
-	//TODO: Verify we can see the files once we return a filename
-	if diagOps.Validate {
-		pxNode, err := d.GetDriverNode(&n)
-		if err != nil {
-			return err
-		}
-
+	// Validate diags, only works for none profile only diags, because OutputFile for the diags.tgz
+	if diagOps.Validate && !config.Profile {
 		opts := node.ConnectionOpts{
 			IgnoreError:     false,
 			TimeBeforeRetry: defaultRetryInterval,
@@ -4280,39 +4278,13 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate async diags on node [%s], Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node [%s], Err: %v %v", pxNode.Hostname, err, out)
 		}
 
 		log.Infof("Found diags file [%s]", config.OutputFile)
-		/*
-									logrus.Debug("Validating CCM health")
-									// Change to config package.
-									url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-									ccmresp, err := http.Get(url)
-									if err != nil {
-										return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-									}
-						>>>>>>> 261b8e726 (Topic/aghodke/ptx 11487 (#872))
-
-									defer ccmresp.Body.Close()
-			=======
-					logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
-					/*
-						logrus.Debug("Validating CCM health")
-						// Change to config package.
-						url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-						ccmresp, err := http.Get(url)
-						if err != nil {
-							return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-						}
-
-						defer ccmresp.Body.Close()
-			>>>>>>> master
-		*/
-		// Check S3 bucket for diags
-		// TODO: Waiting for S3 credentials.
-
+		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
+
 	log.Infof("Successfully collected diags on node [%s]", n.Name)
 	return nil
 }
