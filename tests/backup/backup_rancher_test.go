@@ -528,13 +528,15 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 	projectNamespaces := make(map[string][]string)
 	projectNameMapping := make(map[string]string)
 	projectUIDMapping := make(map[string]string)
-	namespaceMapping := make(map[string]string)
 	backupLocationMap := make(map[string]string)
 	params := make(map[string]string)
 	storageClassMapping := make(map[string]string)
 	labelSelectors := make(map[string]string)
 	projectLabel := make(map[string]string)
 	projectAnnotation := make(map[string]string)
+	namespaceMappingDiffProjectDiffNsDestCluster := make(map[string]string)
+	namespaceMappingStorageClassMappingDestCluster := make(map[string]string)
+	namespaceMappingSameProjectDiffNamespaceSourceCluster := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("MultipleProjectsAndNamespacesBackupAndRestore",
@@ -652,7 +654,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for i, app := range appNamespaces {
 				restoreNamespace := fmt.Sprintf("restore-%v-%v-%v", app, RandomString(5), i)
-				namespaceMapping[app] = restoreNamespace
+				namespaceMappingSameProjectDiffNamespaceSourceCluster[app] = restoreNamespace
 				sourceClusterRestoreNamespaceList = append(sourceClusterRestoreNamespaceList, restoreNamespace)
 			}
 			for i, project := range sourceProjectList {
@@ -661,7 +663,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			}
 			restoreName = fmt.Sprintf("%s-%v-same-proj-diff-ns", restoreNamePrefix, backupName)
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMapping, SourceClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMappingSameProjectDiffNamespaceSourceCluster, SourceClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in same project but different namespace from backup %s in source cluster", restoreName, backupList[0]))
 		})
 
@@ -708,12 +710,12 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			}
 			for i, app := range appNamespaces {
 				restoreNamespace := fmt.Sprintf("restore-diff-proj-diff-ns-%v-%v", RandomString(5), i)
-				namespaceMapping[app] = restoreNamespace
+				namespaceMappingDiffProjectDiffNsDestCluster[app] = restoreNamespace
 				destClusterRestoreNamespaceList = append(destClusterRestoreNamespaceList, restoreNamespace)
 			}
 			restoreName = fmt.Sprintf("%s-%v-diff-proj-diff-ns", restoreNamePrefix, backupList[0])
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMappingDiffProjectDiffNsDestCluster, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in different project and different namespace from backup %s in destination cluster", restoreName, backupList[0]))
 		})
 
@@ -760,12 +762,12 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			}
 			for i, app := range appNamespaces {
 				restoreNamespace := fmt.Sprintf("restore-diff-proj-diff-ns-sc-mapping-%v-%v", RandomString(5), i)
-				namespaceMapping[app] = restoreNamespace
+				namespaceMappingStorageClassMappingDestCluster[app] = restoreNamespace
 				destClusterRestoreNamespaceList = append(destClusterRestoreNamespaceList, restoreNamespace)
 			}
 			restoreName = fmt.Sprintf("%s-%v-diff-proj-diff-ns-sc-mapping", restoreNamePrefix, backupList[0])
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMapping, destinationClusterName, orgID, ctx, storageClassMapping, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMappingStorageClassMappingDestCluster, destinationClusterName, orgID, ctx, storageClassMapping, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in different project and different namespace with storage class mapping from backup %s in destination cluster", restoreName, backupList[0]))
 		})
 
@@ -782,6 +784,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			err = CreateBackupWithValidation(ctx, noProjectBackup, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and validation of backup [%s] with the namespaces %s after removing the namespaces from project", noProjectBackup, appNamespaces))
 		})
+
 		Step("Restore the backup taken after all the namespaces are removed from the project", func() {
 			log.InfoD("Restore the backup taken after all the namespaces are removed from the project")
 			restoreName := fmt.Sprintf("%s-%v-no-project", restoreNamePrefix, RandomString(10))
@@ -798,14 +801,41 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			log.FailOnError(err, "Switching context to source cluster")
 			EndPxBackupTorpedoTest(scheduledAppContexts)
 		}()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.Infof("Deleting restored namespace from destination cluster")
-		destClusterRestoreNamespaceList = append(destClusterRestoreNamespaceList, appNamespaces...)
-		for _, ns := range destClusterRestoreNamespaceList {
-			err = DeleteAppNamespace(ns)
-			log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
+		restoredAppContextsInDestinationCluster := make([]*scheduler.Context, 0)
+
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingDiffProjectDiffNsDestCluster, make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContextsInDestinationCluster = append(restoredAppContextsInDestinationCluster, restoredAppContext)
 		}
+
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingStorageClassMappingDestCluster, make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContextsInDestinationCluster = append(restoredAppContextsInDestinationCluster, restoredAppContext)
+		}
+
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContextsInDestinationCluster = append(restoredAppContextsInDestinationCluster, restoredAppContext)
+		}
+		DestroyApps(restoredAppContextsInDestinationCluster, opts)
+
 		log.Infof("Deleting projects from destination cluster")
 		for i, project := range destProjectList {
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(destProjectIDList[i])
@@ -819,19 +849,31 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		log.FailOnError(err, "Switching context to source cluster failed")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx for source cluster")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
-		log.Infof("Deleting restore ")
+		log.Infof("Deleting restore")
 		for _, restoreName := range restoreList {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
-		log.Infof("Deleting restored namespace from source cluster")
-		for _, ns := range sourceClusterRestoreNamespaceList {
-			err = DeleteAppNamespace(ns)
-			log.FailOnError(err, "Deletion of namespace %s from source cluster failed", ns)
+		restoredAppContextsInSourceCluster := make([]*scheduler.Context, 0)
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingSameProjectDiffNamespaceSourceCluster, make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContextsInSourceCluster = append(restoredAppContextsInSourceCluster, restoredAppContext)
 		}
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContextsInSourceCluster = append(restoredAppContextsInSourceCluster, restoredAppContext)
+		}
+		DestroyApps(restoredAppContextsInSourceCluster, opts)
+
 		log.Infof("Deleting projects from source cluster")
 		for _, projectId := range sourceProjectIDList {
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(projectId)
