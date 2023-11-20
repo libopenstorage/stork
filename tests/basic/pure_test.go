@@ -1420,8 +1420,8 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 			}
 			return nil
 		}
-		// resizeVolume attempts to resize the volume to the maximum allowed size
-		resizeVolume := func(volType VolumeType, vol *api.Volume) error {
+		// resizeVolumeToMaxSize attempts to resize the volume to the maximum allowed size
+		resizeVolumeToMaxSize := func(volType VolumeType, vol *api.Volume) error {
 			maxVolSize := getMaxVolSize(backend, volType)
 			previousSize := vol.Spec.Size
 			resizeSequence := getResizeSequence(vol.Spec.Size, maxVolSize, steps)
@@ -1439,7 +1439,7 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 			for _, newSize := range resizeSequence {
 				log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, previousSize, newSize)
 				switch volType {
-				case VolumeFADA:
+				case VolumeFADA, VolumeFBDA:
 					err = resizePVC(volType, vol, newSize)
 				default:
 					err = Inst().V.ResizeVolume(vol.Id, newSize)
@@ -1539,13 +1539,11 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 		Step("Resize a random volume of each type to max limit", func() {
 			log.InfoD("Resizing a random volume of each type to max limit")
 			for volType, vols := range volumeMap {
-				if len(vols) > 0 {
-					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
-					vol := vols[rand.Intn(len(vols))]
-					log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(backend, volType))
-					err := resizeVolume(volType, vol)
-					log.FailOnError(err, "failed to resize random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(backend, volType))
-				}
+				log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+				randomVol := vols[rand.Intn(len(vols))]
+				log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, randomVol.Id, randomVol.Locator.Name, getMaxVolSize(backend, volType))
+				err := resizeVolumeToMaxSize(volType, randomVol)
+				log.FailOnError(err, "failed to resize random [%s] volume [%s/%s] to max limit [%d]", volType, randomVol.Id, randomVol.Locator.Name, getMaxVolSize(backend, volType))
 			}
 		})
 	})
@@ -1836,24 +1834,23 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 		Step("Delete volumes in parallel", func() {
 			log.InfoD("Deleting volumes in parallel")
 			for volType, vols := range volumeMap {
-				if len(vols) > 0 {
-					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
-					var wg sync.WaitGroup
-					for _, vol := range vols {
-						wg.Add(1)
-						go func(volType VolumeType, vol *api.Volume) {
-							defer GinkgoRecover()
-							defer wg.Done()
-							log.InfoD("Delete [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
-							err = deletePVC(volType, vol)
-							log.FailOnError(err, "failed to delete [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
-						}(volType, vol)
-					}
-					wg.Wait()
+				log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+				var wg sync.WaitGroup
+				for _, vol := range vols {
+					wg.Add(1)
+					go func(volType VolumeType, vol *api.Volume) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						log.InfoD("Delete [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+						err = deletePVC(volType, vol)
+						log.FailOnError(err, "failed to delete [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+					}(volType, vol)
 				}
+				wg.Wait()
 			}
 		})
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		opts := make(map[string]bool)
