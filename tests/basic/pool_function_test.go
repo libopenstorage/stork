@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
 	"strings"
 	"sync"
@@ -859,6 +860,67 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 		})
 	})
 })
+
+var _ = Describe("{StorageFullPoolExpansion}", func() {
+	var (
+		appList      []string
+		selectedNode *node.Node
+	)
+
+	BeforeEach(func() {
+		Inst().AppList = []string{"fio-fastpath-repl1"}
+		contexts = ScheduleApplications("storagefull-resize")
+		appList = Inst().AppList
+	})
+
+	JustBeforeEach(func() {
+		selectedNode = GetNodeWithLeastSize()
+		_ = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed to add fastpath label on node %v", selectedNode.Name))
+	})
+
+	AfterEach(func() {
+		Inst().AppList = appList
+		appsValidateAndDestroy(contexts)
+		_ = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+	})
+
+	It("Expand pool with resize-disk type after pool is down due to storage full", func() {
+		// https://portworx.testrail.net/index.php?/cases/view/51280
+		StartTorpedoTest("StorageFullPoolResize", "Feed a pool full, then expand the pool in type resize-disk", nil, 51280)
+		Step("Prepare a full pool to expand", func() {
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Timed out waiting to load a pool and bring node %s storage down", selectedNode.Name))
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					poolIDToResize = i
+					poolToResize, err = GetStoragePoolByUUID(poolIDToResize)
+					log.FailOnError(err, "error getting pool with UUID [%s]", poolIDToResize)
+					break
+				}
+			}
+		})
+
+		Step("Expand the full pool in type resize-disk", func() {
+			targetSizeGiB = (poolToResize.TotalSize / units.GiB) * 2
+			log.InfoD("Current Size of the pool %s is %d, trying to expand it to double the size", poolToResize.Uuid, poolToResize.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolToResize.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init should be successful.")
+		})
+
+		Step("Verify that pool expansion is successful", func() {
+			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Error waiting for pool %s resize", poolToResize.Uuid))
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
+		})
+  })
+})
+     
 
 var _ = Describe("{PoolExpandTestLimits}", func() {
 	BeforeEach(func() {
