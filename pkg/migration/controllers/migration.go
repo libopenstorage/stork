@@ -909,7 +909,7 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration, mig
 	}
 	terminationChannels := make([]chan bool, 0)
 	for _, ns := range migrationNamespaces {
-		r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, ns)
+		r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
 		if err != nil {
 			for _, channel := range terminationChannels {
 				channel <- true
@@ -933,7 +933,7 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration, mig
 
 func (m *MigrationController) runPostExecRule(migration *stork_api.Migration, migrationNamespaces []string) error {
 	for _, ns := range migrationNamespaces {
-		r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, ns)
+		r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
 		if err != nil {
 			return err
 		}
