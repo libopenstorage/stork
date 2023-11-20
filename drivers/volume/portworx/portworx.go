@@ -3296,10 +3296,8 @@ func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
 
 	for ind, container := range opDep.Spec.Template.Spec.Containers {
 		if container.Name == "portworx-operator" {
-			fmt.Printf("KOKADBG: IMAGE BEFORE: [%s]\n", container.Image)
 			container.Image = strings.Replace(container.Image, strings.Split(container.Image, ":")[1], pxOperatorNewImageTag, -1)
 			opDep.Spec.Template.Spec.Containers[ind] = container
-			fmt.Printf("KOKADBG: IMAGE AFTER: [%s]\n", opDep.Spec.Template.Spec.Containers[ind].Image)
 		}
 	}
 

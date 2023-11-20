@@ -318,8 +318,6 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 					if err != nil {
 						return nil, true, fmt.Errorf("failed to execute [%s], Err: %v", cmd, err)
 					}
-					fmt.Printf("KOKADBG: NEW DIAGS: [%v]\n", newDiags)
-					fmt.Printf("KOKADBG: EXISTING DIAGS: [%v]\n", existingDiags)
 
 					if existingDiags != "" && existingDiags == newDiags {
 						return nil, true, fmt.Errorf("No new profile only diags were found on node [%s], current latest profile only diags are [%s]", currNode.Name, newDiags)
