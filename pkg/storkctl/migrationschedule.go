@@ -2,6 +2,7 @@ package storkctl
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -53,6 +54,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	var includeJobs bool
 	var selectors map[string]string
 	var excludeSelectors map[string]string
+	var excludeResourceTypes []string
 
 	createMigrationScheduleCommand := &cobra.Command{
 		Use:     migrationScheduleSubcommand,
@@ -197,6 +199,16 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				includeOptionalResourceTypes = append(includeOptionalResourceTypes, "Job")
 			}
 
+			//validate excludeResourceTypes
+			if len(excludeResourceTypes) != 0 {
+				resourceTypes := strings.Join(excludeResourceTypes, ",")
+				excludeResourceTypes, err = getResourceTypes(resourceTypes, ioStreams)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+			}
+
 			migrationSchedule := &storkv1.MigrationSchedule{
 				ObjectMeta: meta.ObjectMeta{Annotations: annotations},
 				Spec: storkv1.MigrationScheduleSpec{
@@ -220,6 +232,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 							SkipDeletedNamespaces:        &skipDeletedNamespaces,
 							TransformSpecs:               transformSpecs,
 							IncludeOptionalResourceTypes: includeOptionalResourceTypes,
+							ExcludeResourceTypes:         excludeResourceTypes,
 						},
 					},
 					SchedulePolicyName: schedulePolicyName,
@@ -261,6 +274,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().BoolVar(&includeJobs, "include-jobs", false, "Set this flag to ensure that K8s Job resources are migrated. By default, the Job resources are not migrated")
 	createMigrationScheduleCommand.Flags().StringToStringVar(&selectors, "selectors", nil, "Only resources with the provided labels will be migrated. All the labels provided in this option will be OR'ed")
 	createMigrationScheduleCommand.Flags().StringToStringVar(&excludeSelectors, "exclude-selectors", nil, "Resources with the provided labels will be excluded from the migration. All the labels provided in this option will be OR'ed")
+	createMigrationScheduleCommand.Flags().StringSliceVarP(&excludeResourceTypes, "exclude-resource-types", "", nil, "Comma-separated list of the specific resource types which need to be excluded from migration, ex: Deployment,PersistentVolumeClaim")
 	return createMigrationScheduleCommand
 }
 
