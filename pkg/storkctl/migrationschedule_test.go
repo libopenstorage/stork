@@ -74,7 +74,7 @@ func createMigrationScheduleAndVerify(
 
 func TestGetMigrationSchedulesOneMigrationSchedule(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest", "testpolicy", "test", "clusterpair1", []string{"namespace1"}, "preExec", "postExec", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest", "testpolicy", "test", "clusterpair1", []string{"test"}, "preExec", "postExec", true)
 
 	expected := "NAME                       POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
 		"getmigrationscheduletest   testpolicy   clusterpair1   true                          \n"
@@ -85,8 +85,8 @@ func TestGetMigrationSchedulesOneMigrationSchedule(t *testing.T) {
 
 func TestGetMigrationSchedulesMultiple(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"default"}, "", "", true)
 
 	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
 		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n" +
@@ -113,8 +113,8 @@ func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
 	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test2"}})
 	require.NoError(t, err, "Error creating test2 namespace")
 
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"namespace1"}, "", "", true)
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "test2", "clusterpair2", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"test1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "test2", "clusterpair2", []string{"test2"}, "", "", true)
 
 	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
 		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n"
@@ -132,8 +132,8 @@ func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
 
 func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"default"}, "", "", true)
 
 	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
 		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n"
@@ -144,7 +144,7 @@ func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 
 func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
 	require.NoError(t, err, "Error getting migration schedule")
 
@@ -212,7 +212,7 @@ func TestCreateMigrationSchedulesNoNamespace(t *testing.T) {
 	createClusterPair(t, clusterPairName, "default", "async-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-c", clusterPairName, "migration1"}
 
-	expected := "error: need to provide atleast one namespace to migrate"
+	expected := "error: no valid namespace found based on the provided --namespaces and --namespace-selectors"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -233,6 +233,18 @@ func TestCreateMigrationSchedulesInvalidClusterPair(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
+func TestCreateMigrationSchedulesInvalidAdminClusterPair(t *testing.T) {
+	defer resetTest()
+	clusterPair := "clusterpair1"
+	namespace := "namespace1"
+	name := "createmigrationschedule"
+	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-c", clusterPair, "--admin-cluster-pair", "adminclusterpair",
+		"--namespaces", namespace, name}
+	expected := "error: unable to find the admin cluster pair in the admin namespace"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
 func TestCreateMigrationSchedulesNoName(t *testing.T) {
 	defer resetTest()
 	cmdArgs := []string{"create", "migrationschedules"}
@@ -243,7 +255,24 @@ func TestCreateMigrationSchedulesNoName(t *testing.T) {
 
 func TestCreateMigrationSchedules(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "createmigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "createmigration", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
+}
+
+func TestCreateMigrationScheduleWithNamespaceSelector(t *testing.T) {
+	defer resetTest()
+	clusterPair := "clusterpair1"
+	namespace := "test-ns"
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   namespace,
+			Labels: map[string]string{"key": "value"},
+		}})
+	require.NoError(t, err, "Error creating test-ns namespace")
+	createClusterPair(t, clusterPair, "test-ns", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-c", clusterPair, "-i", "15",
+		"--namespace-selectors", "key=value", "-n", namespace, "ms"}
+	expected := "MigrationSchedule ms created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestCreateMigrationScheduleSyncDrExcludeVolumesFalse(t *testing.T) {
@@ -254,17 +283,20 @@ func TestCreateMigrationScheduleSyncDrExcludeVolumesFalse(t *testing.T) {
 	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
 	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
 		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace, "--exclude-volumes=" + strconv.FormatBool(false)}
-	expected := "error: --exclude-volumes can only be set to true if it is a sync-dr use case or storage options are not provided in the cluster pair"
+	expected := "error: --exclude-volumes can only be set to true if it is a sync-dr use case or when storage options are not provided in the cluster pair"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreateMigrationScheduleWithIntervalAndVerify(t *testing.T) {
 	defer resetTest()
 	clusterPair := "clusterpair1"
+	adminClusterPair := "adminClusterPair"
 	namespace := "namespace1"
 	name := "createmigrationschedule"
 	createClusterPair(t, clusterPair, "namespace1", "sync-dr")
-	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair,
+	//create admin cluster pair in default admin namespace
+	createClusterPair(t, adminClusterPair, "kube-system", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", clusterPair, "--admin-cluster-pair", adminClusterPair,
 		"--namespaces", namespace, "--annotations", "key1=value1", name, "-n", namespace}
 	expected := "MigrationSchedule createmigrationschedule created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -294,6 +326,68 @@ func TestCreateMigrationScheduleWithBothIntervalAndPolicyName(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
+func TestCreateMigrationScheduleWithInvalidNamespaces(t *testing.T) {
+	defer resetTest()
+	namespace := "test-ns"
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   namespace,
+			Labels: map[string]string{"key": "value"},
+		}})
+	require.NoError(t, err, "Error creating test-ns namespace")
+	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", "clusterPair1",
+		"--namespaces", "namespace1", "--namespace-selectors", "key=value", "migrationschedule", "-n", "namespace1"}
+	expected := "error: migration namespaces should only contain the current namespace"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationScheduleInAdminNamespace(t *testing.T) {
+	defer resetTest()
+	namespace := "test-ns"
+	adminNamespace := "kube-system"
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   namespace,
+			Labels: map[string]string{"key": "value"},
+		}})
+	require.NoError(t, err, "Error creating test-ns namespace")
+	createClusterPair(t, "clusterPair1", adminNamespace, "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "-i", "15", "-c", "clusterPair1",
+		"--namespaces", "namespace1", "--namespace-selectors", "key=value", "migrationschedule", "-n", adminNamespace}
+	expected := "MigrationSchedule migrationschedule created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestCreateMigrationScheduleWithMissingTransformSpec(t *testing.T) {
+	defer resetTest()
+	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
+	cmdArgs := []string{"create", "migrationschedule", "-i", "15", "-c", "clusterPair1",
+		"--namespaces", "namespace1", "migrationschedule", "-n", "namespace1", "--transform-spec", "test-rt"}
+	expected := "error: unable to retrieve transformation namespace1/test-rt, err: resourcetransformations.stork.libopenstorage.org \"test-rt\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationScheduleWithInvalidTransformSpec(t *testing.T) {
+	defer resetTest()
+	createClusterPair(t, "clusterPair1", "default", "async-dr")
+	cmdArgs := []string{"create", "migrationschedule", "-i", "15", "-c", "clusterPair1",
+		"--namespaces", "default", "migrationschedule", "--transform-spec", "test-rt", "-n", "default"}
+	createResourceTransformation(t, "test-rt", "default", storkv1.ResourceTransformationStatusFailed)
+	expected := "error: transformation default/test-rt is not in ready state, state: Failed"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationScheduleWithValidTransformSpec(t *testing.T) {
+	defer resetTest()
+	createClusterPair(t, "clusterPair1", "default", "async-dr")
+	cmdArgs := []string{"create", "migrationschedule", "-i", "15", "-c", "clusterPair1",
+		"--namespaces", "default", "migrationschedule", "--transform-spec", "test-rt", "-n", "default"}
+	createResourceTransformation(t, "test-rt", "default", storkv1.ResourceTransformationStatusReady)
+	expected := "MigrationSchedule migrationschedule created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func TestCreateMigrationScheduleWithInvalidInterval(t *testing.T) {
 	defer resetTest()
 	createClusterPair(t, "clusterPair1", "namespace1", "async-dr")
@@ -305,8 +399,8 @@ func TestCreateMigrationScheduleWithInvalidInterval(t *testing.T) {
 
 func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "createmigrationschedule", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	cmdArgs := []string{"create", "migrationschedules", "-s", "testpolicy", "-c", "clusterpair1", "--namespaces", "namespace1", "createmigrationschedule"}
+	createMigrationScheduleAndVerify(t, "createmigrationschedule", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
+	cmdArgs := []string{"create", "migrationschedules", "-s", "testpolicy", "-c", "clusterpair1", "--namespaces", "default", "createmigrationschedule"}
 
 	expected := "Error from server (AlreadyExists): migrationschedules.stork.libopenstorage.org \"createmigrationschedule\" already exists"
 	testCommon(t, cmdArgs, nil, expected, true)
@@ -315,8 +409,8 @@ func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 func TestDefaultMigrationSchedulePolicy(t *testing.T) {
 	defer resetTest()
 	// Create schedule without the default policy present
-	createClusterPair(t, "clusterpair1", "default", "async-dr")
-	cmdArgs := []string{"create", "migrationschedules", "defaultpolicy", "-n", "test", "-c", "clusterpair1", "--namespaces", "test", "-n", "default"}
+	createClusterPair(t, "clusterpair1", "test", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "defaultmigrationschedule", "-c", "clusterpair1", "--namespaces", "test", "-n", "test"}
 	expected := "error: unable to get schedulepolicy default-migration-policy: schedulepolicies.stork.libopenstorage.org \"default-migration-policy\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
@@ -331,7 +425,7 @@ func TestDefaultMigrationSchedulePolicy(t *testing.T) {
 			}},
 	})
 	require.NoError(t, err, "Error creating schedulepolicy")
-	expected = "MigrationSchedule defaultpolicy created successfully\n"
+	expected = "MigrationSchedule defaultmigrationschedule created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 func TestDeleteMigrationSchedulesNoMigrationName(t *testing.T) {
@@ -351,7 +445,7 @@ func TestDeleteMigrationSchedulesNoMigration(t *testing.T) {
 
 func TestDeleteMigrationSchedules(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", false)
+	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", false)
 
 	cmdArgs := []string{"delete", "migrationschedules", "deletemigration"}
 	expected := "MigrationSchedule deletemigration deleted successfully\n"
@@ -361,16 +455,16 @@ func TestDeleteMigrationSchedules(t *testing.T) {
 	expected = "Error from server (NotFound): migrationschedules.stork.libopenstorage.org \"deletemigration\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair2", []string{"default"}, "", "", true)
 
 	cmdArgs = []string{"delete", "migrationschedules", "deletemigration1", "deletemigration2"}
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
 	expected += "MigrationSchedule deletemigration2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
 
 	cmdArgs = []string{"delete", "migrationschedules", "-c", "clusterpair1"}
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
@@ -383,7 +477,7 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	name1 := "testmigrationschedule-2"
 	namespace := "default"
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, name, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
+	createMigrationScheduleAndVerify(t, name, "testpolicy", namespace, "clusterpair1", []string{namespace}, "", "", false)
 
 	cmdArgs := []string{"suspend", "migrationschedules", name}
 	expected := "MigrationSchedule " + name + " suspended successfully\n"
@@ -425,7 +519,7 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	// test multiple suspend/resume using same clusterpair
-	createMigrationScheduleAndVerify(t, name1, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
+	createMigrationScheduleAndVerify(t, name1, "testpolicy", namespace, "clusterpair1", []string{namespace}, "", "", false)
 	cmdArgs = []string{"suspend", "migrationschedules", "-c", "clusterpair1"}
 	expected = "MigrationSchedule " + name + " suspended successfully\nMigrationSchedule " + name1 + " suspended successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -438,11 +532,13 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 
 func createClusterPair(t *testing.T, clusterPairName string, namespace string, mode string) {
 	options := make(map[string]string)
+	storageStatus := storkv1.ClusterPairStatusNotProvided
 	if mode == "async-dr" {
 		options["backuplocation"] = "value1"
 		options["ip"] = "value2"
 		options["port"] = "value3"
 		options["token"] = "value4"
+		storageStatus = storkv1.ClusterPairStatusReady
 	}
 	clusterPair := &storkv1.ClusterPair{
 		ObjectMeta: metav1.ObjectMeta{
@@ -453,7 +549,38 @@ func createClusterPair(t *testing.T, clusterPairName string, namespace string, m
 		Spec: storkv1.ClusterPairSpec{
 			Options: options,
 		},
+
+		Status: storkv1.ClusterPairStatus{
+			SchedulerStatus: storkv1.ClusterPairStatusReady,
+			StorageStatus:   storageStatus,
+		},
 	}
 	_, err := storkops.Instance().CreateClusterPair(clusterPair)
 	require.True(t, err == nil || errors.IsAlreadyExists(err), "Error creating cluster pair")
+}
+
+func createResourceTransformation(t *testing.T, resourceTransformName string, namespace string, status storkv1.ResourceTransformationStatusType) {
+	_, err := storkops.Instance().CreateResourceTransformation(&storkv1.ResourceTransformation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceTransformName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ResourceTransformationSpec{
+			Objects: []storkv1.TransformSpecs{
+				{
+					Resource: "/v1/Service",
+					Paths: []storkv1.ResourcePaths{
+						{
+							Path:  "spec.type",
+							Value: "LoadBalancer",
+							Type:  "string",
+						},
+					},
+				}},
+		},
+		Status: storkv1.ResourceTransformationStatus{
+			Status: status,
+		},
+	})
+	require.NoError(t, err, "Error creating Resource Transformation")
 }
