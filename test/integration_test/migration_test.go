@@ -93,6 +93,11 @@ func testMigration(t *testing.T) {
 	t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
 	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
 	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
+	t.Run("excludeResourceTypeTest", excludeResourceTypeTest)
+	t.Run("excludeResourceTypePVCTest", excludeResourceTypePVCTest)
+	t.Run("excludeMultipleResourceTypesTest", excludeMultipleResourceTypesTest)
+	t.Run("excludeResourceTypesWithSelectorsTest", excludeResourceTypesWithSelectorsTest)
+	t.Run("excludeNonExistingResourceTypesTest", excludeNonExistingResourceTypesTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -2021,6 +2026,288 @@ func transformResourceTest(t *testing.T) {
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, true, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func excludeResourceTypeTest(t *testing.T) {
+	var testrailID, testResult = 93402, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "exclude-resourcetype-migration"
+	appKey := "mysql-1-pvc"
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		instanceID,
+		appKey,
+		[]string{},
+		[]string{instanceID},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/2, defaultWaitInterval)
+	require.NoError(t, err, "Migration could not be completed")
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.Equal(t, 0, len(destDeployments.Items), fmt.Sprintf("Expected no deployments in destination in %s namespace", namespace))
+
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destroyAndWait(t, ctxs)
+
+	blowNamespacesForTest(t, instanceID, appKey, false)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func excludeResourceTypePVCTest(t *testing.T) {
+	var testrailID, testResult = 93403, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "exclude-resourcetype-pvc"
+	appKey := "mysql-1-pvc"
+	pvcName := "mysql-data"
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		instanceID,
+		appKey,
+		[]string{},
+		[]string{instanceID},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/2, defaultWaitInterval)
+	require.NoError(t, err, "Migration could not be completed")
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	_, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	require.Error(t, err, "getting pvc in destination in %s namespace should have failed", namespace)
+
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destroyAndWait(t, ctxs)
+
+	blowNamespacesForTest(t, instanceID, appKey, false)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func excludeMultipleResourceTypesTest(t *testing.T) {
+	var testrailID, testResult = 93404, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "exclude-multiple-resourcetypes-migration"
+	appKey := "mysql-1-pvc"
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		instanceID,
+		appKey,
+		[]string{},
+		[]string{instanceID},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/2, defaultWaitInterval)
+	require.NoError(t, err, "Migration could not be completed")
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.Equal(t, 0, len(destDeployments.Items), fmt.Sprintf("Expected no deployments in destination in %s namespace", namespace))
+	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving services list from %s namespace", namespace)
+	require.Equal(t, 0, len(destServices.Items), fmt.Sprintf("Expected no service in destination in %s namespace", namespace))
+
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destroyAndWait(t, ctxs)
+
+	blowNamespacesForTest(t, instanceID, appKey, false)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func excludeResourceTypesWithSelectorsTest(t *testing.T) {
+	var testrailID, testResult = 93466, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "exclude-resourcetype-selector"
+	appKey := "mysql-1-pvc"
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		instanceID,
+		appKey,
+		[]string{},
+		[]string{instanceID},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/2, defaultWaitInterval)
+	require.NoError(t, err, "Migration could not be completed")
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.Equal(t, 1, len(destDeployments.Items), fmt.Sprintf("Expected 1 deployment in destination in %s namespace", namespace))
+	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving services list from %s namespace", namespace)
+	require.Equal(t, 0, len(destServices.Items), fmt.Sprintf("Expected no service in destination in %s namespace", namespace))
+
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	destroyAndWait(t, ctxs)
+
+	blowNamespacesForTest(t, instanceID, appKey, false)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func excludeNonExistingResourceTypesTest(t *testing.T) {
+	var testrailID, testResult = 93503, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "exclude-nonexisting-resourcetype-migration"
+	appKey := "mysql-1-pvc"
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		instanceID,
+		appKey,
+		[]string{},
+		[]string{instanceID},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	// Validate but do not destroy migration and apps
+	validateAndDestroyMigration(
+		t,
+		ctxs,
+		instanceID,
+		appKey,
+		preMigrationCtx,
+		true,
+		true,
+		true,
+		true,  //Skip Deleting App on Destination
+		true,  //Skip Deleting App on Source
+		false, //Don't delete namespaces yet
+	)
+
+	// Change kubeconfig to destination
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.Equal(t, 1, len(destDeployments.Items), fmt.Sprintf("Expected 1 deployment in destination in %s namespace", namespace))
+	destStatefulSets, err := apps.Instance().ListStatefulSets(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retriving statefulset list from %s namespace", namespace)
+	require.Equal(t, 0, len(destStatefulSets.Items), fmt.Sprintf("Expected no statefulset in destination in %s namespace", namespace))
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	validateAndDestroyMigration(
+		t,
+		ctxs,
+		instanceID,
+		appKey,
+		preMigrationCtx,
+		true,
+		true,
+		true,
+		false,
+		false,
+		true)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
