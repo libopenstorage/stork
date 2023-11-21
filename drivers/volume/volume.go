@@ -155,6 +155,12 @@ type Driver interface {
 	// ValidatePureVolumesNoReplicaSets validates pure volumes has no replicaset
 	ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error
 
+	// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are already attached to the node
+	InitializePureLocalVolumePaths() error
+
+	// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+	ValidatePureLocalVolumePaths() error
+
 	// ValidateVolumeInPxctlList validates that the given volume appears in the output of `pxctl v l`
 	ValidateVolumeInPxctlList(name string) error
 

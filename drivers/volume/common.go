@@ -399,6 +399,22 @@ func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, para
 	}
 }
 
+// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are already attached to the node
+func (d *DefaultDriver) InitializePureLocalVolumePaths() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InitializePureLocalVolumePaths()",
+	}
+}
+
+// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+func (d *DefaultDriver) ValidatePureLocalVolumePaths() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureLocalVolumePaths()",
+	}
+}
+
 // ValidateUpdateVolume validates if volume changes has been applied
 func (d *DefaultDriver) ValidateUpdateVolume(vol *Volume, params map[string]string) error {
 	return &errors.ErrNotSupported{

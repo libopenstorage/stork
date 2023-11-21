@@ -2,25 +2,20 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/pkg/units"
-	appsv1 "k8s.io/api/apps/v1"
+	"math/rand"
 	"sort"
 	"strconv"
-
-	"math/rand"
-
-	"github.com/portworx/torpedo/pkg/osutils"
-
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/sched-ops/k8s/core"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
+	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/google/uuid"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
@@ -30,7 +25,10 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/units"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -84,11 +82,14 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithSDK", "Test pure volumes on applications, run CRUD", nil, 0)
+		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 	})
 
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
-		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
+
+		err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
+		Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
@@ -100,10 +101,11 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
-		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
 	})
 
 	JustAfterEach(func() {
+		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
@@ -114,10 +116,13 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithPXCTL", "Test pure volumes on applications, run CRUD using pxctl", nil, 0)
+		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 	})
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
-		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
+
+		err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
+		Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
@@ -129,9 +134,10 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
-		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
 	})
 	JustAfterEach(func() {
+		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})

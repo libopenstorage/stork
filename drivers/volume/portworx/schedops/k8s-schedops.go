@@ -66,10 +66,10 @@ const (
 	talismanImage               = "portworx/talisman:latest"
 	rancherControlPlaneLabelKey = "node-role.kubernetes.io/controlplane"
 
-	// pureVolumeOUI is used to identify if a mapper device is of Pure origin
+	// PureVolumeOUI is used to identify if a mapper device is of Pure origin
 	// (if it matches with /dev/mapper/.*24a937.*, it's a Pure volume, if it's some other format it's not)
-	pureVolumeOUI   = "24a937"
-	pureMapperRegex = "/dev/mapper/.*" + pureVolumeOUI + ".*"
+	PureVolumeOUI   = "24a937"
+	PureMapperRegex = "/dev/mapper/.*" + PureVolumeOUI + ".*"
 )
 
 const (
@@ -406,7 +406,7 @@ PodLoop:
 			}
 			log.Infof("container [%s] and paths [%v] after checking sym links", containerName, paths)
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", pureMapperRegex, path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", PureMapperRegex, path))
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)

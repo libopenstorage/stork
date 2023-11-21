@@ -48,6 +48,7 @@ import (
 	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -216,6 +217,8 @@ type portworx struct {
 	skipPXSvcEndpoint     bool
 	skipPxOperatorUpgrade bool
 	DiagsFile             string
+
+	pureDeviceBaseline map[string]map[string]pureLocalPathEntry // Stores a list of Pure mapper devices present on each storage node
 }
 
 type statusJSON struct {
@@ -1779,6 +1782,291 @@ func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params ma
 		return fmt.Errorf("purevolumes [%s] has replicationset and it should not", volumeName)
 	}
 	return nil
+}
+
+type pureLocalPathEntry struct {
+	WWID        string
+	SinglePaths []string
+	Size        uint64
+}
+
+func GetSerialFromWWID(wwid string) (string, error) {
+	if !strings.Contains(wwid, schedops.PureVolumeOUI) {
+		return "", fmt.Errorf("not a Pure Storage multipath WWID '%s'", wwid)
+	}
+
+	if strings.HasPrefix(wwid, "eui.") {
+		// NVMe
+		return strings.ToLower(fmt.Sprintf("%s%s", wwid[6:20], wwid[26:36])), nil
+	}
+	// SCSI
+	return strings.TrimPrefix(strings.ToLower(wwid), "36"+schedops.PureVolumeOUI), nil
+}
+
+func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
+	/* Parses output like this
+	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
+	sdd                               137438953472
+	sdb                                34359738368
+	3624a9370ea876434795b4b54000a4128   6442450944
+	|-sdf                               6442450944
+	|-sdi                               6442450944
+	|-sdg                               6442450944
+	`-sdh                               6442450944
+	sde2                              134217728000
+	`-sde                             137438953472
+	sde1                                3219128320
+	`-sde                             137438953472
+	sdc                               137438953472
+	sda2                              133438636032
+	`-sda                             137438953472
+	sda1                                3999268864
+	`-sda                             137438953472
+	*/
+
+	foundDevices := map[string]pureLocalPathEntry{}
+
+	var currentEntry *pureLocalPathEntry = nil
+
+	for _, l := range strings.Split(out, "\n") {
+		line := strings.TrimSpace(l)
+		if len(line) == 0 {
+			continue
+		}
+
+		// If we see a WWID, we are starting a new entry
+		if strings.Contains(line, schedops.PureVolumeOUI) {
+			if currentEntry != nil {
+				foundDevices[currentEntry.WWID] = *currentEntry
+			}
+			parts := strings.Fields(line)
+			wwid := parts[0]
+			sizeStr := parts[1]
+			size, err := strconv.ParseUint(sizeStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse size '%s' from lsblk output, Err: %v", sizeStr, err)
+			}
+			currentEntry = &pureLocalPathEntry{
+				WWID:        wwid,
+				Size:        size,
+				SinglePaths: []string{},
+			}
+			continue
+		}
+
+		if currentEntry != nil {
+			// If we see a pipe or a tick, we are starting a single path inside a WWID
+			if strings.HasPrefix(line, "|-") || strings.HasPrefix(line, "`-") {
+				parts := strings.Fields(line[2:])
+				currentEntry.SinglePaths = append(currentEntry.SinglePaths, parts[0])
+				continue
+			} else {
+				// This is some other path not part of a WWID, ignore it and also finish off any WWID we had going before
+				foundDevices[currentEntry.WWID] = *currentEntry
+				currentEntry = nil
+			}
+		}
+	}
+	if currentEntry != nil {
+		foundDevices[currentEntry.WWID] = *currentEntry
+	}
+
+	return foundDevices, nil
+}
+
+// collectLocalNodeInfo interrogates dmsetup and lsblk to get a comprehensive list of mapper devices, their single paths,
+// and checks for common error conditions such as devices missing single paths or only appearing in dmsetup/lsblk
+func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEntry, error) {
+	// Run `dmsetup ls` to get all the known mapper devices
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, "dmsetup ls", node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check dmsetup ls output on node %s, Err: %v", n.MgmtIp, err)
+	}
+	dmsetupFoundMappers := []string{}
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, schedops.PureVolumeOUI) {
+			continue
+		}
+		mapperName := strings.Split(line, "\t")[0]
+		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
+	}
+
+	// Then run `lsblk` to get the WWN and size of each device. Flags:
+	// * --inverse: show parents before children (instead of the default output that has single paths as the top level)
+	// * --ascii: show ASCII characters only (no unicode, normally it displays the fancy tree characters, this makes it only show |- and `-)
+	// * --noheadings: don't show the header line
+	// * -o NAME,SIZE: only show the name and size columns
+	// * -b: show size in bytes instead of human-readable with a suffix
+	out, err = d.nodeDriver.RunCommandWithNoRetry(n, "lsblk --inverse --ascii --noheadings -o NAME,SIZE -b", node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check 'lsblk --inverse --ascii --noheadings -o NAME,SIZE' output on node %s, Err: %v", n.MgmtIp, err)
+	}
+
+	lsblkParsed, err := parseLsblkOutput(out)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lsblk output on node %s, Err: %v", n.MgmtIp, err)
+	}
+
+	if len(lsblkParsed) != len(dmsetupFoundMappers) {
+		return nil, fmt.Errorf("found %d mappers in dmsetup but %d devices in lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", len(dmsetupFoundMappers), len(lsblkParsed), n.MgmtIp)
+	}
+
+	// Also, raise an error if there is a mismatch in the devices in the two outputs (e.g. if there is a mapper
+	// in dmsetup but not lsblk, something is very wrong and we didn't clean up right)
+	for _, mapper := range dmsetupFoundMappers {
+		lsblkEntry, exists := lsblkParsed[mapper]
+		if !exists {
+			return nil, fmt.Errorf("found mapper %s in dmsetup but not lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", mapper, n.MgmtIp)
+		}
+		// Ensure there are no WWIDs with empty single paths, as that is a malformed device
+		if len(lsblkEntry.SinglePaths) == 0 {
+			return nil, fmt.Errorf("found mapper %s with no single paths on node %s, this should not happen (we didn't clean something up right?)", mapper, n.MgmtIp)
+		}
+	}
+
+	return lsblkParsed, nil
+}
+
+func (d *portworx) getCurrentPureLocalVolumePaths() (map[string]map[string]pureLocalPathEntry, error) {
+	// Iterate through all nodes, and for each node collect local paths
+	currentDevices := make(map[string]map[string]pureLocalPathEntry)
+	nodes := node.GetStorageDriverNodes()
+	for _, n := range nodes {
+		localPathMap, err := d.collectLocalNodeInfo(n)
+		if err != nil {
+			return nil, err
+		}
+		currentDevices[n.MgmtIp] = localPathMap
+	}
+
+	return currentDevices, nil
+}
+
+// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are attached to each node, so that we can compare against it later
+func (d *portworx) InitializePureLocalVolumePaths() error {
+	currentDevices, err := d.getCurrentPureLocalVolumePaths()
+	if err != nil {
+		return err
+	}
+	logrus.Infof("Pure device baseline initialized to: %+v", currentDevices)
+	d.pureDeviceBaseline = currentDevices
+
+	// TODO: we should only include non-FACD drives here. Eventually, we should handle FACD as its own kind of volume in ValidatePureLocalVolumePaths and validate it matches the pxctl cd l output
+
+	return nil
+}
+
+// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+func (d *portworx) ValidatePureLocalVolumePaths() error {
+	t := func() error {
+		currentDevices, err := d.getCurrentPureLocalVolumePaths()
+		if err != nil {
+			return err
+		}
+		logrus.Infof("Current pure devices: %+v", currentDevices)
+
+		// TODO: handle FACD drive failovers properly (these will show up as new devices but they're actually fine)
+		// Remove all devices that are in the baseline (complex set math time!). Also warn if any baseline devices are now missing?
+		for node, baselineDevices := range d.pureDeviceBaseline {
+			currentNodeDevices := currentDevices[node]
+			for wwid := range baselineDevices {
+				if _, exists := currentNodeDevices[wwid]; exists {
+					delete(currentNodeDevices, wwid)
+				} else {
+					return fmt.Errorf("baseline FA device %s originally present on node %s is missing, this should not happen", wwid, node)
+				}
+			}
+		}
+
+		allVolNames, err := d.ListAllVolumes()
+		if err != nil {
+			return err
+		}
+		// Inspect all volumes provided to get the PX spec
+		fadaVolumes := []*api.Volume{}
+		for _, volName := range allVolNames {
+			v, err := d.InspectVolume(volName)
+			if err != nil {
+				return err
+			}
+			if !v.Spec.IsPureVolume() {
+				continue
+			}
+			if v.Spec.ProxySpec.PureBlockSpec == nil {
+				// TODO: handle FBDA volumes properly as well
+				continue
+			}
+			fadaVolumes = append(fadaVolumes, v)
+		}
+
+		// For each volume, check which nodes it should be on. Remove it from the list of devices on that node. Error if we can't find it.
+		for _, v := range fadaVolumes {
+			// Find the node this volume is on
+			var foundNode *node.Node
+			attachedOn := v.GetAttachedOn()
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.MgmtIp == attachedOn { // TODO: RWX support
+					tempVar := n
+					foundNode = &tempVar
+					break
+				}
+			}
+			if foundNode == nil {
+				logrus.Infof("Volume %s is not attached to any node, skipping", v.Locator.Name)
+				continue
+			}
+
+			// Find the device for this volume
+			var device *pureLocalPathEntry
+			for _, deviceEntry := range currentDevices[foundNode.MgmtIp] {
+				serial, err := GetSerialFromWWID(deviceEntry.WWID)
+				if err != nil {
+					return err
+				}
+				if serial == strings.ToLower(v.Spec.GetProxySpec().PureBlockSpec.SerialNum) {
+					device = &deviceEntry
+					break
+				}
+			}
+			if device == nil {
+				return fmt.Errorf("volume %s is attached to node %s but not found in any local path", v.Locator.Name, foundNode.MgmtIp)
+			}
+
+			// Check that the device is actually of the correct size
+			if device.Size != v.Spec.Size {
+				return fmt.Errorf("volume %s is attached to node %s but has incorrect size %d instead of expected size %d", v.Locator.Name, foundNode.MgmtIp, device.Size, v.Spec.Size)
+			}
+
+			// Remove the device from the list of devices on that node
+			delete(currentDevices[foundNode.MgmtIp], device.WWID)
+		}
+
+		logrus.Infof("Remaining devices after removing all attached FADA volumes: %+v", currentDevices)
+
+		// At the very end, ensure that all the lists are empty. If they aren't, there is an extra device on that node not matching to a pod.
+		// TODO: check if this is an FACD drive device, if so then it's also fine
+		for node, devices := range currentDevices {
+			if len(devices) > 0 {
+				return fmt.Errorf("found %d extra devices on node %s that are not attached to any torpedo app volume (it may be from a clone test pod)", len(devices), node)
+			}
+		}
+
+		return nil
+	}
+	_, err := task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+		err := t()
+		if err != nil {
+			return nil, true, err
+		}
+		return nil, false, nil
+	}, time.Minute*2, defaultRetryInterval)
+	return err
 }
 
 func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {
