@@ -122,6 +122,14 @@ const (
 	pxVersionError = "ERROR GETTING PX VERSION"
 )
 
+type ErrorInjection string
+
+const (
+	CRASH      ErrorInjection = "crash"
+	PX_RESTART ErrorInjection = "px_restart"
+	REBOOT     ErrorInjection = "reboot"
+)
+
 // TODO Need to add for AutoJournal
 //var IOProfileChange = [4]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO_JOURNAL, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
 
@@ -310,15 +318,20 @@ func GenerateUUID() string {
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
 
-	if err != nil && event != nil {
-		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
-		actualEvent := strings.Split(event.Event.Type, "<br>")[0]
-		log.Errorf("Event [%s] failed with error: %v", actualEvent, err)
-		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
-		er := fmt.Errorf(err.Error() + "<br>")
-		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
-		event.Outcome = append(event.Outcome, er)
-		createLongevityJiraIssue(event, er)
+	if err != nil {
+		if event != nil {
+			Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
+			actualEvent := strings.Split(event.Event.Type, "<br>")[0]
+			log.Errorf("Event [%s] failed with error: %v", actualEvent, err)
+			dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
+			er := fmt.Errorf(err.Error() + "<br>")
+			Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
+			event.Outcome = append(event.Outcome, er)
+			createLongevityJiraIssue(event, er)
+		} else {
+			log.FailOnError(err, "error in validation")
+		}
+
 	}
 }
 
@@ -465,6 +478,10 @@ const (
 	StorkAppBkpPoolResize = "storkappbkppoolresize"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
+	// HAIncreaseAndRestartPX performs repl-add and restart PX
+	HAIncreaseAndRestartPX = "haIncreaseAndRestartPX"
+	// HAIncreaseAndCrashPX performs repl-add and crash PX
+	HAIncreaseAndCrashPX = "haIncreaseAndCrashPX"
 	// AddDrive performs drive add for on-prem cluster
 	AddDrive = "addDrive"
 	// AddDiskAndReboot performs add-disk and reboots node
@@ -770,7 +787,59 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 	}()
 
 	setMetrics(*event)
+	haIncreaseWithErrorInjection(event, contexts, REBOOT)
 
+}
+
+// TriggerHAIncreaseAndPXRestart triggers repl increase and restart PX on target and source nodes
+func TriggerHAIncreaseAndPXRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(HAIncreaseAndRestartPX)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: HAIncreaseAndRestartPX,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	haIncreaseWithErrorInjection(event, contexts, PX_RESTART)
+
+}
+
+// TriggerHAIncreaseAndCrashPX triggers repl increase and crash PX on target and source nodes
+func TriggerHAIncreaseAndCrashPX(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(HAIncreaseAndCrashPX)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: HAIncreaseAndCrashPX,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	haIncreaseWithErrorInjection(event, contexts, CRASH)
+
+}
+
+func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Context, errorInj ErrorInjection) {
 	//Reboot target node and source node while repl increase is in progress
 	stepLog := "get a volume to  increase replication factor and reboot source  and target node"
 	Step(stepLog, func() {
@@ -782,6 +851,8 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 		for _, n := range storageNodes {
 			storageNodeMap[n.Id] = n
 		}
+
+		var selctx *scheduler.Context
 
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -795,53 +866,78 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
-
-			if strings.Contains(ctx.App.Key, "fio-fstrim") {
-				for _, v := range appVolumes {
-					// Check if volumes are Pure FA/FB DA volumes
-					isPureVol, err := Inst().V.IsPureVolume(v)
-					if err != nil {
-						UpdateOutcome(event, err)
-					}
-					if isPureVol {
-						log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
-						continue
-					}
-
-					currRep, err := Inst().V.GetReplicationFactor(v)
+			for _, v := range appVolumes {
+				// Check if volumes are Pure FA/FB DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err != nil {
 					UpdateOutcome(event, err)
-
-					if currRep != 0 {
-						//Changing replication factor to 1
-						if currRep > 1 {
-							log.Infof("Current replication is > 1, setting it to 1 before proceeding")
-							opts := volume.Options{
-								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-							}
-							rep := currRep
-							for rep > 1 {
-								err = Inst().V.SetReplicationFactor(v, rep-1, nil, nil, true, opts)
-								if err != nil {
-									log.Errorf("There is an error decreasing repl [%v]", err.Error())
-									UpdateOutcome(event, err)
-								}
-								rep--
-								//waiting for volume to be stable
-								time.Sleep(1 * time.Minute)
-							}
-
-						}
-					}
-
-					if err == nil {
-						restartPX := false
-						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap, restartPX)
-						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap, restartPX)
-					}
 				}
+				if isPureVol {
+					log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
+					continue
+				}
+
+				size, err := GetVolumeConsumedSize(*v)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+
+				if size < 50 {
+					continue
+				}
+				selctx = ctx
+				break
 			}
 		}
+
+		if selctx != nil {
+
+			var appVolumes []*volume.Volume
+			var err error
+			stepLog = fmt.Sprintf("get volumes for %s app", selctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				appVolumes, err = Inst().S.GetVolumes(selctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", selctx.App.Key))
+					return
+				}
+			})
+
+			for _, v := range appVolumes {
+
+				currRep, err := Inst().V.GetReplicationFactor(v)
+				UpdateOutcome(event, err)
+
+				if currRep != 0 {
+					//Changing replication factor to 1
+					if currRep > 1 {
+						log.Infof("Current replication is > 1, reducing it before proceeding")
+						opts := volume.Options{
+							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+						}
+						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+						if err != nil {
+							log.Errorf("There is an error decreasing repl [%v]", err.Error())
+							UpdateOutcome(event, err)
+						}
+
+						log.Infof("waiting for 5 mins for data to deleted completely")
+						time.Sleep(5 * time.Minute)
+					}
+				}
+
+				if err == nil {
+					HaIncreaseRebootTargetNode(event, selctx, v, storageNodeMap, errorInj)
+					HaIncreaseRebootSourceNode(event, selctx, v, storageNodeMap, errorInj)
+				}
+			}
+
+		}
 		updateMetrics(*event)
+
 	})
 }
 

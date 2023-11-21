@@ -122,6 +122,8 @@ var _ = Describe("{Longevity}", func() {
 		AddStorageNode:           TriggerAddOCPStorageNode,
 		AddStoragelessNode:       TriggerAddOCPStoragelessNode,
 		OCPStorageNodeRecycle:    TriggerOCPStorageNodeRecycle,
+		HAIncreaseAndCrashPX:     TriggerHAIncreaseAndCrashPX,
+		HAIncreaseAndRestartPX:   TriggerHAIncreaseAndPXRestart,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -1242,6 +1244,17 @@ func populateIntervals() {
 	triggerInterval[CrashNode][2] = 24 * baseInterval
 	triggerInterval[CrashNode][1] = 27 * baseInterval
 
+	triggerInterval[HAIncreaseAndCrashPX][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][5] = 15 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][1] = 27 * baseInterval
+
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
 	triggerInterval[CrashVolDriver][9] = 3 * baseInterval
 	triggerInterval[CrashVolDriver][8] = 6 * baseInterval
@@ -1318,6 +1331,17 @@ func populateIntervals() {
 	triggerInterval[HADecrease][3] = 21 * baseInterval
 	triggerInterval[HADecrease][2] = 24 * baseInterval
 	triggerInterval[HADecrease][1] = 27 * baseInterval
+
+	triggerInterval[HAIncreaseAndRestartPX][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][5] = 15 * baseInterval // Default global chaos level, 1.5 hrs
+	triggerInterval[HAIncreaseAndRestartPX][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][1] = 27 * baseInterval
 
 	triggerInterval[VolumeClone][10] = 1 * baseInterval
 	triggerInterval[VolumeClone][9] = 3 * baseInterval
@@ -1793,6 +1817,8 @@ func populateIntervals() {
 	triggerInterval[AddStoragelessNode][0] = 0
 	triggerInterval[OCPStorageNodeRecycle][0] = 0
 	triggerInterval[NodeDecommission][0] = 0
+	triggerInterval[HAIncreaseAndRestartPX][0] = 0
+	triggerInterval[HAIncreaseAndCrashPX][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
