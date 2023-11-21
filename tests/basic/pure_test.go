@@ -2,12 +2,18 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/storage"
+
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	storageApi "k8s.io/api/storage/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/libopenstorage/openstorage/api"
 	appsv1 "k8s.io/api/apps/v1"
@@ -1078,6 +1084,11 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 			}
 			ValidateApplications(contexts)
 		})
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		flashArrays := pxPureSecret.Arrays
 		stepLog = fmt.Sprintf("Stop portworx,resize and validate pvc,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
 			stepLog := fmt.Sprintf("Stop Portworx")
@@ -1116,6 +1127,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 							requestedVols = append(requestedVols, resizedVol)
 						}
 					})
+
 				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
 					ctx.App.Key, appVolumes)
 				Step(stepLog,
@@ -1130,6 +1142,20 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 							}
 							err := Inst().V.ValidateUpdateVolume(v, params)
 							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+
+							gotVol := false
+							for _, fa := range flashArrays {
+								faVol, err := pureutils.GetPureFAVolumeSize(v.Name, fa.MgmtEndPoint, fa.APIToken)
+								log.FailOnError(err, "error getting vol [%s] size", v.Name)
+								if faVol != 0 {
+									dash.VerifyFatal(faVol, v.Size, fmt.Sprintf("validate volume [%s] resize in FA backend", v.Name))
+									gotVol = true
+									break
+								}
+							}
+							if !gotVol {
+								log.FailOnError(fmt.Errorf("unable to find vol [%s] size", v.Name), "error getting volume size")
+							}
 						}
 					})
 			}
@@ -1146,6 +1172,24 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 				log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
 				StartVolDriverAndWait([]node.Node{selectedNode})
 			})
+			log.Infof("waiting for 5 mins allowing voals to delete in backend")
+			time.Sleep(5 * time.Minute)
+
+			var faVolsAfterDel []string
+			for _, fa := range flashArrays {
+				v, err := pureutils.GetPureFAVolumes(fa.MgmtEndPoint, fa.APIToken)
+				faVolsAfterDel = append(faVolsAfterDel, v...)
+				log.FailOnError(err, "error getting vols using end point [%s],token [%s]", fa.MgmtEndPoint, fa.APIToken)
+			}
+
+			var existingVols []string
+			for _, cv := range requestedVols {
+				if faLUNExists(faVolsAfterDel, cv.Name) {
+					existingVols = append(existingVols, cv.Name)
+				}
+			}
+
+			dash.VerifyFatal(len(existingVols) == 0, true, fmt.Sprintf("validate all volumes are deleted in FA backend. Existing vols: [%v]", existingVols))
 		})
 
 	})
@@ -1166,6 +1210,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 	It("Schedules apps that use FADA volumes, kill the nodes where these volumes are placed while the volumes are being deleted.", func() {
 		var contexts = make([]*scheduler.Context, 0)
 		var wg sync.WaitGroup
+		requestedVols := make([]string, 0)
 		//Scheduling app with volume placement strategy
 		applist := Inst().AppList
 		rand.Seed(time.Now().Unix())
@@ -1219,6 +1264,14 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 				contexts = append(contexts, context...)
 			}
 			ValidateApplications(contexts)
+
+			for _, ctx := range contexts {
+				pvcs, err := GetContextPVCs(ctx)
+				log.FailOnError(err, "Failed to get pvc's from context")
+				for _, pvc := range pvcs {
+					requestedVols = append(requestedVols, pvc.Spec.VolumeName)
+				}
+			}
 		})
 		stepLog = fmt.Sprintf("Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
@@ -1273,6 +1326,32 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 
 			}
 		})
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		flashArrays := pxPureSecret.Arrays
+
+		if len(flashArrays) == 0 {
+			log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+		}
+
+		var faVolsAfterDel []string
+		for _, fa := range flashArrays {
+			v, err := pureutils.GetPureFAVolumes(fa.MgmtEndPoint, fa.APIToken)
+			faVolsAfterDel = append(faVolsAfterDel, v...)
+			log.FailOnError(err, "error getting vols using end point [%s],token [%s]", fa.MgmtEndPoint, fa.APIToken)
+		}
+
+		var existingVols []string
+		for _, cv := range requestedVols {
+			if faLUNExists(faVolsAfterDel, cv) {
+				existingVols = append(existingVols, cv)
+			}
+		}
+
+		dash.VerifyFatal(len(existingVols) == 0, true, fmt.Sprintf("validate all volumes are deleted in FA backend. Existing vols: [%v]", existingVols))
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -1865,3 +1944,230 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 		DestroyApps(contexts, opts)
 	})
 })
+
+var _ = Describe("{PVCLUNValidation}", func() {
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("PVCLUNValidation", "Create and destroy large number of PVCs and validate LUN in the FA", nil, 0)
+	})
+	stepLog = "create large number of PVC and destroy them, restart PX and validate LUN on FA"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		flashArrays := pxPureSecret.Arrays
+
+		if len(flashArrays) == 0 {
+			log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+		}
+
+		stepLog = "Create PVCs and restart PX"
+		scName := "pure-blockfamgmt"
+		nsName := "pvc-lun-ns"
+		pvcPrefix := "falun-test"
+		numPVCs := 101
+		var createdPVCS []string
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("creating storage class %s", scName)
+			createSC := func(scName string) {
+				params := make(map[string]string)
+				params["repl"] = "1"
+				params["priority_io"] = "high"
+				params["io_profile"] = "auto"
+				params["backend"] = "pure_block"
+
+				v1obj := metav1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+
+				k8sStorage := storage.Instance()
+				_, err = k8sStorage.CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify sc [%s] creation", scName))
+			}
+
+			createNs := func(nsName string) {
+				ns := &v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName,
+					},
+				}
+				log.InfoD("Creating namespace %v", nsName)
+				_, err = core.Instance().CreateNamespace(ns)
+
+				if err != nil {
+					if apierrors.IsAlreadyExists(err) {
+						log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+					} else {
+						log.FailOnError(err, fmt.Sprintf("error creating namespace [%s]", nsName))
+					}
+				}
+			}
+
+			createPVC := func(pvcName, scName, appNs string, errCh chan error, wg *sync.WaitGroup) {
+				defer wg.Done()
+				log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, appNs)
+
+				pvcObj := &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pvcName,
+						Namespace: appNs,
+					},
+					Spec: v1.PersistentVolumeClaimSpec{
+						AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+						StorageClassName: &scName,
+						Resources: v1.ResourceRequirements{
+							Requests: v1.ResourceList{
+								v1.ResourceStorage: resource.MustParse("5Gi"),
+							},
+						},
+					},
+				}
+				_, err = core.Instance().CreatePersistentVolumeClaim(pvcObj)
+				if err != nil {
+					errCh <- err
+				}
+
+			}
+
+			createSC(scName)
+			createNs(nsName)
+			stNodes := node.GetStorageDriverNodes()
+			var wg sync.WaitGroup
+			errCh := make(chan error, numPVCs+len(stNodes)) // creating a buffered channel with length for worst case scenario failures
+			for i := 1; i <= numPVCs; i++ {
+				pvcName := fmt.Sprintf("%s-%d", pvcPrefix, i)
+				wg.Add(1)
+				go createPVC(pvcName, scName, nsName, errCh, &wg)
+			}
+
+			//restarting all volume driver nodes sequentially
+			wg.Add(1)
+			go func(errCh chan error, wg *sync.WaitGroup) {
+				defer wg.Done()
+
+				for _, stNode := range stNodes {
+					restartNodes := []node.Node{stNode}
+					err = Inst().V.StopDriver(restartNodes, false, nil)
+					if err != nil {
+						errCh <- err
+						break
+					}
+					err = Inst().V.WaitDriverDownOnNode(stNode)
+					if err != nil {
+						errCh <- err
+						break
+					}
+					err = Inst().V.StartDriver(stNode)
+					if err != nil {
+						errCh <- err
+						break
+					}
+					err = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute)
+					if err != nil {
+						errCh <- err
+						break
+					}
+				}
+			}(errCh, &wg)
+
+			wg.Wait()
+			close(errCh)
+
+			if len(errCh) > 0 {
+				for err := range errCh {
+					log.Errorf("%v", err)
+				}
+				log.FailOnError(fmt.Errorf("error(s) occured while creating PVC and restarting PX on nodes"), "no errors should occur")
+			}
+
+		})
+
+		pvcList, err := core.Instance().GetPersistentVolumeClaims(nsName, nil)
+		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", nsName))
+		log.Infof("len of pvc items: %d", len(pvcList.Items))
+		for _, p := range pvcList.Items {
+			//few PVCs are getting empty volume name, this is workaround for the fix
+			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, nsName)
+			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, nsName))
+			if pvc.Spec.VolumeName == "" {
+				log.Errorf("volume name empty for [%v]", p)
+
+			} else {
+				createdPVCS = append(createdPVCS, pvc.Spec.VolumeName)
+			}
+			createdPVCS = append(createdPVCS, p.Spec.VolumeName)
+		}
+
+		for _, pvc := range pvcList.Items {
+			err := Inst().S.WaitForSinglePVCToBound(pvc.Name, nsName)
+			log.FailOnError(err, fmt.Sprintf("error validating PVC [%s] status in namespace [%s]", pvc.Name, nsName))
+		}
+
+		var faVols []string
+		for _, fa := range flashArrays {
+			v, err := pureutils.GetPureFAVolumes(fa.MgmtEndPoint, fa.APIToken)
+			faVols = append(faVols, v...)
+			log.FailOnError(err, "error getting vols using end point [%s],token [%s]", fa.MgmtEndPoint, fa.APIToken)
+		}
+
+		var missingVols []string
+
+		for _, cv := range createdPVCS {
+			if !faLUNExists(faVols, cv) {
+				missingVols = append(missingVols, cv)
+			}
+		}
+
+		dash.VerifyFatal(len(missingVols) == 0, true, fmt.Sprintf("validate all volumes are created in FA backend. Missing vols: [%v]", missingVols))
+
+		log.InfoD("Destroying Volumes")
+		err = core.Instance().DeleteNamespace(nsName)
+		log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nsName))
+
+		log.Infof("waiting for 5 mins allowing vols to delete")
+		time.Sleep(5 * time.Minute)
+
+		var faVolsAfterDel []string
+		for _, fa := range flashArrays {
+			v, err := pureutils.GetPureFAVolumes(fa.MgmtEndPoint, fa.APIToken)
+			faVolsAfterDel = append(faVolsAfterDel, v...)
+			log.FailOnError(err, "error getting vols using end point [%s],token [%s]", fa.MgmtEndPoint, fa.APIToken)
+		}
+
+		var existingVols []string
+		for _, cv := range createdPVCS {
+			if faLUNExists(faVolsAfterDel, cv) {
+				existingVols = append(existingVols, cv)
+			}
+		}
+
+		dash.VerifyFatal(len(existingVols) == 0, true, fmt.Sprintf("validate all volumes are deleted in FA backend. Existing vols: [%v]", existingVols))
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
+
+func faLUNExists(faVolList []string, pvc string) bool {
+	for _, v := range faVolList {
+		if strings.Contains(v, pvc) {
+			return true
+		}
+	}
+	return false
+}

@@ -17,6 +17,8 @@ spec:
         - name: bonnie-sharedv4
           image: polinux/bonnie
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
           resources:
             limits:
               memory: 1Gi

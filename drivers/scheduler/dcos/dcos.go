@@ -957,6 +957,14 @@ func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRe
 	}
 }
 
+func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string) error {
+	//WaitForSinglePVCToBound is not supported for DCOS
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForSinglePVCToBound()",
+	}
+}
+
 func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
 	//CSISnapshotTest is not supported for DCOS
 	return &errors.ErrNotSupported{

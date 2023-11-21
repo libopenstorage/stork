@@ -6970,7 +6970,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	}
 
 	// Wait for PVC to be bound
-	err = k.waitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", restoredPVCName, err)
 	}
@@ -7055,7 +7055,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	}
 
 	// Wait for PVC to be bound
-	err = k.waitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", clonedPVCName, err)
 	}
@@ -7553,8 +7553,8 @@ func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
 	return nil
 }
 
-// waitForRestoredPVCsToBound retries and waits up to 30 minutes for a single PVC to be bound
-func (k *K8s) waitForSinglePVCToBound(pvcName, namespace string) error {
+// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
+func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string) error {
 	var pvc *v1.PersistentVolumeClaim
 	var err error
 	kubeClient, err := k.getKubeClient("")
