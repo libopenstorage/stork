@@ -57,7 +57,6 @@ func createDefaultAsyncMigrationScheduleTest(t *testing.T) {
 
 func createCustomAsyncMigrationScheduleTest(t *testing.T) {
 	testrailID := 93399
-	intervalMinutes := "25"
 	cmdArgs := map[string]string{
 		"cluster-pair":         asyncDrAdminClusterPair,
 		"namespaces":           defaultNs,
@@ -65,13 +64,13 @@ func createCustomAsyncMigrationScheduleTest(t *testing.T) {
 		"transform-spec":       "test-rt",
 		"annotations":          "openstorage.io/auth-secret-namespace=value1,openstorage.io/auth-secret-name=value2",
 		"exclude-volumes":      "",
-		"interval":             intervalMinutes,
+		"interval":             "25",
 		"disable-auto-suspend": "",
 		"selectors":            "key1=value",
 		"exclude-selectors":    "key2=value",
 		"namespace":            adminNs,
 	}
-	createMigrationScheduleTest(t, testrailID, cmdArgs, "custom-async-migration-schedule.yaml", adminNs, intervalMinutes)
+	createMigrationScheduleTest(t, testrailID, cmdArgs, "custom-async-migration-schedule.yaml", adminNs, "25")
 }
 
 func createDefaultSyncMigrationScheduleTest(t *testing.T) {
@@ -106,7 +105,7 @@ func createCustomSyncMigrationScheduleTest(t *testing.T) {
 }
 
 func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]string,
-	specFileName string, migrationScheduleNs string, validateSchedulePolicyInterval string) {
+	specFileName string, migrationScheduleNs string, inputSchedulePolicyInterval string) {
 	migrationScheduleName := "automation-test-migration-schedule"
 	var testResult = testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
@@ -139,7 +138,7 @@ func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]s
 
 	// Validate the created resource
 	specFile := "specs/storkctl-specs/migrationschedule/" + specFileName
-	err := ValidateMigrationScheduleFromFile(t, specFile, migrationScheduleName, migrationScheduleNs, validateSchedulePolicyInterval)
+	err := ValidateMigrationScheduleFromFile(t, specFile, migrationScheduleName, migrationScheduleNs, inputSchedulePolicyInterval)
 	require.NoError(t, err, "Error validating the created resource")
 
 	// If we are here then the test has passed
@@ -148,7 +147,7 @@ func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]s
 }
 
 func ValidateMigrationScheduleFromFile(t *testing.T, specFilePath string,
-	migrationScheduleName string, migrationScheduleNs string, validateSchedulePolicyInterval string) error {
+	migrationScheduleName string, migrationScheduleNs string, inputSchedulePolicyInterval string) error {
 	data, err := getByteDataFromFile(specFilePath)
 	if err != nil {
 		return err
@@ -158,26 +157,23 @@ func ValidateMigrationScheduleFromFile(t *testing.T, specFilePath string,
 	if err := dec.Decode(&migrationSchedule); err != nil {
 		return err
 	}
-	if err := ValidateMigrationSchedule(t, migrationSchedule, migrationScheduleName, migrationScheduleNs, validateSchedulePolicyInterval); err != nil {
+	if err := ValidateMigrationSchedule(t, migrationSchedule, migrationScheduleName, migrationScheduleNs, inputSchedulePolicyInterval); err != nil {
 		return err
 	}
 	return nil
 }
 
 func ValidateMigrationSchedule(t *testing.T, migrationSchedule *storkv1.MigrationSchedule,
-	migrationScheduleName string, migrationScheduleNs string, validateSchedulePolicyInterval string) error {
+	migrationScheduleName string, migrationScheduleNs string, inputSchedulePolicyInterval string) error {
 	// We want to validate if the created schedule policy resource matches our expectations
 	actualMigrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, migrationScheduleNs)
-	if err != nil {
-		logrus.Errorf("Unable to get the created migration schedule")
-		return err
-	}
+	require.NoError(t, err, "Unable to get the created migration schedule")
 	logrus.Info("Trying to validate the migration schedule")
 	if migrationSchedule.Annotations != nil {
 		require.NotNil(t, actualMigrationSchedule.Annotations, "Expected actualMigrationSchedule not to be nil")
 		require.Equal(t, migrationSchedule.Annotations, actualMigrationSchedule.Annotations, "MigrationSchedule Annotations mismatch")
 	} else {
-		require.Nil(t, actualMigrationSchedule.Annotations, "Expected actualMigrationSchedule not to be nil")
+		require.Nil(t, actualMigrationSchedule.Annotations, "Expected actualMigrationSchedule to be nil")
 	}
 	require.Equal(t, migrationSchedule.Spec.SchedulePolicyName, actualMigrationSchedule.Spec.SchedulePolicyName, "MigrationSchedule Schedule Policy mismatch")
 	require.Equal(t, migrationSchedule.Spec.AutoSuspend, actualMigrationSchedule.Spec.AutoSuspend, "MigrationSchedule AutoSuspend mismatch")
@@ -202,17 +198,14 @@ func ValidateMigrationSchedule(t *testing.T, migrationSchedule *storkv1.Migratio
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.TransformSpecs, actualMigrationSchedule.Spec.Template.Spec.TransformSpecs, "MigrationSchedule TransformSpecs mismatch")
 	require.Equal(t, migrationSchedule.Spec.Template.Spec.IncludeNetworkPolicyWithCIDR, actualMigrationSchedule.Spec.Template.Spec.IncludeNetworkPolicyWithCIDR, "MigrationSchedule IncludeNetworkPolicyWithCIDR mismatch")
 
-	if validateSchedulePolicyInterval != "" {
+	if inputSchedulePolicyInterval != "" {
 		//we will validate the created schedule policy has correct interval minutes value as well
-		expectedInterval, err := strconv.Atoi(validateSchedulePolicyInterval)
+		expectedInterval, err := strconv.Atoi(inputSchedulePolicyInterval)
 		if err != nil {
 			return err
 		}
 		actualSchedulePolicy, err := storkops.Instance().GetSchedulePolicy(migrationScheduleName)
-		if err != nil {
-			logrus.Errorf("Unable to get the created schedule policy")
-			return err
-		}
+		require.NoError(t, err, "Unable to get the created schedule policy")
 		require.Equal(t, expectedInterval, actualSchedulePolicy.Policy.Interval.IntervalMinutes, "MigrationSchedule SchedulePolicy interval-minutes mismatch")
 	}
 	return nil
