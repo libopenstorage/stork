@@ -24,7 +24,7 @@ var (
 	StashCRLabel = "stash-cr"
 )
 
-func TestMigrationStashStrategy(t *testing.T) {
+func TestStashStrategyMigration(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
