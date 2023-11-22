@@ -69,8 +69,9 @@ const (
 	restoreObjectNameKey        = utils.KdmpAnnotationPrefix + "restoreobject-name"
 	restoreObjectUIDKey         = utils.KdmpAnnotationPrefix + "restoreobject-uid"
 
-	pvcNameKey = utils.KdmpAnnotationPrefix + "pvc-name"
-	pvcUIDKey  = utils.KdmpAnnotationPrefix + "pvc-uid"
+	pvcNameKey          = utils.KdmpAnnotationPrefix + "pvc-name"
+	pvcUIDKey           = utils.KdmpAnnotationPrefix + "pvc-uid"
+	kdmpStorageClassKey = utils.KdmpAnnotationPrefix + "storage-class"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -266,6 +267,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(backup.UID)))
 		labels[pvcNameKey] = utils.GetValidLabel(pvc.Name)
 		labels[pvcUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(pvc.UID)))
+		labels[kdmpStorageClassKey] = volumeInfo.StorageClass
 		// If backup from px-backup, update the backup object details in the label
 		if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
 			if val == utils.PxbackupAnnotationCreateByValue {
