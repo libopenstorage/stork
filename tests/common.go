@@ -2187,6 +2187,44 @@ func ToggleAutopilotInStc() error {
 	return nil
 }
 
+func TogglePrometheusInStc() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	log.Infof("is prometheus enabled?: %t", stc.Spec.Monitoring.Prometheus.Enabled)
+	stc.Spec.Monitoring.Prometheus.Enabled = !stc.Spec.Monitoring.Prometheus.Enabled
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating prometheus pod is deleted")
+	checkPodIsDeleted := func() (interface{}, bool, error) {
+		prometheusLabels := make(map[string]string)
+		prometheusLabels["app.kubernetes.io/name"] = "prometheus"
+		pods, err := k8sCore.GetPods(pxNamespace, prometheusLabels)
+		expect(err).NotTo(haveOccurred())
+		if stc.Spec.Monitoring.Prometheus.Enabled {
+			log.Infof("prometheus is active, checking is pod is present.")
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("prometheus pod is still not deployed")
+			}
+			return "prometheus pod deployed", false, nil
+		} else {
+			log.Infof("prometheus is inactive, checking if pod is deleted.")
+			if len(pods.Items) > 0 {
+				return "", true, fmt.Errorf("prometheus pod is still present")
+			}
+			return "prometheus pod is deleted", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+	log.InfoD("Update STC, is PrometheusEnabled Now?: %t", stc.Spec.Monitoring.Prometheus.Enabled)
+	return nil
+}
+
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 	context("Validating portworx pods restart count ...", func() {

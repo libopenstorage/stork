@@ -3809,11 +3809,17 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			autopilotLabels := make(map[string]string)
 			autopilotLabels["name"] = "autopilot"
-			pods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
+			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
 			if err != nil {
 				return err
 			}
-			autopilotEnabled = autopilotEnabled && !(len(pods.Items) == 0)
+			prometheusLabels := make(map[string]string)
+			prometheusLabels["app.kubernetes.io/name"] = "prometheus"
+			prometheusPods, err := k8sCore.GetPods(autopilotDefaultNamespace, prometheusLabels)
+			if err != nil {
+				return err
+			}
+			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0)  && !(len(prometheusPods.Items) == 0)
 			if autopilotEnabled {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
@@ -3830,6 +3836,8 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
+			} else {
+				log.Infof("[%v] Autopilot is not enabled, skipping PVC: %v size validation", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
