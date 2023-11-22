@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"reflect"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
 	"strconv"
@@ -1072,3 +1073,64 @@ func checkAlertsForPoolExpansion(poolIDToResize string, targetSizeGiB uint64) (b
 	return false, fmt.Errorf("Alert not found")
 
 }
+
+
+var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
+
+	var testrailID = 34542904
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542904
+
+	BeforeEach(func() {
+		StartTorpedoTest("CheckPoolLabelsAfterResizeDisk",
+			"Initiate pool expansion and Newly set pool labels should persist post pool expand resize-disk operation", nil, testrailID)
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("Initiate pool expansion and Newly set pool labels should persist post pool expand resize-disk operation", func() {
+		log.InfoD("set pool label, before pool expand")
+		labelBeforeExpand := poolToResize.Labels
+		poolLabelToUpdate := make(map[string]string)
+		poolLabelToUpdate["cust-type"] = "test-label"
+		// Update the pool label
+		err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
+		dash.VerifyFatal(err, nil, "Check if able to update the label on the pool")
+
+		log.InfoD("expand pool using resize-disk")
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+
+		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
+		log.InfoD("check pool label, after pool expand")
+		poolToResize = getStoragePool(poolIDToResize)
+		labelAfterExpand := poolToResize.Labels
+		result := reflect.DeepEqual(labelBeforeExpand, labelAfterExpand)
+		dash.VerifyFatal(result, true, "Check if labels changed after pool expand")
+	})
+
+})
