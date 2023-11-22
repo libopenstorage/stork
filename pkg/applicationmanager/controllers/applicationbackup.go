@@ -727,66 +727,64 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 				}
 			}
-
-			// In case Portworx if the snapshot ID is populated for every volume then the snapshot
-			// process is considered to be completed successfully.
-			// This ensures we don't execute the post-exec before all volume's snapshot is completed
-			for driverName := range pvcMappings {
-				var driver volume.Driver
-				driver, err = volume.Get(driverName)
+		}
+		// In case Portworx if the snapshot ID is populated for every volume then the snapshot
+		// process is considered to be completed successfully.
+		// This ensures we don't execute the post-exec before all volume's snapshot is completed
+		for driverName := range pvcMappings {
+			var driver volume.Driver
+			driver, err = volume.Get(driverName)
+			if err != nil {
+				return err
+			}
+			if driverName == volume.PortworxDriverName {
+				volumeInfos, err := driver.GetBackupStatus(backup)
 				if err != nil {
-					return err
+					return fmt.Errorf("error getting backup status: %v", err)
 				}
-				if driverName == volume.PortworxDriverName {
-					volumeInfos, err := driver.GetBackupStatus(backup)
-					if err != nil {
-						return fmt.Errorf("error getting backup status: %v", err)
-					}
-					for _, volInfo := range volumeInfos {
-						if volInfo.BackupID == "" {
-							log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim)
-							// Some portworx volume snapshot is not completed yet
-							// hence we will retry checking the status in the next reconciler iteration
-							// *stork_api.ApplicationBackupVolumeInfo.Status is not being checked here
-							// since backpID confirms if the snapshot is done or not already
-							return nil
-						}
+				for _, volInfo := range volumeInfos {
+					if volInfo.BackupID == "" {
+						log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim)
+						// Some portworx volume snapshot is not completed yet
+						// hence we will retry checking the status in the next reconciler iteration
+						// *stork_api.ApplicationBackupVolumeInfo.Status is not being checked here
+						// since backpID confirms if the snapshot is done or not already
+						return nil
 					}
 				}
 			}
-
-			// Run any post exec rules once backup is triggered
-			driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
-			// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
-			if driverCombo == nonKdmpDriverOnly {
-				// Let's kill the pre-exec rule pod here so that application specific
-				// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
-				// For detail refer pb-3823
-				for _, channel := range terminationChannels {
-					logrus.Infof("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
-					channel <- true
-				}
-				if backup.Spec.PostExecRule != "" {
-					err = a.runPostExecRule(backup)
+		}
+		// Run any post exec rules once all volume backup is triggered
+		driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
+		// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
+		if driverCombo == nonKdmpDriverOnly {
+			// Let's kill the pre-exec rule pod here so that application specific
+			// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
+			// For detail refer pb-3823
+			for _, channel := range terminationChannels {
+				logrus.Infof("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
+				channel <- true
+			}
+			if backup.Spec.PostExecRule != "" {
+				log.ApplicationBackupLog(backup).Infof("Starting post-exec rule...")
+				err = a.runPostExecRule(backup)
+				if err != nil {
+					message := fmt.Sprintf("Error running PostExecRule: %v", err)
+					log.ApplicationBackupLog(backup).Errorf(message)
+					a.recorder.Event(backup,
+						v1.EventTypeWarning,
+						string(stork_api.ApplicationBackupStatusFailed),
+						message)
+					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+					backup.Status.FinishTimestamp = metav1.Now()
+					backup.Status.LastUpdateTimestamp = metav1.Now()
+					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+					backup.Status.Reason = message
+					err = a.client.Update(context.TODO(), backup)
 					if err != nil {
-						message := fmt.Sprintf("Error running PostExecRule: %v", err)
-						log.ApplicationBackupLog(backup).Errorf(message)
-						a.recorder.Event(backup,
-							v1.EventTypeWarning,
-							string(stork_api.ApplicationBackupStatusFailed),
-							message)
-
-						backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-						backup.Status.FinishTimestamp = metav1.Now()
-						backup.Status.LastUpdateTimestamp = metav1.Now()
-						backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-						backup.Status.Reason = message
-						err = a.client.Update(context.TODO(), backup)
-						if err != nil {
-							return err
-						}
-						return fmt.Errorf("%v", message)
+						return err
 					}
+					return fmt.Errorf("%v", message)
 				}
 			}
 		}
