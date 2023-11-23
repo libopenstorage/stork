@@ -37,6 +37,7 @@ type JobOpts struct {
 	MaintenanceType             string
 	RepoPVCName                 string
 	Compression                 string
+	ExcludeFileList             string
 	PodDataPath                 string
 	// JobConfigMap holds any config needs to be provided to job
 	// from the caller. Eg: executor image name, secret, etc..
@@ -452,6 +453,14 @@ func WithMaintenanceType(maintenanceType string) JobOption {
 func WithCompressionType(compressionType string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.Compression = compressionType
+		return nil
+	}
+}
+
+// WithExcludeFileList is job parameter.
+func WithExcludeFileList(excludeFileList string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.ExcludeFileList = excludeFileList
 		return nil
 	}
 }

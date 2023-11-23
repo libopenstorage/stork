@@ -63,7 +63,8 @@ require (
 )
 
 require (
-	github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
+	github.com/evanphx/json-patch v5.6.0+incompatible
+	github.com/portworx/kdmp v0.4.1-0.20231123040148-68149a57dc24
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	kubevirt.io/api v1.0.0
 )
@@ -121,7 +122,6 @@ require (
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
-	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/color v1.13.0 // indirect
@@ -333,7 +333,7 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231025110112-14cdb50c205e
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231123040148-68149a57dc24
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
