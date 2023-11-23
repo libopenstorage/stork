@@ -2729,7 +2729,6 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 		log.Infof("[%v] Destroyed Config Map: %v", app.Key, obj.Name)
 	} else if obj, ok := spec.(*apapi.AutopilotRule); ok {
-		log.InfoD("Deleting autopilot rule: %s", obj.Name)
 		err := k8sAutopilot.DeleteAutopilotRule(obj.Name)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
@@ -3152,19 +3151,6 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
 
-	allRules, err := k8sAutopilot.ListAutopilotRules()
-	if err != nil {
-		return err
-	}
-
-	for _, rule := range allRules.Items {
-		log.InfoD("Cleaning up autopilot rule: %s", rule.Name)
-		err := k8sAutopilot.DeleteAutopilotRule(rule.Name)
-		if err != nil {
-			return err
-		}
-	}
-
 	// destruction of CustomResourceObjects must most likely be done *first*,
 	// as it may have resources that depend on other resources, which should be deleted *after* this
 	for _, appSpec := range ctx.App.SpecList {
@@ -3192,9 +3178,23 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 	// helm uninstall would delete objects automatically so skip destroy for those
-	err = k.RemoveAppSpecsByName(ctx, removeSpecs)
+	err := k.RemoveAppSpecsByName(ctx, removeSpecs)
 	if err != nil {
 		return err
+	}
+
+	k8sOps := k8sAutopilot
+	apRule := ctx.ScheduleOptions.AutopilotRule
+	if apRule.Name != "" {
+		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					log.Infof("deletion of AR failed: %s, expected since we dont deploy new AR", apRule.ObjectMeta.Name)
+					return nil
+				}
+				return err
+			}
+		}
 	}
 
 	for _, appSpec := range ctx.App.SpecList {
@@ -6514,13 +6514,13 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 		apRule.Labels = defaultTorpedoLabel
 		aRule, err := k8sAutopilot.CreateAutopilotRule(&apRule)
 		if k8serrors.IsAlreadyExists(err) {
-			log.InfoD("deleting and recreating rule: %s", apRule.Name)
-			if err := k8sAutopilot.DeleteAutopilotRule(apRule.Name); err != nil {
-				return nil, false, err
+			if rule, err := k8sAutopilot.GetAutopilotRule(apRule.Name); err == nil {
+				log.Infof("Using existing AutopilotRule: %v", rule.Name)
+				return aRule, false, nil
 			}
-			if _, err = k8sAutopilot.CreateAutopilotRule(&apRule); err == nil {
-				return nil, false, err
-			}
+		}
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
 		}
 		return aRule, false, nil
 	}
