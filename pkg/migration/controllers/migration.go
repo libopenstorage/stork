@@ -907,16 +907,12 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration, mig
 			return nil, nil
 		}
 	}
+	r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
+	if err != nil {
+		return nil, err
+	}
 	terminationChannels := make([]chan bool, 0)
 	for _, ns := range migrationNamespaces {
-		r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, ns)
-		if err != nil {
-			for _, channel := range terminationChannels {
-				channel <- true
-			}
-			return nil, err
-		}
-
 		ch, err := rule.ExecuteRule(r, rule.PreExecRule, migration, ns)
 		if err != nil {
 			for _, channel := range terminationChannels {
@@ -932,15 +928,14 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration, mig
 }
 
 func (m *MigrationController) runPostExecRule(migration *stork_api.Migration, migrationNamespaces []string) error {
+	r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
+	if err != nil {
+		return err
+	}
 	for _, ns := range migrationNamespaces {
-		r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, ns)
-		if err != nil {
-			return err
-		}
-
 		_, err = rule.ExecuteRule(r, rule.PostExecRule, migration, ns)
 		if err != nil {
-			return fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
+			return fmt.Errorf("error executing PostExecRule for namespace %v: %v", ns, err)
 		}
 	}
 	return nil
