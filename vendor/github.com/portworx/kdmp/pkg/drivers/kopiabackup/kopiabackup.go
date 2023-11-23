@@ -292,6 +292,13 @@ func jobFor(
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)
 		cmd = strings.Join(splitCmd, " ")
 	}
+
+	if jobOption.ExcludeFileList != "" {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--exclude-file-list", jobOption.ExcludeFileList)
+		cmd = strings.Join(splitCmd, " ")
+	}
+
 	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
