@@ -76,6 +76,14 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 	var dayOfWeek string
 	var dateOfMonth int
 
+	const (
+		forceFullSnapshotDayFlag = "force-full-snapshot-day"
+		intervalMinutesFlag      = "interval-minutes"
+		timeFlag                 = "time"
+		dayOfWeekFlag            = "day-of-week"
+		dateOfMonthFlag          = "date-of-month"
+	)
+
 	createSchedulePolicyCommand := &cobra.Command{
 		Use:     schedulePolicySubcommand,
 		Aliases: schedulePolicyAliases,
@@ -96,6 +104,10 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 			}
 			switch schedulePolicyType {
 			case "interval":
+				if c.Flags().Changed(timeFlag) || c.Flags().Changed(dayOfWeekFlag) || c.Flags().Changed(dateOfMonthFlag) || c.Flags().Changed(forceFullSnapshotDayFlag) {
+					util.CheckErr(fmt.Errorf("for an Interval SchedulePolicy you can only provide values for --interval-minutes and --retain flags"))
+					return
+				}
 				var intervalPolicy storkv1.IntervalPolicy
 				intervalPolicy.IntervalMinutes = intervalMinutes
 				if retain == 0 {
@@ -111,6 +123,10 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				}
 				policyItem.Interval = &intervalPolicy
 			case "daily":
+				if c.Flags().Changed(intervalMinutesFlag) || c.Flags().Changed(dayOfWeekFlag) || c.Flags().Changed(dateOfMonthFlag) {
+					util.CheckErr(fmt.Errorf("for a Daily SchedulePolicy you can only provide values for --time, --retain and --force-full-snapshot-day flags"))
+					return
+				}
 				var dailyPolicy storkv1.DailyPolicy
 				dailyPolicy.Time = time
 				dailyPolicy.ForceFullSnapshotDay = strings.ToLower(dailyForceFullSnapshotDay)
@@ -131,6 +147,10 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				}
 				policyItem.Daily = &dailyPolicy
 			case "weekly":
+				if c.Flags().Changed(intervalMinutesFlag) || c.Flags().Changed(forceFullSnapshotDayFlag) || c.Flags().Changed(dateOfMonthFlag) {
+					util.CheckErr(fmt.Errorf("for a Weekly SchedulePolicy you can only provide values for --time, --day-of-week and --retain flags"))
+					return
+				}
 				var weeklyPolicy storkv1.WeeklyPolicy
 				weeklyPolicy.Time = time
 				weeklyPolicy.Day = dayOfWeek
@@ -146,6 +166,10 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 				}
 				policyItem.Weekly = &weeklyPolicy
 			case "monthly":
+				if c.Flags().Changed(intervalMinutesFlag) || c.Flags().Changed(forceFullSnapshotDayFlag) || c.Flags().Changed(dayOfWeekFlag) {
+					util.CheckErr(fmt.Errorf("for a Monthly SchedulePolicy you can only provide values for --time, --date-of-month and --retain flags"))
+					return
+				}
 				var monthlyPolicy storkv1.MonthlyPolicy
 				monthlyPolicy.Time = time
 				monthlyPolicy.Date = dateOfMonth
@@ -178,12 +202,12 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 	}
 	// Picking up user inputs and setting the defaults for flags
 	createSchedulePolicyCommand.Flags().StringVarP(&schedulePolicyType, "policy-type", "t", "Interval", "Select Type of schedule policy to apply. Interval / Daily / Weekly / Monthly.")
-	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, "interval-minutes", "i", 30, "Specify the interval, in minutes, after which Stork should trigger the operation.")
+	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, intervalMinutesFlag, "i", 30, "Specify the interval, in minutes, after which Stork should trigger the operation.")
 	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "Specify how many backups triggered as part of this schedule should be retained.")
-	createSchedulePolicyCommand.Flags().StringVarP(&time, "time", "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Stork should trigger the operation.")
-	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, "force-full-snapshot-day", "", "Monday", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
-	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, "day-of-week", "", "Sunday", "Specify the day of the week when Stork should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
-	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, "date-of-month", "", 1, "Specify the day of the month when Stork should trigger the operation.")
+	createSchedulePolicyCommand.Flags().StringVarP(&time, timeFlag, "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Stork should trigger the operation.")
+	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, forceFullSnapshotDayFlag, "", "Monday", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
+	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, dayOfWeekFlag, "", "Sunday", "Specify the day of the week when Stork should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
+	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, dateOfMonthFlag, "", 1, "Specify the day of the month when Stork should trigger the operation.")
 	return createSchedulePolicyCommand
 }
 
