@@ -688,15 +688,25 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 900) ; do
-  printf .
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+first_iteration=true
+
+for i in $(seq 1 900); do
+  echo "Iteration: $i"
+  state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+
   if [ "$state" == "Error" ]; then
     echo "Error: Torpedo finished with $state state"
     describe_pod_then_exit
   elif [ "$state" == "Running" ]; then
-    echo ""
-    kubectl logs -f torpedo
+    # For the first iteration, display all logs. Later, only from 1 minute ago
+    if [ "$first_iteration" = true ]; then
+      echo "Logs from first iteration"
+      kubectl logs -f torpedo
+      first_iteration=false
+    else
+      echo "Logs from iteration: $i"
+      kubectl logs -f --since=1m torpedo
+    fi
   elif [ "$state" == "Completed" ]; then
     echo "Success: Torpedo finished with $state state"
     exit 0
