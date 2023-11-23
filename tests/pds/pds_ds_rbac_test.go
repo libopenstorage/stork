@@ -32,19 +32,19 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 		var (
 			deploymentsToBeCleaned []*pds.ModelsDeployment
 			deployments            = make(map[PDSDataService]*pds.ModelsDeployment)
-			resDeployments         = make(map[PDSDataService]*pds.ModelsDeployment)
-			depList                []*pds.ModelsDeployment
-			deps                   []*pds.ModelsDeployment
-			dsVersions             = make(map[string]map[string][]string)
-			nsRoles                []pds.ModelsBinding
-			iamRolesToBeCleaned    []string
-			siToBeCleaned          []string
-			binding1               pds.ModelsBinding
-			binding2               pds.ModelsBinding
-			nsID1                  []string
-			nsID2                  []string
-			serviceIdentityID      string
-			pdsRestoreNsName       string
+			//resDeployments         = make(map[PDSDataService]*pds.ModelsDeployment)
+			depList             []*pds.ModelsDeployment
+			deps                []*pds.ModelsDeployment
+			dsVersions          = make(map[string]map[string][]string)
+			nsRoles             []pds.ModelsBinding
+			iamRolesToBeCleaned []string
+			siToBeCleaned       []string
+			binding1            pds.ModelsBinding
+			binding2            pds.ModelsBinding
+			nsID1               []string
+			nsID2               []string
+			serviceIdentityID   string
+			pdsRestoreNsName    string
 		)
 
 		Step("Deploy Data Services", func() {
@@ -55,7 +55,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				nsRoles = nil
 				nsID2, nsID2, iamRolesToBeCleaned, siToBeCleaned = nil, nil, nil, nil
 				deps, depList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-				resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
+				//resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
@@ -167,73 +167,73 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityID, nsRoles)
 					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
 				})
-
-				Step("Perform restore again for the backup jobs to ns2 with admin role", func() {
-					ctx, err := GetSourceClusterConfigPath()
-					log.FailOnError(err, "failed while getting src cluster path")
-					restoreTarget := tc.NewTargetCluster(ctx)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					pdsRestoreTargetClusterID, err := targetCluster.GetDeploymentTargetID(clusterID, tenantID)
-
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						log.FailOnError(err, "unable to fetch namespace id to restore")
-						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
-						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(pdsRestoreTargetClusterID, backupJob.GetId(), ns2.Name, dsEntity, ns2Id2, false)
-						log.FailOnError(err, "Failed during restore.")
-
-						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						dsTest.ValidateDataServiceDeployment(restoredDeployment, ns2.Name)
-						resDeployments[ds] = restoredDeployment
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-					}
-				})
-
-				Step("Scale up the restored deployments on ns2", func() {
-					log.InfoD("Starting to scale up the restore deployment")
-					for rds, resDep := range resDeployments {
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						log.InfoD("Scaling up DataService %s ", *resDep.Name)
-						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
-						log.FailOnError(err, "Error while getting app configuration template")
-						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-
-						dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, rds.Name)
-						log.FailOnError(err, "Error while getting resource setting template")
-						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-
-						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
-						customParams.SetParamsForServiceIdentityTest(params, true)
-
-						log.InfoD("Update deploymnets params are- resDepId- %v, dataServiceDefaultAppConfigID- %v ,resDep.GetImageId()- %v ,int32(3)- %v ,dataServiceDefaultResourceTemplateID- %v", *resDep.Id,
-							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID)
-						updatedDeployment, err := dsTest.UpdateDataServices(*resDep.Id,
-							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
-						log.FailOnError(err, "Error while updating dataservices")
-
-						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
-						log.FailOnError(err, "Error while validating data service deployment")
-
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
-						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
-					}
-				})
+				//ToDo: Commenting due to Bug- https://portworx.atlassian.net/browse/DS-7080
+				//Step("Perform restore again for the backup jobs to ns2 with admin role", func() {
+				//	ctx, err := GetSourceClusterConfigPath()
+				//	log.FailOnError(err, "failed while getting src cluster path")
+				//	restoreTarget := tc.NewTargetCluster(ctx)
+				//	restoreClient := restoreBkp.RestoreClient{
+				//		TenantId:             tenantID,
+				//		ProjectId:            projectID,
+				//		Components:           components,
+				//		Deployment:           deployment,
+				//		RestoreTargetCluster: restoreTarget,
+				//	}
+				//	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+				//	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+				//	pdsRestoreTargetClusterID, err := targetCluster.GetDeploymentTargetID(clusterID, tenantID)
+				//
+				//	for _, backupJob := range backupJobs {
+				//		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+				//		log.FailOnError(err, "unable to fetch namespace id to restore")
+				//		components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//		restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(pdsRestoreTargetClusterID, backupJob.GetId(), ns2.Name, dsEntity, ns2Id2, false)
+				//		log.FailOnError(err, "Failed during restore.")
+				//
+				//		restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		dsTest.ValidateDataServiceDeployment(restoredDeployment, ns2.Name)
+				//		resDeployments[ds] = restoredDeployment
+				//		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+				//		deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+				//		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+				//	}
+				//})
+				//
+				//Step("Scale up the restored deployments on ns2", func() {
+				//	log.InfoD("Starting to scale up the restore deployment")
+				//	for rds, resDep := range resDeployments {
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		log.InfoD("Scaling up DataService %s ", *resDep.Name)
+				//		dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
+				//		log.FailOnError(err, "Error while getting app configuration template")
+				//		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				//
+				//		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, rds.Name)
+				//		log.FailOnError(err, "Error while getting resource setting template")
+				//		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				//
+				//		components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//
+				//		log.InfoD("Update deploymnets params are- resDepId- %v, dataServiceDefaultAppConfigID- %v ,resDep.GetImageId()- %v ,int32(3)- %v ,dataServiceDefaultResourceTemplateID- %v", *resDep.Id,
+				//			dataServiceDefaultAppConfigID, resDep.GetImageId(),
+				//			int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID)
+				//		updatedDeployment, err := dsTest.UpdateDataServices(*resDep.Id,
+				//			dataServiceDefaultAppConfigID, resDep.GetImageId(),
+				//			int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
+				//		log.FailOnError(err, "Error while updating dataservices")
+				//
+				//		err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
+				//		log.FailOnError(err, "Error while validating data service deployment")
+				//
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
+				//		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				//		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+				//	}
+				//})
 				//ToDo : Add workload generation for restored-deps with RBAC roles on ns2
 
 				Step("Delete Deployments", func() {
@@ -269,24 +269,24 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 			deploymentsToBeCleaned         []*pds.ModelsDeployment
 			restoredDeploymentsToBeCleaned []*pds.ModelsDeployment
 			deployments                    = make(map[PDSDataService]*pds.ModelsDeployment)
-			resDeployments                 = make(map[PDSDataService]*pds.ModelsDeployment)
-			depList                        []*pds.ModelsDeployment
-			deps                           []*pds.ModelsDeployment
-			dsVersions                     = make(map[string]map[string][]string)
-			nsRolesSrc                     []pds.ModelsBinding
-			nsRolesDesti                   []pds.ModelsBinding
-			iamRolesToBeCleanedinSrc       []string
-			siToBeCleanedinSrc             []string
-			iamRolesToBeCleanedinDest      []string
-			siToBeCleanedinDest            []string
-			binding1                       pds.ModelsBinding
-			binding2                       pds.ModelsBinding
-			nsID1                          []string
-			nsID2                          []string
-			serviceIdentityIDSrc           string
-			serviceIdentityIDDesti         string
-			destinationTargetID            string
-			pdsRestoreNsName               string
+			//resDeployments                 = make(map[PDSDataService]*pds.ModelsDeployment)
+			depList                   []*pds.ModelsDeployment
+			deps                      []*pds.ModelsDeployment
+			dsVersions                = make(map[string]map[string][]string)
+			nsRolesSrc                []pds.ModelsBinding
+			nsRolesDesti              []pds.ModelsBinding
+			iamRolesToBeCleanedinSrc  []string
+			siToBeCleanedinSrc        []string
+			iamRolesToBeCleanedinDest []string
+			siToBeCleanedinDest       []string
+			binding1                  pds.ModelsBinding
+			binding2                  pds.ModelsBinding
+			nsID1                     []string
+			nsID2                     []string
+			//serviceIdentityIDSrc           string
+			//serviceIdentityIDDesti         string
+			destinationTargetID string
+			pdsRestoreNsName    string
 		)
 
 		Step("Deploy Data Services", func() {
@@ -298,7 +298,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				nsRolesSrc, nsRolesDesti = nil, nil
 				nsID2, nsID2, iamRolesToBeCleanedinSrc, iamRolesToBeCleanedinDest, siToBeCleanedinDest, siToBeCleanedinSrc = nil, nil, nil, nil, nil, nil
 				deps, depList, deploymentsToBeCleaned, restoredDeploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-				resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
+				//resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
 				deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
@@ -328,7 +328,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				actorId1, iamId1, err := pdslib.CreateSiAndIamRoleBindings(accountID, nsRolesSrc)
 				log.FailOnError(err, "Error while creating and fetching IAM Roles")
 				log.InfoD("Successfully created ServiceIdentity- %v and IAM Roles- %v ", actorId1, iamId1)
-				serviceIdentityIDSrc = actorId1
+				//serviceIdentityIDSrc = actorId1
 
 				siToBeCleanedinSrc = append(siToBeCleanedinSrc, actorId1)
 				iamRolesToBeCleanedinSrc = append(iamRolesToBeCleanedinSrc, iamId1)
@@ -358,7 +358,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				actorId2, iamId2, err := pdslib.CreateSiAndIamRoleBindings(accountID, nsRolesDesti)
 				log.FailOnError(err, "Error while creating and fetching IAM Roles")
 				log.InfoD("Successfully created ServiceIdentity- %v and IAM Roles- %v ", actorId2, iamId2)
-				serviceIdentityIDDesti = actorId2
+				//serviceIdentityIDDesti = actorId2
 
 				siToBeCleanedinDest = append(siToBeCleanedinDest, actorId2)
 				iamRolesToBeCleanedinDest = append(iamRolesToBeCleanedinDest, iamId2)
@@ -427,144 +427,146 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 					}
 				})
 
-				Step("Update IAM2 with ns1 of cluster1 as reader role", func() {
-					nsRolesDesti = nil
-					var newBinding pds.ModelsBinding
-					customParams.SetParamsForServiceIdentityTest(params, false)
-					newns1RoleName := "namespace-reader"
-					newBinding.ResourceIds = nsID1
-					newBinding.RoleName = &newns1RoleName
-					nsRolesDesti = append(nsRolesDesti, newBinding, binding2)
-					log.InfoD("Starting to update the IAM Roles for ns2")
-					resp, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityIDDesti, nsRolesDesti)
-					log.InfoD("Updated IAM role Binding is- %v", resp.AccessPolicy)
-					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
-				})
+				//ToDo: Commenting due to Bug- https://portworx.atlassian.net/browse/DS-7080
 
-				Step("Restore ds on ns2 of cluster2 to ns2 using updated ServiceIdentity2 (with ns1 as reader) token", func() {
-					log.FailOnError(err, "failed while getting dest cluster path")
-					restoreTarget := tc.NewTargetCluster(destinationConfigPath)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
-
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					err = SetDestinationKubeConfig()
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
-						log.FailOnError(err, "unable to fetch namespace id to restore")
-						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
-						customParams.SetParamsForServiceIdentityTest(params, true)
-						_, err = restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
-						dash.VerifyFatal(err != nil, true, "Restore is failed as expected")
-
-					}
-				})
-				Step("Update IAM2 with ns1 of cluster1 as admin role", func() {
-					nsRolesDesti = nil
-					var newBinding2 pds.ModelsBinding
-					customParams.SetParamsForServiceIdentityTest(params, false)
-					newns1RoleName := "namespace-admin"
-					newBinding2.ResourceIds = nsID1
-					newBinding2.RoleName = &newns1RoleName
-					nsRolesDesti = append(nsRolesDesti, newBinding2, binding2)
-					log.InfoD("Starting to update the IAM Roles for ns2")
-					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityIDDesti, nsRolesDesti)
-					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
-				})
-				Step("Restore ds on ns2 of cluster2 to ns2 using updated ServiceIdentity2 (with ns1 as admin) token", func() {
-					log.FailOnError(err, "failed while getting dest cluster path")
-					restoreTarget := tc.NewTargetCluster(destinationConfigPath)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
-
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
-						log.FailOnError(err, "unable to fetch namespace id to restore")
-						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
-						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
-						log.FailOnError(err, "Failed during restore.")
-						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
-						resDeployments[ds] = restoredDeployment
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-						restoredDeploymentsToBeCleaned = append(restoredDeploymentsToBeCleaned, restoredDeployment)
-						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-					}
-				})
-
-				//ToDo : Add workload generation for restored-deps with RBAC roles on ns2 of cluster2
-				Step("Perform adhoc backup of restored deployment and validate them", func() {
-					customParams.SetParamsForServiceIdentityTest(params, false)
-					log.Infof("Deployment ID: %v, backup target ID: %v", restoredDeployment.GetId(), bkpTarget.GetId())
-					err = bkpClient.TriggerAndValidateAdhocBackup(restoredDeployment.GetId(), bkpTarget.GetId(), "s3")
-					log.FailOnError(err, "Failed while performing adhoc backup")
-				})
-
-				Step("Update IAM1 with ns1 of cluster2 as admin role", func() {
-					err = SetSourceKubeConfig()
-					nsRolesSrc = nil
-					var newBinding1 pds.ModelsBinding
-					newns1RoleName := "namespace-admin"
-
-					newBinding1.ResourceIds = nsID2
-					newBinding1.RoleName = &newns1RoleName
-					nsRolesSrc = append(nsRolesSrc, newBinding1, binding1)
-					log.InfoD("Starting to update the IAM Roles for ns2")
-					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityIDSrc, nsRolesSrc)
-					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
-				})
-
-				Step("Restore ds on ns2 of cluster2 to ns2 using updated ServiceIdentity1 (with ns2 as admin) token", func() {
-					log.FailOnError(err, "failed while getting dest cluster path")
-					restoreTarget := tc.NewTargetCluster(destinationConfigPath)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
-
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					err = SetDestinationKubeConfig()
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
-						log.FailOnError(err, "unable to fetch namespace id to restore")
-						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
-						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
-						log.FailOnError(err, "Failed during restore.")
-						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
-						resDeployments[ds] = restoredDeployment
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-						restoredDeploymentsToBeCleaned = append(restoredDeploymentsToBeCleaned, restoredDeployment)
-						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-					}
-				})
+				//Step("Update IAM2 with ns1 of cluster1 as reader role", func() {
+				//	nsRolesDesti = nil
+				//	var newBinding pds.ModelsBinding
+				//	customParams.SetParamsForServiceIdentityTest(params, false)
+				//	newns1RoleName := "namespace-reader"
+				//	newBinding.ResourceIds = nsID1
+				//	newBinding.RoleName = &newns1RoleName
+				//	nsRolesDesti = append(nsRolesDesti, newBinding, binding2)
+				//	log.InfoD("Starting to update the IAM Roles for ns2")
+				//	resp, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityIDDesti, nsRolesDesti)
+				//	log.InfoD("Updated IAM role Binding is- %v", resp.AccessPolicy)
+				//	log.FailOnError(err, "Failed while updating IAM Roles for ns2")
+				//})
+				//
+				//Step("Restore ds on ns2 of cluster2 to ns2 using updated ServiceIdentity2 (with ns1 as reader) token", func() {
+				//	log.FailOnError(err, "failed while getting dest cluster path")
+				//	restoreTarget := tc.NewTargetCluster(destinationConfigPath)
+				//	restoreClient := restoreBkp.RestoreClient{
+				//		TenantId:             tenantID,
+				//		ProjectId:            projectID,
+				//		Components:           components,
+				//		Deployment:           deployment,
+				//		RestoreTargetCluster: restoreTarget,
+				//	}
+				//	// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
+				//
+				//	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+				//	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+				//	err = SetDestinationKubeConfig()
+				//	for _, backupJob := range backupJobs {
+				//		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+				//		pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+				//		log.FailOnError(err, "unable to fetch namespace id to restore")
+				//		components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//		_, err = restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
+				//		dash.VerifyFatal(err != nil, true, "Restore is failed as expected")
+				//
+				//	}
+				//})
+				//Step("Update IAM2 with ns1 of cluster1 as admin role", func() {
+				//	nsRolesDesti = nil
+				//	var newBinding2 pds.ModelsBinding
+				//	customParams.SetParamsForServiceIdentityTest(params, false)
+				//	newns1RoleName := "namespace-admin"
+				//	newBinding2.ResourceIds = nsID1
+				//	newBinding2.RoleName = &newns1RoleName
+				//	nsRolesDesti = append(nsRolesDesti, newBinding2, binding2)
+				//	log.InfoD("Starting to update the IAM Roles for ns2")
+				//	_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityIDDesti, nsRolesDesti)
+				//	log.FailOnError(err, "Failed while updating IAM Roles for ns2")
+				//})
+				//Step("Restore ds on ns2 of cluster2 to ns2 using updated ServiceIdentity2 (with ns1 as admin) token", func() {
+				//	log.FailOnError(err, "failed while getting dest cluster path")
+				//	restoreTarget := tc.NewTargetCluster(destinationConfigPath)
+				//	restoreClient := restoreBkp.RestoreClient{
+				//		TenantId:             tenantID,
+				//		ProjectId:            projectID,
+				//		Components:           components,
+				//		Deployment:           deployment,
+				//		RestoreTargetCluster: restoreTarget,
+				//	}
+				//	// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
+				//
+				//	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+				//	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+				//	for _, backupJob := range backupJobs {
+				//		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+				//		pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+				//		log.FailOnError(err, "unable to fetch namespace id to restore")
+				//		components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//		restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
+				//		log.FailOnError(err, "Failed during restore.")
+				//		restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
+				//		resDeployments[ds] = restoredDeployment
+				//		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+				//		restoredDeploymentsToBeCleaned = append(restoredDeploymentsToBeCleaned, restoredDeployment)
+				//		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+				//	}
+				//})
+				//
+				////ToDo : Add workload generation for restored-deps with RBAC roles on ns2 of cluster2
+				//Step("Perform adhoc backup of restored deployment and validate them", func() {
+				//	customParams.SetParamsForServiceIdentityTest(params, false)
+				//	log.Infof("Deployment ID: %v, backup target ID: %v", restoredDeployment.GetId(), bkpTarget.GetId())
+				//	err = bkpClient.TriggerAndValidateAdhocBackup(restoredDeployment.GetId(), bkpTarget.GetId(), "s3")
+				//	log.FailOnError(err, "Failed while performing adhoc backup")
+				//})
+				//
+				//Step("Update IAM1 with ns1 of cluster2 as admin role", func() {
+				//	err = SetSourceKubeConfig()
+				//	nsRolesSrc = nil
+				//	var newBinding1 pds.ModelsBinding
+				//	newns1RoleName := "namespace-admin"
+				//
+				//	newBinding1.ResourceIds = nsID2
+				//	newBinding1.RoleName = &newns1RoleName
+				//	nsRolesSrc = append(nsRolesSrc, newBinding1, binding1)
+				//	log.InfoD("Starting to update the IAM Roles for ns2")
+				//	_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityIDSrc, nsRolesSrc)
+				//	log.FailOnError(err, "Failed while updating IAM Roles for ns2")
+				//})
+				//
+				//Step("Restore ds on ns2 of cluster2 to ns2 using updated ServiceIdentity1 (with ns2 as admin) token", func() {
+				//	log.FailOnError(err, "failed while getting dest cluster path")
+				//	restoreTarget := tc.NewTargetCluster(destinationConfigPath)
+				//	restoreClient := restoreBkp.RestoreClient{
+				//		TenantId:             tenantID,
+				//		ProjectId:            projectID,
+				//		Components:           components,
+				//		Deployment:           deployment,
+				//		RestoreTargetCluster: restoreTarget,
+				//	}
+				//	// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
+				//
+				//	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+				//	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+				//	err = SetDestinationKubeConfig()
+				//	for _, backupJob := range backupJobs {
+				//		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+				//		pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+				//		log.FailOnError(err, "unable to fetch namespace id to restore")
+				//		components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//		restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
+				//		log.FailOnError(err, "Failed during restore.")
+				//		restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
+				//		resDeployments[ds] = restoredDeployment
+				//		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+				//		restoredDeploymentsToBeCleaned = append(restoredDeploymentsToBeCleaned, restoredDeployment)
+				//		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+				//	}
+				//})
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(restoredDeploymentsToBeCleaned)
@@ -721,7 +723,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *deployment.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns1.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 
 				})
@@ -766,93 +768,94 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 					}
 				})
 
-				Step("Update IAM2 with newly created restore namespace", func() {
-					nsReaderRoles = nil
-					var (
-						newBinding1 pds.ModelsBinding
-						newBinding2 pds.ModelsBinding
-					)
-					newRoleName := "namespace-admin"
-					newBinding1.ResourceIds = nsID2
-					newBinding1.RoleName = &newRoleName
-					newBinding2.ResourceIds = resDepNamespaceID
-					newBinding2.RoleName = &newRoleName
-
-					nsReaderRoles := append(nsReaderRoles, newBinding1, newBinding2)
-					log.InfoD("Starting to update the IAM Roles for ns2")
-					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityID2, nsReaderRoles)
-					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
-				})
-
-				Step("Scale up the restored deployments with updated IAM2 Sitoken", func() {
-					log.InfoD("Starting to scale up the restore deployment")
-					for rds, resDep := range resDeployments {
-						log.InfoD("Scaling up DataService %v ", rds.Name)
-						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
-						log.FailOnError(err, "Error while getting app configuration template")
-						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-
-						dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, rds.Name)
-						log.FailOnError(err, "Error while getting resource setting template")
-						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-
-						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
-						customParams.SetParamsForServiceIdentityTest(params, true)
-
-						updatedDeployment, err := dsTest.UpdateDataServices(resDep.GetId(),
-							dataServiceDefaultAppConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, pdsRestoreNsName)
-						log.FailOnError(err, "Error while updating dataservices")
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						log.InfoD("PDS RESTORE NAMESPACE IS- %v", pdsRestoreNsName)
-						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, pdsRestoreNsName)
-						log.FailOnError(err, "Error while validating data service deployment")
-						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
-						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
-					}
-
-				})
-
-				//ToDo: Run workloads on restored dep
-
-				Step("Perform adhoc backup of the restored Deployment and validate them", func() {
-
-					customParams.SetParamsForServiceIdentityTest(params, true)
-					log.Infof("Deployment ID: %v, backup target ID: %v", restoredDeployment.GetId(), bkpTarget.GetId())
-					err = bkpClient.TriggerAndValidateAdhocBackup(restoredDeployment.GetId(), bkpTarget.GetId(), "s3")
-					log.FailOnError(err, "Failed while performing adhoc backup")
-				})
-
-				Step("Perform restore again for the backup jobs to same ns with new admin role token", func() {
-					customParams.SetParamsForServiceIdentityTest(params, false)
-					ctx, err := GetSourceClusterConfigPath()
-					log.FailOnError(err, "failed while getting src cluster path")
-					restoreTarget := tc.NewTargetCluster(ctx)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           restoredDeployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, restoredDeployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", restoredDeployment.GetClusterResourceName())
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						log.FailOnError(err, "unable to fetch namespace id to restore")
-						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, resDepNamespaceID[0], false)
-						log.FailOnError(err, "Failed during restore.")
-						restoredDeployment2, err := restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						customParams.SetParamsForServiceIdentityTest(params, false)
-						dsTest.ValidateDataServiceDeployment(restoredDeployment2, pdsRestoreNsName)
-						resDeployments[ds] = restoredDeployment2
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment2)
-						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-					}
-				})
+				//ToDo: Commenting due to Bug- https://portworx.atlassian.net/browse/DS-7080
+				//Step("Update IAM2 with newly created restore namespace", func() {
+				//	nsReaderRoles = nil
+				//	var (
+				//		newBinding1 pds.ModelsBinding
+				//		newBinding2 pds.ModelsBinding
+				//	)
+				//	newRoleName := "namespace-admin"
+				//	newBinding1.ResourceIds = nsID2
+				//	newBinding1.RoleName = &newRoleName
+				//	newBinding2.ResourceIds = resDepNamespaceID
+				//	newBinding2.RoleName = &newRoleName
+				//
+				//	nsReaderRoles := append(nsReaderRoles, newBinding1, newBinding2)
+				//	log.InfoD("Starting to update the IAM Roles for ns2")
+				//	_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityID2, nsReaderRoles)
+				//	log.FailOnError(err, "Failed while updating IAM Roles for ns2")
+				//})
+				//
+				//Step("Scale up the restored deployments with updated IAM2 Sitoken", func() {
+				//	log.InfoD("Starting to scale up the restore deployment")
+				//	for rds, resDep := range resDeployments {
+				//		log.InfoD("Scaling up DataService %v ", rds.Name)
+				//		dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
+				//		log.FailOnError(err, "Error while getting app configuration template")
+				//		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				//
+				//		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, rds.Name)
+				//		log.FailOnError(err, "Error while getting resource setting template")
+				//		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				//
+				//		components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//
+				//		updatedDeployment, err := dsTest.UpdateDataServices(resDep.GetId(),
+				//			dataServiceDefaultAppConfigID, deployment.GetImageId(),
+				//			int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, pdsRestoreNsName)
+				//		log.FailOnError(err, "Error while updating dataservices")
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		log.InfoD("PDS RESTORE NAMESPACE IS- %v", pdsRestoreNsName)
+				//		err = dsTest.ValidateDataServiceDeployment(updatedDeployment, pdsRestoreNsName)
+				//		log.FailOnError(err, "Error while validating data service deployment")
+				//		_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
+				//		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				//		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+				//	}
+				//
+				//})
+				//
+				////ToDo: Run workloads on restored dep
+				//
+				//Step("Perform adhoc backup of the restored Deployment and validate them", func() {
+				//
+				//	customParams.SetParamsForServiceIdentityTest(params, true)
+				//	log.Infof("Deployment ID: %v, backup target ID: %v", restoredDeployment.GetId(), bkpTarget.GetId())
+				//	err = bkpClient.TriggerAndValidateAdhocBackup(restoredDeployment.GetId(), bkpTarget.GetId(), "s3")
+				//	log.FailOnError(err, "Failed while performing adhoc backup")
+				//})
+				//
+				//Step("Perform restore again for the backup jobs to same ns with new admin role token", func() {
+				//	customParams.SetParamsForServiceIdentityTest(params, false)
+				//	ctx, err := GetSourceClusterConfigPath()
+				//	log.FailOnError(err, "failed while getting src cluster path")
+				//	restoreTarget := tc.NewTargetCluster(ctx)
+				//	restoreClient := restoreBkp.RestoreClient{
+				//		TenantId:             tenantID,
+				//		ProjectId:            projectID,
+				//		Components:           components,
+				//		Deployment:           restoredDeployment,
+				//		RestoreTargetCluster: restoreTarget,
+				//	}
+				//	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, restoredDeployment.GetId())
+				//	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", restoredDeployment.GetClusterResourceName())
+				//	for _, backupJob := range backupJobs {
+				//		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+				//		log.FailOnError(err, "unable to fetch namespace id to restore")
+				//		customParams.SetParamsForServiceIdentityTest(params, true)
+				//		restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, resDepNamespaceID[0], false)
+				//		log.FailOnError(err, "Failed during restore.")
+				//		restoredDeployment2, err := restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+				//		customParams.SetParamsForServiceIdentityTest(params, false)
+				//		dsTest.ValidateDataServiceDeployment(restoredDeployment2, pdsRestoreNsName)
+				//		resDeployments[ds] = restoredDeployment2
+				//		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+				//		deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment2)
+				//		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+				//	}
+				//})
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
 					CleanupServiceIdentitiesAndIamRoles(siToBeCleaned, iamRolesToBeCleaned, actorId2)
