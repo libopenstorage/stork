@@ -907,11 +907,11 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration, mig
 			return nil, nil
 		}
 	}
-	terminationChannels := make([]chan bool, 0)
 	r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
 	if err != nil {
 		return nil, err
 	}
+	terminationChannels := make([]chan bool, 0)
 	for _, ns := range migrationNamespaces {
 		ch, err := rule.ExecuteRule(r, rule.PreExecRule, migration, ns)
 		if err != nil {
