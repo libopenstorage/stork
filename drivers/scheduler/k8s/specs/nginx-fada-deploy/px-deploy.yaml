@@ -19,6 +19,8 @@ spec:
       labels:
         app: poc1
     spec:
+      nodeSelector:
+        apptype: fada
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
