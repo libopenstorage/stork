@@ -292,7 +292,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
 
-				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: false, Async: true})
+				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: false, Async: false})
 				log.FailOnError(err, "failed to collect profile only diags on node [%s]", currNode.Name)
 				log.InfoD("Successfully collected profile only diags on node [%s]", currNode.Name)
 
