@@ -125,6 +125,7 @@ type ApplicationBackupController struct {
 	resourceCollector    resourcecollector.ResourceCollector
 	backupAdminNamespace string
 	terminationChannels  map[string][]chan bool
+	execRulesCompleted   map[string]bool
 	reconcileTime        time.Duration
 }
 
@@ -142,6 +143,7 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 	}
 	a.reconcileTime = time.Duration(syncTime) * time.Second
 	a.terminationChannels = make(map[string][]chan bool)
+	a.execRulesCompleted = make(map[string]bool)
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
 
@@ -270,6 +272,15 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			}
 			if !canDelete {
 				return nil
+			}
+			// get-rid of map entry for termination channel and rule flag
+			if _, ok := a.terminationChannels[string(backup.UID)]; ok {
+				log.ApplicationBackupLog(backup).Infof("deleted termination channel entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
+				delete(a.terminationChannels, string(backup.UID))
+			}
+			if _, ok := a.execRulesCompleted[string(backup.UID)]; ok {
+				log.ApplicationBackupLog(backup).Infof("deleted post exec flag entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
+				delete(a.execRulesCompleted, string(backup.UID))
 			}
 			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller.
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
@@ -593,7 +604,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 			kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
 			if err != nil {
-				return fmt.Errorf("error readig kdmp config map: %v", err)
+				return fmt.Errorf("error reading kdmp config map: %v", err)
 			}
 			driverType := kdmpData.Data[genericBackupKey]
 			logrus.Tracef("driverType: %v", driverType)
@@ -757,34 +768,38 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// Run any post exec rules once all volume backup is triggered
 		driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 		// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
-		if driverCombo == nonKdmpDriverOnly {
-			// Let's kill the pre-exec rule pod here so that application specific
-			// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
-			// For detail refer pb-3823
-			for _, channel := range terminationChannels {
-				logrus.Infof("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
-				channel <- true
-			}
-			if backup.Spec.PostExecRule != "" {
-				log.ApplicationBackupLog(backup).Infof("Starting post-exec rule...")
-				err = a.runPostExecRule(backup)
-				if err != nil {
-					message := fmt.Sprintf("Error running PostExecRule: %v", err)
-					log.ApplicationBackupLog(backup).Errorf(message)
-					a.recorder.Event(backup,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationBackupStatusFailed),
-						message)
-					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-					backup.Status.FinishTimestamp = metav1.Now()
-					backup.Status.LastUpdateTimestamp = metav1.Now()
-					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-					backup.Status.Reason = message
-					err = a.client.Update(context.TODO(), backup)
+		if !a.execRulesCompleted[string(backup.UID)] {
+			if driverCombo == nonKdmpDriverOnly {
+				// Let's kill the pre-exec rule pod here so that application specific
+				// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
+				// For detail refer pb-3823
+				// Todo: get-rid of passing terminationChannel as argument, use the method reciever structure to access via backup UID.
+				for _, channel := range terminationChannels {
+					logrus.Infof("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
+					channel <- true
+				}
+				if backup.Spec.PostExecRule != "" {
+					log.ApplicationBackupLog(backup).Infof("Starting post-exec rule...")
+					err = a.runPostExecRule(backup)
+					a.execRulesCompleted[string(backup.UID)] = true
 					if err != nil {
-						return err
+						message := fmt.Sprintf("Error running PostExecRule: %v", err)
+						log.ApplicationBackupLog(backup).Errorf(message)
+						a.recorder.Event(backup,
+							v1.EventTypeWarning,
+							string(stork_api.ApplicationBackupStatusFailed),
+							message)
+						backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+						backup.Status.FinishTimestamp = metav1.Now()
+						backup.Status.LastUpdateTimestamp = metav1.Now()
+						backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+						backup.Status.Reason = message
+						err = a.client.Update(context.TODO(), backup)
+						if err != nil {
+							return err
+						}
+						return fmt.Errorf("%v", message)
 					}
-					return fmt.Errorf("%v", message)
 				}
 			}
 		}
