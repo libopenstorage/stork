@@ -1449,7 +1449,15 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 			}
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 			enterPoolMaintenanceAddDisk(poolToBeResized.Uuid)
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			poolResizeType := api.SdkStoragePool_RESIZE_TYPE_AUTO
+
+			//Remove it once SdkStoragePool_RESIZE_TYPE_ADD_DISK is supported in dmthin
+			if dmthin, err := IsDMthin(); err == nil {
+				if !dmthin {
+					poolResizeType = api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+				}
+			}
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, poolResizeType, expectedSize, false)
 			log.FailOnError(err, fmt.Sprintf("Pool %s expansion init failed", poolToResize.Uuid))
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
@@ -2138,7 +2146,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -6856,9 +6864,16 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 
 			// Resize the Pool with either one of the allowed resize type
 			log.InfoD("Current Size of the pool %s is %d", eachPool, poolToBeResized.TotalSize/units.GiB)
+
 			poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
-				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
 				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+
+			//Remove it once SdkStoragePool_RESIZE_TYPE_ADD_DISK is supported in dmthin
+			if dmthin, err := IsDMthin(); err == nil {
+				if !dmthin {
+					poolResizeType = append(poolResizeType, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+				}
+			}
 			randomIndex := rand.Intn(len(poolResizeType))
 			pickType := poolResizeType[randomIndex]
 			log.InfoD("Expanding Pool [%v] using resize type [%v]", eachPool, pickType)
@@ -8806,8 +8821,14 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
-				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
 				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+
+			//Remove it once SdkStoragePool_RESIZE_TYPE_ADD_DISK is supported in dmthin
+			if dmthin, err := IsDMthin(); err == nil {
+				if !dmthin {
+					poolResizeType = append(poolResizeType, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+				}
+			}
 			randomIndex := rand.Intn(len(poolResizeType))
 			pickType := poolResizeType[randomIndex]
 			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
@@ -8946,8 +8967,14 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
 		poolResizeType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_AUTO,
-			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
 			api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+
+		//Remove it once SdkStoragePool_RESIZE_TYPE_ADD_DISK is supported in dmthin
+		if dmthin, err := IsDMthin(); err == nil {
+			if !dmthin {
+				poolResizeType = append(poolResizeType, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			}
+		}
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 		if err != nil {
