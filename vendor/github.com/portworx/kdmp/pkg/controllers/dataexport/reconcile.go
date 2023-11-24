@@ -62,6 +62,7 @@ const (
 	pxbackupAnnotationCreateByValue = "px-backup"
 	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
 	pvcUIDKey                       = kdmpAnnotationPrefix + "pvc-uid"
+	kdmpStorageClassKey             = kdmpAnnotationPrefix + "storage-class"
 	volumeSnapShotCRDirectory       = "csi-generic"
 	snapDeleteAnnotation            = "snapshotScheduledForDeletion"
 	snapRestoreAnnotation           = "snapshotScheduledForRestore"
@@ -76,6 +77,7 @@ const (
 	defaultTimeout        = 1 * time.Minute
 	progressCheckInterval = 5 * time.Second
 	compressionKey        = "KDMP_COMPRESSION"
+	excludeFileListKey    = "KDMP_EXCLUDE_FILE_LIST"
 	backupPath            = "KDMP_BACKUP_PATH"
 )
 
@@ -261,6 +263,8 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 		var compressionType string
 		var podDataPath string
+		var excludeFileList string
+		pvcStorageClass := dataExport.Labels[kdmpStorageClassKey]
 		var backupLocation *storkapi.BackupLocation
 		var data updateDataExportDetail
 		if driverName != drivers.Rsync {
@@ -273,11 +277,29 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			kdmpData, err := core.Instance().GetConfigMap(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace)
 			if err != nil {
 				logrus.Errorf("failed reading config map %v: %v", utils.KdmpConfigmapName, err)
-				logrus.Warnf("default to %s compression", utils.DefaultCompresion)
-				compressionType = utils.DefaultCompresion
-			} else {
-				compressionType = kdmpData.Data[compressionKey]
-				podDataPath = kdmpData.Data[backupPath]
+				if err != nil {
+					msg := fmt.Sprintf("Failed in parsing the excludeFileList configmap parameter from configmap [%v/%v]: %v", utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName, err)
+					logrus.Errorf(msg)
+					data := updateDataExportDetail{
+						status: kdmpapi.DataExportStatusFailed,
+						reason: msg,
+					}
+					return false, c.updateStatus(dataExport, data)
+				}
+			}
+			compressionType = kdmpData.Data[compressionKey]
+			podDataPath = kdmpData.Data[backupPath]
+			if len(kdmpData.Data[excludeFileListKey]) != 0 {
+				excludeFileList, err = parseExcludeFileListKey(pvcStorageClass, kdmpData.Data[excludeFileListKey])
+				if err != nil {
+					msg := fmt.Sprintf("Failed in parsing the excludeFileList configmap parameter from configmap [%v/%v]", utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName)
+					logrus.Errorf(msg)
+					data := updateDataExportDetail{
+						status: kdmpapi.DataExportStatusFailed,
+						reason: msg,
+					}
+					return false, c.updateStatus(dataExport, data)
+				}
 			}
 			blName := dataExport.Spec.Destination.Name
 			blNamespace := dataExport.Spec.Destination.Namespace
@@ -308,6 +330,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			driver,
 			srcPVCName,
 			compressionType,
+			excludeFileList,
 			dataExport,
 			podDataPath,
 			utils.KdmpConfigmapName,
@@ -501,6 +524,35 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		return false, nil
 	}
 	return false, nil
+}
+
+// If pvc storageclass and the configured storageclass matches, extract the configured ignore file list and return it.
+// For code reference, adding the sample of the configmap parameter.
+//
+//	KDMP_EXCLUDE_FILE_LIST: |
+//	   px-db=dir1,file1,dir2
+//	   mysql=dir1,file1,dir2
+//
+// After we read, the parameter value comes as follow:
+// "px-db=dir1,file1,dir2\nmysql=dir1,file1,dir2\n"
+func parseExcludeFileListKey(pvcStorageClass string, excludeFileListValue string) (string, error) {
+	// trim the ending "\n" character, if it present
+	excludeFileListValue = strings.TrimSuffix(string(excludeFileListValue), "\n")
+	storageClassList := strings.Split(excludeFileListValue, "\n")
+	var excludeFileList string
+	for _, storageClass := range storageClassList {
+		equalSignSplit := strings.Split(storageClass, "=")
+		if len(equalSignSplit) != 2 {
+			return "", fmt.Errorf("invalid exclude file list in the configmap parameter")
+		}
+		// if the PVC storageclass and configure storageclass are same, extract the configured ignore file list
+		if pvcStorageClass == equalSignSplit[0] {
+			excludeFileList = equalSignSplit[1]
+		}
+
+	}
+	logrus.Infof("parseExcludeFileListKey: configured excludeFileList - %v", excludeFileList)
+	return excludeFileList, nil
 }
 
 func appendPodLogToStork(jobName string, namespace string) {
@@ -1752,6 +1804,7 @@ func startTransferJob(
 	drv drivers.Interface,
 	srcPVCName string,
 	compressionType string,
+	excludeFileList string,
 	dataExport *kdmpapi.DataExport,
 	podDataPath string,
 	jobConfigMap string,
@@ -1812,6 +1865,7 @@ func startTransferJob(
 			drivers.WithCertSecretName(utils.GetCertSecretName(dataExport.GetName())),
 			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithCompressionType(compressionType),
+			drivers.WithExcludeFileList(excludeFileList),
 			drivers.WithPodDatapathType(podDataPath),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
