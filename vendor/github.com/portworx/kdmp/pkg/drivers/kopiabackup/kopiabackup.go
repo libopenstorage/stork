@@ -287,6 +287,9 @@ func jobFor(
 		"/data",
 	}, " ")
 
+	// Read the config map from the job option and then add the debug level log if required
+	cmd = utils.CheckAndAddKopiaDebugModeEnabled(cmd, jobOption)
+
 	if jobOption.Compression != "" {
 		splitCmd := strings.Split(cmd, " ")
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)

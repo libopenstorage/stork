@@ -63,6 +63,10 @@ const (
 	PvcBoundSuccessMsg = "pvc bounded successfully"
 	// PvcBoundFailedMsg pvc not bounded msg
 	PvcBoundFailedMsg = "pvc not bounded"
+	// KopiaDebugModeEnabled - debug level log messages are enabled for kopia
+	KopiaDebugModeEnabled = "kopia-debug-mode"
+	// KopiaExecutorDebugModeCMKey - key present in the config maps, which enables debug log level in kopia
+	KopiaExecutorDebugModeCMKey = "KDMP_KOPIAEXECUTOR_ENABLE_DEBUG_MODE"
 )
 
 var (
@@ -875,4 +879,15 @@ func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 		}
 	}
 	return false
+}
+
+func CheckAndAddKopiaDebugModeEnabled(cmd string, jobOption drivers.JobOpts) string {
+	// check for the particular key-value pair
+	isKeyPresent := GetConfigValue(jobOption.JobConfigMap, jobOption.JobConfigMapNs, KopiaExecutorDebugModeCMKey)
+	if isKeyPresent == "true" {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--log-level", "debug")
+		cmd = strings.Join(splitCmd, " ")
+	}
+	return cmd
 }

@@ -19,6 +19,7 @@ type JobOpts struct {
 	VolumeBackupName            string
 	VolumeBackupNamespace       string
 	VolumeBackupDeleteName      string
+	KopiaDebugMode              bool
 	VolumeBackupDeleteNamespace string
 	DataExportName              string
 	SnapshotID                  string
