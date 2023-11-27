@@ -206,9 +206,19 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 	expected = "error: Invalid intervalMinutes (0) in Interval policy"
 	testCommon(t, cmdArgs, nil, expected, true)
 
+	//Irrelevant flags added for Interval Policy
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Interval", "--time", "15"}
+	expected = "error: for an Interval SchedulePolicy you can only provide values for --interval-minutes and --retain flags"
+	testCommon(t, cmdArgs, nil, expected, true)
+
 	//Invalid Time value for Daily Policy
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Daily", "--time", "12:75PM"}
 	expected = "error: Invalid time (12:75PM) in Daily policy: parsing time \"12:75PM\": minute out of range"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	//Irrelevant flags added for Daily Policy
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Daily", "--interval-minutes", "15"}
+	expected = "error: for a Daily SchedulePolicy you can only provide values for --time, --retain and --force-full-snapshot-day flags"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid Day value for Weekly Policy
@@ -216,9 +226,19 @@ func TestCreateSchedulePolicyFailureCases(t *testing.T) {
 	expected = "error: Invalid day of the week (funday) in Weekly policy"
 	testCommon(t, cmdArgs, nil, expected, true)
 
+	//Irrelevant flags added for Weekly Policy
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Weekly", "--interval-minutes", "15"}
+	expected = "error: for a Weekly SchedulePolicy you can only provide values for --time, --day-of-week and --retain flags"
+	testCommon(t, cmdArgs, nil, expected, true)
+
 	//Invalid Date value for Monthly Policy
 	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Monthly", "--date-of-month", "32"}
 	expected = "error: Invalid date of the month (32) in Monthly policy"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	//Irrelevant flags added for Monthly Policy
+	cmdArgs = []string{"create", "schedulepolicy", "test-policy", "-t", "Monthly", "--interval-minutes", "15"}
+	expected = "error: for a Monthly SchedulePolicy you can only provide values for --time, --date-of-month and --retain flags"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	//Invalid retain value
