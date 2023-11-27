@@ -206,6 +206,8 @@ func jobFor(
 		vb.Status.SnapshotID,
 	}, " ")
 
+	cmd = utils.CheckAndAddKopiaDebugModeEnabled(cmd, jobOption)
+
 	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
@@ -369,7 +371,7 @@ func roleFor() *rbacv1.Role {
 			},
 			{
 				APIGroups: []string{"kdmp.portworx.com"},
-				Resources: []string{"volumebackups"},
+				Resources: []string{"volumebackups", "dataexports"},
 				Verbs:     []string{rbacv1.VerbAll},
 			},
 		},

@@ -376,13 +376,19 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		return true, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageTransferInProgress:
+		var reason string
+		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
+			reason = ""
+		} else {
+			reason = dataExport.Status.Reason
+		}
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
 			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 			// set to the next stage
 			data := updateDataExportDetail{
 				stage:  kdmpapi.DataExportStageCleanup,
 				status: dataExport.Status.Status,
-				reason: "",
+				reason: reason,
 			}
 			return false, c.updateStatus(dataExport, data)
 		}
