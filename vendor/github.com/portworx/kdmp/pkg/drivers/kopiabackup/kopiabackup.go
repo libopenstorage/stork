@@ -22,6 +22,8 @@ import (
 
 var backupJobLock sync.Mutex
 
+const KopiaDebugModeEnabled = "kopia-debug-mode"
+
 // Driver is a kopiabackup implementation of the data export interface.
 type Driver struct{}
 
@@ -258,6 +260,20 @@ func (d Driver) validate(o drivers.JobOpts) error {
 	return nil
 }
 
+func checkDataExportAnnotation(jobOption drivers.JobOpts) bool {
+	dataExportCR, err := kdmpops.Instance().GetDataExport(context.Background(), jobOption.DataExportName, jobOption.Namespace)
+	if err != nil {
+		logrus.Tracef("error reading data export job: %v", err)
+		return false
+	}
+
+	if _, ok := dataExportCR.Annotations[KopiaDebugModeEnabled]; ok {
+		logrus.Infof("annotation %v found in the data export CR.", KopiaDebugModeEnabled)
+		return true
+	}
+	return false
+}
+
 func jobFor(
 	jobOption drivers.JobOpts,
 	jobName string,
@@ -286,6 +302,12 @@ func jobFor(
 		"--source-path",
 		"/data",
 	}, " ")
+
+	if checkDataExportAnnotation(jobOption) {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--log-level", "debug")
+		cmd = strings.Join(splitCmd, " ")
+	}
 
 	if jobOption.Compression != "" {
 		splitCmd := strings.Split(cmd, " ")
@@ -500,7 +522,7 @@ func roleFor(live bool) *rbacv1.Role {
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"kdmp.portworx.com"},
-				Resources: []string{"volumebackups"},
+				Resources: []string{"volumebackups", "dataexports"},
 				Verbs:     []string{rbacv1.VerbAll},
 			},
 		},

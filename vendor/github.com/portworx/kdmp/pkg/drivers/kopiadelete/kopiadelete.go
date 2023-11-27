@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	kopiaDeleteJobPrefix = "d"
+	kopiaDeleteJobPrefix  = "d"
+	kopiaDebugModeEnabled = "KDMP_KOPIAEXECUTOR_ENABLE_DEBUG_MODE"
 )
 
 // Driver is a kopia delete snapshot implementation
@@ -200,6 +201,13 @@ func jobFor(
 		"--volume-backup-delete-namespace",
 		jobOption.VolumeBackupDeleteNamespace,
 	}, " ")
+
+	// Adding a new flag to enable debug mode in kopia
+	if jobOption.KopiaDebugMode {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--log-level", "debug")
+		cmd = strings.Join(splitCmd, " ")
+	}
 
 	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,

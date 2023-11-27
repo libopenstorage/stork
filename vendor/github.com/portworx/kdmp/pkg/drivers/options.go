@@ -19,6 +19,7 @@ type JobOpts struct {
 	VolumeBackupName            string
 	VolumeBackupNamespace       string
 	VolumeBackupDeleteName      string
+	KopiaDebugMode              bool
 	VolumeBackupDeleteNamespace string
 	DataExportName              string
 	SnapshotID                  string
@@ -390,6 +391,14 @@ func WithVolumeBackupDeleteName(name string) JobOption {
 			return fmt.Errorf("volumeBackupDelete name should be set")
 		}
 		opts.VolumeBackupDeleteName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithKopiaDebugMode is job parameter
+func WithKopiaDebugMode(debugMode bool) JobOption {
+	return func(opts *JobOpts) error {
+		opts.KopiaDebugMode = debugMode
 		return nil
 	}
 }

@@ -25,6 +25,7 @@ const (
 	quickMaintenaceTye                = "quick"
 	defaultFailedJobsHistoryLimit     = 1
 	defaultSuccessfulJobsHistoryLimit = 1
+	kopiaDebugModeEnabled             = "KDMP_KOPIAEXECUTOR_ENABLE_DEBUG_MODE"
 )
 
 // Driver is a kopia maintenance snapshot implementation
@@ -203,6 +204,12 @@ func jobFor(
 		"--maintenance-type",
 		jobOption.MaintenanceType,
 	}, " ")
+
+	if jobOption.KopiaDebugMode {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--log-level", "debug")
+		cmd = strings.Join(splitCmd, " ")
+	}
 
 	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
