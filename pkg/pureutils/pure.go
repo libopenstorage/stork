@@ -1,6 +1,8 @@
 package pureutils
 
 import (
+	"fmt"
+	"github.com/devans10/pugo/flasharray"
 	"strings"
 
 	"github.com/portworx/torpedo/pkg/units"
@@ -30,4 +32,30 @@ func GetAppDataDir(namespace string) (string, int) {
 		return "/dev/xvda", units.GiB
 	}
 	return "", 0
+}
+
+// GetFAClientMapFromPXPureSecret takes a PXPureSecret and returns a map of mgmt endpoints to FA clients
+func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray.Client, error) {
+	clientMap := make(map[string]*flasharray.Client)
+	for _, fa := range secret.Arrays {
+		faClient, err := flasharray.NewClient(fa.MgmtEndPoint, "", "", fa.APIToken, "", false, false, "", nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create FA client for [%s]. Err: [%v]", fa.MgmtEndPoint, err)
+		}
+		clientMap[fa.MgmtEndPoint] = faClient
+	}
+	return clientMap, nil
+}
+
+// GetFBClientMapFromPXPureSecret takes a PXPureSecret and returns a map of mgmt endpoints to FB clients
+func GetFBClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray.Client, error) {
+	clientMap := make(map[string]*flasharray.Client)
+	for _, fb := range secret.Blades {
+		fbClient, err := flasharray.NewClient(fb.MgmtEndPoint, "", "", fb.APIToken, "", false, false, "", nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create FB client for [%s]. Err: [%v]", fb.MgmtEndPoint, err)
+		}
+		clientMap[fb.MgmtEndPoint] = fbClient
+	}
+	return clientMap, nil
 }

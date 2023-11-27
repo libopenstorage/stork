@@ -2355,9 +2355,17 @@ func (d *portworx) RandomizeVolumeName(params string) string {
 	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
+func (d *portworx) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	currentClusterResponse, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return currentClusterResponse, nil
+}
+
 func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
-		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
+		cluster, err := d.InspectCurrentCluster()
 		if err != nil {
 			return nil, true, err
 		}

@@ -43,6 +43,11 @@ func (d *azure) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.Proxy
 	return nil, nil
 }
 
+func (d *azure) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
 func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName

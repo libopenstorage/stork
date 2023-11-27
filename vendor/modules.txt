@@ -319,6 +319,9 @@ github.com/davecgh/go-spew/spew
 ## explicit; go 1.14
 github.com/deepmap/oapi-codegen/pkg/runtime
 github.com/deepmap/oapi-codegen/pkg/types
+# github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
+## explicit; go 1.12
+github.com/devans10/pugo/flasharray
 # github.com/dimchansky/utfbom v1.1.1
 ## explicit
 github.com/dimchansky/utfbom

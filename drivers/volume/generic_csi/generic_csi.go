@@ -46,6 +46,11 @@ func (d *genericCsi) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.
 	return nil, nil
 }
 
+func (d *genericCsi) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
 func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName

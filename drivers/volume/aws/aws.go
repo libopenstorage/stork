@@ -43,6 +43,11 @@ func (d *aws) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySp
 	return nil, nil
 }
 
+func (d *aws) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
 func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName

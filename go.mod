@@ -78,7 +78,10 @@ require (
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
 
-require go.uber.org/multierr v1.7.0
+require (
+	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
+	go.uber.org/multierr v1.7.0
+)
 
 require (
 	cloud.google.com/go v0.110.7 // indirect
@@ -105,7 +108,7 @@ require (
 	github.com/IBM-Cloud/bluemix-go v0.0.0-20230120122421-afb48116b8f1 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.1.1 // indirect
+	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/Masterminds/sprig/v3 v3.2.2 // indirect
 	github.com/Masterminds/squirrel v1.5.3 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect

@@ -36,6 +36,11 @@ func (d *gce) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySp
 	return nil, nil
 }
 
+func (d *gce) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
 func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName

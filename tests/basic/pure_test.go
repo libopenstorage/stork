@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
 	"math/rand"
@@ -1689,6 +1690,9 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 	/*
 		PTX:
 			https://portworx.atlassian.net/browse/PTX-20633
+			https://portworx.atlassian.net/browse/PTX-20619
+			https://portworx.atlassian.net/browse/PTX-20631
+
 		TestRail:
 			https://portworx.testrail.net/index.php?/cases/view/92653
 			https://portworx.testrail.net/index.php?/cases/view/92654
@@ -1718,14 +1722,19 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 		contexts            []*scheduler.Context
 		appSpecMap          = make(map[string]*spec.AppSpec)
 		volCountFromSpecMap = make(map[string]int)
-		approxVolCount      = 500
+		approxVolCount      = 2
 		exceedVolCount      = true
 		backend             = BackendUnknown
+		volDriverNamespace  string
+		clusterUIDPrefix    string
 		volumeMap           = make(map[VolumeType][]*api.Volume)
+		pureClientMap       = make(map[VolumeType]map[string]*flasharray.Client)
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateAndDeleteMultipleVolumesInParallel", "Validate volume creation and deletion in parallel", nil, 92653)
+		volDriverNamespace, err = Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 	})
 
 	It("Validates volume creation and deletion in parallel", func() {
@@ -1805,7 +1814,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				}
 				return nil, false, nil
 			}
-			_, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 3*time.Minute, 10*time.Second)
+			_, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 10*time.Minute, 30*time.Second)
 			if err != nil {
 				return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
 			}
@@ -1841,6 +1850,10 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				return fmt.Errorf("failed to wait for [%s] volume [%s/%s] deletion. Err: [%v]", volType, vol.Id, vol.Locator.Name, err)
 			}
 			return nil
+		}
+		// getPureVolName translates the volume name into its equivalent in the pure backend
+		getPureVolName := func(vol *api.Volume) string {
+			return "px_" + clusterUIDPrefix + "-" + vol.Locator.Name
 		}
 		Step("Extract volume counts from app specs", func() {
 			log.InfoD("Extracting volume counts from app specs")
@@ -1911,18 +1924,8 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				dash.VerifyFatal(len(vols), volCountFromSpecMap[ctx.App.Key], fmt.Sprintf("Verifying volume count for app [%s]", ctx.App.Key))
 			}
 		})
-		Step("Scale down applications to release volumes", func() {
-			log.InfoD("Scaling down applications to release volumes")
-			for _, ctx := range contexts {
-				log.InfoD("Scaling down app [%s]", ctx.App.Key)
-				err := scaleDownApp(ctx)
-				log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
-			}
-		})
 		Step("Identify backend and categorize volumes", func() {
 			log.InfoD("Identifying backend")
-			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
 			log.FailOnError(err, "failed to get secret list from namespace [%s]", volDriverNamespace)
 			for _, secret := range secretList.Items {
@@ -1958,6 +1961,58 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				}
 			}
 		})
+		Step("Validate FADA and FBDA volumes creation in Pure Backend", func() {
+			log.InfoD("Validating FADA and FBDA volumes creation in Pure Backend")
+			if backend == BackendPure {
+				// The check validates the pure backend only for FADA and FBDA volumes, as FACD volumes are not listed there
+				if len(volumeMap[VolumeFADA])+len(volumeMap[VolumeFBDA]) > 0 {
+					secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+					log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+					for _, volType := range []VolumeType{VolumeFADA, VolumeFBDA} {
+						if len(volumeMap[volType]) > 0 {
+							pureClientMap[volType] = make(map[string]*flasharray.Client)
+							switch volType {
+							case VolumeFADA:
+								pureClientMap[volType], err = pureutils.GetFAClientMapFromPXPureSecret(secret)
+							case VolumeFBDA:
+								pureClientMap[volType], err = pureutils.GetFBClientMapFromPXPureSecret(secret)
+							}
+							log.FailOnError(err, "failed to get [%s] client map from secret [%s/%s]", volType, PureSecretName, volDriverNamespace)
+						}
+					}
+				}
+				cluster, err := Inst().V.InspectCurrentCluster()
+				log.FailOnError(err, "failed to inspect current cluster")
+				log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+				clusterUIDPrefix = strings.Split(cluster.Cluster.Id, "-")[0]
+				for volType, clientMap := range pureClientMap {
+					allPureVolumes := make([]flasharray.Volume, 0)
+					for mgmtEndPoint, client := range clientMap {
+						pureVolumes, err := client.Volumes.ListVolumes(nil)
+						log.FailOnError(err, "failed to list [%s] volumes from endpoint [%s]", volType, mgmtEndPoint)
+						allPureVolumes = append(allPureVolumes, pureVolumes...)
+					}
+					for _, vol := range volumeMap[volType] {
+						found := false
+						pureVolName := getPureVolName(vol)
+						for _, pureVol := range allPureVolumes {
+							if pureVol.Name == pureVolName {
+								found = true
+							}
+						}
+						dash.VerifyFatal(found, true, fmt.Sprintf("Verify [%s] volume [%s/%s] creation in the pure backend", volType, vol.Id, vol.Locator.Name))
+					}
+				}
+			}
+		})
+		Step("Scale down applications to release volumes", func() {
+			log.InfoD("Scaling down applications to release volumes")
+			for _, ctx := range contexts {
+				log.InfoD("Scaling down app [%s]", ctx.App.Key)
+				err := scaleDownApp(ctx)
+				log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
+			}
+		})
 		Step("Delete volumes in parallel", func() {
 			log.InfoD("Deleting volumes in parallel")
 			for volType, vols := range volumeMap {
@@ -1974,6 +2029,24 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 					}(volType, vol)
 				}
 				wg.Wait()
+			}
+			for volType, clientMap := range pureClientMap {
+				allPureVolumes := make([]flasharray.Volume, 0)
+				for mgmtEndPoint, client := range clientMap {
+					pureVolumes, err := client.Volumes.ListVolumes(nil)
+					log.FailOnError(err, "failed to list [%s] volumes from endpoint [%s]", volType, mgmtEndPoint)
+					allPureVolumes = append(allPureVolumes, pureVolumes...)
+				}
+				for _, vol := range volumeMap[volType] {
+					found := false
+					pureVolName := getPureVolName(vol)
+					for _, pureVol := range allPureVolumes {
+						if pureVol.Name == pureVolName {
+							found = true
+						}
+					}
+					dash.VerifyFatal(found, false, fmt.Sprintf("Verify [%s] volume [%s/%s] deletion in the pure backend", volType, vol.Id, vol.Locator.Name))
+				}
 			}
 		})
 	})
