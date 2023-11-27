@@ -276,7 +276,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 
 // Reconcile updates for ApplicationRestore objects.
 func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Infof("Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
+	logrus.Infof("Kgarg Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
 	restore := &storkapi.ApplicationRestore{}
@@ -361,6 +361,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 	}
 
+	logrus.Infof("StorageClassMapping restore spec storage class mapping is: %v", restore.Spec.StorageClassMapping)
 	if len(restore.Spec.StorageClassMapping) >= 1 && isStorageClassMappingContainsDefault(restore) {
 		// Update the default storageclass name in storageclassmapping.
 		// storageclassMapping will have "use-default-storage-class" as destination storage class,
@@ -754,6 +755,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						}
 					}
 				}
+				logrus.Infof("applicationrestore lenght of backupVolInfos: %v", len(backupVolInfos))
 				for i := 0; i < len(backupVolInfos); i += batchCount {
 					batchVolInfo := backupVolInfos[i:min(i+batchCount, len(backupVolInfos))]
 					restoreVolumeInfos, err := driver.StartRestore(restore, batchVolInfo, preRestoreObjects)

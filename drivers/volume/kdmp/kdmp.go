@@ -83,6 +83,7 @@ const (
 	gkeNodeLabelKey          = "topology.gke.io/zone"
 	awsNodeLabelKey          = "alpha.eksctl.io/cluster-name"
 	ocpAWSNodeLabelKey       = "topology.ebs.csi.aws.com/zone"
+	kopiaDebugModeEnabled    = "KDMP_KOPIAEXECUTOR_ENABLE_DEBUG_MODE"
 )
 
 var volumeAPICallBackoff = wait.Backoff{
@@ -285,6 +286,9 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		dataExport.Annotations = make(map[string]string)
 		dataExport.Annotations[utils.SkipResourceAnnotation] = "true"
 		dataExport.Annotations[utils.BackupObjectUIDKey] = string(backup.Annotations[utils.PxbackupObjectUIDKey])
+		if enableKopiaExecutorDebugMode() {
+			dataExport.Annotations[utils.KopiaDebugModeEnabled] = "true"
+		}
 		dataExport.Annotations[pvcUIDKey] = string(pvc.UID)
 		dataExport.Name = getGenericCRName(utils.PrefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
@@ -369,6 +373,24 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 	}
 	return volumeInfos, nil
 }
+
+// Check whether to run kopia executor in debug mode
+func enableKopiaExecutorDebugMode() bool {
+	logrus.Info("enableKopiaExecutorDebugMode entering")
+	kdmpData, err := core.Instance().GetConfigMap(stork_driver.KdmpConfigmapName, stork_driver.KdmpConfigmapNamespace)
+	if err != nil {
+		logrus.Info("enableKopiaExecutorDebugMode unable to read the cm")
+		logrus.Tracef("error readig kdmp config map: %v", err)
+		return false
+	}
+	if enableKopiaDebugMode, ok := kdmpData.Data[kopiaDebugModeEnabled]; ok && enableKopiaDebugMode == "true" {
+		logrus.Infof("enableKopiaExecutorDebugMode found key: %v, value: %v", kopiaDebugModeEnabled, enableKopiaDebugMode)
+		return true
+	}
+
+	return false
+}
+
 func isDataExportActive(status kdmpapi.ExportStatus) bool {
 	if status.Stage == kdmpapi.DataExportStageTransferInProgress ||
 		status.Stage == kdmpapi.DataExportStageSnapshotInProgress ||
@@ -763,6 +785,12 @@ func (k *kdmp) StartRestore(
 		dataExport.Annotations[utils.SkipResourceAnnotation] = "true"
 		dataExport.Annotations[utils.BackupObjectUIDKey] = backupUID
 		dataExport.Annotations[pvcUIDKey] = bkpvInfo.PersistentVolumeClaimUID
+		logrus.Info("enableKopiaExecutorDebugMode calling")
+		if enableKopiaExecutorDebugMode() {
+			logrus.Info("enableKopiaExecutorDebugMode able to find the debug mode present in kdmp-config cm")
+			dataExport.Annotations[utils.KopiaDebugModeEnabled] = "true"
+			logrus.Info("enableKopiaDebugMode annotation added in the CR")
+		}
 		dataExport.Name = getGenericCRName(prefixRestore, string(restore.UID), bkpvInfo.PersistentVolumeClaimUID, restoreNamespace)
 		dataExport.Namespace = restoreNamespace
 		dataExport.Status.TransferID = volBackup.Namespace + "/" + volBackup.Name

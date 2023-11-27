@@ -100,6 +100,8 @@ const (
 	BackupLocationKind = "BackupLocation"
 	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName = "portworx-service"
+	//KopiaDebugModeEnabled is the key present in the kdmp-config cm map
+	KopiaDebugModeEnabled = "kopia-debug-mode"
 )
 
 // ParseKeyValueList parses a list of key=values string into a map
