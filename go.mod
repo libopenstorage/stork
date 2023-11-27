@@ -63,6 +63,7 @@ require (
 )
 
 require (
+	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/portworx/kdmp v0.4.1-0.20230927104323-84564ac8b457
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	kubevirt.io/api v1.0.0
@@ -121,7 +122,6 @@ require (
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
-	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/color v1.13.0 // indirect
@@ -353,6 +353,7 @@ replace (
 	k8s.io/controller-manager => k8s.io/controller-manager v0.25.0
 	k8s.io/cri-api => k8s.io/cri-api v0.25.0
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.25.0
+	k8s.io/gengo => k8s.io/gengo v0.0.0-20220921000656-535f8cc63ed1
 	//k8s.io/klog/v2 => k8s.io/klog/v2 v2.8.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.25.0
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.25.0
