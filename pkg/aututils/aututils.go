@@ -2,11 +2,12 @@ package aututils
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"strings"
-	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,6 +74,8 @@ var (
 	ActiveActionsInProgressToActiveActionsTaken = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsInProgress, apapi.RuleStateActiveActionsTaken)
 	// ActiveActionTakenToNormalEvent is an event which contains "ActiveActionTaken => Normal" message
 	ActiveActionTakenToNormalEvent = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsTaken, apapi.RuleStateNormal)
+	// ActiveActionTakenToAny is an event which contains "ActiveActionTaken =>" message
+	ActiveActionTakenToAny = fmt.Sprintf("%s => ", apapi.RuleStateActiveActionsTaken)
 	// FailedToExecuteActionEvent is an event for failed action
 	FailedToExecuteActionEvent = "failed to execute Action for rule"
 )

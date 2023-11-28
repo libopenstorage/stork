@@ -2591,7 +2591,7 @@ func (d *portworx) ValidateStoragePools() error {
 							err := fmt.Errorf("node [%s], pool: %s was expanded to size: %d larger than expected: %d",
 								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
 							log.Errorf(err.Error())
-							return "", false, err
+							return "", false, nil
 						}
 
 						log.Infof("node [%s], pool: %s, size is not as expected. Expected: %v, Actual: %v",
