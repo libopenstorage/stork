@@ -65,7 +65,7 @@ const (
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
-	taskNamePrefix                            = "pxbackuptask"
+	taskNamePrefix                            = "pxb"
 	orgID                                     = "default"
 	usersToBeCreated                          = "USERS_TO_CREATE"
 	groupsToBeCreated                         = "GROUPS_TO_CREATE"

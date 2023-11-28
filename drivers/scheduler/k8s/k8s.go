@@ -3819,7 +3819,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			if err != nil {
 				return err
 			}
-			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0)  && !(len(prometheusPods.Items) == 0)
+			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
 			if autopilotEnabled {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
