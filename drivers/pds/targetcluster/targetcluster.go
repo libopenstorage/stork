@@ -38,7 +38,7 @@ const (
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
-	PDSChartRepo = "https://pds.pure-px.io/charts/target"
+	PDSChartRepo = "https://d2xtayr2ct14mw.cloudfront.net/charts/target"
 	pxLabel      = "pds.portworx.com/available"
 )
 
@@ -360,31 +360,6 @@ func (targetCluster *TargetCluster) SetConfig() error {
 	}
 	k8sCore.SetConfig(config)
 	k8sApps.SetConfig(config)
-	return nil
-}
-
-// DeleteDeploymentTargets deletes the unhealthy deployment targets
-func (tc *TargetCluster) DeleteDeploymentTargets(tenantID string) error {
-	deploymentsTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
-	if err != nil {
-		return fmt.Errorf("error occued while listing templates %v", err)
-	}
-	count := 0
-	for _, deploymentTarget := range deploymentsTargets {
-		if strings.Contains(*deploymentTarget.Status, "unhealthy") {
-			log.Debugf("deployment target name %s", *deploymentTarget.Name)
-			resp, err := components.DeploymentTarget.DeleteTarget(deploymentTarget.GetId())
-			if resp.StatusCode != http.StatusConflict {
-				//TODO: Delete backups and deployments in unhealthy target cluster
-				if err != nil {
-					return err
-				}
-				log.InfoD("Deployment Target %s Deleted", *deploymentTarget.Name)
-				count++
-			}
-		}
-	}
-	log.Debugf("Number of deployment targets deleted: %d", count)
 	return nil
 }
 

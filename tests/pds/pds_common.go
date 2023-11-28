@@ -406,7 +406,7 @@ func GetVolumeCapacityInGB(namespace string, deployment *pds.ModelsDeployment) (
 	return pvcCapacity, err
 }
 
-func CleanUpBackUpTargets(projectID, prefix string) error {
+func CleanUpBackUpTargets(projectID, objectStore, prefix string) error {
 	bkpClient, err := pdsbkp.InitializePdsBackup()
 	if err != nil {
 		return err
@@ -414,9 +414,11 @@ func CleanUpBackUpTargets(projectID, prefix string) error {
 	bkpTargets, err := bkpClient.GetAllBackUpTargets(projectID, prefix)
 	for _, bkpTarget := range bkpTargets {
 		log.Debugf("Deleting bkptarget %s", bkpTarget.GetName())
-		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		if err != nil {
-			return err
+		if objectStore == "s3" {
+			err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -526,6 +528,9 @@ func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCle
 func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 	log.Infof("Fetch backups associated to the deployment %v ",
 		dsInstance.GetClusterResourceName())
+
+	//ListBackup api uses older way of finding the backups
+	//we need to delete backup jobs
 	backups, err := components.Backup.ListBackup(dsInstance.GetId())
 	if err != nil {
 		return fmt.Errorf("failed while fetching the backup objects.Err - %v", err)

@@ -16,7 +16,6 @@ var (
 	bkpClient                                     *pdsbkp.BackupClient
 	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
 	bkpTargetName                                 = "automation--"
-	bucket                                        = "pds-qa-automation"
 )
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
