@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/kdmp/pkg/jobratelimit"
@@ -94,6 +93,15 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
+
+	// Create PV & PVC only in case of NFS.
+	if o.NfsServer != "" {
+		err := utils.CreateNFSPvPvcForJob(jobName, job.ObjectMeta.Namespace, o)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if _, err = batch.Instance().CreateJob(job); err != nil && !apierrors.IsAlreadyExists(err) {
 		errMsg := fmt.Sprintf("creation of backup job %s failed: %v", jobName, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
@@ -199,6 +207,14 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		jobStatus = job.Status.Conditions[0].Type
 
 	}
+
+	// Check whether mount point failure
+	mountFailed := utils.IsJobPodMountFailed(job, namespace)
+	if mountFailed {
+		errMsg := fmt.Sprintf("job [%v/%v] failed to mount pvc, please check job pod's description for more detail", namespace, name)
+		return utils.ToJobStatus(0, errMsg, batchv1.JobFailed), nil
+	}
+
 	err = utils.JobNodeExists(job)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to fetch the node info tied to the job %s/%s: %v", namespace, name, err)
@@ -246,6 +262,7 @@ func jobFor(
 	jobOption drivers.JobOpts,
 	jobName string,
 	resources corev1.ResourceRequirements,
+	nodeName string,
 ) (*batchv1.Job, error) {
 	backupName := jobName
 
@@ -275,28 +292,30 @@ func jobFor(
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)
 		cmd = strings.Join(splitCmd, " ")
 	}
-	imageRegistry, imageRegistrySecret, err := utils.GetKopiaExecutorImageRegistryAndSecret(
+
+	if jobOption.ExcludeFileList != "" {
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--exclude-file-list", jobOption.ExcludeFileList)
+		cmd = strings.Join(splitCmd, " ")
+	}
+
+	kopiaExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.KopiaExecutorImage,
 		jobOption.KopiaImageExecutorSource,
 		jobOption.KopiaImageExecutorSourceNs,
-	)
+		jobName,
+		jobOption)
 	if err != nil {
-		logrus.Errorf("jobFor: getting kopia image registry and image secret failed during backup: %v", err)
-		return nil, err
-	}
-	if len(imageRegistrySecret) != 0 {
-		err = utils.CreateImageRegistrySecret(imageRegistrySecret, jobName, jobOption.KopiaImageExecutorSourceNs, jobOption.Namespace)
-		if err != nil {
-			return nil, err
-		}
-
-	}
-	var kopiaExecutorImage string
-	if len(imageRegistry) != 0 {
-		kopiaExecutorImage = fmt.Sprintf("%s/%s", imageRegistry, utils.GetKopiaExecutorImageName())
-	} else {
-		kopiaExecutorImage = utils.GetKopiaExecutorImageName()
+		errMsg := fmt.Errorf("failed to get the executor image details for job %s", jobName)
+		logrus.Errorf("%v", errMsg)
+		return nil, errMsg
 	}
 
+	tolerations, err := utils.GetTolerationsFromDeployment(jobOption.KopiaImageExecutorSource,
+		jobOption.KopiaImageExecutorSourceNs)
+	if err != nil {
+		logrus.Errorf("failed to get the toleration details: %v", err)
+		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobName)
+	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -314,7 +333,6 @@ func jobFor(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   utils.ToImagePullSecret(utils.GetImageSecretName(jobName)),
 					ServiceAccountName: jobName,
 					Containers: []corev1.Container{
 						{
@@ -341,6 +359,7 @@ func jobFor(
 							},
 						},
 					},
+					Tolerations: tolerations,
 					Volumes: []corev1.Volume{
 						{
 							Name: "vol",
@@ -364,6 +383,34 @@ func jobFor(
 		},
 	}
 
+	if len(nodeName) != 0 {
+		job.Spec.Template.Spec.NodeName = nodeName
+	}
+
+	// Add the image secret in job spec only if it is present in the stork deployment.
+	if len(imageRegistrySecret) != 0 {
+		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
+	}
+
+	if len(jobOption.NfsServer) != 0 {
+		volumeMount := corev1.VolumeMount{
+			Name:      utils.NfsVolumeName,
+			MountPath: drivers.NfsMount,
+		}
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMount,
+		)
+		volume := corev1.Volume{
+			Name: utils.NfsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: utils.GetPvcNameForJob(jobName),
+				},
+			},
+		}
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
+	}
 	if drivers.CertFilePath != "" {
 		volumeMount := corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,
@@ -427,57 +474,31 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 	}
 	var resourceNamespace string
 	var live bool
+	var nodeName string
 	// filter out the pods that are create by us
-	count := len(pods)
 	for _, pod := range pods {
 		labels := pod.ObjectMeta.Labels
 		if _, ok := labels[drivers.DriverNameLabel]; ok {
-			count--
+			continue
+		}
+		if pod.Status.Phase == "Running" {
+			// get the nodeName, if the pods is in Running state, So that we can schedule
+			// kopia job on the same node.
+			nodeName = pod.Spec.NodeName
+			break
 		}
 	}
-	if count > 0 {
-		storkCm, err := coreops.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, k8sutils.DefaultAdminNamespace)
-		if err != nil && !apierrors.IsNotFound(err) {
-			return nil, err
-		}
-		if storkCm.Data[k8sutils.AdminNsKey] != "" {
-			resourceNamespace = storkCm.Data[k8sutils.AdminNsKey]
-		} else {
-			resourceNamespace = utils.AdminNamespace
-		}
-		live = true
-	} else {
-		resourceNamespace = jobOptions.Namespace
-		live = false
-	}
+	resourceNamespace = jobOptions.Namespace
 	if err := utils.SetupServiceAccount(jobName, resourceNamespace, roleFor(live)); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", resourceNamespace, jobName, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	// run a "live" backup if a pvc is mounted (mount a kubelet directory with pod volumes)
-	if live {
-		logrus.Debugf("buildJob: pod %v phase %v pvc: %v/%v", pods[0].Name, pods[0].Status.Phase, resourceNamespace, jobOptions.SourcePVCName)
-		if pods[0].Status.Phase == corev1.PodPending {
-			errMsg := fmt.Sprintf("pods %v is using pvc %v/%v but it is in pending state, backup is not possible", pods[0].Name, resourceNamespace, jobOptions.SourcePVCName)
-			logrus.Errorf("%s: %v", fn, errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-		pvcNamespace := jobOptions.Namespace
-		jobOptions.Namespace = resourceNamespace
-		return jobForLiveBackup(
-			jobOptions,
-			jobName,
-			pods[0],
-			resources,
-			pvcNamespace,
-		)
-	}
-
 	return jobFor(
 		jobOptions,
 		jobName,
 		resources,
+		nodeName,
 	)
 }
 

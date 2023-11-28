@@ -547,6 +547,7 @@ func (a *ApplicationCloneController) prepareResources(
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
 			&opts,
+			"", "",
 		)
 		if err != nil {
 			return nil, err
@@ -590,7 +591,7 @@ func (a *ApplicationCloneController) preparePVResource(
 		return err
 	}
 
-	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil)
+	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil, "", "")
 	if err != nil {
 		return err
 	}
@@ -818,7 +819,7 @@ func (a *ApplicationCloneController) createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}

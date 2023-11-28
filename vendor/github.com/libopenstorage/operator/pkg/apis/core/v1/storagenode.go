@@ -67,15 +67,29 @@ type NodeStatus struct {
 	// Phase is the current status of the storage node
 	Phase string `json:"phase,omitempty"`
 	// Network details used by the storage driver
-	Network NetworkStatus `json:"network,omitempty"`
+	Network *NetworkStatus `json:"network,omitempty"`
 	// Storage details used by the storage driver
-	Storage StorageStatus `json:"storage,omitempty"`
+	Storage *StorageStatus `json:"storage,omitempty"`
 	// Geo topology information for a node
-	Geo Geography `json:"geography,omitempty"`
+	Geo *Geography `json:"geography,omitempty"`
 	// Conditions is an array of current node conditions
 	Conditions []NodeCondition `json:"conditions,omitempty"`
 	// Checks are a list of pre or post flight checks that are performed by the Operator
 	Checks []CheckResult `json:"checks,omitempty"`
+	// Operating system of the underlying host.
+	OperatingSystem string `json:"operatingSystem,omitempty"`
+	// Kernel version of the underlying host.
+	KernelVersion string `json:"kernelVersion,omitempty"`
+	// Attributes of the storage node.
+	NodeAttributes *NodeAttributes `json:"nodeAttributes,omitempty"`
+}
+
+// Attributes of the storage node.
+type NodeAttributes struct {
+	// Indicates whether the node is a storage node or not.
+	Storage *bool `json:"storage,omitempty"`
+	// Indicates whether the node is a kvdb node or not.
+	KVDB *bool `json:"kvdb,omitempty"`
 }
 
 // CheckResult captures result of a pre or post flight check

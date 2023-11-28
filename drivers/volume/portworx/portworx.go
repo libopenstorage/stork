@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -179,16 +178,23 @@ const (
 	pureFileParam    = "pure_file"
 	pureBlockParam   = "pure_block"
 
-	statfsSOName              = "px_statfs.so"
-	statfsSODirInStork        = "/"
-	statfsSODirInVirtLauncher = "/etc"
-	statfsConfigMapName       = "px-statfs"
-	statfsVolName             = "px-statfs"
+	statfsSOName               = "px_statfs.so"
+	stasfsSOSumName            = "px_statfs.so.sha256"
+	statfsSOPathInStork        = "/" + statfsSOName
+	statfsSOSumPathInStork     = "/" + stasfsSOSumName
+	statfsSOPathInVirtLauncher = "/etc/" + statfsSOName
+	statfsConfigMapName        = "px-statfs"
+	statfsVolName              = "px-statfs"
+	ldPreloadFileName          = "ld.so.preload"
+	ldPreloadFilePath          = "/etc/" + ldPreloadFileName
 
 	nodePublishSecretName           = "csi.storage.k8s.io/node-publish-secret-name"
 	controllerExpandSecretName      = "csi.storage.k8s.io/controller-expand-secret-name"
 	nodePublishSecretNamespace      = "csi.storage.k8s.io/node-publish-secret-namespace"
 	controllerExpandSecretNamespace = "csi.storage.k8s.io/controller-expand-secret-namespace"
+
+	// StorageClass parameter to check if the Pod is using a volume labeled for Windows
+	windowsStorageClassLabel = "winshare"
 )
 
 type cloudSnapStatus struct {
@@ -526,10 +532,26 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 		info.Labels[k] = v
 	}
 	info.NeedsAntiHyperconvergence = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
+
+	info.WindowsVolume = p.volumePrefersWindowsNodes(info)
+
 	info.VolumeSourceRef = vols[0]
 
 	return info, nil
 }
+
+// volumePrefersWindowsNodes checks if "winshare" label is applied to the volume
+func (p *portworx) volumePrefersWindowsNodes(volumeInfo *storkvolume.Info) bool {
+	if volumeInfo.Labels != nil {
+		if value, ok := volumeInfo.Labels[windowsStorageClassLabel]; ok {
+			if preferWindowsNodesExists, err := strconv.ParseBool(value); err == nil {
+				return preferWindowsNodesExists
+			}
+		}
+	}
+	return false
+}
+
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
 	case api.Status_STATUS_POOLMAINTENANCE:
@@ -2459,7 +2481,90 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 	return nil
 }
 
-func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+func (p *portworx) GetPair(remoteStorageID string) (*api.ClusterPairInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	pair, err := clusterManager.GetPair(remoteStorageID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			// for not found errors return nil with no error
+			// for everything else return the error back to the caller
+			return nil, nil
+		}
+		return nil, err
+	}
+	return pair.PairInfo, nil
+}
+
+func (p *portworx) Failover(action *storkapi.Action) error {
+	namespace := action.Namespace
+	logrus.Infof("volumeDriver failover for namespace %s", namespace)
+
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		return fmt.Errorf("error fetching pvcList %v", err)
+	}
+
+	countPromotedVolumes := 0
+	countTotalVolumes := len(pvcList.Items)
+	defer func() {
+		logrus.Infof("promoted %v/%v volumes", countPromotedVolumes, countTotalVolumes)
+	}()
+
+	for _, pvc := range pvcList.Items {
+		if !p.OwnsPVC(core.Instance(), &pvc) {
+			continue
+		}
+		if resourcecollector.SkipResource(pvc.Annotations) {
+			continue
+		}
+
+		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		if err != nil {
+			return fmt.Errorf("error fetching volume for pvc %v", err)
+		}
+
+		volDriver, err := p.getUserVolDriver(pvc.Annotations, namespace)
+		if err != nil {
+			return err
+		}
+
+		volumes, err := volDriver.Inspect([]string{pvName})
+		if err != nil {
+			return err
+		}
+		if len(volumes) != 1 {
+			return &errors.ErrNotFound{
+				ID:   pvName,
+				Type: "Volume",
+			}
+		}
+		vol := volumes[0]
+
+		volLocator := vol.Locator
+		if volLocator.VolumeLabels == nil {
+			volLocator.VolumeLabels = make(map[string]string)
+		}
+		volLocator.VolumeLabels["promote"] = "true"
+		if err := volDriver.Set(vol.GetId(), volLocator, nil); err != nil {
+			return fmt.Errorf("failed to promote volume %v with error %v", vol.GetId(), err)
+		}
+		countPromotedVolumes += 1
+		logrus.Infof("promoted volume %v", vol.GetId())
+	}
+	return nil
+}
+
+func (p *portworx) StartMigration(migration *storkapi.Migration, migrationNamespaces []string) ([]*storkapi.MigrationVolumeInfo, error) {
 	if !p.initDone {
 		if err := p.initPortworxClients(); err != nil {
 			return nil, err
@@ -2483,7 +2588,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 		return nil, err
 	}
 
-	if len(migration.Spec.Namespaces) == 0 {
+	if len(migrationNamespaces) == 0 {
 		return nil, fmt.Errorf("namespaces for migration cannot be empty")
 	}
 
@@ -2492,7 +2597,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 	volumeInfos := make([]*storkapi.MigrationVolumeInfo, 0)
-	for _, namespace := range migration.Spec.Namespaces {
+	for _, namespace := range migrationNamespaces {
 		pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
 		if err != nil {
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
@@ -2653,10 +2758,18 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 	// Get the pv storageclass and get the provision detail and decide on csi section.
 	if len(pv.Spec.StorageClassName) != 0 {
-		sc, err := storkcache.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		var sc *storagev1.StorageClass
+		var err error
+		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+			sc, err = storkcache.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		} else {
+			sc, err = storage.Instance().GetStorageClass(pv.Spec.StorageClassName)
+		}
 		if err != nil {
 			logrus.Warnf("failed in getting the storage class [%v]: %v", pv.Spec.StorageClassName, err)
 		}
@@ -3322,7 +3435,10 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 					// return nil, err
 				}
 			} else {
-				vInfo.TotalSize = resp.GetSize()
+				// For Portworx version lessthan v3.0.0 GetCompressedObjectBytes method will result empty.
+				if vInfo.TotalSize = resp.GetCompressedObjectBytes(); vInfo.TotalSize == 0 {
+					vInfo.TotalSize = resp.GetSize()
+				}
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
@@ -3416,6 +3532,7 @@ func (p *portworx) GetPreRestoreResources(
 	backup *storkapi.ApplicationBackup,
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
+	storageClassByte []byte,
 ) ([]runtime.Unstructured, error) {
 	secretsToRestore := make(map[string]bool)
 	objectsToRestore := make([]runtime.Unstructured, 0)
@@ -3536,7 +3653,13 @@ func (p *portworx) StartRestore(
 
 		taskID := p.getBackupRestoreTaskID(restore.UID, volumeInfo.SourceNamespace, volumeInfo.PersistentVolumeClaim)
 		credID := p.getCredID(restore.Spec.BackupLocation, restore.Namespace)
-		locator, restoreSpec, err := p.getCloudBackupRestoreSpec(restore.Spec.StorageClassMapping, backupVolumeInfo.StorageClass, taskID)
+		locator, restoreSpec, err := p.getCloudBackupRestoreSpec(
+			restore.Spec.StorageClassMapping,
+			backupVolumeInfo.StorageClass,
+			taskID,
+			destinationNamespace,
+			volumeInfo.PersistentVolumeClaim,
+		)
 		if err != nil {
 			return volumeInfos, fmt.Errorf("failed to parse restore volume spec: %v ", err)
 		}
@@ -3580,36 +3703,52 @@ func (p *portworx) getCloudBackupRestoreSpec(
 	storageClassMapping map[string]string,
 	sourceStorageClass string,
 	taskID string,
-
+	destinationNamespace string,
+	pvcName string,
 ) (*api.VolumeLocator, *api.RestoreVolumeSpec, error) {
 	locator := &api.VolumeLocator{
 		Name: taskID, // always override name with taskID
 	}
 	var restoreSpec *api.RestoreVolumeSpec
 	destStorageClass := storageClassMapping[sourceStorageClass]
-	if len(destStorageClass) == 0 {
+	if len(destStorageClass) == 0 && len(destinationNamespace) == 0 {
 		restoreSpec = &api.RestoreVolumeSpec{
 			IoProfileBkupSrc: true, // setting this for backward compatibility
 		}
 		// No mapping provided
 		return locator, restoreSpec, nil
 	}
-	sc, err := storkcache.Instance().GetStorageClass(destStorageClass)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
-	}
+	var sc *storagev1.StorageClass
+	var err error
+	if len(destStorageClass) != 0 {
+		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+			sc, err = storkcache.Instance().GetStorageClass(destStorageClass)
+		} else {
+			sc, err = storage.Instance().GetStorageClass(destStorageClass)
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch storage class %v: %v", destStorageClass, err)
+		}
 
-	restoreSpec, locator, err = spec.NewSpecHandler().RestoreSpecFromOpts(sc.Parameters)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse storage class %v: %v", destStorageClass, err)
+		restoreSpec, locator, err = spec.NewSpecHandler().RestoreSpecFromOpts(sc.Parameters)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse storage class %v: %v", destStorageClass, err)
+		}
+		// Special handling for io_profile
+		// The default volumeSpec.IoProfile is set to sequential
+		// Check in storage class if an io profile is set. If not set use
+		// the io profile from the source
+		if _, ok := sc.Parameters[api.SpecIoProfile]; !ok {
+			// io profile not specified in storage class
+			restoreSpec.IoProfileBkupSrc = true
+		}
 	}
-	// Special handling for io_profile
-	// The default volumeSpec.IoProfile is set to sequential
-	// Check in storage class if an io profile is set. If not set use
-	// the io profile from the source
-	if _, ok := sc.Parameters[api.SpecIoProfile]; !ok {
-		// io profile not specified in storage class
-		restoreSpec.IoProfileBkupSrc = true
+	if len(destinationNamespace) != 0 {
+		if locator.VolumeLabels == nil {
+			locator.VolumeLabels = make(map[string]string)
+		}
+		locator.VolumeLabels[pvcNameLabel] = pvcName
+		locator.VolumeLabels[namespaceLabel] = destinationNamespace
 	}
 
 	return locator, restoreSpec, nil
@@ -4138,14 +4277,14 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 	for i := 0; i < len(pod.Spec.Containers); i++ {
 		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, v1.VolumeMount{
 			Name:      statfsVolName,
-			MountPath: path.Join(statfsSODirInVirtLauncher, statfsSOName),
+			MountPath: statfsSOPathInVirtLauncher,
 			SubPath:   statfsSOName,
 		})
 
 		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, v1.VolumeMount{
 			Name:      statfsVolName,
-			MountPath: "/etc/ld.so.preload",
-			SubPath:   "ld.so.preload",
+			MountPath: ldPreloadFilePath,
+			SubPath:   ldPreloadFileName,
 		})
 	}
 
@@ -4177,7 +4316,7 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 		},
 	}
 
-	if err := p.createStatfsConfigMap(podNamespace); err != nil {
+	if err := p.createOrUpdateStatfsConfigMap(podNamespace); err != nil {
 		return nil, fmt.Errorf("failed to create config map: %w", err)
 	}
 
@@ -4189,15 +4328,57 @@ func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k
 	return patches, nil
 }
 
-func (p *portworx) createStatfsConfigMap(cmNamespace string) error {
-	soPath := path.Join(statfsSODirInStork, statfsSOName)
-	statfsSOContents, err := os.ReadFile(soPath)
+func (p *portworx) createOrUpdateStatfsConfigMap(cmNamespace string) error {
+	// read only the checksum file first to see if an update or create is needed
+	sumBytes, err := os.ReadFile(statfsSOSumPathInStork)
 	if err != nil {
-		logrus.Errorf("Failed to read %s: %v", soPath, err)
+		logrus.Errorf("Failed to read %s: %v", statfsSOSumPathInStork, err)
 		return err
 	}
+	sum := string(sumBytes)
+	cmNamespacedName := fmt.Sprintf("%s/%s", cmNamespace, statfsConfigMapName)
+	existing, err := core.Instance().GetConfigMap(statfsConfigMapName, cmNamespace)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		logrus.Errorf("Failed to check existing config map %s: %v", cmNamespacedName, err)
+		return err
+	}
+	needsUpdate := false
+	needsCreate := false
+	if err == nil && existing != nil {
+		needsUpdate = p.statfsConfigMapNeedsUpdate(existing, sum)
+	} else {
+		needsCreate = true
+	}
+	if !needsCreate && !needsUpdate {
+		return nil
+	}
+	statfsSOContents, err := os.ReadFile(statfsSOPathInStork)
+	if err != nil {
+		logrus.Errorf("Failed to read %s: %v", statfsSOPathInStork, err)
+		return err
+	}
+	expected := p.statfsConfigMap(cmNamespace, statfsSOContents, sum)
+	if needsUpdate {
+		existing.BinaryData = expected.BinaryData
+		existing.Data = expected.Data
+		if _, err := core.Instance().UpdateConfigMap(existing); err != nil {
+			logrus.Errorf("Failed to update config map %s: %v", cmNamespacedName, err)
+			return err
+		}
+		logrus.Infof("Updated configmap %s", cmNamespacedName)
+		return nil
+	}
+	// create one
+	if _, err := core.Instance().CreateConfigMap(expected); err != nil {
+		logrus.Errorf("Failed to create config map %s: %v", cmNamespacedName, err)
+		return err
+	}
+	logrus.Infof("Created configmap %s", cmNamespacedName)
+	return nil
+}
 
-	cm := &v1.ConfigMap{
+func (p *portworx) statfsConfigMap(cmNamespace string, statfsSOContents []byte, sum string) *v1.ConfigMap {
+	return &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statfsConfigMapName,
 			Namespace: cmNamespace,
@@ -4206,17 +4387,17 @@ func (p *portworx) createStatfsConfigMap(cmNamespace string) error {
 			statfsSOName: statfsSOContents,
 		},
 		Data: map[string]string{
-			"ld.so.preload": path.Join(statfsSODirInVirtLauncher, statfsSOName),
+			ldPreloadFileName: statfsSOPathInVirtLauncher,
+			stasfsSOSumName:   sum,
 		},
 	}
+}
 
-	if _, err := core.Instance().CreateConfigMap(cm); err != nil && !k8s_errors.IsAlreadyExists(err) {
-		logrus.Errorf("Failed to create  config map %v/%v: %v", cmNamespace, statfsConfigMapName, err)
-		return err
-	} else if err == nil {
-		logrus.Infof("Created configmap %v/%v", cmNamespace, statfsConfigMapName)
+func (p *portworx) statfsConfigMapNeedsUpdate(existing *v1.ConfigMap, expectedSum string) bool {
+	if !strings.Contains(existing.Data[ldPreloadFileName], statfsSOName) {
+		return true
 	}
-	return nil
+	return existing.Data[stasfsSOSumName] != expectedSum
 }
 
 func init() {

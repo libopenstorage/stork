@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  labels:
+    app: postgres
+data:
+  POSTGRES_DB: benchdb
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: admin
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: "postgres"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      schedulerName: stork
+      containers:
+      - name: postgres
+        image: postgres:11.5-alpine
+        envFrom:
+          - configMapRef:
+              name: postgres-config
+        ports:
+        - containerPort: 5432
+          name: postgredb
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgredb
+  volumeClaimTemplates:
+  - metadata:
+      name: postgredb
+    spec:
+      storageClassName: px-sc
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres

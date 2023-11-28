@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -111,10 +112,20 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 type Client struct {
 	config     *rest.Config
 	kubernetes kubernetes.Interface
-	// eventRecorders is a map of component to event recorders
-	eventRecorders     map[string]record.EventRecorder
+
+	// common lock used by both old and new recorder interfaces
 	eventRecordersLock sync.Mutex
-	eventBroadcaster   record.EventBroadcaster
+
+	// event broadcaster and recorders that record the events with the old interface
+	// (https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#event-v1-core)
+	// eventRecordersLegacy is a map of component to event recorders
+	eventRecordersLegacy   map[string]record.EventRecorder
+	eventBroadcasterLegacy record.EventBroadcaster
+
+	// event broadcaster and recorders that record the events with new interface
+	// (https://pkg.go.dev/k8s.io/api/events/v1)
+	eventRecordersNew   map[string]events.EventRecorder
+	eventBroadcasterNew events.EventBroadcaster
 }
 
 // SetConfig sets the config and resets the client.

@@ -1,0 +1,30 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: MigrationSchedule
+metadata:
+  name: automation-test-migration-schedule
+  namespace: default
+spec:
+  autoSuspend: true
+  schedulePolicyName: default-migration-policy
+  suspend: false
+  template:
+    spec:
+      adminClusterPair: ""
+      clusterPair: automation-test-sync-cluster-pair
+      excludeSelectors: null
+      ignoreOwnerReferencesCheck: false
+      includeNetworkPolicyWithCIDR: false
+      includeOptionalResourceTypes: null
+      includeResources: true
+      includeVolumes: false
+      namespaceSelectors: null
+      namespaces:
+        - default
+      postExecRule: ""
+      preExecRule: ""
+      purgeDeletedResources: false
+      selectors: null
+      skipDeletedNamespaces: true
+      skipServiceUpdate: false
+      startApplications: false
+      transformSpecs: null

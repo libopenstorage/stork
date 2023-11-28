@@ -50,6 +50,7 @@ type gcp struct {
 	service   *compute.Service
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
+	storkvolume.ActionNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.CloneNotSupported
@@ -363,6 +364,8 @@ func (g *gcp) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 	if pv.Spec.CSI != nil {
 		key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
@@ -404,6 +407,7 @@ func (g *gcp) GetPreRestoreResources(
 	*storkapi.ApplicationBackup,
 	*storkapi.ApplicationRestore,
 	[]runtime.Unstructured,
+	[]byte,
 ) ([]runtime.Unstructured, error) {
 	return nil, nil
 }

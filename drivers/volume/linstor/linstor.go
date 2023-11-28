@@ -46,6 +46,7 @@ type linstor struct {
 	stopChannel chan struct{}
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
+	storkvolume.ActionNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.BackupRestoreNotSupported
@@ -62,6 +63,15 @@ func (l *linstor) linstorClient() (*lclient.Client, error) {
 	}
 
 	return l.cli, nil
+}
+
+func (l *linstor) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 func (l *linstor) Init(_ interface{}) error {
@@ -396,6 +406,8 @@ func (l *linstor) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 
 	return pv, nil

@@ -25,6 +25,8 @@ kube_scheduler_version="v1.21.0"
 cloud_deletion_validation=true
 internal_aws_lb=false
 px_namespace="kube-system"
+bidirectional_cluster_pair=false
+unidirectional_cluster_pair=false
 for i in "$@"
 do
 case $i in
@@ -178,6 +180,18 @@ case $i in
         shift
         shift
         ;;		
+    --bidirectional-cluster-pair)
+        echo "Flag to indicate if bidirectional clusterpairing is intended in tests: $2"
+        bidirectional_cluster_pair=$2
+        shift
+        shift
+        ;;
+    --unidirectional-cluster-pair)
+        echo "Flag to indicate if unidirectional clusterpairing is intended in tests: $2"
+        unidirectional_cluster_pair=$2
+        shift
+        shift
+        ;;	
 esac
 done
 
@@ -308,8 +322,8 @@ sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-t
 # testrail params
 sed -i 's/testrail_run_name/'"$TESTRAIL_RUN_NAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_run_id/'"\"$TESTRAIL_RUN_ID\""'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/testrail_jenkins_build_url/'"$TESTRAIL_JENKINS_BUILD_URL"'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/testrail_host/'"$TESTRAIL_HOST"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's|testrail_jenkins_build_url|'"$TESTRAIL_JENKINS_BUILD_URL"'|g' /testspecs/stork-test-pod.yaml
+sed -i 's|testrail_host|'"$TESTRAIL_HOST"'|g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_uame/'"$TESTRAIL_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_pwd/'"$TESTRAIL_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/testrail_milestone/'"$TESTRAIL_MILESTONE"'/g' /testspecs/stork-test-pod.yaml
@@ -359,6 +373,14 @@ if [ "$cloud_deletion_validation" = "true" ] ; then
        sed -i 's/'cloud_deletion_validation'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else
        sed -i 's/'cloud_deletion_validation'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$bidirectional_cluster_pair" = "true" ] ; then
+	sed -i 's/- -bidirectional-cluster-pair=false/- -bidirectional-cluster-pair='"$bidirectional_cluster_pair"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$unidirectional_cluster_pair" = "true" ] ; then
+	sed -i 's/- -unidirectional-cluster-pair=false/- -unidirectional-cluster-pair='"$unidirectional_cluster_pair"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 kubectl delete -f /testspecs/stork-test-pod.yaml

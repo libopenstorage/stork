@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -33,6 +34,20 @@ const (
 	ResourceBackupStatusPartialSuccess ResourceBackupStatus = "PartialSuccess"
 )
 
+// ResourceApplyPhase defines a status of resource restoration phase.
+type ResourceApplyStatus string
+
+const (
+	// ResourceApplyPhasePreparing signifies we are altering the resource
+	// as per target cluster before applying
+	ResourceApplyPhasePreparing ResourceApplyStatus = "Preparing"
+	// ResourceApplyPhaseDeleting when Resources are deleted before applying this
+	// applicable only when replace is opted during restore process.
+	ResourceApplyPhaseDeleting ResourceApplyStatus = "Deleting"
+	// ResourceApplyPhaseApplying when Resource is being applied as part of restore process
+	ResourceApplyPhaseApplying ResourceApplyStatus = "Applying"
+)
+
 // ResourceBackupProgressStatus overall resource backup/restore progress
 type ResourceBackupProgressStatus struct {
 	// ProgressPercentage is the progress of the command in percentage
@@ -43,6 +58,14 @@ type ResourceBackupProgressStatus struct {
 	Reason string `json:"reason,omitempty"`
 	// Resources status of each resource being restore
 	Resources []*ResourceRestoreResourceInfo `json:"resources"`
+	// TotalResourceCount is the total number of resources being restored
+	TotalResourceCount int64
+	// RestoredResourceCount is the count of already applied resource count
+	RestoredResourceCount int64
+	// ResourceApplyStage signifies the current stage of resource restore
+	ResourceApplyStage ResourceApplyStatus
+	// LargeResourceEnabled signifies if it largeResource enabled or not
+	LargeResourceEnabled bool
 }
 
 // +genclient
@@ -57,10 +80,8 @@ type ResourceBackup struct {
 	Type ResourceBackupType `json:"type,omitempty"`
 	// Status Overall status
 	Status ResourceBackupProgressStatus `json:"status,omitempty"`
-	// VolumesInfo Contains list of vols to be restored. Filled in by nfs executor job
-	VolumesInfo []*ResourceBackupVolumeInfo `json:"volumesInfo,omitempty"`
-	// ExistingVolumesInfo existing vols which are not be restored
-	ExistingVolumesInfo []*ResourceRestoreVolumeInfo `json:"existingVolumesInfo,omitempty"`
+	// RestoreCompleteList - restore complete volumeInfo
+	RestoreCompleteList []*storkapi.ApplicationRestoreVolumeInfo `json:"restoreCompleteList,omitempty"`
 }
 
 // ResourceBackupSpec configuration parameters for ResourceBackup

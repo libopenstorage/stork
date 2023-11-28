@@ -4,6 +4,8 @@
 package storkctl
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -125,4 +127,99 @@ func TestGenerateClusterPairInvalidNamespace(t *testing.T) {
 
 	expected := "error: the Namespace \"test_namespace\" is not valid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"
 	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestCreateUniDirectionalClusterPairMissingParameters(t *testing.T) {
+	cmdArgs := []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--unidirectional"}
+	expected := "error: missing parameter \"src-kube-file\" - Kubeconfig file missing for source cluster"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	srcConfig := createTempFile(t, "src.config", "source")
+	destConfig := createTempFile(t, "dest.config", "destination")
+	defer os.Remove(srcConfig.Name())
+	defer os.Remove(destConfig.Name())
+
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--unidirectional"}
+	expected = "error: missing parameter \"dest-kube-file\" - Kubeconfig file missing for destination cluster"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfig.Name(), "-u"}
+	expected = "error: source kubeconfig file and destination kubeconfig file should be different"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	srcConfigDuplicate := createTempFile(t, "srcDup.config", "source")
+	defer os.Remove(srcConfigDuplicate.Name())
+
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfigDuplicate.Name(), "-u"}
+	expected = "error: source kubeconfig and destination kubeconfig file should be different"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+}
+
+func TestGetHostPortFromEndPoint(t *testing.T) {
+	ep := "http://px-ep1.com"
+	host, port, err := getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "http://px-ep1.com", host)
+	require.Equal(t, "80", port)
+
+	ep = "https://px-ep1.com"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "https://px-ep1.com", host)
+	require.Equal(t, "443", port)
+
+	ep = "http://px-ep1.com:10000"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "http://px-ep1.com", host)
+	require.Equal(t, "10000", port)
+
+	ep = "https://px-ep1.com:10001"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "https://px-ep1.com", host)
+	require.Equal(t, "10001", port)
+
+	ep = "px-ep1.com"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "px-ep1.com", host)
+	require.Equal(t, "80", port)
+
+	ep = "px-ep1.com:500"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "px-ep1.com", host)
+	require.Equal(t, "500", port)
+
+	ep = "10.123.146.176"
+	_, _, err = getHostPortFromEndPoint(ep)
+	require.Error(t, err, fmt.Sprintf("Received unexpected error:\nport is needed along with ip address %s", ep))
+
+	ep = "10.123.146.176:9001"
+	host, port, err = getHostPortFromEndPoint(ep)
+	require.NoError(t, err, fmt.Sprintf("hitting error while getting host and port for endpoint %s", ep))
+	require.Equal(t, "10.123.146.176", host)
+	require.Equal(t, "9001", port)
+
+	ep = "htt://px-ep1.com"
+	_, _, err = getHostPortFromEndPoint(ep)
+	require.Error(t, err, "Received unexpected error:\ninvalid url scheme px-ep1.com, expected http or https only")
+
+	ep = "htt://px-ep1.com:80"
+	_, _, err = getHostPortFromEndPoint(ep)
+	require.Error(t, err, "Received unexpected error:\ninvalid url scheme px-ep1.com, expected http or https only")
+}
+
+func createTempFile(t *testing.T, fileName string, fileContent string) *os.File {
+	f, err := os.CreateTemp("", fileName)
+	require.NoError(t, err, "Error creating file %s", fileName)
+	if _, err := f.Write([]byte(fileContent)); err != nil {
+		require.NoError(t, err, "Error writing to file %s", fileName)
+	}
+	if err := f.Close(); err != nil {
+		require.NoError(t, err, "Error closing the file %s", fileName)
+	}
+	return f
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
@@ -22,6 +23,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -190,6 +192,7 @@ func getVolumeSnapshotStatus(name string, namespace string) (snapv1.VolumeSnapsh
 
 func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule *stork_api.VolumeSnapshotSchedule) error {
 	updated := false
+	oldSnapShotSchedule := snapshotSchedule.DeepCopy()
 	for _, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		for _, snapshot := range policyVolumeSnapshot {
 			if snapshot.Status != snapv1.VolumeSnapshotConditionReady {
@@ -231,9 +234,13 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 		}
 	}
 	if updated {
-		err := s.client.Update(context.TODO(), snapshotSchedule)
+		patchBytes, err := utils.CreateVolumeSnapshotSchedulePatch(oldSnapShotSchedule, snapshotSchedule)
 		if err != nil {
-			return err
+			return fmt.Errorf("error creating patch for volumesnapshot schedule %s: %v", oldSnapShotSchedule.Name, err)
+		}
+		err = s.client.Patch(context.TODO(), oldSnapShotSchedule, runtimeclient.RawPatch(types.MergePatchType, patchBytes))
+		if err != nil {
+			return fmt.Errorf("error applying patch on volumesnapshot schedule %s: %v", oldSnapShotSchedule.Name, err)
 		}
 	}
 	return nil
@@ -381,6 +388,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 }
 
 func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stork_api.VolumeSnapshotSchedule) error {
+	snapshotScheduleUpdateRequired := false
 	for policyType, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		numVolumeSnapshots := len(policyVolumeSnapshot)
 		deleteBefore := 0
@@ -394,6 +402,7 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 		// Keep up to retainNum successful snapshot statuses and all failed snapshots
 		// until there is a successful one
 		if numVolumeSnapshots > int(retainNum) {
+			snapshotScheduleUpdateRequired = true
 			// Start from the end and find the retainNum successful snapshots
 			for i := range policyVolumeSnapshot {
 				if policyVolumeSnapshot[(numVolumeSnapshots-1-i)].Status == snapv1.VolumeSnapshotConditionReady {
@@ -455,7 +464,10 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 			}
 		}
 	}
-	return s.client.Update(context.TODO(), snapshotSchedule)
+	if snapshotScheduleUpdateRequired {
+		return s.client.Update(context.TODO(), snapshotSchedule)
+	}
+	return nil
 }
 
 func (s *SnapshotScheduleController) createCRD() error {
@@ -472,7 +484,7 @@ func (s *SnapshotScheduleController) createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}

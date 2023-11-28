@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-virtualization-datadisk-templates
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fedora-template-datadisk
+  namespace: openshift-virtualization-datadisk-templates
+spec:
+  storageClassName: sc-sharedv4svc-nolock
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 15Gi
+

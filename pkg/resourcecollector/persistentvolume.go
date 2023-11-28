@@ -144,6 +144,8 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	storageClassMappings map[string]string,
 	namespaceMappings map[string]string,
 	opts Options,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (bool, error) {
 	var updatedName string
 	var present bool
@@ -215,7 +217,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if err != nil {
 		return false, err
 	}
-	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo, namespaceMappings)
+	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv, volumeInfo, namespaceMappings, backuplocationName, backuplocationNamespace)
 	if err != nil {
 		return false, err
 	}

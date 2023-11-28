@@ -37,6 +37,7 @@ type JobOpts struct {
 	MaintenanceType             string
 	RepoPVCName                 string
 	Compression                 string
+	ExcludeFileList             string
 	PodDataPath                 string
 	// JobConfigMap holds any config needs to be provided to job
 	// from the caller. Eg: executor image name, secret, etc..
@@ -44,7 +45,112 @@ type JobOpts struct {
 	JobConfigMapNs             string
 	KopiaImageExecutorSource   string
 	KopiaImageExecutorSourceNs string
+	NfsImageExecutorSource     string
+	NfsImageExecutorSourceNs   string
 	NodeAffinity               map[string]string
+	NfsServer                  string
+	NfsMountOption             string
+	NfsSubPath                 string
+	NfsExportDir               string
+	RestoreExportName          string
+	AppCRName                  string
+	AppCRNamespace             string
+	ResoureBackupName          string
+	ResoureBackupNamespace     string
+}
+
+// WithResoureBackupName is job parameter
+func WithResoureBackupName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.ResoureBackupName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithResoureBackupNamespace is job parameter
+func WithResoureBackupNamespace(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.ResoureBackupNamespace = strings.TrimSpace(namespace)
+		return nil
+	}
+}
+
+// WithAppCRName is job parameter
+func WithAppCRName(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.AppCRName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithAppCRNamespace is job parameter
+func WithAppCRNamespace(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.AppCRNamespace = strings.TrimSpace(namespace)
+		return nil
+	}
+}
+
+// WithRestoreExport is job parameter
+func WithRestoreExport(name string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.RestoreExportName = strings.TrimSpace(name)
+		return nil
+	}
+}
+
+// WithNfsServer is job parameter.
+func WithNfsServer(server string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsServer = strings.TrimSpace(server)
+		return nil
+	}
+}
+
+// WithNfsMountOption is job parameter.
+func WithNfsMountOption(server string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsMountOption = strings.TrimSpace(server)
+		return nil
+	}
+}
+
+// WithNfsSubPath is job parameter.
+func WithNfsSubPath(server string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsSubPath = strings.TrimSpace(server)
+		return nil
+	}
+}
+
+// WithNfsExportDir is job parameter.
+func WithNfsExportDir(exportDir string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.NfsExportDir = strings.TrimSpace(exportDir)
+		return nil
+	}
+}
+
+// WithNfsImageExecutorSource is job parameter.
+func WithNfsImageExecutorSource(source string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(source) == "" {
+			return fmt.Errorf("nfs image executor source should be set")
+		}
+		opts.NfsImageExecutorSource = strings.TrimSpace(source)
+		return nil
+	}
+}
+
+// WithNfsImageExecutorSourceNs is job parameter.
+func WithNfsImageExecutorSourceNs(namespace string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(namespace) == "" {
+			return fmt.Errorf("nfs image executor source namespace should be set")
+		}
+		opts.NfsImageExecutorSourceNs = strings.TrimSpace(namespace)
+		return nil
+	}
 }
 
 // WithKopiaImageExecutorSource is job parameter.
@@ -347,6 +453,14 @@ func WithMaintenanceType(maintenanceType string) JobOption {
 func WithCompressionType(compressionType string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.Compression = compressionType
+		return nil
+	}
+}
+
+// WithExcludeFileList is job parameter.
+func WithExcludeFileList(excludeFileList string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.ExcludeFileList = excludeFileList
 		return nil
 	}
 }

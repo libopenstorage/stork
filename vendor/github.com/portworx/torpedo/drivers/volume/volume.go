@@ -25,6 +25,7 @@ type Volume struct {
 	Size          uint64
 	RequestedSize uint64
 	Shared        bool
+	Raw           bool
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster
@@ -80,9 +81,15 @@ type Driver interface {
 	// GetVolumeDriverNamespace returns the namespace of this driver.
 	GetVolumeDriverNamespace() (string, error)
 
+	// ListAllVolumes returns volumeIDs of all volumes present in the cluster
+	ListAllVolumes() ([]string, error)
+
 	// CreateVolume creates a volume with the default setting
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
+
+	// ResizeVolume resizes Volume to specific size provided
+	ResizeVolume(volName string, size uint64) error
 
 	// CreateVolumeUsingRequest creates a volume with the given volume request
 	// returns volume_id of the new volume
@@ -124,6 +131,14 @@ type Driver interface {
 	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
 	ValidateCreateSnapshotUsingPxctl(name string) error
 
+	// GetCloudsnaps returns cloudsnap backups
+	// params are the custom backup options passed
+	GetCloudsnaps(name string, params map[string]string) ([]*api.SdkCloudBackupInfo, error)
+
+	// DeleteAllCloudsnaps deletes all  cloudsnap backups
+	// params are the custom backup options passed
+	DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error
+
 	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
 	// params are the custom backup options passed
 	ValidateCreateCloudsnap(name string, params map[string]string) error
@@ -146,8 +161,11 @@ type Driver interface {
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 
-	// SetIoThrottle validates if volume changes has been applied
+	// SetIoBandwidth validates if volume changes has been applied
 	SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error
+
+	// UpdateVolumeSpec updates given volume with provided spec
+	UpdateVolumeSpec(vol *Volume, volumeSpec *api.VolumeSpecUpdate) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
@@ -220,7 +238,7 @@ type Driver interface {
 	GetNodePoolsStatus(n node.Node) (map[string]string, error)
 
 	//DeletePool deletes the pool with given poolID
-	DeletePool(n node.Node, poolID string) error
+	DeletePool(n node.Node, poolID string, retry bool) error
 
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
@@ -336,8 +354,14 @@ type Driver interface {
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 
-	//validate mount options by executing mount command
+	//UpdateStickyFlag update sticky flag using pxctl command
+	UpdateStickyFlag(volumeName, stickyOption string) error
+
+	//ValidatePureFaFbMountOptions validates mount options by executing mount command
 	ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
+
+	//ValidatePureFaCreateOptions validates create options using xfs_info and tune2fs commands
+	ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
@@ -355,10 +379,10 @@ type Driver interface {
 	ValidateDriver(endpointVersion string, autoUpdateComponents bool) error
 
 	// ExpandPool resizes a pool of a given ID
-	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error
 
 	// ExpandPoolUsingPxctlCmd resizes pool of a given ID using CLI Command
-	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	ExpandPoolUsingPxctlCmd(n node.Node, poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error
 
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
@@ -449,6 +473,14 @@ type Driver interface {
 
 	// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
 	GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
+
+	// GetJournalDevicePath returns journal device path in the given node
+	GetJournalDevicePath(n *node.Node) (string, error)
+
+	IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error)
+
+	// IsPxReadyOnNode returns true is Px is ready on the node
+	IsPxReadyOnNode(n node.Node) bool
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

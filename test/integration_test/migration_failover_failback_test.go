@@ -7,14 +7,17 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -57,10 +60,22 @@ func testMigrationFailoverFailback(t *testing.T) {
 }
 
 func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86259, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	failoverAndFailbackMigrationTest(t)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86260, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// Migrate the resources
 	instanceID := "mysql-migration-failover-failback-rancher"
 	appKey := "mysql-enc-pvc-rancher"
@@ -83,7 +98,7 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, true, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false)
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
@@ -106,6 +121,10 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	scaleFactor := testMigrationFailover(t, preMigrationCtx, ctxs, "", appKey, instanceID)
 
 	testMigrationFailback(t, preMigrationCtx, ctxs, scaleFactor, projectIDMappingsReverse, appKey, instanceID)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func failoverAndFailbackMigrationTest(t *testing.T) {
@@ -130,7 +149,7 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, true, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false)
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
@@ -256,8 +275,25 @@ func testMigrationFailback(
 
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
-	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
+	if !bidirectionalClusterpair && !unidirectionalClusterpair {
+		// create, apply and validate cluster pair specs
+		err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", projectIDMappings, true)
+	} else if unidirectionalClusterpair {
+		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error setting remote config")
+		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting secret")
+		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting backuplocation")
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "Error setting remote config")
+		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting secret")
+		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting backuplocation")
+		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, false, true)
+	}
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs

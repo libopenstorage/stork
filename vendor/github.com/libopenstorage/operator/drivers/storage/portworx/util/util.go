@@ -2,11 +2,13 @@ package util
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"math"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/hashicorp/go-version"
+	"github.com/libopenstorage/cloudops"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -26,6 +29,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/constants"
+	"github.com/libopenstorage/operator/pkg/preflight"
 	"github.com/libopenstorage/operator/pkg/util"
 	k8sutil "github.com/libopenstorage/operator/pkg/util/k8s"
 	coreops "github.com/portworx/sched-ops/k8s/core"
@@ -75,6 +79,8 @@ const (
 	EssentialsOSBEndpointKey = "px-osb-endpoint"
 	// EnvKeyKubeletDir env var to set custom kubelet directory
 	EnvKeyKubeletDir = "KUBELET_DIR"
+	// OS name for windows node
+	WindowsOsName = "windows"
 
 	// AnnotationIsPKS annotation indicating whether it is a PKS cluster
 	AnnotationIsPKS = pxAnnotationPrefix + "/is-pks"
@@ -144,6 +150,16 @@ const (
 	AnnotationDisableCSRAutoApprove = pxAnnotationPrefix + "/disable-csr-approve"
 	// AnnotationDisableCSRAutoApprove annotation to set priority for SCCs.
 	AnnotationSCCPriority = pxAnnotationPrefix + "/scc-priority"
+	// AnnotationFACDTopology is added when FACD topology was successfully installed on a *new* cluster (it's blocked for existing clusters)
+	AnnotationFACDTopology = pxAnnotationPrefix + "/facd-topology"
+	// AnnotationIsPrivileged [=false] used to remove privileged containers requirement
+	AnnotationIsPrivileged = pxAnnotationPrefix + "/privileged"
+	// AnnotationAppArmorPrefix controls which AppArmor profile will be used per container.
+	AnnotationAppArmorPrefix = "container.apparmor.security.beta.kubernetes.io/"
+	// AnnotationServerTLSMinVersion sets up TLS-servers w/ requested TLS as minimal version
+	AnnotationServerTLSMinVersion = pxAnnotationPrefix + "/tls-min-version"
+	// AnnotationServerTLSCipherSuites sets up TLS-servers w/ requested cipher suites
+	AnnotationServerTLSCipherSuites = pxAnnotationPrefix + "/tls-cipher-suites"
 
 	// EnvKeyPXImage key for the environment variable that specifies Portworx image
 	EnvKeyPXImage = "PX_IMAGE"
@@ -253,6 +269,10 @@ const (
 
 	// TelemetryCertName is name of the telemetry cert.
 	TelemetryCertName = "pure-telemetry-certs"
+	// HttpProtocolPrefix is the prefix for HTTP protocol
+	HttpProtocolPrefix = "http://"
+	// HttpsProtocolPrefix is the prefix for HTTPS protocol
+	HttpsProtocolPrefix = "https://"
 )
 
 var (
@@ -269,7 +289,7 @@ var (
 	// MinimumPxVersionMetricsCollector minimum PX version to install metrics collector
 	MinimumPxVersionMetricsCollector, _ = version.NewVersion("2.9.1")
 	// MinimumPxVersionAutoTLS is a minimal PX version that supports "auto-TLS" setup
-	MinimumPxVersionAutoTLS, _ = version.NewVersion("3.0.0")
+	MinimumPxVersionAutoTLS, _ = version.NewVersion("4.0.0")
 
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
@@ -341,6 +361,50 @@ func IsIKS(cluster *corev1.StorageCluster) bool {
 func IsOpenshift(cluster *corev1.StorageCluster) bool {
 	enabled, err := strconv.ParseBool(cluster.Annotations[AnnotationIsOpenshift])
 	return err == nil && enabled
+}
+
+// IsVsphere returns true if VSPHERE_VCENTER is present in the spec
+func IsVsphere(cluster *corev1.StorageCluster) bool {
+	for _, env := range cluster.Spec.Env {
+		if env.Name == "VSPHERE_VCENTER" && len(env.Value) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// IsPure true if PURE_FLASHARRAY_SAN_TYPE is present in the spec
+func IsPure(cluster *corev1.StorageCluster) bool {
+	for _, env := range cluster.Spec.Env {
+		if env.Name == "PURE_FLASHARRAY_SAN_TYPE" && len(env.Value) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// IsPrivileged returns true "privileged" annotation is MISSING, or NOT set to FALSE
+func IsPrivileged(cluster *corev1.StorageCluster) bool {
+	enabled, err := strconv.ParseBool(cluster.Annotations[AnnotationIsPrivileged])
+	return err != nil || enabled
+}
+
+// GetCloudProvider returns the cloud provider string
+func GetCloudProvider(cluster *corev1.StorageCluster) string {
+	if IsVsphere(cluster) {
+		return cloudops.Vsphere
+	}
+
+	if IsPure(cluster) {
+		return cloudops.Pure
+	}
+
+	if len(preflight.Instance().ProviderName()) > 0 {
+		return preflight.Instance().ProviderName()
+	}
+
+	// TODO: implement conditions for other providers
+	return ""
 }
 
 // IsHostPidEnabled returns if hostPid should be set to true for portworx pod.
@@ -505,19 +569,21 @@ func IncludeCSISnapshotController(cluster *corev1.StorageCluster) bool {
 	return cluster.Spec.CSI != nil && cluster.Spec.CSI.InstallSnapshotController != nil && *cluster.Spec.CSI.InstallSnapshotController
 }
 
-// GetPortworxVersion returns the Portworx version based on the image provided.
-// We first look at spec.Image, if not valid image tag found, we check the PX_IMAGE
-// env variable. If that is not present or invalid semvar, then we fallback to an
-// annotation portworx.io/px-version; then we try to extract the version from PX_RELEASE_MANIFEST_URL
-// env variable, else we return int max as the version.
+// GetPortworxVersion returns the Portworx version based on the Spec data provided.
+// We first try to extract the image from the PX_IMAGE env variable if specified,
+// If not specified then we use Spec.Image, if the version extraction fails for any
+// reason, we look for annotation portworx.io/px-version if that fails or does not exist.
+// Then we try to extract the version from PX_RELEASE_MANIFEST_URL env variable, else
+// we return int max as the version.
 func GetPortworxVersion(cluster *corev1.StorageCluster) *version.Version {
 	var (
-		err       error
-		pxVersion *version.Version
+		err         error
+		pxVersion   *version.Version
+		manifestURL string
 	)
 
-	pxImage := cluster.Spec.Image
-	var manifestURL string
+	pxImage := strings.TrimSpace(cluster.Spec.Image)
+
 	for _, env := range cluster.Spec.Env {
 		if env.Name == EnvKeyPXImage {
 			pxImage = env.Value
@@ -530,24 +596,39 @@ func GetPortworxVersion(cluster *corev1.StorageCluster) *version.Version {
 	if len(parts) >= 2 {
 		pxVersionStr := parts[len(parts)-1]
 		pxVersion, err = version.NewSemver(pxVersionStr)
-		if err != nil {
-			logrus.Warnf("Invalid PX version %s extracted from image name: %v", pxVersionStr, err)
-			if pxVersionStr, exists := cluster.Annotations[AnnotationPXVersion]; exists {
-				pxVersion, err = version.NewSemver(pxVersionStr)
-				if err != nil {
-					logrus.Warnf("Invalid PX version %s extracted from annotation: %v", pxVersionStr, err)
-					pxVersionStr = getPortworxVersionFromManifestURL(manifestURL)
-					pxVersion, err = version.NewSemver(pxVersionStr)
-					if err != nil {
-						logrus.Warnf("Invalid PX version %s extracted from release manifest url: %v", pxVersionStr, err)
-					}
-				}
-			}
+		if err == nil {
+			logrus.Infof("Using version extracted from image name: %s", pxVersionStr)
+			return pxVersion
 		}
+		logrus.Warnf("Invalid PX version %s extracted from image name: %v", pxVersionStr, err)
+		pxVersion = nil
+	}
+
+	if pxVersion == nil {
+		if pxVersionStr, exists := cluster.Annotations[AnnotationPXVersion]; exists {
+			pxVersion, err = version.NewSemver(pxVersionStr)
+			if err == nil {
+				logrus.Infof("Using version extracted from annotation: %s", pxVersionStr)
+				return pxVersion
+			}
+			logrus.Warnf("Invalid PX version %s extracted from annotation: %v", pxVersionStr, err)
+			pxVersion = nil
+		}
+	}
+
+	if len(manifestURL) > 0 && pxVersion == nil {
+		pxVersionStr := getPortworxVersionFromManifestURL(manifestURL)
+		pxVersion, err = version.NewSemver(pxVersionStr)
+		if err == nil {
+			logrus.Infof("Using version extracted from manifest url: %s", pxVersionStr)
+			return pxVersion
+		}
+		logrus.Warnf("Invalid PX version %s extracted from release manifest url: %v", pxVersionStr, err)
 	}
 
 	if pxVersion == nil {
 		pxVersion, _ = version.NewVersion(strconv.FormatInt(math.MaxInt64, 10))
+		logrus.Infof("Using default max version")
 	}
 	return pxVersion
 }
@@ -644,12 +725,6 @@ func GetPxProxyEnvVarValue(cluster *corev1.StorageCluster) (string, string) {
 	for _, env := range cluster.Spec.Env {
 		key, val := env.Name, env.Value
 		if key == EnvKeyPortworxHTTPSProxy {
-			// If http proxy is specified in https env var, treat it as a http proxy endpoint
-			if strings.HasPrefix(val, "http://") {
-				logrus.Warnf("using endpoint %s from environment variable %s as a http proxy endpoint instead",
-					val, EnvKeyPortworxHTTPSProxy)
-				return EnvKeyPortworxHTTPProxy, val
-			}
 			return EnvKeyPortworxHTTPSProxy, val
 		} else if key == EnvKeyPortworxHTTPProxy {
 			httpProxy = val
@@ -661,65 +736,39 @@ func GetPxProxyEnvVarValue(cluster *corev1.StorageCluster) (string, string) {
 	return "", ""
 }
 
-// SplitPxProxyHostPort trims protocol prefix then splits the proxy address of the form "host:port"
-func SplitPxProxyHostPort(proxy string) (string, string, error) {
-	proxy = strings.TrimPrefix(proxy, "http://")
-	proxy = strings.TrimPrefix(proxy, "https://")
-	address, port, err := net.SplitHostPort(proxy)
-	if err != nil {
-		return "", "", err
-	} else if address == "" || port == "" {
-		return "", "", fmt.Errorf("failed to split px proxy address %s", proxy)
-	}
-	return address, port, nil
-}
+var (
+	authHeader string
+)
 
-// GetValueFromEnvVar returns the value of v1.EnvVar Value or ValueFrom
-func GetValueFromEnvVar(ctx context.Context, client client.Client, envVar *v1.EnvVar, namespace string) (string, error) {
-
-	if valueFrom := envVar.ValueFrom; valueFrom != nil {
-		if valueFrom.SecretKeyRef != nil {
-			key := valueFrom.SecretKeyRef.Key
-			secretName := valueFrom.SecretKeyRef.Name
-
-			// Get secret key
-			secret := &v1.Secret{}
-			err := client.Get(ctx, types.NamespacedName{
-				Name:      secretName,
-				Namespace: namespace,
-			}, secret)
-			if err != nil {
-				return "", err
-			}
-			value := secret.Data[key]
-			if len(value) == 0 {
-				return "", fmt.Errorf("failed to find env var value %s in secret %s in namespace %s", key, secretName, namespace)
-			}
-
-			return string(value), nil
-		} else if valueFrom.ConfigMapKeyRef != nil {
-			cmName := valueFrom.ConfigMapKeyRef.Name
-			key := valueFrom.ConfigMapKeyRef.Key
-			configMap := &v1.ConfigMap{}
-			if err := client.Get(ctx, types.NamespacedName{
-				Name:      cmName,
-				Namespace: namespace,
-			}, configMap); err != nil {
-				return "", err
-			}
-
-			value, ok := configMap.Data[key]
-			if !ok {
-				return "", fmt.Errorf("failed to find env var value %s in configmap %s in namespace %s", key, cmName, namespace)
-			}
-
-			return value, nil
+// ParsePxProxy trims protocol prefix then splits the proxy address of the form "host:port" with possible basic authentication credential
+func ParsePxProxyURL(proxy string) (string, string, string, error) {
+	if strings.Contains(proxy, "@") {
+		proxyUrl, err := url.Parse(proxy)
+		if err != nil {
+			return "", "", "", fmt.Errorf("failed to parse px proxy url %s", proxy)
 		}
+		username := proxyUrl.User.Username()
+		password, _ := proxyUrl.User.Password()
+		encodedAuth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+		authHeader = fmt.Sprintf("Basic %s", encodedAuth)
+		host, port, err := net.SplitHostPort(proxyUrl.Host)
+		if err != nil {
+			return "", "", "", err
+		} else if host == "" || port == "" || encodedAuth == "" {
+			return "", "", "", fmt.Errorf("failed to split px proxy to get host and port %s", proxy)
+		}
+		return host, port, authHeader, nil
 	} else {
-		return envVar.Value, nil
+		proxy = strings.TrimPrefix(proxy, HttpProtocolPrefix)
+		proxy = strings.TrimPrefix(proxy, HttpsProtocolPrefix) // treat https proxy as http proxy if no credential provided
+		host, port, err := net.SplitHostPort(proxy)
+		if err != nil {
+			return "", "", "", err
+		} else if host == "" || port == "" {
+			return "", "", "", fmt.Errorf("failed to split px proxy to get host and port %s", proxy)
+		}
+		return host, port, authHeader, nil
 	}
-
-	return "", nil
 }
 
 func getSpecsBaseDir() string {
@@ -1112,37 +1161,6 @@ func IsCCMGoSupported(pxVersion *version.Version) bool {
 	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCCMGO)
 }
 
-// ValidateTelemetry validates if telemetry is enabled correctly
-func ValidateTelemetry(cluster *corev1.StorageCluster) error {
-	if !IsTelemetryEnabled(cluster.Spec) {
-		return nil
-	}
-
-	pxVersion := GetPortworxVersion(cluster)
-	if pxVersion.LessThan(MinimumPxVersionCCM) {
-		// PX version is lower than 2.8
-		return fmt.Errorf("telemetry is not supported on Portworx version: %s", pxVersion)
-	} else if IsCCMGoSupported(pxVersion) {
-		proxyType, proxy := GetPxProxyEnvVarValue(cluster)
-		if proxy == "" {
-			return nil
-		} else if proxyType == EnvKeyPortworxHTTPProxy {
-			// CCM Go is enabled with http proxy, but it cannot be split into host and port
-			if _, _, err := SplitPxProxyHostPort(proxy); err != nil {
-				return fmt.Errorf("telemetry is not supported with proxy in a format of: %s", proxy)
-			}
-		} else if proxyType == EnvKeyPortworxHTTPSProxy {
-			// CCM Go is enabled with https proxy
-			// TODO: remove when custom proxy is supported
-			return fmt.Errorf("telemetry is not supported with secure proxy: %s", proxy)
-		}
-	}
-
-	// NOTE: don't check if air-gapped here when telemetry is specified enabled or disabled explicitly,
-	// as it will ping the registration endpoint periodically
-	return nil
-}
-
 // IsPxRepoEnabled returns true is pxRepo is enabled
 func IsPxRepoEnabled(spec corev1.StorageClusterSpec) bool {
 	return spec.PxRepo != nil &&
@@ -1203,6 +1221,23 @@ func ApplyStorageClusterSettingsToPodSpec(cluster *corev1.StorageCluster, podSpe
 			}
 		}
 	}
+}
+
+func ApplyWindowsSettingsToPodSpec(podSpec *v1.PodSpec) {
+	for _, nodeselector := range podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+		for i := range nodeselector.MatchExpressions {
+			if nodeselector.MatchExpressions[i].Key == v1.LabelOSStable {
+				nodeselector.MatchExpressions[i].Values = []string{WindowsOsName}
+			}
+		}
+	}
+
+	toleration := v1.Toleration{
+		Key:   "os",
+		Value: WindowsOsName,
+	}
+
+	podSpec.Tolerations = append(podSpec.Tolerations, toleration)
 }
 
 // GetClusterID returns portworx instance cluster ID
@@ -1278,6 +1313,93 @@ func CountStorageNodes(
 	return storageNodesCount, nil
 }
 
+func getStorageNodeMappingFromRPC(
+	cluster *corev1.StorageCluster,
+	sdkConn *grpc.ClientConn,
+	k8sClient client.Client,
+) (map[string]string, map[string]string, error) {
+	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
+	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nodeEnumerateResponse, err := nodeClient.EnumerateWithFilters(
+		ctx,
+		&api.SdkNodeEnumerateWithFiltersRequest{},
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to enumerate nodes: %v", err)
+	}
+
+	nodeNameToNodeID := map[string]string{}
+	nodeIDToNodeName := map[string]string{}
+
+	// Loop through all storage nodes
+	for _, n := range nodeEnumerateResponse.Nodes {
+		if n.SchedulerNodeName == "" {
+			continue
+		}
+
+		nodeNameToNodeID[n.SchedulerNodeName] = n.Id
+		nodeIDToNodeName[n.Id] = n.SchedulerNodeName
+	}
+
+	return nodeNameToNodeID, nodeIDToNodeName, nil
+}
+
+func getStorageNodeMappingFromK8s(
+	cluster *corev1.StorageCluster,
+	k8sClient client.Client,
+) (map[string]string, map[string]string, error) {
+	nodes := &corev1.StorageNodeList{}
+	err := k8sClient.List(context.TODO(), nodes, &client.ListOptions{Namespace: cluster.Namespace})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list StorageNodes: %v", err)
+	}
+
+	nodeNameToNodeID := map[string]string{}
+	nodeIDToNodeName := map[string]string{}
+
+	// Loop through all storage nodes
+	for _, n := range nodes.Items {
+		if n.Status.NodeUID == "" {
+			continue
+		}
+
+		nodeNameToNodeID[n.Name] = n.Status.NodeUID
+		nodeIDToNodeName[n.Status.NodeUID] = n.Name
+	}
+
+	return nodeNameToNodeID, nodeIDToNodeName, nil
+}
+
+// GetStorageNodeMapping returns a mapping of node name to node ID, as well as the inverse mapping.
+// If sdkConn is nil, it will fall back to k8s API which may not be up to date.
+// If both fail then the error will be returned.
+func GetStorageNodeMapping(
+	cluster *corev1.StorageCluster,
+	sdkConn *grpc.ClientConn,
+	k8sClient client.Client,
+) (map[string]string, map[string]string, error) {
+	var nodeNameToNodeID, nodeIDToNodeName map[string]string
+	var rpcErr, k8sErr error
+
+	if sdkConn != nil {
+		nodeNameToNodeID, nodeIDToNodeName, rpcErr = getStorageNodeMappingFromRPC(cluster, sdkConn, k8sClient)
+		if rpcErr == nil {
+			return nodeNameToNodeID, nodeIDToNodeName, nil
+		}
+		logrus.WithError(rpcErr).Warn("Failed to get storage node mapping from RPC, falling back to k8s API which may not be up to date")
+	}
+
+	nodeNameToNodeID, nodeIDToNodeName, k8sErr = getStorageNodeMappingFromK8s(cluster, k8sClient)
+	if k8sErr != nil {
+		return nil, nil, fmt.Errorf("failed to get storage node mapping from both RPC and k8s. RPC err: %v. k8s err: %v", rpcErr, k8sErr)
+	}
+	return nodeNameToNodeID, nodeIDToNodeName, nil
+}
+
 func CleanupObject(obj client.Object) {
 	obj.SetGenerateName("")
 	obj.SetUID("")
@@ -1292,7 +1414,7 @@ func CleanupObject(obj client.Object) {
 
 // IsFreshInstall checks whether it's a fresh Portworx install
 func IsFreshInstall(cluster *corev1.StorageCluster) bool {
-	// To handle failures during fresh install e.g. validation falures,
+	// To handle failures during fresh install e.g. validation failures,
 	// extra check for px runtime states is added here to avoid unexpected behaviors
 	return cluster.Status.Phase == "" ||
 		cluster.Status.Phase == string(corev1.ClusterStateInit) ||
@@ -1348,4 +1470,64 @@ func SetTelemetryCertOwnerRef(
 	secret.OwnerReferences = references
 
 	return k8sClient.Update(context.TODO(), secret)
+}
+
+// GetTLSMinVersion gets requested TLS version and validates it
+func GetTLSMinVersion(cluster *corev1.StorageCluster) (string, error) {
+	req := cluster.Annotations[AnnotationServerTLSMinVersion]
+	if req == "" {
+		return "", nil
+	}
+	req = strings.Trim(req, " \t")
+
+	switch strings.ToUpper(req) {
+	case "VERSIONTLS10":
+		return "VersionTLS10", nil
+	case "VERSIONTLS11":
+		return "VersionTLS11", nil
+	case "VERSIONTLS12":
+		return "VersionTLS12", nil
+	case "VERSIONTLS13":
+		return "VersionTLS13", nil
+	}
+
+	return "", fmt.Errorf("invalid TLS version: expected one of VersionTLS1{0..3}, got %s", req)
+}
+
+// GetTLSCipherSuites gets requested TLS ciphers suites and validates it
+// - RETURN: the normalized comma-separated list of cipher suites, or error if requested unknown cipher
+func GetTLSCipherSuites(cluster *corev1.StorageCluster) (string, error) {
+	req := cluster.Annotations[AnnotationServerTLSCipherSuites]
+	if req == "" {
+		return "", nil
+	}
+
+	csMap := make(map[string]bool)
+	for _, c := range tls.CipherSuites() {
+		csMap[c.Name] = true
+	}
+	icsMap := make(map[string]bool)
+	for _, c := range tls.InsecureCipherSuites() {
+		icsMap[c.Name] = true
+	}
+
+	req = strings.ToUpper(req)
+	parts := strings.FieldsFunc(req, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == ':' || r == ';' || r == ','
+	})
+	outList := make([]string, 0, len(parts))
+
+	for _, p := range parts {
+		if p == "" {
+			// nop..
+		} else if _, has := csMap[p]; has {
+			outList = append(outList, p)
+		} else if _, has = icsMap[p]; has {
+			logrus.Warnf("Requested insecure cipher suite %s", p)
+			outList = append(outList, p)
+		} else {
+			return "", fmt.Errorf("unknown cipher suite %s", p)
+		}
+	}
+	return strings.Join(outList, ","), nil
 }

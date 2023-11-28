@@ -11,13 +11,27 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 func TestCommandExecutor(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	t.Run("cmdExecutorTest", cmdExecutorTest)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
+}
+
+func cmdExecutorTest(t *testing.T) {
+	var testrailID, testResult = 86261, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
 
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
@@ -62,9 +76,8 @@ func TestCommandExecutor(t *testing.T) {
 		// Negative test cases
 		for _, pod := range pods {
 			executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", noWaitPlaceholderCmd, string(pod.GetUID()))
-			stdoutChan := make(chan string)
 			errChan := make(chan error)
-			err = executor.Start(stdoutChan, errChan)
+			err = executor.Start(errChan)
 			require.Error(t, err, "expected error from the start command API")
 		}
 
@@ -84,15 +97,18 @@ func TestCommandExecutor(t *testing.T) {
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecutor.Executor {
 	executors := make([]cmdexecutor.Executor, 0)
 	for _, pod := range pods {
 		executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", command, string(pod.GetUID()))
-		stdoutChan := make(chan string)
 		errChan := make(chan error)
-		err := executor.Start(stdoutChan, errChan)
+		err := executor.Start(errChan)
 		require.NoError(t, err, "failed to start async command")
 		executors = append(executors, executor)
 	}

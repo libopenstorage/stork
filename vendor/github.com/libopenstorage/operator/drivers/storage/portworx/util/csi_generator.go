@@ -76,6 +76,9 @@ type CSIImages struct {
 	Resizer                 string
 	SnapshotController      string
 	HealthMonitorController string
+	LivenessProbe           string
+	CsiDriverInstaller      string
+	CsiWindowsNodeRegistrar string
 }
 
 // CSIGenerator contains information needed to generate CSI side car versions
@@ -203,8 +206,11 @@ func (g *CSIGenerator) GetCSIConfiguration() *CSIConfiguration {
 	}
 
 	// IncludeExternalHealthMonitor only with PX 2.10.0+ and k8s 1.21+
+	// Disabling the csi-health-monitor-controller
+	// csi-health-monitor-controller container should never start by default
+	// TODO : add this back with condition on when to start csi-health-monitor-controller container
 	if g.kubeVersion.GreaterThanOrEqual(k8sVer1_21) && g.pxVersion.GreaterThanOrEqual(pxVer2_10) {
-		cv.IncludeHealthMonitorController = true
+		cv.IncludeHealthMonitorController = false
 	}
 
 	return cv
@@ -261,9 +267,9 @@ func (c *CSIConfiguration) DriverBasePath() string {
 }
 
 func (g *CSIGenerator) getSidecarContainerVersionsV1_0() *CSIImages {
-	provisionerImage := k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-provisioner:v3.3.0"
-	snapshotterImage := k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-snapshotter:v6.1.0"
-	snapshotControllerImage := k8sutil.DefaultK8SRegistryPath + "/sig-storage/snapshot-controller:v6.1.0"
+	provisionerImage := k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-provisioner:v3.5.0"
+	snapshotterImage := k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-snapshotter:v6.2.2"
+	snapshotControllerImage := k8sutil.DefaultK8SRegistryPath + "/sig-storage/snapshot-controller:v6.2.2"
 
 	// Provisioner fork can only be removed in PX 2.13 and later.
 	if g.pxVersion.LessThan(pxVer2_13) {
@@ -285,12 +291,15 @@ func (g *CSIGenerator) getSidecarContainerVersionsV1_0() *CSIImages {
 
 	return &CSIImages{
 		Attacher:                "docker.io/openstorage/csi-attacher:v1.2.1-1",
-		NodeRegistrar:           k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-node-driver-registrar:v2.6.2",
+		NodeRegistrar:           k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-node-driver-registrar:v2.8.0",
 		Provisioner:             provisionerImage,
 		Snapshotter:             snapshotterImage,
-		Resizer:                 k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-resizer:v1.6.0",
+		Resizer:                 k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-resizer:v1.8.0",
 		SnapshotController:      snapshotControllerImage,
 		HealthMonitorController: k8sutil.DefaultK8SRegistryPath + "/sig-storage/csi-external-health-monitor-controller:v0.7.0",
+		LivenessProbe:           "docker.io/portworx/livenessprobe:v2.10.0-windows",
+		CsiDriverInstaller:      "docker.io/portworx/px-windows-csi-driver:23.8.0",
+		CsiWindowsNodeRegistrar: "docker.io/portworx/csi-node-driver-registrar:v2.8.0-windows",
 	}
 }
 

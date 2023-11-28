@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -117,6 +118,10 @@ func triggerApplicationCloneTest(
 }
 
 func deploymentApplicationCloneTest(t *testing.T) {
+	var testrailID, testResult = 50840, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"mysql-clone",
@@ -127,9 +132,17 @@ func deploymentApplicationCloneTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetApplicationCloneTest(t *testing.T) {
+	var testrailID, testResult = 50841, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"cassandra-clone",
@@ -140,9 +153,17 @@ func statefulsetApplicationCloneTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetApplicationCloneRuleTest(t *testing.T) {
+	var testrailID, testResult = 50842, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"cassandra-clone-rule",
@@ -153,9 +174,17 @@ func statefulsetApplicationCloneRuleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneRulePreExecMissingTest(t *testing.T) {
+	var testrailID, testResult = 50843, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"applicationclone-pre-exec-missing",
@@ -166,9 +195,17 @@ func applicationCloneRulePreExecMissingTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneRulePostExecMissingTest(t *testing.T) {
+	var testrailID, testResult = 50844, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"applicationclone-post-exec-missing",
@@ -179,9 +216,17 @@ func applicationCloneRulePostExecMissingTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneDisallowedNamespaceTest(t *testing.T) {
+	var testrailID, testResult = 50845, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"applicationclone-disallowed-namespace",
@@ -192,9 +237,17 @@ func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneFailingPreExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50846, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"applicationclone-failing-pre-exec-rule",
@@ -205,9 +258,17 @@ func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneFailingPostExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50847, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"applicationclone-failing-post-exec-rule",
@@ -218,9 +279,17 @@ func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneLabelSelectorTest(t *testing.T) {
+	var testrailID, testResult = 50848, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerApplicationCloneTest(
 		t,
 		"applicationclone-label-selector-test",
@@ -231,4 +300,8 @@ func applicationCloneLabelSelectorTest(t *testing.T) {
 		false,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }

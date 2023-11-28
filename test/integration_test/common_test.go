@@ -4,10 +4,13 @@
 package integrationtest
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,18 +19,8 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	storkdriver "github.com/libopenstorage/stork/drivers/volume"
-	_ "github.com/libopenstorage/stork/drivers/volume/aws"
-	_ "github.com/libopenstorage/stork/drivers/volume/azure"
-	_ "github.com/libopenstorage/stork/drivers/volume/csi"
-	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
-	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
-	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/schedule"
-	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
@@ -35,7 +28,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/objectstore"
@@ -55,43 +49,56 @@ import (
 	"github.com/stretchr/testify/require"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
+	storage_v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	storkdriver "github.com/libopenstorage/stork/drivers/volume"
+	_ "github.com/libopenstorage/stork/drivers/volume/aws"
+	_ "github.com/libopenstorage/stork/drivers/volume/azure"
+	_ "github.com/libopenstorage/stork/drivers/volume/csi"
+	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
+	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
+	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/schedule"
+	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/version"
 )
 
 const (
-	nodeDriverName              = "ssh"
-	cmName                      = "stork-version"
-	defaultAdminNamespace       = "kube-system"
-	schedulerDriverName         = "k8s"
-	remotePairName              = "remoteclusterpair"
-	srcConfig                   = "sourceconfigmap"
-	destConfig                  = "destinationconfigmap"
-	specDir                     = "./specs"
-	tempDir                     = "/tmp"
-	defaultClusterPairDir       = "cluster-pair"
-	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
-	pairFileName                = "cluster-pair.yaml"
-	remoteFilePath              = "/tmp/kubeconfig"
-	configMapSyncWaitTime       = 3 * time.Second
-	defaultSchedulerName        = "default-scheduler"
-	bucketPrefix                = "stork-test"
-	adminTokenSecretName        = "px-admin-token"
-	pxStcServiceTypeKey         = "portworx.io/service-type"
-	stcLoadBalancerValue        = "LoadBalancer"
-	pxStcServiceKey             = "service/portworx-service"
-	awsInternalLBKey            = "service.beta.kubernetes.io/aws-load-balancer-internal"
-	awsInternalLBValue          = "true"
-	awsLBTypeKey                = "service.beta.kubernetes.io/aws-load-balancer-type"
-	awsLBTypeVal                = "nlb"
-	awsNLBTargetTypeKey         = "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"
-	awsNLBTargetTypeVal         = "ip"
-	awsLBSubnetKey              = "service.beta.kubernetes.io/aws-load-balancer-subnets"
-	awsLBSubnetVal              = "subnet-0758f16bc3ca384e0"
+	nodeDriverName               = "ssh"
+	cmName                       = "stork-version"
+	defaultAdminNamespace        = "kube-system"
+	schedulerDriverName          = "k8s"
+	remotePairName               = "remoteclusterpair"
+	srcConfig                    = "sourceconfigmap"
+	destConfig                   = "destinationconfigmap"
+	specDir                      = "./specs"
+	tempDir                      = "/tmp"
+	defaultClusterPairDir        = "cluster-pair"
+	bidirectionalClusterPairDir  = "bidirectional-cluster-pair"
+	unidirectionalClusterPairDir = "unidirectionalClusterPairDir"
+	pairFileName                 = "cluster-pair.yaml"
+	remoteFilePath               = "/tmp/kubeconfig"
+	configMapSyncWaitTime        = 3 * time.Second
+	defaultSchedulerName         = "default-scheduler"
+	bucketPrefix                 = "stork-test"
+	adminTokenSecretName         = "px-admin-token"
+	pxStcServiceTypeKey          = "portworx.io/service-type"
+	stcLoadBalancerValue         = "LoadBalancer"
+	pxStcServiceKey              = "service/portworx-service"
+	awsInternalLBKey             = "service.beta.kubernetes.io/aws-load-balancer-internal"
+	awsInternalLBValue           = "true"
+	awsLBTypeKey                 = "service.beta.kubernetes.io/aws-load-balancer-type"
+	awsLBTypeVal                 = "nlb"
+	awsNLBTargetTypeKey          = "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"
+	awsNLBTargetTypeVal          = "ip"
+	awsLBSubnetKey               = "service.beta.kubernetes.io/aws-load-balancer-subnets"
+	awsLBSubnetVal               = "subnet-0758f16bc3ca384e0"
 
 	pxServiceName = "portworx-service"
 
@@ -158,6 +165,8 @@ var testrailHostname string
 var testrailUsername string
 var testrailPassword string
 var testrailSetupSuccessful bool
+var bidirectionalClusterpair bool
+var unidirectionalClusterpair bool
 
 func TestSnapshot(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -171,6 +180,7 @@ func TestStorkCbt(t *testing.T) {
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
+	t.Run("cmdExecutorTest", cmdExecutorTest)
 }
 
 func TestStorkCbtBackup(t *testing.T) {
@@ -283,10 +293,10 @@ func setup() error {
 	if err == nil {
 		logrus.Infof("Internal AWS Load Balancer is being used: %t", isInternalLBAws)
 	}
-	// On source cluster, change PX service to type LoadBalancer if it is an EKS cluster
+	// On source cluster, change PX service to type LoadBalancer if it is an EKS/AKS/GKE cluster
 	pxNamespace = os.Getenv(portworxNamespace)
 	logrus.Infof("PX has been deployed in namespace: %s", pxNamespace)
-	if volumeDriverName == storkdriver.PortworxDriverName && IsEks() {
+	if volumeDriverName == storkdriver.PortworxDriverName && IsCloud() {
 		if err = changePxServiceToLoadBalancer(isInternalLBAws); err != nil {
 			return fmt.Errorf("failed to change PX service to LoadBalancer on source cluster: %v", err)
 		}
@@ -296,8 +306,8 @@ func setup() error {
 		return fmt.Errorf("while PX service to LoadBalancer, setting kubeconfig to destination failed %v", err)
 	}
 
-	// On destination cluster, change PX service to type LoadBalancer if it is an EKS cluster
-	if volumeDriverName == storkdriver.PortworxDriverName && IsEks() {
+	// On destination cluster, change PX service to type LoadBalancer if it is an EKS/AKS/GKE cluster
+	if volumeDriverName == storkdriver.PortworxDriverName && IsCloud() {
 		if err = changePxServiceToLoadBalancer(isInternalLBAws); err != nil {
 			return fmt.Errorf("failed to change PX service to LoadBalancer on destination cluster: %v", err)
 		}
@@ -308,6 +318,10 @@ func setup() error {
 		return fmt.Errorf("at the end of setup, setting kubeconfig to source failed in setup: %v", err)
 	}
 
+	err = addTestModeEnvironmentVar()
+	if err != nil {
+		return fmt.Errorf("TEST_MODE environment variable not set for stork: %v", err)
+	}
 	SetupTestRail()
 
 	return nil
@@ -376,6 +390,21 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	}
 	require.Equal(t, true, found, "Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode)
 
+	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
+
+	highScore := 0
+	for _, score := range scores {
+		if score > highScore {
+			highScore = score
+		}
+	}
+
+	logrus.Infof("Scores: %v", scores)
+	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+}
+
+// Helper function to get scoring of driverNodes based on hyper-convergence
+func getScoringBasedOnHyperconvergence(t *testing.T, driverNodes []*storkdriver.NodeInfo, volumes []string) map[string]int {
 	scores := make(map[string]int)
 	idMap := make(map[string]*storkdriver.NodeInfo)
 	rackMap := make(map[string][]string)
@@ -429,16 +458,50 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 			}
 		}
 	}
+	return scores
+}
 
-	highScore := 0
-	for _, score := range scores {
-		if score > highScore {
-			highScore = score
-		}
+// Verify pods are scheduled on appropriate nodes based on hyperconvergence scoring
+// This method assumes we have pod AntiAffinities set in the deployment to deploy each replica on a different node.
+func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, volumes []string) {
+	driverNodes, err := storkVolumeDriver.GetNodes()
+	require.NoError(t, err, "Error getting nodes from stork driver")
+
+	//The scores are stored in a map where the keys are node names, and the values are the corresponding scores.
+	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
+	replicaCount := len(appNodes)
+
+	// The nodes are sorted based on their scores, from highest to lowest.
+	// From the nodeScores slice we want to select the top nodes with the highest scores.
+	// The actual nodes which the pods get scheduled on maybe different in case of multiple nodes having the same scores.
+	// However, the scheduled nodes should have the same scores as the top n highest scores where n is number of replicas.
+	nodeScores := descendingSortBasedOnValue(scores)
+	expectedNodeScores := nodeScores[0:replicaCount]
+	logrus.Infof("Expected nodescores are %v", expectedNodeScores)
+
+	//appNodeScores is a map of nodeName:score, in which we store the calculated scores of the set of scheduled nodes.
+	appNodeScores := make(map[string]int)
+	for _, appNode := range appNodes {
+		appNodeScores[appNode.Name] = scores[appNode.Name]
+	}
+	actualNodeScores := descendingSortBasedOnValue(appNodeScores)
+
+	//since we have sorted both the expectedNodeScores and actualNodeScores
+	//for scheduling to be correct these two arrays should be equal
+	require.Equal(t, expectedNodeScores, actualNodeScores, "Scheduled nodes do not have the highest scores")
+}
+
+// helper function to sort a map of nodeScores in descending order of scores
+func descendingSortBasedOnValue(scores map[string]int) []int {
+	var nodeScores []int
+
+	for _, value := range scores {
+		nodeScores = append(nodeScores, value)
 	}
 
-	logrus.Infof("Scores: %v", scores)
-	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+	// Sort the slice in descending order
+	sort.Sort(sort.Reverse(sort.IntSlice(nodeScores)))
+	return nodeScores
 }
 
 // write kubbeconfig file to /tmp/kubeconfig
@@ -489,7 +552,7 @@ func setRemoteConfig(kubeConfig string) error {
 	k8sOps := core.Instance()
 	k8sOps.SetConfig(config)
 
-	storkOps := stork.Instance()
+	storkOps := storkops.Instance()
 	storkOps.SetConfig(config)
 
 	appsOps := apps.Instance()
@@ -513,47 +576,54 @@ func setRemoteConfig(kubeConfig string) error {
 	operatorOps := operator.Instance()
 	operatorOps.SetConfig(config)
 
+	k8sBatchOps := batch.Instance()
+	k8sBatchOps.SetConfig(config)
+
 	return nil
 }
 
-func setSourceKubeConfig() error {
+func setKubeConfig(config string) error {
 	// setting kubeconfig to default cluster first since all configmaps are created there
 	err := setRemoteConfig("")
 	if err != nil {
 		return fmt.Errorf("setting kubeconfig to default failed: %v", err)
 	}
 
-	// Change kubeconfig to source cluster
-	err = dumpRemoteKubeConfig(srcConfig)
+	err = dumpRemoteKubeConfig(config)
 	if err != nil {
-		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+		return fmt.Errorf("unable to dump config %v to remoteFilePath: %v", config, err)
 	}
 
 	err = setRemoteConfig(remoteFilePath)
 	if err != nil {
-		return fmt.Errorf("unable to set source config: %v", err)
+		return fmt.Errorf("unable to set config to %v: %v", config, err)
+	}
+
+	if schedulerDriver != nil {
+		err = schedulerDriver.RefreshNodeRegistry()
+		if err != nil {
+			return fmt.Errorf(
+				"unable to refresh node registry after setting config to %v: %v", config, err)
+		}
+
+		err = volumeDriver.RefreshDriverEndpoints()
+		if err != nil {
+			// return fmt.Errorf(
+			logrus.Errorf(
+				"unable to refresh driver endpoints after setting config to %v: %v", config, err)
+		}
 	}
 	return nil
 }
 
+func setSourceKubeConfig() error {
+	logrus.Info("Set kubeConfig to Source")
+	return setKubeConfig(srcConfig)
+}
+
 func setDestinationKubeConfig() error {
-	// setting kubeconfig to default cluster first since all configmaps are created there
-	err := setRemoteConfig("")
-	if err != nil {
-		return fmt.Errorf("unable to set destination config: %v", err)
-	}
-
-	// Change kubeconfig to source cluster
-	err = dumpRemoteKubeConfig(destConfig)
-	if err != nil {
-		return fmt.Errorf("unable to dump remote config while setting destination config: %v", err)
-	}
-
-	err = setRemoteConfig(remoteFilePath)
-	if err != nil {
-		return fmt.Errorf("unable to set destination config: %v", err)
-	}
-	return nil
+	logrus.Info("Set kubeConfig to Destination")
+	return setKubeConfig(destConfig)
 }
 
 func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir, projectIDMappings string) error {
@@ -644,7 +714,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		}
 	}
 
-	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, token, IsEks(), reverse)
+	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, token, IsCloud(), reverse)
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -679,8 +749,8 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 }
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
-func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string) error {
-	var token string
+func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string) error {
+	//var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
 	if err != nil {
@@ -696,7 +766,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 			},
 		},
 	})
-	if err != nil {
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
 	}
 
@@ -726,21 +796,6 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
 	}
 
-	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
-	if authTokenConfigMap != "" {
-		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Get cluster pair details for source cluster
-	srcInfo, err := volumeDriver.GetClusterPairingInfo(srcKubeconfigPath, token, IsEks(), true)
-	if err != nil {
-		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
-		return err
-	}
-
 	destKubeconfigPath := path.Join(tempDir, bidirectionalClusterPairDir, "dest_kubeconfig")
 	destKubeConfig, err := os.Create(destKubeconfigPath)
 	if err != nil {
@@ -766,21 +821,6 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
 	}
 
-	// For auth-enabled clusters, get token for the current cluster, which will be used to generate cluster pair
-	if authTokenConfigMap != "" {
-		token, err = getTokenFromSecret(adminTokenSecretName, defaultAdminNamespace)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Get cluster pair details for destination cluster
-	destInfo, err := volumeDriver.GetClusterPairingInfo(destKubeconfigPath, token, IsEks(), false)
-	if err != nil {
-		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
-		return err
-	}
-
 	// Create namespace for the cluster pair on destination cluster
 	_, err = core.Instance().CreateNamespace(&v1.Namespace{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -790,7 +830,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 			},
 		},
 	})
-	if err != nil {
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
 	}
 
@@ -802,21 +842,331 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	// Create source --> destination and destination --> cluster pairs using storkctl
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
-	cmd.SetArgs([]string{"create", "clusterpair", "-n", cpNamespace, cpName,
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
 		"--src-kube-file", srcKubeconfigPath,
-		"--src-ip", srcInfo[clusterIP],
-		"--src-token", srcInfo[tokenKey],
 		"--dest-kube-file", destKubeconfigPath,
-		"--dest-ip", destInfo[clusterIP],
-		"--dest-token", destInfo[tokenKey],
-		"--project-mappings", projectMappings,
-	})
+	}
 
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+	if err != nil {
+		return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+	}
+
+	cmdArgs = append(cmdArgs, objectStoreArgs...)
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Following is the bidirectional command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
 	}
 	return nil
 }
+
+// Create a cluster pair from source to destination using unidirectional flag
+func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, resetConfig bool, reverse bool) error {
+	//var token string
+	// Setting kubeconfig to source because we will create unidirectional cluster pair based on source as reference
+	err := setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	// Create directory to store kubeconfig files
+	err = os.MkdirAll(path.Join(tempDir, unidirectionalClusterPairDir), 0777)
+	if err != nil {
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+unidirectionalClusterPairDir, err)
+		return err
+	}
+	srcKubeconfigPath := path.Join(tempDir, unidirectionalClusterPairDir, "src_kubeconfig")
+	srcKubeConfig, err := os.Create(srcKubeconfigPath)
+	if err != nil {
+		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		return err
+	}
+
+	defer func() {
+		err := srcKubeConfig.Close()
+		if err != nil {
+			logrus.Errorf("Error closing source kubeconfig file: %v", err)
+		}
+	}()
+
+	// Dump source config to the directory created before
+	err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+	}
+
+	destKubeconfigPath := path.Join(tempDir, unidirectionalClusterPairDir, "dest_kubeconfig")
+	destKubeConfig, err := os.Create(destKubeconfigPath)
+	if err != nil {
+		logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+		return err
+	}
+
+	defer func() {
+		err := destKubeConfig.Close()
+		if err != nil {
+			logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+		}
+	}()
+
+	// Dump destination config to the directory created before
+	err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting destination config: %v", err)
+	}
+
+	err = setDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	err = setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		"--src-kube-file", srcKubeconfigPath,
+		"--dest-kube-file", destKubeconfigPath,
+		"--unidirectional",
+	}
+	if reverse {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+			"--src-kube-file", destKubeconfigPath,
+			"--dest-kube-file", srcKubeconfigPath,
+			"--unidirectional",
+		}
+	}
+
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+	if err != nil {
+		return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+	}
+
+	cmdArgs = append(cmdArgs, objectStoreArgs...)
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Following is the unidirectional command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of unidirectional cluster pair using storkctl failed: %v", err)
+	}
+
+	if resetConfig {
+		err = setSourceKubeConfig()
+		if err != nil {
+			logrus.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+			return err
+		}
+	} else {
+		err = setDestinationKubeConfig()
+		if err != nil {
+			logrus.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func activateAppUsingStorkctl(namespace string, runInSource bool) error {
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"activate", "migrations", "-n", namespace}
+	err := setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("setting kubeconfig to source failed during activate migrations %v", err)
+	}
+	if runInSource {
+		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
+		srcKubeConfig, err := os.Create(srcKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := srcKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting source config during activate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
+	} else {
+		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
+		destKubeConfig, err := os.Create(destKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := destKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			}
+		}()
+
+		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting destination config during activate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", destKubeconfigPath}...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Activating apps in namespace with command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("activating apps using storkctl failed: %v", err)
+	}
+	return nil
+}
+
+func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"deactivate", "migrations", "-n", namespace}
+
+	err := setSourceKubeConfig()
+	if runInSource {
+		if err != nil {
+			return fmt.Errorf("setting kubeconfig to source failed during deactivate migrations %v", err)
+		}
+		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
+		srcKubeConfig, err := os.Create(srcKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := srcKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting source config during deactivate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", srcKubeconfigPath}...)
+	} else {
+		if err != nil {
+			return fmt.Errorf("setting kubeconfig to destination failed during deactivate migrations %v", err)
+		}
+		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
+		destKubeConfig, err := os.Create(destKubeconfigPath)
+		if err != nil {
+			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			return err
+		}
+
+		defer func() {
+			err := destKubeConfig.Close()
+			if err != nil {
+				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			}
+		}()
+		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to dump remote config while setting destination config during deactivate migrations: %v", err)
+		}
+		cmdArgs = append(cmdArgs, []string{"--kubeconfig", destKubeconfigPath}...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	logrus.Infof("Deactivating apps in namespace with command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("deactivating apps using storkctl failed: %v", err)
+	}
+	return nil
+}
+
+func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
+	var objectStoreArgs []string
+	secretData, err := core.Instance().GetSecret(secretName, "default")
+	if err != nil {
+		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
+	}
+	if objectStoreType == storkv1.BackupLocationS3 {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "s3",
+				"--s3-access-key", string(secretData.Data["accessKeyID"]),
+				"--s3-secret-key", string(secretData.Data["secretAccessKey"]),
+				"--s3-region", string(secretData.Data["region"]),
+				"--s3-endpoint", string(secretData.Data["endpoint"]),
+			}...)
+		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
+			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
+		}
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationAzure {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
+				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationGoogle {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	}
+
+	return objectStoreArgs, nil
+}
+
 func setMockTime(t *time.Time) error {
 	timeString := ""
 	if t != nil {
@@ -902,7 +1252,7 @@ func addSecurityAnnotation(spec interface{}) error {
 	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
 		return fmt.Errorf("failed to get secret namespace from config map")
 	}
-	if obj, ok := spec.(*storageapi.StorageClass); ok {
+	if obj, ok := spec.(*storage_v1.StorageClass); ok {
 		if obj.Parameters == nil {
 			obj.Parameters = make(map[string]string)
 		}
@@ -1008,6 +1358,199 @@ func getTokenFromSecret(secretName, secretNamespace string) (string, error) {
 	return "", fmt.Errorf("secret does not contain key 'auth-token'")
 }
 
+func createSecret(t *testing.T, secret_name string, secret_map map[string]string) *v1.Secret {
+	secret := &v1.Secret{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      secret_name,
+			Namespace: "kube-system",
+		},
+		StringData: secret_map,
+	}
+	secretObj, err := core.Instance().CreateSecret(secret)
+	if !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "failed to create secret for volumes")
+	}
+	return secretObj
+}
+
+func cleanup(t *testing.T, namespace string, storageClass string) {
+	funcCleanup := func() {
+		err := core.Instance().DeleteNamespace(namespace)
+		if err != nil {
+			logrus.Infof("Error deleting namespace %s: %v\n", namespace, err)
+		}
+		if storageClass != "" {
+			err = storage.Instance().DeleteStorageClass(storageClass)
+			if err != nil {
+				logrus.Infof("Error deleting storage class %s: %v\n", namespace, err)
+			}
+		}
+
+	}
+	funcCleanup()
+	executeOnDestination(t, funcCleanup)
+	// time to let deletion finish
+	time.Sleep(time.Second * 20)
+}
+
+func executeOnDestination(t *testing.T, funcToExecute func()) {
+	err := setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	defer func() {
+		err := setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	}()
+
+	funcToExecute()
+}
+
+func scheduleAppAndWait(t *testing.T, instanceIDs []string, appKey string) []*scheduler.Context {
+	var ctxs []*scheduler.Context
+
+	// creates the namespace (appKey-instanceID) and schedules the app (appKey)
+	for _, instanceID := range instanceIDs {
+		newCtxs, err := schedulerDriver.Schedule(
+			instanceID,
+			scheduler.ScheduleOptions{
+				AppKeys: []string{appKey},
+				Labels:  nil,
+			})
+		require.NoError(t, err, "Error scheduling task")
+		require.Equal(t, 1, len(newCtxs), "Only one task should have started")
+		ctxs = append(ctxs, newCtxs[0])
+	}
+
+	// wait for all apps to get to running state
+	for _, ctx := range ctxs {
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app to get to running state")
+	}
+	return ctxs
+}
+
+func addTasksAndWait(t *testing.T, ctx *scheduler.Context, appKeys []string) {
+	err := schedulerDriver.AddTasks(
+		ctx,
+		scheduler.ScheduleOptions{
+			AppKeys: appKeys,
+		})
+	require.NoError(t, err, "Error scheduling app")
+
+	err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for app to get to running state")
+}
+
+func triggerMigrationMultiple(
+	t *testing.T,
+	ctxs []*scheduler.Context,
+	migrationName string,
+	namespaces []string,
+	includeResources bool,
+	includeVolumes bool,
+	startApplications bool,
+) ([]*scheduler.Context, []*scheduler.Context, []*storkv1.Migration) {
+	var preMigrationCtxs []*scheduler.Context
+	var migrations []*storkv1.Migration
+
+	for idx, ctx := range ctxs {
+		preMigrationCtxs = append(preMigrationCtxs, ctx.DeepCopy())
+
+		// create, apply and validate cluster pair specs
+		err := scheduleClusterPair(
+			ctx, true, true, defaultClusterPairDir, "", false)
+		require.NoError(t, err, "Error scheduling cluster pair")
+
+		// apply migration specs
+		migration, err := createMigration(
+			t, migrationName, namespaces[idx], "remoteclusterpair",
+			namespaces[idx], &includeResources, &includeVolumes, &startApplications)
+		require.NoError(t, err, "Error scheduling migration")
+		migrations = append(migrations, migration)
+	}
+	return preMigrationCtxs, ctxs, migrations
+}
+
+func createActionCR(
+	t *testing.T,
+	actionName,
+	namespace string,
+) (*storkv1.Action, error) {
+	actionSpec := storkv1.Action{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      actionName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ActionSpec{
+			ActionType: storkv1.ActionTypeFailover,
+		},
+		Status: storkv1.ActionStatusScheduled,
+	}
+	return storkops.Instance().CreateAction(&actionSpec)
+}
+
+func validateActionCR(t *testing.T, actionName, namespace string, isSuccessful bool) {
+	action, err := storkops.Instance().GetAction(actionName, namespace)
+	require.NoError(t, err, "error fetching Action CR")
+	if isSuccessful {
+		require.Equal(t, storkv1.ActionStatusSuccessful, action.Status)
+	} else {
+		require.Equal(t, storkv1.ActionStatusFailed, action.Status)
+	}
+}
+
+func scaleDownApps(
+	t *testing.T,
+	ctxs []*scheduler.Context,
+) []map[string]int32 {
+	var scaleFactors []map[string]int32
+
+	for _, ctx := range ctxs {
+		scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
+		require.NoError(t, err, "unexpected error on GetScaleFactorMap")
+		scaleFactors = append(scaleFactors, scaleFactor)
+
+		zeroScaleFactor := make(map[string]int32) // scale down
+		for k := range scaleFactor {
+			zeroScaleFactor[k] = 0
+		}
+
+		err = schedulerDriver.ScaleApplication(ctx, zeroScaleFactor)
+		require.NoError(t, err, "unexpected error on ScaleApplication")
+
+		// check if the app is scaled down
+		_, err = task.DoRetryWithTimeout(
+			func() (interface{}, bool, error) {
+				updatedScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				for k := range updatedScaleFactor {
+					if int(updatedScaleFactor[k]) != 0 {
+						return "", true, fmt.Errorf("expected scale to be 0")
+					}
+				}
+				return "", false, nil
+			},
+			defaultWaitTimeout,
+			defaultWaitInterval)
+		require.NoError(t, err, "unexpected error on scaling down application.")
+	}
+	return scaleFactors
+}
+
+func validateMigrationOnSrc(
+	t *testing.T,
+	migrationName string,
+	namespaces []string,
+) {
+	for _, namespace := range namespaces {
+		err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error validating migration")
+		logrus.Infof("Validated migration on src: %v", migrationName)
+	}
+}
+
 func changePxServiceToLoadBalancer(internalLB bool) error {
 	// Check if service is already of type loadbalancer
 	pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
@@ -1022,11 +1565,11 @@ func changePxServiceToLoadBalancer(internalLB bool) error {
 	if volumeDriverName == storkdriver.PortworxDriverName {
 		stc, err := operator.Instance().ListStorageClusters(pxNamespace)
 		if err != nil {
-			return fmt.Errorf("failed to list PX storage cluster on EKS: %v", err)
+			return fmt.Errorf("failed to list PX storage cluster on EKS/AKS/GKE: %v", err)
 		}
 		if len(stc.Items) > 0 {
 			pxStc := (*stc).Items[0]
-			// Change portworx service to LoadBalancer, since this is an EKS with PX operator install for Portworx
+			// Change portworx service to LoadBalancer, since this is an EKS/AKS/GKE with PX operator install for Portworx
 			if pxStc.ObjectMeta.Annotations == nil {
 				pxStc.ObjectMeta.Annotations = make(map[string]string)
 			}
@@ -1057,7 +1600,7 @@ func changePxServiceToLoadBalancer(internalLB bool) error {
 			return fmt.Errorf("No storage clusters found")
 		}
 
-		time.Sleep(15 * time.Second)
+		time.Sleep(1 * time.Minute)
 
 		// Check if service has been changed to type loadbalancer
 		pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
@@ -1073,13 +1616,48 @@ func changePxServiceToLoadBalancer(internalLB bool) error {
 	return nil
 }
 
-func IsEks() bool {
+// Set environment variable for TEST_MODE=true required for running some stork integration tests
+func addTestModeEnvironmentVar() error {
+	stc, err := operator.Instance().ListStorageClusters(pxNamespace)
+	if err != nil {
+		logrus.Infof("failed to list PX storage cluster: %v, won't add TEST_MODE environment variable to stork", err)
+		return nil
+	}
+	if len(stc.Items) > 0 {
+		pxStc := (*stc).Items[0]
+		storkEnvVars := v1.EnvVar{
+			Name:  "TEST_MODE",
+			Value: "true",
+		}
+		if len(pxStc.Spec.Stork.Env) == 0 {
+			pxStc.Spec.Stork.Env = []v1.EnvVar{storkEnvVars}
+		} else {
+			pxStc.Spec.Stork.Env = append(pxStc.Spec.Stork.Env, storkEnvVars)
+		}
+		_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+		if err != nil {
+			return fmt.Errorf("failed to update PX service type to LoadBalancer on EKS: %v", err)
+		}
+		logrus.Infof("Successfully added TEST_MODE environment variable to stork spec in storage cluster")
+	}
+	return nil
+}
+
+func IsCloud() bool {
 	stc, err := operator.Instance().ListStorageClusters(defaultAdminNamespace)
 	if err == nil {
 		logrus.Infof("Storage cluster name: %s", stc.Items[0].Name)
-		if len(stc.Items) > 0 && oputils.IsEKS(&stc.Items[0]) {
-			logrus.Infof("EKS installation detected.")
-			return true
+		if len(stc.Items) > 0 {
+			if oputils.IsEKS(&stc.Items[0]) {
+				logrus.Infof("EKS installation detected.")
+				return true
+			} else if oputils.IsAKS(&stc.Items[0]) {
+				logrus.Infof("AKS installation detected.")
+				return true
+			} else if oputils.IsGKE(&stc.Items[0]) {
+				logrus.Infof("GKE installation detected.")
+				return true
+			}
 		}
 	}
 	return false
@@ -1106,7 +1684,7 @@ func SetupTestRail() {
 		logrus.Infof("Testrail Host: %s", testrailUsername)
 	}
 	if testrailPassword = os.Getenv(testrailPasswordVar); testrailPassword != "" {
-		logrus.Infof("Testrail run name: %s", testrailPassword)
+		logrus.Infof("Testrail Password: %s", testrailPassword)
 	}
 	if testrailHostname != "" && testrailUsername != "" && testrailPassword != "" {
 		err := testrailutils.Init(testrailHostname, testrailUsername, testrailPassword)
@@ -1187,6 +1765,37 @@ func getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
 	return pods, nil
 }
 
+type StorageClass struct {
+	name        string
+	provisioner string
+	// parameters
+	repl                          int
+	nearsync                      bool
+	nearsync_replication_strategy string
+}
+
+func createStorageClass(storageClass StorageClass) (*storage_v1.StorageClass, error) {
+	parameters := make(map[string]string)
+	if storageClass.repl != 0 {
+		parameters["repl"] = strconv.Itoa(storageClass.repl)
+	} else {
+		parameters["repl"] = "1"
+	}
+	if storageClass.nearsync {
+		parameters["nearsync"] = "true"
+	}
+	if storageClass.nearsync_replication_strategy != "" {
+		parameters["near_sync_replication_strategy"] = storageClass.nearsync_replication_strategy
+	}
+	return storage.Instance().CreateStorageClass(&storage_v1.StorageClass{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: storageClass.name,
+		},
+		Provisioner: storageClass.provisioner,
+		Parameters:  parameters,
+	})
+}
+
 func TestMain(m *testing.M) {
 	flag.IntVar(&snapshotScaleCount,
 		"snapshot-scale-count",
@@ -1212,10 +1821,91 @@ func TestMain(m *testing.M) {
 		"stork-version-check",
 		false,
 		"Turn on/off stork version check before running tests. Default off.")
+	flag.BoolVar(&bidirectionalClusterpair,
+		"bidirectional-cluster-pair",
+		false,
+		"Turn on/off bidirectional cluster pair creation for all migrations. Default off.")
+	flag.BoolVar(&unidirectionalClusterpair,
+		"unidirectional-cluster-pair",
+		false,
+		"Turn on/off unidirectional cluster pair creation for all migrations. Default off.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
+}
+
+// activates/deactivate the source cluster domain
+func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, activate bool, wait bool) {
+	var err error
+	op := "activate"
+	if !activate {
+		op = "deactivate"
+	}
+	executeOnDestination(t, func() {
+		destNode := node.GetStorageDriverNodes()[0]
+		out, err := volumeDriver.GetPxctlCmdOutput(
+			destNode, fmt.Sprintf("cluster domains %v --name %v", op, clusterDomains.LocalDomain))
+		require.NoError(t, err)
+		logrus.Infof(out)
+	})
+	if wait {
+		srcNodes := node.GetStorageDriverNodes()
+		if activate {
+			for _, srcNode := range srcNodes {
+				err = volumeDriver.WaitDriverUpOnNode(srcNode, defaultWaitTimeout)
+				require.NoError(t, err)
+			}
+		} else {
+			for _, srcNode := range srcNodes {
+				err = volumeDriver.WaitDriverDownOnNode(srcNode)
+				require.NoError(t, err)
+			}
+		}
+	}
+}
+
+func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
+	operatorAppToCRMap := make(map[string][]meta_v1.APIResource)
+	// mongodbcommunity CR
+	operatorAppToCRMap[appNameMongo] = []meta_v1.APIResource{
+		{
+			Kind:       "MongoDBCommunity",
+			Version:    "v1",
+			Group:      "mongodbcommunity.mongodb.com",
+			Name:       "mongodbcommunity",
+			Namespaced: true,
+		},
+	}
+
+	// kafka CR
+	operatorAppToCRMap[appNameKafka] = []meta_v1.APIResource{
+		{
+			Kind:       "Kafka",
+			Version:    "v1beta2",
+			Group:      "kafka.strimzi.io",
+			Name:       "kafkas",
+			Namespaced: true,
+		},
+	}
+
+	return operatorAppToCRMap
+}
+
+// extract data from a file in []byte format
+func getByteDataFromFile(filePath string) ([]byte, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("empty file path")
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file %v: %v", filePath, err)
+	}
+	data, err := io.ReadAll(bufio.NewReader(file))
+	if err != nil {
+		return nil, fmt.Errorf("error reading file %v: %v", filePath, err)
+	}
+	return data, nil
 }

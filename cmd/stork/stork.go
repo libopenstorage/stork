@@ -20,6 +20,7 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/kdmp"
 	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/action"
 	"github.com/libopenstorage/stork/pkg/apis"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
 	"github.com/libopenstorage/stork/pkg/cache"
@@ -44,6 +45,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	"github.com/portworx/kdmp/pkg/controllers/dataexport"
+	"github.com/portworx/kdmp/pkg/controllers/resourceexport"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpversion "github.com/portworx/kdmp/pkg/version"
@@ -137,6 +139,11 @@ func main() {
 			Name:  "health-monitor-interval",
 			Value: 120,
 			Usage: "The interval in seconds to monitor the health of the storage driver (min: 30)",
+		},
+		cli.BoolFlag{
+			Name:   "action-controller",
+			Usage:  "Start the Action controller (default: false)",
+			Hidden: true,
 		},
 		cli.BoolTFlag{
 			Name:  "migration-controller",
@@ -261,9 +268,22 @@ func run(c *cli.Context) {
 
 	_, err = schedops.Instance().CreateConfigMap(storkControllerCm)
 	if k8s_errors.IsAlreadyExists(err) {
-		_, err := schedops.Instance().UpdateConfigMap(storkControllerCm)
+		// If the storkControllerCm configmap is already present, take the existing content and update only the
+		// value that need to be fetched dynamically. For example admin-namespace, serviceAccountName and storkPodNs
+		// Fetch the current content of the storkControllerCm configmap.
+		temp, err := schedops.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, defaultAdminNamespace)
 		if err != nil {
-			log.Warnf("unable to update stork controller configmap: %v", err)
+			log.Warnf("unable to get stork controller configmap: %v", err)
+		} else {
+
+			temp.Data[k8sutils.AdminNsKey] = c.String("admin-namespace")
+			temp.Data[k8sutils.StorkServiceAccount] = serviceAccountName
+			temp.Data[k8sutils.DeployNsKey] = storkPodNs
+
+			_, err := schedops.Instance().UpdateConfigMap(temp)
+			if err != nil {
+				log.Warnf("unable to update stork controller configmap: %v", err)
+			}
 		}
 	} else if err != nil {
 		log.Warnf("Unable to create stork controller configmap: %v", err)
@@ -515,6 +535,13 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 			}
 		}
 
+		if c.Bool("action-controller") {
+			actionController := action.NewActionController(mgr, d, recorder)
+			if err := actionController.Init(mgr); err != nil {
+				log.Fatalf("Error initializing action controller: %v", err)
+			}
+		}
+
 		if c.Bool("snapshotter") {
 			if err := snapshot.Start(mgr); err != nil {
 				log.Fatalf("Error starting snapshot controller: %v", err)
@@ -592,6 +619,14 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 		}
 		if err := dataexport.Init(mgr); err != nil {
 			log.Fatalf("Error initializing kdmp controller: %v", err)
+		}
+		resourceexport, err := resourceexport.NewController(mgr)
+		if err != nil {
+			log.Fatalf("Error initializing resource export controller: %v", err)
+		}
+
+		if err := resourceexport.Init(mgr); err != nil {
+			log.Fatalf("Error initializing resource export controller manager: %v", err)
 		}
 	}
 

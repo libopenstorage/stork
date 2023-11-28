@@ -235,7 +235,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 		if err != nil {
 			return false, nil
 		}
-		if node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded {
+		if n.Status == volume.NodeOffline || n.Status == volume.NodeDegraded {
 			log.Infof("Volume driver on node %v (%v) is still offline (%v)", node.Hostname, node.StorageID, n.RawStatus)
 			return false, nil
 		}

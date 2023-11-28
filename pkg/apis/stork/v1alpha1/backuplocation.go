@@ -108,6 +108,9 @@ type S3Config struct {
 	// UseIam when set stork will use the instance IAM role associated with the nodes
 	// on which stork pods run
 	UseIam bool `json:"useIam"`
+	// SSE (Server Side Encryption) type for the S3 bucket.
+	// supported option: "AES256", "aws:kms"
+	SSE string `json:"sse"`
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
@@ -245,6 +248,9 @@ func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
 		}
 		if val, ok := secretConfig.Data["storageClass"]; ok && val != nil {
 			bl.Location.S3Config.StorageClass = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["sse"]; ok && val != nil {
+			bl.Location.S3Config.SSE = strings.TrimSuffix(string(val), "\n")
 		}
 	}
 	return nil

@@ -45,8 +45,10 @@ const (
 	schedulingFailureEventReason                  = "FailedScheduling"
 	// Pod annotation to check if only local nodes should be used to schedule a pod
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
-	// StorageCluster parameter to check if only remote nodes should be used to schedule a pod
+	// StorageClass parameter to check if only remote nodes should be used to schedule a pod
 	preferRemoteNodeOnlyParameter = "stork.libopenstorage.org/preferRemoteNodeOnly"
+	// StorageClass parameter to disable anti-hyperconvergence for pods using shared v4 service volumes
+	preferRemoteNodeParameter = "stork.libopenstorage.org/preferRemoteNode"
 	// annotation to skip a volume and its local node replicas for scoring while
 	// scheduling a pod
 	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
@@ -228,12 +230,23 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
 		} else {
 			for _, volumeInfo := range driverVolumes {
+				// Pod is using a volume that is labeled for Windows
+				// This Pod needs to run only on Windows node
+				// Stork will return all nodes in the filter request
+				if volumeInfo.WindowsVolume {
+					e.encodeFilterResponse(encoder,
+						pod,
+						args.Nodes.Items)
+					return
+				}
 				onlineNodeFound := false
 				for _, volumeNode := range volumeInfo.DataNodes {
 					for _, driverNode := range driverNodes {
 						if volumeNode == driverNode.StorageID {
-							// preferRemoteNodeOnly applies only to volumes with NeedsAntiHyperconvergence
-							if e.volumePrefersRemoteOnly(volumeInfo) && volumeInfo.NeedsAntiHyperconvergence {
+							// prefersRemoteNode and preferRemoteNodeOnly apply only to volumes with NeedsAntiHyperconvergence
+							if volumeInfo.NeedsAntiHyperconvergence &&
+								e.volumePrefersRemoteNode(volumeInfo) &&
+								e.volumePrefersRemoteNodeOnly(volumeInfo) {
 								preferRemoteOnlyExists = true
 								nodeNoAntiHyperconvergedPodAllowed[driverNode.StorageID] = true
 							}
@@ -264,15 +277,18 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			}
 
 			hyperconvergenceVolumeCount := 0
-			nodeHyperconverenceVolumeCount := make(map[string]int)
+			nodeHyperconvergenceVolumeCount := make(map[string]int)
 			for _, volumeInfo := range driverVolumes {
 				if !volumeInfo.NeedsAntiHyperconvergence {
 					hyperconvergenceVolumeCount++
 				}
 				for _, volumeNode := range volumeInfo.DataNodes {
-					// nodeToHyperconverenceVolumeCount is used to determine if valid nodes exist with preferLocalNodeOnly
+					//This loop is calculating the total number of volumes that are available on one node.
+					//This is used to decide at a later step if the node can be used to strictly enforce hyperconvergence based on preferLocalNodeOnly.
+					//preferLocalNodeOnly doesn't apply to volumes with NeedsAntiHyperconvergence set to true.
+					//So an explicit volumePrefersRemoteNode or volumePrefersRemoteNodeOnly check is not necessary.
 					if preferLocalOnly && !volumeInfo.NeedsAntiHyperconvergence {
-						nodeHyperconverenceVolumeCount[volumeNode]++
+						nodeHyperconvergenceVolumeCount[volumeNode]++
 					}
 				}
 			}
@@ -285,7 +301,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 						// If only nodes with replicas are to be preferred,
 						// filter out all nodes that don't have a replica
 						// for all the volumes
-						if preferLocalOnly && nodeHyperconverenceVolumeCount[driverNode.StorageID] != hyperconvergenceVolumeCount {
+						if preferLocalOnly && nodeHyperconvergenceVolumeCount[driverNode.StorageID] != hyperconvergenceVolumeCount {
 							continue
 						}
 						if val, ok := nodeNoAntiHyperconvergedPodAllowed[driverNode.StorageID]; ok && val {
@@ -324,6 +340,13 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		filteredNodes = args.Nodes.Items
 	}
 
+	e.encodeFilterResponse(encoder, pod, filteredNodes)
+}
+
+func (e *Extender) encodeFilterResponse(encoder *json.Encoder,
+	pod *v1.Pod,
+	filteredNodes []v1.Node) {
+
 	storklog.PodLog(pod).Debugf("Nodes in filter response:")
 	for _, node := range filteredNodes {
 		log.Debugf("%v %+v", node.Name, node.Status.Addresses)
@@ -338,8 +361,8 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 }
 
-// volumePrefersRemoteOnly checks if preferRemoteNodeOnly label is applied to the label
-func (e *Extender) volumePrefersRemoteOnly(volumeInfo *volume.Info) bool {
+// volumePrefersRemoteNodeOnly checks if preferRemoteNodeOnly label is applied to the volume
+func (e *Extender) volumePrefersRemoteNodeOnly(volumeInfo *volume.Info) bool {
 	if volumeInfo.Labels != nil {
 		if value, ok := volumeInfo.Labels[preferRemoteNodeOnlyParameter]; ok {
 			if preferRemoteOnlyExists, err := strconv.ParseBool(value); err == nil {
@@ -348,6 +371,18 @@ func (e *Extender) volumePrefersRemoteOnly(volumeInfo *volume.Info) bool {
 		}
 	}
 	return false
+}
+
+// volumePrefersRemoteNode checks if preferRemoteNode label is applied to the volume, else returns default value True.
+func (e *Extender) volumePrefersRemoteNode(volumeInfo *volume.Info) bool {
+	if volumeInfo.Labels != nil {
+		if value, ok := volumeInfo.Labels[preferRemoteNodeParameter]; ok {
+			if preferRemoteExists, err := strconv.ParseBool(value); err == nil {
+				return preferRemoteExists
+			}
+		}
+	}
+	return true
 }
 
 func (e *Extender) collectExtenderMetrics() error {
@@ -631,13 +666,14 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 						skipVolumeScoring = false
 					}
 				}
-				if skipVolumeScoring {
+
+				if skipVolumeScoring || volume.WindowsVolume {
 					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
 					continue
 				}
-				if volume.NeedsAntiHyperconvergence {
+				if volume.NeedsAntiHyperconvergence && e.volumePrefersRemoteNode(volume) {
 					isAntihyperconvergenceRequired = true
-					storklog.PodLog(pod).Debugf("Skipping NeedsAntiHyperconvergence volume %v from scoring based on hyperconvergence", volume.VolumeName)
+					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring based on hyperconvergence", volume.VolumeName)
 					continue
 				}
 				storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
@@ -713,7 +749,8 @@ func (e *Extender) updateForAntiHyperconvergence(
 			storklog.PodLog(pod).Debugf("Skipping volume %v from scoring during antihyperconvergence evaluation due to skipScoringLabel", volume.VolumeName)
 			continue
 		}
-		if !volume.NeedsAntiHyperconvergence {
+		//We want hyperconvergence-based scoring for NeedsAntiHyperconvergence volumes with preferRemoteNode parameter set to false
+		if !volume.NeedsAntiHyperconvergence || !e.volumePrefersRemoteNode(volume) {
 			storklog.PodLog(pod).Debugf("Skipping volume %v from scoring based on antihyperconvergence", volume.VolumeName)
 			continue
 		}
@@ -764,18 +801,7 @@ func (e *Extender) processCSIExtPodFilterRequest(
 		filteredNodes = args.Nodes.Items
 	}
 
-	storklog.PodLog(pod).Debugf("Nodes in filter response:")
-	for _, node := range filteredNodes {
-		log.Debugf("%v %+v", node.Name, node.Status.Addresses)
-	}
-	response := &schedulerapi.ExtenderFilterResult{
-		Nodes: &v1.NodeList{
-			Items: filteredNodes,
-		},
-	}
-	if err := encoder.Encode(response); err != nil {
-		storklog.PodLog(pod).Errorf("Error encoding filter response: %+v : %v", response, err)
-	}
+	e.encodeFilterResponse(encoder, pod, filteredNodes)
 }
 
 func (e *Extender) processCSIExtPodPrioritizeRequest(

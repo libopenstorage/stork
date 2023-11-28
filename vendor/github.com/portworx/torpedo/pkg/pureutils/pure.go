@@ -1,8 +1,9 @@
 package pureutils
 
 import (
-	"github.com/portworx/torpedo/pkg/units"
 	"strings"
+
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 // GetAppDataDir checks the pod namespace prefix, and returns a path that we can
@@ -24,6 +25,9 @@ func GetAppDataDir(namespace string) (string, int) {
 	}
 	if strings.HasPrefix(namespace, "nginx-fa-davol") {
 		return "/data", units.GiB
+	}
+	if strings.HasPrefix(namespace, "nginx-fa-darawvol") {
+		return "/dev/xvda", units.GiB
 	}
 	return "", 0
 }

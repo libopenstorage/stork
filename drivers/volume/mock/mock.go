@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
@@ -38,6 +39,7 @@ const (
 type Driver struct {
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
+	storkvolume.ActionNotSupported
 	storkvolume.GroupSnapshotNotSupported
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.BackupRestoreNotSupported
@@ -63,6 +65,15 @@ func (m Driver) Init(_ interface{}) error {
 // Stop Stops the mock driver
 func (m Driver) Stop() error {
 	return nil
+}
+
+func (m *Driver) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	*storkapi.ApplicationRestore,
+	[]runtime.Unstructured,
+	[]byte,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 // CreateCluster Creates a cluster with specified number of nodes
@@ -144,6 +155,7 @@ func (m *Driver) ProvisionVolume(
 	size uint64,
 	labels map[string]string,
 	needsAntiHyperconvergence bool,
+	windowsVolume bool,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
 		return fmt.Errorf("volume %v already exists", volumeName)
@@ -155,6 +167,7 @@ func (m *Driver) ProvisionVolume(
 		Size:                      size,
 		Labels:                    labels,
 		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
+		WindowsVolume:             windowsVolume,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {
@@ -312,6 +325,8 @@ func (m *Driver) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 	vInfo *storkapi.ApplicationRestoreVolumeInfo,
 	namespaceMapping map[string]string,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (*v1.PersistentVolume, error) {
 
 	return pv, nil

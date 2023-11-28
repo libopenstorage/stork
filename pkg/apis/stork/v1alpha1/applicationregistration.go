@@ -37,6 +37,10 @@ type ApplicationResource struct {
 	// in addition to parent server
 	// NestedSuspendOptions allow way to suspend such CR server
 	NestedSuspendOptions []SuspendOptions `json:"customSuspendOptions"`
+	// Clusterwide Operators will control the CRs in all namespaces
+	// StashStrategy option if enabled will make sure as part of migration the CR does not get applied
+	// if StashCR is enabled. The CR will be applied as part of app activation
+	StashStrategy StashStrategy `json:"stashStrategy"`
 }
 
 // SuspendOptions to disable CRD upon migration/restore/clone
@@ -44,6 +48,11 @@ type SuspendOptions struct {
 	Path  string `json:"path"`
 	Type  string `json:"type"`
 	Value string `json:"value"`
+}
+
+// StashStrategy to restrict applying CR during migration
+type StashStrategy struct {
+	StashCR bool `json:"stashCR"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

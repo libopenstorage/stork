@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -20,6 +19,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -59,6 +60,7 @@ func TestApplicationBackup(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
+	t.Run("applicationBackupRestoreWithoutNMTest", applicationBackupRestoreWithoutNMTest)
 	t.Run("applicationBackupDelBackupLocation", applicationBackupDelBackupLocation)
 	t.Run("applicationBackupMultiple", applicationBackupMultiple)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
@@ -76,6 +78,9 @@ func TestApplicationBackup(t *testing.T) {
 }
 
 func TestScaleApplicationBackup(t *testing.T) {
+	var testrailID, testResult = 50785, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
 
 	if !defaultsBackupSet {
 		setDefaultsForBackup(t)
@@ -162,6 +167,11 @@ func triggerBackupRestoreTest(
 			require.NoError(t, err, "Error waiting for back-up to complete.")
 			logrus.Infof("Backup completed.")
 
+			appBackedup, err := storkops.Instance().GetApplicationBackup(appBackupKey[0], ctx.GetID())
+			require.NoError(t, err, "Failed to get application backup: %s in namespace: %v", appBackupKey[0], ctx.GetID())
+
+			resourcesBackedup := appBackedup.Status.ResourceCount
+
 			// Delete apps so that they can be restored
 			destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
 
@@ -176,6 +186,13 @@ func triggerBackupRestoreTest(
 			require.NoError(t, err, "Error waiting for restore to complete.")
 
 			logrus.Infof("Restore completed.")
+
+			appRestored, err := storkops.Instance().GetApplicationRestore(appRestoreKey[0], ctx.GetID())
+			require.NoError(t, err, "Failed to get application restore: %s in namespace: %v", appRestoreKey[0], ctx.GetID())
+
+			resourcesRestored := appRestored.Status.RestoredResourceCount
+			logrus.Infof("resourcesBackedup: %v, resourcesRestored: %v", resourcesBackedup, resourcesRestored)
+			require.Equal(t, resourcesBackedup, resourcesRestored, "Restore unsuccessful as backup resources are %v and restore resources are %v", resourcesBackedup, resourcesRestored)
 
 			// Validate that restore results in restoration of correct apps based on whether all apps were expected or not
 			err = schedulerDriver.WaitForRunning(preBackupCtx, defaultWaitTimeout, defaultWaitInterval)
@@ -476,6 +493,10 @@ func getBackupFromListWithAnnotations(backupList *storkv1.ApplicationBackupList,
 }
 
 func applicationBackupRestoreTest(t *testing.T) {
+	var testrailID, testResult = 50849, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-simple-backup"},
@@ -486,9 +507,38 @@ func applicationBackupRestoreTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func applicationBackupRestoreWithoutNMTest(t *testing.T) {
+	var testrailID, testResult = 50849, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-simple-backup"},
+		[]string{},
+		[]string{"mysql-simple-restore-without-nm"},
+		allConfigMap,
+		true,
+		true,
+		true,
+	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupRestorePreExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50850, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-pre-exec-rule-backup"},
@@ -499,9 +549,17 @@ func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupRestorePostExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50851, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-rule-backup"},
@@ -512,9 +570,17 @@ func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
+	var testrailID, testResult = 50852, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-pre-exec-missing-rule-backup"},
@@ -525,9 +591,17 @@ func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 		false,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
+	var testrailID, testResult = 50853, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-missing-rule-backup"},
@@ -538,9 +612,17 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 		false,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
+	var testrailID, testResult = 50854, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-pre-exec-failing-rule-backup"},
@@ -551,9 +633,17 @@ func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 		false,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
+	var testrailID, testResult = 50855, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-failing-rule-backup"},
@@ -564,9 +654,17 @@ func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 		false,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupLabelSelectorTest(t *testing.T) {
+	var testrailID, testResult = 50856, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-label-selector-backup"},
@@ -577,9 +675,17 @@ func applicationBackupLabelSelectorTest(t *testing.T) {
 		true,
 		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func scaleApplicationBackupRestore(t *testing.T) {
+	var testrailID, testResult = 50785, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerScaleBackupRestoreTest(
 		t,
 		[]string{"mysql-1-pvc"},
@@ -591,6 +697,10 @@ func scaleApplicationBackupRestore(t *testing.T) {
 		true,
 		defaultSecretName,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupScheduleTests(t *testing.T) {
@@ -621,6 +731,10 @@ func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, po
 }
 
 func intervalApplicationBackupScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86265, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	backupLocation := "interval-backuplocation"
 
 	ctx := createApp(t, "interval-appbackup-sched-test")
@@ -695,9 +809,17 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName, 2)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func dailyApplicationBackupScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86266, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	backupLocation := "daily-backuplocation"
 	ctx := createApp(t, "daily-backup-sched-test")
 
@@ -761,9 +883,17 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	commonApplicationBackupScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeDaily)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func weeklyApplicationBackupScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86267, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	backupLocation := "weekly-backuplocation"
 	ctx := createApp(t, "weekly-backup-sched-test")
 
@@ -828,9 +958,17 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	commonApplicationBackupScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeWeekly)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func monthlyApplicationBackupScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86268, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	backupLocation := "monthly-backuplocation"
 	ctx := createApp(t, "monthly-backup-sched-test")
 
@@ -899,9 +1037,17 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	commonApplicationBackupScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeMonthly)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
+	var testrailID, testResult = 86269, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	backupLocation := "invalid-backuplocation"
 	ctx := createApp(t, "invalid-backup-sched-test")
 
@@ -957,6 +1103,10 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace))
 	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName, 0)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func commonApplicationBackupScheduleTests(
@@ -1014,6 +1164,10 @@ func commonApplicationBackupScheduleTests(
 }
 
 func applicationBackupSyncControllerTest(t *testing.T) {
+	var testrailID, testResult = 50858, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	defer func() {
 		err = setRemoteConfig("")
@@ -1189,6 +1343,10 @@ func waitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 }
 
 func applicationBackupDelBackupLocation(t *testing.T) {
+	var testrailID, testResult = 86263, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// Create myqsl app deployment
 	appCtx := createApp(t, appKey+"-delete-bkp")
 
@@ -1218,6 +1376,9 @@ func applicationBackupDelBackupLocation(t *testing.T) {
 }
 
 func applicationBackupMultiple(t *testing.T) {
+	var testrailID, testResult = 86264, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
 
 	// Create myqsl app deployment
 	appCtx := createApp(t, appKey+"-multiple-backup")

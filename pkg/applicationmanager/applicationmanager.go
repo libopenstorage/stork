@@ -98,21 +98,21 @@ func CreateCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval); err != nil {
 			return err
 		}
-		err = k8sutils.CreateCRD(platformCred)
+		err = k8sutils.CreateCRDV1(platformCred)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 		if err := apiextensions.Instance().ValidateCRD(platformCred.Plural+"."+platformCred.Group, validateCRDTimeout, validateCRDInterval); err != nil {
 			return err
 		}
-		err = k8sutils.CreateCRD(appReg)
+		err = k8sutils.CreateCRDV1(appReg)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}

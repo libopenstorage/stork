@@ -3,26 +3,26 @@ package externalsnapshotter
 import (
 	"context"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	v1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SnapshotContentOps is an interface to perform k8s VolumeSnapshotContent operations
 type SnapshotContentOps interface {
 	// CreateSnapshotContent creates the given snapshot content
-	CreateSnapshotContent(snap *v1beta1.VolumeSnapshotContent) (*v1beta1.VolumeSnapshotContent, error)
+	CreateSnapshotContent(snap *v1.VolumeSnapshotContent) (*v1.VolumeSnapshotContent, error)
 	// GetSnapshotContent returns the snapshot content for given name
-	GetSnapshotContent(name string) (*v1beta1.VolumeSnapshotContent, error)
+	GetSnapshotContent(name string) (*v1.VolumeSnapshotContent, error)
 	// ListSnapshotContents lists all snapshot contents
-	ListSnapshotContents() (*v1beta1.VolumeSnapshotContentList, error)
+	ListSnapshotContents() (*v1.VolumeSnapshotContentList, error)
 	// UpdateSnapshotContent updates the given snapshot content
-	UpdateSnapshotContent(snap *v1beta1.VolumeSnapshotContent) (*v1beta1.VolumeSnapshotContent, error)
+	UpdateSnapshotContent(snap *v1.VolumeSnapshotContent) (*v1.VolumeSnapshotContent, error)
 	// DeleteSnapshotContent deletes the given snapshot content
 	DeleteSnapshotContent(name string) error
 }
 
 // CreateSnapshotContent creates the given snapshot content.
-func (c *Client) CreateSnapshotContent(snap *v1beta1.VolumeSnapshotContent) (*v1beta1.VolumeSnapshotContent, error) {
+func (c *Client) CreateSnapshotContent(snap *v1.VolumeSnapshotContent) (*v1.VolumeSnapshotContent, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (c *Client) CreateSnapshotContent(snap *v1beta1.VolumeSnapshotContent) (*v1
 }
 
 // GetSnapshotContent returns the snapshot content for given name
-func (c *Client) GetSnapshotContent(name string) (*v1beta1.VolumeSnapshotContent, error) {
+func (c *Client) GetSnapshotContent(name string) (*v1.VolumeSnapshotContent, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (c *Client) GetSnapshotContent(name string) (*v1beta1.VolumeSnapshotContent
 }
 
 // ListSnapshotContents lists all snapshot contents
-func (c *Client) ListSnapshotContents() (*v1beta1.VolumeSnapshotContentList, error) {
+func (c *Client) ListSnapshotContents() (*v1.VolumeSnapshotContentList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (c *Client) ListSnapshotContents() (*v1beta1.VolumeSnapshotContentList, err
 }
 
 // UpdateSnapshotContent updates the given snapshot content
-func (c *Client) UpdateSnapshotContent(snap *v1beta1.VolumeSnapshotContent) (*v1beta1.VolumeSnapshotContent, error) {
+func (c *Client) UpdateSnapshotContent(snap *v1.VolumeSnapshotContent) (*v1.VolumeSnapshotContent, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -25,6 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -40,6 +42,8 @@ func TestMigration(t *testing.T) {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
+
+	setDefaultsForBackup(t)
 
 	t.Run("testMigration", testMigration)
 	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
@@ -86,7 +90,9 @@ func testMigration(t *testing.T) {
 	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
+	t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
 	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
+	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -101,6 +107,7 @@ func triggerMigrationTest(
 	migrationSuccessExpected bool,
 	migrateAllAppsExpected bool,
 	startAppsOnMigration bool,
+	skipDestDeletion bool,
 ) {
 	var err error
 	// Reset config in case of error
@@ -111,7 +118,7 @@ func triggerMigrationTest(
 
 	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false, "", nil)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, skipDestDeletion, true)
 }
 
 func triggerMigration(
@@ -151,9 +158,9 @@ func triggerMigration(
 	if migrateAllAppsExpected {
 		preMigrationCtx = ctxs[0].DeepCopy()
 	}
-	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, projectIDMappings, pairReverse)
-	require.NoError(t, err, "Error scheduling cluster pair")
+
+	// Schedule bidirectional or regular cluster pair based on the flag
+	scheduleClusterPairGeneric(t, ctxs, appKey, instanceID, defaultClusterPairDir, projectIDMappings, skipStoragePair, true, pairReverse)
 
 	// apply migration specs
 	err = schedulerDriver.AddTasks(ctxs[0],
@@ -188,24 +195,30 @@ func validateMigrationSummary(
 	require.Equal(t, migObj.Status.Summary.NumberOfMigratedVolumes, expectedVolumes, "unexpected number of volumes migrated")
 	require.Equal(t, migObj.Status.Summary.TotalNumberOfResources, expectedResources, "unexpected number of total resources")
 	require.Equal(t, migObj.Status.Summary.TotalNumberOfVolumes, expectedVolumes, "unexpected number of total volumes")
-	require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
-
+	if expectedVolumes > 0 {
+		require.True(t, migObj.Status.Summary.TotalBytesMigrated > 0, "expected bytes total to be non-zero")
+	} else {
+		require.True(t, migObj.Status.Summary.TotalBytesMigrated == 0, "expected bytes total to be zero")
+	}
 }
 
 func validateAndDestroyMigration(
 	t *testing.T,
 	ctxs []*scheduler.Context,
+	instanceID string,
+	appKey string,
 	preMigrationCtx *scheduler.Context,
 	migrationSuccessExpected bool,
 	startAppsOnMigration bool,
 	migrateAllAppsExpected bool,
 	skipAppDeletion bool,
 	skipDestDeletion bool,
+	blowNamespaces bool,
 ) {
 	var err error
 	timeout := defaultWaitTimeout
 	if !migrationSuccessExpected {
-		timeout = timeout / 2
+		timeout = timeout / 5
 	}
 
 	allAppsCtx := ctxs[0].DeepCopy()
@@ -214,68 +227,86 @@ func validateAndDestroyMigration(
 		require.NoError(t, err, "Error waiting for migration to get to Ready state")
 
 		// wait on cluster 2 for the app to be running
-		err = setDestinationKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
-
-		if startAppsOnMigration {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
-			if !migrateAllAppsExpected {
-				err = schedulerDriver.WaitForRunning(allAppsCtx, defaultWaitTimeout/2, defaultWaitInterval)
-				require.Error(t, err, "All apps shouldn't have been migrated")
+		funcWaitAndDelete := func() {
+			if startAppsOnMigration {
+				err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+				require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+				if !migrateAllAppsExpected {
+					err = schedulerDriver.WaitForRunning(allAppsCtx, defaultWaitTimeout/2, defaultWaitInterval)
+					require.Error(t, err, "All apps shouldn't have been migrated")
+				}
+			} else {
+				err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
+				require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
 			}
-		} else {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
-			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
-		}
 
-		/* Failing right now as SC's are not migrated
-		* else {
-			logrus.Infof("test only validating storage components as migration has startApplications disabled")
-			err = schedulerDriver.InspectVolumes(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error validating storage components on remote cluster after migration")
-		}*/
+			/* Failing right now as SC's are not migrated
+			* else {
+				logrus.Infof("test only validating storage components as migration has startApplications disabled")
+				err = schedulerDriver.InspectVolumes(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+				require.NoError(t, err, "Error validating storage components on remote cluster after migration")
+			}*/
 
-		// Validate the migration summary
-		// destroy mysql app on cluster 2
-		if !skipAppDeletion && !skipDestDeletion {
-			destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+			// Validate the migration summary
+			// destroy mysql app on cluster 2
+			if !skipAppDeletion && !skipDestDeletion {
+				destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+			}
 		}
+		executeOnDestination(t, funcWaitAndDelete)
 	} else {
 		require.Error(t, err, "Expected migration to fail")
 	}
 
+	// destroy app on cluster 1
 	if !skipAppDeletion {
-		// destroy app on cluster 1
-		err := setSourceKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-
 		destroyAndWait(t, ctxs)
+	}
+
+	if blowNamespaces {
+		blowNamespacesForTest(t, instanceID, appKey, skipDestDeletion)
 	}
 }
 
 func deploymentMigrationTest(t *testing.T) {
+	var testrailID, testResult = 50803, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationTest(
 		t,
-		"mysql-migration",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
-		"mysql-migration",
+		instanceID,
 		true,
 		true,
 		true,
+		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deploymentMigrationReverseTest(t *testing.T) {
+	var testrailID, testResult = 54210, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration"
+	appKey := "mysql-1-pvc"
+
 	var err error
 
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
-		[]string{"mysql-migration"},
+		[]string{instanceID},
 		true,
 		false,
 		true,
@@ -285,7 +316,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	)
 
 	// Cleanup up source
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, true, true, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, true, true, false, false, false)
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
@@ -301,8 +332,25 @@ func deploymentMigrationReverseTest(t *testing.T) {
 
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
-	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", "", true)
+	// create, apply and validate cluster pair specs on destination for non-bidirectional pair
+	if !bidirectionalClusterpair && !unidirectionalClusterpair {
+		err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", "", true)
+	} else if unidirectionalClusterpair {
+		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error setting remote config")
+		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting secret")
+		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting backuplocation")
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "Error setting remote config")
+		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting secret")
+		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting backuplocation")
+		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, "", defaultBackupLocation, defaultSecretName, false, true)
+	}
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -325,140 +373,337 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	//validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, preMigrationCtx, true, true, true, true, false)
 
 	destroyAndWait(t, []*scheduler.Context{postMigrationCtx})
+	validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, instanceID, appKey, preMigrationCtx, false, false, false, true, false, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationTest(t *testing.T) {
+	var testrailID, testResult = 50804, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "cassandra-migration"
+	appKey := "cassandra"
+
 	triggerMigrationTest(
 		t,
-		"cassandra-migration",
-		"cassandra",
+		instanceID,
+		appKey,
 		nil,
-		"cassandra-migration",
+		instanceID,
 		true,
 		true,
 		true,
+		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationStartAppFalseTest(t *testing.T) {
+	var testrailID, testResult = 86243, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "cassandra-migration"
+	appKey := "cassandra"
+
 	triggerMigrationTest(
 		t,
-		"cassandra-migration",
-		"cassandra",
+		instanceID,
+		appKey,
 		nil,
 		"cassandra-migration-startapps-false",
 		true,
 		true,
 		false,
+		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationRuleTest(t *testing.T) {
+	var testrailID, testResult = 50805, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "cassandra-migration-rule"
+	appKey := "cassandra"
+
 	triggerMigrationTest(
 		t,
-		"cassandra-migration-rule",
-		"cassandra",
+		instanceID,
+		appKey,
 		nil,
 		"cassandra-migration-rule",
 		true,
 		true,
 		true,
+		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
+	var testrailID, testResult = 50806, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-pre-exec-missing"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationTest(
 		t,
-		"migration-pre-exec-missing",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		"mysql-migration-pre-exec-missing",
 		false,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
+	var testrailID, testResult = 50807, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-post-exec-missing"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationTest(
 		t,
-		"migration-post-exec-missing",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		"mysql-migration-post-exec-missing",
 		false,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationDisallowedNamespaceTest(t *testing.T) {
+	var testrailID, testResult = 50808, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-disallowed-namespace"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationTest(
 		t,
-		"migration-disallowed-namespace",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		"mysql-migration-disallowed-ns",
 		false,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationFailingPreExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50809, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-failing-pre-exec-rule"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationTest(
 		t,
-		"migration-failing-pre-exec-rule",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		"mysql-migration-failing-pre-exec",
 		false,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationFailingPostExecRuleTest(t *testing.T) {
+	var testrailID, testResult = 50810, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-failing-post-exec-rule"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationTest(
 		t,
-		"migration-failing-post-exec-rule",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		"mysql-migration-failing-post-exec",
 		false,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationLabelSelectorTest(t *testing.T) {
+	var testrailID, testResult = 50811, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-label-selector-test"
+	appKey := "cassandra"
+
 	triggerMigrationTest(
 		t,
-		"migration-label-selector-test",
-		"cassandra",
+		instanceID,
+		appKey,
 		[]string{"mysql-1-pvc"},
 		"label-selector-migration",
 		true,
 		false,
 		true,
+		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationLabelExcludeSelectorTest(t *testing.T) {
+	var testrailID, testResult = 86245, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "migration-label-exclude-selector-test"
+	appKey := "cassandra"
+
 	triggerMigrationTest(
 		t,
-		"migration-label-exclude-selector-test",
-		"cassandra",
+		instanceID,
+		appKey,
 		[]string{"mysql-1-pvc"},
 		"label-exclude-selector-migration",
 		true,
 		false,
 		true,
+		false,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func namespaceLabelSelectorTest(t *testing.T) {
+	var testrailID, testResult = 86244, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "ns-selector-test"
+	appKey := "cassandra"
+
+	var err error
+	defer func() {
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
+	}()
+
+	// Deploy mysql-1-pvc in namespace "mysql-1-pvc-ns-selector-test"
+	ctxNs2, err := schedulerDriver.Schedule(instanceID,
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"mysql-1-pvc"},
+			Labels:  nil,
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxNs2), "Only one task should have started")
+
+	// Deploy cassandra in namespace "cassandra-ns-selector-test"
+	// This namespace has label kubernetes.io/metadata.name=cassandra-ns-selector-test
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		instanceID,
+		appKey,
+		[]string{},
+		[]string{"namespace-selector-migration"},
+		false,
+		false,
+		true,
+		false,
+		"",
+		nil)
+
+	// Validate but do not destroy migration and apps
+	validateAndDestroyMigration(
+		t,
+		ctxs,
+		instanceID,
+		appKey,
+		preMigrationCtx,
+		true,
+		true,
+		true,
+		true,  //Skip Deleting App on Destination
+		true,  //Skip Deleting App on Source
+		false, //Don't delete namespaces yet
+	)
+
+	// Validate on destination cluster that mysql-1-pvc is not migrated as it doesn't have the required namespace labels
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	err = schedulerDriver.WaitForRunning(ctxNs2[0], defaultWaitTimeout/16, defaultWaitInterval)
+	require.Error(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Destroy migration
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+
+	// Destroy cassandra app context
+	destroyAndWait(t, ctxs)
+
+	// Destroy mysql-1-pvc app context
+	destroyAndWait(t, ctxNs2)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // migrationIntervalScheduleTest runs test for migrations with schedules that are
 // intervals of time
 func migrationIntervalScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50812, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration-schedule-interval"
+	appKey := "mysql-1-pvc"
+
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -469,8 +714,8 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-interval",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		[]string{"mysql-migration-schedule-interval"},
 		true,
@@ -486,13 +731,23 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	err = setMockTime(&mockNow)
 	require.NoError(t, err, "Error setting mock time")
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // intervalScheduleCleanupTest runs test for migrations with schedules that are
 // intervals of time, will try to perform cleanup of k8s resources which are deleted
 // on source cluster
 func intervalScheduleCleanupTest(t *testing.T) {
+	var testrailID, testResult = 86246, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration-schedule-interval"
+	appKey := "mysql-1-pvc"
+
 	var err error
 	var name, namespace string
 	var pvcs *v1.PersistentVolumeClaimList
@@ -506,8 +761,8 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-interval",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		[]string{"cassandra"},
 		[]string{"mysql-migration-schedule-interval"},
 		true,
@@ -557,10 +812,14 @@ func intervalScheduleCleanupTest(t *testing.T) {
 
 	// verify app deleted on source cluster with second migration
 	time.Sleep(1 * time.Minute)
-	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+	validateMigration(t, instanceID, preMigrationCtx.GetID())
 	validateMigrationCleanup(t, name, namespace, pvcs)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.PersistentVolumeClaimList) {
@@ -600,18 +859,48 @@ func validateMigration(t *testing.T, name, namespace string) {
 }
 
 func migrationDailyScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50813, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationWeeklyScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50814, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationMonthlyScheduleTest(t *testing.T) {
+	var testrailID, testResult = 50815, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func migrationScheduleInvalidTest(t *testing.T) {
+	var testrailID, testResult = 50816, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration-schedule-invalid"
+	appKey := "mysql-1-pvc"
+
 	migrationSchedules := []string{
 		"mysql-migration-schedule-daily-invalid",
 		"mysql-migration-schedule-weekly-invalid",
@@ -620,8 +909,8 @@ func migrationScheduleInvalidTest(t *testing.T) {
 
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-invalid",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		nil,
 		migrationSchedules,
 		true,
@@ -663,6 +952,10 @@ func migrationScheduleInvalidTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // NOTE: below test assumes all schedule policies used here  (interval, daily, weekly or monthly) have a
@@ -823,7 +1116,7 @@ func migrationScheduleTest(
 			firstMigrationCreationTime, migrationStatus.CreationTimestamp))
 
 	// validate and destroy apps on both clusters
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, migrationScheduleName, "mysql-1-pvc", preMigrationCtx, true, false, true, false, false, false)
 
 	// explicitly check if all child migrations of the schedule are deleted
 	f := func() (interface{}, bool, error) {
@@ -850,20 +1143,33 @@ func migrationScheduleTest(
 }
 
 func migrationScaleTest(t *testing.T) {
+	var testrailID, testResult = 86247, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration"
+	appKey := "mysql-1-pvc"
+
 	triggerMigrationScaleTest(
 		t,
-		"mysql-migration",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
+		true,
 		true,
 		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKey string, includeResourcesFlag bool, startApplicationsFlag bool) {
+func triggerMigrationScaleTest(t *testing.T, migrationKey, migrationAppKey string, includeResourcesFlag, includeVolumesFlag, startApplicationsFlag bool) {
 	var appCtxs []*scheduler.Context
 	var ctxs []*scheduler.Context
 	var allMigrations []*v1alpha1.Migration
 	var err error
+	instanceID := migrationKey
+	appKey := migrationAppKey
 
 	// Reset config in case of error
 	defer func() {
@@ -884,13 +1190,12 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 		preMigrationCtx := currCtxs[0].DeepCopy()
 		appCtxs = append(appCtxs, preMigrationCtx)
 
-		// create, apply and validate cluster pair specs
-		err = scheduleClusterPair(currCtxs[0], false, true, defaultClusterPairDir, "", false)
-		require.NoError(t, err, "Error scheduling cluster pair")
+		// Schedule bidirectional or regular cluster pair based on the flag
+		scheduleClusterPairGeneric(t, currCtxs, appKey, instanceID+"-"+strconv.Itoa(i), defaultClusterPairDir, projectIDMappings, false, true, false)
 		ctxs = append(ctxs, currCtxs...)
 
 		currMigNamespace := migrationAppKey + "-" + migrationKey + "-" + strconv.Itoa(i)
-		currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &includeVolumesFlag, &startApplicationsFlag)
 		require.NoError(t, err, "failed to create migration: %s in namespace %s", migrationKey, currMigNamespace)
 		allMigrations = append(allMigrations, currMig)
 
@@ -924,6 +1229,10 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 }
 
 func clusterPairFailuresTest(t *testing.T) {
+	var testrailID, testResult = 86248, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	ctxs, err := schedulerDriver.Schedule("cluster-pair-failures",
 		scheduler.ScheduleOptions{AppKeys: []string{testKey}})
 	require.NoError(t, err, "Error scheduling task")
@@ -940,7 +1249,7 @@ func clusterPairFailuresTest(t *testing.T) {
 			SpecList: []interface{}{},
 		}}
 
-	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsEks(), false)
+	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsCloud(), false)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	// Change token value to an incorrect token
@@ -961,7 +1270,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 
-	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsEks(), false)
+	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsCloud(), false)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	badIPInfo[clusterIP] = "0.0.0.0"
@@ -982,7 +1291,7 @@ func clusterPairFailuresTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 
-	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsEks(), false)
+	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo(remoteFilePath, "", IsCloud(), false)
 	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
 
 	badPortInfo[clusterPort] = "0000"
@@ -1004,55 +1313,151 @@ func clusterPairFailuresTest(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
 	destroyAndWait(t, ctxs)
 
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func bidirectionalClusterPairTest(t *testing.T) {
+	if bidirectionalClusterpair == false {
+		t.Skipf("skipping %s test because bidirectional cluster pair flag has not been set", t.Name())
+	}
+	var testrailID, testResult = 86249, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	clusterPairName := "birectional-cluster-pair"
 	clusterPairNamespace := "bidirectional-clusterpair-ns"
 
+	// Read the configmap secret-config in default namespace and based on the secret type , create the bidirectional pair
+	configMap, err := core.Instance().GetConfigMap("secret-config", "default")
+	if err != nil {
+		require.NoError(t, err, "error getting configmap secret-config in defaule namespace: %v")
+	}
+	cmData := configMap.Data
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
-	err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "")
-	require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	for location, secret := range cmData {
+		logrus.Infof("Creating a bidirectional-pair using %s as objectstore.", location)
+		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret)
+		require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
 
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
-	_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "failed to get bidirectional cluster pair on source: %v", err)
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "failed to get bidirectional cluster pair on source: %v", err)
 
-	err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "failed to validate bidirectional cluster pair on source: %v", err)
+		err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "failed to validate bidirectional cluster pair on source: %v", err)
 
-	logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+		logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
 
-	// Clean up on source cluster
-	err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "Error deleting clusterpair on source cluster")
+		// Clean up on source cluster
+		err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting clusterpair on source cluster")
 
-	logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+		logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
 
-	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+		// Clean up destination cluster while we are on it
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on destination cluster", clusterPairNamespace)
 
-	_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "failed to get bidirectional cluster pair on destination: %v", err)
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
-	err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "failed to validate bidirectional cluster pair on destination: %v", err)
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "failed to get bidirectional cluster pair on destination: %v", err)
 
-	logrus.Infof("Successfully validated cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+		err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "failed to validate bidirectional cluster pair on destination: %v", err)
 
-	// Clean up on destination cluster
-	err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
-	require.NoError(t, err, "Error deleting clusterpair on destination cluster")
+		logrus.Infof("Successfully validated cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
 
-	logrus.Infof("Successfully deleted cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+		// Clean up on destination cluster
+		err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting clusterpair on destination cluster")
 
-	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		// Clean up destination cluster while we are on it
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on destination cluster", clusterPairNamespace)
+
+		logrus.Infof("Successfully deleted cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		logrus.Infof("Successfully tested creating a bidirectional-pair using %s as objectstore.", location)
+	}
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func unidirectionalClusterPairTest(t *testing.T) {
+	if unidirectionalClusterpair == false {
+		t.Skipf("skipping %s test because unidirectional cluster pair flag has not been set", t.Name())
+	}
+	var testrailID, testResult = 91979, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	clusterPairName := "unirectional-cluster-pair"
+	clusterPairNamespace := "unidirectional-clusterpair-ns"
+
+	// Read the configmap secret-config in default namespace and based on the secret type , create the bidirectional pair
+	configMap, err := core.Instance().GetConfigMap("secret-config", "default")
+	if err != nil {
+		require.NoError(t, err, "error getting configmap secret-config in defaule namespace: %v")
+	}
+	cmData := configMap.Data
+	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
+	for location, secret := range cmData {
+		logrus.Infof("Creating a unidirectional-pair using %s as objectstore.", location)
+		err := scheduleUnidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret, true, false)
+		require.NoError(t, err, "failed to set unidirectional cluster pair: %v", err)
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "failed to get unidirectional cluster pair on source: %v", err)
+
+		err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "failed to validate unidirectional cluster pair on source: %v", err)
+
+		logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+		_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+		require.Error(t, err, "clusterpair should not be created on destination cluster")
+
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on destination cluster", clusterPairNamespace)
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		// Clean up on source cluster
+		err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+		require.NoError(t, err, "Error deleting clusterpair on source cluster")
+
+		logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+
+		err = core.Instance().DeleteNamespace(clusterPairNamespace)
+		require.NoError(t, err, "failed to delete namespace %s on source cluster", clusterPairNamespace)
+	}
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func operatorMigrationMongoTest(t *testing.T) {
+	var testrailID, testResult = 86250, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	triggerMigrationTest(
 		t,
 		"migration",
@@ -1062,10 +1467,19 @@ func operatorMigrationMongoTest(t *testing.T) {
 		true,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func operatorMigrationRabbitmqTest(t *testing.T) {
+	var testrailID, testResult = 86251, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	_, err := core.Instance().CreateNamespace(&v1.Namespace{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: rabbitmqNamespace,
@@ -1089,7 +1503,12 @@ func operatorMigrationRabbitmqTest(t *testing.T) {
 		true,
 		true,
 		true,
+		true,
 	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func createMigration(
@@ -1099,6 +1518,7 @@ func createMigration(
 	clusterPair string,
 	migrationNamespace string,
 	includeResources *bool,
+	includeVolumes *bool,
 	startApplications *bool,
 ) (*v1alpha1.Migration, error) {
 
@@ -1110,6 +1530,7 @@ func createMigration(
 		Spec: v1alpha1.MigrationSpec{
 			ClusterPair:       clusterPair,
 			IncludeResources:  includeResources,
+			IncludeVolumes:    includeVolumes,
 			StartApplications: startApplications,
 			Namespaces:        []string{migrationNamespace},
 		},
@@ -1161,6 +1582,12 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 // reflected correctly after change on source pvc
 // it also make sure that sc param is kept for migrated pvcs
 func pvcResizeMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86252, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration-schedule-interval"
+	appKey := "mysql-1-pvc"
+
 	var err error
 	var namespace string
 	var pvcs *v1.PersistentVolumeClaimList
@@ -1174,8 +1601,8 @@ func pvcResizeMigrationTest(t *testing.T) {
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-interval",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		[]string{"cassandra"},
 		[]string{"mysql-migration-schedule-interval"},
 		true,
@@ -1186,7 +1613,7 @@ func pvcResizeMigrationTest(t *testing.T) {
 		nil,
 	)
 
-	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+	validateMigration(t, instanceID, preMigrationCtx.GetID())
 
 	// Get pvc lists from source cluster
 	for _, spec := range ctxs[0].App.SpecList {
@@ -1251,7 +1678,11 @@ func pvcResizeMigrationTest(t *testing.T) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
@@ -1278,11 +1709,14 @@ func suspendMigrationTest(t *testing.T) {
 	}()
 	err = setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	instanceID := "mysql-migration-schedule-interval-autosuspend"
+	appKey := "mysql-1-pvc"
+
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-schedule-interval-autosuspend",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		[]string{"cassandra"},
 		[]string{"mysql-migration-schedule-interval-autosuspend"},
 		true,
@@ -1338,10 +1772,16 @@ func suspendMigrationTest(t *testing.T) {
 
 	logrus.Infof("Successfully verified suspend migration case")
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
 }
 
 func endpointMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86256, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "endpoint-migration-schedule-interval"
+	appKey := "endpoint"
+
 	var err error
 	namespace := "endpoint-migration-schedule-interval"
 	// Reset config in case of error
@@ -1354,8 +1794,8 @@ func endpointMigrationTest(t *testing.T) {
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"endpoint-migration-schedule-interval",
-		"endpoint",
+		instanceID,
+		appKey,
 		[]string{},
 		[]string{"endpoint-migration-schedule-interval"},
 		true,
@@ -1402,11 +1842,19 @@ func endpointMigrationTest(t *testing.T) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // networkPolicyMigrationTest validate migrated network policy
 func networkPolicyMigrationTest(t *testing.T) {
+	var testrailID, testResult = 86257, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	// validate default behaviour of network policy migration where policy which has CIDR set
 	// will not be migrated
 	validateNetworkPolicyMigration(t, false)
@@ -1414,6 +1862,10 @@ func networkPolicyMigrationTest(t *testing.T) {
 	// validate behaviour of network policy migration where policy which has CIDR set
 	// will be migrated using IncludeNetworkPolicyWithCIDR option in migration schedule
 	validateNetworkPolicyMigration(t, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 func validateNetworkPolicyMigration(t *testing.T, all bool) {
 	var err error
@@ -1503,10 +1955,16 @@ func validateNetworkPolicyMigration(t *testing.T, all bool) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, scheduleName, "networkpolicy", preMigrationCtx, true, false, true, false, false, true)
 }
 
 func transformResourceTest(t *testing.T) {
+	var testrailID, testResult = 86253, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "mysql-migration-transform-interval"
+	appKey := "mysql-1-pvc"
+
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -1518,8 +1976,8 @@ func transformResourceTest(t *testing.T) {
 	// the schedule interval for these specs it set to 5 minutes
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-migration-transform-interval",
-		"mysql-1-pvc",
+		instanceID,
+		appKey,
 		[]string{"transform-service"},
 		[]string{"mysql-migration-transform-interval"},
 		true,
@@ -1562,11 +2020,19 @@ func transformResourceTest(t *testing.T) {
 	}
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, true, true)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // Testrail ID 85741 - https://portworx.testrail.net/index.php?/cases/view/85741
 func serviceAndServiceAccountUpdate(t *testing.T) {
+	var testrailID, testResult = 85741, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -1700,15 +2166,74 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 
 	// Clean up destination cluster while we are on it
 	err = core.Instance().DeleteNamespace(testNamespace)
-	require.NoError(t, err, "failed to delete namespace %s on destintation cluster")
+	require.NoError(t, err, "failed to delete namespace %s on destination cluster")
 
 	// Clean up source cluster
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	err = core.Instance().DeleteNamespace(testNamespace)
-	require.NoError(t, err, "failed to delete namespace %s on destintation cluster")
+	require.NoError(t, err, "failed to delete namespace %s on destination cluster")
 
 	err = setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
+	appKey, instanceID string,
+	defaultClusterPairDir, projectIDMappings string,
+	skipStoragePair, resetConfig, pairReverse bool) {
+	var err error
+	if bidirectionalClusterpair {
+		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		logrus.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
+		logrus.Infof("Name: %s", remotePairName)
+		logrus.Infof("Namespace: %s", clusterPairNamespace)
+		logrus.Infof("Backuplocation: %s", defaultBackupLocation)
+		logrus.Infof("Secret name: %s", defaultSecretName)
+		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+		require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	} else if unidirectionalClusterpair {
+		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		logrus.Info("Unidirectional flag is set, will create unidirectional cluster pair:")
+		logrus.Infof("Name: %s", remotePairName)
+		logrus.Infof("Namespace: %s", clusterPairNamespace)
+		logrus.Infof("Backuplocation: %s", defaultBackupLocation)
+		logrus.Infof("Secret name: %s", defaultSecretName)
+		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, true, pairReverse)
+		require.NoError(t, err, "failed to set unidirectional cluster pair: %v", err)
+	} else {
+		// create, apply and validate cluster pair specs
+		err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, projectIDMappings, pairReverse)
+		require.NoError(t, err, "Error scheduling cluster pair")
+	}
+}
+
+func blowNamespacesForTest(t *testing.T, instanceID, appKey string, skipDestDeletion bool) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+	err = core.Instance().DeleteNamespace(namespace)
+	require.NoError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+
+	// for negative cases the namespace is not even created on destination, so skip deleting it
+	if skipDestDeletion {
+		return
+	}
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	err = core.Instance().DeleteNamespace(namespace)
+	require.NoError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 }

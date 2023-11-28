@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/go-version"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/constants"
+	consolev1 "github.com/openshift/api/console/v1"
 	apiextensionsops "github.com/portworx/sched-ops/k8s/apiextensions"
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -165,7 +166,7 @@ func CreateOrUpdateCRD(
 	// We only compare spec, as other fields will change after it's deployed, for example: creationTimestamp: null will
 	// be changed to a real timestamp.
 	if !equality.Semantic.DeepDerivative(crd.Spec, deployedCRD.Spec) {
-		//if !reflect.DeepEqual(crd.Spec, deployedCRD.Spec) {
+		// if !reflect.DeepEqual(crd.Spec, deployedCRD.Spec) {
 		logrus.Infof("Updating CRD %s", crd.Name)
 		crd.ResourceVersion = deployedCRD.ResourceVersion
 		if _, err = apiextensionsops.Instance().UpdateCRD(crd); err != nil {
@@ -1503,6 +1504,13 @@ func CreateOrUpdatePrometheus(
 		}
 	}
 
+	if prometheus.Spec.PodMetadata == nil {
+		prometheus.Spec.PodMetadata = &monitoringv1.EmbeddedObjectMetadata{}
+	}
+	if prometheus.Spec.PodMetadata.Labels == nil {
+		prometheus.Spec.PodMetadata.Labels = make(map[string]string)
+	}
+	prometheus.Spec.PodMetadata.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
 	if modified || len(prometheus.OwnerReferences) > len(existingPrometheus.OwnerReferences) {
 		prometheus.ResourceVersion = existingPrometheus.ResourceVersion
 		logrus.Infof("Updating Prometheus %s/%s", prometheus.Namespace, prometheus.Name)
@@ -1578,6 +1586,13 @@ func CreateOrUpdateAlertManager(
 		}
 	}
 
+	if alertManager.Spec.PodMetadata == nil {
+		alertManager.Spec.PodMetadata = &monitoringv1.EmbeddedObjectMetadata{}
+	}
+	if alertManager.Spec.PodMetadata.Labels == nil {
+		alertManager.Spec.PodMetadata.Labels = make(map[string]string)
+	}
+	alertManager.Spec.PodMetadata.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
 	if modified || len(alertManager.OwnerReferences) > len(existingAlertManager.OwnerReferences) {
 		alertManager.ResourceVersion = existingAlertManager.ResourceVersion
 		logrus.Infof("Updating AlertManager %s/%s", alertManager.Namespace, alertManager.Name)
@@ -1696,6 +1711,85 @@ func DeletePodDisruptionBudget(
 	pdb.OwnerReferences = newOwners
 	logrus.Infof("Disowning %s/%s PodDisruptionBudget", namespace, name)
 	return k8sClient.Update(context.TODO(), pdb)
+}
+
+// CreateOrUpdateConsolePlugin creates a ConsolePlougin instance of ConsolePlugin CRD if not present, else updates it
+func CreateOrUpdateConsolePlugin(
+	k8sClient client.Client,
+	cp *consolev1.ConsolePlugin,
+	ownerRef *metav1.OwnerReference,
+) error {
+
+	existingPlugin := &consolev1.ConsolePlugin{}
+	err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{
+			Name:      cp.Name,
+			Namespace: cp.Namespace,
+		},
+		existingPlugin,
+	)
+
+	if errors.IsNotFound(err) {
+		logrus.Infof("Creating %s Consoleplugin", cp.Name)
+		return k8sClient.Create(context.TODO(), cp)
+	} else if err != nil {
+		return err
+	}
+
+	modified := !reflect.DeepEqual(cp.Spec, existingPlugin.Spec)
+
+	for _, o := range existingPlugin.OwnerReferences {
+		if o.UID != ownerRef.UID {
+			cp.OwnerReferences = append(cp.OwnerReferences, o)
+		}
+	}
+
+	if modified || len(cp.OwnerReferences) > len(existingPlugin.OwnerReferences) {
+		cp.ResourceVersion = existingPlugin.ResourceVersion
+		logrus.Infof("Updating Console Plugin %s/%s", cp.Namespace, cp.Name)
+		return k8sClient.Update(context.TODO(), cp)
+	}
+	return nil
+}
+
+// DeleteConsolePlugin deletes a ConsolePlugin instance of ConsolePlugin CRD if present and owned
+func DeleteConsolePlugin(
+	k8sClient client.Client,
+	name, namespace string,
+	owners ...metav1.OwnerReference,
+) error {
+	resource := types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+
+	consolePlugin := &consolev1.ConsolePlugin{}
+	err := k8sClient.Get(context.TODO(), resource, consolePlugin)
+	if errors.IsNotFound(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	newOwners := removeOwners(consolePlugin.OwnerReferences, owners)
+
+	// Do not delete the object if it does not have the owner that was passed;
+	// even if the object has no owner
+	if (len(consolePlugin.OwnerReferences) == 0 && len(owners) > 0) ||
+		(len(consolePlugin.OwnerReferences) > 0 && len(consolePlugin.OwnerReferences) == len(newOwners)) {
+		logrus.Infof("Cannot delete ConsolePlugin %s/%s as it is not owned",
+			namespace, name)
+		return nil
+	}
+
+	if len(newOwners) == 0 {
+		logrus.Infof("Deleting %s/%s ConsolePlugin", namespace, name)
+		return k8sClient.Delete(context.TODO(), consolePlugin)
+	}
+	consolePlugin.OwnerReferences = newOwners
+	logrus.Infof("Disowning %s/%s ConsolePlugin", namespace, name)
+	return k8sClient.Update(context.TODO(), consolePlugin)
 }
 
 // GetDaemonSetPods returns a list of pods for the given daemon set
@@ -2172,4 +2266,12 @@ func AppendObjectList(k8sClient client.Client, namespace string, list client.Obj
 	}
 
 	return nil
+}
+
+func AddManagedByOperatorLabel(om metav1.ObjectMeta) metav1.ObjectMeta {
+	if om.Labels == nil {
+		om.Labels = make(map[string]string)
+	}
+	om.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
+	return om
 }

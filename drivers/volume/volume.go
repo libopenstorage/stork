@@ -15,6 +15,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -153,6 +154,7 @@ type Driver interface {
 	ClusterPairPluginInterface
 	// MigratePluginInterface Interface to migrate data between clusters
 	MigratePluginInterface
+	ActionPluginInterface
 	// ClusterDomainsPluginInterface Interface to manage cluster domains
 	ClusterDomainsPluginInterface
 	// BackupRestorePluginInterface Interface to backup and restore volumes
@@ -182,15 +184,17 @@ type GroupSnapshotPluginInterface interface {
 type ClusterPairPluginInterface interface {
 	// Create a pair with a remote cluster
 	CreatePair(*storkapi.ClusterPair) (string, error)
-	// Deletes a paring with a remote cluster
+	// Deletes a pairing with a remote cluster
 	DeletePair(*storkapi.ClusterPair) error
+	// Get the pairing info with remote cluster
+	GetPair(string) (*api.ClusterPairInfo, error)
 }
 
 // MigratePluginInterface Interface to migrate data between clusters
 type MigratePluginInterface interface {
 	// Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
-	StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
+	StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error)
 	// Get the status of migration of the volumes specified in the status
 	// for the migration spec
 	GetMigrationStatus(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
@@ -198,7 +202,11 @@ type MigratePluginInterface interface {
 	CancelMigration(*storkapi.Migration) error
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
-	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string) (*v1.PersistentVolume, error)
+	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string, string, string) (*v1.PersistentVolume, error)
+}
+
+type ActionPluginInterface interface {
+	Failover(*storkapi.Action) error
 }
 
 // ClusterDomainsPluginInterface Interface to manage cluster domains
@@ -226,7 +234,7 @@ type BackupRestorePluginInterface interface {
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) (bool, error)
 	// Get any resources that should be created before the restore is started
-	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured) ([]runtime.Unstructured, error)
+	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured, []byte) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo, []runtime.Unstructured) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
@@ -278,6 +286,8 @@ type Info struct {
 	VolumeSourceRef interface{}
 	// NeedsAntiHyperconvergence is a flag for figuring if Pod needs anti-hyperconvergence
 	NeedsAntiHyperconvergence bool
+	// WindowsVolume is a flag to indicate if the volume is being used by a windows Pod
+	WindowsVolume bool
 }
 
 // NodeStatus Status of driver on a node
@@ -421,11 +431,16 @@ func (c *ClusterPairNotSupported) DeletePair(*storkapi.ClusterPair) error {
 	return &errors.ErrNotSupported{}
 }
 
+// GetPair Returns ErrNotSupported
+func (c *ClusterPairNotSupported) GetPair(string) (*api.ClusterPairInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 // MigrationNotSupported to be used by drivers that don't support migration
 type MigrationNotSupported struct{}
 
 // StartMigration returns ErrNotSupported
-func (m *MigrationNotSupported) StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+func (m *MigrationNotSupported) StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
@@ -444,6 +459,12 @@ func (m *MigrationNotSupported) UpdateMigratedPersistentVolumeSpec(
 	*v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
 	return nil, &errors.ErrNotSupported{}
+}
+
+type ActionNotSupported struct{}
+
+func (m *ActionNotSupported) Failover(*storkapi.Action) error {
+	return &errors.ErrNotSupported{}
 }
 
 // GroupSnapshotNotSupported to be used by drivers that don't support group snapshots

@@ -70,12 +70,12 @@ func triggerClusterDomainUpdate(
 ) {
 	// run the command on the remote cluster as currently
 	// we do not stop/deactivate the remote cluster
-	err := setRemoteConfig(remoteFilePath)
-	require.NoError(t, err, "Error resetting remote config")
+	err := setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	defer func() {
-		err = setRemoteConfig("")
-		require.NoError(t, err, "Error resetting remote config")
+		err := setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	}()
 
 	updateName := name + uuid.New()
@@ -117,7 +117,7 @@ func failoverAndFailbackClusterDomainTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, false, true, false)
+	validateAndDestroyMigration(t, ctxs, "cassandra-clusterdomain-migration", "cassandra", preMigrationCtx, true, false, false, true, false, false)
 
 	testClusterDomainsFailover(t, preMigrationCtx, ctxs)
 
@@ -182,8 +182,8 @@ func testClusterDomainsFailover(
 	require.NoError(t, err, "Unexpected error on scaling down application.")
 
 	// start the app on cluster 2
-	err = setRemoteConfig(remoteFilePath)
-	require.NoError(t, err, "Error setting remote config")
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Set scale factor to it's orignal values on cluster 1
 	err = schedulerDriver.ScaleApplication(preMigrationCtx, oldScaleFactor)
@@ -226,8 +226,8 @@ func testClusterDomainsFailback(
 	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// start the app on cluster 1
-	err = setRemoteConfig("")
-	require.NoError(t, err, "Error resetting remote config")
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	err = schedulerDriver.ScaleApplication(ctxs[0], oldScaleFactor)
 	require.NoError(t, err, "Unexpected error on ScaleApplication")

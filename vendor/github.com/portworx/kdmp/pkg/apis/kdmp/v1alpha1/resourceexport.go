@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -82,6 +83,20 @@ const (
 	ResourceExportStageFinal ResourceExportStage = "Final"
 )
 
+// ResourceExportResourceApplyPhase defines a status of resource restore
+type ResourceExportResourceApplyPhase string
+
+const (
+	// ResourceExportResourceApplyPhasePreparing signifies we are altering the resource
+	// as per target cluster before applying
+	ResourceExportResourceApplyPhasePreparing ResourceExportResourceApplyPhase = "Preparing"
+	// ResourceExportResourceApplyPhaseDeleting when Resources are deleted before applying this
+	// applicable only when replace is opted during restore process.
+	ResourceExportResourceApplyPhaseDeleting ResourceExportResourceApplyPhase = "Deleting"
+	// ResourceExportResourceApplyPhaseApplying when Resource is being applied as part of restore process
+	ResourceExportResourceApplyPhaseApplying ResourceExportResourceApplyPhase = "Applying"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -92,10 +107,8 @@ type ResourceExport struct {
 	Spec              ResourceExportSpec `json:"spec"`
 	// Status Overall status
 	Status ResourceStatus `json:"status,omitempty"`
-	// VolumesInfo Contains list of vols to be restored. Filled in by nfs executor job
-	VolumesInfo []*ResourceBackupVolumeInfo `json:"volumesInfo"`
-	// ExistingVolumesInfo existing vols which are not be restored
-	ExistingVolumesInfo []*ResourceRestoreVolumeInfo `json:"existingVolumesInfo,omitempty"`
+	// RestoreCompleteList - restore complete volumeInfo
+	RestoreCompleteList []*storkapi.ApplicationRestoreVolumeInfo `json:"restoreCompleteList,omitempty"`
 }
 
 // ResourceExportSpec configuration parameters for ResourceExport
@@ -124,6 +137,14 @@ type ResourceStatus struct {
 	Stage ResourceExportStage `json:"stage,omitempty"`
 	// Resources status of each resource being restore
 	Resources []*ResourceRestoreResourceInfo `json:"resources"`
+	// Total Resource Count is the total number of resources being restored
+	TotalResourceCount int64
+	// Restored Resource count is the count of already applied resource count
+	RestoredResourceCount int64
+	// Resource apply phase signifies the current stage of resource restore
+	ResourceExportResourceApplyStage ResourceExportResourceApplyPhase
+	// LargeResourceEnabled signifies if it largeResource enabled or not
+	LargeResourceEnabled bool
 }
 
 // ResourceExportObjectReference contains enough information to let you inspect the referred object.

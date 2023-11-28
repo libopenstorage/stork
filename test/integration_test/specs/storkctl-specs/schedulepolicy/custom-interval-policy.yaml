@@ -1,0 +1,12 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: "automation-test-policy"
+policy:
+  daily: null
+  interval:
+    intervalMinutes: 15
+    options: null
+    retain: 5
+  monthly: null
+  weekly: null

@@ -1,0 +1,13 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: "automation-test-policy"
+policy:
+  daily:
+    forceFullSnapshotDay: "wednesday"
+    options: null
+    retain: 2
+    time: "4:00PM"
+  interval: null
+  monthly: null
+  weekly: null
