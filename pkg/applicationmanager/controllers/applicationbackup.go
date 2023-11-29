@@ -770,7 +770,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if backup.Spec.PostExecRule != "" {
 					log.ApplicationBackupLog(backup).Infof("Starting post-exec rule for non-kdmp driver path")
 					err = a.runPostExecRule(backup)
-					a.execRulesCompleted[string(backup.UID)] = true
 					if err != nil {
 						message := fmt.Sprintf("Error running PostExecRule: %v", err)
 						log.ApplicationBackupLog(backup).Errorf(message)
@@ -785,10 +784,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						backup.Status.Reason = message
 						err = a.client.Update(context.TODO(), backup)
 						if err != nil {
+							log.ApplicationBackupLog(backup).Errorf("failed to update post exec rule failure status in cr %v", err)
 							return err
 						}
 						return fmt.Errorf("%v", message)
 					}
+					a.execRulesCompleted[string(backup.UID)] = true
 				}
 			}
 		}
@@ -1048,7 +1049,7 @@ func (a *ApplicationBackupController) runPostExecRule(backup *stork_api.Applicat
 	for _, ns := range backup.Spec.Namespaces {
 		_, err = rule.ExecuteRule(r, rule.PostExecRule, backup, ns)
 		if err != nil {
-			return fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
+			return fmt.Errorf("error executing PostExecRule for namespace %v: %v", ns, err)
 		}
 	}
 	return nil
