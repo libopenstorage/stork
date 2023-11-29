@@ -414,6 +414,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 		}
 	}
 	require.Equal(t, true, found, "Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode)
+	log.InfoD("Scheduled node for app found: %s", appNode.Name)
 
 	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
 
@@ -426,6 +427,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 	logrus.Infof("Scores: %v", scores)
 	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+	log.InfoD("Verified scheduled node for app has highest score: %s", appNode.Name)
 }
 
 // Helper function to get scoring of driverNodes based on hyper-convergence
