@@ -171,6 +171,7 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 		NodeCount:                          &nodeCount,
 		ResourceSettingsTemplateId:         &resourceTemplateID,
 	}
+	log.InfoD("Starting to update the deployment ... ")
 	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ctx, deploymentID).Body(createRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdPut`: %v\n.Full HTTP response: %v", err, res)

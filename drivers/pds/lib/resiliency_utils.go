@@ -5,6 +5,7 @@ import (
 	"fmt"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,25 +25,27 @@ import (
 )
 
 const (
-	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
-	PdsAgentPod                       = "pds-agent"
-	PdsTeleportPod                    = "pds-teleport"
-	PdsBackupControllerPod            = "pds-backup-controller-manager"
-	PdsTargetControllerPod            = "pds-operator-target-controller-manager"
-	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
-	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
-	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
-	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
-	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
-	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
-	UpdateTemplate                    = "medium"
-	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
-	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
-	RestoreDSDuringPXPoolExpansion    = "restore-ds-during-px-pool-expansion"
-	RestoreDSDuringKVDBFailOver       = "restore-ds-during-kvdb-fail-over"
-	RestoreDuringAllNodesReboot       = "restore-ds-during-node-reboot"
-	poolResizeTimeout                 = time.Minute * 120
-	retryTimeout                      = time.Minute * 2
+	PdsDeploymentControllerManagerPod   = "pds-deployment-controller-manager"
+	PdsAgentPod                         = "pds-agent"
+	PdsTeleportPod                      = "pds-teleport"
+	PdsBackupControllerPod              = "pds-backup-controller-manager"
+	PdsTargetControllerPod              = "pds-operator-target-controller-manager"
+	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
+	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp            = "restart-portworx-during-ds-scaleup"
+	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
+	RestartAppDuringResourceUpdate      = "restart-app-during-resource-update"
+	UpdateTemplate                      = "Medium"
+	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
+	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion      = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
+	RestoreDuringAllNodesReboot         = "restore-ds-during-node-reboot"
+	StopPXDuringStorageResize           = "stop-px-during-storage-resize"
+	KillDbMasterNodeDuringStorageResize = "kill-db-master-node-during-storage-resize"
+	poolResizeTimeout                   = time.Minute * 120
+	retryTimeout                        = time.Minute * 2
 )
 
 // PDS vars
@@ -221,6 +224,24 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+	case StopPXDuringStorageResize:
+		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
+		func1 := func() {
+			ResizeDataserviceStorage(deployment, namespace, UpdateTemplate)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case KillDbMasterNodeDuringStorageResize:
+		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
+		func1 := func() {
+			ResizeDataserviceStorage(deployment, namespace, UpdateTemplate)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
 	}
 
 	var aggregatedError error
@@ -335,6 +356,63 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 		DynamicDeployments = append(DynamicDeployments, restoredDeployment)
 		RestoredDeployments = append(RestoredDeployments, restoredDeployment)
 		log.InfoD("Restored successfully. Details: Deployment- %v", restoredDeployment.GetClusterResourceName())
+	}
+	return true, nil
+}
+
+func ResizeDataserviceStorage(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) (bool, error) {
+	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
+	var (
+		resourceTemplateId string
+		cpuLimits          int64
+		initialCapacity    string
+		updatedCapacity    string
+	)
+	initialCapacity = *deployment.Resources.StorageRequest
+	log.InfoD("Initial volume storage size is : %v", initialCapacity)
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+	for _, template := range resourceTemplates {
+		log.Debugf("template - %v", template.GetName())
+		if template.GetDataServiceId() == deployment.GetDataServiceId() && strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
+			log.Debugf("CpuLimit - %v, %T", cpuLimits, cpuLimits)
+			resourceTemplateId = template.GetId()
+		}
+	}
+	if resourceTemplateId == "" {
+		return false, fmt.Errorf("resource template - {%v} , not found", resourceTemplate)
+	}
+	if appConfigTemplateID == "" {
+		appConfigTemplateID, err = controlplane.GetAppConfTemplate(*deployment.TenantId, *deployment.Name)
+		log.FailOnError(err, "Error while fetching AppConfigID")
+	}
+	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
+	updatedDeployment, err := components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
+	if err != nil {
+		CapturedErrors <- err
+		return false, err
+	}
+	if ResiliencyFlag {
+		ResiliencyCondition <- true
+	}
+	log.InfoD("Resiliency Condition is met, now proceeding to validate if storage size is increased.")
+	err = dataservice.ValidateDataServiceDeployment(updatedDeployment, namespace)
+	log.FailOnError(err, "Error while validating dataservices")
+	log.InfoD("Data-service: %v is up and healthy", updatedDeployment.Name)
+	updatedCapacity = updatedDeployment.Resources.GetStorageRequest()
+	if updatedCapacity > initialCapacity {
+		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
+		log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
+	} else {
+		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
 	}
 	return true, nil
 }
