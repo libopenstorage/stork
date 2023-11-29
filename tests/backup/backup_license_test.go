@@ -315,7 +315,6 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 	})
 })
 
-// LicensingCountBeforeAndAfterBackupPodRestart verifies the license count before and after the backup pods restart
 var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 	var (
 		pxbNamespace                  string
@@ -378,7 +377,9 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		Step("Restart all the backup pod and wait for it to come up", func() {
 			pxbNamespace, err = backup.GetPxBackupNamespace()
 			log.FailOnError(err, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
+			var labelselector = make(map[string]string)
+			labelselector["kdmp.portworx.com/driver-name"] = "kopiamaintenance"
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, labelselector, true)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
 			err = ValidateAllPodsInPxBackupNamespace()
@@ -407,7 +408,9 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 		Step("Restart all the backup pod again and wait for it to come up", func() {
-			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
+			var labelselector = make(map[string]string)
+			labelselector["kdmp.portworx.com/driver-name"] = "kopiamaintenance"
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, labelselector, true)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
 			err = ValidateAllPodsInPxBackupNamespace()

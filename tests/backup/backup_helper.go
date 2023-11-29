@@ -1472,13 +1472,19 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 	return restoreNames, nil
 }
 
-// DeletePodWithLabelInNamespace kills pod with the given label in the given namespace
-func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
+// DeletePodWithWithoutLabelInNamespace kills pod with the given label in the given namespace or skip pod with the given label
+// and delete all pods
+func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]string, ignoreLabel bool) error {
 	var pods *corev1.PodList
 	var err error
 	// TODO: Revisit this function and remove the below code if not needed
 	podList := func() (interface{}, bool, error) {
-		pods, err = core.Instance().GetPods(namespace, label)
+		if ignoreLabel {
+			nolabel := make(map[string]string)
+			pods, err = core.Instance().GetPods(namespace, nolabel)
+		} else {
+			pods, err = core.Instance().GetPods(namespace, label)
+		}
 		if err != nil {
 			if strings.Contains(err.Error(), "no pod found with the label") {
 				return "", true, fmt.Errorf("waiting for pod with the given label %v to come up in namespace %s", label, namespace)
@@ -1497,12 +1503,29 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 	}
 
 	// fetch the newest set of pods post wait for pods to come up
-	pods, err = core.Instance().GetPods(namespace, label)
+	if ignoreLabel {
+		nolabel := make(map[string]string)
+		pods, err = core.Instance().GetPods(namespace, nolabel)
+	} else {
+		pods, err = core.Instance().GetPods(namespace, label)
+	}
 	if err != nil {
 		return err
 	}
-
 	for _, pod := range pods.Items {
+		skipPod := false
+		if ignoreLabel {
+			for key, podlabel := range pod.GetLabels() {
+				if podlabel2, exists := label[key]; exists && podlabel == podlabel2 {
+					skipPod = true
+					break
+				}
+			}
+			if skipPod {
+				break
+			}
+		}
+
 		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
 		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
 		if err != nil {
@@ -4517,7 +4540,7 @@ func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupNam
 	if err != nil {
 		return err
 	}
-	err = DeletePodWithLabelInNamespace(namespace, label)
+	err = DeletePodWithWithoutLabelInNamespace(namespace, label, false)
 	if err != nil {
 		return err
 	}
@@ -4552,7 +4575,7 @@ func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreN
 	if err != nil {
 		return err
 	}
-	err = DeletePodWithLabelInNamespace(namespace, label)
+	err = DeletePodWithWithoutLabelInNamespace(namespace, label, false)
 	if err != nil {
 		return err
 	}

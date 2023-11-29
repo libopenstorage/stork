@@ -315,7 +315,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.InfoD("Kill stork when backup in progress")
 			pxNamespace, err := ssh.GetExecPodNamespace()
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-			err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxNamespace, storkLabel, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
 		})
 
@@ -343,7 +343,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.InfoD("Kill stork when restore in-progress")
 			pxNamespace, err := ssh.GetExecPodNamespace()
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-			err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxNamespace, storkLabel, false)
 			dash.VerifyFatal(err, nil, "Killing stork while all the restores are in progress")
 		})
 		Step("Check if restore is successful when the stork restart happened", func() {
@@ -494,7 +494,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			backupPodLabel["app"] = "px-backup"
 			pxbNamespace, err := backup.GetPxBackupNamespace()
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, backupPodLabel, false)
 			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
 			err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
 			log.FailOnError(err, "Checking if px-backup pod is in running state")
@@ -548,7 +548,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			mongoDBPodLabel["app.kubernetes.io/component"] = mongodbStatefulset
 			pxbNamespace, err := backup.GetPxBackupNamespace()
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, mongoDBPodLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, mongoDBPodLabel, false)
 			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
 			err = IsMongoDBReady()
 			log.FailOnError(err, "Checking if mongo db pod is in running state")

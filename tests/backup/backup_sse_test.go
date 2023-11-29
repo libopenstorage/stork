@@ -300,7 +300,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.InfoD("Kill stork")
 				pxNamespace, err := ssh.GetExecPodNamespace()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-				err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
+				err = DeletePodWithWithoutLabelInNamespace(pxNamespace, storkLabel, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork after toggling SSE-S3 type"))
 			})
 			Step("Restart backup pod", func() {
@@ -309,7 +309,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				backupPodLabel["app"] = "px-backup"
 				pxbNamespace, err := backup.GetPxBackupNamespace()
 				dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-				err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
+				err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, backupPodLabel, false)
 				dash.VerifyFatal(err, nil, "Restart backup pod")
 				err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
 				log.FailOnError(err, "Checking if px-backup pod is in running state")
