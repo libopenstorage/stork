@@ -140,6 +140,33 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 
+			if transformSpec != "" {
+				// Validate the transformSpec
+				if err := validateTransformSpec(migrationNamespaces, transformSpec); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				// Create transformSpecs []string
+				// This is done because Migration.TransformSpecs is a []string and
+				// since current allowed maximum length of the array is 1 we only took a string as user input
+				transformSpecs = append(transformSpecs, transformSpec)
+			}
+
+			// We only support Job resources as part of includeOptionalResourceTypes as of now
+			if includeJobs {
+				includeOptionalResourceTypes = append(includeOptionalResourceTypes, "Job")
+			}
+
+			//validate excludeResourceTypes
+			if len(excludeResourceTypes) != 0 {
+				resourceTypes := strings.Join(excludeResourceTypes, ",")
+				excludeResourceTypes, err = getResourceTypes(resourceTypes, ioStreams)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+			}
+
 			// There are 4 possible cases for schedulePolicyName and interval flags
 			// 1. user provides both schedulePolicyName and interval value -> we throw an error saying you can only fill one of the values
 			// 2. user provides interval value only -> we will create a new schedule policy and use that in the migrationSchedule
@@ -178,33 +205,6 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				_, err := storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 				if err != nil {
 					util.CheckErr(fmt.Errorf("unable to get schedulepolicy %v: %v", schedulePolicyName, err))
-					return
-				}
-			}
-
-			if transformSpec != "" {
-				// Validate the transformSpec
-				if err := validateTransformSpec(migrationNamespaces, transformSpec); err != nil {
-					util.CheckErr(err)
-					return
-				}
-				// Create transformSpecs []string
-				// This is done because Migration.TransformSpecs is a []string and
-				// since current allowed maximum length of the array is 1 we only took a string as user input
-				transformSpecs = append(transformSpecs, transformSpec)
-			}
-
-			// We only support Job resources as part of includeOptionalResourceTypes as of now
-			if includeJobs {
-				includeOptionalResourceTypes = append(includeOptionalResourceTypes, "Job")
-			}
-
-			//validate excludeResourceTypes
-			if len(excludeResourceTypes) != 0 {
-				resourceTypes := strings.Join(excludeResourceTypes, ",")
-				excludeResourceTypes, err = getResourceTypes(resourceTypes, ioStreams)
-				if err != nil {
-					util.CheckErr(err)
 					return
 				}
 			}
