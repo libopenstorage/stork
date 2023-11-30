@@ -56,6 +56,22 @@ func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTar
 	return dtModel, nil
 }
 
+// PatchDeploymentTarget returns the updated the deployment target model
+func (dt *DeploymentTarget) PatchDeploymentTarget(targetID, issuerName string, tlsRequired bool) (*pds.ModelsDeploymentTarget, error) {
+	dtClient := dt.apiClient.DeploymentTargetsApi
+	log.Infof("Get cluster details having uuid - %v", targetID)
+	updateRequest := pds.RequestsPatchDeploymentTargetRequest{TlsIssuer: &issuerName, TlsRequired: &tlsRequired}
+	ctx, err := GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	dtModel, res, err := dtClient.ApiDeploymentTargetsIdPatch(ctx, targetID).Body(updateRequest).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentTargetsIdPut`: %v\n.Full HTTP response: %v", err, res)
+	}
+	return dtModel, nil
+}
+
 // UpdateTarget return updated deployment target model.
 func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi

@@ -77,7 +77,15 @@ var _ = BeforeSuite(func() {
 			log.FailOnError(err, "Failed to get the deployment TargetID")
 			dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
 			log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
+		})
 
+		steplog = "Update deployment target with cluster issuer"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			if params.TLS.EnableTLS {
+				err = targetCluster.UpdateTargetClusterWithClusterIssuer(deploymentTargetID, params.TLS.ClusterIssuerName, false)
+				log.FailOnError(err, "Error while updating the target cluster with cluster issuer")
+			}
 		})
 
 		steplog = "Get StorageTemplateID and Replicas"

@@ -20,7 +20,14 @@ type Parameter struct {
 		OldImage      string `json:"OldImage"`
 	} `json:"DataServiceToTest"`
 	ForceImageID bool
-	InfraToTest  struct {
+	TLS          struct {
+		EnableTLS              bool
+		RepoName               string
+		RepoURL                string
+		ClusterIssuerName      string
+		ClusterIssuerNamespace string
+	}
+	InfraToTest struct {
 		ControlPlaneURL      string `json:"ControlPlaneURL"`
 		AccountName          string `json:"AccountName"`
 		TenantName           string `json:"TenantName"`
