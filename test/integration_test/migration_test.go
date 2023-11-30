@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
@@ -134,6 +135,7 @@ func triggerMigration(
 	projectIDMappings string,
 	namespaceLabels map[string]string,
 ) ([]*scheduler.Context, *scheduler.Context) {
+	log.InfoD("Schedule mysql app")
 	ctxs, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{
 			AppKeys: []string{appKey},
@@ -144,6 +146,7 @@ func triggerMigration(
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for app to get to running state")
+	log.InfoD("Mysql app validated")
 
 	preMigrationCtx := ctxs[0].DeepCopy()
 
@@ -159,9 +162,11 @@ func triggerMigration(
 		preMigrationCtx = ctxs[0].DeepCopy()
 	}
 
+	log.InfoD("Schedule cluster pair")
 	// Schedule bidirectional or regular cluster pair based on the flag
 	scheduleClusterPairGeneric(t, ctxs, appKey, instanceID, defaultClusterPairDir, projectIDMappings, skipStoragePair, true, pairReverse)
 
+	log.InfoD("Start migration")
 	// apply migration specs
 	err = schedulerDriver.AddTasks(ctxs[0],
 		scheduler.ScheduleOptions{AppKeys: migrationAppKeys})
@@ -257,6 +262,7 @@ func validateAndDestroyMigration(
 	} else {
 		require.Error(t, err, "Expected migration to fail")
 	}
+	log.InfoD("Migration validated")
 
 	// destroy app on cluster 1
 	if !skipAppDeletion {
@@ -269,6 +275,7 @@ func validateAndDestroyMigration(
 }
 
 func deploymentMigrationTest(t *testing.T) {
+	dash.TestCaseBegin("Deployment migration test", "Validating Async DR with Deployment App", "", nil)
 	var testrailID, testResult = 50803, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
@@ -293,6 +300,7 @@ func deploymentMigrationTest(t *testing.T) {
 }
 
 func deploymentMigrationReverseTest(t *testing.T) {
+	dash.TestCaseBegin("Deployment migration reverse test", "Validating Async DR and reverse Async DR from destination cluster", "", nil)
 	var testrailID, testResult = 54210, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
@@ -2189,6 +2197,7 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 	skipStoragePair, resetConfig, pairReverse bool) {
 	var err error
 	if bidirectionalClusterpair {
+		log.InfoD("Scheduling bidirectional cluster pair")
 		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 		logrus.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
 		logrus.Infof("Name: %s", remotePairName)
@@ -2201,6 +2210,7 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	} else if unidirectionalClusterpair {
+		log.InfoD("Scheduling unidirectional cluster pair")
 		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 		logrus.Info("Unidirectional flag is set, will create unidirectional cluster pair:")
 		logrus.Infof("Name: %s", remotePairName)
@@ -2210,6 +2220,7 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, true, pairReverse)
 		require.NoError(t, err, "failed to set unidirectional cluster pair: %v", err)
 	} else {
+		log.InfoD("Scheduling cluster pair using storkctl generate")
 		// create, apply and validate cluster pair specs
 		err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, projectIDMappings, pairReverse)
 		require.NoError(t, err, "Error scheduling cluster pair")
