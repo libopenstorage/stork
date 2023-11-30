@@ -207,7 +207,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 	createSchedulePolicyCommand.Flags().StringVarP(&time, timeFlag, "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Stork should trigger the operation.")
 	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, forceFullSnapshotDayFlag, "", "Monday", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
 	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, dayOfWeekFlag, "", "Sunday", "Specify the day of the week when Stork should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
-	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, dateOfMonthFlag, "", 1, "Specify the day of the month when Stork should trigger the operation.")
+	createSchedulePolicyCommand.Flags().IntVarP(&dateOfMonth, dateOfMonthFlag, "", 1, "Specify the date of the month when Stork should trigger the operation.")
 	return createSchedulePolicyCommand
 }
 
