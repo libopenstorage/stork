@@ -103,6 +103,7 @@ func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 	logrus.Infof("Starting migration %s/%s with startApplication false", appData.Ns, migNamePref+appName)
 	startApplications := false
 	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	require.NoError(t, err, "Error creating migration")
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
@@ -305,6 +306,7 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	logrus.Infof("Starting migration %s/%s with startApplication true", appData.Ns, migNamePref+appName)
 	startApplications := true
 	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	require.NoError(t, err, "Error creating migration")
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
@@ -404,6 +406,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	firstMigrationName := fmt.Sprintf("%s%s-%d", migNamePref, appName, 1)
 	logrus.Infof("Starting migration %s/%s with startApplication false, iteration number: 1", appData.Ns, firstMigrationName)
 	mig1, err := asyncdr.CreateMigration(firstMigrationName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	require.NoError(t, err, "Error creating migration")
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig1})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, mig1.Name)
@@ -416,6 +419,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	secondMigrationName := fmt.Sprintf("%s%s-%d", migNamePref, appName, 2)
 	logrus.Infof("Starting migration %s/%s with startApplication false, iteration number: 2", appData.Ns, secondMigrationName)
 	mig2, err := asyncdr.CreateMigration(secondMigrationName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	require.NoError(t, err, "Error creating migration")
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig2})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, mig2.Name)
@@ -544,6 +548,7 @@ func testFailbackWithStashStrategy(t *testing.T) {
 	logrus.Infof("Starting migration %s/%s with startApplication false", appData.Ns, migNamePref+appName)
 	startApplications := false
 	mig, err := asyncdr.CreateMigration(migNamePref+appName, migrationNamespace, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	require.NoError(t, err, "Error creating migration")
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
@@ -600,6 +605,7 @@ func testFailbackWithStashStrategy(t *testing.T) {
 	revMigrationName := fmt.Sprintf("%s%s-%s", migNamePref, appName, "reverse")
 	logrus.Infof("Starting reverse migration %s/%s with startApplication false", appData.Ns, revMigrationName)
 	revmig, err := asyncdr.CreateMigration(revMigrationName, migrationNamespace, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	require.NoError(t, err, "Error creating migration")
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{revmig})
 	require.NoError(t, err, "Error waiting for migration")
 	logrus.Infof("Migration %s/%s completed successfully ", appData.Ns, revMigrationName)

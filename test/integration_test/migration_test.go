@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
 const (
@@ -1338,7 +1337,7 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
 	for location, secret := range cmData {
 		logrus.Infof("Creating a bidirectional-pair using %s as objectstore.", location)
-		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret)
+		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", v1alpha1.BackupLocationType(location), secret)
 		require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
 
 		err = setSourceKubeConfig()
@@ -1413,7 +1412,7 @@ func unidirectionalClusterPairTest(t *testing.T) {
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
 	for location, secret := range cmData {
 		logrus.Infof("Creating a unidirectional-pair using %s as objectstore.", location)
-		err := scheduleUnidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret, true, false)
+		err := scheduleUnidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", v1alpha1.BackupLocationType(location), secret, true, false)
 		require.NoError(t, err, "failed to set unidirectional cluster pair: %v", err)
 
 		err = setSourceKubeConfig()
@@ -2082,10 +2081,12 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 
 	serviceAccountSrc, err = core.Instance().UpdateServiceAccount(serviceAccountSrc)
 	require.NoError(t, err, "Error updating service account on source")
+	require.NotNil(t, serviceAccountSrc)
 
 	// After update do a get on service account to get values of secret references
 	serviceAccountSrc, err = core.Instance().GetServiceAccount(appKey, testNamespace)
-	require.NoError(t, err, "Error getting service account on source")
+	require.NoError(t, err, "Error getting service account")
+	require.NotNil(t, serviceAccountSrc)
 
 	// Collect secret references on source cluster
 	secretRefSrc := make(map[string]bool)
@@ -2095,6 +2096,7 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 
 	mysqlService, err := core.Instance().GetService("mysql-service", testNamespace)
 	require.NoError(t, err, "Error getting mysql service on source")
+	require.NotNil(t, mysqlService)
 
 	// Update ports on the service on source clusters
 	var updatedPorts []int32
@@ -2105,6 +2107,7 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 
 	mysqlService, err = core.Instance().UpdateService(mysqlService)
 	require.NoError(t, err, "Error updating mysql service on source")
+	require.NotNil(t, mysqlService)
 
 	logrus.Infof("Waiting for next migration to trigger...")
 	time.Sleep(5 * time.Minute)

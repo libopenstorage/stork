@@ -17,10 +17,6 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
-var templatePVCSpecs = map[string]string{
-	"fedora": "kubevirt-templates",
-}
-
 const (
 	importerPodPrefix            = "importer"
 	importerPodStartTimeout      = 2 * time.Minute

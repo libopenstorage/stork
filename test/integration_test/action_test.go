@@ -52,7 +52,7 @@ func testFailoverBasic(t *testing.T) {
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -95,7 +95,7 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -119,7 +119,7 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 	addTasksAndWait(t, ctxs[0], additionalAppKeys)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -164,7 +164,7 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -190,7 +190,8 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 	funcRestartNode := func() {
 		mapNodeIDToNode := node.GetNodesByVoDriverNodeID()
 		logrus.Infof("mapNodeIDToNode: %v", mapNodeIDToNode)
-		nodeObj, _ := mapNodeIDToNode[nearSyncTargetMid]
+		nodeObj, ok := mapNodeIDToNode[nearSyncTargetMid]
+		require.True(t, ok)
 		logrus.Infof("node: %v", nodeObj)
 
 		_, err = nodeDriver.RunCommand(
