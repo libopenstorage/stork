@@ -376,6 +376,10 @@ func TestCreateMigrationScheduleWithInvalidTransformSpec(t *testing.T) {
 	createResourceTransformation(t, "test-rt", "default", storkv1.ResourceTransformationStatusFailed)
 	expected := "error: transformation default/test-rt is not in ready state, state: Failed"
 	testCommon(t, cmdArgs, nil, expected, true)
+
+	//validate that schedule-policy was not created since validations have failed and migration schedule was not created
+	_, err := storkops.Instance().GetSchedulePolicy("migrationschedule")
+	require.EqualErrorf(t, err, "schedulepolicies.stork.libopenstorage.org \"migrationschedule\" not found", "Schedule Policy expected not found error did not occur")
 }
 
 func TestCreateMigrationScheduleWithValidTransformSpec(t *testing.T) {
@@ -406,28 +410,38 @@ func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
-func TestDefaultMigrationSchedulePolicy(t *testing.T) {
+func TestMigrationScheduleWithInvalidSchedulePolicy(t *testing.T) {
 	defer resetTest()
-	// Create schedule without the default policy present
+	// Create schedule without the custom policy present
 	createClusterPair(t, "clusterpair1", "test", "async-dr")
-	cmdArgs := []string{"create", "migrationschedules", "defaultmigrationschedule", "-c", "clusterpair1", "--namespaces", "test", "-n", "test"}
-	expected := "error: unable to get schedulepolicy default-migration-policy: schedulepolicies.stork.libopenstorage.org \"default-migration-policy\" not found"
+	cmdArgs := []string{"create", "migrationschedules", "migrationschedule", "-c", "clusterpair1", "--namespaces", "test", "-n", "test", "--schedule-policy-name", "migrate-every-5m"}
+	expected := "error: unable to get schedulepolicy migrate-every-5m: schedulepolicies.stork.libopenstorage.org \"migrate-every-5m\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	// Create again adding default policy
 	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default-migration-policy",
+			Name: "migrate-every-5m",
 		},
 		Policy: storkv1.SchedulePolicyItem{
 			Interval: &storkv1.IntervalPolicy{
-				IntervalMinutes: 1,
+				IntervalMinutes: 5,
 			}},
 	})
 	require.NoError(t, err, "Error creating schedulepolicy")
-	expected = "MigrationSchedule defaultmigrationschedule created successfully\n"
+	expected = "MigrationSchedule migrationschedule created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
+
+func TestMigrationScheduleWithDefaultSchedulePolicy(t *testing.T) {
+	defer resetTest()
+	// default-migration-policy with 30min interval will be created if it doesn't already exist in default case
+	createClusterPair(t, "clusterpair1", "test", "async-dr")
+	cmdArgs := []string{"create", "migrationschedules", "migrationschedule", "-c", "clusterpair1", "--namespaces", "test", "-n", "test"}
+	expected := "MigrationSchedule migrationschedule created successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func TestDeleteMigrationSchedulesNoMigrationName(t *testing.T) {
 	cmdArgs := []string{"delete", "migrationschedules"}
 
