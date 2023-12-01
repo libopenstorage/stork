@@ -2433,7 +2433,7 @@ func (m *MigrationController) parallelWorker(
 
 	if shuffle {
 		// Shuffle Object order before applying so we can get parallelism between resource types
-		rand.Seed(time.Now().UnixNano())
+		rand.New(rand.NewSource(time.Now().UnixNano()))
 		rand.Shuffle(len(objects), func(i, j int) { objects[i], objects[j] = objects[j], objects[i] })
 	}
 

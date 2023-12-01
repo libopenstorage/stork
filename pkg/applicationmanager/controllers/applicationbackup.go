@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,7 +46,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	coreapi "k8s.io/kubernetes/pkg/apis/core"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,10 +61,6 @@ const (
 	crdObjectName      = "crds.json"
 	nsObjectName       = "namespaces.json"
 	metadataObjectName = "metadata.json"
-
-	backupCancelBackoffInitialDelay = 5 * time.Second
-	backupCancelBackoffFactor       = 1
-	backupCancelBackoffSteps        = math.MaxInt32
 
 	allNamespacesSpecifier          = "*"
 	backupVolumeBatchCountEnvVar    = "BACKUP-VOLUME-BATCH-COUNT"
@@ -99,11 +93,6 @@ const (
 )
 
 var (
-	backupCancelBackoff = wait.Backoff{
-		Duration: backupCancelBackoffInitialDelay,
-		Factor:   backupCancelBackoffFactor,
-		Steps:    backupCancelBackoffSteps,
-	}
 	optionalBackupResources = []string{"Job"}
 	errResourceBusy         = fmt.Errorf("resource is busy")
 )
