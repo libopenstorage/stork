@@ -13,7 +13,7 @@ STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
-DOCK_BUILD_CNT := golang:1.21.2
+DOCK_BUILD_CNT := golang:1.21.4
 
 # DO NOT update this to the latest version. We need to keep this old enough so that
 # px_statfs.so can be loaded on OCP 4.12 which uses RHEL8. Use "ldd -r -v ./bin/px_statfs.so" to
