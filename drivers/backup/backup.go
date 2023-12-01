@@ -8,6 +8,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 // Image Generic struct
@@ -431,6 +432,9 @@ type Rule interface {
 
 	// CreateRuleForBackup creates backup rule
 	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
+
+	// CreateRuleForKubevirtBackup creates backup rule for kubevirt
+	CreateRuleForKubevirtBackup(ctx context.Context, virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error)
 
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error
