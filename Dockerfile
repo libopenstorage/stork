@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8-minimal:latest
+FROM registry.access.redhat.com/ubi9-minimal:latest
 MAINTAINER Portworx Inc. <support@portworx.com>
 
 ARG VERSION=master
@@ -9,8 +9,6 @@ LABEL name="Stork" \
     release=${RELEASE} \
     summary="Storage Operator Runtime for Kubernetes" \
     description="Stork is a Cloud Native storage operator runtime scheduler plugin"
-
-RUN curl https://yum.portworx.com/dl/ubi8/libsolv-0.7.22-4.el8pc.x86_64.rpm -o libresolv.rpm && rpm -U libresolv.rpm && rm -f libresolv.rpm
 
 RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip openssl curl git findutils unzip
 
