@@ -33,7 +33,7 @@ RUN asdf install kubelogin latest
 RUN asdf global kubelogin latest
 
 #Install Google Cloud SDK
-ARG GCLOUD_SDK=google-cloud-cli-444.0.0-linux-x86_64.tar.gz
+ARG GCLOUD_SDK=google-cloud-cli-455.0.0-linux-x86_64.tar.gz
 ARG GCLOUD_INSTALL_DIR="/usr/lib"
 RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
     tar xf $GCLOUD_SDK -C $GCLOUD_INSTALL_DIR && rm -rf $GCLOUD_SDK && \
