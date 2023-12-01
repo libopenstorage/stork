@@ -93,8 +93,8 @@ func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error
 	return client, nil
 }
 
-// getKubernetesInstance - Get hanlder to k8s cluster.
-func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
+// GetKubernetesInstance - Get handler to k8s cluster.
+func GetKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
 	client, err := getKubernetesRestConfig(cluster)
 	if err != nil {
 		return nil, nil, err
@@ -861,7 +861,7 @@ func (p *portworx) GetVolumeBackupIDs(
 ) ([]string, error) {
 
 	var volumeBackupIDs []string
-	_, storkClient, err := getKubernetesInstance(clusterObj)
+	_, storkClient, err := GetKubernetesInstance(clusterObj)
 	if err != nil {
 		return volumeBackupIDs, err
 	}
@@ -1641,7 +1641,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 				fmt.Errorf("[%v] number of backups remain undeleted", len(backups))
 		}
 		// Check all the backup CRs are deleted.
-		_, inst, err := getKubernetesInstance(clusterObj)
+		_, inst, err := GetKubernetesInstance(clusterObj)
 		if err != nil {
 			return nil, true, err
 		}

@@ -297,6 +297,7 @@ const (
 const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
+	StorkNamePrefix                   = "stork-namespace"
 	BackupRestoreCompletionTimeoutMin = 20
 	clusterDeleteTimeout              = 60 * time.Minute
 	clusterDeleteRetryTime            = 30 * time.Second

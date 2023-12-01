@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -16,10 +21,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
-	"os"
-	"strings"
-	"testing"
-	"time"
 )
 
 // TestcaseAuthor List
@@ -35,6 +36,7 @@ const (
 	Tthurlapati    TestcaseAuthor = "tthurlapati-px"
 	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
+	ATrivedi       TestcaseAuthor = "atrivedi-px"
 )
 
 // TestcaseQuarter List

@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	"github.com/portworx/torpedo/drivers"
+
 	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -31,6 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -286,12 +288,57 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	if err != nil {
 		return err
 	}
+
 	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
+}
+
+// CreateBackupWithCRValidation creates backup and checks for success along with Backup CR Validation
+func CreateBackupWithCRValidation(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
+	backupInspectResponse, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+
+	err = ValidateBackupCR(backupInspectResponse, ctx)
+	if err != nil {
+		return err
+	}
+
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Backup [%s] created successfully", backupName)
+	return nil
+}
+
+// ValidateBackupCR validates the CR creation for backup
+func ValidateBackupCR(backupInspectResponse *api.BackupInspectResponse, ctx context.Context) error {
+
+	// Getting the backup object from backupInspectResponse
+	backupObject := backupInspectResponse.GetBackup()
+
+	backupDriver := Inst().Backup
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, backupObject.Cluster)
+	if err != nil {
+		return err
+	}
+
+	return validateBackupCRs(
+		backupObject.Name,
+		backupObject.Cluster,
+		backupObject.OrgId,
+		clusterUID,
+		backupObject.Namespaces,
+		ctx)
+
 }
 
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class based on the env variable - VOLUME_SNAPSHOT_CLASS
@@ -465,6 +512,53 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
 	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+}
+
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup along with CR validation
+func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	backupScheduleInspectReponse, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	if err != nil {
+		return "", err
+	}
+	time.Sleep(1 * time.Minute)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+
+	err = ValidateScheduleBackupCR(firstScheduleBackupName, backupScheduleInspectReponse, ctx)
+	if err != nil {
+		return "", err
+	}
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+}
+
+func ValidateScheduleBackupCR(backupName string, backupScheduleInspectReponse *api.BackupScheduleInspectResponse, ctx context.Context) error {
+
+	// Getting the backup schedule object from backupScheduleInspectReponse
+	backupSchedule := backupScheduleInspectReponse.BackupSchedule
+
+	backupDriver := Inst().Backup
+	clusterUID, err := backupDriver.GetClusterUID(ctx, backupSchedule.Metadata.OrgId, backupSchedule.BackupScheduleInfo.Cluster)
+	if err != nil {
+		return err
+	}
+
+	return validateBackupCRs(
+		backupName,
+		backupSchedule.BackupScheduleInfo.Cluster,
+		backupSchedule.Metadata.OrgId,
+		clusterUID,
+		backupSchedule.BackupScheduleInfo.Namespaces,
+		ctx)
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
@@ -816,6 +910,68 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
 		return err
+	}
+	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
+// CreateRestoreWithCRValidation creates a restore along with restore CR validation
+func CreateRestoreWithCRValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
+
+	var bkpUid string
+
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+	backupDriver := Inst().Backup
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	// Commenting out restore validation for now as it's happening so fast that
+	// program is not able to detect the custom resource created and destroyed
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	err = ValidateRestoreCRs(restoreName, clusterName, orgID, clusterUID, ctx, namespaceMapping)
+	if err != nil {
+		log.Warnf(err.Error())
 	}
 	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
@@ -2968,6 +3124,7 @@ func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, s
 		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+
 	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
@@ -5581,4 +5738,237 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
 	return nil
+}
+
+// ChangeStorkAdminNamespace changes admin namespace for Storage Cluster
+func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
+	// Get current storage cluster configuration
+	isOpBased, err := Inst().V.IsOperatorBasedInstall()
+	if err != nil {
+		return nil, err
+	}
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	storkOldPods, err := core.Instance().GetPods(storkDeploymentNamespace, map[string]string{"name": "stork"})
+	if err != nil {
+		return nil, err
+	}
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Is op based deployment %v", isOpBased)
+
+	if isOpBased {
+		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
+			log.Infof("Current admin namespace - [%s]", adminNamespace)
+		}
+		// Setting the new admin namespace
+		if namespace != "" {
+			stc.Spec.Stork.Args["admin-namespace"] = namespace
+		} else {
+			delete(stc.Spec.Stork.Args, "admin-namespace")
+		}
+		stc, err = operator.Instance().UpdateStorageCluster(stc)
+		if err != nil {
+			return nil, err
+		}
+		if namespace != "" {
+			log.Infof("Configured admin namespace to %s", namespace)
+		} else {
+			log.Infof("Removed admin namespace") // Removing admin namespace is not supported - https://docs.portworx.com/portworx-backup-on-prem/configure/admin-namespace.html
+		}
+	} else {
+		log.Infof("Updating stork deployment as it's pxe is not present")
+		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+		if err != nil {
+			return nil, err
+		}
+		storkDeployment.Spec.Template.Spec.Containers[0].Command = append(storkDeployment.Spec.Template.Spec.Containers[0].Command, fmt.Sprintf("--admin-namespace=%s", namespace))
+
+		_, err = apps.Instance().UpdateDeployment(storkDeployment)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return nil, err
+	}
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return nil, err
+	}
+
+	// Removing all old stork pods
+	for _, pod := range storkOldPods.Items {
+		err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
+		if err != nil {
+			log.Warnf("Unable to delete [%v]. Error - [%s]", pod.Name, err.Error())
+		} else {
+			log.Infof("Old stork pod deleted [%v]", pod.Name)
+		}
+	}
+
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return nil, err
+	}
+
+	return stc, nil
+}
+
+// getCurrentAdminNamespace returns the value of current admin namespace set
+func getCurrentAdminNamespace() (string, error) {
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		stc, err := Inst().V.GetDriver()
+		if err != nil {
+			return "", err
+		}
+		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
+			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			return adminNamespace, nil
+		} else {
+			adminNamespace, err := k8sutils.GetStorkPodNamespace()
+			if err != nil {
+				return "", err
+			}
+			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			return adminNamespace, nil
+		}
+
+	} else {
+		adminNamespace, err := k8sutils.GetStorkPodNamespace()
+		if err != nil {
+			return "", err
+		}
+		log.Infof("Current admin namespace - [%s]", adminNamespace)
+		return adminNamespace, nil
+	}
+}
+
+// Validates Backup CRs created
+func validateBackupCRs(backupName string, clusterName string, orgID string, clusterUID string,
+	backupNameSpaces []string, ctx context.Context) error {
+
+	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	if len(backupNameSpaces) == 1 {
+		currentAdminNamespace = backupNameSpaces[0]
+	}
+	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
+
+	backupDriver := Inst().Backup
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+
+	validateBackupCRInNamespace := func() (interface{}, bool, error) {
+		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
+		log.InfoD("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
+
+		for _, eachCR := range allBackupCrs {
+			if strings.Contains(eachCR, backupName) {
+				log.Infof("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", backupName, currentAdminNamespace)
+	}
+
+	_, err = task.DoRetryWithTimeout(validateBackupCRInNamespace, 5*time.Minute, 500*time.Millisecond)
+
+	return err
+}
+
+// Validates Restore CRs created
+func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, clusterUID string, ctx context.Context,
+	restoreNameSpaces map[string]string) error {
+	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	if len(restoreNameSpaces) == 1 {
+		for _, val := range restoreNameSpaces {
+			currentAdminNamespace = val
+		}
+	}
+	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
+
+	backupDriver := Inst().Backup
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+
+	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
+		allRestoreCrs, err := GetRestoreCRs(currentAdminNamespace, clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
+		log.InfoD("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
+
+		for _, eachCR := range allRestoreCrs {
+			if strings.Contains(eachCR, restoreName) {
+				log.Infof("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+	}
+
+	_, err = task.DoRetryWithTimeout(validateRestoreCRInNamespace, 5*time.Minute, 500*time.Millisecond)
+
+	return err
+}
+
+// GetBackupCRs lists all the Backup CRs present under given namespace
+func GetBackupCRs(
+	namespace string,
+	clusterObj *api.ClusterObject) ([]string, error) {
+
+	allBackupCRNames := make([]string, 0)
+	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Warnf("failed to get application backup CR from [%s]. Error [%v]", namespace, err)
+		return nil, err
+	}
+
+	for _, backup := range storkApplicationBackupCR.Items {
+		allBackupCRNames = append(allBackupCRNames, backup.Name)
+	}
+	return allBackupCRNames, nil
+}
+
+// GetRestoreCRs lists all the Restore CRs present under given namespace
+func GetRestoreCRs(
+	namespace string,
+	clusterObj *api.ClusterObject) ([]string, error) {
+
+	allRestoreCRNames := make([]string, 0)
+	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	storkApplicationRestoreCR, err := storkClient.ListApplicationRestores(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Warnf("failed to get application restore CR from [%s]. Error [%v]", namespace, err)
+		return nil, err
+	}
+
+	for _, restore := range storkApplicationRestoreCR.Items {
+		allRestoreCRNames = append(allRestoreCRNames, restore.Name)
+	}
+	return allRestoreCRNames, nil
 }
