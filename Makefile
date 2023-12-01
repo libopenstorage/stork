@@ -13,7 +13,7 @@ STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
-DOCK_BUILD_CNT := golang:1.19.10
+DOCK_BUILD_CNT := golang:1.21.2
 
 # DO NOT update this to the latest version. We need to keep this old enough so that
 # px_statfs.so can be loaded on OCP 4.12 which uses RHEL8. Use "ldd -r -v ./bin/px_statfs.so" to
@@ -85,7 +85,8 @@ vet:
 staticcheck:
 	  docker run --rm  $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork $(DOCK_BUILD_CNT) \
 		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
-			  go install honnef.co/go/tools/cmd/staticcheck@v0.3.3; \
+			  go install honnef.co/go/tools/cmd/staticcheck@v0.4.6; \
+			  git config --global --add safe.directory /go/src/github.com/libopenstorage/stork; \
 			  staticcheck $(PKGS); \
 			  staticcheck -tags integrationtest test/integration_test/*.go;staticcheck -tags unittest $(PKGS)"
 
@@ -93,6 +94,7 @@ errcheck:
 	  docker run --rm  $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
 	          GO111MODULE=off go get -u github.com/kisielk/errcheck; \
+		  git config --global --add safe.directory /go/src/github.com/libopenstorage/stork; \
 	          errcheck -verbose -blank $(PKGS); \
 	          errcheck -verbose -blank -tags unittest $(PKGS); \
 	          errcheck -verbose -blank -tags integrationtest /go/src/github.com/libopenstorage/stork/test/integration_test"

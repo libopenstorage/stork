@@ -5,7 +5,7 @@ package integrationtest
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -137,7 +137,7 @@ func getClusterConfigPath(cmName string) (string, error) {
 	}
 	filePath := fmt.Sprintf("%s/%s", kubeconfigDirectory, cmName)
 	log.Infof("Save kubeconfig to %s", filePath)
-	err = ioutil.WriteFile(filePath, []byte(config), 0644)
+	err = os.WriteFile(filePath, []byte(config), 0644)
 	if err != nil {
 		return "", err
 	}
