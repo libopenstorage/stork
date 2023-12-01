@@ -74,11 +74,14 @@ const (
 	// will incorporate in their names
 	pvcNameLenLimitForJob = 48
 
-	defaultTimeout        = 1 * time.Minute
-	progressCheckInterval = 5 * time.Second
-	compressionKey        = "KDMP_COMPRESSION"
-	excludeFileListKey    = "KDMP_EXCLUDE_FILE_LIST"
-	backupPath            = "KDMP_BACKUP_PATH"
+	defaultTimeout             = 1 * time.Minute
+	progressCheckInterval      = 5 * time.Second
+	compressionKey             = "KDMP_COMPRESSION"
+	excludeFileListKey         = "KDMP_EXCLUDE_FILE_LIST"
+	backupPath                 = "KDMP_BACKUP_PATH"
+	defaultFBDAIgnorFileList   = "/.snapshot/"
+	backendFBDAStorageClassKey = "backend"
+	backendFBDAStorageClassVal = "pure_file"
 )
 
 type updateDataExportDetail struct {
@@ -276,29 +279,46 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 			kdmpData, err := core.Instance().GetConfigMap(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace)
 			if err != nil {
-				logrus.Errorf("failed reading config map %v: %v", utils.KdmpConfigmapName, err)
-				if err != nil {
-					msg := fmt.Sprintf("Failed in parsing the excludeFileList configmap parameter from configmap [%v/%v]: %v", utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName, err)
-					logrus.Errorf(msg)
-					data := updateDataExportDetail{
-						status: kdmpapi.DataExportStatusFailed,
-						reason: msg,
-					}
-					return false, c.updateStatus(dataExport, data)
+				msg := fmt.Sprintf("Failed in reading configmap [%v/%v]: %v", utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName, err)
+				logrus.Errorf(msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
 				}
+				return false, c.updateStatus(dataExport, data)
 			}
 			compressionType = kdmpData.Data[compressionKey]
 			podDataPath = kdmpData.Data[backupPath]
-			if len(kdmpData.Data[excludeFileListKey]) != 0 {
-				excludeFileList, err = parseExcludeFileListKey(pvcStorageClass, kdmpData.Data[excludeFileListKey])
-				if err != nil {
-					msg := fmt.Sprintf("Failed in parsing the excludeFileList configmap parameter from configmap [%v/%v]", utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName)
-					logrus.Errorf(msg)
-					data := updateDataExportDetail{
-						status: kdmpapi.DataExportStatusFailed,
-						reason: msg,
+			if driverName == drivers.KopiaBackup {
+				if len(kdmpData.Data[excludeFileListKey]) != 0 {
+					excludeFileList, err = parseExcludeFileListKey(pvcStorageClass, kdmpData.Data[excludeFileListKey])
+					if err != nil {
+						msg := fmt.Sprintf("Failed in parsing the excludeFileList configmap parameter from configmap [%v/%v]: %v",
+							utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName, err)
+						logrus.Errorf(msg)
+						data := updateDataExportDetail{
+							status: kdmpapi.DataExportStatusFailed,
+							reason: msg,
+						}
+						return false, c.updateStatus(dataExport, data)
 					}
-					return false, c.updateStatus(dataExport, data)
+				} else {
+					// Add default ignore rule, if any.
+					// For FBDA pvc, we will add "/.snapshot/" dir to be ignored by default.
+					if len(pvcStorageClass) != 0 {
+						excludeFileList, err = getDefaultIgnoreFileListForFBDA(pvcStorageClass)
+						if err != nil {
+							msg := fmt.Sprintf("Failed in getting storageclass[%v] for setting default ignore file option : %v",
+								pvcStorageClass, err)
+							logrus.Errorf(msg)
+							data := updateDataExportDetail{
+								status: kdmpapi.DataExportStatusFailed,
+								reason: msg,
+							}
+							return false, c.updateStatus(dataExport, data)
+						}
+						logrus.Infof("Default exclude file list for sc %v: %v", pvcStorageClass, excludeFileList)
+					}
 				}
 			}
 			blName := dataExport.Spec.Destination.Name
@@ -526,6 +546,21 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	return false, nil
 }
 
+func getDefaultIgnoreFileListForFBDA(pvcStorageClass string) (string, error) {
+	var sc *storagev1.StorageClass
+	sc, checkErr := storage.Instance().GetStorageClass(pvcStorageClass)
+	if checkErr != nil {
+		return "", checkErr
+	}
+	if val, ok := sc.Parameters[backendFBDAStorageClassKey]; ok && val == backendFBDAStorageClassVal {
+		excludeFileList := defaultFBDAIgnorFileList
+		logrus.Infof("setting default FBDA ignore file list: %v", excludeFileList)
+		return excludeFileList, nil
+	}
+	return "", nil
+}
+
+// parseExcludeFileListKey:
 // If pvc storageclass and the configured storageclass matches, extract the configured ignore file list and return it.
 // For code reference, adding the sample of the configmap parameter.
 //
@@ -540,16 +575,27 @@ func parseExcludeFileListKey(pvcStorageClass string, excludeFileListValue string
 	excludeFileListValue = strings.TrimSuffix(string(excludeFileListValue), "\n")
 	storageClassList := strings.Split(excludeFileListValue, "\n")
 	var excludeFileList string
+	var err error
 	for _, storageClass := range storageClassList {
 		equalSignSplit := strings.Split(storageClass, "=")
-		if len(equalSignSplit) != 2 {
+		if len(equalSignSplit) <= 1 {
 			return "", fmt.Errorf("invalid exclude file list in the configmap parameter")
 		}
 		// if the PVC storageclass and configure storageclass are same, extract the configured ignore file list
 		if pvcStorageClass == equalSignSplit[0] {
 			excludeFileList = equalSignSplit[1]
+			break
 		}
 
+	}
+	// If the cm parameter did not had any matching rule, we will try to get the default file ignore list.
+	// For now, we have default list only for FABDA. The default file list is "/.snapshot/
+	if len(excludeFileList) == 0 {
+		excludeFileList, err = getDefaultIgnoreFileListForFBDA(pvcStorageClass)
+		if err != nil {
+			return "", err
+		}
+		logrus.Infof("parseExcludeFileListKey: Default exclude file list for sc %v: %v", pvcStorageClass, excludeFileList)
 	}
 	logrus.Infof("parseExcludeFileListKey: configured excludeFileList - %v", excludeFileList)
 	return excludeFileList, nil
