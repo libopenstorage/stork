@@ -1,6 +1,6 @@
 module github.com/libopenstorage/stork
 
-go 1.19
+go 1.21
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
@@ -64,7 +64,7 @@ require (
 
 require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
-	github.com/portworx/kdmp v0.4.1-0.20231123040148-68149a57dc24
+	github.com/portworx/kdmp v0.4.1-0.20231130175942-e8a1e0c64972
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	kubevirt.io/api v1.0.0
 )
@@ -333,7 +333,7 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231123040148-68149a57dc24
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231130175942-e8a1e0c64972
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
