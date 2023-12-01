@@ -2,6 +2,7 @@ package storkctl
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 	"time"
 
@@ -200,11 +201,26 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 					util.CheckErr(fmt.Errorf("could not create a schedule policy with specified interval: %v", err))
 					return
 				}
-			} else {
-				// case #3 and #4 are covered in this branch
+			} else if c.Flags().Changed(schedulePolicyNameFlag) {
 				_, err := storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 				if err != nil {
 					util.CheckErr(fmt.Errorf("unable to get schedulepolicy %v: %v", schedulePolicyName, err))
+					return
+				}
+			} else {
+				//we will create the default-migration-policy in case it doesn't exist for any reason
+				defaultInterval := 30
+				_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+					ObjectMeta: meta.ObjectMeta{
+						Name: schedulePolicyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							IntervalMinutes: defaultInterval,
+						}},
+				})
+				if err != nil && !errors.IsAlreadyExists(err) {
+					util.CheckErr(err)
 					return
 				}
 			}
