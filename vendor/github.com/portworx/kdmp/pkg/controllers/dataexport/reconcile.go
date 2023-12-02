@@ -62,6 +62,7 @@ const (
 	pxbackupAnnotationCreateByValue = "px-backup"
 	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
 	pvcUIDKey                       = kdmpAnnotationPrefix + "pvc-uid"
+	kdmpStorageClassKey             = kdmpAnnotationPrefix + "storage-class"
 	volumeSnapShotCRDirectory       = "csi-generic"
 	snapDeleteAnnotation            = "snapshotScheduledForDeletion"
 	snapRestoreAnnotation           = "snapshotScheduledForRestore"
@@ -73,10 +74,14 @@ const (
 	// will incorporate in their names
 	pvcNameLenLimitForJob = 48
 
-	defaultTimeout        = 1 * time.Minute
-	progressCheckInterval = 5 * time.Second
-	compressionKey        = "KDMP_COMPRESSION"
-	backupPath            = "KDMP_BACKUP_PATH"
+	defaultTimeout             = 1 * time.Minute
+	progressCheckInterval      = 5 * time.Second
+	compressionKey             = "KDMP_COMPRESSION"
+	excludeFileListKey         = "KDMP_EXCLUDE_FILE_LIST"
+	backupPath                 = "KDMP_BACKUP_PATH"
+	defaultFBDAIgnorFileList   = "/.snapshot/"
+	backendFBDAStorageClassKey = "backend"
+	backendFBDAStorageClassVal = "pure_file"
 )
 
 type updateDataExportDetail struct {
@@ -261,6 +266,8 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 		var compressionType string
 		var podDataPath string
+		var excludeFileList string
+		pvcStorageClass := dataExport.Labels[kdmpStorageClassKey]
 		var backupLocation *storkapi.BackupLocation
 		var data updateDataExportDetail
 		if driverName != drivers.Rsync {
@@ -272,12 +279,47 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 
 			kdmpData, err := core.Instance().GetConfigMap(utils.KdmpConfigmapName, utils.KdmpConfigmapNamespace)
 			if err != nil {
-				logrus.Errorf("failed reading config map %v: %v", utils.KdmpConfigmapName, err)
-				logrus.Warnf("default to %s compression", utils.DefaultCompresion)
-				compressionType = utils.DefaultCompresion
-			} else {
-				compressionType = kdmpData.Data[compressionKey]
-				podDataPath = kdmpData.Data[backupPath]
+				msg := fmt.Sprintf("Failed in reading configmap [%v/%v]: %v", utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName, err)
+				logrus.Errorf(msg)
+				data := updateDataExportDetail{
+					status: kdmpapi.DataExportStatusFailed,
+					reason: msg,
+				}
+				return false, c.updateStatus(dataExport, data)
+			}
+			compressionType = kdmpData.Data[compressionKey]
+			podDataPath = kdmpData.Data[backupPath]
+			if driverName == drivers.KopiaBackup {
+				if len(kdmpData.Data[excludeFileListKey]) != 0 {
+					excludeFileList, err = parseExcludeFileListKey(pvcStorageClass, kdmpData.Data[excludeFileListKey])
+					if err != nil {
+						msg := fmt.Sprintf("Failed in parsing the excludeFileList configmap parameter from configmap [%v/%v]: %v",
+							utils.KdmpConfigmapNamespace, utils.KdmpConfigmapName, err)
+						logrus.Errorf(msg)
+						data := updateDataExportDetail{
+							status: kdmpapi.DataExportStatusFailed,
+							reason: msg,
+						}
+						return false, c.updateStatus(dataExport, data)
+					}
+				} else {
+					// Add default ignore rule, if any.
+					// For FBDA pvc, we will add "/.snapshot/" dir to be ignored by default.
+					if len(pvcStorageClass) != 0 {
+						excludeFileList, err = getDefaultIgnoreFileListForFBDA(pvcStorageClass)
+						if err != nil {
+							msg := fmt.Sprintf("Failed in getting storageclass[%v] for setting default ignore file option : %v",
+								pvcStorageClass, err)
+							logrus.Errorf(msg)
+							data := updateDataExportDetail{
+								status: kdmpapi.DataExportStatusFailed,
+								reason: msg,
+							}
+							return false, c.updateStatus(dataExport, data)
+						}
+						logrus.Infof("Default exclude file list for sc %v: %v", pvcStorageClass, excludeFileList)
+					}
+				}
 			}
 			blName := dataExport.Spec.Destination.Name
 			blNamespace := dataExport.Spec.Destination.Namespace
@@ -287,7 +329,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 				blNamespace = vb.Spec.BackupLocation.Namespace
 			}
 
-			backupLocation, err := readBackupLocation(blName, blNamespace, "")
+			backupLocation, err = readBackupLocation(blName, blNamespace, "")
 			if err != nil {
 				msg := fmt.Sprintf("reading of backuplocation [%v/%v] failed: %v", blNamespace, blName, err)
 				logrus.Errorf(msg)
@@ -308,6 +350,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 			driver,
 			srcPVCName,
 			compressionType,
+			excludeFileList,
 			dataExport,
 			podDataPath,
 			utils.KdmpConfigmapName,
@@ -503,6 +546,61 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 	return false, nil
 }
 
+func getDefaultIgnoreFileListForFBDA(pvcStorageClass string) (string, error) {
+	var sc *storagev1.StorageClass
+	sc, checkErr := storage.Instance().GetStorageClass(pvcStorageClass)
+	if checkErr != nil {
+		return "", checkErr
+	}
+	if val, ok := sc.Parameters[backendFBDAStorageClassKey]; ok && val == backendFBDAStorageClassVal {
+		excludeFileList := defaultFBDAIgnorFileList
+		logrus.Infof("setting default FBDA ignore file list: %v", excludeFileList)
+		return excludeFileList, nil
+	}
+	return "", nil
+}
+
+// parseExcludeFileListKey:
+// If pvc storageclass and the configured storageclass matches, extract the configured ignore file list and return it.
+// For code reference, adding the sample of the configmap parameter.
+//
+//	KDMP_EXCLUDE_FILE_LIST: |
+//	   px-db=dir1,file1,dir2
+//	   mysql=dir1,file1,dir2
+//
+// After we read, the parameter value comes as follow:
+// "px-db=dir1,file1,dir2\nmysql=dir1,file1,dir2\n"
+func parseExcludeFileListKey(pvcStorageClass string, excludeFileListValue string) (string, error) {
+	// trim the ending "\n" character, if it present
+	excludeFileListValue = strings.TrimSuffix(string(excludeFileListValue), "\n")
+	storageClassList := strings.Split(excludeFileListValue, "\n")
+	var excludeFileList string
+	var err error
+	for _, storageClass := range storageClassList {
+		equalSignSplit := strings.Split(storageClass, "=")
+		if len(equalSignSplit) <= 1 {
+			return "", fmt.Errorf("invalid exclude file list in the configmap parameter")
+		}
+		// if the PVC storageclass and configure storageclass are same, extract the configured ignore file list
+		if pvcStorageClass == equalSignSplit[0] {
+			excludeFileList = equalSignSplit[1]
+			break
+		}
+
+	}
+	// If the cm parameter did not had any matching rule, we will try to get the default file ignore list.
+	// For now, we have default list only for FABDA. The default file list is "/.snapshot/
+	if len(excludeFileList) == 0 {
+		excludeFileList, err = getDefaultIgnoreFileListForFBDA(pvcStorageClass)
+		if err != nil {
+			return "", err
+		}
+		logrus.Infof("parseExcludeFileListKey: Default exclude file list for sc %v: %v", pvcStorageClass, excludeFileList)
+	}
+	logrus.Infof("parseExcludeFileListKey: configured excludeFileList - %v", excludeFileList)
+	return excludeFileList, nil
+}
+
 func appendPodLogToStork(jobName string, namespace string) {
 	// Get job and check whether it has live pod attaced to it
 	job, err := batch.Instance().GetJob(jobName, namespace)
@@ -565,7 +663,7 @@ func (c *Controller) createJobCredCertSecrets(
 
 	// Check if the above env is present and read the certs file contents and
 	// secret for the job pod for kopia to access the same
-	err := createCertificateSecret(utils.GetCertSecretName(dataExport.Name), namespace, dataExport.Labels)
+	err := createCertificateSecret(utils.GetCertSecretName(dataExport.Name), namespace, blName, blNamespace, dataExport.Labels)
 	if err != nil {
 		msg := fmt.Sprintf("error in creating certificate secret[%v/%v]: %v", namespace, dataExport.Name, err)
 		logrus.Errorf(msg)
@@ -1752,6 +1850,7 @@ func startTransferJob(
 	drv drivers.Interface,
 	srcPVCName string,
 	compressionType string,
+	excludeFileList string,
 	dataExport *kdmpapi.DataExport,
 	podDataPath string,
 	jobConfigMap string,
@@ -1812,6 +1911,7 @@ func startTransferJob(
 			drivers.WithCertSecretName(utils.GetCertSecretName(dataExport.GetName())),
 			drivers.WithCertSecretNamespace(dataExport.Spec.Source.Namespace),
 			drivers.WithCompressionType(compressionType),
+			drivers.WithExcludeFileList(excludeFileList),
 			drivers.WithPodDatapathType(podDataPath),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
@@ -2156,7 +2256,15 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	return err
 }
 
-func createCertificateSecret(secretName, namespace string, labels map[string]string) error {
+func createCertificateSecret(secretName, namespace, blName, blNamespace string, labels map[string]string) error {
+	backupLocation, err := readBackupLocation(blName, blNamespace, "")
+	if err != nil {
+		return err
+	}
+	// when DisableSSL is true, dont create job cert secrets.
+	if backupLocation.Location.Type == storkapi.BackupLocationS3 && backupLocation.Location.S3Config.DisableSSL {
+		return nil
+	}
 	drivers.CertFilePath = os.Getenv(drivers.CertDirPath)
 	if drivers.CertFilePath != "" {
 		certificateData, err := os.ReadFile(filepath.Join(drivers.CertFilePath, drivers.CertFileName))
