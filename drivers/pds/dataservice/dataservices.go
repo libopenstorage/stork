@@ -94,13 +94,14 @@ type TestParams struct {
 }
 
 type PDSDataService struct {
-	Name          string "json:\"Name\""
-	Version       string "json:\"Version\""
-	Image         string "json:\"Image\""
-	Replicas      int    "json:\"Replicas\""
-	ScaleReplicas int    "json:\"ScaleReplicas\""
-	OldVersion    string "json:\"OldVersion\""
-	OldImage      string "json:\"OldImage\""
+	Name                  string "json:\"Name\""
+	Version               string "json:\"Version\""
+	Image                 string "json:\"Image\""
+	Replicas              int    "json:\"Replicas\""
+	ScaleReplicas         int    "json:\"ScaleReplicas\""
+	OldVersion            string "json:\"OldVersion\""
+	OldImage              string "json:\"OldImage\""
+	DataServiceEnabledTLS bool   "json:\"DataServiceEnabledTLS\""
 }
 
 // GetVersionsImage returns the required Image of dataservice version
@@ -227,7 +228,7 @@ func (d *DataserviceType) GetDataServiceID(ds string) (string, error) {
 // DeployDS deploys dataservices its internally used function
 func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceDefaultAppConfigID string,
 	replicas int32, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID, dsVersion,
-	dsBuild, namespace string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	dsBuild, namespace string, enableTLS bool) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 
 	currentReplicas = replicas
 
@@ -292,7 +293,9 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 		currentReplicas,
 		serviceType,
 		dataServiceDefaultResourceTemplateID,
-		storageTemplateID)
+		storageTemplateID,
+		enableTLS,
+	)
 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("An Error Occured while creating deployment %v", err)
@@ -359,6 +362,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 		dsVersion,
 		dsImage,
 		namespace,
+		ds.DataServiceEnabledTLS,
 	)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error while deploying data services %v", err)

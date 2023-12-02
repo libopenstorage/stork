@@ -38,13 +38,14 @@ import (
 )
 
 type PDSDataService struct {
-	Name          string "json:\"Name\""
-	Version       string "json:\"Version\""
-	Image         string "json:\"Image\""
-	Replicas      int    "json:\"Replicas\""
-	ScaleReplicas int    "json:\"ScaleReplicas\""
-	OldVersion    string "json:\"OldVersion\""
-	OldImage      string "json:\"OldImage\""
+	Name                  string "json:\"Name\""
+	Version               string "json:\"Version\""
+	Image                 string "json:\"Image\""
+	Replicas              int    "json:\"Replicas\""
+	ScaleReplicas         int    "json:\"ScaleReplicas\""
+	OldVersion            string "json:\"OldVersion\""
+	OldImage              string "json:\"OldImage\""
+	DataServiceEnabledTLS bool   "json:\"DataServiceEnabledTLS\""
 }
 
 type TestParams struct {

@@ -31,20 +31,38 @@ func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.Models
 }
 
 // CreateDeployment return newly created deployment model.
-func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string) (*pds.ModelsDeployment, error) {
+func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, enableTLS bool) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
-	createRequest := pds.RequestsCreateProjectDeploymentRequest{
-		ApplicationConfigurationTemplateId: &appConfigID,
-		DeploymentTargetId:                 &deploymentTargetID,
-		DnsZone:                            &dnsZone,
-		ImageId:                            &imageID,
-		Name:                               &name,
-		NamespaceId:                        &namespaceID,
-		NodeCount:                          &nodeCount,
-		ResourceSettingsTemplateId:         &resourceTemplateID,
-		ServiceType:                        &serviceType,
-		StorageOptionsTemplateId:           &storageTemplateID,
+	var createRequest pds.RequestsCreateProjectDeploymentRequest
+	if enableTLS {
+		createRequest = pds.RequestsCreateProjectDeploymentRequest{
+			ApplicationConfigurationTemplateId: &appConfigID,
+			DeploymentTargetId:                 &deploymentTargetID,
+			DnsZone:                            &dnsZone,
+			ImageId:                            &imageID,
+			Name:                               &name,
+			NamespaceId:                        &namespaceID,
+			NodeCount:                          &nodeCount,
+			ResourceSettingsTemplateId:         &resourceTemplateID,
+			ServiceType:                        &serviceType,
+			StorageOptionsTemplateId:           &storageTemplateID,
+			TlsEnabled:                         &enableTLS,
+		}
+	} else {
+		createRequest = pds.RequestsCreateProjectDeploymentRequest{
+			ApplicationConfigurationTemplateId: &appConfigID,
+			DeploymentTargetId:                 &deploymentTargetID,
+			DnsZone:                            &dnsZone,
+			ImageId:                            &imageID,
+			Name:                               &name,
+			NamespaceId:                        &namespaceID,
+			NodeCount:                          &nodeCount,
+			ResourceSettingsTemplateId:         &resourceTemplateID,
+			ServiceType:                        &serviceType,
+			StorageOptionsTemplateId:           &storageTemplateID,
+		}
 	}
+
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)

@@ -871,11 +871,11 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 		for _, ds := range params.DataServiceToTest {
 			if ds.Name == postgresql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas), ds.DataServiceEnabledTLS)
 			}
 			if ds.Name == mysql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas), ds.DataServiceEnabledTLS)
 			}
 		}
 	})
@@ -886,7 +886,7 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 
 // This module deploys a data service, validates it, Prepares the data service with 4 districts and 2 warehouses
 // and runs TPCC Workload for a default time of 2 minutes
-func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) {
+func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32, enableTLS bool) {
 	Step("Deploy and Validate Data Service and run TPCC Workload", func() {
 		isDeploymentsDeleted = false
 		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, dataservice)
@@ -911,6 +911,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			Version,
 			Image,
 			namespace,
+			enableTLS,
 		)
 		log.FailOnError(err, "Error while deploying data services")
 		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
@@ -1282,6 +1283,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			oldVersion,
 			oldImage,
 			namespace,
+			ds.DataServiceEnabledTLS,
 		)
 		log.FailOnError(err, "Error while deploying data services")
 		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
