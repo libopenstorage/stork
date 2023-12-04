@@ -911,6 +911,8 @@ func populateIntervals() {
 	triggerInterval[AddStorageNode] = make(map[int]time.Duration)
 	triggerInterval[AddStoragelessNode] = make(map[int]time.Duration)
 	triggerInterval[OCPStorageNodeRecycle] = make(map[int]time.Duration)
+	triggerInterval[HAIncreaseAndCrashPX] = make(map[int]time.Duration)
+	triggerInterval[HAIncreaseAndRestartPX] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
