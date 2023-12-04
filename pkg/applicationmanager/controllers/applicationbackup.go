@@ -264,12 +264,12 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			}
 			// get-rid of map entry for termination channel and rule flag
 			if _, ok := a.terminationChannels[string(backup.UID)]; ok {
-				log.ApplicationBackupLog(backup).Infof("deleted termination channel entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 				delete(a.terminationChannels, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("deleted termination channel entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 			}
 			if _, ok := a.execRulesCompleted[string(backup.UID)]; ok {
-				log.ApplicationBackupLog(backup).Infof("deleted post exec flag entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 				delete(a.execRulesCompleted, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("deleted post exec flag entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 			}
 			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller.
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
@@ -757,6 +757,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// Run any post exec rules once all volume backup is triggered
 		driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 		// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
+
+		// The flag check is done for non-kdmp driver only because in case of other volume types
+		// snapshot would have been already completed by the time we get to run postexec rule.
+		// This ensures that snapshots for non-kdmp volumes are completed before calling the post-exec
+		// rules and ending the pre-exec pods if any. Additionally, it ensures we execute post-exec rule
+		// only once in the lifetime of certain backup.
 		if !a.execRulesCompleted[string(backup.UID)] {
 			if driverCombo == nonKdmpDriverOnly {
 				// Let's kill the pre-exec rule pod here so that application specific
