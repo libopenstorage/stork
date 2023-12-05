@@ -1982,6 +1982,33 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	})
 }
 
+// CrashPXDaemonAndWait crashes px daemon service on given app nodes and waits till driver is back up
+func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	context(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.KillPXDaemon(appNodes, nil)
+			processError(err, errChan...)
+		})
+
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				processError(err, errChan...)
+			}
+		})
+
+	})
+}
+
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {

@@ -4849,8 +4849,6 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			log.InfoD(stepLog)
 			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
 
-			log.FailOnError(err, "Failed to check if Journal enabled")
-
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")

@@ -62,6 +62,7 @@ var _ = Describe("{Longevity}", func() {
 		RebootNode:       TriggerRebootNodes,
 		ValidatePdsApps:  TriggerValidatePdsApps,
 		CrashNode:        TriggerCrashNodes,
+		CrashPXDaemon:    TriggerCrashPXDaemon,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAIncrease:       TriggerHAIncrease,
@@ -124,6 +125,10 @@ var _ = Describe("{Longevity}", func() {
 		OCPStorageNodeRecycle:    TriggerOCPStorageNodeRecycle,
 		HAIncreaseAndCrashPX:     TriggerHAIncreaseAndCrashPX,
 		HAIncreaseAndRestartPX:   TriggerHAIncreaseAndPXRestart,
+		NodeMaintenanceCycle:     TriggerNodeMaintenanceCycle,
+		PoolMaintenanceCycle:     TriggerPoolMaintenanceCycle,
+		StorageFullPoolExpansion: TriggerStorageFullPoolExpansion,
+		HAIncreaseWithPVCResize:  TriggerHAIncreasWithPVCResize,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -591,6 +596,7 @@ func populateDisruptiveTriggers() {
 		ResizeDiskAndReboot:             true,
 		VolumeCreatePxRestart:           true,
 		OCPStorageNodeRecycle:           true,
+		CrashPXDaemon:                   true,
 	}
 }
 
@@ -905,14 +911,17 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
 	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
-
 	triggerInterval[AggrVolDepReplResizeOps] = make(map[int]time.Duration)
-
 	triggerInterval[AddStorageNode] = make(map[int]time.Duration)
 	triggerInterval[AddStoragelessNode] = make(map[int]time.Duration)
 	triggerInterval[OCPStorageNodeRecycle] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndCrashPX] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndRestartPX] = make(map[int]time.Duration)
+	triggerInterval[CrashPXDaemon] = make(map[int]time.Duration)
+	triggerInterval[NodeMaintenanceCycle] = make(map[int]time.Duration)
+	triggerInterval[PoolMaintenanceCycle] = make(map[int]time.Duration)
+	triggerInterval[StorageFullPoolExpansion] = make(map[int]time.Duration)
+	triggerInterval[HAIncreaseWithPVCResize] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1246,6 +1255,50 @@ func populateIntervals() {
 	triggerInterval[CrashNode][2] = 24 * baseInterval
 	triggerInterval[CrashNode][1] = 27 * baseInterval
 
+	triggerInterval[CrashPXDaemon][10] = 1 * baseInterval
+	triggerInterval[CrashPXDaemon][9] = 3 * baseInterval
+	triggerInterval[CrashPXDaemon][8] = 6 * baseInterval
+	triggerInterval[CrashPXDaemon][7] = 9 * baseInterval
+	triggerInterval[CrashPXDaemon][6] = 12 * baseInterval
+	triggerInterval[CrashPXDaemon][5] = 15 * baseInterval
+	triggerInterval[CrashPXDaemon][4] = 18 * baseInterval
+	triggerInterval[CrashPXDaemon][3] = 21 * baseInterval
+	triggerInterval[CrashPXDaemon][2] = 24 * baseInterval
+	triggerInterval[CrashPXDaemon][1] = 27 * baseInterval
+
+	triggerInterval[NodeMaintenanceCycle][10] = 1 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][9] = 3 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][8] = 6 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][7] = 9 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][6] = 12 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][5] = 15 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][4] = 18 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][3] = 21 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][2] = 24 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][1] = 27 * baseInterval
+
+	triggerInterval[PoolMaintenanceCycle][10] = 1 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][9] = 3 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][8] = 6 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][7] = 9 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][6] = 12 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][5] = 15 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][4] = 18 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][3] = 21 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][2] = 24 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][1] = 27 * baseInterval
+
+	triggerInterval[StorageFullPoolExpansion][10] = 1 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][9] = 3 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][8] = 6 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][7] = 9 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][6] = 12 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][5] = 15 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][4] = 18 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][3] = 21 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][2] = 24 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][1] = 27 * baseInterval
+
 	triggerInterval[HAIncreaseAndCrashPX][10] = 1 * baseInterval
 	triggerInterval[HAIncreaseAndCrashPX][9] = 3 * baseInterval
 	triggerInterval[HAIncreaseAndCrashPX][8] = 6 * baseInterval
@@ -1256,6 +1309,17 @@ func populateIntervals() {
 	triggerInterval[HAIncreaseAndCrashPX][3] = 21 * baseInterval
 	triggerInterval[HAIncreaseAndCrashPX][2] = 24 * baseInterval
 	triggerInterval[HAIncreaseAndCrashPX][1] = 27 * baseInterval
+
+	triggerInterval[HAIncreaseWithPVCResize][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][5] = 15 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][1] = 27 * baseInterval
 
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
 	triggerInterval[CrashVolDriver][9] = 3 * baseInterval
@@ -1821,6 +1885,11 @@ func populateIntervals() {
 	triggerInterval[NodeDecommission][0] = 0
 	triggerInterval[HAIncreaseAndRestartPX][0] = 0
 	triggerInterval[HAIncreaseAndCrashPX][0] = 0
+	triggerInterval[CrashPXDaemon][0] = 0
+	triggerInterval[NodeMaintenanceCycle][0] = 0
+	triggerInterval[PoolMaintenanceCycle][0] = 0
+	triggerInterval[StorageFullPoolExpansion][0] = 0
+	triggerInterval[HAIncreaseWithPVCResize][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

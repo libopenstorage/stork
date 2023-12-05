@@ -471,6 +471,14 @@ func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool, triggerOpts *d
 	}
 }
 
+// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+func (d *DefaultDriver) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "KillPXDaemon()",
+	}
+}
+
 // GetNodeForVolume returns the node on which the volume is attached
 func (d *DefaultDriver) GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	return nil, &errors.ErrNotSupported{
