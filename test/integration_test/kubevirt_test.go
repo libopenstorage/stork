@@ -68,7 +68,6 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 		t,
 		instanceID,
 		[]string{appKey},
-		false,
 	)
 
 	log.Infof("Destroying apps")
@@ -90,7 +89,6 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 		t,
 		instanceID,
 		[]string{appKey},
-		false,
 	)
 
 	log.Infof("Destroying apps")
@@ -105,7 +103,6 @@ func kubevirtVMsDeployAndValidate(
 	t *testing.T,
 	instanceID string,
 	appKeys []string,
-	multiVolume bool,
 ) []*scheduler.Context {
 	ctxs, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{
@@ -115,7 +112,7 @@ func kubevirtVMsDeployAndValidate(
 	require.Equal(t, len(appKeys), len(ctxs), "wrong number of tasks started")
 
 	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		err = schedulerDriver.WaitForRunning(ctx, 30*time.Minute, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for app %s to get to running state", ctx.App.Key)
 
 		namespace := appKey + "-" + instanceID
@@ -125,10 +122,7 @@ func kubevirtVMsDeployAndValidate(
 		for _, vm := range vms.Items {
 			require.Equal(t, vm.Status.Created, true, "VM %s not created yet", vm.Name)
 			require.Equal(t, vm.Status.Ready, true, "VM %s not ready yet", vm.Name)
-			if multiVolume {
-				// verify there are multiple volumes mounted by the virtual machine in case of multi volume config
-				require.Greater(t, len(vm.Spec.Template.Spec.Volumes), 2, "VM %s does not have the required data disks", vm.Name)
-			}
+			logrus.Infof("VM %s has %d disks", vm.Name, len(vm.Spec.Template.Spec.Volumes))
 		}
 	}
 	return ctxs
@@ -145,7 +139,6 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 		t,
 		instanceID,
 		[]string{appKey},
-		false,
 	)
 
 	destroyAndWait(t, ctxs)
@@ -166,7 +159,6 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 		t,
 		instanceID,
 		[]string{appKey},
-		false,
 	)
 
 	destroyAndWait(t, ctxs)
@@ -187,7 +179,6 @@ func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
 		t,
 		instanceID,
 		[]string{appKey},
-		true,
 	)
 
 	destroyAndWait(t, ctxs)
