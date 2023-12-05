@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,7 +46,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	coreapi "k8s.io/kubernetes/pkg/apis/core"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,10 +61,6 @@ const (
 	crdObjectName      = "crds.json"
 	nsObjectName       = "namespaces.json"
 	metadataObjectName = "metadata.json"
-
-	backupCancelBackoffInitialDelay = 5 * time.Second
-	backupCancelBackoffFactor       = 1
-	backupCancelBackoffSteps        = math.MaxInt32
 
 	allNamespacesSpecifier          = "*"
 	backupVolumeBatchCountEnvVar    = "BACKUP-VOLUME-BATCH-COUNT"
@@ -99,11 +93,6 @@ const (
 )
 
 var (
-	backupCancelBackoff = wait.Backoff{
-		Duration: backupCancelBackoffInitialDelay,
-		Factor:   backupCancelBackoffFactor,
-		Steps:    backupCancelBackoffSteps,
-	}
 	optionalBackupResources = []string{"Job"}
 	errResourceBusy         = fmt.Errorf("resource is busy")
 )
@@ -275,12 +264,12 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			}
 			// get-rid of map entry for termination channel and rule flag
 			if _, ok := a.terminationChannels[string(backup.UID)]; ok {
-				log.ApplicationBackupLog(backup).Infof("deleted termination channel entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 				delete(a.terminationChannels, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("deleted termination channel entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 			}
 			if _, ok := a.execRulesCompleted[string(backup.UID)]; ok {
-				log.ApplicationBackupLog(backup).Infof("deleted post exec flag entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 				delete(a.execRulesCompleted, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("deleted post exec flag entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
 			}
 			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller.
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
@@ -768,6 +757,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// Run any post exec rules once all volume backup is triggered
 		driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 		// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
+
+		// The flag check is done for non-kdmp driver only because in case of other volume types
+		// snapshot would have been already completed by the time we get to run postexec rule.
+		// This ensures that snapshots for non-kdmp volumes are completed before calling the post-exec
+		// rules and ending the pre-exec pods if any. Additionally, it ensures we execute post-exec rule
+		// only once in the lifetime of certain backup.
 		if !a.execRulesCompleted[string(backup.UID)] {
 			if driverCombo == nonKdmpDriverOnly {
 				// Let's kill the pre-exec rule pod here so that application specific
@@ -781,7 +776,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if backup.Spec.PostExecRule != "" {
 					log.ApplicationBackupLog(backup).Infof("Starting post-exec rule for non-kdmp driver path")
 					err = a.runPostExecRule(backup)
-					a.execRulesCompleted[string(backup.UID)] = true
 					if err != nil {
 						message := fmt.Sprintf("Error running PostExecRule: %v", err)
 						log.ApplicationBackupLog(backup).Errorf(message)
@@ -796,10 +790,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						backup.Status.Reason = message
 						err = a.client.Update(context.TODO(), backup)
 						if err != nil {
+							log.ApplicationBackupLog(backup).Errorf("failed to update post exec rule failure status in cr %v", err)
 							return err
 						}
 						return fmt.Errorf("%v", message)
 					}
+					a.execRulesCompleted[string(backup.UID)] = true
 				}
 			}
 		}
@@ -1059,7 +1055,7 @@ func (a *ApplicationBackupController) runPostExecRule(backup *stork_api.Applicat
 	for _, ns := range backup.Spec.Namespaces {
 		_, err = rule.ExecuteRule(r, rule.PostExecRule, backup, ns)
 		if err != nil {
-			return fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
+			return fmt.Errorf("error executing PostExecRule for namespace %v: %v", ns, err)
 		}
 	}
 	return nil

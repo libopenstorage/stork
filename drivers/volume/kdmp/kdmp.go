@@ -32,7 +32,6 @@ import (
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/component-helpers/storage/volume"
 )
 
@@ -85,12 +84,6 @@ const (
 	awsNodeLabelKey          = "alpha.eksctl.io/cluster-name"
 	ocpAWSNodeLabelKey       = "topology.ebs.csi.aws.com/zone"
 )
-
-var volumeAPICallBackoff = wait.Backoff{
-	Duration: volumeinitialDelay,
-	Factor:   volumeFactor,
-	Steps:    volumeSteps,
-}
 
 var (
 	nonSupportedProvider = false
