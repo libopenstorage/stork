@@ -6,7 +6,7 @@ metadata:
   labels:
     app: containerized-data-importer
   annotations:
-    cdi.kubevirt.io/storage.import.endpoint: https://ftp-nyc.osuosl.org/pub/fedora/linux/releases/37/Cloud/x86_64/images/Fedora-Cloud-Base-37-1.7.x86_64.qcow2
+    cdi.kubevirt.io/storage.import.endpoint: https://ftp-nyc.osuosl.org/pub/fedora/linux/releases/39/Cloud/x86_64/images/Fedora-Cloud-Base-39-1.5.x86_64.qcow2
 spec:
   storageClassName: sc-sharedv4svc-nolock
   accessModes:

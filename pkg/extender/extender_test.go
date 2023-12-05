@@ -1752,11 +1752,11 @@ func invalidNodePrioritizeTest(t *testing.T) {
 
 	// First test for Hyperconvergence scenario
 	provNodes := []int{0}
-	if err := driver.ProvisionVolume("HyperConvergedPrioritize", provNodes, 1, nil, false, false); err != nil {
+	if err := driver.ProvisionVolume("HyperConvergedPrioritize", provNodes, 1, nil, false, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
-	pod := newPod("HyperConvergedPrioritize", map[string]bool{"HyperConvergedPrioritize": false})
+	pod := newPod("HyperConvergedPrioritize", defaultNamespace, map[string]bool{"HyperConvergedPrioritize": false})
 
 	prioritizeResponse, err := sendPrioritizeRequest(pod, requestNodes)
 	if err != nil {
@@ -1772,11 +1772,11 @@ func invalidNodePrioritizeTest(t *testing.T) {
 
 	// Test for AntiHyperconvergence scenario
 	provNodes = []int{0}
-	if err := driver.ProvisionVolume("AntiHyperConvergedPrioritize", provNodes, 1, nil, true, false); err != nil {
+	if err := driver.ProvisionVolume("AntiHyperConvergedPrioritize", provNodes, 1, nil, true, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
-	pod = newPod("AntiHyperConvergedPrioritize", map[string]bool{"AntiHyperConvergedPrioritize": false})
+	pod = newPod("AntiHyperConvergedPrioritize", defaultNamespace, map[string]bool{"AntiHyperConvergedPrioritize": false})
 
 	prioritizeResponse, err = sendPrioritizeRequest(pod, requestNodes)
 	if err != nil {
