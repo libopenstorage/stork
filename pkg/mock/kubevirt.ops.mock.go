@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	kubevirtdynamic "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -51,6 +52,36 @@ func (mr *MockOpsMockRecorder) CreateVirtualMachineInstanceMigration(arg0, arg1,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVirtualMachineInstanceMigration", reflect.TypeOf((*MockOps)(nil).CreateVirtualMachineInstanceMigration), arg0, arg1, arg2)
 }
 
+// GetDataVolume mocks base method.
+func (m *MockOps) GetDataVolume(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.DataVolume, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDataVolume", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*kubevirtdynamic.DataVolume)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDataVolume indicates an expected call of GetDataVolume.
+func (mr *MockOpsMockRecorder) GetDataVolume(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDataVolume", reflect.TypeOf((*MockOps)(nil).GetDataVolume), arg0, arg1, arg2)
+}
+
+// GetVirtualMachine mocks base method.
+func (m *MockOps) GetVirtualMachine(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.VirtualMachine, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVirtualMachine", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*kubevirtdynamic.VirtualMachine)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVirtualMachine indicates an expected call of GetVirtualMachine.
+func (mr *MockOpsMockRecorder) GetVirtualMachine(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachine", reflect.TypeOf((*MockOps)(nil).GetVirtualMachine), arg0, arg1, arg2)
+}
+
 // GetVirtualMachineInstance mocks base method.
 func (m *MockOps) GetVirtualMachineInstance(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.VirtualMachineInstance, error) {
 	m.ctrl.T.Helper()
@@ -81,19 +112,49 @@ func (mr *MockOpsMockRecorder) GetVirtualMachineInstanceMigration(arg0, arg1, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineInstanceMigration", reflect.TypeOf((*MockOps)(nil).GetVirtualMachineInstanceMigration), arg0, arg1, arg2)
 }
 
-// ListVirtualMachineInstanceMigrations mocks base method.
-func (m *MockOps) ListVirtualMachineInstanceMigrations(arg0 context.Context, arg1 string) ([]*kubevirtdynamic.VirtualMachineInstanceMigration, error) {
+// ListDataVolumes mocks base method.
+func (m *MockOps) ListDataVolumes(arg0 context.Context, arg1 string, arg2 v1.ListOptions) ([]*kubevirtdynamic.DataVolume, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListVirtualMachineInstanceMigrations", arg0, arg1)
+	ret := m.ctrl.Call(m, "ListDataVolumes", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*kubevirtdynamic.DataVolume)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListDataVolumes indicates an expected call of ListDataVolumes.
+func (mr *MockOpsMockRecorder) ListDataVolumes(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDataVolumes", reflect.TypeOf((*MockOps)(nil).ListDataVolumes), arg0, arg1, arg2)
+}
+
+// ListVirtualMachineInstanceMigrations mocks base method.
+func (m *MockOps) ListVirtualMachineInstanceMigrations(arg0 context.Context, arg1 string, arg2 v1.ListOptions) ([]*kubevirtdynamic.VirtualMachineInstanceMigration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVirtualMachineInstanceMigrations", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*kubevirtdynamic.VirtualMachineInstanceMigration)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListVirtualMachineInstanceMigrations indicates an expected call of ListVirtualMachineInstanceMigrations.
-func (mr *MockOpsMockRecorder) ListVirtualMachineInstanceMigrations(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockOpsMockRecorder) ListVirtualMachineInstanceMigrations(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVirtualMachineInstanceMigrations", reflect.TypeOf((*MockOps)(nil).ListVirtualMachineInstanceMigrations), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVirtualMachineInstanceMigrations", reflect.TypeOf((*MockOps)(nil).ListVirtualMachineInstanceMigrations), arg0, arg1, arg2)
+}
+
+// ListVirtualMachines mocks base method.
+func (m *MockOps) ListVirtualMachines(arg0 context.Context, arg1 string, arg2 v1.ListOptions) ([]*kubevirtdynamic.VirtualMachine, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListVirtualMachines", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*kubevirtdynamic.VirtualMachine)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListVirtualMachines indicates an expected call of ListVirtualMachines.
+func (mr *MockOpsMockRecorder) ListVirtualMachines(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListVirtualMachines", reflect.TypeOf((*MockOps)(nil).ListVirtualMachines), arg0, arg1, arg2)
 }
 
 // SetConfig mocks base method.
