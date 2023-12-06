@@ -93,7 +93,7 @@ func testMigration(t *testing.T) {
 	t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
 	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
 	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
-	t.Run("excludeResourceTypeTest", excludeResourceTypeTest)
+	t.Run("excludeResourceTypeDeploymentTest", excludeResourceTypeDeploymentTest)
 	t.Run("excludeResourceTypePVCTest", excludeResourceTypePVCTest)
 	t.Run("excludeMultipleResourceTypesTest", excludeMultipleResourceTypesTest)
 	t.Run("excludeResourceTypesWithSelectorsTest", excludeResourceTypesWithSelectorsTest)
@@ -1625,7 +1625,7 @@ func pvcResizeMigrationTest(t *testing.T) {
 		if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			namespace = obj.GetNamespace()
 			pvcs, err = core.Instance().GetPersistentVolumeClaims(namespace, nil)
-			require.NoError(t, err, "error retriving pvc list from %s namespace", namespace)
+			require.NoError(t, err, "error retrieving pvc list from %s namespace", namespace)
 			break
 		}
 	}
@@ -1658,7 +1658,7 @@ func pvcResizeMigrationTest(t *testing.T) {
 		pvcSize := cap.Value()
 
 		migratedPvc, err := core.Instance().GetPersistentVolumeClaim(pvc.GetName(), pvc.GetNamespace())
-		require.NoError(t, err, "error retriving pvc %s/%s", pvc.GetNamespace(), pvc.GetName())
+		require.NoError(t, err, "error retrieving pvc %s/%s", pvc.GetNamespace(), pvc.GetName())
 
 		cap = migratedPvc.Status.Capacity[v1.ResourceName(v1.ResourceStorage)]
 		migrSize := cap.Value()
@@ -1668,10 +1668,10 @@ func pvcResizeMigrationTest(t *testing.T) {
 			require.NoError(t, resizeErr, resizeErr)
 		}
 		srcSC, err := getStorageClassNameForPVC(&pvc)
-		require.NoError(t, err, "error retriving sc for %s/%s", pvc.GetNamespace(), pvc.GetName())
+		require.NoError(t, err, "error retrieving sc for %s/%s", pvc.GetNamespace(), pvc.GetName())
 
 		destSC, err := getStorageClassNameForPVC(migratedPvc)
-		require.NoError(t, err, "error retriving sc for %s/%s", migratedPvc.GetNamespace(), migratedPvc.GetName())
+		require.NoError(t, err, "error retrieving sc for %s/%s", migratedPvc.GetNamespace(), migratedPvc.GetName())
 
 		if srcSC != destSC {
 			scErr := fmt.Errorf("migrated pvc storage class does not match")
@@ -1743,7 +1743,7 @@ func suspendMigrationTest(t *testing.T) {
 		if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			scale := int32(1)
 			sts, err := apps.Instance().GetStatefulSet(obj.GetName(), obj.GetNamespace())
-			require.NoError(t, err, "Error retriving sts: %s/%s", obj.GetNamespace(), obj.GetName())
+			require.NoError(t, err, "Error retrieving sts: %s/%s", obj.GetNamespace(), obj.GetName())
 			sts.Spec.Replicas = &scale
 			namespace = obj.GetNamespace()
 			_, err = apps.Instance().UpdateStatefulSet(sts)
@@ -1814,7 +1814,7 @@ func endpointMigrationTest(t *testing.T) {
 	validateMigration(t, "endpoint-migration-schedule-interval", preMigrationCtx.GetID())
 
 	srcEndpoints, err := core.Instance().ListEndpoints(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving endpoints list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving endpoints list from %s namespace", namespace)
 	cnt := 0
 	for _, endpoint := range srcEndpoints.Items {
 		collect := false
@@ -1836,7 +1836,7 @@ func endpointMigrationTest(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	destEndpoints, err := core.Instance().ListEndpoints(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving endpoints list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving endpoints list from %s namespace", namespace)
 
 	if len(destEndpoints.Items) != cnt {
 		matchErr := fmt.Errorf("migrated endpoints does not match")
@@ -1905,7 +1905,7 @@ func validateNetworkPolicyMigration(t *testing.T, all bool) {
 	validateMigration(t, scheduleName, preMigrationCtx.GetID())
 
 	networkPolicies, err := core.Instance().ListNetworkPolicy(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving network policy list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving network policy list from %s namespace", namespace)
 	cnt := 0
 	for _, networkPolicy := range networkPolicies.Items {
 		collect := true
@@ -1941,7 +1941,7 @@ func validateNetworkPolicyMigration(t *testing.T, all bool) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	destNetworkPolicies, err := core.Instance().ListNetworkPolicy(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving network policy list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving network policy list from %s namespace", namespace)
 
 	if len(destNetworkPolicies.Items) != cnt {
 		matchErr := fmt.Errorf("migrated network poilcy does not match")
@@ -2032,12 +2032,13 @@ func transformResourceTest(t *testing.T) {
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func excludeResourceTypeTest(t *testing.T) {
+func excludeResourceTypeDeploymentTest(t *testing.T) {
 	var testrailID, testResult = 93402, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
-	instanceID := "exclude-resourcetype-migration"
+	instanceID := "exclude-resourcetype-deployment"
 	appKey := "mysql-1-pvc"
+	pvcName := "mysql-data"
 	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 
 	var err error
@@ -2054,7 +2055,7 @@ func excludeResourceTypeTest(t *testing.T) {
 		[]string{instanceID},
 		false,
 		false,
-		true,
+		true, //Starting apps after migration
 		false,
 		"",
 		nil)
@@ -2064,11 +2065,16 @@ func excludeResourceTypeTest(t *testing.T) {
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving deployments from %s namespace", namespace)
 	require.Equal(t, 0, len(destDeployments.Items), fmt.Sprintf("Expected no deployments in destination in %s namespace", namespace))
+	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retrieving services from %s namespace", namespace)
+	require.Equal(t, 1, len(destServices.Items), fmt.Sprintf("Expected 1 service in destination in %s namespace", namespace))
+	_, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	require.NoError(t, err, "getting pvc %s in destination in %s namespace failed", pvcName, namespace)
 
 	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
 
@@ -2106,7 +2112,7 @@ func excludeResourceTypePVCTest(t *testing.T) {
 		[]string{instanceID},
 		false,
 		false,
-		true,
+		true, //Starting apps after migration
 		false,
 		"",
 		nil)
@@ -2116,8 +2122,14 @@ func excludeResourceTypePVCTest(t *testing.T) {
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
+	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retrieving deployments from %s namespace", namespace)
+	require.Equal(t, 1, len(destDeployments.Items), fmt.Sprintf("Expected 1 deployment in destination in %s namespace", namespace))
+	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retrieving services from %s namespace", namespace)
+	require.Equal(t, 1, len(destServices.Items), fmt.Sprintf("Expected 1 service in destination in %s namespace", namespace))
 	_, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
 	require.Error(t, err, "getting pvc in destination in %s namespace should have failed", namespace)
 
@@ -2140,6 +2152,7 @@ func excludeMultipleResourceTypesTest(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "exclude-multiple-resourcetypes-migration"
 	appKey := "mysql-1-pvc"
+	pvcName := "mysql-data"
 	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 
 	var err error
@@ -2156,7 +2169,7 @@ func excludeMultipleResourceTypesTest(t *testing.T) {
 		[]string{instanceID},
 		false,
 		false,
-		true,
+		true, //Starting apps after migration
 		false,
 		"",
 		nil)
@@ -2166,14 +2179,16 @@ func excludeMultipleResourceTypesTest(t *testing.T) {
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving deployments from %s namespace", namespace)
 	require.Equal(t, 0, len(destDeployments.Items), fmt.Sprintf("Expected no deployments in destination in %s namespace", namespace))
 	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving services list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving services from %s namespace", namespace)
 	require.Equal(t, 0, len(destServices.Items), fmt.Sprintf("Expected no service in destination in %s namespace", namespace))
+	_, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	require.NoError(t, err, "getting pvc %s in destination in %s namespace failed", pvcName, namespace)
 
 	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
 
@@ -2194,6 +2209,7 @@ func excludeResourceTypesWithSelectorsTest(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "exclude-resourcetype-selector"
 	appKey := "mysql-1-pvc"
+	pvcName := "mysql-data"
 	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 
 	var err error
@@ -2210,7 +2226,7 @@ func excludeResourceTypesWithSelectorsTest(t *testing.T) {
 		[]string{instanceID},
 		false,
 		false,
-		true,
+		true, //Starting apps after migration
 		false,
 		"",
 		nil)
@@ -2220,14 +2236,16 @@ func excludeResourceTypesWithSelectorsTest(t *testing.T) {
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving deployments from %s namespace", namespace)
 	require.Equal(t, 1, len(destDeployments.Items), fmt.Sprintf("Expected 1 deployment in destination in %s namespace", namespace))
 	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving services list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving services from %s namespace", namespace)
 	require.Equal(t, 0, len(destServices.Items), fmt.Sprintf("Expected no service in destination in %s namespace", namespace))
+	_, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	require.NoError(t, err, "getting pvc %s in destination in %s namespace failed", pvcName, namespace)
 
 	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
 
@@ -2247,6 +2265,7 @@ func excludeNonExistingResourceTypesTest(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "exclude-nonexisting-resourcetype-migration"
 	appKey := "mysql-1-pvc"
+	pvcName := "mysql-data"
 	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 
 	var err error
@@ -2263,7 +2282,7 @@ func excludeNonExistingResourceTypesTest(t *testing.T) {
 		[]string{instanceID},
 		false,
 		false,
-		true,
+		true, //Starting apps after migration
 		false,
 		"",
 		nil)
@@ -2285,14 +2304,19 @@ func excludeNonExistingResourceTypesTest(t *testing.T) {
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	destDeployments, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving deployments list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving deployments from %s namespace", namespace)
 	require.Equal(t, 1, len(destDeployments.Items), fmt.Sprintf("Expected 1 deployment in destination in %s namespace", namespace))
 	destStatefulSets, err := apps.Instance().ListStatefulSets(namespace, meta_v1.ListOptions{})
-	require.NoError(t, err, "error retriving statefulset list from %s namespace", namespace)
+	require.NoError(t, err, "error retrieving statefulsets from %s namespace", namespace)
 	require.Equal(t, 0, len(destStatefulSets.Items), fmt.Sprintf("Expected no statefulset in destination in %s namespace", namespace))
+	destServices, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
+	require.NoError(t, err, "error retrieving services from %s namespace", namespace)
+	require.Equal(t, 1, len(destServices.Items), fmt.Sprintf("Expected 1 service in destination in %s namespace", namespace))
+	_, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	require.NoError(t, err, "getting pvc %s in destination in %s namespace failed", pvcName, namespace)
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)

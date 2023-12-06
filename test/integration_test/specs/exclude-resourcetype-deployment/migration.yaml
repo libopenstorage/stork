@@ -1,7 +1,7 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Migration
 metadata:
-  name: exclude-resourcetype
+  name: exclude-resourcetype-deployment
 spec:
   # This should be the name of the cluster pair
   clusterPair: remoteclusterpair
@@ -14,4 +14,4 @@ spec:
   - Deployment
   # List of namespaces to migrate
   namespaces:
-  - mysql-1-pvc-exclude-resourcetype-migration
+  - mysql-1-pvc-exclude-resourcetype-deployment
