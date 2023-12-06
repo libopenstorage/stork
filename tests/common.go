@@ -7405,6 +7405,17 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 	return poolUuids, nil
 }
 
+func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
+	for _, n := range node.GetStorageNodes() {
+		for _, p := range n.StoragePools {
+			if p.Uuid == poolUUID {
+				return &n, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to find node for pool UUID %v", poolUUID)
+}
+
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
 func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	var err error
@@ -7923,15 +7934,11 @@ func RandomString(length int) string {
 	return randomString
 }
 
-// DeleteGivenPoolInNode deletes pool with given ID in the given node
-func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
-
+func EnterPoolMaintenance(stNode node.Node) error {
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
-	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
+	if err := Inst().V.EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
-	//Waiting for cli to work
-	time.Sleep(2 * time.Minute)
 
 	status, err := Inst().V.GetNodeStatus(stNode)
 	if err != nil {
@@ -7943,48 +7950,62 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
 		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
 	}
-	defer func() {
-		var exitErr error
-		if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
-			log.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
 
-		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
-			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
-		//Adding wait as even PX is up it is taking some time for pool status to update
-		//when all pools are deleted
-		time.Sleep(1 * time.Minute)
-		cmd := "pxctl sv pool show"
-		var out string
-
-		// Execute the command and check if any pools exist
-		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
-		if exitErr != nil {
-			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
-		log.Infof("pool show: [%s]", out)
-
-		//skipping waitForPoolStatusToUpdate if there are no pools in the node
-		if strings.Contains(out, "No drives configured for this node") {
-			return
-		}
-
-		expectedStatus := "Online"
-		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
-			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
-		}
-
-	}()
-	err = Inst().V.DeletePool(stNode, poolIDToDelete, retry)
-	return err
+	return nil
 }
+
+func ExitPoolMaintenance(stNode node.Node) error {
+	var exitErr error
+	if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
+		return fmt.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+
+	if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
+		return fmt.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+
+	// wait as even PX is up it is taking some time for pool status to update when all pools are deleted
+	time.Sleep(1 * time.Minute)
+	cmd := "pxctl sv pool show"
+	var out string
+
+	// Execute the command and check if any pools exist
+	out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if exitErr != nil {
+		return fmt.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+	log.Infof("pool show: [%s]", out)
+
+	// skipping waitForPoolStatusToUpdate if there are no pools in the node
+	if strings.Contains(out, "No drives configured for this node") {
+		return nil
+	}
+
+	expectedStatus := "Online"
+	if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+		return fmt.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
+	}
+
+	return nil
+}
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
+	if err := EnterPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
+		return err
+	}
+	if err := ExitPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	return nil
+}
+
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
 
 	systemOpts := node.SystemctlOpts{
