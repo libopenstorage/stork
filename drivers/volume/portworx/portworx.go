@@ -2773,7 +2773,7 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 		if err != nil {
 			logrus.Warnf("failed in getting the storage class [%v]: %v", pv.Spec.StorageClassName, err)
 		}
-		if sc != nil {
+		if sc != nil && vInfo != nil {
 			if isCsiProvisioner(sc.Provisioner) {
 				// add csi section in the pv spec
 				if pv.Spec.CSI == nil {
