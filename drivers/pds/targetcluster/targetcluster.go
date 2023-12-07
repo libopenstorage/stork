@@ -46,6 +46,7 @@ const (
 	pxLabel            = "pds.portworx.com/available"
 	CertManager        = "jetstack/cert-manager"
 	CertManagerVersion = "v1.11.0"
+	TLSFeatureGates    = "AdditionalCertificateOutputFormats=true"
 )
 
 var (
@@ -137,7 +138,9 @@ func (targetCluster *TargetCluster) UpdateTargetClusterWithClusterIssuer(Deploym
 
 // InstallCertManager installs cert-manager using helm
 func (targetCluster *TargetCluster) InstallCertManager(ClusterIssuerNamespace string) error {
-	cmd := fmt.Sprintf("helm upgrade --install cert-manager %s --namespace %s --create-namespace --version %s --set installCRDs=%s", CertManager, ClusterIssuerNamespace, CertManagerVersion, "true")
+	cmd := fmt.Sprintf("helm upgrade --install cert-manager %s --namespace %s --create-namespace "+
+		"--version %s --set installCRDs=%s --set featureGates=%s --set webhook.extraArgs={--feature-gates=%s}",
+		CertManager, ClusterIssuerNamespace, CertManagerVersion, "true", TLSFeatureGates, TLSFeatureGates)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("cert manager installation failed : %v", err)

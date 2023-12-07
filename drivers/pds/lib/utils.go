@@ -1198,6 +1198,22 @@ func DeleteDeploymentTargets(projectID string) error {
 	return nil
 }
 
+func GetMongoDBConnectionString(deployment *pds.ModelsDeployment, dataServiceName, namespace string) (string, string, string, error) {
+	log.Debugf("Deployment ID %s", deployment.GetId())
+	depPassword, err := GetDeploymentCredentials(deployment.GetId())
+	if err != nil {
+		return "", "", "", fmt.Errorf("error occured while getting creds %v", err)
+	}
+
+	_, port, err := GetDeploymentConnectionInfo(deployment.GetId(), dataServiceName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error occured while getting dns endpoints %v", err)
+	}
+	connectionString := fmt.Sprintf("%s-%s.%s", deployment.GetClusterResourceName(), namespace, namespace)
+
+	return connectionString, depPassword, port, nil
+}
+
 // GetDeploymentConnectionInfo returns the dns endpoint
 func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, error) {
 	var isfound bool

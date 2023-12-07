@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	bucketName           = "pds-automation"
+	bucketName           = "pds-automation-1"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
 	bkpTimeInterval      = 60 * time.Second
@@ -158,7 +158,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	if err != nil {
 		return fmt.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 	}
-	waitErr := wait.Poll(bkpTimeInterval, 1*time.Minute, func() (bool, error) {
+	waitErr := wait.Poll(bkpTimeInterval, 15*time.Minute, func() (bool, error) {
 		model, bkpErr := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())

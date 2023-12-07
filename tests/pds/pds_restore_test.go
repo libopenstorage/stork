@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
+	"strings"
 	"sync"
 )
 
@@ -233,14 +234,30 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 					dsEntity = restoreBkp.DSEntity{
 						Deployment: deployment,
 					}
+
+					stepLog = "Verify if ds is tls enabled"
+					Step(stepLog, func() {
+						if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+							connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(deployment, ds.Name, namespace)
+							log.FailOnError(err, "error occured while getting connection string")
+
+							//Validate if TLS is enabled for the data service
+							err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+							dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+								"validating if ds is TLS enabled")
+						}
+					})
 				})
+
 				stepLog = "Running Workloads before taking backups"
 				Step(stepLog, func() {
-					ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-					wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
-					log.FailOnError(err, "Error while Running workloads")
-					log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
-					pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+					if ds.Name != mongodb {
+						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
+						log.FailOnError(err, "Error while Running workloads")
+						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+					}
 				})
 
 				defer func() {
@@ -284,24 +301,40 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
 				})
+
+				stepLog = "Verify if restored ds is tls enabled"
+				Step(stepLog, func() {
+					if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+						connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDeployment, ds.Name, namespace)
+						log.FailOnError(err, "error occured while getting connection string")
+
+						//Validate if TLS is enabled for the data service
+						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+						dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+							"validating if ds is TLS enabled")
+					}
+				})
+
 				stepLog = "Validate md5hash for the restored deployments"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					for _, pdsDeployment := range restoredDeployments {
-						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
-						wlDeploymentsToBeCleanedinDest = append(wlDeploymentsToBeCleanedinDest, wlDep)
-						log.FailOnError(err, "Error while Running workloads")
-						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
-						restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-					}
+					if ds.Name != mongodb {
+						for _, pdsDeployment := range restoredDeployments {
+							ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
+							wlDeploymentsToBeCleanedinDest = append(wlDeploymentsToBeCleanedinDest, wlDep)
+							log.FailOnError(err, "Error while Running workloads")
+							log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+							restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
+						}
 
-					dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
-						true, "Validate md5 hash after restore")
+						dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
+							true, "Validate md5 hash after restore")
 
-					log.InfoD("Cleaning up workload deployments")
-					for _, wlDep := range wlDeploymentsToBeCleanedinDest {
-						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-						log.FailOnError(err, "Failed while deleting the workload deployment")
+						log.InfoD("Cleaning up workload deployments")
+						for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+							err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+							log.FailOnError(err, "Failed while deleting the workload deployment")
+						}
 					}
 				})
 				Step("Delete Deployments", func() {
@@ -1328,14 +1361,29 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						Deployment: deployment,
 					}
 
+					stepLog = "Verify ds is tls enabled"
+					Step(stepLog, func() {
+						if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+							connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(deployment, ds.Name, namespace)
+							log.FailOnError(err, "error occured while getting connection string")
+
+							//Validate if TLS is enabled for the data service
+							err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+							dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+								"validating if ds is TLS enabled")
+						}
+					})
+
 					stepLog = "Running Workloads before taking backups"
 					Step(stepLog, func() {
-						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-						wlDeploymentsToBeCleaned := append(wlDeploymentsToBeCleanedinSrc, wlDep)
-						log.FailOnError(err, "Error while Running workloads")
-						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
-						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
-						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+						if ds.Name != mongodb {
+							ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+							wlDeploymentsToBeCleaned := append(wlDeploymentsToBeCleanedinSrc, wlDep)
+							log.FailOnError(err, "Error while Running workloads")
+							log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+							pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+							wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+						}
 					})
 
 					stepLog = "Perform backup and restore of the original deployment"
@@ -1365,9 +1413,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredOriginalDep, pdsdeploymentsmd5Hash)
-						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+						if ds.Name != mongodb {
+							log.InfoD(stepLog)
+							wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredOriginalDep, pdsdeploymentsmd5Hash)
+							wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+						}
 					})
 
 					stepLog = "Update the app config, resource template and scale up the data service"
@@ -1395,6 +1445,19 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						resourceTempUpdatedDsEntity = restoreBkp.DSEntity{
 							Deployment: updatedDeployment,
 						}
+
+						stepLog = "Verify ds is tls enabled post ds update"
+						Step(stepLog, func() {
+							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+								connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(updatedDeployment, ds.Name, namespace)
+								log.FailOnError(err, "error occured while getting connection string")
+
+								//Validate if TLS is enabled for the data service
+								err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+								dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+									"validating if ds is TLS enabled")
+							}
+						})
 
 						stepLog = "Perform backup and restore of the resource template updated deployment "
 						Step(stepLog, func() {
@@ -1426,21 +1489,41 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							err = DeleteAllDsBackupEntities(updatedDeployment)
 							log.FailOnError(err, "error while deleting backup job")
 						})
+
+						stepLog = "Verify tls is enabled after ds update operation on restored ds"
+						Step(stepLog, func() {
+							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+								for _, restoredDep := range restoredDepPostResourceTempUpdate {
+									connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDep, ds.Name, namespace)
+									log.FailOnError(err, "error occured while getting connection string")
+
+									//Validate if TLS is enabled for the data service
+									err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+									dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+										"validating if ds is TLS enabled")
+								}
+							}
+						})
+
 						stepLog = "Validate md5hash for the restored deployments"
 						Step(stepLog, func() {
-							log.InfoD(stepLog)
-							wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostResourceTempUpdate, pdsdeploymentsmd5Hash)
-							wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+							if ds.Name != mongodb {
+								log.InfoD(stepLog)
+								wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostResourceTempUpdate, pdsdeploymentsmd5Hash)
+								wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+							}
 						})
 					})
 
 					stepLog = "Clean up the workload deployments"
 					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						for _, wlDep := range wlDeploymentsToBeCleanedinSrc {
-							log.Debugf("Deleting workload deployment [%s]", wlDep.Name)
-							err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-							log.FailOnError(err, "Failed while deleting the workload deployment")
+						if ds.Name != mongodb {
+							log.InfoD(stepLog)
+							for _, wlDep := range wlDeploymentsToBeCleanedinSrc {
+								log.Debugf("Deleting workload deployment [%s]", wlDep.Name)
+								err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+								log.FailOnError(err, "Failed while deleting the workload deployment")
+							}
 						}
 					})
 				})

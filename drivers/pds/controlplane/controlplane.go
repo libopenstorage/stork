@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"context"
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -8,6 +9,8 @@ import (
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net"
 	"net/url"
 	"strings"
@@ -394,6 +397,45 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 		return "", err
 	}
 	return token.GetToken(), nil
+}
+
+// CreateMongoDBClientAndConnect takes connectionString as parameter and does a ping then returns client
+func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (*mongo.Client, error) {
+	log.Debugf("Connection string %s", connectionString)
+	clientOptions := options.Client().ApplyURI(connectionString)
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(context.Background(), clientOptions)
+	if err != nil {
+		return nil, fmt.Errorf("error while connecting to mongoDB: [%v]", err)
+	}
+	// Ping the MongoDB server to ensure connectivity
+	err = client.Ping(context.Background(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error occured during ping: [%v]", err)
+	}
+	log.Infof("Connected to MongoDB!")
+
+	// Close the client when done
+	err = client.Disconnect(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// ValidateIfTLSEnabled takes db related parameters to establish connection and returns error if connection is unsuccessful
+func (cp *ControlPlane) ValidateIfTLSEnabled(username, password, dnsEndPoint, port string) error {
+	log.Infof("Data service endpoint is: [%s]", dnsEndPoint)
+	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s", username, password, dnsEndPoint, port)
+
+	_, err := cp.CreateMongoDBClientAndConnect(connectionString)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ValidateDNSEndpoint
