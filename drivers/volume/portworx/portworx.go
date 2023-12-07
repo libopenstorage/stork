@@ -1800,7 +1800,7 @@ func GetSerialFromWWID(wwid string) (string, error) {
 		return strings.ToLower(fmt.Sprintf("%s%s", wwid[6:20], wwid[26:36])), nil
 	}
 	// SCSI
-	return strings.TrimPrefix(strings.ToLower(wwid), "36"+schedops.PureVolumeOUI), nil
+	return strings.TrimPrefix(strings.ToLower(wwid), fmt.Sprintf("36%s0", schedops.PureVolumeOUI)), nil
 }
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
