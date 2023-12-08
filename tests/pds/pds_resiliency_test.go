@@ -1676,17 +1676,24 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 
 	It("Deploy Dataservices and Restart PX During App scaleup", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		//var generateWorkloads = make(map[string]string)
 		var wlDeploymentsToBeCleaned []*v1.Deployment
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
-					deployments[ds] = deployment
-				})
+				//This test is applicable only for SQL dbs
+				if (ds.Name == postgresql) || (ds.Name == mysql) {
+					//This test requires minimum of 3 replicas to be deployed
+					ds.Replicas = 3
+					ds.ScaleReplicas = 4
+					Step("Deploy and validate data service", func() {
+						isDeploymentsDeleted = false
+						deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+					})
+				} else {
+					log.InfoD("This testcase is valid only for SQL databases, Skipping this testcase as DB is- [%v]", ds.Name)
+				}
 			}
 		})
 
@@ -1704,7 +1711,9 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 		Step("Kill DB Master node during application's storage is resized", func() {
 			for ds, deployment := range deployments {
 				ctx, err := GetSourceClusterConfigPath()
-				sourceTarget = tc.NewTargetCluster(ctx)
+				log.FailOnError(err, "failed while getting src cluster path")
+				sourceTarget := tc.NewTargetCluster(ctx)
+				log.InfoD("source target is - %v", sourceTarget)
 				failuretype := pdslib.TypeOfFailure{
 					Type: KillDbMasterNodeDuringStorageResize,
 					Method: func() error {

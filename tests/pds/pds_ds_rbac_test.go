@@ -18,10 +18,10 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ServiceIdentityNsLevel", "Create and Update Service Identity with N namespaces with different roles ", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -245,7 +245,9 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -254,12 +256,12 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ServiceIdentityTargetClusterLevel", "Create and Update Service Identity with 2 namespaces on different clusters and perform cross-cluster restore", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target1.")
-		log.InfoD("AWS S3 target1 - %v created successfully", bkpTarget.GetName())
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", credName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
 	})
@@ -583,7 +585,9 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -592,10 +596,10 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ServiceIdentitySiDLevel", "Create and Update N Service Identities with N namespaces with different roles ", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -865,7 +869,9 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
