@@ -47,7 +47,7 @@ COPY tests tests
 RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 
 # Build a fresh container with just the binaries
-FROM alpine
+FROM alpine:3.18.5
 
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
 

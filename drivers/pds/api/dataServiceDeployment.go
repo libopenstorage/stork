@@ -174,6 +174,29 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	return dsModel, err
 }
 
+// UpdateDeploymentWithTls updates the deployment with TLS
+func (ds *DataServiceDeployment) UpdateDeploymentWithTls(deploymentID string, appConfigID string, imageID string,
+	nodeCount int32, resourceTemplateID string, enableTLS bool) (*pds.ModelsDeployment, error) {
+	dsClient := ds.apiClient.DeploymentsApi
+	ctx, err := GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	createRequest := pds.RequestsUpdateDeploymentRequest{
+		ApplicationConfigurationTemplateId: &appConfigID,
+		ImageId:                            &imageID,
+		NodeCount:                          &nodeCount,
+		ResourceSettingsTemplateId:         &resourceTemplateID,
+		TlsEnabled:                         &enableTLS,
+	}
+	log.InfoD("Starting to update the deployment ... ")
+	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ctx, deploymentID).Body(createRequest).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdPut`: %v\n.Full HTTP response: %v", err, res)
+	}
+	return dsModel, err
+}
+
 // UpdateDeployment func
 func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string,
 	appConfigOverride map[string]string) (*pds.ModelsDeployment, error) {
@@ -182,7 +205,7 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	createRequest := pds.ControllersUpdateDeploymentRequest{
+	createRequest := pds.RequestsUpdateDeploymentRequest{
 		ApplicationConfigurationOverrides:  &appConfigOverride,
 		ApplicationConfigurationTemplateId: &appConfigID,
 		ImageId:                            &imageID,

@@ -197,6 +197,21 @@ func GetLatestVersionsImage(dsVersion string, dataServiceID string) (string, str
 }
 
 // UpdateDataServices modifies the existing deployment
+func (d *DataserviceType) UpdateDataServicesWithTLS(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string, enableTLS bool) (*pds.ModelsDeployment, error) {
+	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		log.Debugf("Updating deployment [%s]", deploymentID)
+		deployment, err = components.DataServiceDeployment.UpdateDeploymentWithTls(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, enableTLS)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+
+	return deployment, nil
+}
+
+// UpdateDataServices modifies the existing deployment
 func (d *DataserviceType) UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {

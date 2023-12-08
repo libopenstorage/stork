@@ -3,6 +3,7 @@ package controlplane
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -397,6 +398,20 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 		return "", err
 	}
 	return token.GetToken(), nil
+}
+
+// CreatePostgreSQLClientAndConnect takes connectionString as parameter and does a ping then returns client
+func (cp *ControlPlane) CreatePostgreSQLClientAndConnect(connectionString string) (*pgx.Conn, error) {
+	log.Debugf("Connection string %s", connectionString)
+	conn, err := pgx.Connect(context.Background(), connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("error while connecting to the database")
+	}
+	err = conn.Ping(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("error while pinging the database")
+	}
+	return conn, nil
 }
 
 // CreateMongoDBClientAndConnect takes connectionString as parameter and does a ping then returns client
