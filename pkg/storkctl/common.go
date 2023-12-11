@@ -30,9 +30,8 @@ func printMsg(msg string, out io.Writer) {
 	}
 }
 
-func getDiscoveryClientForApiResources() (discovery.DiscoveryInterface, error) {
-	tempFactory := NewFactory()
-	config, err := tempFactory.GetConfig()
+func getDiscoveryClientForApiResources(cmdFactory Factory) (discovery.DiscoveryInterface, error) {
+	config, err := cmdFactory.GetConfig()
 	if err != nil {
 		return nil, err
 	}

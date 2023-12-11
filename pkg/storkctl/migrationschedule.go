@@ -161,7 +161,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			//validate excludeResourceTypes
 			if len(excludeResourceTypes) != 0 {
 				resourceTypes := strings.Join(excludeResourceTypes, ",")
-				excludeResourceTypes, err = getResourceTypes(resourceTypes, ioStreams)
+				excludeResourceTypes, err = getResourceTypes(resourceTypes, ioStreams, cmdFactory)
 				if err != nil {
 					util.CheckErr(err)
 					return
