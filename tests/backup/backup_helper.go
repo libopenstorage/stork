@@ -1731,6 +1731,7 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 			}
 		}
+
 		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 
 	}
@@ -1780,6 +1781,21 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupStatusCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
+	}
+	// Check size of backup taken is non-zero
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	Volumes := resp.GetBackup().GetVolumes()
+	if len(Volumes) > 0 {
+		for _, volume := range Volumes {
+			size := volume.GetTotalSize()
+			actualSize := volume.GetActualSize()
+			if !(size > 0 || actualSize > 0) {
+				return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0 ", backupName, size, actualSize)
+			}
+		}
 	}
 
 	var errors []error
