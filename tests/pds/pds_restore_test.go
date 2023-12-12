@@ -36,13 +36,6 @@ const (
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
@@ -166,23 +159,12 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreToDifferentCluster", "Perform multiple restore to different cluster.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
@@ -345,10 +327,6 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -464,13 +442,6 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousRestoresSameDataService", "Perform multiple restore within same cluster.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 	})
 
 	It("Perform multiple restore within same cluster", func() {
@@ -555,23 +526,12 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousRestoresDifferentDataService", "Perform multiple backup and restore simultaneously for different dataservices.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 	})
 
 	It("Perform multiple restore within same cluster", func() {
@@ -665,10 +625,6 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -681,13 +637,6 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreAfterHelmUpgrade", "Perform multiple restore within same cluster.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
@@ -837,23 +786,12 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreAfterPVCResize", "Perform PVC Resize and restore within same cluster.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 	})
 
 	It("Perform PVC Resize and restore within same cluster", func() {
@@ -976,10 +914,6 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -987,12 +921,6 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousBackupRestore", "Perform multiple backup and restore simultaneously..", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 	})
 
 	It("Perform multiple restore within same cluster", func() {
@@ -1091,10 +1019,6 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -1102,11 +1026,6 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreAfterDataServiceVersionUpdate", "Perform restore after ds version update", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
@@ -1290,23 +1209,13 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	//bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreAfterDataServiceUpdate", "Perform restore after ds update", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
@@ -1547,22 +1456,13 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	//bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreAfterDataServiceUpdate", "Perform restore after ds update", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
@@ -1793,22 +1693,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", pdsLabels, 0)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 	})
 
 	It("Perform multiple restore within same cluster", func() {
@@ -1915,23 +1805,12 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
 var _ = Describe("{ValidateTransitionalHealthStatus}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateTransitionalHealthStatus", "Perform restore within same cluster and validates the health status", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
@@ -2026,9 +1905,5 @@ var _ = Describe("{ValidateTransitionalHealthStatus}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })

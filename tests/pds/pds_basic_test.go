@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"os"
 	"strings"
 	"testing"
@@ -79,6 +80,29 @@ var _ = BeforeSuite(func() {
 			log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
 		})
 
+		steplog = "Create backup bucket, targets and credentials"
+		Step(steplog, func() {
+			if params.BackUpAndRestore.RunBkpAndRestrTest {
+				switch params.BackUpAndRestore.TargetLocation {
+				case "s3":
+					log.InfoD("creating creds on s3")
+					credName := targetName + pdsbkp.RandString(8)
+					bkpClient, err = pdsbkp.InitializePdsBackup()
+					log.FailOnError(err, "Failed to initialize backup for pds.")
+					bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
+					log.FailOnError(err, "Failed to create S3 backup target.")
+					log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+					awsBkpTargets = append(awsBkpTargets, bkpTarget)
+				case "S3-Comp":
+					log.InfoD("creating creds on s3 compatible - minio")
+				case "Azure":
+					log.InfoD("creating creds on azure")
+				default:
+					log.InfoD("creatins creds on s3 compatible - minio by default")
+				}
+			}
+		})
+
 		steplog = "Update deployment target with cluster issuer"
 		Step(steplog, func() {
 			log.InfoD(steplog)
@@ -121,6 +145,10 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
+	err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+	log.FailOnError(err, "error while deleting backup targets and creds")
+	err = bkpClient.AWSStorageClient.DeleteBucket()
+	log.FailOnError(err, "Failed while deleting the bucket")
 })
 
 func TestMain(m *testing.M) {

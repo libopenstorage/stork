@@ -28,6 +28,10 @@ type Parameter struct {
 		ClusterIssuerName      string
 		ClusterIssuerNamespace string
 	}
+	BackUpAndRestore struct {
+		RunBkpAndRestrTest bool
+		TargetLocation     string
+	}
 	InfraToTest struct {
 		ControlPlaneURL      string `json:"ControlPlaneURL"`
 		AccountName          string `json:"AccountName"`

@@ -37,7 +37,8 @@ type gcpStorageClient struct {
 	projectId string
 }
 
-func (awsObj *awsStorageClient) createBucket() error {
+func (awsObj *awsStorageClient) createBucket(bucketName string) error {
+	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(awsObj.region),

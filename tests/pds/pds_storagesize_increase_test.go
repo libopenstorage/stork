@@ -6,7 +6,6 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
-	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
@@ -19,13 +18,6 @@ import (
 var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeStorageAndRestoreWithVariousFSandRepl", "Perform PVC Resize and validate the updated vol in the storage config also perform restore of the ds", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
@@ -234,8 +226,6 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
