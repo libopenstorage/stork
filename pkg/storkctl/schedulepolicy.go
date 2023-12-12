@@ -203,7 +203,7 @@ func newCreateSchedulePolicyCommand(cmdFactory Factory, ioStreams genericcliopti
 	// Picking up user inputs and setting the defaults for flags
 	createSchedulePolicyCommand.Flags().StringVarP(&schedulePolicyType, "policy-type", "t", "Interval", "Select Type of schedule policy to apply. Interval / Daily / Weekly / Monthly.")
 	createSchedulePolicyCommand.Flags().IntVarP(&intervalMinutes, intervalMinutesFlag, "i", 30, "Specify the interval, in minutes, after which Stork should trigger the operation.")
-	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "Specify how many backups triggered as part of this schedule should be retained.")
+	createSchedulePolicyCommand.Flags().IntVarP(&retain, "retain", "", 0, "For backup operations,specify how many backups triggered as part of this schedule should be retained.")
 	createSchedulePolicyCommand.Flags().StringVarP(&time, timeFlag, "", "12:00AM", "Specify the time of the day in the 12 hour AM/PM format, when Stork should trigger the operation.")
 	createSchedulePolicyCommand.Flags().StringVarP(&dailyForceFullSnapshotDay, forceFullSnapshotDayFlag, "", "Monday", "For daily scheduled backup operations, specify on which day to trigger a full backup.")
 	createSchedulePolicyCommand.Flags().StringVarP(&dayOfWeek, dayOfWeekFlag, "", "Sunday", "Specify the day of the week when Stork should trigger the operation. You can use both the abbreviated or the full name of the day of the week.")
