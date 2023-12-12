@@ -65,7 +65,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 			}
 
 			if len(resourceTypes) > 0 {
-				resourceList, err := getResourceTypes(resourceTypes, ioStreams, cmdFactory)
+				resourceList, err := getResourceTypes(resourceTypes, cmdFactory, ioStreams)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -287,7 +287,7 @@ func waitForApplicationBackup(name, namespace string, ioStreams genericclioption
 	return msg, err
 }
 
-func getResourceTypes(resourceType string, ioStreams genericclioptions.IOStreams, cmdFactory Factory) ([]string, error) {
+func getResourceTypes(resourceType string, cmdFactory Factory, ioStreams genericclioptions.IOStreams) ([]string, error) {
 	resourceList := make([]string, 0)
 	resourceTypes := strings.Split(resourceType, ",")
 
