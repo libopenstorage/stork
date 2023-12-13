@@ -331,27 +331,23 @@ func GetPvsAndPVCsfromDeployment(namespace string, deployment *pds.ModelsDeploym
 }
 
 // Check the DS related PV usage and resize in case of 90% full
-func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeployment) error {
+func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeployment, thresholdPercentage float64) error {
 	log.Infof("Check PVC Usage")
 	f := func() (interface{}, bool, error) {
-		_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
-		for _, vol := range vols {
-			appVol, err := Inst().V.InspectVolume(vol.ID)
-			if err != nil {
-				return nil, true, err
-			}
-			pvcCapacity := appVol.Spec.Size / units.GiB
-			usedGiB := appVol.GetUsage() / units.GiB
-			threshold := pvcCapacity - 1
-			if usedGiB >= threshold {
-				log.Infof("The PVC is consumed upto threshold . PVC capacity was %vGB , the consumed PVC is %vGB", pvcCapacity, usedGiB)
-				return nil, false, nil
-			}
+		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deployment)
+		floatCapacity := float64(initialCapacity)
+		log.FailOnError(err, "unable to calculate vol capacity")
+		consumedCapacity, err := GetVolumeUsage(namespace, deployment)
+		log.FailOnError(err, "unable to calculate vol usage")
+		threshold := thresholdPercentage * (floatCapacity / 100)
+		log.InfoD("threshold value calculated is- [%v]", threshold)
+		if consumedCapacity >= threshold {
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+			return nil, false, nil
 		}
 		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
 	}
-	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
-
+	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
 	return err
 }
 
@@ -410,6 +406,20 @@ func GetVolumeCapacityInGB(namespace string, deployment *pds.ModelsDeployment) (
 		pvcCapacity = appVol.Spec.Size / units.GiB
 	}
 	return pvcCapacity, err
+}
+
+func GetVolumeUsage(namespace string, deployment *pds.ModelsDeployment) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, err
 }
 
 func CleanUpBackUpTargets(projectID, objectStore, prefix string) error {
