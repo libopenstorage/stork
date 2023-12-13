@@ -145,10 +145,12 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
-	err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-	log.FailOnError(err, "error while deleting backup targets and creds")
-	err = bkpClient.AWSStorageClient.DeleteBucket()
-	log.FailOnError(err, "Failed while deleting the bucket")
+	if params.BackUpAndRestore.RunBkpAndRestrTest {
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	}
 })
 
 func TestMain(m *testing.M) {
