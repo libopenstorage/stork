@@ -547,7 +547,7 @@ func (a *ApplicationCloneController) prepareResources(
 			clone.Spec.IncludeOptionalResourceTypes,
 			nil,
 			&opts,
-			"", "",
+			"", "", nil,
 		)
 		if err != nil {
 			return nil, err

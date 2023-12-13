@@ -163,12 +163,80 @@ func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.Applic
 func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.ApplicationBackup,
 	backupLocation string,
 	restore *storkapi.ApplicationRestore) error {
+	logrus.Info("Starting createNamespaces")
 	var namespaces []*v1.Namespace
+
+	// rtTemplate := &storkapi.ResourceTransformation{}
+	// a.client.Get(context.Background(), types.NamespacedName{Name: restore.Spec.ResourceTransformationTemplate, Namespace: kdmputils.AdminNamespace}, rtTemplate)
+
+	var gvkResourceTransform map[schema.GroupVersionKind][]storkapi.TransformSpecs
+	if restore.Spec.ResourceTransformationTemplate != "" {
+		var err error
+		gvkResourceTransform, err = resourcecollector.GetGVKToTransformSpecMapper(restore.Spec.ResourceTransformationTemplate, kdmputils.AdminNamespace)
+		if err != nil {
+			log.ApplicationRestoreLog(restore).
+				Warnf("Unable to get transformation spec from :%s, skipping transformation for this restore, err: %v", restore.Spec.ResourceTransformationTemplate, err)
+			return err
+		}
+	}
+
+	logrus.Info("gvkResourceTransform: ", gvkResourceTransform)
 
 	nsData, err := a.downloadObject(backup, backupLocation, restore.Namespace, nsObjectName, true)
 	if err != nil {
 		return err
 	}
+
+	logrus.Info("Before nsdata: ", string(nsData))
+
+	if gvkResourceTransform != nil {
+		objects := make([]*unstructured.Unstructured, 0)
+		if err = json.Unmarshal(nsData, &namespaces); err != nil {
+			return err
+		}
+
+		for _, ns := range namespaces {
+			var object unstructured.Unstructured
+			content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(ns)
+			if err != nil {
+				logrus.Errorf("Error while DefaultUnstructuredConverter.ToUnstructured: %v", err)
+			}
+			object.SetUnstructuredContent(content)
+			objects = append(objects, &object)
+		}
+
+		logrus.Info("one: objects: ", objects)
+		// gvk, err := resourcecollector.GetGVK(nsData)
+		// if err != nil {
+		// 	return err
+		// }
+		gvk := schema.GroupVersionKind{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Namespace",
+		}
+		logrus.Info("two: gvk: ", gvk)
+
+		if transforms, ok := gvkResourceTransform[gvk]; ok {
+			for _, object := range objects {
+				for _, transform := range transforms {
+					if resourcecollector.IsObjectLabelsMatched(object.UnstructuredContent(), transform.Selectors) {
+						resourcecollector.TransformObject(object, transform)
+					}
+				}
+			}
+		}
+		logrus.Info("three: transform done ")
+
+		//v1.SchemeGroupVersion.WithKind()
+		nsData, err = json.Marshal(objects)
+		if err != nil {
+			logrus.Error("error while marshaling the unstructed objects to []byte: err", err)
+			return err
+		}
+	}
+
+	logrus.Info("After nsdata: ", string(nsData))
 
 	rancherProjectMapping := getRancherProjectMapping(restore)
 	if nsData != nil {
@@ -683,6 +751,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 							&opts,
 							restore.Spec.BackupLocation,
 							restore.Namespace,
+							nil,
 						)
 						if err != nil {
 							return err
@@ -1593,6 +1662,18 @@ func (a *ApplicationRestoreController) applyResources(
 		break
 	}
 
+	var gvkResourceTransform map[schema.GroupVersionKind][]storkapi.TransformSpecs
+	log.ApplicationRestoreLog(restore).Info("restore.Spec.ResourceTransformationTemplate value:", restore.Spec.ResourceTransformationTemplate)
+	if restore.Spec.ResourceTransformationTemplate != "" {
+		var err error
+		gvkResourceTransform, err = resourcecollector.GetGVKToTransformSpecMapper(restore.Spec.ResourceTransformationTemplate, kdmputils.AdminNamespace)
+		if err != nil {
+			log.ApplicationRestoreLog(restore).
+				Warnf("Unable to get transformation spec from :%s, skipping transformation for this restore, err: %v", restore.Spec.ResourceTransformationTemplate, err)
+			return err
+		}
+	}
+
 	// This channel listens on two values if the CR's time stamp to be updated or to quit the go routine
 	startTime := time.Now()
 	for _, o := range objects {
@@ -1613,6 +1694,7 @@ func (a *ApplicationRestoreController) applyResources(
 			&opts,
 			restore.Spec.BackupLocation,
 			restore.Namespace,
+			gvkResourceTransform,
 		)
 		if err != nil {
 			return err

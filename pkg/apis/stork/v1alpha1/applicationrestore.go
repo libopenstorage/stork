@@ -24,14 +24,15 @@ type ApplicationRestore struct {
 
 // ApplicationRestoreSpec is the spec used to restore applications
 type ApplicationRestoreSpec struct {
-	BackupName                   string                              `json:"backupName"`
-	BackupLocation               string                              `json:"backupLocation"`
-	NamespaceMapping             map[string]string                   `json:"namespaceMapping"`
-	ReplacePolicy                ApplicationRestoreReplacePolicyType `json:"replacePolicy"`
-	IncludeOptionalResourceTypes []string                            `json:"includeOptionalResourceTypes"`
-	IncludeResources             []ObjectInfo                        `json:"includeResources"`
-	StorageClassMapping          map[string]string                   `json:"storageClassMapping"`
-	RancherProjectMapping        map[string]string                   `json:"rancherProjectMapping"`
+	BackupName                     string                              `json:"backupName"`
+	BackupLocation                 string                              `json:"backupLocation"`
+	NamespaceMapping               map[string]string                   `json:"namespaceMapping"`
+	ReplacePolicy                  ApplicationRestoreReplacePolicyType `json:"replacePolicy"`
+	IncludeOptionalResourceTypes   []string                            `json:"includeOptionalResourceTypes"`
+	IncludeResources               []ObjectInfo                        `json:"includeResources"`
+	StorageClassMapping            map[string]string                   `json:"storageClassMapping"`
+	RancherProjectMapping          map[string]string                   `json:"rancherProjectMapping"`
+	ResourceTransformationTemplate string                              `json:"resourceTransformationTemplate"`
 }
 
 // ApplicationRestoreReplacePolicyType is the replace policy for the application restore
