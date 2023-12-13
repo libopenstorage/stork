@@ -10048,3 +10048,18 @@ func GetKubevirtVersionToUpgrade() string {
 	}
 	return LatestKubevirtVersion
 }
+
+// GetRandomSubset generates a random subset of elements from a given list.
+func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
+	if subsetSize > len(elements) {
+		return nil, fmt.Errorf("subset size exceeds the length of the input list")
+	}
+
+	shuffledElements := make([]string, len(elements))
+	copy(shuffledElements, elements)
+	rand.Shuffle(len(shuffledElements), func(i, j int) {
+		shuffledElements[i], shuffledElements[j] = shuffledElements[j], shuffledElements[i]
+	})
+
+	return shuffledElements[:subsetSize], nil
+}

@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/portworx/sched-ops/k8s/storage"
 
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 
@@ -47,6 +49,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"encoding/base64"
@@ -1192,8 +1195,6 @@ func kubectlExec(arguments []string) (string, error) {
 	}
 	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	log.InfoD("Command '%s'", cmd.String())
-	log.Infof("Command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
@@ -6011,4 +6012,293 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context.Context, namespace
 	}
 
 	return ruleStatus, ruleName, nil
+}
+
+// UpdateKDMPConfigMap updates the KDMP configMap with the given key and value.
+func UpdateKDMPConfigMap(dataKey string, dataValue string) error {
+	KDMPconfigMapName := "kdmp-config"
+	KDMPconfigMapNamespace := "kube-system"
+	KDMPconfigMap, err := core.Instance().GetConfigMap(KDMPconfigMapName, KDMPconfigMapNamespace)
+	if err != nil {
+		return err
+	}
+	intialSize := KDMPconfigMap.Size()
+	KDMPconfigMap.Data[dataKey] = dataValue
+	_, err = core.Instance().UpdateConfigMap(KDMPconfigMap)
+	if err != nil {
+		return err
+	}
+	log.Infof("updated the KDMP configMap data with key [%s]: value [%s]", dataKey, dataValue)
+
+	KDMPconfigMap, err = core.Instance().GetConfigMap(KDMPconfigMapName, KDMPconfigMapNamespace)
+	if err != nil {
+		return err
+	}
+	finalSize := KDMPconfigMap.Size()
+	log.Infof(fmt.Sprintf("The intial size of configMap [%s] : [%v] and final size [%v]", KDMPconfigMapName, intialSize, finalSize))
+	return nil
+}
+
+type PodDirectoryConfig struct {
+	BasePath           string
+	Depth              int
+	Levels             int
+	FilesPerDirectory  int
+	FileSizeInMB       int
+	FileName           string
+	DirName            string
+	CreateSymbolicLink bool
+	CreateHardLink     bool
+}
+
+// CreateNestedDirectoriesWithFilesInPod creates a nested directory structure with files within a specified Pod.
+func CreateNestedDirectoriesWithFilesInPod(pod corev1.Pod, containerName string, directoryConfig PodDirectoryConfig) error {
+	var wg sync.WaitGroup
+	var errChan = make(chan error)
+	fileConfig := PodDirectoryConfig{
+		BasePath:          directoryConfig.BasePath,
+		FilesPerDirectory: directoryConfig.FilesPerDirectory,
+	}
+	_, err := CreateFilesInPodDirectory(pod, containerName, fileConfig)
+	if err != nil {
+		return fmt.Errorf("error creating files in %s: %s", directoryConfig.BasePath, err.Error())
+	}
+
+	if directoryConfig.Levels > 0 && directoryConfig.Depth > 0 {
+		for i := 0; i < directoryConfig.Depth; i++ {
+			dirPath := filepath.Join(directoryConfig.BasePath, fmt.Sprintf("level_%d_depth_%d_%s", directoryConfig.Levels, i, RandomString(8)))
+			podConfig := PodDirectoryConfig{
+				BasePath: dirPath,
+			}
+			err := CreateDirectoryInPod(pod, containerName, podConfig)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Error creating directory %s: %s\n", dirPath, err.Error()))
+				continue
+			}
+			fileConfig := PodDirectoryConfig{
+				BasePath:          dirPath,
+				FilesPerDirectory: directoryConfig.FilesPerDirectory,
+			}
+
+			_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+			if err != nil {
+				return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
+			}
+
+			if directoryConfig.Levels > 1 {
+				wg.Add(1)
+				go func(dirPath string, depth int) {
+					defer wg.Done()
+					DirectoryConfig := PodDirectoryConfig{
+						BasePath:          dirPath,
+						Depth:             directoryConfig.Depth,
+						Levels:            directoryConfig.Levels - 1,
+						FilesPerDirectory: directoryConfig.FilesPerDirectory,
+					}
+					errChan <- CreateDirectoryStructureInPod(pod, containerName, DirectoryConfig)
+				}(dirPath, directoryConfig.Depth)
+			}
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var errs []error
+	for err := range errChan {
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("error creating nested directories: %v", errs)
+	}
+
+	return nil
+}
+
+// CreateDirectoryStructureInPod creates a directory structure with multiple levels and files per directory within a specified Pod.
+func CreateDirectoryStructureInPod(pod corev1.Pod, containerName string, directoryConfig PodDirectoryConfig) error {
+	for i := 0; i < directoryConfig.Depth; i++ {
+		dirPath := filepath.Join(directoryConfig.BasePath, fmt.Sprintf("level_%d_depth_%d_%s", directoryConfig.Levels, i, RandomString(8)))
+		podConfig := PodDirectoryConfig{
+			BasePath: dirPath,
+		}
+		err := CreateDirectoryInPod(pod, containerName, podConfig)
+		if err != nil {
+			log.Errorf(fmt.Sprintf("Error creating directory %s: %s\n", dirPath, err.Error()))
+			continue
+		}
+		fileConfig := PodDirectoryConfig{
+			BasePath:          dirPath,
+			FilesPerDirectory: directoryConfig.FilesPerDirectory,
+		}
+
+		_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+		if err != nil {
+			return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
+		}
+
+		if directoryConfig.Levels > 1 {
+			DirectoryConfig := PodDirectoryConfig{
+				BasePath:          dirPath,
+				Depth:             directoryConfig.Depth,
+				Levels:            directoryConfig.Levels - 1,
+				FilesPerDirectory: directoryConfig.FilesPerDirectory,
+			}
+			err := CreateDirectoryStructureInPod(pod, containerName, DirectoryConfig)
+			if err != nil {
+				return fmt.Errorf("error creating nested directories: %s", err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+// CreateDirectoryInPod creates a directory within a specified Pod.
+func CreateDirectoryInPod(pod corev1.Pod, containerName string, directoryConfig PodDirectoryConfig) error {
+	cmd := fmt.Sprintf("mkdir -p %s ", directoryConfig.BasePath)
+	cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", cmd)}
+	_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateFilesInPodDirectory creates a specified number of files per directory level in a Pod.
+func CreateFilesInPodDirectory(pod corev1.Pod, containerName string, fileConfig PodDirectoryConfig) ([]string, error) {
+	var cmd string
+	var fileName string
+	var filesCreated []string
+	for i := 1; i <= fileConfig.FilesPerDirectory; i++ {
+		if len(fileConfig.FileName) > 0 {
+			fileName = fileConfig.FileName
+		} else {
+			fileName = fmt.Sprintf("file%d.txt", i)
+		}
+		filePath := filepath.Join(fileConfig.BasePath, fmt.Sprintf("%s", fileName))
+		if fileConfig.FileSizeInMB != 0 {
+			cmd = fmt.Sprintf("dd if=/dev/urandom of=%s bs=%dM count=1;", filePath, fileConfig.FileSizeInMB)
+		} else {
+			content := fmt.Sprintf("This is file %d in directory %s", i, fileConfig.BasePath)
+			cmd = fmt.Sprintf("echo \"%s\" > %s", content, filePath)
+		}
+		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", cmd)}
+		_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("error creating file %s: %s", filePath, err.Error())
+		}
+		filesCreated = append(filesCreated, strings.TrimPrefix(fileName, fileConfig.BasePath))
+		// Check if symbolic link needs to be created inside the pod using ln command
+		if fileConfig.CreateSymbolicLink {
+			symlinkPath := filePath + ".symlink"
+			lnCmd := fmt.Sprintf("ln -s %s %s", filePath, symlinkPath)
+			lnCmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", lnCmd)}
+			_, err := core.Instance().RunCommandInPod(lnCmdArgs, pod.Name, containerName, pod.Namespace)
+			if err != nil {
+				return nil, fmt.Errorf("error creating symbolic link %s: %s", symlinkPath, err.Error())
+			}
+			filesCreated = append(filesCreated, strings.TrimPrefix(symlinkPath, fileConfig.BasePath+"/"))
+		}
+
+		// Check if hard link needs to be created inside the pod using ln command
+		if fileConfig.CreateHardLink {
+			hardlinkPath := filePath + ".hardlink"
+			lnCmd := fmt.Sprintf("ln %s %s", filePath, hardlinkPath)
+			lnCmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", lnCmd)}
+			_, err := core.Instance().RunCommandInPod(lnCmdArgs, pod.Name, containerName, pod.Namespace)
+			if err != nil {
+				return nil, fmt.Errorf("error creating hard link %s: %s", hardlinkPath, err.Error())
+			}
+			filesCreated = append(filesCreated, strings.TrimPrefix(hardlinkPath, fileConfig.BasePath+"/"))
+		}
+	}
+	return filesCreated, nil
+}
+
+// GetExcludeFileListValue generates a formatted string representation
+// of storage classes and their associated files and directories which need to be excluded.
+// it return string in below formatted structure for updating value in ConfigMap.
+// usage eg:
+// KDMP_EXCLUDE_FILE_LIST: |-
+//
+//	mysql-sc-seq=level_3,level_2,file4.txt,file5.txt
+//	mysql-sc=level_3,level_2,file5.txt,file1.txt
+//	mysql-sc-aggr=level_2,level_3,file3.txt,file1.txt
+func GetExcludeFileListValue(storageClassesMap map[*storagev1.StorageClass][]string) string {
+	var excludeLists []string
+	for storageClass, paths := range storageClassesMap {
+		// check if fbda volume and and add .snapshot to exclude by default
+		if isFBDAVolume(storageClass) {
+			paths = append(paths, ".snapshot")
+		}
+		excludeList := fmt.Sprintf("%s=%s", storageClass.Name, strings.Join(paths, ","))
+		excludeLists = append(excludeLists, excludeList)
+	}
+	return strings.Join(excludeLists, "\n")
+}
+
+// FetchFilesAndDirectoriesFromPod retrieves files and directories from a specified path within a Pod,
+// excluding any specified file or directory entries. It executes a 'find' command within the Pod to gather the files
+// and directories of specified file types ('f' for files and 'd' for directories).
+func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path string, excludeFileDirectoryList []string) ([]string, []string, error) {
+	fileList := make(map[string][]string)
+	var fileTypes = [2]string{"f,l", "d"}
+	for _, fileType := range fileTypes {
+		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user root", path, fileType)}
+		output, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch file and directories from pod: %s. Output: %s", err, output)
+		}
+		filesWithAbsolutePaths := strings.Split(output, "\n")
+		// Unwanted error strings or patterns to filter out
+		unwantedPatterns := []string{"Unable to use a TTY - input is not a terminal or the right kind of file"}
+
+		for _, filePath := range filesWithAbsolutePaths {
+			if filePath != "" {
+				includePath := true
+				for _, pattern := range unwantedPatterns {
+					if strings.Contains(filePath, pattern) {
+						includePath = false
+						break
+					}
+				}
+				if includePath {
+					relativePath := strings.TrimPrefix(filePath, path)
+					relativePath = strings.TrimLeft(relativePath, "/")
+					if !IsPresent(excludeFileDirectoryList, relativePath) {
+						fileList[fileType] = append(fileList[fileType], relativePath)
+					}
+				}
+			}
+		}
+	}
+	return fileList["f,l"], fileList["d"], nil
+}
+
+// isFBDAVolume check if storageClass is of FBDA volume.
+func isFBDAVolume(storageClass *storagev1.StorageClass) bool {
+	backendFBDAStorageClassKey := "backend"
+	backendFBDAStorageClassVal := "pure_file"
+	if val, ok := storageClass.Parameters[backendFBDAStorageClassKey]; ok && val == backendFBDAStorageClassVal {
+		return true
+	}
+	return false
+}
+
+// isStorageClassPresent checks whether the storage class already present in the cluster.
+func isStorageClassPresent(storageClassName string) (bool, error) {
+	k8sStorage := storage.Instance()
+	storageClasses, err := k8sStorage.GetAllStorageClasses()
+	if err != nil {
+		return false, err
+	}
+	for _, storageClass := range storageClasses.Items {
+		if storageClass.GetName() == storageClassName {
+			return true, nil
+		}
+	}
+	return false, nil
 }
