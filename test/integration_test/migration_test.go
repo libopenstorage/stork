@@ -4,7 +4,11 @@
 package integrationtest
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/spf13/cobra"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,7 +46,6 @@ func TestMigration(t *testing.T) {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
-
 	setDefaultsForBackup(t)
 
 	t.Run("testMigration", testMigration)
@@ -122,19 +125,16 @@ func triggerMigrationTest(
 	}()
 
 	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false, "", nil)
-
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, skipDestDeletion, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, skipDestDeletion, true, nil, nil)
 }
 
-func triggerMigration(
+func scheduleAndRunTasks(
 	t *testing.T,
 	instanceID string,
 	appKey string,
 	additionalAppKeys []string,
-	migrationAppKeys []string,
 	migrateAllAppsExpected bool,
 	skipStoragePair bool,
-	startAppsOnMigration bool,
 	pairReverse bool,
 	projectIDMappings string,
 	namespaceLabels map[string]string,
@@ -166,13 +166,79 @@ func triggerMigration(
 
 	// Schedule bidirectional or regular cluster pair based on the flag
 	scheduleClusterPairGeneric(t, ctxs, appKey, instanceID, defaultClusterPairDir, projectIDMappings, skipStoragePair, true, pairReverse)
+	return ctxs, preMigrationCtx
+}
+
+func triggerMigration(
+	t *testing.T,
+	instanceID string,
+	appKey string,
+	additionalAppKeys []string,
+	migrationAppKeys []string,
+	migrateAllAppsExpected bool,
+	skipStoragePair bool,
+	startAppsOnMigration bool,
+	pairReverse bool,
+	projectIDMappings string,
+	namespaceLabels map[string]string,
+) ([]*scheduler.Context, *scheduler.Context) {
+	ctxs, preMigrationCtx := scheduleAndRunTasks(t, instanceID, appKey, additionalAppKeys, migrateAllAppsExpected, skipStoragePair, pairReverse, projectIDMappings, namespaceLabels)
 
 	// apply migration specs
-	err = schedulerDriver.AddTasks(ctxs[0],
+	err := schedulerDriver.AddTasks(ctxs[0],
 		scheduler.ScheduleOptions{AppKeys: migrationAppKeys})
 	require.NoError(t, err, "Error scheduling migration specs")
 
 	return ctxs, preMigrationCtx
+}
+
+func triggerMigrationSchedule(
+	t *testing.T,
+	instanceID string,
+	appKey string,
+	additionalAppKeys []string,
+	migrationAppKeys []string,
+	migrateAllAppsExpected bool,
+	skipStoragePair bool,
+	startAppsOnMigration bool,
+	pairReverse bool,
+	projectIDMappings string,
+	namespaceLabels map[string]string,
+	migrationScheduleArgs map[string]map[string]string,
+	schedulePolicyArgs map[string]map[string]string,
+) ([]*scheduler.Context, *scheduler.Context) {
+	ctxs, preMigrationCtx := scheduleAndRunTasks(t, instanceID, appKey, additionalAppKeys, migrateAllAppsExpected, skipStoragePair, pairReverse, projectIDMappings, namespaceLabels)
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	migrationScheduleNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+
+	//Create schedulePolicies using storkCtl if any required
+	for schedulePolicyName, customArgs := range schedulePolicyArgs {
+		cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName}
+		executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
+	}
+	//Create migrationSchedules using storkCtl
+	for _, migrationKey := range migrationAppKeys {
+		cmdArgs := []string{"create", "migrationschedule", migrationKey, "-c", remotePairName,
+			"--namespaces", migrationScheduleNamespace, "-n", migrationScheduleNamespace}
+		executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	}
+	return ctxs, preMigrationCtx
+}
+
+func executeStorkCtlCommand(t *testing.T, cmd *cobra.Command, cmdArgs []string, customArgs map[string]string) {
+	// add the custom args to the command
+	for key, value := range customArgs {
+		cmdArgs = append(cmdArgs, "--"+key)
+		if value != "" {
+			cmdArgs = append(cmdArgs, value)
+		}
+	}
+	cmd.SetArgs(cmdArgs)
+	//execute the command
+	logrus.Infof("The storkctl command being executed is %v", cmdArgs)
+	require.NoError(t, cmd.Execute(), "Storkctl execution failed")
 }
 
 // validateMigrationSummary validats the migration summary
@@ -219,6 +285,8 @@ func validateAndDestroyMigration(
 	skipAppDeletion bool,
 	skipDestDeletion bool,
 	blowNamespaces bool,
+	migrationSchedulesToCleanup []string,
+	schedulePoliciesToCleanup []string,
 ) {
 	var err error
 	timeout := defaultWaitTimeout
@@ -229,6 +297,7 @@ func validateAndDestroyMigration(
 	allAppsCtx := ctxs[0].DeepCopy()
 	err = schedulerDriver.WaitForRunning(ctxs[0], timeout, defaultWaitInterval)
 	if migrationSuccessExpected {
+		// need to wait for migration to complete
 		require.NoError(t, err, "Error waiting for migration to get to Ready state")
 
 		// wait on cluster 2 for the app to be running
@@ -266,6 +335,15 @@ func validateAndDestroyMigration(
 	// destroy app on cluster 1
 	if !skipAppDeletion {
 		destroyAndWait(t, ctxs)
+		// migrationSchedules and schedulePolicies arguments are used to delete the created resources
+		// as they are not part of the torpedo scheduler context
+		migrationScheduleNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+		for _, migrationSchedule := range migrationSchedulesToCleanup {
+			DeleteAndWaitForMigrationScheduleDeletion(t, migrationSchedule, migrationScheduleNamespace)
+		}
+		for _, schedulePolicy := range schedulePoliciesToCleanup {
+			DeleteAndWaitForSchedulePolicyDeletion(t, schedulePolicy)
+		}
 	}
 
 	if blowNamespaces {
@@ -321,7 +399,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	)
 
 	// Cleanup up source
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, true, true, false, false, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, true, true, false, false, false, nil, nil)
 
 	// Change kubeconfig to destination
 	err = setDestinationKubeConfig()
@@ -378,7 +456,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	//validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, preMigrationCtx, true, true, true, true, false)
 
 	destroyAndWait(t, []*scheduler.Context{postMigrationCtx})
-	validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, instanceID, appKey, preMigrationCtx, false, false, false, true, false, true)
+	validateAndDestroyMigration(t, []*scheduler.Context{preMigrationCtx}, instanceID, appKey, preMigrationCtx, false, false, false, true, false, true, nil, nil)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -674,6 +752,8 @@ func namespaceLabelSelectorTest(t *testing.T) {
 		true,  //Skip Deleting App on Destination
 		true,  //Skip Deleting App on Source
 		false, //Don't delete namespaces yet
+		nil,
+		nil,
 	)
 
 	// Validate on destination cluster that mysql-1-pvc is not migrated as it doesn't have the required namespace labels
@@ -708,7 +788,6 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "mysql-migration-schedule-interval"
 	appKey := "mysql-1-pvc"
-
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -716,8 +795,20 @@ func migrationIntervalScheduleTest(t *testing.T) {
 		require.NoError(t, err, "Error resetting remote config")
 	}()
 
+	// we want to create the schedulePolicy and migrationSchedule using storkctl instead of scheduling apps using torpedo's scheduler
+	// schedulePolicyArgs is a map of schedulePolicyName : {{flag1:value1,flag2:value2,....}}
+	var schedulePolicyArgs = make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+
+	// migrationScheduleArgs is a map of migrationScheduleName : {{flag1:value1,flag2:value2,....}}
+	var migrationScheduleArgs = make(map[string]map[string]string)
+	migrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "migrate-every-5m",
+	}
+
 	// the schedule interval for these specs it set to 5 minutes
-	ctxs, preMigrationCtx := triggerMigration(
+	ctxs, preMigrationCtx := triggerMigrationSchedule(
 		t,
 		instanceID,
 		appKey,
@@ -729,6 +820,8 @@ func migrationIntervalScheduleTest(t *testing.T) {
 		false,
 		"",
 		nil,
+		migrationScheduleArgs,
+		schedulePolicyArgs,
 	)
 
 	// bump time of the world by 5 minutes
@@ -736,7 +829,7 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	err = setMockTime(&mockNow)
 	require.NoError(t, err, "Error setting mock time")
 
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true, []string{instanceID}, []string{"migrate-every-5m"})
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -764,7 +857,14 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	err = setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
 	// the schedule interval for these specs it set to 5 minutes
-	ctxs, preMigrationCtx := triggerMigration(
+	var migrationScheduleArgs = make(map[string]map[string]string)
+	migrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "migrate-every-5m",
+	}
+	var schedulePolicyArgs = make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+	ctxs, preMigrationCtx := triggerMigrationSchedule(
 		t,
 		instanceID,
 		appKey,
@@ -776,8 +876,9 @@ func intervalScheduleCleanupTest(t *testing.T) {
 		false,
 		"",
 		nil,
+		migrationScheduleArgs,
+		schedulePolicyArgs,
 	)
-
 	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
 
 	// delete statefulset from source cluster
@@ -820,7 +921,7 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	validateMigration(t, instanceID, preMigrationCtx.GetID())
 	validateMigrationCleanup(t, name, namespace, pvcs)
 
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true, []string{instanceID}, []string{"migrate-every-5m"})
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -868,7 +969,15 @@ func migrationDailyScheduleTest(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
-	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1)
+	var schedulePolicyArgs = make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-daily"] = map[string]string{"policy-type": "Daily", "time": "12:04PM"}
+
+	var migrationScheduleArgs = make(map[string]map[string]string)
+	migrationScheduleArgs["mysql-migration-schedule-daily"] = map[string]string{
+		"schedule-policy-name": "migrate-every-daily",
+	}
+
+	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1, migrationScheduleArgs, schedulePolicyArgs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -880,7 +989,15 @@ func migrationWeeklyScheduleTest(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
-	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1)
+	var schedulePolicyArgs = make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-weekly"] = map[string]string{"policy-type": "Weekly", "time": "12:04PM", "day-of-week": "Monday"}
+
+	var migrationScheduleArgs = make(map[string]map[string]string)
+	migrationScheduleArgs["mysql-migration-schedule-weekly"] = map[string]string{
+		"schedule-policy-name": "migrate-every-weekly",
+	}
+
+	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1, migrationScheduleArgs, schedulePolicyArgs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -892,7 +1009,15 @@ func migrationMonthlyScheduleTest(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
-	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11)
+	var schedulePolicyArgs = make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-monthly"] = map[string]string{"policy-type": "Monthly", "time": "12:04PM", "date-of-month": "11"}
+
+	var migrationScheduleArgs = make(map[string]map[string]string)
+	migrationScheduleArgs["mysql-migration-schedule-monthly"] = map[string]string{
+		"schedule-policy-name": "migrate-every-monthly",
+	}
+
+	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11, migrationScheduleArgs, schedulePolicyArgs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -963,14 +1088,16 @@ func migrationScheduleInvalidTest(t *testing.T) {
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-// NOTE: below test assumes all schedule policies used here  (interval, daily, weekly or monthly) have a
+// NOTE: below test assumes all schedule policies used here (daily, weekly or monthly) have a
 // trigger time of 12:05PM. Ensure the SchedulePolicy specs use that time.
 func migrationScheduleTest(
 	t *testing.T,
 	scheduleType v1alpha1.SchedulePolicyType,
 	migrationScheduleName string,
 	scheduleDay string,
-	scheduleDate int) {
+	scheduleDate int,
+	migrationScheduleCustomArgs map[string]map[string]string,
+	schedulePolicyArgs map[string]map[string]string) {
 	var err error
 	// Reset config in case of error
 	defer func() {
@@ -1015,7 +1142,7 @@ func migrationScheduleTest(
 	err = setMockTime(&mockNow)
 	require.NoError(t, err, "Error setting mock time")
 
-	ctxs, preMigrationCtx := triggerMigration(
+	ctxs, preMigrationCtx := triggerMigrationSchedule(
 		t,
 		migrationScheduleName,
 		"mysql-1-pvc",
@@ -1027,6 +1154,8 @@ func migrationScheduleTest(
 		false,
 		"",
 		nil,
+		migrationScheduleCustomArgs,
+		schedulePolicyArgs,
 	)
 
 	namespace := preMigrationCtx.GetID()
@@ -1120,8 +1249,18 @@ func migrationScheduleTest(
 		fmt.Sprintf("creation of migration: %v should have been after: %v the first migration",
 			firstMigrationCreationTime, migrationStatus.CreationTimestamp))
 
+	var migrationSchedulesToCleanup []string
+	for key := range migrationScheduleCustomArgs {
+		migrationSchedulesToCleanup = append(migrationSchedulesToCleanup, key)
+	}
+
+	var schedulePoliciesToCleanup []string
+	for key := range schedulePolicyArgs {
+		schedulePoliciesToCleanup = append(schedulePoliciesToCleanup, key)
+	}
+
 	// validate and destroy apps on both clusters
-	validateAndDestroyMigration(t, ctxs, migrationScheduleName, "mysql-1-pvc", preMigrationCtx, true, false, true, false, false, false)
+	validateAndDestroyMigration(t, ctxs, migrationScheduleName, "mysql-1-pvc", preMigrationCtx, true, false, true, false, false, false, migrationSchedulesToCleanup, schedulePoliciesToCleanup)
 
 	// explicitly check if all child migrations of the schedule are deleted
 	f := func() (interface{}, bool, error) {
@@ -1683,7 +1822,7 @@ func pvcResizeMigrationTest(t *testing.T) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true, nil, nil)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -1777,7 +1916,7 @@ func suspendMigrationTest(t *testing.T) {
 
 	logrus.Infof("Successfully verified suspend migration case")
 
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true, nil, nil)
 }
 
 func endpointMigrationTest(t *testing.T) {
@@ -1847,7 +1986,7 @@ func endpointMigrationTest(t *testing.T) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, false, true, nil, nil)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -1960,7 +2099,7 @@ func validateNetworkPolicyMigration(t *testing.T, all bool) {
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, scheduleName, "networkpolicy", preMigrationCtx, true, false, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, scheduleName, "networkpolicy", preMigrationCtx, true, false, true, false, false, true, nil, nil)
 }
 
 func transformResourceTest(t *testing.T) {
@@ -2025,7 +2164,7 @@ func transformResourceTest(t *testing.T) {
 	}
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, true, true)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, false, true, true, nil, nil)
 
 	// If we are here then the test has passed
 	testResult = testResultPass

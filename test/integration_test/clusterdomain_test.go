@@ -117,7 +117,7 @@ func failoverAndFailbackClusterDomainTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, "cassandra-clusterdomain-migration", "cassandra", preMigrationCtx, true, false, false, true, false, false)
+	validateAndDestroyMigration(t, ctxs, "cassandra-clusterdomain-migration", "cassandra", preMigrationCtx, true, false, false, true, false, false, nil, nil)
 
 	testClusterDomainsFailover(t, preMigrationCtx, ctxs)
 
