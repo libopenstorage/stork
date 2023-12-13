@@ -2439,6 +2439,8 @@ func excludeNonExistingResourceTypesTest(t *testing.T) {
 		true,  //Skip Deleting App on Destination
 		true,  //Skip Deleting App on Source
 		false, //Don't delete namespaces yet
+		nil,
+		nil,
 	)
 
 	// Change kubeconfig to destination
@@ -2470,7 +2472,10 @@ func excludeNonExistingResourceTypesTest(t *testing.T) {
 		true,
 		false,
 		false,
-		true)
+		true,
+		nil,
+		nil,
+	)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
