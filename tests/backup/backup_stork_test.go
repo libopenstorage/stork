@@ -18,7 +18,7 @@ import (
 )
 
 // This testcase verifies backup and restore with non existing and deleted custom stork admin namespaces
-var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeSuspendBackupPolicies}", func() {
+var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies}", func() {
 
 	var (
 		newAdminNamespace                     string // New admin namespace to be set as custom admin namespace
@@ -61,7 +61,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeS
 		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeSuspendBackupPolicies", "Test to verify stork-namespace, backup CRs, restore CRs in case of non existing admin namespace and suspended, resumed backup schedules", nil, 93700, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies", "Test to verify stork-namespace, backup CRs, restore CRs in case of non existing admin namespace and suspended, resumed backup schedules", nil, 93700, ATrivedi, Q4FY24)
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
