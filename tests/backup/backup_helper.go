@@ -6246,8 +6246,14 @@ func GetExcludeFileListValue(storageClassesMap map[*storagev1.StorageClass][]str
 func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path string, excludeFileDirectoryList []string) ([]string, []string, error) {
 	fileList := make(map[string][]string)
 	var fileTypes = [2]string{"f,l", "d"}
+	//Fetch the user ID associated with the command execution.
+	cmdArgs := []string{"/bin/sh", "-c", "whoami"}
+	user, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch user-id , error : %v", err)
+	}
 	for _, fileType := range fileTypes {
-		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user root", path, fileType)}
+		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user %s", path, fileType, user)}
 		output, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to fetch file and directories from pod: %s. Output: %s", err, output)
