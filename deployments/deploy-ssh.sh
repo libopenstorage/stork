@@ -727,6 +727,10 @@ spec:
       value: "${VCLUSTER_TOTAL_ITERATIONS}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
+    - name: PX_BACKUP_MONGODB_USERNAME
+      value: "${PX_BACKUP_MONGODB_USERNAME}"
+    - name: PX_BACKUP_MONGODB_PASSWORD
+      value: "${PX_BACKUP_MONGODB_PASSWORD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

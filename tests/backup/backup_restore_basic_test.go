@@ -3594,7 +3594,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858, Ak, Q3FY24)
+		StartPxBackupTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858, Kshithijiyer, Q3FY24)
 
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
