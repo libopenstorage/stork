@@ -355,29 +355,6 @@ func validateAndDestroyMigration(
 	}
 }
 
-//func WaitForMigrationScheduleSuccess(t *testing.T, name string, namespace string) {
-//	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(name, namespace)
-//	if err != nil {
-//		logrus.Errorf("Unable to get migration schedule %s/%s", namespace, name)
-//	}
-//	f := func() (interface{}, bool, error) {
-//		logrus.Infof("Checking if migration schedule resource is successfully deleted")
-//		_, err := storkops.Instance().GetMigrationSchedule(name, namespace)
-//		if err == nil {
-//			return "", true, fmt.Errorf("get migration schedule : %s/%s should have failed", namespace, name)
-//		}
-//		if !errors.IsNotFound(err) {
-//			logrus.Infof("unexpected err: %v when checking deleted migration schedule: %s/%s", err, namespace, name)
-//			return "", true, err
-//		}
-//		//deletion done
-//		logrus.Infof("Migration Schedule %s/%s successfully deleted", namespace, name)
-//		return "", false, nil
-//	}
-//	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, 2*time.Second)
-//	require.NoError(t, err, "Unable to delete migration schedule %s/%s", namespace, name)
-//}
-
 func deploymentMigrationTest(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
