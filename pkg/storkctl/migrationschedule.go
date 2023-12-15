@@ -578,13 +578,17 @@ func getMigrationNamespaces(namespaceList []string, namespaceSelectors map[strin
 	for _, ns := range namespaceList {
 		uniqueNamespaces[ns] = true
 	}
-	labelSelectorNamespaces, err := core.Instance().ListNamespaces(namespaceSelectors)
-	if err != nil {
-		return nil, err
+
+	for key, val := range namespaceSelectors {
+		namespaces, err := core.Instance().ListNamespaces(map[string]string{key: val})
+		if err != nil {
+			return nil, err
+		}
+		for _, namespace := range namespaces.Items {
+			uniqueNamespaces[namespace.GetName()] = true
+		}
 	}
-	for _, ns := range labelSelectorNamespaces.Items {
-		uniqueNamespaces[ns.GetName()] = true
-	}
+
 	migrationNamespaces := make([]string, 0, len(uniqueNamespaces))
 	for namespace := range uniqueNamespaces {
 		migrationNamespaces = append(migrationNamespaces, namespace)
