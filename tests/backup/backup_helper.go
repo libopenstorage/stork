@@ -5813,6 +5813,30 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
+	// Explicit wait for the deployment to be updated
+	time.Sleep(30 * time.Second)
+
+	checkCurrentAdminNamespace := func() (interface{}, bool, error) {
+		currentAdminNamespace, err := getCurrentAdminNamespace()
+		if err != nil {
+			return nil, true, fmt.Errorf("Error occurred while checking admin namespace - [%s]", err.Error())
+		}
+
+		if currentAdminNamespace == namespace {
+			return nil, false, nil
+		} else if namespace == "" && currentAdminNamespace == defaultStorkDeploymentNamespace {
+			return nil, false, nil
+		} else {
+			return nil, true, fmt.Errorf("Admin namespace not updated")
+		}
+	}
+
+	// Waiting for all pods admin namespace to be updated
+	_, err = task.DoRetryWithTimeout(checkCurrentAdminNamespace, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
 		return nil, err
