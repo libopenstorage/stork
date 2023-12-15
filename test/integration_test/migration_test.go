@@ -49,9 +49,9 @@ func TestMigration(t *testing.T) {
 	setDefaultsForBackup(t)
 
 	t.Run("testMigration", testMigration)
-	//t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
-	//t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
-	//t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
+	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
+	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
+	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
 }
 
 func testMigration(t *testing.T) {
@@ -64,43 +64,43 @@ func testMigration(t *testing.T) {
 
 	t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("deploymentMigrationReverseTest", deploymentMigrationReverseTest)
-	//t.Run("statefulsetTest", statefulsetMigrationTest)
-	//t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
-	//t.Run("statefulsetRuleTest", statefulsetMigrationRuleTest)
-	//t.Run("preExecRuleMissingTest", statefulsetMigrationRulePreExecMissingTest)
-	//t.Run("postExecRuleMissingTest", statefulsetMigrationRulePostExecMissingTest)
-	//t.Run("disallowedNamespaceTest", migrationDisallowedNamespaceTest)
-	//t.Run("failingPreExecRuleTest", migrationFailingPreExecRuleTest)
-	//t.Run("failingPostExecRuleTest", migrationFailingPostExecRuleTest)
+	t.Run("statefulsetTest", statefulsetMigrationTest)
+	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
+	t.Run("statefulsetRuleTest", statefulsetMigrationRuleTest)
+	t.Run("preExecRuleMissingTest", statefulsetMigrationRulePreExecMissingTest)
+	t.Run("postExecRuleMissingTest", statefulsetMigrationRulePostExecMissingTest)
+	t.Run("disallowedNamespaceTest", migrationDisallowedNamespaceTest)
+	t.Run("failingPreExecRuleTest", migrationFailingPreExecRuleTest)
+	t.Run("failingPostExecRuleTest", migrationFailingPostExecRuleTest)
 	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
 	if authTokenConfigMap == "" {
-		//t.Run("labelSelectorTest", migrationLabelSelectorTest)
-		//t.Run("labelExcludeSelectorTest", migrationLabelExcludeSelectorTest)
-		//t.Run("intervalScheduleTest", migrationIntervalScheduleTest)
-		//t.Run("dailyScheduleTest", migrationDailyScheduleTest)
-		//t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
-		//t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
-		//t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
-		//t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
+		t.Run("labelSelectorTest", migrationLabelSelectorTest)
+		t.Run("labelExcludeSelectorTest", migrationLabelExcludeSelectorTest)
+		t.Run("intervalScheduleTest", migrationIntervalScheduleTest)
+		t.Run("dailyScheduleTest", migrationDailyScheduleTest)
+		t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
+		t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
+		t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
+		t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
 	}
-	//t.Run("networkpolicyTest", networkPolicyMigrationTest)
-	//t.Run("endpointTest", endpointMigrationTest)
-	//t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
-	//t.Run("scaleTest", migrationScaleTest)
-	//t.Run("pvcResizeTest", pvcResizeMigrationTest)
-	//t.Run("transformResourceTest", transformResourceTest)
-	//t.Run("suspendMigrationTest", suspendMigrationTest)
-	//t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
-	//t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
-	//t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
-	//t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
-	//t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
-	//t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
-	//t.Run("excludeResourceTypeDeploymentTest", excludeResourceTypeDeploymentTest)
-	//t.Run("excludeResourceTypePVCTest", excludeResourceTypePVCTest)
-	//t.Run("excludeMultipleResourceTypesTest", excludeMultipleResourceTypesTest)
-	//t.Run("excludeResourceTypesWithSelectorsTest", excludeResourceTypesWithSelectorsTest)
-	//t.Run("excludeNonExistingResourceTypesTest", excludeNonExistingResourceTypesTest)
+	t.Run("networkpolicyTest", networkPolicyMigrationTest)
+	t.Run("endpointTest", endpointMigrationTest)
+	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
+	t.Run("scaleTest", migrationScaleTest)
+	t.Run("pvcResizeTest", pvcResizeMigrationTest)
+	t.Run("transformResourceTest", transformResourceTest)
+	t.Run("suspendMigrationTest", suspendMigrationTest)
+	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
+	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
+	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
+	t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
+	t.Run("serviceAndServiceAccountUpdate", serviceAndServiceAccountUpdate)
+	t.Run("namespaceLabelSelectorTest", namespaceLabelSelectorTest)
+	t.Run("excludeResourceTypeDeploymentTest", excludeResourceTypeDeploymentTest)
+	t.Run("excludeResourceTypePVCTest", excludeResourceTypePVCTest)
+	t.Run("excludeMultipleResourceTypesTest", excludeMultipleResourceTypesTest)
+	t.Run("excludeResourceTypesWithSelectorsTest", excludeResourceTypesWithSelectorsTest)
+	t.Run("excludeNonExistingResourceTypesTest", excludeNonExistingResourceTypesTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -293,9 +293,14 @@ func validateAndDestroyMigration(
 	if !migrationSuccessExpected {
 		timeout = timeout / 5
 	}
-
+	migrationScheduleNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 	allAppsCtx := ctxs[0].DeepCopy()
 	err = schedulerDriver.WaitForRunning(ctxs[0], timeout, defaultWaitInterval)
+	for _, migrationSchedule := range migrationSchedulesToCleanup {
+		// Need to Validate the migrationSchedules separately because they are created using storkctl
+		// and not a part of the torpedo scheduler context
+		_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedule, migrationScheduleNamespace, timeout, defaultWaitInterval)
+	}
 	if migrationSuccessExpected {
 		// need to wait for migration to complete
 		require.NoError(t, err, "Error waiting for migration to get to Ready state")
@@ -337,7 +342,6 @@ func validateAndDestroyMigration(
 		destroyAndWait(t, ctxs)
 		// migrationSchedules and schedulePolicies arguments are used to delete the created resources
 		// as they are not part of the torpedo scheduler context
-		migrationScheduleNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 		for _, migrationSchedule := range migrationSchedulesToCleanup {
 			DeleteAndWaitForMigrationScheduleDeletion(t, migrationSchedule, migrationScheduleNamespace)
 		}
