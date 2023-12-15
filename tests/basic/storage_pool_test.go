@@ -10369,3 +10369,254 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{PoolDeleteVariations}", func() {
+
+	/*
+		migrated from px-test: PoolDeleteVariations
+ 		1. Verify pool deletion after creating 50 volumes
+		2. Verify pool deletion after creating 30 snaps
+ 	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteVariations", "Pool delete with variations", nil, 0)
+	})
+
+	var testNode *node.Node
+	BeforeEach(func() {
+		testNode = selectPoolDeletableNode(true)
+		dash.VerifyFatal(testNode != nil, true, "very if select test node ok")
+	  })
+	var contexts []*scheduler.Context
+
+	itLog := fmt.Sprintf("Verify pool delete variations")
+	It(itLog, func() {
+		log.InfoD(itLog)
+		numVolCreate := 50
+		stepLog := fmt.Sprintf("1. Verify pool deletion after creating %v volumes", numVolCreate)
+		Step(stepLog, func() {
+			deletablePools := make (map[string]string) // poolUUID to ID
+			for _, p := range testNode.Pools {
+				deletablePools[p.Uuid] = fmt.Sprintf("%v",p.GetID())
+			}
+
+			log.InfoD("deletable pools %+v", deletablePools)
+
+			volumesCreated := []string{}
+			for i:=0; i< numVolCreate; i++{
+				uuidObj := uuid.New()
+				volName := fmt.Sprintf("volume_%s", uuidObj.String())
+				size := uint64(rand.Intn(5) + 1)   // Size of the Volume between 1G to 5G
+				ha := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+
+				volId, err := Inst().V.CreateVolume(volName, size, int64(ha))
+				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", volName)
+				volumesCreated = append(volumesCreated, volId)
+			}
+
+			// select a pool with volume on it to delete
+			poolIDToDelete := ""
+			for _, vol := range volumesCreated {
+				appVol, err := Inst().V.InspectVolume(vol)
+				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
+				replPools := appVol.ReplicaSets[0].PoolUuids 
+				for _, p := range replPools {
+					if id, ok := deletablePools[p]; ok {
+						poolIDToDelete = id
+						break
+					}
+				}
+				if poolIDToDelete != "" {
+					break
+				}
+			}
+			log.InfoD("select testNode %v poolID %v to delete", testNode.Addresses, poolIDToDelete)
+
+			// delete should fail since the pool has volume replicas
+			err = DeleteGivenPoolInNode(*testNode, poolIDToDelete, false)
+			dash.VerifyFatal(err != nil, true, "do not expect pool delete success since pool has volume replicas")
+			dash.VerifyFatal(strings.Contains(err.Error(), "have data on pool"), true, fmt.Sprintf("check error message: %v", err.Error()))
+
+			log.InfoD("deleting all volumes")
+
+			for _, volID := range volumesCreated {
+				// Delete the Volume
+				err = Inst().V.DeleteVolume(volID)
+				log.FailOnError(err, "failed to delete volume with volume ID [%s]", volID)
+			}
+
+			vols, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "cannot list all volumes")
+
+			dash.VerifyFatal(len(vols) == 0, true, fmt.Sprintf("expect all volumes deleted: %+v", vols))
+
+			deletePoolAndValidate(*testNode, poolIDToDelete)
+
+			// add a pool back	
+			err = AddCloudDrive(*testNode, -1) 
+			log.FailOnError(err, "drive add failed")
+		})
+
+		numVolSnaps := 3
+		numVols := 25
+		stepLog = fmt.Sprintf("2. Verify pool deletion after creating vols and each with %v snaps %v", numVols, numVolSnaps)
+
+		Step(stepLog, func() {
+			deletablePools, err := Inst().V.GetNodePools(*testNode)
+			log.FailOnError(err, "failed to get node pool info")
+			log.Infof("Deletable pools %+v", deletablePools)
+
+			volIDs := []string{}
+			for i:=0; i<numVols; i++ {
+				uuidObj := uuid.New()
+				volName := fmt.Sprintf("volume_%s", uuidObj.String())
+				size := uint64(rand.Intn(5) + 1)   // Size of the Volume between 1G to 5G
+				ha := int64(3)
+				volID, err := Inst().V.CreateVolume(volName, size, int64(ha))
+				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", volName)
+				volIDs = append(volIDs, volID)
+			}
+
+			snapshotList := []string{}
+			for _, volID := range volIDs {
+				for i:=0; i< numVolSnaps; i++ {
+					uuidCreated := uuid.New()
+					snapshotName := fmt.Sprintf("snapshot_%s_%s", volID, uuidCreated.String())
+					snapshotResponse, err := Inst().V.CreateSnapshot(volID, snapshotName)
+					log.FailOnError(err, "error creating snapshot [%s]", volID)
+					snapID := snapshotResponse.GetSnapshotId()
+					snapshotList = append(snapshotList, snapID)
+					log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapID)
+				}
+			}
+
+			// select a pool with volume on it to delete
+			poolIDToDelete := ""
+			for _, vol := range snapshotList {
+				appVol, err := Inst().V.InspectVolume(vol)
+				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
+				replPools := appVol.ReplicaSets[0].PoolUuids 
+				log.Infof("vol %+v, replPools %+v", vol, replPools)
+				for _, p := range replPools {
+					if id, ok := deletablePools[p]; ok {
+						poolIDToDelete = id
+						break
+					}
+				}
+				if poolIDToDelete != "" {
+					break
+				}
+			}
+
+			dash.VerifyFatal(poolIDToDelete != "", true, fmt.Sprintf("target pool deletion ID: %v", poolIDToDelete))
+
+			log.InfoD("deleting all vols")
+			for _, volID := range volIDs {
+				err = Inst().V.DeleteVolume(volID)
+				log.FailOnError(err, "failed to delete volume with volume ID [%s]", volID)
+			}
+
+			// delete should fail
+			err = DeleteGivenPoolInNode(*testNode, poolIDToDelete, false)
+			dash.VerifyFatal(err != nil, true, "do not expect pool delete success since pool has snap replicas")
+			dash.VerifyFatal(strings.Contains(err.Error(), "have data on pool"), true, fmt.Sprintf("check error message: %v", err.Error()))
+
+			log.InfoD("deleting all snaps")
+			for _, snapID := range snapshotList {
+				// Delete the Volume
+				err = Inst().V.DeleteVolume(snapID)
+				log.FailOnError(err, "failed to delete snap with volume ID [%s]", snapID)
+			}
+
+			deletePoolAndValidate(*testNode, poolIDToDelete)
+
+			// add a pool back	
+			err = AddCloudDrive(*testNode, -1) 
+			log.FailOnError(err, "drive add failed")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{PoolDeleteServiceDisruption}", func() {
+
+	/*
+		migrated from px-test: RunPoolServiceDisruptiveTests
+		after pool deletion, after the followin cases px should be up
+		1. entering and exiting maintenance
+		2. restart
+		3. reboot
+		4. add a drive
+ 	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteServiceDisruption", "Pool delete with service disruption", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "PoolDeleteServiceDisruption"
+ 	It(itLog, func() {
+		testNode := selectPoolDeletableNode(true)
+ 		poolIDToDelete := ""
+
+		drvMap, err := Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
+		for poolID := range drvMap {
+			poolIDToDelete = poolID
+			break
+		}
+
+		dash.VerifyFatal(poolIDToDelete != "", true, fmt.Sprintf("check deltable pool on node %s: poolIDToDelete %v", testNode.Name, poolIDToDelete))
+
+		deletePoolAndValidate(*testNode, poolIDToDelete)
+
+		stepLog := "1. Verify enter and exit maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = Inst().V.EnterMaintenance(*testNode)
+			log.FailOnError(err, "fail to enter maintenace mode")
+
+			err = Inst().V.ExitMaintenance(*testNode)
+			log.FailOnError(err, "fail to exit maintenace mode")
+		})
+
+		stepLog = "2. Verify restart pxc"
+		Step(stepLog, func() {
+ 			log.InfoD(stepLog)
+			err := Inst().V.RestartDriver(*testNode, nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", testNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(*testNode, 5*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", testNode.Name))
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", testNode.Name))
+		})
+
+		stepLog = "3. Verify reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = RebootNodeAndWait(*testNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot succeed")
+		})
+
+		// add a pool back
+		stepLog = "4. Add a drive back"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Wait 1 min for stabling everything after reboot")
+			time.Sleep(time.Second * 60)
+			err = AddCloudDrive(*testNode, -1) 
+			log.FailOnError(err, "drive add failed")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

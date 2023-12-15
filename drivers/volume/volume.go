@@ -249,6 +249,9 @@ type Driver interface {
 	//GetNodePoolsStatus returns map of pool UUID and status
 	GetNodePoolsStatus(n node.Node) (map[string]string, error)
 
+	//GetNodePools returns latest map of pool UUID and id
+	GetNodePools(n node.Node) (map[string]string, error)
+
 	//DeletePool deletes the pool with given poolID
 	DeletePool(n node.Node, poolID string, retry bool) error
 

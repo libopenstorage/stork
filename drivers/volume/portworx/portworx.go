@@ -801,7 +801,7 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 		return "", fmt.Errorf("failed to create volume, Err: %v", err)
 	}
 
-	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
+	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
 	return resp.VolumeId, nil
 }
 
@@ -1221,6 +1221,45 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 			poolId = ""
 		}
 		status = ""
+	}
+	return poolsData, nil
+}
+
+// Return latest node PoolUUID -> ID
+func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e Pool -e UUID", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool info on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var poolUUID string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolUUID = strings.Split(line, ":")[1]
+			poolUUID = strings.Trim(poolUUID, " ")
+		}
+		if strings.Contains(line, "Pool") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if poolId != "" && poolUUID != "" {
+ 			if _, ok := poolsData[poolUUID]; !ok {
+				poolsData[poolUUID] = poolId
+			}
+			poolUUID = ""
+		}
+		poolId = ""
 	}
 	return poolsData, nil
 }

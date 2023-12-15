@@ -295,6 +295,14 @@ func (d *DefaultDriver) GetNodePoolsStatus(n node.Node) (map[string]string, erro
 	}
 }
 
+// GetNodePoolsStatus returns latest map of pool UUID and id
+func (d *DefaultDriver) GetNodePools(n node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePools()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{
