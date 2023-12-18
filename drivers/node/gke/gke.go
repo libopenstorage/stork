@@ -15,17 +15,17 @@ const (
 	DriverName = "gke"
 )
 
-type gke struct {
+type Gke struct {
 	ssh.SSH
 	ops           cloudops.Ops
 	instanceGroup string
 }
 
-func (g *gke) String() string {
+func (g *Gke) String() string {
 	return DriverName
 }
 
-func (g *gke) Init(nodeOpts node.InitOptions) error {
+func (g *Gke) Init(nodeOpts node.InitOptions) error {
 	g.SSH.Init(nodeOpts)
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
@@ -44,7 +44,7 @@ func (g *gke) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-func (g *gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+func (g *Gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	// GCP SDK requires per zone cluster size
 	err := g.ops.SetInstanceGroupSize(g.instanceGroup, perZoneCount, timeout)
 	if err != nil {
@@ -55,7 +55,7 @@ func (g *gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 	return nil
 }
 
-func (g *gke) GetASGClusterSize() (int64, error) {
+func (g *Gke) GetASGClusterSize() (int64, error) {
 	nodeCount, err := g.ops.GetInstanceGroupSize(g.instanceGroup)
 	if err != nil {
 		log.Errorf("failed to get size of node pool %s. Error: %v", g.instanceGroup, err)
@@ -65,7 +65,7 @@ func (g *gke) GetASGClusterSize() (int64, error) {
 	return nodeCount, nil
 }
 
-func (g *gke) SetClusterVersion(version string, timeout time.Duration) error {
+func (g *Gke) SetClusterVersion(version string, timeout time.Duration) error {
 
 	err := g.ops.SetClusterVersion(version, timeout)
 	if err != nil {
@@ -84,7 +84,7 @@ func (g *gke) SetClusterVersion(version string, timeout time.Duration) error {
 	return nil
 }
 
-func (g *gke) DeleteNode(node node.Node, timeout time.Duration) error {
+func (g *Gke) DeleteNode(node node.Node, timeout time.Duration) error {
 
 	err := g.ops.DeleteInstance(node.Name, node.Zone, timeout)
 	if err != nil {
@@ -93,7 +93,7 @@ func (g *gke) DeleteNode(node node.Node, timeout time.Duration) error {
 	return nil
 }
 
-func (g *gke) GetZones() ([]string, error) {
+func (g *Gke) GetZones() ([]string, error) {
 	storageDriverNodes := node.GetStorageDriverNodes()
 	nZones := make(map[string]bool)
 	for _, sNode := range storageDriverNodes {
@@ -110,7 +110,7 @@ func (g *gke) GetZones() ([]string, error) {
 }
 
 func init() {
-	g := &gke{
+	g := &Gke{
 		SSH: *ssh.New(),
 	}
 
