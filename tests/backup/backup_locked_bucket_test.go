@@ -149,31 +149,28 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 
 		Step("Taking backup of application to locked and unlocked bucket", func() {
 			log.InfoD("Taking backup of application to locked and unlocked bucket")
-			for _, namespace := range bkpNamespaces {
-				for backupLocationUID, backupLocationName := range BackupLocationMap {
-					ctx, err := backup.GetAdminCtxFromSecret()
-					log.FailOnError(err, "Fetching px-central-admin ctx")
-					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
-					backupList = append(backupList, backupName)
-					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-				}
+			for backupLocationUID, backupLocationName := range BackupLocationMap {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, RandomString(5), backupLocationName)
+				backupList = append(backupList, backupName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
 		Step("Restoring the backups application", func() {
 			log.InfoD("Restoring the backups application")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for range bkpNamespaces {
-				for _, backupName := range backupList {
-					restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
-					err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
-					restoreNames = append(restoreNames, restoreName)
-				}
+			for _, backupName := range backupList {
+				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), SourceClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
 			}
 		})
 	})

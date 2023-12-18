@@ -164,13 +164,14 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 			log.InfoD("Restoring the backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, backupName := range incrementalBackupNames2 {
+			for i, backupName := range incrementalBackupNames2 {
 				restoreName = fmt.Sprintf("%s-%s", backupName, RandomString(4))
 				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
 					restoreName = fmt.Sprintf("%s-%s", backupName, RandomString(4))
 				}
 				log.InfoD("Restoring %s backup", backupName)
-				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[i]})
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}

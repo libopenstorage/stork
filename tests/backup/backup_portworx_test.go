@@ -102,12 +102,10 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			}
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
 		Step("Restoring the backed up application", func() {
@@ -115,7 +113,8 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			log.FailOnError(err, "%s restore failed", restoreName)
 		})
 	})
@@ -215,6 +214,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
 			}
 		})
+
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -227,6 +227,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 				backupNames = append(backupNames, backupName)
 			}
 		})
+
 		Step("Create new storage class for restore", func() {
 			log.InfoD("Create new storage class for restore")
 			scName = fmt.Sprintf("replica-sc-%v", time.Now().Unix())
@@ -252,20 +253,20 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			log.InfoD("Restoring the backed up application")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
-				for _, backupName := range backupNames {
-					restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
-					pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace [%s]. Total PVCs - %d", namespace, len(pvcs.Items)))
-					singlePvc := pvcs.Items[0]
-					sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC from PVC - %s", singlePvc.GetName()))
-					storageClassMapping[sourceScName.Name] = scName
-					restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
-					namespaceMapping[namespace] = restoredNameSpace
-					err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring with custom Storage Class Mapping - %v", namespaceMapping))
-				}
+
+			for i, backupName := range backupNames {
+				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
+				pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[i], labelSelectors)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace [%s]. Total PVCs - %d", bkpNamespaces[i], len(pvcs.Items)))
+				singlePvc := pvcs.Items[0]
+				sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC from PVC - %s", singlePvc.GetName()))
+				storageClassMapping[sourceScName.Name] = scName
+				restoredNameSpace := fmt.Sprintf("%s-%s", bkpNamespaces[i], "restored")
+				namespaceMapping[bkpNamespaces[i]] = restoredNameSpace
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[i]})
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, SourceClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring with custom Storage Class Mapping - %v", namespaceMapping))
 			}
 		})
 		Step("Validate applications", func() {
@@ -421,7 +422,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, "Restore failed")
 			}
 		})
@@ -479,6 +481,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
+		appContextsToBackup  []*scheduler.Context
 		bkpNamespaces        []string
 		backupNames          []string
 		restoreNames         []string
@@ -491,6 +494,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		CredName             string
 		backupName           string
 		encryptionBucketName string
+		encryptedBackupName  string
 	)
 
 	providers := getProviders()
@@ -556,19 +560,19 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Taking encrypted and non-encrypted backups", func() {
 			log.InfoD("Taking encrypted and no-encrypted backups")
-			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-				backupNames = append(backupNames, backupName)
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-				encryptionBackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
-				backupNames = append(backupNames, encryptionBackupName)
-				err = CreateBackupWithValidation(ctx, encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", encryptionBackupName))
-			}
+
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+			backupNames = append(backupNames, backupName)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			encryptionBackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, RandomString(10))
+			backupNames = append(backupNames, encryptionBackupName)
+			err = CreateBackupWithValidation(ctx, encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", encryptionBackupName))
+
 		})
 
 		Step("Restoring encrypted and non-encrypted backups", func() {
@@ -577,26 +581,24 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			restoreNames = append(restoreNames, restoreName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateRestore(restoreName, backupNames[0], nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			err = CreateRestoreWithValidation(ctx, restoreName, backupNames[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			log.FailOnError(err, "%s restore failed", restoreName)
 			time.Sleep(time.Minute * 5)
 			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[1])
 			restoreNames = append(restoreNames, restoreName)
-			err = CreateRestore(restoreName, backupNames[1], nil, destinationClusterName, orgID, ctx, make(map[string]string))
+			err = CreateRestoreWithValidation(ctx, restoreName, backupNames[1], make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
+
 			log.FailOnError(err, "%s restore failed", restoreName)
 		})
 		// PB-3962: Taking encrypted backup, validating the backup location and restoring the backup to make sure the encryption key is not lost after backup location validation which will result in restore failure
 		Step("Taking new encrypted backup", func() {
 			log.InfoD("Taking new encrypted backup")
-			for _, namespace := range bkpNamespaces {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				encryptedBackupName := fmt.Sprintf("new-%s-%s-%s", "encrypted", BackupNamePrefix, namespace)
-				backupNames = append(backupNames, encryptedBackupName)
-				err = CreateBackupWithValidation(ctx, encryptedBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of new encrypted backup [%s]", encryptedBackupName))
-			}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			encryptedBackupName = fmt.Sprintf("new-%s-%s-%s", "encrypted", BackupNamePrefix, RandomString(10))
+			backupNames = append(backupNames, encryptedBackupName)
+			err = CreateBackupWithValidation(ctx, encryptedBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of new encrypted backup [%s]", encryptedBackupName))
 		})
 
 		Step("Validate the encrypted backup location after taking backup", func() {
@@ -607,14 +609,10 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Restore the encrypted backups after validating the encrypted backup location", func() {
 			log.InfoD("Restore the encrypted backups after validating the encrypted backup location")
-			for i := 1; i < len(backupNames); i++ {
-				restoreName := fmt.Sprintf("%s-%s-encrypted", restoreNamePrefix, backupNames[i])
-				restoreNames = append(restoreNames, restoreName)
-				for i := range scheduledAppContexts {
-					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
-				}
-				log.FailOnError(err, "%s restore failed", restoreName)
-			}
+			restoreName := fmt.Sprintf("%s-%s-encrypted", restoreNamePrefix, encryptedBackupName)
+			restoreNames = append(restoreNames, restoreName)
+			err = CreateRestoreWithValidation(ctx, restoreName, encryptedBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
+			log.FailOnError(err, "%s restore failed", restoreName)
 		})
 	})
 	JustAfterEach(func() {
@@ -645,6 +643,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	var (
 		appList                     = Inst().AppList
 		scheduledAppContexts        []*scheduler.Context
+		appContextsToBackup         []*scheduler.Context
 		preRuleNameList             []string
 		postRuleNameList            []string
 		appNamespaces               []string
@@ -825,13 +824,11 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Create schedule backup after initiating volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 					scheduleNames = append(scheduleNames, scheduleName)
 					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-
 					firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				})
@@ -858,11 +855,9 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-
-					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					err = backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of recent backup [%s]", firstScheduleBackupName))
-
 					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
 					currentScheduleBackupCount := len(allScheduleBackupNames)
@@ -880,7 +875,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					}
 					nextScheduleBackupNameRef, err = DoRetryWithTimeoutWithGinkgoRecover(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
-
 					nextScheduleBackupName = nextScheduleBackupNameRef.(string)
 					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
 					err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
@@ -892,7 +886,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", namespace, time.Now().Unix())
 					restoreNames = append(restoreNames, restoreName)
-					err = CreateRestore(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+					err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, firstScheduleBackupName))
 				})
 				Step("Restoring application from recent backup", func() {
@@ -901,7 +895,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", namespace, time.Now().Unix())
 					restoreNames = append(restoreNames, restoreName)
-					err = CreateRestore(restoreName, nextScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+					err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, nextScheduleBackupName))
 				})
 			}

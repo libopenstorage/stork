@@ -254,7 +254,8 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		Step("Restoring the backed up application", func() {
 			log.InfoD("Restoring the backed up application")
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, nil)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s of backup: %s", backupName, backupName))
 		})
 		Step("Removing label portworx.io/nobackup=true from worker nodes and verifying the license count", func() {

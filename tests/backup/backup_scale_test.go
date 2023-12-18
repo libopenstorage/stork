@@ -103,7 +103,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			createBackup := func(backupName string, namespace string, index int) {
 				defer GinkgoRecover()
 				defer wg.Done()
-				err := CreateBackup(backupName, SourceClusterName, backupLocationNameMap[index], backupLocationUIDMap[index], []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNameMap[index], backupLocationUIDMap[index], appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 			}
 			semaphore := make(chan int, 4)
@@ -134,7 +135,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 				defer wg.Done()
 				customNamespace := "custom-" + namespace + RandomString(4)
 				namespaceMapping := map[string]string{namespace: customNamespace}
-				err := CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
 				restoreNames = SafeAppend(&mutex, restoreNames, restoreName).([]string)
 			}

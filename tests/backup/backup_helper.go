@@ -112,7 +112,7 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
-	podReadyTimeout                           = 10 * time.Minute
+	podReadyTimeout                           = 15 * time.Minute
 	storkPodReadyTimeout                      = 20 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute

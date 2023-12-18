@@ -2132,37 +2132,33 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				time.Sleep(timeBetweenConsecutiveBackups)
 				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					restoreConfigs := []struct {
-						namePrefix          string
-						namespaceMapping    map[string]string
-						storageClassMapping map[string]string
-						replacePolicy       ReplacePolicyType
-					}{
-						{
-							"test-restore-single-ns",
-							make(map[string]string, 0),
-							make(map[string]string, 0),
-							ReplacePolicyRetain,
-						},
-						{
-							"test-custom-restore-single-ns",
-							map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
-							make(map[string]string, 0),
-							ReplacePolicyRetain,
-						},
-					}
-					for _, config := range restoreConfigs {
-						restoreName := fmt.Sprintf("%s-%s-%s", nonAdminUserName, config.namePrefix, RandomString(4))
-						restoreNameMap[nonAdminUserName] = restoreName
-						log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v for user [%s]", singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreName, config.namespaceMapping, nonAdminUserName)
-						err = CreateRestore(restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, destinationClusterName, orgID, nonAdminCtx, config.storageClassMapping)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace backup [%s] in cluster [%s] by user [%s]", restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
-					}
-				}(nonAdminUserName)
+				restoreConfigs := []struct {
+					namePrefix          string
+					namespaceMapping    map[string]string
+					storageClassMapping map[string]string
+					replacePolicy       ReplacePolicyType
+				}{
+					{
+						"test-restore-single-ns",
+						make(map[string]string, 0),
+						make(map[string]string, 0),
+						ReplacePolicyRetain,
+					},
+					{
+						"test-custom-restore-single-ns",
+						map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
+						make(map[string]string, 0),
+						ReplacePolicyRetain,
+					},
+				}
+				for _, config := range restoreConfigs {
+					restoreName := fmt.Sprintf("%s-%s-%s", nonAdminUserName, config.namePrefix, RandomString(4))
+					restoreNameMap[nonAdminUserName] = restoreName
+					log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v for user [%s]", singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreName, config.namespaceMapping, nonAdminUserName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, config.storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace backup [%s] in cluster [%s] by user [%s]", restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
+				}
 			}
 			wg.Wait()
 		})
@@ -2174,18 +2170,13 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				time.Sleep(timeBetweenConsecutiveBackups)
 				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
-					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
-				}(nonAdminUserName)
+				restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
+				restoreNameMap[nonAdminUserName] = restoreName
+				log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 			}
-			wg.Wait()
 		})
 
 		// Restore a multiple namespace backup
@@ -2195,18 +2186,13 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				time.Sleep(timeBetweenConsecutiveBackups)
 				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
-					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
-				}(nonAdminUserName)
+				restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
+				restoreNameMap[nonAdminUserName] = restoreName
+				log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 			}
-			wg.Wait()
 		})
 
 		log.InfoD("Deletion of all backup,restore,schedule,cluster of users when user is present in keycloak ")
@@ -2729,77 +2715,63 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 			log.InfoD("Restore single namespace backups with different configs")
 			for _, nonAdminUserName := range userNames {
 				time.Sleep(timeBetweenConsecutiveBackups)
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
-					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-					restoreConfigs := []struct {
-						namePrefix          string
-						namespaceMapping    map[string]string
-						storageClassMapping map[string]string
-						replacePolicy       ReplacePolicyType
-					}{
-						{
-							"test-restore-single-ns",
-							make(map[string]string, 0),
-							make(map[string]string, 0),
-							ReplacePolicyRetain,
-						},
-						{
-							"test-custom-restore-single-ns",
-							map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
-							make(map[string]string, 0),
-							ReplacePolicyRetain,
-						},
-					}
-					for _, config := range restoreConfigs {
-						restoreName := fmt.Sprintf("%s-%s-%s", nonAdminUserName, config.namePrefix, RandomString(4))
-						restoreNameMap[nonAdminUserName] = restoreName
-						log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v for user [%s]", singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreName, config.namespaceMapping, nonAdminUserName)
-						err = CreateRestore(restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, destinationClusterName, orgID, nonAdminCtx, config.storageClassMapping)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace backup [%s] in cluster [%s] by user [%s]", restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
-					}
-				}(nonAdminUserName)
+				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
+				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				restoreConfigs := []struct {
+					namePrefix          string
+					namespaceMapping    map[string]string
+					storageClassMapping map[string]string
+					replacePolicy       ReplacePolicyType
+				}{
+					{
+						"test-restore-single-ns",
+						make(map[string]string, 0),
+						make(map[string]string, 0),
+						ReplacePolicyRetain,
+					},
+					{
+						"test-custom-restore-single-ns",
+						map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
+						make(map[string]string, 0),
+						ReplacePolicyRetain,
+					},
+				}
+				for _, config := range restoreConfigs {
+					restoreName := fmt.Sprintf("%s-%s-%s", nonAdminUserName, config.namePrefix, RandomString(4))
+					restoreNameMap[nonAdminUserName] = restoreName
+					log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v for user [%s]", singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreName, config.namespaceMapping, nonAdminUserName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, config.storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace backup [%s] in cluster [%s] by user [%s]", restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
+				}
 			}
 			wg.Wait()
 		})
 		Step("Restore a multiple namespace backups", func() {
 			log.InfoD("Restore a multiple namespace backups")
 			for _, nonAdminUserName := range userNames {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
-					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-					restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
-					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
-				}(nonAdminUserName)
+				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
+				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
+				restoreNameMap[nonAdminUserName] = restoreName
+				log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 			}
-			wg.Wait()
 		})
 		Step("Restore a namespace label backups", func() {
 			log.InfoD("Restore a namespace label backups")
 			for _, nonAdminUserName := range userNames {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
-					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-					restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
-					restoreNameMap[nonAdminUserName] = restoreName
-					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
-				}(nonAdminUserName)
+				nonAdminCtx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
+				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
+				restoreNameMap[nonAdminUserName] = restoreName
+				log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 			}
-			wg.Wait()
 		})
 		log.InfoD("Deletion of all backups,restores,schedules,clusters of users when user is present in keycloak ")
 		Step(fmt.Sprintf("Listing and Deletion of backup of non-admin user from px-admin user"), func() {
