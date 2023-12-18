@@ -161,6 +161,9 @@ import (
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 
+	// import ocp driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"

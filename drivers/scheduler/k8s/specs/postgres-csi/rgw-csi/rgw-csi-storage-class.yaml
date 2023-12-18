@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    description: Provides Object Bucket Claims
+  name: postgres-sc
+parameters:
+  objectStoreName: ocs-storagecluster-cephobjectstore
+  objectStoreNamespace: openshift-storage
+provisioner: openshift-storage.ceph.rook.io/bucket
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
