@@ -117,6 +117,9 @@
     "StorageRequest": "1G",
     "Iterations" : 2
   },
+  "SSIE": {
+    "NumIterations": 5
+  },
   "LoadGen": {
     "LoadGenDepName": "workload",
     "FailOnError": "false",
