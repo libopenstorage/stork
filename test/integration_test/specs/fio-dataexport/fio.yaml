@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fio
+spec:
+  serviceName: fio
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fio
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      schedulerName: stork
+      containers:
+      - name: fio
+        image: portworx/fio_drv
+        command: ["fio"]
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
+        args: ["/configs/fio.job", "--status-interval=1", "--eta=never", "--output=/scratch/fio.log"]
+        volumeMounts:
+        - name: fio-config-vol
+          mountPath: /configs
+        - name: fio-data
+          mountPath: /scratch
+      volumes:
+      - name: fio-config-vol
+        configMap:
+          name: fio-job-config
+  volumeClaimTemplates:
+  - metadata:
+      name: fio-data
+    spec:
+      storageClassName: fio-sc
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: dest-pvc-for-import
+spec:
+   storageClassName: fio-sc
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 20Gi
+---
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "2"
+allowVolumeExpansion: true

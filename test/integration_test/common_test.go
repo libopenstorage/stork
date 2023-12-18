@@ -176,6 +176,7 @@ func TestSnapshot(t *testing.T) {
 
 func TestStorkCbt(t *testing.T) {
 	t.Run("deploymentTest", deploymentMigrationTest)
+	t.Run("dataExportTest", TestDataExportRsync)
 	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
