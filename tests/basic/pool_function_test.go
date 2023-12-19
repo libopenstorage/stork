@@ -2,14 +2,16 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-    "github.com/google/uuid"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -1533,5 +1535,77 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{DriveAddDifferentTypesAndResize}", func() {
+
+	var testrailID = 34542903
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542903
+
+	BeforeEach(func() {
+		StartTorpedoTest("DriveAddDifferentTypesAndResize",
+			"Create pools with different types of drive and pool expand using resize-disk", nil, testrailID)
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("creating pools with different drive types and resizing them", func() {
+		var driveTypes []string
+
+		driveSize := "100"
+		driveTypes, err = Inst().N.GetSupportedDriveTypes()
+		log.FailOnError(err, "Error getting drive types for the provider")
+		for i := 0; i < len(driveTypes); i++ {
+
+			poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+
+			newDriveSpec := fmt.Sprintf("size=%s,type=%s", driveSize, driveTypes[i])
+			err = Inst().V.AddCloudDrive(storageNode, newDriveSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", storageNode.Name))
+
+			log.InfoD("Validate pool rebalance after drive add to the node %s", storageNode.Name)
+			err = ValidateDriveRebalance(*storageNode)
+			log.FailOnError(err, "pool re-balance failed on node %s", storageNode.Name)
+
+			err = Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut)
+			log.FailOnError(err, "volume driver down on node %s", storageNode.Name)
+
+			poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			dash.VerifyFatal(len(poolsBfr)+1, len(poolsAfr), "verify new pool is created")
+
+		}
+
+		allPools, err := GetAllPoolsOnNode(storageNode.Id)
+		log.FailOnError(err, "Unable to get pool drives on node %s", storageNode.Name)
+
+		for i := 0; i < len(allPools); i++ {
+			poolToResize = getStoragePool(allPools[i])
+			originalSizeInBytes = poolToResize.TotalSize
+			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", allPools[i], poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(allPools[i], 1000, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+			resizeErr := waitForOngoingPoolExpansionToComplete(allPools[i])
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+		}
+
 	})
 })
