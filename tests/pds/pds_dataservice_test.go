@@ -23,6 +23,7 @@ import (
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -1836,20 +1837,30 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	It("Deploy Dataservices", func() {
 		var (
-			generateWorkloads = make(map[string]string)
-			deployments       = make(map[PDSDataService]*pds.ModelsDeployment)
-			stIds             []string
-			resIds            []string
-			depList           []*pds.ModelsDeployment
+			wlDeploymentsToBeCleaned []*v1.Deployment
+			deployments              = make(map[PDSDataService]*pds.ModelsDeployment)
+			stIds                    []string
+			resIds                   []string
+			stIDs                    []string
+			resConfigModel           *pds.ModelsResourceSettingsTemplate
+			stConfigModel            *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID    string
+			newStorageTemplateID     string
 		)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-
+				stIDs, resIds = nil, nil
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
 				Step("Deploy and validate data service", func() {
-					deployment, _, resConfigModel, stConfigModel, _, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
+					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+					newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
+					newTemplateConfig := controlplane.Templates{
+						Name:           newTemplateName,
 						CpuLimit:       params.StorageConfigurations.CpuLimit,
 						CpuRequest:     params.StorageConfigurations.CpuRequest,
+						DataServiceID:  dataserviceID,
 						MemoryLimit:    "2G",
 						MemoryRequest:  "1G",
 						StorageRequest: "2G",
@@ -1858,66 +1869,56 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						Provisioner:    "pxd.portworx.com",
 						Secure:         false,
 						VolGroups:      false,
-					})
-					stIds = append(stIds, stConfigModel.GetId())
-					resIds = append(resIds, resConfigModel.GetId())
-					depList = append(depList, deployment)
-					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-					log.FailOnError(err, "failed to create deployment with custom templates")
-				})
-
-			}
-			defer func() {
-				for _, newDeployment := range deployments {
-					Step("Delete created deployments")
-					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
-					log.FailOnError(err, "Error while deleting data services")
-					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				}
-			}()
-			Step("Running Workloads to fill-up the PVC ", func() {
-				for ds, deployment := range deployments {
-					if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
-						log.InfoD("Running Workloads on DataService %v ", ds.Name)
-						_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
-						log.FailOnError(err, "Error while genearating workloads")
-						generateWorkloads[ds.Name] = wldep.Name
 					}
-				}
-			})
-			defer func() {
-				for dsName, workloadContainer := range generateWorkloads {
-					Step("Delete the workload generating deployments", func() {
-						if Contains(dataServiceDeploymentWorkloads, dsName) {
-							log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
-							err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
-						} else if Contains(dataServicePodWorkloads, dsName) {
-							log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
-							err = pdslib.DeleteK8sPods(workloadContainer, namespace)
-						}
-						log.FailOnError(err, "error deleting workload generating pods")
-					})
-				}
-			}()
-			Step("Checking the PVC usage", func() {
-				log.FailOnError(err, "Unable to create scheduler context")
-				err = CheckStorageFullCondition(namespace, deployment, 85)
-				log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
-				_, err = IncreasePVCby1Gig(namespace, deployment, 1)
-				log.FailOnError(err, "Failing while Increasing the PVC name...")
-			})
-			Step("Validate Deployments after PVC Resize", func() {
-				for ds, deployment := range deployments {
-					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
-					log.FailOnError(err, "Error while validating dataservices")
-					log.InfoD("Data-service: %v is up and healthy", ds.Name)
-				}
-			})
-			Step("Delete Deployments", func() {
-				CleanupDeployments(deploymentsToBeCleaned)
-				err := controlPlane.CleanupCustomTemplates(stIds, resIds)
-				log.FailOnError(err, "Failed to delete custom templates")
-			})
+					stConfigModel, resConfigModel, err = controlPlane.CreateCustomResourceTemplate(tenantID, newTemplateConfig)
+					log.FailOnError(err, "Unable to update template")
+					log.InfoD("Successfully updated the template with ID- %v", resConfigModel.GetId())
+					newResourceTemplateID = resConfigModel.GetId()
+					newStorageTemplateID = stConfigModel.GetId()
+					stIDs = append(stIDs, newStorageTemplateID)
+					resIds = append(resIds, newResourceTemplateID)
+					controlPlane.UpdateResourceTemplateName(newTemplateName)
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+				Step("Running Workloads to fill up the PVC ", func() {
+					wkloadParams.Mode = "write"
+					_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
+					if err != nil {
+						log.FailOnError(err, "Unable to run workloads")
+					}
+					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wldep)
+				})
+				Step("Checking the PVC usage", func() {
+					log.FailOnError(err, "Unable to create scheduler context")
+					err = CheckStorageFullCondition(namespace, deployment, 85)
+					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
+					_, err = IncreasePVCby1Gig(namespace, deployment, 1)
+					log.FailOnError(err, "Failing while Increasing the PVC name...")
+				})
+				Step("Validate Deployments after PVC Resize", func() {
+					for ds, deployment := range deployments {
+						err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+						log.FailOnError(err, "Error while validating dataservices")
+						log.InfoD("Data-service: %v is up and healthy", ds.Name)
+					}
+				})
+				Step("Clean up workload deployments", func() {
+					for _, wlDep := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
+
+				})
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+					log.FailOnError(err, "Failed to delete custom templates")
+					controlPlane.UpdateResourceTemplateName("Small")
+				})
+			}
+
 		})
 	})
 	JustAfterEach(func() {
