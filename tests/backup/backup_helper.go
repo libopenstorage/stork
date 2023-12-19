@@ -127,6 +127,8 @@ const (
 	rancherActiveCluster                      = "local"
 	rancherProjectDescription                 = "new project"
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
+	backupScheduleDeleteTimeout               = 60 * time.Minute
+	backupScheduleDeleteRetryTime             = 30 * time.Second
 )
 
 var (
@@ -6464,4 +6466,82 @@ func validateCRCleanup(resourceInterface interface{},
 
 	return err
 
+}
+
+// SuspendAndDeleteSchedule suspends and deletes the backup schedule
+func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName string, clusterName string, orgID string, ctx context.Context, deleteBackupFlag bool) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schedulePolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: orgID, Uid: backupScheduleUID},
+		Suspend:        true,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schedulePolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	log.InfoD("Suspending backup schedule %s", backupScheduleName)
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	if err != nil {
+		return err
+	}
+	log.Infof("Verifying if the schedule is suspended by getting the suspended state of the schedule by inspecting")
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		Uid:   "",
+	}
+	validateScheduleStatus := func() (interface{}, bool, error) {
+		resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+		if err != nil {
+			return nil, false, err
+		}
+		if resp.GetBackupSchedule().BackupScheduleInfo.GetSuspend() != true {
+			return nil, true, fmt.Errorf("backup Schedule status after suspending is %v: ", resp.GetBackupSchedule().BackupScheduleInfo.GetSuspend())
+		}
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(validateScheduleStatus, 2*time.Minute, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Deleting backup schedule %s", backupScheduleName)
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: deleteBackupFlag,
+		Uid:           backupScheduleUID,
+	}
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
+		clusterObj,
+		backupScheduleDeleteTimeout,
+		backupScheduleDeleteRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -1078,18 +1078,18 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "failed to switch context to source cluster")
 		}()
-
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		allAppNamespaces := append(appNamespaces, newAppNamespaces...)
 		log.InfoD("Deleting deployed namespaces - %v", allAppNamespaces)
 		ValidateAndDestroy(allContexts, opts)
-
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
-
-		err = DeleteSchedule(scheduleName, destinationClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		// TO DO: Remove SuspendAndDeleteSchedule after PB-5221 is fixed and replace it with DeleteSchedule function
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		err = SuspendAndDeleteSchedule(scheduleName, schedulePolicyName, destinationClusterName, orgID, ctx, true)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Suspending and deleting backup schedule - %s", scheduleName))
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{schedulePolicyName}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
