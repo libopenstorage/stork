@@ -6364,6 +6364,15 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 // validateCRCleanup validates CR cleanup created during backup or restore
 func validateCRCleanup(resourceInterface interface{},
 	ctx context.Context) error {
+
+	log.InfoD("Validating CR cleanup")
+
+	// TODO : This needs to be removed in future once stork client is integrated for GKE in automation
+	if GetClusterProviders()[0] == "gke" {
+		log.Infof("Skipping CR cleanup validation in case of GKE")
+		return nil
+	}
+
 	var allCRs []string
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
@@ -6439,12 +6448,11 @@ func validateCRCleanup(resourceInterface interface{},
 			return nil, true, err
 		}
 
-		log.Infof("Validating CR cleanup")
 		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
 
 		for _, eachCR := range allCRs {
 			if strings.Contains(eachCR, resourceName) {
-				log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
+				log.InfoD("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
 				return nil, true, fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
 			}
 		}
