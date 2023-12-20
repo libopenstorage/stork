@@ -473,7 +473,7 @@ func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
 		false,
 		true,
 		true,
-		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -496,7 +496,7 @@ func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
 		false,
 		true,
 		true,
-		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -520,7 +520,7 @@ func migrationDisallowedNamespaceTest(t *testing.T) {
 		false,
 		true,
 		true,
-		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -544,7 +544,7 @@ func migrationFailingPreExecRuleTest(t *testing.T) {
 		false,
 		true,
 		true,
-		true,
+		false,
 	)
 
 	// If we are here then the test has passed
@@ -568,7 +568,7 @@ func migrationFailingPostExecRuleTest(t *testing.T) {
 		false,
 		true,
 		true,
-		true,
+		false,
 	)
 
 	// If we are here then the test has passed
