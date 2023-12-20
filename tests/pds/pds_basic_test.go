@@ -33,7 +33,7 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		InitInstance()
+		//InitInstance()
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
@@ -83,18 +83,22 @@ var _ = BeforeSuite(func() {
 		steplog = "Create backup bucket, targets and credentials"
 		Step(steplog, func() {
 			if params.BackUpAndRestore.RunBkpAndRestrTest {
+				credName := targetName + pdsbkp.RandString(8)
+				bkpClient, err = pdsbkp.InitializePdsBackup()
+				log.FailOnError(err, "Failed to initialize backup for pds.")
+				bucketName = strings.ToLower("pds-automation-" + pdsbkp.RandString(5))
 				switch params.BackUpAndRestore.TargetLocation {
 				case "s3":
 					log.InfoD("creating creds on s3")
-					credName := targetName + pdsbkp.RandString(8)
-					bkpClient, err = pdsbkp.InitializePdsBackup()
-					log.FailOnError(err, "Failed to initialize backup for pds.")
-					bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
+					bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
 					log.FailOnError(err, "Failed to create S3 backup target.")
 					log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 					awsBkpTargets = append(awsBkpTargets, bkpTarget)
-				case "S3-Comp":
+				case "s3-comp":
 					log.InfoD("creating creds on s3 compatible - minio")
+					bkpTarget, err = bkpClient.CreateAwsS3MinioBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
+					log.FailOnError(err, "Failed to create S3 compatible backup target.")
+					log.InfoD("AWS S3 compatible target - %v created successfully", bkpTarget.GetName())
 				case "Azure":
 					log.InfoD("creating creds on azure")
 				default:
@@ -146,10 +150,19 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	if params.BackUpAndRestore.RunBkpAndRestrTest {
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		switch params.BackUpAndRestore.TargetLocation {
+		case "s3":
+			err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			log.FailOnError(err, "error while deleting backup targets and creds")
+			err = bkpClient.AWSStorageClient.DeleteBucket(bucketName)
+			log.FailOnError(err, "Failed while deleting the s3 bucket")
+
+		case "s3-comp":
+			err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			log.FailOnError(err, "error while deleting backup targets and creds")
+			err = bkpClient.S3MinioStorageClient.DeleteS3MinioBucket(bucketName)
+			log.FailOnError(err, "Failed while deleting the s3-minio bucket")
+		}
 	}
 })
 

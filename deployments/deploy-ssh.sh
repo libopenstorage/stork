@@ -605,6 +605,14 @@ spec:
       value: "${AWS_SECRET_ACCESS_KEY}"
     - name: AWS_REGION
       value: "${AWS_REGION}"
+    - name: AWS_MINIO_ACCESS_KEY_ID
+      value: "${AWS_MINIO_ACCESS_KEY_ID}"
+    - name: AWS_MINIO_SECRET_ACCESS_KEY
+      value: "${AWS_MINIO_SECRET_ACCESS_KEY}"
+    - name: AWS_MINIO_REGION
+      value: "${AWS_MINIO_REGION}"
+    - name: AWS_MINIO_ENDPOINT
+      value: "${AWS_MINIO_ENDPOINT}"
     - name: KUBECONFIGS
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT

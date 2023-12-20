@@ -343,7 +343,7 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 		stepLog := "Create AWS S3 Backup target."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
+			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
 			log.FailOnError(err, "Failed to create AWS backup target.")
 			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 			bkpTargets = append(bkpTargets, bkpTarget)
@@ -432,10 +432,6 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 

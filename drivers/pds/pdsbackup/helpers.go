@@ -22,6 +22,13 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
+type awsCompatibleStorageClient struct {
+	endpoint  string
+	accessKey string
+	secretKey string
+	region    string
+}
+
 type awsStorageClient struct {
 	accessKey string
 	secretKey string
@@ -35,6 +42,42 @@ type azureStorageClient struct {
 
 type gcpStorageClient struct {
 	projectId string
+}
+
+func (awsObj *awsCompatibleStorageClient) createBucket(bucketName string) error {
+	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Endpoint:         aws.String(awsObj.endpoint),
+			Region:           aws.String(awsObj.region),
+			Credentials:      credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			S3ForcePathStyle: aws.Bool(true),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	bucketObj, err := client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if (aerr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou) || (aerr.Code() == s3.ErrCodeBucketAlreadyExists) {
+				log.Infof("Bucket: %v ,already exist.", bucketName)
+				return nil
+			} else {
+				return fmt.Errorf("couldn't create bucket: %v", err)
+			}
+
+		}
+	}
+
+	log.Infof("[AWS]Successfully created the bucket. Info: %v", bucketObj)
+	return nil
 }
 
 func (awsObj *awsStorageClient) createBucket(bucketName string) error {
@@ -71,22 +114,10 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsStorageClient) DeleteBucket() error {
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Config: aws.Config{
-			Region:      aws.String(awsObj.region),
-			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
-		},
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize new session: %v", err)
-	}
-
-	client := s3.New(sess)
-
+func DeleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
 	// Delete all objects and versions in the bucket
-	err = client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+	log.Debugf("Deleting bucket [%s]", bucketName)
+	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
 	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 		// Iterate through the objects in the bucket and delete them
@@ -131,6 +162,42 @@ func (awsObj *awsStorageClient) DeleteBucket() error {
 
 	log.Infof("[AWS] Successfully deleted the bucket: %v", bucketName)
 	return nil
+}
+
+func (awsObj *awsCompatibleStorageClient) DeleteS3MinioBucket(bucketName string) error {
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Endpoint:         aws.String(awsObj.endpoint),
+			Region:           aws.String(awsObj.region),
+			Credentials:      credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			S3ForcePathStyle: aws.Bool(true),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	err = DeleteAndValidateBucketDeletion(client, bucketName)
+	return err
+}
+
+func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(awsObj.region),
+			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	err = DeleteAndValidateBucketDeletion(client, bucketName)
+	return err
 }
 
 func (awsObj *awsStorageClient) ListFolders(after time.Time) ([]string, error) {
