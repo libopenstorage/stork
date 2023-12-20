@@ -86,6 +86,7 @@ func validateAndDestroyCrMigration(t *testing.T, appName string, appPath string)
 	require.NoError(t, err, "Error setting source kubeconfig")
 
 	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	require.NoError(t, err, "Failed to create migration")
 	err = asyncdr.WaitForMigration([]*storkv1.Migration{mig})
 	require.NoError(t, err, "Error waiting for migration")
 
@@ -132,8 +133,7 @@ func getClusterConfigPath(cmName string) (string, error) {
 	}
 	config := cm.Data["kubeconfig"]
 	if len(config) == 0 {
-		configErr := fmt.Sprintf("Error reading kubeconfig")
-		return "", fmt.Errorf(configErr)
+		return "", fmt.Errorf("Error reading kubeconfig")
 	}
 	filePath := fmt.Sprintf("%s/%s", kubeconfigDirectory, cmName)
 	log.Infof("Save kubeconfig to %s", filePath)

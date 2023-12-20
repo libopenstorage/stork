@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var horntail = false
+
 func TestAction(t *testing.T) {
 
 	setupOnce(t)
@@ -23,7 +25,7 @@ func TestAction(t *testing.T) {
 	t.Run("testFailoverWithoutMigration", testFailoverWithoutMigration)
 	t.Run("testFailoverForMultipleNamespaces", testFailoverForMultipleNamespaces)
 	t.Run("testFailoverWithMultipleApplications", testFailoverWithMultipleApplications)
-	// t.Run("testFailoverForFailedPromoteVolume", testFailoverForFailedPromoteVolume)
+	t.Run("testFailoverForFailedPromoteVolume", testFailoverForFailedPromoteVolume)
 }
 
 func setupOnce(t *testing.T) {
@@ -52,7 +54,7 @@ func testFailoverBasic(t *testing.T) {
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -95,7 +97,7 @@ func testFailoverForMultipleNamespaces(t *testing.T) {
 	ctxs := scheduleAppAndWait(t, instanceIDs, appKey)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -119,7 +121,7 @@ func testFailoverWithMultipleApplications(t *testing.T) {
 	addTasksAndWait(t, ctxs[0], additionalAppKeys)
 
 	startAppsOnMigration := false
-	preMigrationCtxs, ctxs, _ := triggerMigrationMultiple(
+	preMigrationCtxs, _, _ := triggerMigrationMultiple(
 		t, ctxs, migrationName, namespaces, true, false, startAppsOnMigration)
 
 	validateMigrationOnSrc(t, migrationName, namespaces)
@@ -153,6 +155,9 @@ func deactivateClusterDomainAndTriggerFailover(
 // It depends on a change that will prevent promote call from going
 // through if PX is down on the nearsync node for a volume
 func testFailoverForFailedPromoteVolume(t *testing.T) {
+	if !horntail {
+		return
+	}
 	appKey := "mysql-nearsync"
 	instanceIDs := []string{"failover-failed-promote-volume"}
 	storageClass := "px-sc"
@@ -190,7 +195,7 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 	funcRestartNode := func() {
 		mapNodeIDToNode := node.GetNodesByVoDriverNodeID()
 		logrus.Infof("mapNodeIDToNode: %v", mapNodeIDToNode)
-		nodeObj, _ := mapNodeIDToNode[nearSyncTargetMid]
+		nodeObj := mapNodeIDToNode[nearSyncTargetMid]
 		logrus.Infof("node: %v", nodeObj)
 
 		_, err = nodeDriver.RunCommand(

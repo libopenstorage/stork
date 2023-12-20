@@ -1735,7 +1735,7 @@ func addRunToMilestone(testrailID int, testResult *string) (int, error) {
 		if testrailID == 0 {
 			return 0, fmt.Errorf("invalid testcase ID: %v", testrailID)
 		}
-		runID, err = strconv.Atoi(testrailutils.JobRunID)
+		_, err = strconv.Atoi(testrailutils.JobRunID)
 		if err != nil {
 			return 0, fmt.Errorf("invalid testrail run ID: %v", testrailutils.JobRunID)
 		}

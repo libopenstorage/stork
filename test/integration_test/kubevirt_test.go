@@ -17,10 +17,6 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
-var templatePVCSpecs = map[string]string{
-	"fedora": "kubevirt-templates",
-}
-
 const (
 	importerPodPrefix            = "importer"
 	importerPodStartTimeout      = 2 * time.Minute
@@ -33,8 +29,6 @@ const (
 	kubevirtDatadiskNamespace             = "openshift-virtualization-datadisk-templates"
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
 	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
-
-	volumeBindingImmediate = "kubevirt-templates"
 )
 
 func TestKubevirt(t *testing.T) {

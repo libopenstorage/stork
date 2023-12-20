@@ -25,7 +25,6 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 )
 
@@ -856,7 +855,7 @@ func validateMigration(t *testing.T, name, namespace string) {
 	require.NoError(t, err, "error getting migration schedule")
 	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
 
-	migrationStatus := migrationsMap[v1alpha1.SchedulePolicyTypeInterval][0]
+	migrationStatus := migrationsMap[storkv1.SchedulePolicyTypeInterval][0]
 	// Independently validate the migration
 	err = storkops.Instance().ValidateMigration(
 		migrationStatus.Name, namespace, defaultWaitTimeout, defaultWaitInterval)
@@ -868,7 +867,7 @@ func migrationDailyScheduleTest(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
-	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1)
+	migrationScheduleTest(t, storkv1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -880,7 +879,7 @@ func migrationWeeklyScheduleTest(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
-	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1)
+	migrationScheduleTest(t, storkv1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -892,7 +891,7 @@ func migrationMonthlyScheduleTest(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 
-	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11)
+	migrationScheduleTest(t, storkv1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -967,7 +966,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 // trigger time of 12:05PM. Ensure the SchedulePolicy specs use that time.
 func migrationScheduleTest(
 	t *testing.T,
-	scheduleType v1alpha1.SchedulePolicyType,
+	scheduleType storkv1.SchedulePolicyType,
 	migrationScheduleName string,
 	scheduleDay string,
 	scheduleDate int) {
@@ -1083,11 +1082,11 @@ func migrationScheduleTest(
 
 	// **** TEST 4 bump time by (1 day / 1 week / 1 month) + 5 minutes. Should cause one new migration
 	switch scheduleType {
-	case v1alpha1.SchedulePolicyTypeDaily:
+	case storkv1.SchedulePolicyTypeDaily:
 		mockNow = nextTrigger.AddDate(0, 0, 1)
-	case v1alpha1.SchedulePolicyTypeWeekly:
+	case storkv1.SchedulePolicyTypeWeekly:
 		mockNow = nextTrigger.AddDate(0, 0, 7)
-	case v1alpha1.SchedulePolicyTypeMonthly:
+	case storkv1.SchedulePolicyTypeMonthly:
 		mockNow = nextTrigger.AddDate(0, 1, 0)
 	default:
 		t.Fatalf("this testcase only supports daily, weekly and monthly intervals")
@@ -1171,7 +1170,7 @@ func migrationScaleTest(t *testing.T) {
 func triggerMigrationScaleTest(t *testing.T, migrationKey, migrationAppKey string, includeResourcesFlag, includeVolumesFlag, startApplicationsFlag bool) {
 	var appCtxs []*scheduler.Context
 	var ctxs []*scheduler.Context
-	var allMigrations []*v1alpha1.Migration
+	var allMigrations []*storkv1.Migration
 	var err error
 	instanceID := migrationKey
 	appKey := migrationAppKey
@@ -1525,14 +1524,14 @@ func createMigration(
 	includeResources *bool,
 	includeVolumes *bool,
 	startApplications *bool,
-) (*v1alpha1.Migration, error) {
+) (*storkv1.Migration, error) {
 
-	migration := &v1alpha1.Migration{
+	migration := &storkv1.Migration{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.MigrationSpec{
+		Spec: storkv1.MigrationSpec{
 			ClusterPair:       clusterPair,
 			IncludeResources:  includeResources,
 			IncludeVolumes:    includeVolumes,
@@ -1551,7 +1550,7 @@ func createMigration(
 	return mig, err
 }
 
-func deleteMigrations(migrations []*v1alpha1.Migration) error {
+func deleteMigrations(migrations []*storkv1.Migration) error {
 	for _, mig := range migrations {
 		err := storkops.Instance().DeleteMigration(mig.Name, mig.Namespace)
 		if err != nil {
@@ -1561,7 +1560,7 @@ func deleteMigrations(migrations []*v1alpha1.Migration) error {
 	return nil
 }
 
-func WaitForMigration(migrationList []*v1alpha1.Migration) error {
+func WaitForMigration(migrationList []*storkv1.Migration) error {
 	checkMigrations := func() (interface{}, bool, error) {
 		isComplete := true
 		for _, m := range migrationList {
@@ -1569,7 +1568,7 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 			if err != nil {
 				return "", false, err
 			}
-			if mig.Status.Status != v1alpha1.MigrationStatusSuccessful {
+			if mig.Status.Status != storkv1.MigrationStatusSuccessful {
 				logrus.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
 				isComplete = false
 			}
@@ -2391,7 +2390,7 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 	}
 	serviceAccountSrc.Secrets = append(serviceAccountSrc.Secrets, objRef)
 
-	serviceAccountSrc, err = core.Instance().UpdateServiceAccount(serviceAccountSrc)
+	_, err = core.Instance().UpdateServiceAccount(serviceAccountSrc)
 	require.NoError(t, err, "Error updating service account on source")
 
 	// After update do a get on service account to get values of secret references
@@ -2414,7 +2413,7 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 		updatedPorts = append(updatedPorts, mysqlService.Spec.Ports[i].Port)
 	}
 
-	mysqlService, err = core.Instance().UpdateService(mysqlService)
+	_, err = core.Instance().UpdateService(mysqlService)
 	require.NoError(t, err, "Error updating mysql service on source")
 
 	logrus.Infof("Waiting for next migration to trigger...")
