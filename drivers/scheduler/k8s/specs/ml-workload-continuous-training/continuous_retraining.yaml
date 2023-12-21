@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: continuous-retraining
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: continuous-retraining
+  template:
+    metadata:
+      labels:
+        app: continuous-retraining
+    spec:
+      containers:
+        - name: ml-workload
+          image: portworx/ml-workload:rent-prediction
+          command: ["/bin/bash", "-c"]
+          args: ["while true; do python retrain.py; sleep 300; done"]
+          volumeMounts:
+            - name: ml-shared-data
+              mountPath: "/mnt/data"
+      volumes:
+        - name: ml-shared-data
+          persistentVolumeClaim:
+            claimName: ml-workload-pvc

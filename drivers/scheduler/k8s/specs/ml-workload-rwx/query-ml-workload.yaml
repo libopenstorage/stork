@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: querying-app-1
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: ml-workload
+        image: portworx/ml-workload:rent-prediction
+        command: ["/bin/bash", "-c"]
+        args: ["python query.py && sleep 300"]
+        env:
+        - name: OUTPUT_FILE
+          value: query_output_1.csv
+        volumeMounts:
+        - name: ml-shared-data
+          mountPath: /mnt/data
+      volumes:
+      - name: ml-shared-data
+        persistentVolumeClaim:
+          claimName: ml-workload-pvc

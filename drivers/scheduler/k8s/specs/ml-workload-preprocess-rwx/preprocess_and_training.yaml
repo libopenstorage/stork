@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: preprocessing-and-training
+spec:
+  containers:
+    - name: ml-workload
+      image: portworx/ml-workload:rent-prediction
+      command: ["/bin/bash", "-c"]
+      args: ["python preprocess.py && python first_training.py && sleep 6000"]
+      volumeMounts:
+        - name: ml-shared-data
+          mountPath: "/mnt/data"
+  volumes:
+    - name: ml-shared-data
+      persistentVolumeClaim:
+        claimName: ml-workload-pvc
+  restartPolicy: Never
