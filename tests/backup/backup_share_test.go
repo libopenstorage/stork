@@ -4123,25 +4123,14 @@ var _ = Describe("{SwapShareBackup}", func() {
 			ctx, err := backup.GetNonAdminCtx(users[i], commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
 			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
-			backupDriver := Inst().Backup
-			backupEnumerateReq := &api.BackupEnumerateRequest{
-				OrgId: orgID,
-			}
-			backupDeletionSuccessCheck := func() (interface{}, bool, error) {
-				currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
-				if err != nil {
-					return "", true, err
-				}
-				for _, backupObject := range currentBackups.GetBackups() {
-					if backupObject.Uid == backupUIDList[i] {
-						return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Uid)
-					}
-				}
-				return "", false, nil
-			}
-			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
-			log.FailOnError(err, fmt.Sprintf("Error deleting backup - %s for user - %s", backupName, users[i]))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup - %s of user %s", backupName, users[i]))
+		}
+
+		for i := numberOfUsers - 1; i >= 0; i-- {
+			ctx, err := backup.GetNonAdminCtx(users[i], commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			err = DeleteBackupAndWait(backupName, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup %s deletion for user - %s", backupName, users[i]))
 		}
 
 		log.Infof("Generating user context")
