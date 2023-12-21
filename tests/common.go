@@ -7182,22 +7182,23 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
-		testCaseName := ginkgoTestDescr.FullTestText
-		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
-		if len(matches) > 1 {
-			testCaseName = matches[1]
-		}
-		masterNode := node.GetMasterNodes()[0]
-		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
-		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
-		if err != nil {
-			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
-			return
-		}
-		collectStorkLogs(testCaseName)
-		collectPxBackupLogs(testCaseName)
-		compressSubDirectories(pxbLogDirPath)
 	}
+	log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
+	testCaseName := ginkgoTestDescr.FullTestText
+	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+	if len(matches) > 1 {
+		testCaseName = matches[1]
+	}
+	masterNode := node.GetMasterNodes()[0]
+	log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+	err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+		return
+	}
+	collectStorkLogs(testCaseName)
+	collectPxBackupLogs(testCaseName)
+	compressSubDirectories(pxbLogDirPath)
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
