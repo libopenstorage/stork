@@ -2272,6 +2272,24 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 			}
 		}
 
+		// This part is added when we have taken backup of custom resources and the restored namespace will not have all the resource as that of
+		// source namespace, so modifying the expectedRestoredAppContext to have only the resources which are present in the restored namespace
+		if len(resourceTypesFilter) != 0 {
+			newCtxAppSpecList := make([]interface{}, 0)
+			for _, spec := range expectedRestoredAppContext.App.SpecList {
+				val := reflect.ValueOf(spec)
+				if val.Kind() == reflect.Struct && val.FieldByName("Kind").IsValid() {
+					kindField := val.FieldByName("Kind")
+					log.Infof("Value of Kind field is [%s]", kindField.String())
+					if IsPresent(kindField, resourceTypesFilter) {
+						newCtxAppSpecList = append(newCtxAppSpecList, spec)
+					}
+				}
+			}
+			newCtx := *expectedRestoredAppContext
+			newCtx.App.SpecList = newCtxAppSpecList
+		}
+
 		// VALIDATE APPLICATIONS
 		log.InfoD("Validate applications in restored namespace [%s] due to restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		errorChan := make(chan error, errorChannelSize)
@@ -4559,6 +4577,7 @@ func DeleteAllBackups(ctx context.Context, orgId string) error {
 			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), backupDeleteTimeout, backupDeleteRetryTime)
 			if err != nil {
 				errChan <- err
+				return
 			}
 		}(bkp)
 	}
@@ -6542,6 +6561,75 @@ func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName stri
 		backupScheduleDeleteRetryTime)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// ValidateCustomResourceRestores validates restore taken of custom resource
+func ValidateCustomResourceRestores(ctx context.Context, orgID string, resourceList []string, restoreContextMap map[string][]*scheduler.Context, clusterName string) error {
+	if clusterName == "source-cluster" {
+		err := SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+	} else if clusterName == "destination-cluster" {
+		err := SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("cluster name provided is not correct %s", clusterName)
+	}
+	errChan := make(chan error, 100)
+	var errList []error
+	var wg sync.WaitGroup
+	for restoreName, contexts := range restoreContextMap {
+		restoreInspectRequest := &api.RestoreInspectRequest{
+			Name:  restoreName,
+			OrgId: orgID,
+		}
+		response, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return err
+		}
+		restoreObj := response.GetRestore()
+		nsMapping := restoreObj.NamespaceMapping
+		scMapping := restoreObj.StorageClassMapping
+		log.Infof("Namespace mapping is %s, storage class mapping is %s for restore %s", nsMapping, scMapping, restoreName)
+		wg.Add(1)
+		go func(restoreName string, nsMapping map[string]string, scMapping map[string]string) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			log.InfoD("Validating restore [%s] with custom resources %v", restoreName, resourceList)
+			var expectedRestoredAppContextList []*scheduler.Context
+			for _, context := range contexts {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(context, nsMapping, scMapping, true)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				expectedRestoredAppContextList = append(expectedRestoredAppContextList, expectedRestoredAppContext)
+			}
+			err := ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContextList, resourceList)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}(restoreName, nsMapping, scMapping)
+	}
+	wg.Wait()
+	close(errChan)
+	for err := range errChan {
+		errList = append(errList, err)
+	}
+	errStrings := make([]string, 0)
+	for _, err := range errList {
+		if err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+	if len(errStrings) > 0 {
+		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
 	return nil
 }

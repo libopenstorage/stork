@@ -156,7 +156,6 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 
 // This test does custom resource backup and restore.
 var _ = Describe("{CustomResourceBackupAndRestore}", func() {
-	namespaceMapping := make(map[string]string)
 	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -173,6 +172,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	var backupNames []string
 	var restoreNames []string
 	bkpNamespaces = make([]string, 0)
+	namespaceMapping := make(map[string]string)
+	restoreContextMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 83720, Kshithijiyer, Q4FY23)
@@ -251,25 +252,34 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
+				restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
 				restoreNames = append(restoreNames, restoreName)
 				namespaceList, err := FetchNamespacesFromBackup(ctx, backupName, orgID)
 				for _, namespace := range namespaceList {
-					restoredNameSpace := fmt.Sprintf("%s-%s-%s", backupNames, "restored", namespace)
+					restoredNameSpace := fmt.Sprintf("%s-%s", RandomString(10), "restored")
 					namespaceMapping[namespace] = restoredNameSpace
 				}
+				log.InfoD("Namespace mapping is %v:", namespaceMapping)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), SourceClusterName, orgID, appContextsToBackup)
+				restoreContextMap[restoreName] = appContextsToBackup
+				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s from backup: %s", restoreName, backupName))
 			}
 		})
 
+		Step("Validating custom resource backup restores", func() {
+			log.InfoD("Validating custom resource backup restores")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = ValidateCustomResourceRestores(ctx, orgID, []string{"PersistentVolumeClaim"}, restoreContextMap, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating custom resource restore - %v", restoreNames))
+		})
+
 		Step("Compare PVCs on both namespaces", func() {
 			log.InfoD("Compare PVCs on both namespaces")
-			for _, namespace := range bkpNamespaces {
-				pvcs, _ := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
-				restoreNamespace := fmt.Sprintf("%s-%s", namespace, "restored")
-				restoredPvcs, _ := core.Instance().GetPersistentVolumeClaims(restoreNamespace, labelSelectors)
+			for sourceNamespace, restoredNamespace := range namespaceMapping {
+				pvcs, _ := core.Instance().GetPersistentVolumeClaims(sourceNamespace, labelSelectors)
+				restoredPvcs, _ := core.Instance().GetPersistentVolumeClaims(restoredNamespace, labelSelectors)
 				dash.VerifyFatal(len(pvcs.Items), len(restoredPvcs.Items), "Compare number of PVCs")
 			}
 		})
