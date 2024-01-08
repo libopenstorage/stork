@@ -2533,7 +2533,9 @@ func blowNamespacesForTest(t *testing.T, instanceID, appKey string, skipDestDele
 
 	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 	err = core.Instance().DeleteNamespace(namespace)
-	require.NoError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+	if !errors.IsNotFound(err) {
+		require.NoError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+	}
 
 	// for negative cases the namespace is not even created on destination, so skip deleting it
 	if skipDestDeletion {
@@ -2543,7 +2545,9 @@ func blowNamespacesForTest(t *testing.T, instanceID, appKey string, skipDestDele
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	err = core.Instance().DeleteNamespace(namespace)
-	require.NoError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+	if !errors.IsNotFound(err) {
+		require.NoError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+	}
 
 	err = setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
