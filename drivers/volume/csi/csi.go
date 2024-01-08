@@ -382,12 +382,14 @@ func (c *csi) StartBackup(
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkvolume.CSIDriverName
 		volumeInfo.Volume = pvc.Spec.VolumeName
-		volumeInfos = append(volumeInfos, volumeInfo)
 
 		vsName := c.getBackupSnapshotName(&pvc, backup)
 		// We should bail-out if snapshotter is not initialized right
 		if c.snapshotter == nil {
-			return nil, fmt.Errorf("found uninitialized snapshotter object")
+			volumeInfo.Status = storkapi.ApplicationBackupStatusFailed
+			volumeInfo.Reason = "found uninitialized snapshotter object"
+			volumeInfos = append(volumeInfos, volumeInfo)
+			continue
 		}
 		_, _, csiDriverName, err := c.snapshotter.CreateSnapshot(
 			snapshotter.Name(vsName),
@@ -397,7 +399,10 @@ func (c *csi) StartBackup(
 		)
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)
-			return nil, fmt.Errorf("failed to ensure volumesnapshotclass was created: %v", err)
+			volumeInfo.Status = storkapi.ApplicationBackupStatusFailed
+			volumeInfo.Reason = fmt.Sprintf("failed to ensure volumesnapshotclass was created: %v", err)
+			volumeInfos = append(volumeInfos, volumeInfo)
+			continue
 		}
 
 		volumeInfo.Options[optCSIDriverName] = csiDriverName
@@ -408,7 +413,10 @@ func (c *csi) StartBackup(
 			sc, err := core.Instance().GetStorageClassForPVC(&pvc)
 			if err != nil {
 				c.cancelBackupDuringStartFailure(backup, volumeInfos)
-				return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
+				volumeInfo.Status = storkapi.ApplicationBackupStatusFailed
+				volumeInfo.Reason = fmt.Sprintf("failed to get storage class for PVC %s: %v", pvc.Name, err)
+				volumeInfos = append(volumeInfos, volumeInfo)
+				continue
 			}
 
 			// only add one instance of a storageclass
@@ -420,6 +428,7 @@ func (c *csi) StartBackup(
 				storageClassAdded[sc.Name] = true
 			}
 		}
+		volumeInfos = append(volumeInfos, volumeInfo)
 	}
 	if !nfs {
 		// In the case of nfs backuplocation type, uploading of storageclass.json will
@@ -942,6 +951,10 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 		// set of all snapshot classes deleted
 		for _, vInfo := range backup.Status.Volumes {
 			if vInfo.DriverName != storkvolume.CSIDriverName {
+				continue
+			}
+			// In the case of partial success, we don't want to clean up for successful PVC VS and VSC
+			if vInfo.Status == storkapi.ApplicationBackupStatusSuccessful || vInfo.Status == storkapi.ApplicationBackupStatusSkip {
 				continue
 			}
 			snapshotName := vInfo.BackupID
