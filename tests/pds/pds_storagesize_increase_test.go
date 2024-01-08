@@ -6,6 +6,7 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
+	_ "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
@@ -47,11 +48,12 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 			stConfigModelUpdated     *pds.ModelsStorageOptionsTemplate
 			newResourceTemplateID    string
 			newStorageTemplateID     string
-			updatedPvcSize           uint64
+			increasedStorageSize     uint64
+			beforeResizePodAge       float64
 		)
-		pdsdeploymentsmd5Hash2 := make(map[string]string)
+		pdsdeploymentsmd5HashUpdated := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
-		restoredDeploymentsmd5Hash2 := make(map[string]string)
+		restoredDeploymentsmd5HashUpdated := make(map[string]string)
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
 		Step(stepLog, func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
@@ -62,8 +64,8 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 						log.InfoD(stepLog)
 						log.InfoD("The test will run with following storage/resource template configurations- FilesystemType is - [%v] and RepelFactor is- [%v] ", fs, repl)
 						CleanMapEntries(restoredDeploymentsmd5Hash)
-						CleanMapEntries(restoredDeploymentsmd5Hash2)
-						CleanMapEntries(pdsdeploymentsmd5Hash2)
+						CleanMapEntries(restoredDeploymentsmd5HashUpdated)
+						CleanMapEntries(pdsdeploymentsmd5HashUpdated)
 						stIDs, resIds = nil, nil
 						depList, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
 						wlDeploymentsToBeCleaned = []*v1.Deployment{}
@@ -90,6 +92,9 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 						log.InfoD("Initial deployment ID- %v", deployment.GetId())
 						dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+						beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+						log.FailOnError(err, "unable to get pods AGE before Storage resize")
+						log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 						stepLog = "Update the resource/storage template with increased storage size"
 						Step(stepLog, func() {
 							newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
@@ -131,8 +136,8 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 								log.FailOnError(err, "Error while validating dataservices")
 								log.InfoD("Data-service: %v is up and healthy", ds.Name)
 								updatedDepList = append(updatedDepList, updatedDeployment)
-								updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-								log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
+								increasedStorageSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
+								log.InfoD("Increased Storage Size is- %v", increasedStorageSize)
 								dsEntity = restoreBkp.DSEntity{
 									Deployment: updatedDeployment,
 								}
@@ -142,12 +147,20 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 								ckSum2, wlDep2, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
 								log.FailOnError(err, "Error while Running workloads-%v", wlDep2)
 								log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-								pdsdeploymentsmd5Hash2[*deployment.ClusterResourceName] = ckSum2
+								pdsdeploymentsmd5HashUpdated[*deployment.ClusterResourceName] = ckSum2
 								wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep2)
 							})
 							stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 							Step(stepLog, func() {
-								err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
+								stIncrease := validateStorageIncrease{
+									UpdatedDeployment:    updatedDeployment,
+									StConfigUpdated:      stConfigModelUpdated,
+									ResConfigUpdated:     resConfigModelUpdated,
+									InitialCapacity:      initialCapacity,
+									IncreasedStorageSize: increasedStorageSize,
+									BeforeResizePodAge:   beforeResizePodAge,
+								}
+								err := ValidateDepConfigPostStorageIncrease(ds, &stIncrease)
 								log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 							})
 						})
@@ -196,13 +209,13 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 								wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep, wlDep2)
 								log.FailOnError(err, "Error while Running workloads")
 								log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
-								log.Debugf("Checksum for the deployment2 %s is %s", *pdsDeployment.ClusterResourceName, ckSum2)
+								log.Debugf("Checksum for the updated-deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum2)
 								restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-								restoredDeploymentsmd5Hash2[*pdsDeployment.ClusterResourceName] = ckSum2
+								restoredDeploymentsmd5HashUpdated[*pdsDeployment.ClusterResourceName] = ckSum2
 							}
 							dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsDeploymentHash, restoredDeploymentsmd5Hash),
 								true, "Validate md5 hash1 after restore")
-							dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash2, restoredDeploymentsmd5Hash2),
+							dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5HashUpdated, restoredDeploymentsmd5HashUpdated),
 								true, "Validate md5 hash2 after restore")
 						})
 
@@ -248,36 +261,37 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
 
 		var (
-			updatedDeployment        *pds.ModelsDeployment
-			updatedDeployment1       *pds.ModelsDeployment
-			wlDeploymentsToBeCleaned []*v1.Deployment
-			deploymentsToBeCleaned   []*pds.ModelsDeployment
-			updatedDepList           []*pds.ModelsDeployment
-			depList                  []*pds.ModelsDeployment
-			updatedDepList1          []*pds.ModelsDeployment
-			stIds                    []string
-			resIds                   []string
-			resConfigModelUpdated1   *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated1    *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID1   string
-			newStorageTemplateID1    string
-			resConfigModelUpdated2   *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated2    *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID2   string
-			newStorageTemplateID2    string
-			updatedPvcSize           uint64
-			updatedPvcSize1          uint64
+			updatedDeployment            *pds.ModelsDeployment
+			scaledUpdatedDeployment      *pds.ModelsDeployment
+			wlDeploymentsToBeCleaned     []*v1.Deployment
+			deploymentsToBeCleaned       []*pds.ModelsDeployment
+			updatedDepList               []*pds.ModelsDeployment
+			depList                      []*pds.ModelsDeployment
+			scaledUpdatedDepList         []*pds.ModelsDeployment
+			stIds                        []string
+			resIds                       []string
+			resConfigModelUpdated        *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated         *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID        string
+			newStorageTemplateID         string
+			scaledUpdatedResConfigModel  *pds.ModelsResourceSettingsTemplate
+			scaledUpdatedstConfigModel   *pds.ModelsStorageOptionsTemplate
+			scaledNewResourceTemplateID  string
+			scaledNewStorageTemplateID   string
+			increasedPvcSize             uint64
+			increasedPvcSizeAfterScaleUp uint64
+			beforeResizePodAge           float64
 		)
 
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
 		Step(stepLog, func() {
-			pdsdeploymentsmd5Hash2 := make(map[string]string)
+			pdsdeploymentsmd5HashAfterResize := make(map[string]string)
 			for _, ds := range params.DataServiceToTest {
 				for _, repl := range params.StorageConfigurations.ReplFactor {
 					log.InfoD(stepLog)
-					CleanMapEntries(pdsdeploymentsmd5Hash2)
+					CleanMapEntries(pdsdeploymentsmd5HashAfterResize)
 					stIds, resIds = nil, nil
-					depList, updatedDepList, updatedDepList1, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+					depList, updatedDepList, scaledUpdatedDepList, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
 					wlDeploymentsToBeCleaned = []*v1.Deployment{}
 					log.InfoD("The test will run with following storage/resource template configurations- FilesystemType is - [%v] and RepelFactor is- [%v] ", "xfs", repl)
 					deployment, initialCapacity, resConfigModel, stConfigModel, appConfigID, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
@@ -297,7 +311,10 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 					depList = append(depList, deployment)
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
-					stepLog = "Check PVC for full condition based upto 90% full"
+					beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+					log.FailOnError(err, "unable to get pods AGE before Storage resize")
+					log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
+
 					stepLog = "Scale up the DS with increased storage size and Repl factor as 2 "
 					Step(stepLog, func() {
 						newTemplateName1 := "autoTemp-" + strconv.Itoa(rand.Int())
@@ -315,13 +332,13 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							Secure:         false,
 							VolGroups:      false,
 						}
-						stConfigModelUpdated1, resConfigModelUpdated1, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig1)
+						stConfigModelUpdated, resConfigModelUpdated, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig1)
 						log.FailOnError(err, "Unable to update template")
-						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated1.GetId(), updatedTemplateConfig1.ReplFactor)
-						newResourceTemplateID1 = resConfigModelUpdated1.GetId()
-						newStorageTemplateID1 = stConfigModelUpdated1.GetId()
-						stIds = append(stIds, newStorageTemplateID1)
-						resIds = append(resIds, newResourceTemplateID1)
+						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated.GetId(), updatedTemplateConfig1.ReplFactor)
+						newResourceTemplateID = resConfigModelUpdated.GetId()
+						newStorageTemplateID = stConfigModelUpdated.GetId()
+						stIds = append(stIds, newStorageTemplateID)
+						resIds = append(resIds, newResourceTemplateID)
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -332,15 +349,15 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						}
 						updatedDeployment, err = dsTest.UpdateDataServices(deployment.GetId(),
 							appConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), newResourceTemplateID1, params.InfraToTest.Namespace)
+							int32(ds.ScaleReplicas), newResourceTemplateID, params.InfraToTest.Namespace)
 						log.FailOnError(err, "Error while updating dataservices")
 						Step("Validate Deployments after template update", func() {
 							err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 							log.FailOnError(err, "Error while validating dataservices")
 							log.InfoD("Data-service: %v is up and healthy", ds.Name)
 							updatedDepList = append(updatedDepList, updatedDeployment)
-							updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-							log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
+							increasedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
+							log.InfoD("Increased Storage Size is- %v", increasedPvcSize)
 						})
 						stepLog = "Validate Workload is running after storage resize by creating new workload"
 						Step(stepLog, func() {
@@ -348,39 +365,50 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							ckSum2, wlDep2, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
 							log.FailOnError(err, "Error while Running workloads-%v", wlDep2)
 							log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-							pdsdeploymentsmd5Hash2[*deployment.ClusterResourceName] = ckSum2
+							pdsdeploymentsmd5HashAfterResize[*deployment.ClusterResourceName] = ckSum2
 							wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep2)
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated1, resConfigModelUpdated1, initialCapacity, updatedPvcSize)
+							stIncrease := validateStorageIncrease{
+								UpdatedDeployment:    updatedDeployment,
+								StConfigUpdated:      stConfigModelUpdated,
+								ResConfigUpdated:     resConfigModelUpdated,
+								InitialCapacity:      initialCapacity,
+								IncreasedStorageSize: increasedPvcSize,
+								BeforeResizePodAge:   beforeResizePodAge,
+							}
+							err := ValidateDepConfigPostStorageIncrease(ds, &stIncrease)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
 					stepLog = "Increase the storage size again after Scale-UP"
 					Step(stepLog, func() {
 						newTemplateName2 := "autoTemp-" + strconv.Itoa(rand.Int())
+						currStorageSize := *resConfigModelUpdated.StorageRequest
+						newStorageSize, _ := strconv.Atoi(currStorageSize[:len(currStorageSize)-1])
+						updatedStorage := strconv.Itoa(newStorageSize+10) + "G"
 						updatedTemplateConfig2 := controlplane.Templates{
-							CpuLimit:       *resConfigModelUpdated1.CpuLimit,
-							CpuRequest:     *resConfigModelUpdated1.CpuRequest,
+							CpuLimit:       *resConfigModelUpdated.CpuLimit,
+							CpuRequest:     *resConfigModelUpdated.CpuRequest,
 							DataServiceID:  dataserviceID,
-							MemoryLimit:    *resConfigModelUpdated1.MemoryLimit,
-							MemoryRequest:  *resConfigModelUpdated1.MemoryRequest,
+							MemoryLimit:    *resConfigModelUpdated.MemoryLimit,
+							MemoryRequest:  *resConfigModelUpdated.MemoryRequest,
 							Name:           newTemplateName2,
-							StorageRequest: params.StorageConfigurations.NewStorageSize,
+							StorageRequest: updatedStorage,
 							FsType:         *stConfigModel.Fs,
 							ReplFactor:     *stConfigModel.Repl,
-							Provisioner:    *stConfigModelUpdated1.Provisioner,
+							Provisioner:    *stConfigModelUpdated.Provisioner,
 							Secure:         false,
 							VolGroups:      false,
 						}
-						stConfigModelUpdated2, resConfigModelUpdated2, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig2)
+						scaledUpdatedstConfigModel, scaledUpdatedResConfigModel, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig2)
 						log.FailOnError(err, "Unable to update template")
-						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated1.GetId(), updatedTemplateConfig2.ReplFactor)
-						newResourceTemplateID2 = resConfigModelUpdated2.GetId()
-						newStorageTemplateID2 = stConfigModelUpdated2.GetId()
-						stIds = append(stIds, newStorageTemplateID2)
-						resIds = append(resIds, newResourceTemplateID2)
+						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated.GetId(), updatedTemplateConfig2.ReplFactor)
+						scaledNewResourceTemplateID = scaledUpdatedResConfigModel.GetId()
+						scaledNewStorageTemplateID = scaledUpdatedstConfigModel.GetId()
+						stIds = append(stIds, scaledNewStorageTemplateID)
+						resIds = append(resIds, scaledNewResourceTemplateID)
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -389,21 +417,29 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
 							log.FailOnError(err, "Error while fetching AppConfigID")
 						}
-						updatedDeployment1, err = dsTest.UpdateDataServices(deployment.GetId(),
-							appConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), newResourceTemplateID2, params.InfraToTest.Namespace)
+						scaledUpdatedDeployment, err = dsTest.UpdateDataServices(updatedDeployment.GetId(),
+							appConfigID, updatedDeployment.GetImageId(),
+							int32(ds.ScaleReplicas), scaledNewResourceTemplateID, params.InfraToTest.Namespace)
 						log.FailOnError(err, "Error while updating dataservices")
 						Step("Validate Deployments after template update", func() {
-							err = dsTest.ValidateDataServiceDeployment(updatedDeployment1, namespace)
+							err = dsTest.ValidateDataServiceDeployment(scaledUpdatedDeployment, namespace)
 							log.FailOnError(err, "Error while validating dataservices")
 							log.InfoD("Data-service: %v is up and healthy", ds.Name)
-							updatedDepList1 = append(updatedDepList1, updatedDeployment1)
-							updatedPvcSize1, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-							log.InfoD("Updated Storage Size is- %v", updatedPvcSize1)
+							scaledUpdatedDepList = append(scaledUpdatedDepList, scaledUpdatedDeployment)
+							increasedPvcSizeAfterScaleUp, err = GetVolumeCapacityInGB(namespace, scaledUpdatedDeployment)
+							log.InfoD("Increased Storage Size after scale-up is- %v", increasedPvcSizeAfterScaleUp)
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1)
+							stIncrease := validateStorageIncrease{
+								UpdatedDeployment:    scaledUpdatedDeployment,
+								StConfigUpdated:      scaledUpdatedstConfigModel,
+								ResConfigUpdated:     scaledUpdatedResConfigModel,
+								InitialCapacity:      increasedPvcSize,
+								IncreasedStorageSize: increasedPvcSizeAfterScaleUp,
+								BeforeResizePodAge:   beforeResizePodAge,
+							}
+							err := ValidateDepConfigPostStorageIncrease(ds, &stIncrease)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
@@ -445,7 +481,8 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 			tempresIds            []string
 			newResourceTemplateID string
 			newStorageTemplateID  string
-			updatedPvcSize        uint64
+			increasedPvcSize      uint64
+			beforeResizePodAge    float64
 		)
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
 		Step(stepLog, func() {
@@ -471,6 +508,9 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 				log.InfoD("workload deployment is- %v", wlDep.Name)
+				beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+				log.FailOnError(err, "unable to get pods AGE before Storage resize")
+				log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
 				for i := 2; i <= params.StorageConfigurations.Iterations; i++ {
@@ -505,6 +545,9 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 						newStorageTemplateID = stConfigModelUpdated.GetId()
 						tempstIds = append(tempstIds, newStorageTemplateID)
 						tempresIds = append(tempresIds, newResourceTemplateID)
+						beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+						log.FailOnError(err, "unable to get pods AGE before Storage resize")
+						log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -520,12 +563,20 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 							err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 							log.FailOnError(err, "Error while validating dataservices")
 							log.InfoD("Data-service: %v is up and healthy", ds.Name)
-							updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-							log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
+							increasedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
+							log.InfoD("Increased Storage Size is- %v", increasedPvcSize)
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
+							stIncrease := validateStorageIncrease{
+								UpdatedDeployment:    updatedDeployment,
+								StConfigUpdated:      stConfigModelUpdated,
+								ResConfigUpdated:     resConfigModelUpdated,
+								InitialCapacity:      initialCapacity,
+								IncreasedStorageSize: increasedPvcSize,
+								BeforeResizePodAge:   beforeResizePodAge,
+							}
+							err := ValidateDepConfigPostStorageIncrease(ds, &stIncrease)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 						//ToDo: Re-run  Workload to check if I/O is running post update
@@ -576,7 +627,7 @@ func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string,
 		FailOnError:    params.LoadGen.FailOnError,
 	}
 
-	pdsdeploymentsmd5Hash1 := make(map[string]string)
+	pdsdeploymentsmd5Hash := make(map[string]string)
 	cusTempName := "autoTemp-" + strconv.Itoa(rand.Int())
 
 	dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
@@ -633,11 +684,11 @@ func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string,
 	dsEntity = restoreBkp.DSEntity{
 		Deployment: deployment,
 	}
-	CleanMapEntries(pdsdeploymentsmd5Hash1)
+	CleanMapEntries(pdsdeploymentsmd5Hash)
 	ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
 	workloadDep = wlDep
 	log.FailOnError(err, "Error while Running workloads")
 	log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
-	pdsdeploymentsmd5Hash1[*deployment.ClusterResourceName] = ckSum
-	return deployment, initialCapacity, resConfigModel, stConfigModel, dataServiceAppConfigID, workloadDep, pdsdeploymentsmd5Hash1, wkloadParams, nil
+	pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+	return deployment, initialCapacity, resConfigModel, stConfigModel, dataServiceAppConfigID, workloadDep, pdsdeploymentsmd5Hash, wkloadParams, nil
 }
