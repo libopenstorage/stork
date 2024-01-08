@@ -1,0 +1,109 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume-1
+spec:
+  storageClassName: kubevirt-longevity-multi-disk-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume-2
+spec:
+  storageClassName: kubevirt-longevity-multi-disk-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume-3
+spec:
+  storageClassName: kubevirt-longevity-multi-disk-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-multi-disk
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+        app: vm-multi-disk
+    spec:
+      domain:
+        cpu:
+          cores: 1
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            - name: datavolume1
+              disk:
+                bus: virtio
+            - name: datavolume2
+              disk:
+                bus: virtio
+            - name: datavolume3
+              disk:
+                bus: virtio
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            memory: 1024M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: pvc-longevity-multi-disk
+        - name: datavolume1
+          dataVolume:
+            name: pvc-data-volume-1
+        - name: datavolume2
+          dataVolume:
+            name: pvc-data-volume-2
+        - name: datavolume3
+          dataVolume:
+            name: pvc-data-volume-3
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False
+              runcmd:
+                - while true; do
+                    sysbench cpu --cpu-max-prime=10000 run
+                    sleep 60
+                  done

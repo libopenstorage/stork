@@ -3,9 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"math"
 	"math/rand"
 	"os"
@@ -13,10 +10,16 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/stats"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 
@@ -517,6 +520,9 @@ const (
 
 	// HAIncreaseWithPVCResize performs repl-add and resize PVC at same time
 	HAIncreaseWithPVCResize = "haIncreaseWithPVCResize"
+
+	// ReallocateSharedMount reallocated shared mount volumes
+	ReallocateSharedMount = "reallocateSharedMount"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -581,6 +587,25 @@ func endLongevityTest() {
 	CloseLogger(longevityLogger)
 }
 
+func updateLongevityStats(name, eventStatName string, dashStats map[string]string) {
+	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
+	version, err := Inst().V.GetDriverVersion()
+	if err != nil {
+		log.Errorf("error getting px version. err: %+v", err)
+	}
+	dashStats["node-driver"] = Inst().N.String()
+	dashStats["scheduler-driver"] = Inst().S.String()
+	eventStat := &stats.EventStat{
+		EventName: eventStatName,
+		EventTime: time.Now().Format(time.RFC1123),
+		Version:   version,
+		DashStats: dashStats,
+	}
+
+	stats.PushStatsToAetos(dash, name, "px-enterprise", "Longevity", eventStat)
+
+}
+
 // TriggerDeployNewApps deploys applications in separate namespaces
 func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -609,6 +634,10 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
+	dashStats := make(map[string]string)
+	dashStats["app-list"] = strings.Join(Inst().AppList, ", ")
+	dashStats["scale-factor"] = fmt.Sprintf("%d", Inst().GlobalScaleFactor)
+	updateLongevityStats(DeployApps, stats.DeployAppsEventName, dashStats)
 	Step("Deploy applications", func() {
 		if len(labels) > 0 {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -929,6 +958,11 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						opts := volume.Options{
 							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 						}
+						dashStats := make(map[string]string)
+						dashStats["volume-name"] = v.Name
+						dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+						dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+						updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 						if err != nil {
 							log.Errorf("There is an error decreasing repl [%v]", err.Error())
@@ -1050,6 +1084,11 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							if err != nil {
 								log.Infof("Replica Set before ha-increase : %+v", replSets[0].Nodes)
 							}
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(expRF, 10)
+							updateLongevityStats(HAIncrease, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true, opts)
 							if err != nil {
 								log.Errorf("There is a error setting repl [%v]", err.Error())
@@ -1350,6 +1389,11 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							if err != nil {
 								log.Infof("Replica Set before ha-decrease : %+v", replSets[0].Nodes)
 							}
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+							updateLongevityStats(HADecrease, stats.HADecreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							if err != nil {
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
@@ -1423,6 +1467,9 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		stepLog = fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			dashStats := make(map[string]string)
+			dashStats["task-name"] = ctx.App.Key
+			updateLongevityStats(AppTaskDown, stats.DeletePodsEventName, dashStats)
 			err := Inst().S.DeleteTasks(ctx, nil)
 			if err != nil {
 				PrintDescribeContext(ctx)
@@ -1479,6 +1526,9 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(CrashVolDriver, stats.PXCrashEventName, dashStats)
 					CrashVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -1532,6 +1582,9 @@ func TriggerCrashPXDaemon(contexts *[]*scheduler.Context, recordChan *chan *Even
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(CrashPXDaemon, stats.PXDaemonCrashEventName, dashStats)
 					CrashPXDaemonAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -1586,6 +1639,9 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(RestartVolDriver, stats.PXRestartEventName, dashStats)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -1662,6 +1718,9 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					taskStep := fmt.Sprintf("enter maintenance on node: %s.",
 						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(NodeMaintenanceCycle, stats.NodeMaintenanceEventName, dashStats)
 					err = Inst().V.EnterMaintenance(appNode)
 					if err != nil {
 						UpdateOutcome(event, err)
@@ -1740,6 +1799,9 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					taskStep := fmt.Sprintf("enter pool maintenance on node: %s.",
 						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(PoolMaintenanceCycle, stats.PoolMaintenanceEventName, dashStats)
 					err = Inst().V.EnterPoolMaintenance(appNode)
 					if err != nil {
 						UpdateOutcome(event, err)
@@ -1844,6 +1906,9 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 					}
 					if resizeOpType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
 						log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", appNode.Name))
+						dashStats := make(map[string]string)
+						dashStats["node"] = appNode.Name
+						updateLongevityStats(StorageFullPoolExpansion, stats.PoolMaintenanceEventName, dashStats)
 						err = Inst().V.EnterPoolMaintenance(appNode)
 						if err != nil {
 							UpdateOutcome(event, err)
@@ -1864,6 +1929,16 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 						expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
 
 						log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
+						dashStats := make(map[string]string)
+						dashStats["pool-uuid"] = selectedPool.Uuid
+						dashStats["resize-operation"] = resizeOpType.String()
+						dashStats["resize-size"] = fmt.Sprintf("%d", expandedExpectedPoolSize)
+						statType := stats.ResizeDiskEventName
+						if resizeOpType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+							statType = stats.AddDiskEventName
+						}
+						updateLongevityStats(event.Event.Type, statType, dashStats)
+
 						err = Inst().V.ExpandPool(selectedPool.Uuid, resizeOpType, expandedExpectedPoolSize, true)
 						if err != nil {
 							UpdateOutcome(event, err)
@@ -1977,6 +2052,9 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, appNode := range driverNodesToRestart {
+			dashStats := make(map[string]string)
+			dashStats["node"] = appNode.Name
+			updateLongevityStats(RestartManyVolDriver, stats.PXRestartEventName, dashStats)
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
@@ -2090,6 +2168,10 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					dashStats["kvdb"] = "true"
+					updateLongevityStats(RestartKvdbVolDriver, stats.PXRestartEventName, dashStats)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -2199,6 +2281,9 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("reboot node: %s.", n.Name)
 						event.Event.Type += "<br>" + taskStep
+						dashStats := make(map[string]string)
+						dashStats["node"] = n.Name
+						updateLongevityStats(RebootNode, stats.NodeRebootEventName, dashStats)
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -2282,6 +2367,9 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
 			for _, n := range nodesToReboot {
+				dashStats := make(map[string]string)
+				dashStats["node"] = n.Name
+				updateLongevityStats(RebootManyNodes, stats.NodeRebootEventName, dashStats)
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
@@ -2451,6 +2539,9 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("crash node: %s.", n.MgmtIp)
 						event.Event.Type += "<br>" + taskStep
+						dashStats := make(map[string]string)
+						dashStats["node"] = n.Name
+						updateLongevityStats(CrashNode, stats.NodeCrashEventName, dashStats)
 						err := Inst().N.CrashNode(n, node.CrashNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -2620,6 +2711,10 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 					}
 					for _, pvc := range pvcs {
 						log.InfoD("increasing pvc [%s/%s]  size to %d", pvc.Namespace, pvc.Name, chaosLevel)
+						dashStats := make(map[string]string)
+						dashStats["pvc-name"] = pvc.Name
+						dashStats["resize-by"] = fmt.Sprintf("%dGiB", chaosLevel)
+						updateLongevityStats(VolumeResize, stats.VolumeResizeEventName, dashStats)
 						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, chaosLevel)
 						if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
 							UpdateOutcome(event, err)
@@ -2700,7 +2795,11 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 									IntervalMinutes: interval,
 								},
 							}}
-
+						dashStats := make(map[string]string)
+						dashStats["app-name"] = ctx.App.Key
+						dashStats["schedule-interval"] = fmt.Sprintf("%d mins", interval)
+						dashStats["retain"] = fmt.Sprintf("%d", retain)
+						updateLongevityStats(LocalSnapShot, stats.LocalsnapEventName, dashStats)
 						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 						log.Infof("Waiting for 10 mins for Snapshots to be completed")
 						time.Sleep(10 * time.Minute)
@@ -2840,6 +2939,10 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 							for _, v := range snapStatuses {
 								for _, e := range v {
 									log.InfoD("Deleting ScheduledVolumeSnapShot: %v", e.Name)
+									dashStats := make(map[string]string)
+									dashStats["app-name"] = ctx.App.Key
+									dashStats["snapshot-name"] = e.Name
+									updateLongevityStats(DeleteLocalSnapShot, stats.LocalsnapEventName, dashStats)
 									err = Inst().S.DeleteSnapShot(ctx, e.Name, appNamespace)
 									UpdateOutcome(event, err)
 
@@ -2946,6 +3049,12 @@ func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, err)
 					return
 				}
+				dashStats := make(map[string]string)
+				dashStats["source-name"] = volumeSnapshotStatus.Name
+				dashStats["source-namespace"] = appNamespace
+				dashStats["destination-name"] = v.Name
+				dashStats["destination-namespace"] = v.Namespace
+				updateLongevityStats(LocalSnapShotRestore, stats.LocalsnapRestorEventName, dashStats)
 				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
 					Name:      v.Name,
 					Namespace: v.Namespace,
@@ -3039,6 +3148,11 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 								},
 							}}
 
+						dashStats := make(map[string]string)
+						dashStats["app-name"] = ctx.App.Key
+						dashStats["schedule-interval"] = fmt.Sprintf("%d mins", interval)
+						dashStats["retain"] = fmt.Sprintf("%d", retain)
+						updateLongevityStats(CloudSnapShot, stats.CloudsnapEventName, dashStats)
 						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 						log.Infof("Waiting for 10 mins for Snapshots to be completed")
 						time.Sleep(10 * time.Minute)
@@ -3174,6 +3288,12 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	Step(stepLog, func() {
 		for ns, volSnap := range cloudsnapMap {
 			for vol, snap := range volSnap {
+				dashStats := make(map[string]string)
+				dashStats["source-name"] = snap.Name
+				dashStats["source-namespace"] = ns
+				dashStats["destination-name"] = vol.Name
+				dashStats["destination-namespace"] = vol.Namespace
+				updateLongevityStats(CloudSnapShotRestore, stats.CloudsnapRestorEventName, dashStats)
 				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
 					Name:      vol.Name,
 					Namespace: vol.Namespace,
@@ -5039,6 +5159,15 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	if poolValidity {
 		initialPoolSize := pool.TotalSize / units.GiB
 
+		dashStats := make(map[string]string)
+		dashStats["pool-uuid"] = pool.Uuid
+		dashStats["resize-operation"] = resizeOperationType.String()
+		dashStats["resize-percentage"] = fmt.Sprintf("%d", chaosLevel)
+		statType := stats.AddDiskEventName
+		if resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK {
+			statType = stats.ResizeDiskEventName
+		}
+		updateLongevityStats(event.Event.Type, statType, dashStats)
 		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
 		if err != nil {
 			err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, expansionType, err.Error())
@@ -5053,6 +5182,10 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
 					log.Error(err.Error())
 					UpdateOutcome(event, err)
+					dashStats = make(map[string]string)
+					dashStats["node"] = storageNode.Name
+
+					updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 					err = RebootNodeAndWait(*storageNode)
 					log.Error(err.Error())
 					UpdateOutcome(event, err)
@@ -5381,6 +5514,9 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			stepLog = "start the volume driver upgrade"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
+				dashStats := make(map[string]string)
+				dashStats["upgrade-hop"] = upgradeHop
+				updateLongevityStats(UpgradeVolumeDriver, stats.UpgradeVolumeDriverEventName, dashStats)
 				err := Inst().V.UpgradeDriver(upgradeHop)
 				if err != nil {
 					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
@@ -5424,6 +5560,9 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 			}
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
 				log.InfoD(stepLog)
+				dashStats := make(map[string]string)
+				dashStats["upgrade-hop"] = upgradeHop
+				updateLongevityStats(UpgradeStork, stats.UpgradeStorkEventName, dashStats)
 				err := Inst().V.UpgradeStork(upgradeHop)
 				UpdateOutcome(event, err)
 			}
@@ -5723,6 +5862,11 @@ func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfil
 				log.InfoD(" HA of PVC  %v cannot be set to DB-REMOTE", pvcName)
 			} else {
 				log.InfoD("Expected IO Profile change to  %v", ioProfileTo)
+				dashStats := make(map[string]string)
+				dashStats["curr-io-profile"] = currentIOProfile.String()
+				dashStats["derived-io-profile"] = derivedIOProfile.String()
+				dashStats["new-io-profile"] = ioProfileTo.String()
+				updateLongevityStats(event.Event.Type, stats.VolumeUpdateEventName, dashStats)
 				volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: ioProfileTo}}
 				err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
 				if err != nil {
@@ -6116,6 +6260,9 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 				UpdateOutcome(event, err)
 				return
 			}
+			dashStats := make(map[string]string)
+			dashStats["node"] = nodeToDecomm.Name
+			updateLongevityStats(NodeDecommission, stats.NodeDecommEventName, dashStats)
 			err = Inst().V.DecommissionNode(&nodeToDecomm)
 			if err != nil {
 				log.InfoD("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
@@ -6211,6 +6358,9 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					log.Errorf("Error while rebooting node %s the node. error: %v", decommissionedNode.Name, err)
 					UpdateOutcome(event, err)
 				}
+				dashStats := make(map[string]string)
+				dashStats["node"] = decommissionedNode.Name
+				updateLongevityStats(NodeRejoin, stats.NodeRejoinEventName, dashStats)
 				err = Inst().V.RejoinNode(&decommissionedNode)
 
 				if err != nil {
@@ -6602,6 +6752,10 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
 					nodeContexts = append(nodeContexts, appNodeContexts...)
 					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = kvdbNode.Name
+					dashStats["kvdb"] = "true"
+					updateLongevityStats(KVDBFailover, stats.PXRestartEventName, dashStats)
 					StopVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -6759,6 +6913,9 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 				stepLog = fmt.Sprintf("delete tasks for app: %s", ctx.App.Key)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
+					dashStats := make(map[string]string)
+					dashStats["task-name"] = ctx.App.Key
+					updateLongevityStats(AppTasksDown, stats.DeletePodsEventName, dashStats)
 					err := Inst().S.DeleteTasks(ctx, nil)
 					if err != nil {
 						PrintDescribeContext(ctx)
@@ -8774,6 +8931,11 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		//Scaling the cluster by one node
 		expReplicas := len(node.GetWorkerNodes()) + 1
 		log.InfoD("scaling up the cluster to replicas %d", expReplicas)
+		dashStats := make(map[string]string)
+		dashStats["curr-scale"] = fmt.Sprintf("%d", len(node.GetWorkerNodes()))
+		dashStats["new-scale"] = fmt.Sprintf("%d", expReplicas)
+		dashStats["storage-node"] = "true"
+		updateLongevityStats(AddStorageNode, stats.NodeScaleUpEventName, dashStats)
 		err = Inst().S.ScaleCluster(expReplicas)
 		if err != nil {
 			UpdateOutcome(event, err)
@@ -8878,6 +9040,11 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 		//Scaling the cluster by one node
 		expReplicas := len(node.GetWorkerNodes()) + 1
 		log.InfoD("scaling up the cluster to replicas %d", expReplicas)
+		dashStats := make(map[string]string)
+		dashStats["curr-scale"] = fmt.Sprintf("%d", len(node.GetWorkerNodes()))
+		dashStats["new-scale"] = fmt.Sprintf("%d", expReplicas)
+		dashStats["storage-node"] = "false"
+		updateLongevityStats(AddStoragelessNode, stats.NodeScaleUpEventName, dashStats)
 		err = Inst().S.ScaleCluster(expReplicas)
 		if err != nil {
 			UpdateOutcome(event, err)
@@ -8963,6 +9130,9 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 		Step(
 			fmt.Sprintf("Recycle a storage node: [%s] and validating the drives", delNode.Name),
 			func() {
+				dashStats := make(map[string]string)
+				dashStats["node"] = delNode.Name
+				updateLongevityStats(OCPStorageNodeRecycle, stats.NodeRecycleEventName, dashStats)
 				err := Inst().S.RecycleNode(delNode)
 				UpdateOutcome(event, err)
 			})
@@ -9003,6 +9173,131 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 	validateContexts(event, contexts)
 	updateMetrics(*event)
 
+}
+
+// TriggerReallocSharedMount peforms sharedv4 and sharedv4_svc volumes reallocation
+func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ReallocateSharedMount)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ReallocateSharedMount,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "get nodes with shared mount and reboot them"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		for _, ctx := range *contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+
+			for _, vol := range vols {
+				if vol.Shared {
+
+					n, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+					if err != nil {
+						UpdateOutcome(event, err)
+						continue
+					}
+
+					log.InfoD("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+
+					// Workaround to avoid PWX-24277 for now.
+					Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
+						log.InfoD("wait until volume %v status is Up", vol.ID)
+
+						t := func() (interface{}, bool, error) {
+							connOpts := node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+								Sudo:            true,
+							}
+							cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
+							volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+							if err != nil {
+								log.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
+								return nil, true, err
+							}
+
+							if strings.Contains(volStatus, "Up") {
+								log.InfoD("volume %v: %v", vol.ID, volStatus)
+								return nil, false, nil
+							}
+							return nil, true, fmt.Errorf("volum status is not Up, Curr status: %s", volStatus)
+						}
+
+						_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
+						UpdateOutcome(event, err)
+					})
+
+					dashStats := make(map[string]string)
+					dashStats["node"] = n.Name
+					dashStats["volume"] = vol.Name
+					updateLongevityStats(ReallocateSharedMount, stats.PXRestartEventName, dashStats)
+
+					err = Inst().S.DisableSchedulingOnNode(*n)
+					dash.VerifySafely(err == nil, true, fmt.Sprintf("Disable sceduling on node : %s", n.Name))
+
+					err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
+					dash.VerifySafely(err == nil, true, fmt.Sprintf("Stop volume driver on node : %s success ?", n.Name))
+
+					err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 1 * time.Second,
+						},
+					})
+					UpdateOutcome(event, err)
+
+					// as we keep the storage driver down on node until we check if the volume, we wait a minute for
+					// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
+					log.InfoD("wait for %v for node reboot", 1*time.Minute)
+					time.Sleep(1 * time.Minute)
+
+					// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
+					err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
+						Action: "start",
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         5 * time.Minute,
+							TimeBeforeRetry: 10 * time.Second,
+						}})
+					UpdateOutcome(event, err)
+
+					ctx.RefreshStorageEndpoint = true
+					n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 10*time.Second)
+
+					UpdateOutcome(event, err)
+					if n2 != nil {
+						// the mount should move to another node otherwise fail
+						log.InfoD("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+						dash.VerifySafely(n.SchedulerNodeName != n2.SchedulerNodeName, true, "Volume is scheduled on different nodes?")
+
+						StartVolDriverAndWait([]node.Node{*n})
+						err = Inst().S.EnableSchedulingOnNode(*n)
+						UpdateOutcome(event, err)
+
+					}
+				}
+			}
+			log.InfoD("validating applications")
+			ValidateApplications(*contexts)
+		}
+		updateMetrics(*event)
+	})
 }
 
 // GetContextPVCs returns pvc from the given context

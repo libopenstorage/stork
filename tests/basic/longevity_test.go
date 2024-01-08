@@ -129,6 +129,7 @@ var _ = Describe("{Longevity}", func() {
 		PoolMaintenanceCycle:     TriggerPoolMaintenanceCycle,
 		StorageFullPoolExpansion: TriggerStorageFullPoolExpansion,
 		HAIncreaseWithPVCResize:  TriggerHAIncreasWithPVCResize,
+		ReallocateSharedMount:    TriggerReallocSharedMount,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -922,6 +923,7 @@ func populateIntervals() {
 	triggerInterval[PoolMaintenanceCycle] = make(map[int]time.Duration)
 	triggerInterval[StorageFullPoolExpansion] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseWithPVCResize] = make(map[int]time.Duration)
+	triggerInterval[ReallocateSharedMount] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1669,6 +1671,17 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
 	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
 
+	triggerInterval[ReallocateSharedMount][10] = 1 * baseInterval
+	triggerInterval[ReallocateSharedMount][9] = 3 * baseInterval
+	triggerInterval[ReallocateSharedMount][8] = 6 * baseInterval
+	triggerInterval[ReallocateSharedMount][7] = 9 * baseInterval
+	triggerInterval[ReallocateSharedMount][6] = 12 * baseInterval
+	triggerInterval[ReallocateSharedMount][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ReallocateSharedMount][4] = 18 * baseInterval
+	triggerInterval[ReallocateSharedMount][3] = 21 * baseInterval
+	triggerInterval[ReallocateSharedMount][2] = 24 * baseInterval
+	triggerInterval[ReallocateSharedMount][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1890,6 +1903,7 @@ func populateIntervals() {
 	triggerInterval[PoolMaintenanceCycle][0] = 0
 	triggerInterval[StorageFullPoolExpansion][0] = 0
 	triggerInterval[HAIncreaseWithPVCResize][0] = 0
+	triggerInterval[ReallocateSharedMount][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

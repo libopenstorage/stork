@@ -1,0 +1,14 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: kubevirt-longevity-ssie-localsnap
+provisioner: pxd.portworx.com
+parameters:
+  repl: "3"
+  sharedv4_mount_options: vers=3.0,nolock
+  snapshotschedule.stork.libopenstorage.org/interval-schedule: |
+    schedulePolicyName: localintervalpolicy
+    annotations:
+      portworx/snapshot-type: local
+allowVolumeExpansion: true

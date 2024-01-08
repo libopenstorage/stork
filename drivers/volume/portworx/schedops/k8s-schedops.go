@@ -37,6 +37,10 @@ const (
 	PXDaemonSet = "portworx"
 	// PXServiceLabelKey is the label key used for px systemd service control
 	PXServiceLabelKey = "px/service"
+	//PXPodlabelKey is the label key used for portworx pods
+	PXPodlabelKey = "name"
+	//PXPodLabelValue is the label value used for portworx pods
+	PXPodLabelValue = "portworx"
 	// k8sServiceOperationStart is label value for starting Portworx service
 	k8sServiceOperationStart = "start"
 	// k8sServiceOperationStop is label value for stopping Portworx service
@@ -757,6 +761,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		log.Errorf("Failed to get portworx namespace. Error : %v", err)
 		return false
 	}
+
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, namespace)
 	if err != nil {
 		log.Errorf("Failed to get apps on node %s. Error : %v", n.Name, err)
@@ -1019,18 +1024,25 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 }
 
 func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
-	var allServices *corev1.ServiceList
+	var pods *corev1.PodList
 	var err error
+	var ns string
 
-	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
-		return "", fmt.Errorf("Failed to get list of services. Err: %v", err)
+	pods, err = k8sCore.ListPods(map[string]string{
+		PXPodlabelKey: PXPodLabelValue,
+	})
+	if err != nil {
+		return ns, err
 	}
-	for _, svc := range allServices.Items {
-		if svc.Name == PXServiceName {
-			return svc.Namespace, nil
-		}
+
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
 	}
-	return "", fmt.Errorf("can't find %s Portworx service from list of services.", PXServiceName)
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("error: can't find portworx namespace using pods with label [%s=%s]", PXPodlabelKey, PXPodLabelValue)
+	}
+	return ns, nil
+
 }
 
 func printStatus(k *k8sSchedOps, pods ...corev1.Pod) {

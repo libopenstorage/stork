@@ -545,12 +545,17 @@ func (d *Dashboard) UpdateStats(name, product, statType, version string, dashSta
 		}
 
 		statsURL := fmt.Sprintf("%s/stats", DashBoardBaseURL)
+		logrus.Infof("pushing stats to aetos: %v", st)
 
 		resp, respStatusCode, err := rest.POST(statsURL, st, nil, nil)
 		if err != nil {
 			logrus.Errorf("Error in updating stats to dashboard, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Error updating the stats, resp : %s", string(resp))
+		} else {
+			logrus.Infof("stats response: %v", resp)
+			logrus.Infof("stats status code: %d", respStatusCode)
 		}
+
 	}
 }
