@@ -18,6 +18,7 @@ import (
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
+	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -40,6 +41,7 @@ func TestExtender(t *testing.T) {
 	t.Run("antihyperconvergenceTest", antihyperconvergenceTest)
 	t.Run("antihyperconvergenceTestPreferRemoteOnlyTest", antihyperconvergenceTestPreferRemoteOnlyTest)
 	t.Run("preferRemoteNodeFalseHyperconvergenceTest", preferRemoteNodeFalseHyperconvergenceTest)
+	t.Run("antihyperconvergenceAfterVolumeLabelUpdate", antihyperconvergenceAfterVolumeLabelUpdate)
 	t.Run("equalPodSpreadTest", equalPodSpreadTest)
 
 	err = setRemoteConfig("")
@@ -450,6 +452,72 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
+// This test has been added as part of fix for PWX-35513
+func antihyperconvergenceAfterVolumeLabelUpdate(t *testing.T) {
+	var testrailID, testResult = 94378, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+
+	ctxs, err := schedulerDriver.Schedule("volumelabelupdate",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"test-sv4-replica1-prefer-remote-only"},
+		})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on 1 nodes")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	nodesWithoutVolumeData := getNodesWithoutVolumeData(t, volumeNames[0])
+
+	// cordon the nodes without volume data
+	for _, node := range nodesWithoutVolumeData {
+		err = core.Instance().CordonNode(node, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error cordorning k8s node for stork test pod")
+	}
+
+	// update the label in px volume
+	labels := map[string]string{"stork.libopenstorage.org/preferRemoteNodeOnly": "false"}
+	updatePXVolumeLabel(t, volumeNames[0], labels)
+
+	// restart the pod
+	logrus.Infof("Delete application pods")
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			depPods, err := apps.Instance().GetDeploymentPods(obj)
+			require.NoError(t, err, "Error getting pods for deployment.")
+
+			err = core.Instance().DeletePods(depPods, true)
+			require.NoError(t, err, "Error delete deployment pods for deploymet.")
+		}
+	}
+
+	// check that pod can get scheduled
+	logrus.Infof("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], maxPodBringupTime, defaultWaitInterval)
+	require.Error(t, err, "Expected an error while scheduling the pod")
+
+	destroyAndWait(t, ctxs)
+
+	// uncordon the nodes
+	for _, node := range nodesWithoutVolumeData {
+		err = core.Instance().UnCordonNode(node, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error cordorning k8s node for stork test pod")
+	}
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
 func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
 	var testrailID, testResult = 92964, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
@@ -475,6 +543,28 @@ func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
 
 	logrus.Infof("Verifying Pods scheduling favors hyperconvergence")
 	verifyScheduledNodesMultipleReplicas(t, scheduledNodes, volumeNames)
+}
+
+func getNodesWithoutVolumeData(t *testing.T, volume string) []string {
+	driverNodes, err := storkVolumeDriver.GetNodes()
+	require.NoError(t, err, "Unable to get driver nodes from stork volume driver")
+
+	idMap := make(map[string]*storkdriver.NodeInfo)
+	for _, dNode := range driverNodes {
+		idMap[dNode.StorageID] = dNode
+	}
+
+	volInfo, err := storkVolumeDriver.InspectVolume(volume)
+	require.NoError(t, err, "Unable to inspect volume driver")
+
+	nodes := node.GetWorkerNodes()
+	nodesWithoutVolumeData := make([]string, 0)
+	for _, node := range nodes {
+		if !slices.Contains(volInfo.DataNodes, node.Name) {
+			nodesWithoutVolumeData = append(nodesWithoutVolumeData, node.Name)
+		}
+	}
+	return nodesWithoutVolumeData
 }
 
 func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []string) {
