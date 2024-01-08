@@ -323,6 +323,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 
 func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.KDMPDriverName {
 			continue
@@ -330,8 +331,11 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 		crName := getGenericCRName(utils.PrefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
 		dataExport, err := kdmpShedOps.Instance().GetDataExport(crName, vInfo.Namespace)
 		if err != nil {
+			vInfo.Status = storkapi.ApplicationBackupStatusFailed
+			vInfo.Reason = fmt.Sprintf("%v", err)
+			volumeInfos = append(volumeInfos, vInfo)
 			logrus.Errorf("failed to get backup DataExport CR: %v", err)
-			return volumeInfos, err
+			continue
 		}
 
 		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed &&
@@ -367,6 +371,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
+
 	return volumeInfos, nil
 }
 func isDataExportActive(status kdmpapi.ExportStatus) bool {
