@@ -24,6 +24,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/platform/rancher"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
@@ -251,6 +252,48 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 	return nil
 }
 
+func createVMRuleCr(rule *stork_api.Rule) error {
+	_, err := storkops.Instance().GetRule(rule.Name, rule.Namespace)
+	if err != nil {
+		_, err = storkops.Instance().CreateRule(rule)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *ApplicationBackupController) createVMSpeceficBackupResources(backup *stork_api.ApplicationBackup) error {
+
+	returnErrorm := func(message string, err error) error {
+		logrus.Errorf(message, err)
+		return err
+	}
+
+	preExecRule, postExecRule, vmResources, err := resourceutils.ProcessVMBackupRequest(backup)
+	if err != nil {
+		return returnErrorm("Error Processing VM Backup Request: %v", err)
+	}
+
+	err = createVMRuleCr(preExecRule)
+	if err != nil {
+		return returnErrorm("Error Creating PreExec ruleCR for vm freeze: %v", err)
+	}
+
+	err = createVMRuleCr(postExecRule)
+	if err != nil {
+		return returnErrorm("Error Creating PostExec ruleCR for vm unfreeze: %v", err)
+	}
+
+	if len(vmResources) != 0 {
+		backup.Spec.PreExecRule = preExecRule.Name
+		backup.Spec.PostExecRule = postExecRule.Name
+		backup.Spec.IncludeResources = append(backup.Spec.IncludeResources, vmResources...)
+	}
+	return nil
+
+}
+
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
 	if backup.DeletionTimestamp != nil {
@@ -414,6 +457,35 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				return nil
 			}
 		}
+		fallthrough
+	case stork_api.ApplicationBackupStageImportResource:
+		if backup.Annotations[utils.PxBackupObjectType] == utils.PxBackupObjectType_virtualMachine {
+			logrus.Infof("This is a VM specific backup, processing vm resources")
+			err = a.createVMSpeceficBackupResources(backup)
+			if err != nil {
+				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Reason = fmt.Sprintf("Error Updating Backup CR for VMObject Backup : %v", err)
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Status.FinishTimestamp = metav1.Now()
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				err = fmt.Errorf("Error Updating Backup CR for VMObject Backup : %v", err)
+				log.ApplicationBackupLog(backup).Errorf(err.Error())
+				a.recorder.Event(backup,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationBackupStatusFailed),
+					err.Error())
+			} else {
+				backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+			}
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error updating Cr in VMBackupProcessingStage: %v", err)
+				return nil
+			}
+			return nil
+		}
+		logrus.Infof("Non VM backup, moving on.")
 		fallthrough
 	case stork_api.ApplicationBackupStagePreExecRule:
 		var inProgress bool

@@ -100,6 +100,10 @@ const (
 	BackupLocationKind = "BackupLocation"
 	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName = "portworx-service"
+	// PxBackupObjectType specifies if px-backup object is of VM specific backup object
+	PxBackupObjectType = PxbackupAnnotationPrefix + "backup-object-type"
+	// PxBackupObjectType_virtualMachine px-backuo ObjectType virtualMachine
+	PxBackupObjectType_virtualMachine = "VirtualMachine"
 )
 
 // ParseKeyValueList parses a list of key=values string into a map

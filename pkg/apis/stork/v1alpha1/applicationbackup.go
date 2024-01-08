@@ -129,6 +129,8 @@ const (
 	// ApplicationBackupStageInitial for when backup is created
 	ApplicationBackupStageInitial ApplicationBackupStageType = ""
 	// ApplicationBackupStagePreExecRule for when the PreExecRule is being executed
+	ApplicationBackupStageImportResource ApplicationBackupStageType = "ImportResource"
+	// ApplicationBackupStagePreExecRule for when the PreExecRule is being executed
 	ApplicationBackupStagePreExecRule ApplicationBackupStageType = "PreExecRule"
 	// ApplicationBackupStagePostExecRule for when the PostExecRule is being executed
 	ApplicationBackupStagePostExecRule ApplicationBackupStageType = "PostExecRule"
