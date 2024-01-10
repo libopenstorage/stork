@@ -13,12 +13,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -73,6 +73,7 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 		StartTorpedoTest("PoolExpandDiskResize3Times",
 			"Validate storage pool expansion with type=resize-disk", nil, 0)
 		for i := 0; i < 3; i++ {
+			poolToResize = getStoragePool(poolIDToResize)
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
