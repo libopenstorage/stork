@@ -39,6 +39,8 @@ const (
 	regionPriorityScore float64 = 10
 	// defaultScore Score assigned to a node which doesn't have data for any volume
 	defaultScore float64 = 5
+	// invalidNodeScore Score assigned to a node which is not available to the volume driver
+	invalidNodeScore float64 = 0
 	// storageDownNodeScorePenaltyPercentage is the percentage by which a node's score
 	// will take a hit if the node's status is StorageDown
 	storageDownNodeScorePenaltyPercentage float64 = 50
@@ -560,7 +562,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
 	}
 
-	// Intialize scores to 0
+	// Initialize scores to 0
 	priorityMap := make(map[string]int)
 	for _, node := range args.Nodes.Items {
 		for _, address := range node.Status.Addresses {
@@ -696,8 +698,14 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				storklog.PodLog(pod).Debugf("Volume %v allocated in regions: %v", volume.VolumeName, regionInfo.PreferredLocality)
 
 				for k8sNodeIndex, node := range args.Nodes.Items {
-					storageNode := k8sNodeIndexStorageNodeMap[k8sNodeIndex]
-					priorityMap[node.Name] += int(e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, storageNode))
+					if storageNode, keyExists := k8sNodeIndexStorageNodeMap[k8sNodeIndex]; keyExists {
+						priorityMap[node.Name] += int(e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, storageNode))
+					} else {
+						// the k8sNodeIndex's corresponding node isn't available to the driver,
+						// so we shouldn't schedule pods on this node
+						// we will assign a negative score here and set it to 0 when encoding the response
+						priorityMap[node.Name] = -1
+					}
 				}
 			}
 
@@ -715,6 +723,8 @@ sendResponse:
 		score, ok := priorityMap[node.Name]
 		if !ok || score == 0 {
 			score = int(defaultScore)
+		} else if score == -1 {
+			score = int(invalidNodeScore)
 		}
 		hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: int64(score)}
 		respList = append(respList, hostPriority)
@@ -759,17 +769,20 @@ func (e *Extender) updateForAntiHyperconvergence(
 		}
 	}
 	for k8sNodeIndex, node := range args.Nodes.Items {
-		storageNode := k8sNodeIndexStorageNodeMap[k8sNodeIndex]
-		// storageNode.StorageID = datanodeID
-		// Give defaultScore to the nodes where NeedsAntiHyperconvergence volume exist
-		// to give them a lower score
-		if val, ok := needsAntiHyperconvergenceReplicaNodes[storageNode.StorageID]; ok && val {
-			priorityMap[node.Name] = int(defaultScore)
-		} else if storageNode.Status == volume.NodeOnline {
-			// In a scenario where regular volumes do not exist
-			// Raise the score of non replica nodes to give them
-			// a score higher than the default score
-			priorityMap[node.Name] += int(nodePriorityScore)
+		if storageNode, keyExists := k8sNodeIndexStorageNodeMap[k8sNodeIndex]; keyExists {
+			// storageNode.StorageID = datanodeID
+			// Give defaultScore to the nodes where NeedsAntiHyperconvergence volume exist
+			// to give them a lower score
+			if val, ok := needsAntiHyperconvergenceReplicaNodes[storageNode.StorageID]; ok && val {
+				priorityMap[node.Name] = int(defaultScore)
+			} else if storageNode.Status == volume.NodeOnline {
+				// In a scenario where regular volumes do not exist
+				// Raise the score of non replica nodes to give them
+				// a score higher than the default score
+				priorityMap[node.Name] += int(nodePriorityScore)
+			}
+		} else {
+			priorityMap[node.Name] = -1
 		}
 	}
 }
