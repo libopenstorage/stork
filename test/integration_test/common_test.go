@@ -1868,6 +1868,19 @@ func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, a
 	}
 }
 
+func updatePXVolumeLabel(t *testing.T, volume string, labelsMap map[string]string) {
+	labels := make([]string, 0)
+	for k, v := range labelsMap {
+		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
+	}
+	labelString := strings.Join(labels, ",")
+	pxNode := node.GetStorageDriverNodes()[0]
+	out, err := volumeDriver.GetPxctlCmdOutput(
+		pxNode, fmt.Sprintf("volume update %s --label %s", volume, labelString))
+	require.NoError(t, err)
+	logrus.Infof(out)
+}
+
 func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
 	operatorAppToCRMap := make(map[string][]meta_v1.APIResource)
 	// mongodbcommunity CR

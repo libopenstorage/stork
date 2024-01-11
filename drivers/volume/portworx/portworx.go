@@ -518,12 +518,7 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 		info.ParentID = vols[0].Source.Parent
 	}
 
-	if len(vols[0].Locator.GetVolumeLabels()) > 0 {
-		info.Labels = vols[0].Locator.GetVolumeLabels()
-	} else {
-		info.Labels = make(map[string]string)
-	}
-
+	info.Labels = make(map[string]string)
 	for k, v := range vols[0].Spec.GetVolumeLabels() {
 		info.Labels[k] = v
 	}
