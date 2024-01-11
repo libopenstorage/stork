@@ -356,6 +356,7 @@ func TestExtender(t *testing.T) {
 	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
 	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
 	t.Run("skipScoringForWindowsPods", skipScoringForWindowsPods)
+	t.Run("invalidNodePrioritizeTest", invalidNodePrioritizeTest)
 	t.Run("teardown", teardown)
 }
 
@@ -1725,6 +1726,60 @@ func antiHyperConvergenceTest(t *testing.T) {
 			nodePriorityScore,
 			nodePriorityScore,
 			nodePriorityScore},
+		prioritizeResponse)
+}
+
+func invalidNodePrioritizeTest(t *testing.T) {
+	requestNodes := &v1.NodeList{}
+	driverNodes := &v1.NodeList{}
+	requestNodes.Items = append(requestNodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	requestNodes.Items = append(requestNodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	driverNodes.Items = requestNodes.Items
+	// node3 is not available to PX
+	requestNodes.Items = append(requestNodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+
+	if err := driver.CreateCluster(2, driverNodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	// First test for Hyperconvergence scenario
+	provNodes := []int{0}
+	if err := driver.ProvisionVolume("HyperConvergedPrioritize", provNodes, 1, nil, false, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	pod := newPod("HyperConvergedPrioritize", map[string]bool{"HyperConvergedPrioritize": false})
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, requestNodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		requestNodes,
+		[]float64{nodePriorityScore,
+			defaultScore,
+			invalidNodeScore},
+		prioritizeResponse)
+
+	// Test for AntiHyperconvergence scenario
+	provNodes = []int{0}
+	if err := driver.ProvisionVolume("AntiHyperConvergedPrioritize", provNodes, 1, nil, true, false); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	pod = newPod("AntiHyperConvergedPrioritize", map[string]bool{"AntiHyperConvergedPrioritize": false})
+
+	prioritizeResponse, err = sendPrioritizeRequest(pod, requestNodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		requestNodes,
+		[]float64{defaultScore,
+			nodePriorityScore,
+			invalidNodeScore},
 		prioritizeResponse)
 }
 
