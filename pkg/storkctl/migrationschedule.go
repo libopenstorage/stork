@@ -196,9 +196,9 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				var schedulePolicy storkv1.SchedulePolicy
 				schedulePolicy.Name = schedulePolicyName
 				schedulePolicy.Policy = policyItem
-				ms, _ := storkops.Instance().GetMigrationSchedule(migrationScheduleName, cmdFactory.GetNamespace())
+				_, err = storkops.Instance().GetMigrationSchedule(migrationScheduleName, cmdFactory.GetNamespace())
 				// Create custom schedulePolicy only if migrationSchedule doesn't already exist
-				if ms == nil {
+				if err != nil {
 					_, err = storkops.Instance().CreateSchedulePolicy(&schedulePolicy)
 					if err != nil {
 						util.CheckErr(fmt.Errorf("could not create a schedule policy with specified interval: %v", err))
