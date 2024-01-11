@@ -404,10 +404,15 @@ func TestCreateMigrationScheduleWithInvalidInterval(t *testing.T) {
 func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "createmigrationschedule", "testpolicy", "default", "clusterpair1", []string{"default"}, "", "", true)
-	cmdArgs := []string{"create", "migrationschedules", "-s", "testpolicy", "-c", "clusterpair1", "--namespaces", "default", "createmigrationschedule"}
+	cmdArgs := []string{"create", "migrationschedules", "-c", "clusterpair1", "--namespaces", "default", "-i", "5", "createmigrationschedule"}
 
 	expected := "Error from server (AlreadyExists): migrationschedules.stork.libopenstorage.org \"createmigrationschedule\" already exists"
 	testCommon(t, cmdArgs, nil, expected, true)
+
+	//Also verify that the custom schedule policy was not created during the second try
+	_, err := storkops.Instance().GetSchedulePolicy("createmigrationschedule")
+	require.EqualErrorf(t, err, "schedulepolicies.stork.libopenstorage.org \"createmigrationschedule\" not found", "Schedule Policy expected not found error did not occur")
+
 }
 
 func TestMigrationScheduleWithInvalidSchedulePolicy(t *testing.T) {
