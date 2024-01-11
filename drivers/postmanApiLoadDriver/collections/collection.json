@@ -1,0 +1,245 @@
+{
+	"info": {
+		"_postman_id": "bfce2f42-6a86-4b61-94f5-7c690b006253",
+		"name": "API LOAD TEST",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "28190149"
+	},
+	"item": [
+		{
+			"name": "Get API KEY",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"response is ok\",  ()=>{",
+							"   if( pm.response.to.have.status(200)){",
+							"const responseJson = JSON.parse(responseBody);",
+							"const token = responseJson.data[0].jwt_token;",
+							"pm.globals.set(\"auth_token\", token);",
+							"}",
+							"})"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIiLCJlbWFpbCI6Im5pbCIsImV4cCI6MTcxODE3MzY5NywiaWF0IjoxNjg2NjM3Njk5LCJpc3MiOiJwZHMtdXNlckFQSUtleSIsIm5hbWUiOiJkNzYzZTE4Ny01MTc0LTQzY2ItOWJhZC0zMzI0MGNiYTJhNmIiLCJyb2xlcyI6bnVsbCwic3ViIjoiMWRlYjlmMjctNWEzMi00ODRlLTgyYzQtNzM5MGY1ODk4MGY1In0.-1T6nFIsz2V49V7dlAXety9Qlg59y4SSHhvvI45XMBLBknenRD4nDmYArkCYNRAiwLDd9DoJ2rhD2RSXsTbd9A",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://staging.pds.portworx.com/api/user-api-key?name=testJmeter",
+					"host": [
+						"https://staging.pds.portworx.com"
+					],
+					"path": [
+						"api",
+						"user-api-key"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "testJmeter"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Accounts",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"response is ok\",  ()=>{",
+							"   if( pm.response.to.have.status(200)){",
+							"const responseJson = JSON.parse(responseBody);",
+							"const id = responseJson.data[0].id;",
+							"console.log(\"account_id is: \", id)",
+							"pm.globals.set(\"account_id\", id);",
+							"}",
+							"})"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{auth_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://staging.pds.portworx.com/api/accounts?name=Automation",
+					"host": [
+						"https://staging.pds.portworx.com"
+					],
+					"path": [
+						"api",
+						"accounts"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "Automation"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Tenants",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"response is ok\",  ()=>{",
+							"   if( pm.response.to.have.status(200)){",
+							"const responseJson = JSON.parse(responseBody);",
+							"const id = responseJson.data[0].id;",
+							"console.log(\"tenant_id is: \", id)",
+							"pm.globals.set(\"tenant_id\", id);",
+							"}",
+							"})"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{auth_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://staging.pds.portworx.com/api/accounts/{{account_id}}/tenants",
+					"host": [
+						"https://staging.pds.portworx.com"
+					],
+					"path": [
+						"api",
+						"accounts",
+						"{{account_id}}",
+						"tenants"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Project ID",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"response is ok\",  ()=>{",
+							"   if( pm.response.to.have.status(200)){",
+							"const responseJson = JSON.parse(responseBody);",
+							"const id = responseJson.data[0].id;",
+							"console.log(\"project_id is: \", id)",
+							"pm.globals.set(\"project_id\", id);",
+							"}",
+							"})"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{auth_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://staging.pds.portworx.com/api/tenants/{{tenant_id}}/projects",
+					"host": [
+						"https://staging.pds.portworx.com"
+					],
+					"path": [
+						"api",
+						"tenants",
+						"{{tenant_id}}",
+						"projects"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

@@ -66,6 +66,16 @@ WORKDIR /torpedo
 COPY deployments deployments
 COPY scripts scripts
 
+# Install Postman-Newman Dependencies
+RUN apk update && apk upgrade \
+    && apk add --no-cache \
+        nodejs \
+        npm \
+    && rm -rf /var/cache/apk/*
+
+# Install Newman globally using npm
+RUN npm install -g newman
+
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install docker
