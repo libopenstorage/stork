@@ -3308,6 +3308,17 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		// Delete backups with cluster uid to handle backup deletion in case of CSI volumes
+		srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+		log.FailOnError(err, "Fetching cluster uid for [%s]", SourceClusterName)
+		for _, backupName := range backupNames {
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Fetching backup uid for [%s]", backupName)
+			_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, srcClusterUid, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+		}
+
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
