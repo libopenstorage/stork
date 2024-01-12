@@ -24,7 +24,7 @@ const (
 
 // RegisterTo creates a new controller for a provided config and registers it to the controller manager.
 func RegisterTo(mgr manager.Manager, name string, r reconcile.Reconciler, watchedObjects ...client.Object) error {
-	// Create a new controller
+	// Create a new controller.
 	c, err := controller.New(name, mgr, controller.Options{
 		Reconciler:              r,
 		MaxConcurrentReconciles: 10,
@@ -33,7 +33,7 @@ func RegisterTo(mgr manager.Manager, name string, r reconcile.Reconciler, watche
 		return err
 	}
 
-	// Watch for changes to primary resource
+	// Watch for changes to primary resource.
 	for _, obj := range watchedObjects {
 		if err = c.Watch(&source.Kind{Type: obj}, &handler.EnqueueRequestForObject{}); err != nil {
 			return err

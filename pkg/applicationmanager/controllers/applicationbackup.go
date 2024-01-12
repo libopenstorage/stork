@@ -118,7 +118,7 @@ type ApplicationBackupController struct {
 	reconcileTime        time.Duration
 }
 
-// Init Initialize the application backup controller
+// Init initialize Namespacesthe application backup controller.
 func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNamespace string, syncTime int64) error {
 	err := a.createCRD()
 	if err != nil {

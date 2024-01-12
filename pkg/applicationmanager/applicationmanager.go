@@ -50,7 +50,7 @@ func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, st
 	}
 
 	scheduleController := controllers.NewApplicationBackupSchedule(mgr, a.Recorder)
-	if err := scheduleController.Init(mgr); err != nil {
+	if err := scheduleController.Init(mgr, adminNamespace); err != nil {
 		return err
 	}
 	syncController := &controllers.BackupSyncController{

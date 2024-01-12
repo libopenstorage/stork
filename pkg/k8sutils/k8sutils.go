@@ -389,3 +389,18 @@ func GetPxNamespaceFromStorkDeploy(storkDeployName, storkDeployNamespace string)
 	}
 	return namespace, service, nil
 }
+
+// CheckNamespaceExists checks if the specified namespace exists in a Kubernetes cluster.
+func CheckNamespaceExists(ns string) (bool, error) {
+	namespaces, err := core.Instance().ListNamespaces(nil)
+	if err != nil {
+		return false, err
+	}
+
+	for _, namespace := range namespaces.Items {
+		if ns == namespace.Name {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("namespace %s does not exist", ns)
+}

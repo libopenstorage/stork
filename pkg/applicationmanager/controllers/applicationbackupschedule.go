@@ -61,16 +61,18 @@ func NewApplicationBackupSchedule(mgr manager.Manager, r record.EventRecorder) *
 type ApplicationBackupScheduleController struct {
 	client runtimeclient.Client
 
-	recorder record.EventRecorder
+	recorder             record.EventRecorder
+	backupAdminNamespace string
 }
 
 // Init Initialize the backup schedule controller
-func (s *ApplicationBackupScheduleController) Init(mgr manager.Manager) error {
+func (s *ApplicationBackupScheduleController) Init(mgr manager.Manager, backupAdminNamespace string) error {
 	err := s.createCRD()
 	if err != nil {
 		return err
 	}
 
+	s.backupAdminNamespace = backupAdminNamespace
 	return controllers.RegisterTo(mgr, "application-backup-schedule-controller", s, &stork_api.ApplicationBackupSchedule{})
 }
 
@@ -78,9 +80,18 @@ func (s *ApplicationBackupScheduleController) Init(mgr manager.Manager) error {
 func (s *ApplicationBackupScheduleController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ApplicationBackupSchedule %s/%s", request.Namespace, request.Name)
 
+	// Do not start the application backup if the admin namespace is not present.
+	exists, err := k8sutils.CheckNamespaceExists(s.backupAdminNamespace)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if !exists {
+		return reconcile.Result{}, fmt.Errorf("admin namespace not found, not proceeding with backup")
+	}
+
 	// Fetch the ApplicationBackup instance
 	backup := &stork_api.ApplicationBackupSchedule{}
-	err := s.client.Get(context.TODO(), request.NamespacedName, backup)
+	err = s.client.Get(context.TODO(), request.NamespacedName, backup)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.

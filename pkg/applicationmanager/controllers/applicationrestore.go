@@ -278,9 +278,18 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Infof("Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
 
+	// Do not start the application backup if the admin namespace is not present.
+	exists, err := k8sutils.CheckNamespaceExists(a.restoreAdminNamespace)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if !exists {
+		return reconcile.Result{}, fmt.Errorf("admin namespace not found, not proceeding with restore")
+	}
+
 	// Fetch the ApplicationBackup instance
 	restore := &storkapi.ApplicationRestore{}
-	err := a.client.Get(context.TODO(), request.NamespacedName, restore)
+	err = a.client.Get(context.TODO(), request.NamespacedName, restore)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
