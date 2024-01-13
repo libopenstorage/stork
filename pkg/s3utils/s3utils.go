@@ -154,7 +154,7 @@ func GetTimeStamp(getPreviousFolder bool) string {
 	if getPreviousFolder {
 		tnow = tnow.Add(-1 * time.Hour)
 	}
-	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
+	return fmt.Sprintf("%d_%02d_%02d/%02d", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
 }
 
 // GetS3Objects lists the objects in S3
