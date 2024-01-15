@@ -406,7 +406,31 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	}
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
-		// Make sure the namespaces exist
+		if restore.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine {
+			//if restore.Annotations[utils.PxBackupObjectType] == utils.PxBackupObjectType_virtualMachine {
+			logrus.Infof("Its VM Object restore, filtering orphaned resources if required")
+			includeObjects, err := a.filterOrphanedResourcesForVMRestore(restore)
+			if err != nil {
+				message := fmt.Sprintf("Error processing VM restore : %v", err)
+				log.ApplicationRestoreLog(restore).Errorf(message)
+				a.recorder.Event(restore,
+					v1.EventTypeWarning,
+					string(storkapi.ApplicationRestoreStatusFailed),
+					message)
+				if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
+					return errResourceBusy
+				}
+				return nil
+			}
+			if len(includeObjects) != 0 {
+				restore.Spec.IncludeResources = includeObjects
+				restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
+				err = a.client.Update(context.TODO(), restore)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		fallthrough
 	case storkapi.ApplicationRestoreStageVolumes:
 		err := a.restoreVolumes(restore, updateCr)
@@ -589,7 +613,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					continue
 				}
 			}
-
 			pvcCount++
 			isVolRestoreDone := false
 			for _, statusVolume := range restore.Status.Volumes {
@@ -2151,4 +2174,39 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 		}
 	}
 	return nil
+}
+
+// filterOrphanedResourcesForVMRestore removes orhpaned resources from includeResrouce for restore for VM specific restore operation.
+func (a *ApplicationRestoreController) filterOrphanedResourcesForVMRestore(restore *storkapi.ApplicationRestore) ([]storkapi.ObjectInfo, error) {
+
+	objectInfo := make([]storkapi.ObjectInfo, 0)
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("error getting backup spec for restore: %v", err)
+	}
+	// get objectMap of includeResources
+	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
+	resourceObjects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
+		return nil, err
+	}
+	// get VM to vm resources map
+	objectInfoMap, err := resourcecollector.GetVMResourcesObjectMap(resourceObjects, objectMap)
+	if err != nil {
+		return objectInfo, err
+	}
+
+	for _, includeResource := range restore.Spec.IncludeResources {
+		if includeResource.Kind != "VirtualMachine" {
+			if _, present := objectInfoMap[includeResource]; !present {
+				// resources is present in backup resources but is no backed by
+				// any VM in includeResources. This is orphaned resource. Hence,
+				// filter th resource.
+				continue
+			}
+		}
+		objectInfo = append(objectInfo, includeResource)
+	}
+	return objectInfo, nil
 }
