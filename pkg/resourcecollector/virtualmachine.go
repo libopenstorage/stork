@@ -26,11 +26,7 @@ const (
 // IsVirtualMachineRunning returns true if virtualMachine is in running state
 func IsVirtualMachineRunning(vm kubevirtv1.VirtualMachine) bool {
 
-	if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning {
-		return true
-	}
-	return false
-
+	return  vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning
 }
 
 // GetVMDataVolumes returns DataVolumes used by the VM
