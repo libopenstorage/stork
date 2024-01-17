@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -326,6 +327,15 @@ func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
 	log.Infof("Updating the resource template name with : %v", TemplateName)
 	resourceTemplateName = TemplateName
 	return resourceTemplateName
+}
+
+// WhoAmI Fetches the details of the current calling actor (user or service account)
+func (cp *ControlPlane) WhoAmI() (*pds.ControllersWhoAmIResponse, *http.Response, error) {
+	whoamiResp, httpResp, err := components.Whoami.WhoAmI()
+	if err != nil {
+		return nil, nil, err
+	}
+	return whoamiResp, httpResp, err
 }
 
 // GetResourceTemplate get the resource template id

@@ -84,6 +84,26 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 	})
 })
 
+var _ = Describe("{PingTest}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PingTest", "It calls the whoami api and validates the api response", pdsLabels, 0)
+	})
+
+	steplog := "Invoke whoami api and validate the api response "
+	Step(steplog, func() {
+		log.InfoD(steplog)
+		It("validate api response", func() {
+			_, httpResp, err := controlPlane.WhoAmI()
+			log.FailOnError(err, "Error while fetching user details")
+			dash.VerifyFatal(httpResp.StatusCode, 200, "validating whoami api response")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)

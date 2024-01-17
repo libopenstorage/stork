@@ -30,6 +30,7 @@ type Components struct {
 	Restore                  *Restore
 	ServiceIdentity          *ServiceIdentity
 	IamRoleBindings          *IamRoleBindings
+	Whoami                   *Whoami
 }
 
 // NewComponents create a struct literal that can be leveraged to call all the components functions.
@@ -103,6 +104,9 @@ func NewComponents(apiClient *pds.APIClient) *Components {
 			apiClient: apiClient,
 		},
 		IamRoleBindings: &IamRoleBindings{
+			apiClient: apiClient,
+		},
+		Whoami: &Whoami{
 			apiClient: apiClient,
 		},
 	}
