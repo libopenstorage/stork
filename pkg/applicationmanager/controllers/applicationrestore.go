@@ -407,7 +407,6 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
 		if restore.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine {
-			//if restore.Annotations[utils.PxBackupObjectType] == utils.PxBackupObjectType_virtualMachine {
 			logrus.Infof("Its VM Object restore, filtering orphaned resources if required")
 			includeObjects, err := a.filterOrphanedResourcesForVMRestore(restore)
 			if err != nil {
