@@ -265,6 +265,43 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
+			// Run the post exec rules if the backup is in ApplicationBackupStageVolumes stage(After the ApplicationBackupStagePreExecRule Stage) AND execRulesCompleted check is negative
+			if _, ok := a.execRulesCompleted[string(backup.UID)]; !ok && backup.Status.Stage == stork_api.ApplicationBackupStageVolumes {
+				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("BackpCR is marked for deletion before execting the post exec rules, will execute the same during the finalizer cleanup if any")
+				if terminationChannels, ok := a.terminationChannels[string(backup.UID)]; ok {
+					for _, channel := range terminationChannels {
+						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
+						channel <- true
+					}
+				}
+				if backup.Spec.PostExecRule != "" {
+					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Starting post-exec rule during the backup cr finalizer cleanup")
+					err := a.runPostExecRule(backup)
+					if err != nil {
+						message := fmt.Sprintf("Error running PostExecRule during the finalizer cleanup: %v", err)
+						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Errorf(message)
+						a.recorder.Event(backup,
+							v1.EventTypeWarning,
+							string(stork_api.ApplicationBackupStatusFailed),
+							message)
+						return fmt.Errorf("%v", message)
+					}
+					a.execRulesCompleted[string(backup.UID)] = true
+				}
+			}
+
+			// Delete post-exec rule CR after executing the postexec rules only for the manual backup as it is managed and created through the px-backup
+			// And also here the deletion will be skipped if the backupCR is created by the schedule or for the restore from the px-backup.
+			if len(backup.Spec.PostExecRule) != 0 && backup.Annotations[utils.PxbackupAnnotationCreateByKey] == utils.PxbackupAnnotationCreateByValue && backup.Annotations["portworx.io/backup-by"] != "backup-schedule" && backup.Annotations["portworx.io/backup-by"] != "restore" {
+				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Delete post-exec rule CR as it is a manual backup created by the px-backup")
+
+				err := storkops.Instance().DeleteRule(backup.Spec.PostExecRule, backup.Namespace)
+				if err != nil && !k8s_errors.IsNotFound(err) {
+					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Infof("Error while deleting post exec rule CR: %v", err)
+					return err
+				}
+			}
+
 			canDelete, err := a.deleteBackup(backup)
 			if err != nil {
 				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
@@ -272,6 +309,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			if !canDelete {
 				return nil
 			}
+
 			// get-rid of map entry for termination channel and rule flag
 			if _, ok := a.terminationChannels[string(backup.UID)]; ok {
 				delete(a.terminationChannels, string(backup.UID))
@@ -620,8 +658,21 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		backupStatusVolMap[statusVolume.Namespace+"-"+statusVolume.PersistentVolumeClaim] = ""
 	}
 
+	namespacedName := types.NamespacedName{Namespace: backup.Namespace, Name: backup.Name}
 	backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
-	namespacedName := types.NamespacedName{}
+
+	backup, err = a.updateBackupCRInVolumeStage(
+		namespacedName,
+		stork_api.ApplicationBackupStatusInProgress,
+		backup.Status.Stage,
+		"Starting the Volume backups",
+		nil,
+	)
+	if err != nil {
+		logrus.Errorf("Error while updateBackupCRInVolumeStage: %v", err)
+		return err
+	}
+
 	if a.IsVolsToBeBackedUp(backup) {
 		isResourceTypePVC := IsResourceTypePVC(backup)
 		var objectMap map[stork_api.ObjectInfo]bool
@@ -710,8 +761,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
 		}
 
-		namespacedName.Namespace = backup.Namespace
-		namespacedName.Name = backup.Name
 		if len(backup.Status.Volumes) != pvcCount {
 			for driverName, pvcs := range pvcMappings {
 				var driver volume.Driver
@@ -938,38 +987,41 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 	// If the driver combination of volumes onlykdmp or mixed of both kdmp and non-kdmp, call post exec rule
 	// backup of volume is success.
-	if driverCombo == kdmpDriverOnly || driverCombo == mixedDriver {
-		// Let's kill the pre-exec rule pod here so that application specific
-		// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
-		// At this point we are dead sure that volume snapshot for all PVCs in the APP is done.. if not then
-		// there is issue...
-		// For detail refer pb-3823
-		for _, channel := range terminationChannels {
-			logrus.Infof("Sending termination commands to kill pre-exec pod in kdmp or mixed driver path")
-			channel <- true
-		}
-		//terminationChannels = nil
-		if backup.Spec.PostExecRule != "" {
-			log.ApplicationBackupLog(backup).Infof("Starting post-exec rule for kdmp and mixed driver path")
-			err = a.runPostExecRule(backup)
-			if err != nil {
-				message := fmt.Sprintf("Error running PostExecRule for kdmp and mixed driver scenario: %v", err)
-				log.ApplicationBackupLog(backup).Errorf(message)
-				a.recorder.Event(backup,
-					v1.EventTypeWarning,
-					string(stork_api.ApplicationBackupStatusFailed),
-					message)
-
-				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-				backup.Status.FinishTimestamp = metav1.Now()
-				backup.Status.LastUpdateTimestamp = metav1.Now()
-				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-				backup.Status.Reason = message
-				err = a.client.Update(context.TODO(), backup)
+	if !a.execRulesCompleted[string(backup.UID)] {
+		if driverCombo == kdmpDriverOnly || driverCombo == mixedDriver {
+			// Let's kill the pre-exec rule pod here so that application specific
+			// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
+			// At this point we are dead sure that volume snapshot for all PVCs in the APP is done.. if not then
+			// there is issue...
+			// For detail refer pb-3823
+			for _, channel := range terminationChannels {
+				logrus.Infof("Sending termination commands to kill pre-exec pod in kdmp or mixed driver path")
+				channel <- true
+			}
+			//terminationChannels = nil
+			if backup.Spec.PostExecRule != "" {
+				log.ApplicationBackupLog(backup).Infof("Starting post-exec rule for kdmp and mixed driver path")
+				err = a.runPostExecRule(backup)
 				if err != nil {
-					return err
+					message := fmt.Sprintf("Error running PostExecRule for kdmp and mixed driver scenario: %v", err)
+					log.ApplicationBackupLog(backup).Errorf(message)
+					a.recorder.Event(backup,
+						v1.EventTypeWarning,
+						string(stork_api.ApplicationBackupStatusFailed),
+						message)
+
+					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+					backup.Status.FinishTimestamp = metav1.Now()
+					backup.Status.LastUpdateTimestamp = metav1.Now()
+					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+					backup.Status.Reason = message
+					err = a.client.Update(context.TODO(), backup)
+					if err != nil {
+						return err
+					}
+					return fmt.Errorf("%v", message)
 				}
-				return fmt.Errorf("%v", message)
+				a.execRulesCompleted[string(backup.UID)] = true
 			}
 		}
 	}
