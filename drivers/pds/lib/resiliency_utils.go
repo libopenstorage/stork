@@ -43,6 +43,7 @@ const (
 	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
 	RestoreDuringAllNodesReboot         = "restore-ds-during-node-reboot"
 	StopPXDuringStorageResize           = "stop-px-during-storage-resize"
+	RebootNodeDuringAppResourceUpdate   = "reboot-node-during-app-resource-update"
 	KillDbMasterNodeDuringStorageResize = "kill-db-master-node-during-storage-resize"
 	poolResizeTimeout                   = time.Minute * 120
 	retryTimeout                        = time.Minute * 2
@@ -237,6 +238,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
 		func1 := func() {
 			ResizeDataserviceStorage(deployment, namespace, UpdateTemplate)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case RebootNodeDuringAppResourceUpdate:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will start rebooting all worker nodes.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
