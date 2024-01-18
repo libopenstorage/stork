@@ -407,10 +407,12 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
 		if restore.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine {
-			logrus.Infof("Its VM Object restore, filtering orphaned resources if required")
+			// The backuObjectType is VirtualMachine. We need to remove resources such as PVC,
+			// configMap, secret that are not associated to any VirtualMachine (aka orphaned resources).
+			logrus.Infof("It is restore of  VirtualMachine  Backup Object type. Filtering resources not associated to any of the selected VirtualMachines")
 			includeObjects, err := a.filterOrphanedResourcesForVMRestore(restore)
 			if err != nil {
-				message := fmt.Sprintf("Error processing VM restore : %v", err)
+				message := fmt.Sprintf("Error processing VirtualMachine restore : %v", err)
 				log.ApplicationRestoreLog(restore).Errorf(message)
 				a.recorder.Event(restore,
 					v1.EventTypeWarning,
@@ -2175,19 +2177,20 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 	return nil
 }
 
-// filterOrphanedResourcesForVMRestore removes orhpaned resources from includeResrouce for restore for VM specific restore operation.
+// filterOrphanedResourcesForVMRestore filters out resources such as PVC, ConfgiMap and Secrets that are not associated to any VM specified in the
+// includeResources. Such resources called orhpaned resources are removed from includeResrouce during restore for VM specific restore operation.
 func (a *ApplicationRestoreController) filterOrphanedResourcesForVMRestore(restore *storkapi.ApplicationRestore) ([]storkapi.ObjectInfo, error) {
 
 	objectInfo := make([]storkapi.ObjectInfo, 0)
 	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
 	if err != nil {
-		return nil, fmt.Errorf("error getting backup spec for restore: %v", err)
+		return nil, fmt.Errorf("error getting backup spec for VirtualMachine specific restore: %v", err)
 	}
 	// get objectMap of includeResources
 	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 	resourceObjects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
 	if err != nil {
-		log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
+		log.ApplicationRestoreLog(restore).Errorf("error downloading resources for VirtualMachine specific restore: %v", err)
 		return nil, err
 	}
 	// get VM to vm resources map
@@ -2201,7 +2204,7 @@ func (a *ApplicationRestoreController) filterOrphanedResourcesForVMRestore(resto
 			if _, present := objectInfoMap[includeResource]; !present {
 				// resources is present in backup resources but is no backed by
 				// any VM in includeResources. This is orphaned resource. Hence,
-				// filter th resource.
+				// filter the resource.
 				continue
 			}
 		}

@@ -32,7 +32,7 @@ type ApplicationRestoreSpec struct {
 	IncludeResources             []ObjectInfo                        `json:"includeResources"`
 	StorageClassMapping          map[string]string                   `json:"storageClassMapping"`
 	RancherProjectMapping        map[string]string                   `json:"rancherProjectMapping"`
-	// BackupObjectType specifies if its vm specific backup Object for rstore.
+	// BackupObjectType specifies if its vm specific backup Object for restore.
 	BackupObjectType string `json:"backupObjectType"`
 }
 
