@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	// PxBackupObjectType_virtualMachine px-backuo ObjectType virtualMachine
+	// PxBackupObjectType_virtualMachine px-backup ObjectType virtualMachine
 	PxBackupObjectType_virtualMachine = "VirtualMachine"
 	//VMPodSelectorLabel is the kubvirt label key for virt-launcher pod of the VM
 	VMPodSelectorLabel = "vm.kubevirt.io/name"
