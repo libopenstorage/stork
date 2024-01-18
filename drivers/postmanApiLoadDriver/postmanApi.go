@@ -10,6 +10,7 @@ import (
 
 const (
 	defaultCollectionPath = "../drivers/postmanApiLoadDriver/collections/collection.json"
+	defaultResultsPath    = "../drivers/postmanApiLoadDriver/newmanResults/"
 	PxDataServices        = "pds"
 )
 
@@ -17,6 +18,7 @@ const (
 type PostmanDriver struct {
 	ResultsFileName string
 	ResultType      string
+	Namespace       string
 	Iteration       string
 	Kubeconfig      string
 }
@@ -26,11 +28,11 @@ func GetProjectNameToExecutePostman(projectName string, driver *PostmanDriver) e
 	if projectName == PxDataServices {
 		_, err := ExecutePostmanCommandInTorpedoForPDS(driver)
 		if err != nil {
-			return err
+			return fmt.Errorf("postman execution failed.. [%v] Please check the logs manually", err)
 		}
 	}
-	//ToDo: Add cases for other PX Projects
 	return nil
+	//ToDo: Add cases for other PX Projects
 }
 
 // GetPostmanCollectionPath to check if collection is present in the folder
@@ -56,12 +58,14 @@ func ExecuteCommandInShell(command string) (string, string, error) {
 func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, error) {
 	collectionPath, err := GetPostmanCollectionPath()
 	if err != nil {
-		return false, fmt.Errorf("postman collection json not found- [%v], Please create a Collection json manually and export to defaultCollectionPath folder", err)
+		return false, fmt.Errorf("postman Collection Json not found [%v], Please create a Collection json manually and export to [%v] folder", err, defaultCollectionPath)
 	}
 	log.InfoD("Postman Collection found is- %v", collectionPath)
 
 	iterations := postmanParams.Iteration
-	newmanCmd := "newman run " + collectionPath + " -n " + iterations + " --verbose"
+	resultsPath, err := filepath.Abs(defaultResultsPath)
+	resultsFilePath := resultsPath + "/" + postmanParams.ResultsFileName
+	newmanCmd := "newman run " + collectionPath + " -n " + iterations + " --verbose" + " -r " + postmanParams.ResultType + " --reporter-json-export " + resultsFilePath
 	log.InfoD("Newman command formed is- [%v]", newmanCmd)
 	output, res, err := ExecuteCommandInShell(newmanCmd)
 	if err != nil {
@@ -69,7 +73,8 @@ func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, e
 	}
 	log.InfoD("output from the newman execution is- %v", res)
 	if strings.Contains(output, "failure") {
-		return false, fmt.Errorf("newman exited with a failure.. [%v], Please check logs for more details", err)
+		return false, fmt.Errorf("newman exited with a failure..[%v] Please check logs for more details", err)
 	}
+	log.InfoD("Postman execution is completed and the results are exported to filepath - [%v]", resultsFilePath)
 	return true, nil
 }
