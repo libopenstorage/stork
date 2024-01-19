@@ -358,7 +358,7 @@ func getCluterInfo() string {
 	t := func() (interface{}, bool, error) {
 		nodeList, err := k8sCore.GetNodes()
 		if err != nil {
-			return "", true, fmt.Errorf("failed to get nodes. cause: %v", err)
+			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
 		}
 		if len(nodeList.Items) > 0 {
 			firstNodeInfo := nodeList.Items[0].Status.NodeInfo
@@ -370,7 +370,7 @@ func getCluterInfo() string {
 		return "", false, nil
 	}
 	if output, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
-		log.Errorf("Failed to get cluster info %v", err)
+		log.Errorf("Failed to get cluster info, Err: %v", err)
 		return ""
 	}
 	return output.(string)
@@ -384,7 +384,7 @@ func getClientVersion() (string, error) {
 		var output []byte
 		cmd := "oc version --client -o json|jq -r .releaseClientVersion"
 		if output, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
-			return "", true, fmt.Errorf("failed to get client version. cause: %v", err)
+			return "", true, fmt.Errorf("failed to get client version, Err: %v", err)
 		}
 		clientVersion := strings.TrimSpace(string(output))
 		clientVersion = strings.Trim(clientVersion, "\"")
@@ -406,7 +406,7 @@ func getGenerationNumber() (int, error) {
 	}
 	genNumInt, err = strconv.Atoi(beforeGenNum)
 	if err != nil {
-		return 0, fmt.Errorf("Failed to convert generator number from string to int : cause: %v", err)
+		return 0, fmt.Errorf("Failed to convert generator number from string to int, Err: %v", err)
 	}
 	return genNumInt, nil
 }
@@ -417,12 +417,12 @@ func waitForNewGenertionNumber(currentGenNumber int) error {
 	t := func() (interface{}, bool, error) {
 		newGenNumInt, err := getGenerationNumber()
 		if err != nil {
-			return nil, true, fmt.Errorf("Failed to convert generator number from string to int : cause: %v", err)
+			return nil, true, fmt.Errorf("Failed to convert generator number from string to int, Err: %v", err)
 		}
 		if newGenNumInt == currentGenNumber {
-			return nil, false, fmt.Errorf("Generation number has not changed yet: %d", currentGenNumber)
+			return nil, false, fmt.Errorf("Generation number has not changed yet: New [%d], Current [%d]", newGenNumInt, currentGenNumber)
 		}
-		log.Debugf("Set channel spec has been updated: Generation number %d", newGenNumInt)
+		log.Debugf("Set channel spec has been updated: Generation number [%d]", newGenNumInt)
 		return nil, true, nil
 	}
 	_, err = task.DoRetryWithTimeout(t, generationNumberWaitTime, 5*time.Second)
@@ -438,10 +438,10 @@ func selectChannel(version string) error {
 	}
 	beforeGenNumInt, err := getGenerationNumber()
 	if err != nil {
-		return fmt.Errorf("Failed to convert generator number from string to int : cause: %v", err)
+		return fmt.Errorf("Failed to convert generator number from string to int, Err: %v", err)
 	}
-	log.Infof("Generation number before select channel: %d ", beforeGenNumInt)
-	log.Infof("Selected channel: %s", channel)
+	log.Infof("Generation number before selecting channel [%d]", beforeGenNumInt)
+	log.Infof("Selecting channel [%s]..", channel)
 	patch := `
 spec:
   channel: %s
@@ -449,11 +449,11 @@ spec:
 	t := func() (interface{}, bool, error) {
 		args := []string{"patch", "clusterversion", "version", "--type=merge", "--patch", fmt.Sprintf(patch, channel)}
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-			return nil, true, fmt.Errorf("failed to select channel due to %s. cause: %v", string(output), err)
+			return nil, true, fmt.Errorf("Failed to select channel [%s], Err: %v %v", channel, string(output), err)
 		}
 		log.Info(output)
 		if err := waitForNewGenertionNumber(beforeGenNumInt); err != nil {
-			return nil, true, fmt.Errorf("Failed to select channel: cause %v", err)
+			return nil, true, fmt.Errorf("Failed to select channel [%s], Err: %v", channel, err)
 		}
 		return nil, false, nil
 	}
@@ -461,7 +461,7 @@ spec:
 	return err
 }
 
-// getImageSha get Image sha
+// getImageSha gets image sha which will be used to install/upgrade OCP
 func getImageSha(ocpVersion string) (string, error) {
 	downloadURL := fmt.Sprintf("%s/%s/%s", OpenshiftMirror,
 		ocpVersion, releaseFileName)
@@ -472,12 +472,12 @@ func getImageSha(ocpVersion string) (string, error) {
 		Body:     nil,
 		Insecure: true,
 	}
-	log.Debugf("URL %s", downloadURL)
+	log.Debugf("Getting image sha for OCP [%s] from URL [%s]", ocpVersion, downloadURL)
 	content, err := netutil.DoRequest(request)
 	if err != nil {
-		return "", fmt.Errorf("Failed to get Get content from %s, error %v", downloadURL, err)
+		return "", fmt.Errorf("Failed to get Get content from [%s], Err: %v", downloadURL, err)
 	}
-	//Convert the body to type string
+	// Convert the body to type string
 	contentInString := string(content)
 	parts := strings.Split(contentInString, "\n")
 	for _, a := range parts {
@@ -485,7 +485,7 @@ func getImageSha(ocpVersion string) (string, error) {
 			return strings.TrimSpace(strings.Split(a, ": ")[1]), nil
 		}
 	}
-	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
+	return "", fmt.Errorf("Failed to find image sha from [%s]", downloadURL)
 }
 
 func startUpgrade(upgradeVersion string) error {
@@ -647,57 +647,55 @@ func getChannel(version string) (string, error) {
 	return channels[channel], err
 }
 
+// downloadOCP4Client Constructs URL, dowloads and prepares OC CLI to be used based on OCP version given
 func downloadOCP4Client(ocpVersion string) error {
-	var clientName = ""
-	var downloadURL = ""
-	var output []byte
+	var clientName string
+	var downloadURL string
+	ocBinaryDir := "/usr/local/bin"
 
 	if ocpVersion == "" {
 		ocpVersion = "latest"
 	}
 
-	log.Info("Downloading OCP 4.X client. May take some time...")
+	log.Infof("Downloading OCP [%s] client. May take some time...", ocpVersion)
 	if versionReg.MatchString(ocpVersion) {
-		downloadURL = fmt.Sprintf("%s/%s/openshift-client-linux.tar.gz", OpenshiftMirror,
-			ocpVersion)
+		downloadURL = fmt.Sprintf("%s/%s/openshift-client-linux.tar.gz", OpenshiftMirror, ocpVersion)
 		clientName = "openshift-client-linux.tar.gz"
 	} else {
-		downloadURL = fmt.Sprintf("%s/%s/openshift-client-linux-%s.tar.gz", OpenshiftMirror,
-			ocpVersion, ocpVersion)
+		downloadURL = fmt.Sprintf("%s/%s/openshift-client-linux-%s.tar.gz", OpenshiftMirror, ocpVersion, ocpVersion)
 		clientName = fmt.Sprintf("openshift-client-linux-%s.tar.gz", ocpVersion)
 	}
+	if clientName == "" && downloadURL == "" {
+		return fmt.Errorf("Failed to construct URL [%s] and/or client package name [%s] for OCP [%s]", downloadURL, clientName, ocpVersion)
+	}
 
+	log.Infof("Downloading OCP [%s] client from URL [%s] to [%s]", ocpVersion, downloadURL, clientName)
 	stdout, err := exec.Command("curl", "-o", clientName, downloadURL).CombinedOutput()
 	if err != nil {
-		log.Errorf("Error while downloading OpenShift 4.X client from %s, error %v", downloadURL, err)
-		log.Error(string(stdout))
-		return err
+		return fmt.Errorf("Error while downloading OpenShift [%s] client from [%s], Err %v %v", clientName, downloadURL, stdout, err)
 	}
+	log.Infof("Openshift [%s] client downloaded successfully downloaded from [%s] and saved as [%s]", ocpVersion, downloadURL, clientName)
 
-	log.Infof("Openshift client %s downloaded successfully.", clientName)
-
+	log.Debugf("Executing [tar -xvf %s]", clientName)
 	stdout, err = exec.Command("tar", "-xvf", clientName).CombinedOutput()
 	if err != nil {
-		log.Errorf("Error extracting %s, error %v", clientName, err)
-		log.Error(string(stdout))
-		return err
+		return fmt.Errorf("Failed extracting [%s], Err: %v %v", clientName, err, string(stdout))
 	}
+	log.Infof("Successfully extracted [%s]", clientName)
 
-	log.Infof("Extracted %s successfully.", clientName)
-
-	stdout, err = exec.Command("cp", "./oc", "/usr/local/bin").CombinedOutput()
+	log.Debugf("Executing [cp ./oc %s]", ocBinaryDir)
+	stdout, err = exec.Command("cp", "./oc", ocBinaryDir).CombinedOutput()
 	if err != nil {
-		log.Errorf("Error copying %s, error %v", clientName, err)
-		log.Error(string(stdout))
-		return err
+		return fmt.Errorf("Failed to copy oc binary to [%s], Err %v %v", ocBinaryDir, err, string(stdout))
 	}
+	log.Infof("Successfully move oc binary to [%s]", ocBinaryDir)
 
-	if output, err = exec.Command("oc", "version").CombinedOutput(); err != nil {
-		log.Errorf("Error getting oc version, error %v", err)
-		log.Error(string(stdout))
-		return err
+	log.Debug("Executing [oc version]")
+	stdout, err = exec.Command("oc", "version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to get oc version, Err: %v %v", err, string(stdout))
 	}
-	log.Info(string(output))
+	log.Infof("Successfully got OCP version:\n%v\n", string(stdout))
 	return nil
 }
 
@@ -764,20 +762,24 @@ func ackAPIRemoval(version string) error {
 	if err != nil {
 		return err
 	}
-	// this issue happens on OCP 4.9, 4.12 and 4.13
+	// this issue happens on OCP 4.9, 4.12, 4.13 and 4.14
 	parsedVersion49, _ := semver.Parse("4.9.0")
 	parsedVersion412, _ := semver.Parse("4.12.0")
 	parsedVersion413, _ := semver.Parse("4.13.0")
+	parsedVersion414, _ := semver.Parse("4.14.0")
 	var patchData string
 	if parsedVersion.GTE(parsedVersion49) && parsedVersion.LT(parsedVersion412) {
 		patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
 	} else if parsedVersion.GTE(parsedVersion412) && parsedVersion.LT(parsedVersion413) {
 		patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
-	} else if parsedVersion.GTE(parsedVersion413) {
+	} else if parsedVersion.GTE(parsedVersion413) && parsedVersion.LT(parsedVersion414) {
 		patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
+	} else if parsedVersion.GTE(parsedVersion414) {
+		patchData = "{\"data\":{\"ack-4.13-kube-1.27-api-removals-in-4.14\":\"true\"}}"
 	} else {
 		return nil
 	}
+
 	t := func() (interface{}, bool, error) {
 		var output []byte
 		args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
