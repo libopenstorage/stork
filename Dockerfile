@@ -81,6 +81,9 @@ WORKDIR /go/src/github.com/portworx/torpedo
 # Install docker
 RUN apk add --update --no-cache docker
 
+# Install dependancy for OCP 4.14 CLI
+RUN apk --update add gcompat
+
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
