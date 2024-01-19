@@ -412,7 +412,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 			logrus.Infof("It is restore of  VirtualMachine  Backup Object type. Filtering resources not associated to any of the selected VirtualMachines")
 			includeObjects, err := a.filterOrphanedResourcesForVMRestore(restore)
 			if err != nil {
-				message := fmt.Sprintf("Error processing VirtualMachine restore : %v", err)
+				message := fmt.Sprintf("error processing VirtualMachine restore : %v", err)
 				log.ApplicationRestoreLog(restore).Errorf(message)
 				a.recorder.Event(restore,
 					v1.EventTypeWarning,
@@ -424,7 +424,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 				return nil
 			}
 			if len(includeObjects) != 0 {
-				restore.Spec.IncludeResources = includeObjects
+				restore.Spec.IncludeResources = append(restore.Spec.IncludeResources, includeObjects...)
 				restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
 				err = a.client.Update(context.TODO(), restore)
 				if err != nil {
@@ -2193,22 +2193,13 @@ func (a *ApplicationRestoreController) filterOrphanedResourcesForVMRestore(resto
 		log.ApplicationRestoreLog(restore).Errorf("error downloading resources for VirtualMachine specific restore: %v", err)
 		return nil, err
 	}
-	// get VM to vm resources map
-	objectInfoMap, err := resourcecollector.GetVMResourcesObjectMap(resourceObjects, objectMap)
+
+	includeResourceList, err := resourcecollector.GetVMResourcesFromResourceObject(resourceObjects, objectMap)
 	if err != nil {
 		return objectInfo, err
 	}
-
-	for _, includeResource := range restore.Spec.IncludeResources {
-		if includeResource.Kind != "VirtualMachine" {
-			if _, present := objectInfoMap[includeResource]; !present {
-				// resources is present in backup resources but is no backed by
-				// any VM in includeResources. This is orphaned resource. Hence,
-				// filter the resource.
-				continue
-			}
-		}
-		objectInfo = append(objectInfo, includeResource)
+	if len(includeResourceList) != 0 {
+		objectInfo = append(objectInfo, includeResourceList...)
 	}
 	return objectInfo, nil
 }

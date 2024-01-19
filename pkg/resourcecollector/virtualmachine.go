@@ -264,44 +264,23 @@ func (r *ResourceCollector) prepareVirtualMachineForCollection(
 	return nil
 }
 
-// getObjectInfoFromVM returns map with resource to VM mapping
-func getObjecInfoFromVM(
-	resourceNames []string, vm kubevirtv1.VirtualMachine,
-	objectKind string,
-	objectMap map[storkapi.ObjectInfo]kubevirtv1.VirtualMachine,
-) map[storkapi.ObjectInfo]kubevirtv1.VirtualMachine {
-
-	for _, resource := range resourceNames {
-		info := storkapi.ObjectInfo{
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   "core",
-				Version: "v1",
-				Kind:    objectKind,
-			},
-			Name:      resource,
-			Namespace: vm.Namespace,
-		}
-		objectMap[info] = vm
-	}
-	return objectMap
-}
-
-// GetVMResourcesObjectMap creates a map of VM resources to VM from backupObject
-func GetVMResourcesObjectMap(
-	objects []runtime.Unstructured,
+// GetVMResourcesFromResourceObject returns ObjectInfo array with resources for each of
+// the VirtualMachines specified in restore.Spec.IncludeResources
+func GetVMResourcesFromResourceObject(objects []runtime.Unstructured,
 	includeObjectMap map[storkapi.ObjectInfo]bool,
-) (map[storkapi.ObjectInfo]kubevirtv1.VirtualMachine, error) {
-	objectsMap := make(map[storkapi.ObjectInfo]kubevirtv1.VirtualMachine)
+) ([]storkapi.ObjectInfo, error) {
+
+	includeVMObjects := make([]storkapi.ObjectInfo, 0)
 	for _, o := range objects {
 		objectType, err := meta.TypeAccessor(o)
 		if err != nil {
-			return objectsMap, err
+			return includeVMObjects, err
 		}
 		if objectType.GetKind() == "VirtualMachine" {
 			var vm kubevirtv1.VirtualMachine
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &vm)
 			if err != nil {
-				return objectsMap, nil
+				return includeVMObjects, nil
 			}
 			vmInfo := storkapi.ObjectInfo{
 				GroupVersionKind: metav1.GroupVersionKind{
@@ -316,11 +295,58 @@ func GetVMResourcesObjectMap(
 			if !includeObjectMap[vmInfo] {
 				continue
 			}
-			objectsMap = getObjecInfoFromVM(GetVMPersistentVolumeClaims(vm), vm, "PersistentVolumeClaim", objectsMap)
-			objectsMap = getObjecInfoFromVM(GetVMConfigMaps(vm), vm, "ConfigMap", objectsMap)
-			objectsMap = getObjecInfoFromVM(GetVMSecrets(vm), vm, "Secret", objectsMap)
-
+			resourcesInfoList := GetObjectInfoFromVMResources(vm)
+			if len(resourcesInfoList) != 0 {
+				// ConfigMaps and Secrets may be referred by more than one VM
+				// try include only one entry per namespace.
+				for _, info := range resourcesInfoList {
+					if !includeObjectMap[info] {
+						includeObjectMap[info] = true
+						includeVMObjects = append(includeVMObjects, info)
+					}
+				}
+			}
 		}
 	}
-	return objectsMap, nil
+	return includeVMObjects, nil
+}
+
+// GetObjectInfoFromVMResources helper function to getch resources of given VirtualMachine
+func GetObjectInfoFromVMResources(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
+
+	vmResourceInfoList := make([]storkapi.ObjectInfo, 0)
+
+	// get PVCs of the VM
+	volumeObjectInfoList := getObjectInfo(GetVMPersistentVolumeClaims(vm), vm.Namespace, "PersistentVolumeClaim")
+	vmResourceInfoList = append(vmResourceInfoList, volumeObjectInfoList...)
+
+	// get configMaps of the VM
+	configMapObjectInfoList := getObjectInfo(GetVMConfigMaps(vm), vm.Namespace, "ConfigMap")
+	vmResourceInfoList = append(vmResourceInfoList, configMapObjectInfoList...)
+
+	// getSecret references of the VM
+	secretObjectInfoList := getObjectInfo(GetVMSecrets(vm), vm.Namespace, "Secret")
+	vmResourceInfoList = append(vmResourceInfoList, secretObjectInfoList...)
+
+	return vmResourceInfoList
+
+}
+
+// getObjectInfo helper function that returns ObjectInfo object from resourcesName and namespace
+func getObjectInfo(resourceNames []string, namespace string, objectKind string) []storkapi.ObjectInfo {
+	objectInfoList := make([]storkapi.ObjectInfo, 0)
+	for _, resource := range resourceNames {
+		info := storkapi.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "core",
+				Version: "v1",
+				Kind:    objectKind,
+			},
+			Name:      resource,
+			Namespace: namespace,
+		}
+		objectInfoList = append(objectInfoList, info)
+	}
+	return objectInfoList
+
 }
