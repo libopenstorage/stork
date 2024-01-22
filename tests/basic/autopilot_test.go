@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -2153,6 +2154,191 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 
 	return contexts
 }
+
+//This testsuite is designed to execute fundamental scenarios with Autopilot rules.
+//It involves scheduling applications and waiting until the
+//Autopilot ActiveActionsPendingToActiveActionsInProgress event is triggered.
+//After this event, two storage nodes, one with KVDB, are intentionally crashed,
+//and the test checks whether these nodes successfully recover.
+
+var _ = Describe("{AutoPoolExpandCrashTest}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sAutoPoolExpandCrashTest}", testSuiteName), "Crash one kvdb node and one storage node when multiple pools are expanded using autopilot", nil, 0)
+	})
+
+	It("has to crash one kvdb node and one storage node when multiple pools are expanded with add-disk , validate and teardown apps", func() {
+		var contexts []*scheduler.Context
+		testName := strings.ToLower(fmt.Sprintf("%sAutoPoolExpandCrashTest", testSuiteName))
+		poolLabel := map[string]string{"node-type": "fastpath", "autopilot": "adddisk"}
+		crashedNodes := make([]node.Node, 0)
+		storageNode := node.GetStorageNodes()[0]
+		crashedNodes = append(crashedNodes, storageNode)
+		log.InfoD("storage pool %s", storageNode.Name)
+
+		stepLog := "get kvdb node to crash and add label to the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNodes := node.GetNodesByVoDriverNodeID()
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+			for _, kvdbNode := range kvdbNodes {
+				appNode, ok := stNodes[kvdbNode.ID]
+				if !ok {
+					log.InfoD("node with id %s not found in the nodes list", kvdbNode.ID)
+					continue
+				}
+				if storageNode.Name == appNode.Name {
+					//kvdb shouldn't be same as storagenodes
+					continue
+				}
+				crashedNodes = append(crashedNodes, appNode)
+				break
+			}
+		})
+
+		//map which holds the initial sizes of the global pool
+		poolSizes := make(map[int]float64, 0)
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByAvailableCapacity(80, 10, aututils.RuleScaleTypeAddDisk),
+		}
+		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
+		log.FailOnError(err, "Failed to get cluster provision status")
+		var originalTotalSize float64 = 0
+		for _, pstatus := range provisionStatus {
+			originalTotalSize += pstatus.TotalSize
+		}
+		poolSizes[0] = originalTotalSize
+		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
+		log.FailOnError(err, "Failed to get cluster provision status")
+		originalTotalSize = 0
+		for _, pstatus := range provisionStatus {
+			originalTotalSize += pstatus.TotalSize
+		}
+		poolSizes[1] = originalTotalSize
+		log.InfoD("Pool size before pool expand:%v", originalTotalSize)
+
+		stepLog = "schedule apps with autopilot rules for pool expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range crashedNodes {
+				err = AddLabelsOnNode(node, poolLabel)
+				log.FailOnError(err, "Failed to add label on node:%v", node.Name)
+			}
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 50 * units.GiB})
+		})
+
+		stepLog = "Wait for Autopilot pool expansion, then crash a KVDB and Storage Node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Crash one kvdb node and one storage node where the application is provisioned
+			log.InfoD("Started listening for any autopilot event")
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
+			log.FailOnError(err, "Failed to listen for any autopilot events")
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			log.FailOnError(err, "Failed to listen for active-actions-pending to active-actions-in-progress event")
+			var wg sync.WaitGroup
+			for _, nodeToCrash := range crashedNodes {
+				wg.Add(1)
+
+				go func(nodeToCrash node.Node) {
+					defer GinkgoRecover()
+					defer wg.Done() // Decrement the WaitGroup counter when the task is done
+					stepLog := fmt.Sprintf("crash node: %s", nodeToCrash.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err := Inst().N.CrashNode(nodeToCrash, node.CrashNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						dash.VerifySafely(err, nil, "Validate node is crashed")
+					})
+
+					stepLog = fmt.Sprintf("wait for node: %s to be back up", nodeToCrash.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err := Inst().N.TestConnection(nodeToCrash, node.ConnectionOpts{
+							Timeout:         defaultTestConnectionTimeout,
+							TimeBeforeRetry: defaultWaitRebootRetry,
+						})
+						log.FailOnError(err, "Validate node is back up")
+					})
+
+					stepLog = fmt.Sprintf("wait for scheduler: %s and volume driver: %s to start",
+						Inst().S.String(), Inst().V.String())
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err := Inst().S.IsNodeReady(nodeToCrash)
+						log.FailOnError(err, "Validate node is ready")
+						err = Inst().V.WaitDriverUpOnNode(nodeToCrash, Inst().DriverStartTimeout)
+						log.FailOnError(err, "Validate volume driver is up")
+					})
+				}(nodeToCrash)
+			}
+			// Wait for all tasks to finish before proceeding
+			wg.Wait()
+
+			//calculate pool size from first node
+			provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
+			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[0])
+
+			var sizeAfterPoolExpand float64 = 0
+			for _, pstatus := range provisionStatus {
+				sizeAfterPoolExpand += pstatus.TotalSize
+			}
+			dash.VerifyFatal(sizeAfterPoolExpand > poolSizes[0], true, "Pool expand successfully verified on first node")
+			//calculate pool size from second node
+			provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
+			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[1].Name)
+
+			sizeAfterPoolExpand = 0
+			for _, pstatus := range provisionStatus {
+				sizeAfterPoolExpand += pstatus.TotalSize
+			}
+
+			dash.VerifyFatal(sizeAfterPoolExpand > poolSizes[1], true, "Pool expand successfully verified on second node")
+			log.InfoD("Pool expand successfully completed, size after pool expand:%v", sizeAfterPoolExpand)
+
+		})
+		stepLog = "wait until workload completes on volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				ValidateContext(ctx)
+			}
+		})
+		stepLog = "validating and verifying size of storage pools"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateStoragePools(contexts)
+		})
+		stepLog = "destroy apps"
+		Step(stepLog, func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range apRules {
+				err = Inst().S.DeleteAutopilotRule(apRule.Name)
+				log.FailOnError(err, "Failed to delete autopilot rule")
+				log.Infof("Deleted autopilot rule: %v", apRule.Name)
+			}
+			for key := range poolLabel {
+				for _, node := range crashedNodes {
+					err = Inst().S.RemoveLabelOnNode(node, key)
+					log.FailOnError(err, "Failed to remove label from node:%v", node.Name)
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
 
 func getTheSmallestPoolSize() uint64 {
 	// find the smallest pool and create a rule with size cap above that

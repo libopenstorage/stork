@@ -112,7 +112,7 @@ const (
 	defaultRetryInterval              = 10 * time.Second
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
-	maintenanceWaitTimeout            = 2 * time.Minute
+	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
 	validateDeleteVolumeTimeout       = 6 * time.Minute
