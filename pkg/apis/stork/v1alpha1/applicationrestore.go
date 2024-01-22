@@ -124,6 +124,8 @@ type ApplicationRestoreStageType string
 const (
 	// ApplicationRestoreStageInitial for when restore is created
 	ApplicationRestoreStageInitial ApplicationRestoreStageType = ""
+	// ApplicationRestoreStageIncludeResources for when includeResources for vm restore is processed
+	ApplicationRestoreStageIncludeResources ApplicationRestoreStageType = "IncludeResources"
 	// ApplicationRestoreStageVolumes for when volumes are being restored
 	ApplicationRestoreStageVolumes ApplicationRestoreStageType = "Volumes"
 	// ApplicationRestoreStageApplications for when applications are being
