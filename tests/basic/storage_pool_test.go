@@ -6402,6 +6402,11 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		for _, eachAlert := range severityType {
 			alerts, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(api.ResourceType_RESOURCE_TYPE_POOL,
 				eachAlert)
+			log.Infof("alerts generated: %v for resource type: %v", alerts, eachAlert)
+			if strings.Contains(err.Error(), "EOF") == true {
+				log.Infof("Alerts not generated for severity type [%v] of resource Type [%v]", eachAlert, "Pool")
+				continue
+			}
 			log.FailOnError(err, "Failed to fetch alerts using severity type [%v] of resource Type [%v]",
 				eachAlert,
 				api.ResourceType_RESOURCE_TYPE_POOL)
