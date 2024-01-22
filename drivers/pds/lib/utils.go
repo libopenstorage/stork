@@ -2993,7 +2993,7 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 		expectedSizeWithJournal = expectedSizeWithJournal - 3
 	}
 	log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
-	err = tests.Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+	err = tests.Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 	resizeErr := WaitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 	if resizeErr != nil {
 		log.FailOnError(resizeErr, fmt.Sprintf("Failed to resize pool with ID-  %s", poolIDToResize))

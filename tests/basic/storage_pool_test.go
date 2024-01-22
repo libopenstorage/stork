@@ -582,6 +582,10 @@ func nodePoolsExpansion(testName string) {
 		stepLog = fmt.Sprintf("Calculate expected pool size and trigger pool resize for %s", nodePoolToExpanded.Name)
 		Step(stepLog, func() {
 
+			if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+				enterPoolMaintenanceAddDisk(poolsToBeResized[0].Uuid)
+			}
+
 			for _, poolToBeResized := range poolsToBeResized {
 				drvSize, err := getPoolDiskSize(poolToBeResized)
 				log.FailOnError(err, fmt.Sprintf("error getting drive size for pool [%s]", poolToBeResized.Uuid))
@@ -594,11 +598,8 @@ func nodePoolsExpansion(testName string) {
 					expectedSizeWithJournal = expectedSizeWithJournal - 3
 				}
 				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-				if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
-					enterPoolMaintenanceAddDisk(poolToBeResized.Uuid)
-				}
 
-				err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize, false)
+				err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool %s expansion init succesful?", poolToBeResized.Uuid))
 				err = WaitForExpansionToStart(poolToBeResized.Uuid)
 				//this condition is skip error where drive is size is small and resize completes very fast
@@ -611,10 +612,9 @@ func nodePoolsExpansion(testName string) {
 					}
 				}
 				log.FailOnError(err, "pool expansion not started")
-				if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
-					exitPoolMaintenance(poolToBeResized.Uuid)
-				}
 			}
+
+			exitPoolMaintenance(poolsToBeResized[0].Uuid)
 
 			for poolUUID, expectedSize := range poolsExpectedSizeMap {
 				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
@@ -776,7 +776,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			enterPoolMaintenanceAddDisk(poolIDToResize)
-			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, false)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expandedExpectedPoolSize, true)
 			log.FailOnError(err, "failed to initiate pool expansion")
 		})
 
@@ -1729,7 +1729,7 @@ var _ = Describe("{PoolResizeDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -1743,7 +1743,7 @@ var _ = Describe("{PoolResizeDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 50 + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -1757,7 +1757,7 @@ var _ = Describe("{PoolResizeDiskDiff}", func() {
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 150 + drvSize
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -2391,7 +2391,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expansion triggered successfully on node %s", volSelected.Name, stNode.Name))
 		})
 
-		stepLog := "Initiate pool expansion using resize-disk"
+		stepLog := "Initiate pool expansion using add-disk"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
@@ -2404,7 +2404,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
 			enterPoolMaintenanceAddDisk(selectedPool.Uuid)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -2661,7 +2661,7 @@ var _ = Describe("{MulPoolsResize}", func() {
 				expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 				resizedPoolsMap[poolToBeResized.Uuid] = expectedSize
 				log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			}
 
@@ -2751,7 +2751,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 				log.FailOnError(err, "Failed to check if Journal enabled")
 
 				log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			}
 
@@ -2826,7 +2826,7 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, journalStatus)
@@ -2976,7 +2976,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, selectedNode.Name))
@@ -5089,7 +5089,7 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -5195,7 +5195,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool [%s] is [%d]", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -5452,7 +5452,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			if isjournal {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
-			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
@@ -10373,10 +10373,10 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 var _ = Describe("{PoolDeleteVariations}", func() {
 
 	/*
-		migrated from px-test: PoolDeleteVariations
- 		1. Verify pool deletion after creating 50 volumes
-		2. Verify pool deletion after creating 30 snaps
- 	*/
+				migrated from px-test: PoolDeleteVariations
+		 		1. Verify pool deletion after creating 50 volumes
+				2. Verify pool deletion after creating 30 snaps
+	*/
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteVariations", "Pool delete with variations", nil, 0)
@@ -10386,7 +10386,7 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 	BeforeEach(func() {
 		testNode = selectPoolDeletableNode(true)
 		dash.VerifyFatal(testNode != nil, true, "very if select test node ok")
-	  })
+	})
 	var contexts []*scheduler.Context
 
 	itLog := fmt.Sprintf("Verify pool delete variations")
@@ -10395,19 +10395,19 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 		numVolCreate := 50
 		stepLog := fmt.Sprintf("1. Verify pool deletion after creating %v volumes", numVolCreate)
 		Step(stepLog, func() {
-			deletablePools := make (map[string]string) // poolUUID to ID
+			deletablePools := make(map[string]string) // poolUUID to ID
 			for _, p := range testNode.Pools {
-				deletablePools[p.Uuid] = fmt.Sprintf("%v",p.GetID())
+				deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
 			}
 
 			log.InfoD("deletable pools %+v", deletablePools)
 
 			volumesCreated := []string{}
-			for i:=0; i< numVolCreate; i++{
+			for i := 0; i < numVolCreate; i++ {
 				uuidObj := uuid.New()
 				volName := fmt.Sprintf("volume_%s", uuidObj.String())
-				size := uint64(rand.Intn(5) + 1)   // Size of the Volume between 1G to 5G
-				ha := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+				size := uint64(rand.Intn(5) + 1) // Size of the Volume between 1G to 5G
+				ha := int64(rand.Intn(3) + 1)    // Size of the HA between 1 and 3
 
 				volId, err := Inst().V.CreateVolume(volName, size, int64(ha))
 				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", volName)
@@ -10419,7 +10419,7 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			for _, vol := range volumesCreated {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
-				replPools := appVol.ReplicaSets[0].PoolUuids 
+				replPools := appVol.ReplicaSets[0].PoolUuids
 				for _, p := range replPools {
 					if id, ok := deletablePools[p]; ok {
 						poolIDToDelete = id
@@ -10452,8 +10452,8 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 
 			deletePoolAndValidate(*testNode, poolIDToDelete)
 
-			// add a pool back	
-			err = AddCloudDrive(*testNode, -1) 
+			// add a pool back
+			err = AddCloudDrive(*testNode, -1)
 			log.FailOnError(err, "drive add failed")
 		})
 
@@ -10467,10 +10467,10 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			log.Infof("Deletable pools %+v", deletablePools)
 
 			volIDs := []string{}
-			for i:=0; i<numVols; i++ {
+			for i := 0; i < numVols; i++ {
 				uuidObj := uuid.New()
 				volName := fmt.Sprintf("volume_%s", uuidObj.String())
-				size := uint64(rand.Intn(5) + 1)   // Size of the Volume between 1G to 5G
+				size := uint64(rand.Intn(5) + 1) // Size of the Volume between 1G to 5G
 				ha := int64(3)
 				volID, err := Inst().V.CreateVolume(volName, size, int64(ha))
 				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", volName)
@@ -10479,7 +10479,7 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 
 			snapshotList := []string{}
 			for _, volID := range volIDs {
-				for i:=0; i< numVolSnaps; i++ {
+				for i := 0; i < numVolSnaps; i++ {
 					uuidCreated := uuid.New()
 					snapshotName := fmt.Sprintf("snapshot_%s_%s", volID, uuidCreated.String())
 					snapshotResponse, err := Inst().V.CreateSnapshot(volID, snapshotName)
@@ -10495,7 +10495,7 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			for _, vol := range snapshotList {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
-				replPools := appVol.ReplicaSets[0].PoolUuids 
+				replPools := appVol.ReplicaSets[0].PoolUuids
 				log.Infof("vol %+v, replPools %+v", vol, replPools)
 				for _, p := range replPools {
 					if id, ok := deletablePools[p]; ok {
@@ -10530,8 +10530,8 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 
 			deletePoolAndValidate(*testNode, poolIDToDelete)
 
-			// add a pool back	
-			err = AddCloudDrive(*testNode, -1) 
+			// add a pool back
+			err = AddCloudDrive(*testNode, -1)
 			log.FailOnError(err, "drive add failed")
 		})
 
@@ -10551,7 +10551,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 		2. restart
 		3. reboot
 		4. add a drive
- 	*/
+	*/
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteServiceDisruption", "Pool delete with service disruption", nil, 0)
@@ -10560,9 +10560,9 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 	var contexts []*scheduler.Context
 
 	itLog := "PoolDeleteServiceDisruption"
- 	It(itLog, func() {
+	It(itLog, func() {
 		testNode := selectPoolDeletableNode(true)
- 		poolIDToDelete := ""
+		poolIDToDelete := ""
 
 		drvMap, err := Inst().V.GetPoolDrives(testNode)
 		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
@@ -10588,7 +10588,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 
 		stepLog = "2. Verify restart pxc"
 		Step(stepLog, func() {
- 			log.InfoD(stepLog)
+			log.InfoD(stepLog)
 			err := Inst().V.RestartDriver(*testNode, nil)
 			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", testNode.Name))
 			err = Inst().V.WaitDriverUpOnNode(*testNode, 5*time.Minute)
@@ -10610,7 +10610,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 			log.InfoD(stepLog)
 			log.Info("Wait 1 min for stabling everything after reboot")
 			time.Sleep(time.Second * 60)
-			err = AddCloudDrive(*testNode, -1) 
+			err = AddCloudDrive(*testNode, -1)
 			log.FailOnError(err, "drive add failed")
 		})
 	})

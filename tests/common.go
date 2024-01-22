@@ -8112,7 +8112,10 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
 		return err
 	}
-	if err := ExitPoolMaintenance(stNode); err != nil {
+
+	err = ExitPoolMaintenance(stNode)
+
+	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
 		return err
 	}
 	return nil
@@ -9100,7 +9103,7 @@ outer:
 				}
 				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
 			}
-			_, mError = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			_, mError = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Minute)
 			if mError != nil {
 				return mError
 			}
@@ -10198,4 +10201,44 @@ func DeleteAllNamespacesCreatedByTestCase() error {
 		}
 	}
 	return nil
+}
+
+func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
+
+	t := func() (interface{}, bool, error) {
+		pxVol, err := Inst().V.InspectVolume(volName)
+		if err != nil {
+			log.Warnf("Failed to inspect volume [%s], Err: %v", volName, err)
+			return nil, false, err
+		}
+
+		for _, n := range node.GetStorageDriverNodes() {
+			ok, err := Inst().V.IsVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				return &n, false, err
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volName)
+	}
+
+	n, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != nil {
+		attachedNode := n.(*node.Node)
+		return attachedNode, nil
+	}
+
+	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
 }

@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
+	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,6 +157,32 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				var volName string
+				var attachedNode *node.Node
+				fioJobName := "upg_vol"
+				log.Infof(upgradeHop)
+
+				n := storageNodes[rand.Intn(numOfNodes)]
+
+				if Inst().N.IsUsingSSH() {
+
+					volName = fmt.Sprintf("vol-%s", time.Now().Format("01-02-15h04m05s"))
+					volId, err := Inst().V.CreateVolume(volName, 53687091200, 3)
+					log.FailOnError(err, "error creating vol-1")
+					log.Infof("created vol %s", volId)
+					out, err := Inst().V.AttachVolume(volId)
+					log.FailOnError(err, "error attaching vol-1")
+					log.Infof("attached vol %s", out)
+					attachedNode, err = GetNodeForGivenVolumeName(volName)
+
+					log.FailOnError(err, fmt.Sprintf("error getting  attached node fro volume %s", volName))
+
+					err = writeFIOData(volName, fioJobName, *attachedNode)
+					log.FailOnError(err, fmt.Sprintf("error running fio command on node %s", n.Name))
+				}
+
+				done := make(chan bool)
+				eg := errgroup.Group{}
 				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
 				if err != nil {
 					log.Warnf("error getting driver version, Err: %v", err)
@@ -160,6 +190,33 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				timeBeforeUpgrade = time.Now()
 				isDmthinBeforeUpgrade, errDmthinCheck := IsDMthin()
 				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin before upgrade? ")
+
+				//validating the apps during the PX upgrade
+				eg.Go(func() error {
+
+					var mError error
+					for {
+						select {
+						case <-done:
+							return nil
+						default:
+							for _, ctx := range contexts {
+								errorChan := make(chan error, len(contexts))
+								ValidateContext(ctx, &errorChan)
+								for err := range errorChan {
+									mError = multierr.Append(mError, err)
+								}
+							}
+
+							if mError != nil {
+								return mError
+							}
+							time.Sleep(30 * time.Second)
+						}
+					}
+
+				})
+
 				err = Inst().V.UpgradeDriver(upgradeHop)
 				timeAfterUpgrade = time.Now()
 				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
@@ -190,6 +247,17 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
 				statsData["status"] = upgradeStatus
 				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+				//end the apps validation loop
+				done <- true
+
+				if err = eg.Wait(); err != nil {
+					dash.VerifyFatal(err, nil, "validate apps status during upgrade")
+				}
+
+				if attachedNode != nil {
+					err = readFIOData(volName, fioJobName, *attachedNode)
+					log.FailOnError(err, fmt.Sprintf("error while reading fio data on node %s", attachedNode.Name))
+				}
 
 				// Validate Apps after volume driver upgrade
 				ValidateApplications(contexts)
@@ -211,6 +279,84 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func writeFIOData(volName, fioJobName string, n node.Node) error {
+	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	log.Infof("Running command %s on %s", creatDir, n.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(n, creatDir, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	mountCmd := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volName)
+	log.Infof("Running command %s on %s", mountCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, mountCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	writeCmd := fmt.Sprintf("fio --name=%s --ioengine=libaio --rw=write --bs=4k --numjobs=1 --size=5G --iodepth=256 --directory=%s --output=/tmp/vol_write.log --verify=meta --direct=1 --randrepeat=1 --verify_pattern=0xbeddacef --end_fsync=1", fioJobName, mountPath)
+
+	log.Infof("Running command %s on %s", writeCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, writeCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func readFIOData(volName, fioJobName string, n node.Node) error {
+	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	readCmd := fmt.Sprintf("fio --name=%s --ioengine=libaio --rw=read --bs=4k --numjobs=1 --size=5G --iodepth=256 --directory=%s --output=/tmp/vol_read.log --do_verify=1 --verify=meta --direct=1 --randrepeat=1 --verify_pattern=0xbeddacef --end_fsync=1", fioJobName, mountPath)
+
+	log.Infof("Running command %s on %s", readCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, readCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	validationCmd := "cat /tmp/vol_write.log | grep \"error\\|bad magic header\" | wc -l"
+	log.Infof("Running command %s on %s", validationCmd, n.Name)
+	out, err := Inst().N.RunCommandWithNoRetry(n, validationCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	out = strings.TrimSpace(out)
+	errCount, err := strconv.Atoi(out)
+	if err != nil {
+		return err
+	}
+
+	if errCount > 0 {
+		return fmt.Errorf("error reading fio data after upgrade")
+	}
+
+	return nil
+
+}
 
 // UpgradeVolumeDriverFromCatalog test performs upgrade hops of volume driver based on a given list of upgradeEndpoints from marketplace
 var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
