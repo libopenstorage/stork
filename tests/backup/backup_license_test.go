@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
 
 // NodeCountForLicensing applies label portworx.io/nobackup=true on any worker node of application cluster and verifies that this worker node is not counted for licensing
@@ -145,6 +146,8 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		destinationClusterWorkerNodes []node.Node
 		totalNumberOfWorkerNodes      []node.Node
 		scheduledAppContexts          []*scheduler.Context
+		controlChannel                chan string
+		errorGroup                    *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	JustBeforeEach(func() {
@@ -180,7 +183,8 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		})
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications ")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating cloud account and backup location", func() {
 			log.InfoD("Creating cloud account and backup location")
@@ -290,8 +294,9 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		err := SetDestinationKubeConfig()
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+		err = SetDestinationKubeConfig()
 		dash.VerifySafely(err, nil, "Switching context to destination cluster")
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
 		for _, workerNode := range destinationClusterWorkerNodes {

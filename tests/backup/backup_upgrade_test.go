@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies Px Backup upgrade
@@ -52,6 +53,8 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		upgradeStorkImageStr string
 		clusterUid           string
 		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58023
 	labelSelectors := make(map[string]string)
@@ -80,7 +83,8 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 
 	It("StorkUpgradeWithBackup", func() {
 		Step("Validate deployed applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
@@ -209,7 +213,8 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		log.Infof("Deleting the deployed apps after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
@@ -247,6 +252,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		backupAfterUpgradeWithRuleNames    []string
 		restoreNames                       []string
 		mutex                              sync.Mutex
+		controlChannel                     chan string
+		errorGroup                         *errgroup.Group
 	)
 	updateBackupToContextMapping := func(backupName string, appContextsToBackup []*scheduler.Context) {
 		mutex.Lock()
@@ -306,7 +313,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			log.InfoD("Validating app namespaces in source cluster")
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
-			ValidateApplications(srcClusterContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(srcClusterContexts, ctx)
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
@@ -746,7 +754,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		ValidateAndDestroy(destClusterContexts, opts)
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
-		ValidateAndDestroy(srcClusterContexts, opts)
+		err = DestroyAppsWithData(srcClusterContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 	})
 })

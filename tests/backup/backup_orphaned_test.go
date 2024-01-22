@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
 
 // DeleteSameNameObjectsByMultipleUsersFromAdmin delete backups, backup schedules, restore and cluster objects created by multiple user with same name from the admin
@@ -39,6 +40,8 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 		numberOfBackups                                = 1
 		randomSuffix                                   = RandomString(4)
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -61,7 +64,8 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
 			log.InfoD(fmt.Sprintf("Creating %d users with %s role", numberOfUsers, infraAdminRole))
@@ -352,7 +356,8 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 		log.InfoD("Destroying the scheduled applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		cleanupUserObjects := func(user string) {
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user)
@@ -363,7 +368,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 			err = backup.DeleteUser(user)
 			log.FailOnError(err, "failed to delete user %s", user)
 		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
 		log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })
@@ -387,6 +392,8 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 		numberOfBackups                            = 1
 		invalidKubeconfig                          = "\"\""
 		infraAdminRole         backup.PxBackupRole = backup.InfrastructureOwner
+		controlChannel         chan string
+		errorGroup             *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -407,7 +414,8 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 	It("Deletes user backups and restores of the deleted and inactive cluster from the admin", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		for i := 0; i < 2; i++ {
 			Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
@@ -676,7 +684,8 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 		log.InfoD("Destroying the scheduled applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		cleanupUserObjects := func(user string) {
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user)
@@ -687,7 +696,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 			err = backup.DeleteUser(user)
 			log.FailOnError(err, "failed to delete user %s", user)
 		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
 		log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })
@@ -715,6 +724,8 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 		newAdmin                   string
 		adminGroup                                     = "px-admin-group"
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -735,7 +746,8 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 	It("Deletes backups, backup schedules, restore and cluster objects created by multiple user from the new admin", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
 			log.InfoD(fmt.Sprintf("Creating %d users with %s role", numberOfUsers, infraAdminRole))
@@ -1051,7 +1063,8 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 		log.InfoD("Destroying the scheduled applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		cleanupUserObjects := func(user string) {
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user)
@@ -1062,7 +1075,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 			err = backup.DeleteUser(user)
 			log.FailOnError(err, "failed to delete user %s", user)
 		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Sequential)
+		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Sequential)
 		log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })
@@ -1089,6 +1102,8 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
 		userSourceClusterUID       string
 		infraAdminUser             string
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -1111,7 +1126,8 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 	It("Delete failed and in-progress backups and restores of user from the admin", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create user with %s role", infraAdminRole), func() {
 			infraAdminUser = createUsers(1)[0]
@@ -1544,7 +1560,8 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
 		log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
 		for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap {
@@ -1574,6 +1591,8 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 		user1                  string
 		user2                  string
 		user3                  string
+		controlChannel         chan string
+		errorGroup             *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -1593,7 +1612,8 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 
 	It("Deletes backups shared by the user from the admin", func() {
 		Step("Validate applications", func() {
-			log.InfoD("Validating applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 			ValidateApplications(scheduledAppContexts)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", 3, infraAdminRole), func() {
@@ -1770,7 +1790,8 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 		log.InfoD("Destroying the scheduled applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user1] {
@@ -1813,6 +1834,8 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 		infraAdminUserNames            []string
 		mutex                          sync.Mutex
 		wg                             sync.WaitGroup
+		controlChannel                 chan string
+		errorGroup                     *errgroup.Group
 	)
 	bkpNamespaces = make([]string, 0)
 	userNames = make([]string, 0)
@@ -1867,7 +1890,8 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Generate and add labels to namespaces", func() {
@@ -2431,7 +2455,8 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.Infof("Deleting backup schedule policy")
 		schedulePolicyNames, err := backupDriver.GetAllSchedulePolicies(ctx, orgID)
 		for _, schedulePolicyName := range schedulePolicyNames {
@@ -2488,6 +2513,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 		userBackupSchedulesMap           = make(map[string][]string)
 		userRestoresMap                  = make(map[string][]string)
 		backupDriver                     = Inst().Backup
+		controlChannel                   chan string
+		errorGroup                       *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -2511,7 +2538,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generate and add labels to namespaces", func() {
 			log.InfoD("Generate and add labels to namespaces")
@@ -3007,7 +3035,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.Infof("Deleting backup schedule policy")
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{periodicSchedulePolicyName}))
@@ -3045,6 +3074,8 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 		backupLocationMap              = make(map[string]string)
 		providers                      = getProviders()
 		userBackupNames                = make([]string, 0)
+		controlChannel                 chan string
+		errorGroup                     *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -3068,7 +3099,8 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 	It("Updates Backups and Cluster of user from px-admin", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Create a non-admin user", func() {
@@ -3245,7 +3277,8 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.Infof("Deleting backup schedule policy")
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
@@ -3287,6 +3320,8 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 		userBackupsMapFromAdmin        = make(map[string][]string)
 		userBackupsMap                 = make(map[string][]string)
 		backupDriver                   = Inst().Backup
+		controlChannel                 chan string
+		errorGroup                     *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -3310,7 +3345,8 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 	It("Delete backups of non admin user from px-admin", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Create a non-admin users to create the backups and restore", func() {
@@ -3567,7 +3603,8 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		for _, nonAdminUserName := range userNames {
 			userBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUserName, commonPassword)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of fetching backup schedules of user "))
@@ -3591,7 +3628,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 		}
 		wg.Wait()
 		log.Infof("Deleting backup schedule policy")
-		err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching non admin ctx")

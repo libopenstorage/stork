@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node/ssh"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,16 +15,20 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 	appsV1 "k8s.io/api/apps/v1"
 )
 
 // This test restarts volume driver (PX) while backup is in progress
 var _ = Describe("{BackupRestartPX}", func() {
 	var (
-		appList = Inst().AppList
+		appList        = Inst().AppList
+		controlChannel chan string
+		errorGroup     *errgroup.Group
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -74,7 +77,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 	})
 	It("Restart PX when backup in progress", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -176,7 +180,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -190,7 +195,9 @@ var _ = Describe("{BackupRestartPX}", func() {
 // performing backup and restores.
 var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var (
-		appList = Inst().AppList
+		appList        = Inst().AppList
+		controlChannel chan string
+		errorGroup     *errgroup.Group
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -238,7 +245,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	})
 	It("Kill Stork when backup and restore in-progress", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -329,7 +337,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			}
 		})
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Restoring the backups application", func() {
 			for _, backupName := range backupNames {
@@ -357,7 +366,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			}
 		})
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 	})
 	JustAfterEach(func() {
@@ -367,7 +377,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		backupDriver := Inst().Backup
 		for _, backupName := range backupNames {
@@ -384,6 +395,10 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 
 // This test does restart the px-backup pod, Mongo pods during backup sharing
 var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
+	var (
+		controlChannel chan string
+		errorGroup     *errgroup.Group
+	)
 	numberOfUsers := 10
 	var scheduledAppContexts []*scheduler.Context
 	userContexts := make([]context.Context, 0)
@@ -421,7 +436,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	})
 	It("Restart backup pod during backup sharing", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -574,7 +590,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("Deleting the backups")
 
@@ -622,6 +639,8 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		destClusterStatus api.ClusterInfo_StatusInfo_Status
 		contexts          []*scheduler.Context
 		appContexts       []*scheduler.Context
+		controlChannel    chan string
+		errorGroup        *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -650,7 +669,8 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(contexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -788,7 +808,8 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		err = DestroyAppsWithData(contexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -1081,6 +1102,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		newBackupNames           []string
 		listOfStorageDriverNodes []node.Node
 		ctx                      context.Context
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "2"))
@@ -1305,7 +1328,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.Infof("Deleting the deployed applications on application cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.Infof("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster")
@@ -1334,6 +1358,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		ctx                  context.Context
 		backupDeployment     *appsV1.Deployment
 		originalReplicaCount int32
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1363,7 +1389,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1567,7 +1594,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
 			wg.Add(1)
@@ -1597,6 +1625,8 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
 		destClusterStatus    api.ClusterInfo_StatusInfo_Status
 		restoreNames         []string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1623,7 +1653,8 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding cloud account and backup location", func() {
 			log.InfoD("Adding cloud account and backup location")
@@ -1783,7 +1814,8 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting the remaining restores in case of failure")
 		adminRestores, err := GetAllRestoresAdmin()
 		for _, restoreName := range adminRestores {

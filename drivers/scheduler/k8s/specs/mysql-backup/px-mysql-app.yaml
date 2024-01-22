@@ -2,13 +2,20 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mysql
-  labels:
-    app: mysql
+  annotations:
+    startDataSupported: "true"
+    username: "root"
+    password: "password"
+    databaseName: "mysql"
+    port: "3306"
+    appType: "mysql"
 spec:
-  ports:
-    - port: 3306
+  type: NodePort
   selector:
     app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
 ---
 apiVersion: apps/v1
 kind: Deployment

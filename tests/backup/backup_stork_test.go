@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -48,6 +49,8 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		scheduleBackupNameBeforeUpdate        string
 		scheduleBackupNameAfterUpdate         string
 		scheduleAndBackup                     map[string]string
+		controlChannel                        chan string
+		errorGroup                            *errgroup.Group
 	)
 	JustBeforeEach(func() {
 		newAdminNamespace = StorkNamePrefix
@@ -79,7 +82,8 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 
 		Step("Validating deployed applications", func() {
 			log.InfoD("Validating deployed applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
@@ -364,7 +368,8 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.InfoD("Deleting deployed applications")
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting backups")
 		err = DeleteAllBackups(ctx, orgID)
 		log.FailOnError(err, "Unable to delete all backups")

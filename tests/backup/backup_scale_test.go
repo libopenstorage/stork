@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
 
 // MultipleBackupLocationWithSameEndpoint Create Backup and Restore for Multiple backup location added using same endpoint.
@@ -34,6 +35,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 		numberOfBackups               = 30
 		providers                     = getProviders()
 		timeBetweenConsecutiveBackups = 10 * time.Second
+		controlChannel                chan string
+		errorGroup                    *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -54,7 +57,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 
 	It("Create Backup and Restore for Multiple backup location added using same endpoint", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Creating a cloud credentials from px-admin"), func() {
 			log.InfoD(fmt.Sprintf("Creating a cloud credentials from px-admin"))
@@ -200,7 +204,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting the px-backup objects")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})

@@ -2093,6 +2093,19 @@ var (
 			"container":         {"", ""},
 		},
 		},
+		"mysql-backup": {"pre": {"pre_action_list": {"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"},
+			"background":        {"true"},
+			"runInSinglePod":    {"false"},
+			"pod_selector_list": {"app=mysql"},
+			"container":         {"", ""},
+		},
+			"post": {"post_action_list": {"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"},
+				"background":        {"false"},
+				"pod_selector_list": {"app=mysql"},
+				"runInSinglePod":    {"false"},
+				"container":         {"", ""},
+			},
+		},
 	}
 )
 

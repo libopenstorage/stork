@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies backup and restore of Kubevirt VMs in different states like Running, Stopped, Restarting
@@ -41,6 +42,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		restoreWithVMMixed         string
 		backupWithVMStopped        string
 		restoreWithVMStopped       string
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -76,7 +79,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -440,7 +444,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			}
 			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 		}
-		DestroyApps(restoredAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
@@ -472,6 +477,8 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		providers            []string
 		labelSelectors       map[string]string
 		namespaceMapping     map[string]string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -503,7 +510,8 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -630,7 +638,8 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()

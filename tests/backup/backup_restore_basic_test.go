@@ -26,6 +26,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -328,6 +329,8 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		preRuleUid           string
 		postRuleUid          string
 		appContextsToBackup  []*scheduler.Context
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -367,7 +370,9 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		providers := getProviders()
 
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			log.InfoD("Validating applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
@@ -512,7 +517,8 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.Infof(" Deleting deployed applications")
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validation failed for apps")
 	})
 })
 

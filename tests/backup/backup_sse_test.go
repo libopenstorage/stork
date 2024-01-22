@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -13,12 +17,10 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
-	"sync"
-	"time"
 )
 
 var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}", func() {
@@ -58,6 +60,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		customBuckets                        []string
 		randomStringLength                   = 10
 		backupsAfterSettingSseTrue           []string
+		controlChannel                       chan string
+		errorGroup                           *errgroup.Group
 	)
 	params := make(map[string]string)
 	k8sStorage := storage.Instance()
@@ -90,7 +94,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		for _, provider := range providers {
 			Step("Validate applications", func() {
 				log.InfoD("Validate applications")
-				ValidateApplications(scheduledAppContexts)
+				ctx, _ := backup.GetAdminCtxFromSecret()
+				controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 			})
 			Step("Register cluster for backup", func() {
 				log.InfoD(fmt.Sprintf("Creating source and destination cluster"))
@@ -507,7 +512,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		// Delete backup schedule policy

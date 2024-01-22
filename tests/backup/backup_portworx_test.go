@@ -2,9 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"golang.org/x/sync/errgroup"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
@@ -37,6 +39,8 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		restoreName          string
 		backupName           string
 		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 
 	var (
@@ -64,7 +68,8 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	It("Creating Backup Location with Encryption Keys", func() {
 
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -131,11 +136,18 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		opts := make(map[string]bool)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 	})
 })
 
 // Change replica while restoring backup through StorageClass Mapping.
 var _ = Describe("{ReplicaChangeWhileRestore}", func() {
+	var (
+		controlChannel chan string
+		errorGroup     *errgroup.Group
+	)
 	namespaceMapping := make(map[string]string)
 	storageClassMapping := make(map[string]string)
 	var scheduledAppContexts []*scheduler.Context
@@ -174,7 +186,8 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 
 	It("Change replica while restoring backup", func() {
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -280,7 +293,8 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
@@ -305,6 +319,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		restoreName          string
 		namespaceMapping     map[string]string
 		credName             string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -345,7 +361,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	It("Resize after the volume is restored from a backup", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -468,7 +485,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -495,6 +513,8 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		backupName           string
 		encryptionBucketName string
 		encryptedBackupName  string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 
 	providers := getProviders()
@@ -542,7 +562,8 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		backupLocationMap[BackupLocation1UID] = backupLocationNames[1]
 
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Register cluster for backup", func() {
@@ -634,6 +655,9 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx)
 		DeleteBucket(providers[0], encryptionBucketName)
+		opts := make(map[string]bool)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 	})
 
 })
@@ -663,6 +687,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		nextScheduleBackupName      string
 		volumeMounts                []string
 		podList                     []v1.Pod
+		controlChannel              chan string
+		errorGroup                  *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -706,7 +732,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	It("Schedule backup while resizing the volume", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")
@@ -923,7 +950,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })

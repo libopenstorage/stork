@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"time"
+
+	"strings"
+	"sync"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -10,9 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"strings"
-	"sync"
-	"time"
+	"golang.org/x/sync/errgroup"
 )
 
 // DeleteNfsExecutorPodWhileBackupAndRestoreInProgress deletes the nfs executor pod while backup and restore are in progress and validates their status
@@ -42,6 +45,8 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 		scheduledAppContexts     []*scheduler.Context
 		appContextsToBackup      []*scheduler.Context
 		schedulePolicyInfo       *api.SchedulePolicyInfo
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	scheduleBackup = "scheduleBackup"
@@ -69,7 +74,8 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 	It("To validate backup and restore status after deleting the respective nfs executor pod while in progress", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating NFS backup location", func() {
@@ -193,7 +199,8 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)

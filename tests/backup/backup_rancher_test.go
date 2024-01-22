@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -14,10 +16,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	_ "github.com/rancher/norman/clientbase"
 	_ "github.com/rancher/rancher/pkg/client/generated/management/v3"
+	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 // This testcase takes backup of single namespace and restore to namespace in same and different project
@@ -41,6 +43,8 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 		contexts                    []*scheduler.Context
 		appContexts                 []*scheduler.Context
 		scheduledAppContexts        []*scheduler.Context
+		controlChannel              chan string
+		errorGroup                  *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	projectLabel := make(map[string]string)
@@ -71,7 +75,8 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -248,7 +253,8 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		for _, ns := range restoreNamespacesAll {
 			err = DeleteAppNamespace(ns)
 			log.FailOnError(err, "Deletion of namespace %s failed", ns)
@@ -297,6 +303,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		contexts                 []*scheduler.Context
 		appContexts              []*scheduler.Context
 		scheduledAppContexts     []*scheduler.Context
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	projectNameMapping := make(map[string]string)
 	projectUIDMapping := make(map[string]string)
@@ -330,7 +338,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -481,7 +490,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		log.FailOnError(err, "Fetching px-central-admin ctx for source cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.Infof("Deleting restores created")
 		for _, restoreName := range restoreList {
 			err = DeleteRestore(restoreName, orgID, ctx)
@@ -524,6 +534,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		contexts                          []*scheduler.Context
 		appContexts                       []*scheduler.Context
 		scheduledAppContexts              []*scheduler.Context
+		controlChannel                    chan string
+		errorGroup                        *errgroup.Group
 	)
 	projectNamespaces := make(map[string][]string)
 	projectNameMapping := make(map[string]string)
@@ -564,7 +576,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -834,7 +847,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			}
 			restoredAppContextsInDestinationCluster = append(restoredAppContextsInDestinationCluster, restoredAppContext)
 		}
-		DestroyApps(restoredAppContextsInDestinationCluster, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.Infof("Deleting projects from destination cluster")
 		for i, project := range destProjectList {

@@ -26,6 +26,8 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -155,6 +157,7 @@ var (
 	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
 	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+	queryCountForValidation    = 10
 )
 
 type userRoleAccess struct {
@@ -279,6 +282,10 @@ var (
 	}
 )
 
+var (
+	dataAfterBackupSuffix = "-after-backup"
+)
+
 // Set default provider as aws
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
@@ -393,6 +400,51 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
+func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver, backupName string,
+	commandBeforeBackup map[appDriver.ApplicationDriver]map[string][]string) ([]appDriver.ApplicationDriver, map[appDriver.ApplicationDriver]map[string][]string, error) {
+
+	// afterBackup - Check if the data is being inserted before or after backup
+
+	// Getting app handlers for deployed apps in the namespace and inserting data to same
+	var err error
+	var allHandlers []appDriver.ApplicationDriver
+	var dataCommands = make(map[appDriver.ApplicationDriver]map[string][]string)
+
+	if len(existingAppHandler) == 0 {
+		for _, eachNamespace := range namespaces {
+			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
+				log.Infof("App with data support found under namespace - [%s]", eachNamespace)
+				for _, eachHandler := range handler {
+					log.Infof("Adding data to app in namespace  - [%s]", eachNamespace)
+					dataCommands[eachHandler] = eachHandler.GetRandomDataCommands(queryCountForValidation)
+					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands[eachHandler]["insert"])
+					if err != nil {
+						return nil, nil, err
+					}
+					allHandlers = append(allHandlers, eachHandler)
+				}
+			}
+		}
+	} else {
+
+		backupDriver := Inst().Backup
+		backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+
+		for _, eachHandler := range existingAppHandler {
+			log.Infof("Backup UUID while adding data - [%s]", backupUid)
+			eachHandler.AddDataCommands(backupUid, commandBeforeBackup[eachHandler])
+			restoreIdentifier := fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix)
+			eachHandler.UpdateDataCommands(queryCountForValidation, restoreIdentifier)
+			err = eachHandler.InsertBackupData(ctx, restoreIdentifier, []string{})
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	return allHandlers, dataCommands, nil
+}
+
 // CreateBackupWithValidation creates backup, checks for success, and validates the backup
 func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
@@ -402,10 +454,24 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+
+	// Insert data before backup which is expected to be present after restore
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	}
+
+	err = CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
+
+	// Insert data after backup which is expected NOT to be present after restore
+	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
+	}
+
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
@@ -1127,6 +1193,7 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 
 // CreateRestoreWithValidation creates restore, waits and checks for success and validates the backup
 func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
+	startTime := time.Now()
 	err := CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
 	if err != nil {
 		return err
@@ -1159,6 +1226,13 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 	}
 	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Namespace mapping from CreateRestoreWithValidation [%v]", namespaceMapping)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping, startTime)
+
 	return err
 }
 
@@ -2030,6 +2104,7 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		}
 		actual := resp.GetRestore().GetStatus().Status
 		reason := resp.GetRestore().GetStatus().Reason
+
 		for _, status := range statusesExpected {
 			if actual == status {
 				return "", false, nil
@@ -2086,6 +2161,177 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
 	return err
+}
+
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, appContext context.Context,
+	backupName string, namespaceMapping map[string]string, startTime time.Time) error {
+	var k8sCore = core.Instance()
+	var allBackupNamespaces []string
+	var dataBeforeBackup = make(map[string]map[string][][]string)
+	var dataAfterBackup = make(map[string]map[string][][]string)
+
+	var allRestoreHandlers []appDriver.ApplicationDriver
+	var allErrors []string
+
+	backupDriver := Inst().Backup
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	restoreInspectResponse, err := backupDriver.InspectRestore(appContext, restoreInspectRequest)
+	if err != nil {
+		return err
+	}
+
+	backupUid, err := backupDriver.GetBackupUID(appContext, backupName, orgID)
+
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	backupInspectResponse, _ := backupDriver.InspectBackup(appContext, backupInspectRequest)
+	theBackup := backupInspectResponse.GetBackup()
+	allBackupNamespaces = theBackup.Namespaces
+	theRestore := restoreInspectResponse.GetRestore()
+
+	log.Infof("Backup UUID - [%s]", backupUid)
+	// Fetching the Data commands from Source
+	for _, eachBackupNamespace := range allBackupNamespaces {
+		log.Infof("All Handler Namespaces - [%+v]", NamespaceAppWithDataMap)
+		for _, eachHandler := range NamespaceAppWithDataMap[eachBackupNamespace] {
+			beforeBackup := eachHandler.GetBackupData(backupUid)
+			afterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix))
+
+			if restoreNamespace, ok := namespaceMapping[eachBackupNamespace]; ok {
+				if beforeBackup != nil {
+					log.InfoD("Data inserted before backup added for validation")
+					if _, ok := dataBeforeBackup[restoreNamespace]; !ok {
+						dataBeforeBackup[restoreNamespace] = make(map[string][][]string)
+					}
+					dataBeforeBackup[restoreNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], beforeBackup)
+				}
+
+				if afterBackup != nil {
+					log.InfoD("Data inserted after backup added for validation")
+					if _, ok := dataAfterBackup[restoreNamespace]; !ok {
+						dataAfterBackup[restoreNamespace] = make(map[string][][]string)
+					}
+					dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], afterBackup)
+				}
+			} else {
+				if beforeBackup != nil {
+					log.InfoD("Data inserted before backup added for validation")
+					if _, ok := dataBeforeBackup[eachBackupNamespace]; !ok {
+						dataBeforeBackup[eachBackupNamespace] = make(map[string][][]string)
+					}
+					dataBeforeBackup[eachBackupNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], beforeBackup)
+				}
+
+				if afterBackup != nil {
+					log.InfoD("Data inserted after backup added for validation")
+					if _, ok := dataAfterBackup[eachBackupNamespace]; !ok {
+						dataAfterBackup[eachBackupNamespace] = make(map[string][][]string)
+					}
+					dataAfterBackup[eachBackupNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], afterBackup)
+				}
+			}
+		}
+	}
+
+	currentPodAge, err := getPodAge()
+	if err != nil {
+		return err
+	}
+
+	// Creating restore handlers
+	log.Infof("Creating all restore app handlers")
+	log.Infof("Namespace Mapping - [%+v]", namespaceMapping)
+	for _, ctx := range expectedRestoredAppContexts {
+
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		if err != nil {
+			allErrors = append(allErrors, err.Error())
+		}
+		if appInfo.StartDataSupport {
+			appHandler, _ := appDriver.GetApplicationDriver(
+				appInfo.AppType,
+				appInfo.Hostname,
+				appInfo.User,
+				appInfo.Password,
+				appInfo.Port,
+				appInfo.DBName,
+				appInfo.NodePort,
+				appInfo.Namespace)
+
+			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
+			if err != nil {
+				return err
+			}
+			for _, eachPod := range pods.Items {
+				// If the policy is set to retain and the pod is not modified we are skipping the data validation check
+				if currentPodAge[appInfo.Namespace][eachPod.ObjectMeta.GetGenerateName()].Before(startTime) {
+					log.Infof("Skipping %s from validation as the pod is not changed", eachPod.ObjectMeta.GetGenerateName())
+					log.Infof("Current Restore Policy - [%s]", theRestore.ReplacePolicy.String())
+					continue
+				} else {
+					log.Infof("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
+					allRestoreHandlers = append(allRestoreHandlers, appHandler)
+				}
+			}
+		}
+	}
+
+	// Verifying data on restored pods
+	for _, eachHandler := range allRestoreHandlers {
+		// TODO: This needs to be fixed later in case of multiple apps in one namsespace
+		if len(dataBeforeBackup) != 0 {
+			log.InfoD("Validating data inserted before backup")
+			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			if err != nil {
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
+			}
+		} else {
+			log.InfoD("Skipping data validation added before backup as no data was found")
+		}
+
+		if len(dataAfterBackup) != 0 {
+			log.InfoD("Validating data inserted after backup")
+			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			if err == nil {
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+			}
+		} else {
+			log.InfoD("Skipping data validation added after backup as no data was found")
+		}
+	}
+
+	if len(allErrors) != 0 {
+		return fmt.Errorf("Restore data validation failed - [%s]", strings.Join(allErrors, "\n"))
+	}
+
+	return nil
+}
+
+func verifyDataPresentInApp(appHandler appDriver.ApplicationDriver, dataExpected [][]string, appContext context.Context) error {
+	var isDataPresent = false
+	var allErrorMessage []string
+	for _, eachExpectedData := range dataExpected {
+		err := appHandler.CheckDataPresent(eachExpectedData, appContext)
+		if err == nil {
+			isDataPresent = true
+			break
+		} else {
+			allErrorMessage = append(allErrorMessage, err.Error())
+		}
+	}
+
+	if isDataPresent {
+		return nil
+	}
+
+	return fmt.Errorf("%s", strings.Join(allErrorMessage, "\n"))
+
 }
 
 // ValidateRestore validates a restore's spec's objects (resources) and volumes using expectedRestoredAppContexts (generated by transforming scheduledAppContexts using TransformAppContextWithMappings). This function must be called after switching to the context on which `expectedRestoredAppContexts` exists. Cluster level resources aren't validated.
@@ -2182,6 +2428,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 								if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
 									err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [Retained], with reason [%s], despite the replace policy being [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Reason, theRestore.ReplacePolicy)
 									errors = append(errors, err)
+									IsReplacePolicySetToDelete = true
 								}
 							} else {
 								err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [%s], with reason [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status, restoredObj.Status.Reason)
@@ -5811,11 +6058,11 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Is op based deployment %v", isOpBased)
+	log.InfoD("Is op based deployment %v", isOpBased)
 
 	if isOpBased {
 		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 		}
 		// Setting the new admin namespace
 		if namespace != "" {
@@ -5828,12 +6075,12 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 			return nil, err
 		}
 		if namespace != "" {
-			log.Infof("Configured admin namespace to %s", namespace)
+			log.InfoD("Configured admin namespace to %s", namespace)
 		} else {
-			log.Infof("Removed admin namespace") // Removing admin namespace is not supported - https://docs.portworx.com/portworx-backup-on-prem/configure/admin-namespace.html
+			log.InfoD("Removed admin namespace") // Removing admin namespace is not supported - https://docs.portworx.com/portworx-backup-on-prem/configure/admin-namespace.html
 		}
 	} else {
-		log.Infof("Updating stork deployment as it's pxe is not present")
+		log.InfoD("Updating stork deployment as it's pxe is not present")
 		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 		if err != nil {
 			return nil, err
@@ -5906,14 +6153,14 @@ func getCurrentAdminNamespace() (string, error) {
 			return "", err
 		}
 		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		} else {
 			adminNamespace, err := k8sutils.GetStorkPodNamespace()
 			if err != nil {
 				return "", err
 			}
-			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		}
 
@@ -5922,7 +6169,7 @@ func getCurrentAdminNamespace() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		log.Infof("Current admin namespace - [%s]", adminNamespace)
+		log.InfoD("Current admin namespace - [%s]", adminNamespace)
 		return adminNamespace, nil
 	}
 }
@@ -5950,7 +6197,7 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 		if err != nil {
 			return nil, true, err
 		}
-		log.InfoD("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
+		log.Infof("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
 
 		for _, eachCR := range allBackupCrs {
 			if strings.Contains(eachCR, backupName) {
@@ -5990,7 +6237,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 		if err != nil {
 			return nil, true, err
 		}
-		log.InfoD("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
+		log.Infof("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
 
 		for _, eachCR := range allRestoreCrs {
 			if strings.Contains(eachCR, restoreName) {
@@ -6481,11 +6728,10 @@ func validateCRCleanup(resourceInterface interface{},
 			return nil, true, err
 		}
 
-		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
-
+		log.Infof("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
 		for _, eachCR := range allCRs {
 			if strings.Contains(eachCR, resourceName) {
-				log.InfoD("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
+				log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
 				return nil, true, fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
 			}
 		}

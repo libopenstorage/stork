@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node/gke"
 
 	"github.com/portworx/torpedo/pkg/stats"
@@ -28,7 +29,6 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -41,6 +41,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -80,9 +81,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -189,6 +192,11 @@ var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
 	GlobalGkeSecretString  string
+)
+
+var (
+	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
+	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
 )
 
 type OwnershipAccessType int32
@@ -1904,6 +1912,57 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	})
 }
 
+// ValidateApplicationsStartData validates applications and start continous data injection to the same
+func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+
+	// Resetting the global map before starting the new App Validations
+	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+
+	log.InfoD("Validate applications")
+	for _, ctx := range contexts {
+		ValidateContext(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		if err != nil {
+			log.InfoD("Some error occurred - [%s]", err)
+		}
+		log.InfoD("App Info - [%+v]", appInfo)
+		if appContext == nil {
+			log.Warnf("App Context is not proper - [%v]", appContext)
+			continue
+		}
+		if appInfo.StartDataSupport {
+			appHandler, _ := appDriver.GetApplicationDriver(
+				appInfo.AppType,
+				appInfo.Hostname,
+				appInfo.User,
+				appInfo.Password,
+				appInfo.Port,
+				appInfo.DBName,
+				appInfo.NodePort,
+				appInfo.Namespace)
+			log.InfoD("App handler created for [%s]", appInfo.Hostname)
+			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
+		}
+	}
+
+	controlChannel := make(chan string)
+	errGroup := errgroup.Group{}
+
+	for _, allhandler := range NamespaceAppWithDataMap {
+		for _, handler := range allhandler {
+			currentHandler := handler
+			errGroup.Go(func() error {
+				err := currentHandler.StartData(controlChannel, appContext)
+				return err
+			})
+		}
+	}
+
+	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
+
+	return controlChannel, &errGroup
+}
+
 // StartVolDriverAndWait starts volume driver on given app nodes
 func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	defer func() {
@@ -2040,6 +2099,45 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// DestroyApps destroy applications with data validation
+func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
+
+	var allErrors string
+
+	log.InfoD("Validating apps data continuity")
+
+	// Stopping all data flow to apps
+
+	for _, appList := range NamespaceAppWithDataMap {
+		for range appList {
+			controlChannel <- "Stop"
+		}
+	}
+
+	if err := errGroup.Wait(); err != nil {
+		allErrors += err.Error()
+	}
+
+	close(controlChannel)
+
+	log.InfoD("Destroying apps")
+	for _, ctx := range contexts {
+		TearDownContext(ctx, opts)
+	}
+
+	if allErrors != "" {
+		if IsReplacePolicySetToDelete {
+			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+			return nil
+		} else {
+			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+		}
+	}
+
+	return nil
 }
 
 // AddLabelsOnNode adds labels on the node

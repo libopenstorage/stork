@@ -481,6 +481,9 @@ github.com/go-playground/universal-translator
 # github.com/go-playground/validator/v10 v10.14.0
 ## explicit; go 1.18
 github.com/go-playground/validator/v10
+# github.com/go-sql-driver/mysql v1.6.0
+## explicit; go 1.10
+github.com/go-sql-driver/mysql
 # github.com/gobwas/glob v0.2.3
 ## explicit
 github.com/gobwas/glob
