@@ -61,7 +61,7 @@ func runPxctlCommand(pxctlCmd string, n node.Node, cmdConnectionOpts *node.Conne
 
 func TelemetryEnabled(currNode node.Node) bool {
 	// This returns true if telemetry is enabled
-	output, err := runPxctlCommand("status | egrep ^Telemetry:", currNode, nil)
+	output, err := runPxctlCommand("status | grep -E ^Telemetry:", currNode, nil)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get status for node %v", currNode.Name)
 	log.Infof("node %s: %s", currNode.Name, output)
 	status, err := regexp.MatchString(`Telemetry:.*Healthy`, output)
