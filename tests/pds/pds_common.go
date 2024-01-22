@@ -99,6 +99,8 @@ const (
 	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
 	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
+	KillPdsAgentPodDuringAppScaleUp     = "kill-pds-agent-pod-during-app-scale-up"
+	RebootNodeDuringAppResourceUpdate   = "reboot-node-during-app-resource-update"
 	RestoreDSDuringPXPoolExpansion      = "restore-ds-during-px-pool-expansion"
 	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
 	StopPXDuringStorageResize           = "stop-px-during-storage-resize"

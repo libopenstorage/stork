@@ -201,6 +201,13 @@ var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
 
 				stepLog = "Scale up the DS with increased storage size and Repl factor as 2 "
 				Step(stepLog, func() {
+					failuretype := pdslib.TypeOfFailure{
+						Type: RebootNodeDuringAppResourceUpdate,
+						Method: func() error {
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment, 1)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
 					newTemplateName1 := "autoTemp-" + strconv.Itoa(rand.Int())
 					newCpuLimit, _ := strconv.Atoi(*resConfigModel.CpuLimit)
 					newCpuReq, _ := strconv.Atoi(*resConfigModel.CpuRequest)
@@ -275,6 +282,111 @@ var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
 					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
 					log.FailOnError(err, "Failed to delete custom templates")
 				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill PDS-Agent Pod during application is scaled up", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true)
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
+	})
+
+	It("Deploy Dataservices and Kill PDS Pod Agent while App scaleup", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var wlDeploymentsToBeCleaned []*v1.Deployment
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+
+		Step("Scale Up Data Services and Restart Portworx", func() {
+			for ds, deployment := range deployments {
+				failuretype := pdslib.TypeOfFailure{
+					Type: KillPdsAgentPodDuringAppScaleUp,
+					Method: func() error {
+						return pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+
+				log.InfoD("Scaling up DataService %v ", ds.Name)
+				dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting resource setting template")
+				dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
+				updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
+					dataServiceDefaultAppConfigID, deployment.GetImageId(),
+					int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
+				log.FailOnError(err, "Error while updating dataservices")
+
+				//wait for the scaled up data service and restart px
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
+				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
+
+				id := pdslib.GetDataServiceID(ds.Name)
+				dash.VerifyFatal(id != "", true, "Validating dataservice id")
+				log.Infof("Getting versionID  for Data service version %s and buildID for %s ", ds.Version, ds.Image)
+
+				_, _, dsVersionBuildMap, err := pdslib.GetVersionsImage(ds.Version, ds.Image, id)
+				log.FailOnError(err, "Error while fetching versions/image information")
+
+				//TODO: Rename the method ValidateDataServiceVolumes
+				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				ValidateDeployments(resourceTemp, storageOp, config, ds.ScaleReplicas, dsVersionBuildMap)
+				dash.VerifyFatal(ds.ScaleReplicas, config.Replicas, "Validating replicas after scaling up of dataservice")
+			}
+		})
+		Step("Running Workloads", func() {
+			for _, deployment := range deployments {
+				ckSum2, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+				log.FailOnError(err, "Error while Running workloads-%v", wlDep)
+				log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+			}
+		})
+		Step("Clean up workload deployments", func() {
+			for _, wlDep := range wlDeploymentsToBeCleaned {
+				err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+				log.FailOnError(err, "Failed while deleting the workload deployment")
 			}
 		})
 	})
