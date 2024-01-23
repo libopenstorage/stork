@@ -173,6 +173,7 @@ var _ = Describe("{Longevity}", func() {
 
 		Inst().IsHyperConverged = hyperConvergedTypeEnabled
 
+		enableNFSProxyValidation()
 		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
@@ -211,6 +212,34 @@ var _ = Describe("{Longevity}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func enableNFSProxyValidation() {
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) == 0 {
+		log.Errorf("no master nodes found")
+		return
+	}
+
+	masterNode := masterNodes[0]
+	err = SetupProxyServer(masterNode)
+	if err != nil {
+		log.Errorf("error setting up proxy server on master node %s, Err:%s", masterNode.Name, err.Error())
+		return
+	}
+
+	addresses := masterNode.Addresses
+	if len(addresses) == 0 {
+		log.Errorf("no addresses found for node [%s]", masterNode.Name)
+		return
+	}
+	err = CreateNFSProxyStorageClass("portworx-proxy-volume-volume", addresses[0], "/exports/testnfsexportdir")
+	if err != nil {
+		log.Errorf("error creating storage class for proxy volume, Err: %s", err.Error())
+		return
+	}
+	Inst().AppList = append(Inst().AppList, "nginx-proxy-deployment")
+
+}
 
 var _ = Describe("{UpgradeLongevity}", func() {
 	var (

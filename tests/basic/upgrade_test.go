@@ -193,7 +193,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 				//validating the apps during the PX upgrade
 				eg.Go(func() error {
-
+					defer GinkgoRecover()
 					var mError error
 					for {
 						select {
