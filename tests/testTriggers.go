@@ -3,6 +3,10 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"math"
 	"math/rand"
 	"os"
@@ -16,9 +20,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/stats"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -84,6 +85,10 @@ const (
 	MigrationIntervalField = "migrationinterval"
 	// MigrationsCountField is a field in configmap which stores no. of migrations to be run(optional)
 	MigrationsCountField = "migrationscount"
+	// UpgradeEndpoints is a field in the configmap that contains a comma-separated list of upgrade endpoints
+	UpgradeEndpoints = "upgradeEndpoints"
+	// BaseInterval is a field in the configmap that represents base interval in minutes
+	BaseInterval = "baseInterval"
 )
 
 const (
@@ -255,8 +260,40 @@ var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
-// TestExecutionCountMap holds the count of executions for each test
-var TestExecutionCountMap = make(map[string]int)
+// Counter is a thread-safe generic counter for keys of a comparable type
+type Counter[K comparable] struct {
+	sync.RWMutex
+	countMap map[K]int
+}
+
+// Increment increases the count for the specified key by 1
+func (c *Counter[K]) Increment(key K) {
+	c.Lock()
+	defer c.Unlock()
+	c.countMap[key]++
+}
+
+// GetCount retrieves the count for the specified key
+func (c *Counter[K]) GetCount(key K) int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.countMap[key]
+}
+
+// String returns a string representation of the count map
+func (c *Counter[K]) String() string {
+	c.RLock()
+	defer c.RUnlock()
+	return fmt.Sprintf("%v", c.countMap)
+}
+
+// NewCounter creates a new Counter instance
+func NewCounter[K comparable]() *Counter[K] {
+	return &Counter[K]{countMap: make(map[K]int)}
+}
+
+// TestExecutionCounter holds the count of executions for each test
+var TestExecutionCounter = NewCounter[string]()
 
 // emailRecords stores events for rendering
 // email template
@@ -266,6 +303,7 @@ type emailRecords struct {
 
 type emailData struct {
 	MasterIP     []string
+	DashboardURL string
 	NodeInfo     []nodeInfo
 	EmailRecords emailRecords
 	TriggersInfo []triggerInfo
@@ -1012,7 +1050,6 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	stepLog := "get volumes for all apps in test and increase replication factor"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		time.Sleep(10 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
@@ -3500,15 +3537,15 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 	return req, nil
 }
 
-// CollectEventRecords collects eventRecords from channel
+// CollectEventRecords collects eventRecords from a channel
 // and stores in buffer for future email notifications
 func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
 		actualEvent := strings.Split(eventRecord.Event.Type, "<br>")[0]
-		TestExecutionCountMap[actualEvent] += 1
-		log.Infof("TestExecutionCountMap: %v", TestExecutionCountMap)
+		TestExecutionCounter.Increment(actualEvent)
+		log.Infof("TestExecutionCountMap: %v", TestExecutionCounter.String())
 		eventRing = eventRing.Next()
 	}
 }
@@ -3528,6 +3565,7 @@ func TriggerEmailReporter() {
 		masterNodeList = append(masterNodeList, n.Addresses...)
 	}
 	emailData.MasterIP = masterNodeList
+	emailData.DashboardURL = fmt.Sprintf("%s/resultSet/testSetID/%s", aetosutil.AetosBaseURL, os.Getenv("DASH_UID"))
 
 	for _, n := range node.GetStorageDriverNodes() {
 		k8sNode, err := core.Instance().GetNodeByName(n.Name)
@@ -9491,6 +9529,7 @@ tbody tr:last-child {
 <hr/>
 <h3>SetUp Details</h3>
 <p><b>Master IP:</b> {{.MasterIP}}</p>
+<p><b>Dashboard URL:</b> {{.DashboardURL}}</p>
 <table id="pxtable" border=1 width: 50% >
 <tr>
    <td align="center"><h4>PX Node IP </h4></td>

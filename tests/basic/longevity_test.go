@@ -26,6 +26,10 @@ const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
+	podDestroyTimeout     = 5 * time.Minute
+	maximumChaosLevel     = 10
+	defaultChaosLevel     = 0
+	defaultBaseInterval   = 60 * time.Minute
 )
 
 var (
@@ -253,12 +257,13 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		wg                         sync.WaitGroup
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
 		upgradeExecutionThreshold int
+		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+		disruptiveTriggerWrapper func(fn TriggerFunction) TriggerFunction
 	)
 
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			RestartVolDriver:     TriggerRestartVolDriver,
 			CloudSnapShot:        TriggerCloudSnapShot,
 			HAIncrease:           TriggerHAIncrease,
 			PoolAddDisk:          TriggerPoolAddDisk,
@@ -269,21 +274,14 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
 			AddStorageNode:       TriggerAddOCPStorageNode,
 		}
-		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
-			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-				triggerLock.Lock()
-				defer triggerLock.Unlock()
-				fn(contexts, recordChan)
-			}
-		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
-			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			RebootNode:           TriggerRebootNodes,
+			RestartVolDriver:     TriggerRestartVolDriver,
+			CrashNode:            TriggerCrashNodes,
+			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
+			NodeDecommission:     TriggerNodeDecommission,
+			AppTasksDown:         TriggerAppTasksDown,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -305,9 +303,16 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
 		}
-		upgradeExecutionThreshold = 4 // default value
+		upgradeExecutionThreshold = 1 // default value
 		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
 			upgradeExecutionThreshold = val
+		}
+		disruptiveTriggerWrapper = func(fn TriggerFunction) TriggerFunction {
+			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+				triggerLock.Lock()
+				defer triggerLock.Unlock()
+				fn(contexts, recordChan)
+			}
 		}
 	})
 
@@ -352,7 +357,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			for triggerType, triggerFunc := range disruptiveTriggerFunctions {
 				log.InfoD("Registering disruptive trigger: [%v]", triggerType)
 				wg.Add(1)
-				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
+				go testTrigger(&wg, &contexts, triggerType, disruptiveTriggerWrapper(triggerFunc), &disruptiveTriggerLock, &triggerEventsChan)
 			}
 			log.InfoD("Finished registering disruptive test triggers")
 		})
@@ -374,54 +379,46 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					defer wg.Done()
 					start := time.Now().Local()
 					timeout := Inst().MinRunTimeMins * 60
-					upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 					currentEndpointIndex := 0
 					for {
+						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
-							log.Infof("All endpoints have been processed, exiting the trigger function for [%s]\n", triggerType)
-							break // break if all upgrade endpoints are processed
+							continue
 						}
-						testExecSum := 0 // total test execution count
 						minTestExecCount := math.MaxInt32
 						// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
 						for trigger := range triggerFunctions {
-							count := TestExecutionCountMap[trigger]
-							testExecSum += count
+							count := TestExecutionCounter.GetCount(trigger)
 							if count < minTestExecCount {
 								minTestExecCount = count
 							}
 						}
 						// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
 						for trigger := range disruptiveTriggerFunctions {
-							count := TestExecutionCountMap[trigger]
-							testExecSum += count
-							if count < minTestExecCount {
-								minTestExecCount = count
+							if ChaosMap[trigger] != 0 {
+								count := TestExecutionCounter.GetCount(trigger)
+								if count < minTestExecCount {
+									minTestExecCount = count
+								}
 							}
 						}
-						// Determining whether to trigger based on minimum execution count
-						shouldTrigger := minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold
-						// Proceeding with upgrade if testExecSum is much higher than expected
-						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*(upgradeExecutionThreshold+1) {
-							shouldTrigger = true
-							// Logging a warning as TestExecutionCountMap might not be accurate
-							log.Warnf("Triggering %s based on testExecSum %v. The tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
-						}
-						if shouldTrigger {
+						if minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold {
 							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
+							currentEndpointIndex++
 							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
 							disruptiveTriggerLock.Lock()
 							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+							log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
 							triggerFunc(&contexts, &triggerEventsChan)
 							log.Infof("Trigger Function completed for [%s]\n", triggerType)
 							disruptiveTriggerLock.Unlock()
 							log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
-							currentEndpointIndex++
+							Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
 						}
 						time.Sleep(controlLoopSleepTime)
 					}
@@ -644,6 +641,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
+	setUpgradeStorageDriverEndpointList(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -762,12 +760,29 @@ func setSendGridEmailAPIKey(configData *map[string]string) error {
 		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
 }
 
+func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
+	// Get upgrade endpoints from configMap
+	if upgradeEndpoints, ok := (*configData)[UpgradeEndpoints]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.", UpgradeEndpoints, testTriggersConfigMap, configMapNS)
+	} else if upgradeEndpoints != "" {
+		currentCount := len(strings.Split(Inst().UpgradeStorageDriverEndpointList, ","))
+		newCount := len(strings.Split(upgradeEndpoints, ","))
+		if Inst().UpgradeStorageDriverEndpointList == "" || newCount >= currentCount {
+			Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints
+		} else {
+			log.Warnf("upgradeEndpoints reduced from [%s] to [%s], removal not supported.", Inst().UpgradeStorageDriverEndpointList, upgradeEndpoints)
+		}
+		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
+	}
+	delete(*configData, UpgradeEndpoints)
+}
+
 func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
-			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
-				testTriggersConfigMap, configMapNS, err)
+			return fmt.Errorf("failed to get chaos levels for [%s] from configMap [%s] in [%s] namespace. Error: [%v]",
+				triggerType, testTriggersConfigMap, configMapNS, err)
 		}
 		ChaosMap[triggerType] = chaosLevelInt
 		if triggerType == BackupScheduleAll || triggerType == BackupScheduleScale {
@@ -863,6 +878,18 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	}
 
 	return topologyLabels, nil
+}
+
+// GetWaitTime returns the wait time based on the given chaos level and base interval of test trigger
+func GetWaitTime(chaosLevel int, baseInterval time.Duration) time.Duration {
+	switch {
+	case chaosLevel <= 0:
+		return 0
+	case chaosLevel < maximumChaosLevel:
+		return 3 * baseInterval * time.Duration(maximumChaosLevel-chaosLevel+1)
+	default:
+		return baseInterval
+	}
 }
 
 func populateIntervals() {
@@ -1936,16 +1963,16 @@ func populateIntervals() {
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
-	var chaosLevel int
-	var ok bool
-	chaosLevel, ok = ChaosMap[triggerType]
+	chaosLevel, ok := ChaosMap[triggerType]
 	if !ok {
-		chaosLevel = Inst().ChaosLevel
-		log.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
-			triggerType, Inst().ChaosLevel)
+		chaosLevel = defaultChaosLevel
 	}
-	if triggerInterval[triggerType][chaosLevel] != 0 {
-		return triggerInterval[triggerType][chaosLevel], true
+	if chaosLevel == 0 {
+		return 0, false
 	}
-	return triggerInterval[triggerType][chaosLevel], false
+	if baseInterval, ok := ChaosMap[BaseInterval]; ok {
+		return GetWaitTime(chaosLevel, time.Duration(baseInterval)*time.Minute), true
+	} else {
+		return GetWaitTime(chaosLevel, defaultBaseInterval), true
+	}
 }
