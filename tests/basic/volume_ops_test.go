@@ -3,6 +3,13 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
@@ -16,12 +23,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math"
-	"math/rand"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -300,6 +301,21 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist ?")
 				})
 				for _, v := range appVolumes {
+					if _, ok := v.Labels[k8s.PureDAVolumeLabel]; ok {
+						// This is a Pure Direct Access volume, which will not support repl updates.
+						// Ensure the command fails.
+						Step(fmt.Sprintf("ensure repl update fails on Pure Direct Access on app %s's volume: %v", ctx.App.Key, v), func() {
+							appNodes, err := Inst().S.GetNodesForApp(ctx)
+							log.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
+							dash.VerifyFatal(len(appNodes) > 0, true, "App nodes exist ?")
+
+							err = Inst().V.SetReplicationFactor(v, 3, []string{appNodes[0].VolDriverNodeID}, nil, true)
+							dash.VerifyFatal(err != nil, true, "Repl update failed (as expected) for Pure DA volumes?")
+							dash.VerifyFatal(strings.Contains(err.Error(), "not supported for Pure"), true, "Repl update error for Pure DA volumes contains proper string?")
+						})
+						continue
+					}
+
 					MaxRF := Inst().V.GetMaxReplicationFactor()
 					MinRF := Inst().V.GetMinReplicationFactor()
 					currReplicaSet := []string{}
