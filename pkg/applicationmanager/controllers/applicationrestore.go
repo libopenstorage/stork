@@ -408,6 +408,32 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	case storkapi.ApplicationRestoreStageInitial:
 		// Make sure the namespaces exist
 		fallthrough
+	case storkapi.ApplicationRestoreStageIncludeResources:
+		if restore.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine {
+			// The backuObjectType is VirtualMachine. We need to map resources such as PVC,
+			// configMap and secrets of VirtualMachines inlucded in restore and include only
+			// these resources for restore.
+			logrus.Infof("It is restore of  VirtualMachine  Backup Object type. Processing VirtualMachine resources for restore")
+			includeObjects, err := a.processVMResourcesForVMRestore(restore)
+			if err != nil {
+				message := fmt.Sprintf("error processing VirtualMachine restore : %v", err)
+				log.ApplicationRestoreLog(restore).Errorf(message)
+				a.recorder.Event(restore,
+					v1.EventTypeWarning,
+					string(storkapi.ApplicationRestoreStatusFailed),
+					message)
+				return nil
+			}
+			if len(includeObjects) != 0 {
+				restore.Spec.IncludeResources = append(restore.Spec.IncludeResources, includeObjects...)
+				restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
+				err = a.client.Update(context.TODO(), restore)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		fallthrough
 	case storkapi.ApplicationRestoreStageVolumes:
 		err := a.restoreVolumes(restore, updateCr)
 		if err != nil {
@@ -589,7 +615,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					continue
 				}
 			}
-
 			pvcCount++
 			isVolRestoreDone := false
 			for _, statusVolume := range restore.Status.Volumes {
@@ -2151,4 +2176,27 @@ func (a *ApplicationRestoreController) cleanupResources(restore *storkapi.Applic
 		}
 	}
 	return nil
+}
+
+// processVMResourcesForVMRestore maps VM resources such as  PVC, ConfigMap and Secrets with VirtualMachines in includeResourcs and populates
+// them to includeResource for VM Restore. Resources not associated to any VMs in includeResources will be skipped including them for restore.
+func (a *ApplicationRestoreController) processVMResourcesForVMRestore(restore *storkapi.ApplicationRestore) ([]storkapi.ObjectInfo, error) {
+
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("error getting backup spec for VirtualMachine specific restore: %v", err)
+	}
+	// get objectMap of includeResources
+	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
+	resourceObjects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("error downloading resources for VirtualMachine specific restore: %v", err)
+		return nil, err
+	}
+
+	includeResourceList, err := resourcecollector.GetVMResourcesFromResourceObject(resourceObjects, objectMap)
+	if err != nil {
+		return nil, err
+	}
+	return includeResourceList, nil
 }
