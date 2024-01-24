@@ -1,11 +1,159 @@
 package resourcecollector
 
 import (
+	"fmt"
 	"strings"
 
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
+
+const (
+	// PxBackupObjectType_virtualMachine px-backup ObjectType virtualMachine
+	PxBackupObjectType_virtualMachine = "VirtualMachine"
+	//VMPodSelectorLabel is the kubvirt label key for virt-launcher pod of the VM
+	VMPodSelectorLabel = "vm.kubevirt.io/name"
+	//VMFreezeCmd is the template for VM freeze command
+	VMFreezeCmd = "/usr/bin/virt-freezer --freeze --name %s --namespace %s"
+	//VMUnFreezeCmd is the template for VM unfreeze command
+	VMUnFreezeCmd = "/usr/bin/virt-freezer --unfreeze --name %s --namespace %s"
+)
+
+// IsVirtualMachineRunning returns true if virtualMachine is in running state
+func IsVirtualMachineRunning(vm kubevirtv1.VirtualMachine) bool {
+
+	return vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning
+}
+
+// GetVMDataVolumes returns DataVolumes used by the VM
+func GetVMDataVolumes(vm kubevirtv1.VirtualMachine) []string {
+
+	volList := vm.Spec.Template.Spec.Volumes
+	dvList := make([]string, 0)
+	for _, vol := range volList {
+		if vol.VolumeSource.DataVolume != nil {
+			dvList = append(dvList, vol.VolumeSource.DataVolume.Name)
+		}
+	}
+	return dvList
+}
+
+// GetVMPersistentVolumeClaims returns persistentVolumeClaim names used by the VMs
+func GetVMPersistentVolumeClaims(vm kubevirtv1.VirtualMachine) []string {
+
+	volList := vm.Spec.Template.Spec.Volumes
+	PVCList := make([]string, 0)
+	for _, vol := range volList {
+		if vol.VolumeSource.PersistentVolumeClaim != nil {
+			PVCList = append(PVCList, vol.VolumeSource.PersistentVolumeClaim.ClaimName)
+		}
+		// Add DataVolume name to the PVC list
+		if vol.VolumeSource.DataVolume != nil {
+			PVCList = append(PVCList, vol.VolumeSource.DataVolume.Name)
+		}
+	}
+	return PVCList
+}
+
+// GetVMSecrets returns references to secrets in all supported formats of VM configs
+func GetVMSecrets(vm kubevirtv1.VirtualMachine) []string {
+
+	volList := vm.Spec.Template.Spec.Volumes
+	secretList := make([]string, 0)
+	for _, vol := range volList {
+		// secret as VolumeType
+		if vol.VolumeSource.Secret != nil {
+			secretList = append(secretList, vol.Secret.SecretName)
+		}
+		// Secret reference as sysprep
+		if vol.VolumeSource.Sysprep != nil {
+			if vol.VolumeSource.Sysprep.Secret != nil {
+				secretList = append(secretList, vol.VolumeSource.Sysprep.Secret.Name)
+			}
+		}
+		if vol.VolumeSource.CloudInitNoCloud != nil {
+			cloudInitNoCloud := vol.VolumeSource.CloudInitNoCloud
+			// secret as NetworkDataSecretRef
+			if cloudInitNoCloud.NetworkDataSecretRef != nil {
+				secretList = append(secretList, cloudInitNoCloud.NetworkDataSecretRef.Name)
+			}
+			// secret as UserDataSecretRef
+			if cloudInitNoCloud.UserDataSecretRef != nil {
+				secretList = append(secretList, cloudInitNoCloud.UserDataSecretRef.Name)
+			}
+		}
+		if vol.VolumeSource.CloudInitConfigDrive != nil {
+			cloudInitConfigDrive := vol.VolumeSource.CloudInitConfigDrive
+			// Secret from configDrive for NetworkData
+			if cloudInitConfigDrive.NetworkDataSecretRef != nil {
+				secretList = append(secretList, cloudInitConfigDrive.NetworkDataSecretRef.Name)
+			}
+			// Secret from configDrive aka Ignition
+			if cloudInitConfigDrive.UserDataSecretRef != nil {
+				secretList = append(secretList, cloudInitConfigDrive.UserDataSecretRef.Name)
+			}
+
+		}
+	}
+	return secretList
+}
+
+// GetVMConfigMaps returns ConfigMaps referenced in the VirtualMachine.
+func GetVMConfigMaps(vm kubevirtv1.VirtualMachine) []string {
+
+	volList := vm.Spec.Template.Spec.Volumes
+	configMaps := make([]string, 0)
+	for _, vol := range volList {
+		// ConfigMap as volumeType
+		if vol.ConfigMap != nil {
+			configMaps = append(configMaps, vol.ConfigMap.Name)
+		}
+		// configMap reference in sysprep
+		if vol.VolumeSource.Sysprep != nil {
+			if vol.VolumeSource.Sysprep.ConfigMap != nil {
+				configMaps = append(configMaps, vol.VolumeSource.Sysprep.ConfigMap.Name)
+			}
+		}
+
+	}
+	return configMaps
+}
+
+// IsVMAgentConnected returns true if Running VM has qemu-guest-agent running in the guest OS
+func IsVMAgentConnected(vm kubevirtv1.VirtualMachine) bool {
+
+	if IsVirtualMachineRunning(vm) {
+		for _, cond := range vm.Status.Conditions {
+			if cond.Type == "AgentConnected" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GetVMFreezeRule returns freeze Rule action for given VM
+func GetVMFreezeRule(vm kubevirtv1.VirtualMachine) string {
+
+	return fmt.Sprintf(VMFreezeCmd, vm.GetName(), vm.GetNamespace())
+}
+
+// GetVMUnFreezeRule returns unfreeze Rule action for given VM
+func GetVMUnFreezeRule(vm kubevirtv1.VirtualMachine) string {
+
+	return fmt.Sprintf(VMUnFreezeCmd, vm.GetName(), vm.GetNamespace())
+}
+
+// GetVMPodLabel return podSelector label for the given VM
+func GetVMPodLabel(vm kubevirtv1.VirtualMachine) map[string]string {
+	return map[string]string{
+		VMPodSelectorLabel: vm.GetName(),
+	}
+}
 
 // Transform dataVolume: to persistentVolumeClaim:
 func transformDataVolume(input map[string]interface{}, name string) map[string]interface{} {
@@ -114,4 +262,91 @@ func (r *ResourceCollector) prepareVirtualMachineForCollection(
 	path = []string{"spec", "dataVolumeTemplates"}
 	unstructured.RemoveNestedField(content, path...)
 	return nil
+}
+
+// GetVMResourcesFromResourceObject returns ObjectInfo array with resources for each of
+// the VirtualMachines specified in restore.Spec.IncludeResources
+func GetVMResourcesFromResourceObject(objects []runtime.Unstructured,
+	includeObjectMap map[storkapi.ObjectInfo]bool,
+) ([]storkapi.ObjectInfo, error) {
+
+	includeVMObjects := make([]storkapi.ObjectInfo, 0)
+	for _, o := range objects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return includeVMObjects, err
+		}
+		if objectType.GetKind() == "VirtualMachine" {
+			var vm kubevirtv1.VirtualMachine
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &vm)
+			if err != nil {
+				return includeVMObjects, nil
+			}
+			vmInfo := storkapi.ObjectInfo{
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   "kubevirt.io",
+					Version: "v1",
+					Kind:    "VirtualMachine",
+				},
+				Name:      vm.Name,
+				Namespace: vm.Namespace,
+			}
+			// Skip the resource if vm is not included in the includeResource.
+			if !includeObjectMap[vmInfo] {
+				continue
+			}
+			resourcesInfoList := GetObjectInfoFromVMResources(vm)
+			if len(resourcesInfoList) != 0 {
+				// ConfigMaps and Secrets may be referred by more than one VM
+				// try include only one entry per namespace.
+				for _, info := range resourcesInfoList {
+					if !includeObjectMap[info] {
+						includeObjectMap[info] = true
+						includeVMObjects = append(includeVMObjects, info)
+					}
+				}
+			}
+		}
+	}
+	return includeVMObjects, nil
+}
+
+// GetObjectInfoFromVMResources helper function to getch resources of given VirtualMachine
+func GetObjectInfoFromVMResources(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
+
+	vmResourceInfoList := make([]storkapi.ObjectInfo, 0)
+
+	// get PVCs of the VM
+	volumeObjectInfoList := getObjectInfo(GetVMPersistentVolumeClaims(vm), vm.Namespace, "PersistentVolumeClaim")
+	vmResourceInfoList = append(vmResourceInfoList, volumeObjectInfoList...)
+
+	// get configMaps of the VM
+	configMapObjectInfoList := getObjectInfo(GetVMConfigMaps(vm), vm.Namespace, "ConfigMap")
+	vmResourceInfoList = append(vmResourceInfoList, configMapObjectInfoList...)
+
+	// getSecret references of the VM
+	secretObjectInfoList := getObjectInfo(GetVMSecrets(vm), vm.Namespace, "Secret")
+	vmResourceInfoList = append(vmResourceInfoList, secretObjectInfoList...)
+
+	return vmResourceInfoList
+
+}
+
+// getObjectInfo helper function that returns ObjectInfo object from resourcesName and namespace
+func getObjectInfo(resourceNames []string, namespace string, objectKind string) []storkapi.ObjectInfo {
+	objectInfoList := make([]storkapi.ObjectInfo, 0)
+	for _, resource := range resourceNames {
+		info := storkapi.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "core",
+				Version: "v1",
+				Kind:    objectKind,
+			},
+			Name:      resource,
+			Namespace: namespace,
+		}
+		objectInfoList = append(objectInfoList, info)
+	}
+	return objectInfoList
+
 }
