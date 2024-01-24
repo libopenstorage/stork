@@ -2780,7 +2780,7 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsproxytest-%d", i))...)
 			}
 
 			for _, ctx := range contexts {
@@ -2840,6 +2840,137 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{SharedVolFuseTest}", func() {
+	/*
+					https://portworx.atlassian.net/browse/PWX-35639
+				   https://portworx.atlassian.net/browse/PTX-21805
+
+
+
+			  		1.Get the list of storage nodes where sv4 service and sv4 volumes are attached
+					2.Stop/Start PX on each storage node filtered in step 1
+					3.Validate PX on the node
+			   		4.Repeat this in a loop for 10 iterations
+		            5. Validate the applications
+	*/
+	var testrailID = 12133434
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
+	var runID int
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("SharedVolFuseTest", "Validate PX operations after sharedv4 and sharedv4 svc volumes  failover multiple times", nil, 0)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("schedule sharedv4 and sharedv4_svc volumes and perform failover of the coordinator node", func() {
+
+		appList := make([]string, 0)
+		stepLog = "create sharedv4 and sharedv4_svc apps "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, appName := range Inst().AppList {
+
+				if strings.Contains(appName, "shared") || strings.Contains(appName, "svc") {
+					appList = append(appList, appName)
+				}
+			}
+
+			if len(appList) == 0 {
+				log.FailOnError(fmt.Errorf("sharedv4 or sharedv4 svc apps are mandatory for the test"), "no sharedv4 or sharedv4 svc apps found to deploy")
+			}
+
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pxfusetest-%d", i))...)
+			}
+
+			for _, ctx := range contexts {
+				log.InfoD("Validating application [%s]", ctx.App.Key)
+				ValidateContext(ctx)
+			}
+		})
+
+		stNodes := node.GetStorageNodes()
+
+		nodesToRestart := make(map[string]bool)
+		sharedVols := make([]*volume.Volume, 0)
+
+		for _, stNode := range stNodes {
+			nodesToRestart[stNode.Name] = false
+		}
+
+		stepLog = "restart PX on storage nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			numIter := 10
+
+			//Getting the volumes of sharedv4 and sharedv4 svc apps
+			for _, ctx := range contexts {
+				if Contains(appList, ctx.App.Key) {
+					appVols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+					sharedVols = append(sharedVols, appVols...)
+				}
+			}
+
+			for i := 1; i <= numIter; i++ {
+
+				log.Infof("Running Iteration: #%d", i)
+
+				//Getting the coordinator nodes of sharedv4 and sharedv4 svc volumes
+				for _, appVol := range sharedVols {
+					attachedNode, err := Inst().V.GetNodeForVolume(appVol, 1*time.Minute, 5*time.Second)
+					log.FailOnError(err, fmt.Sprintf("error getting attached node for volume [%s]", appVol.Name))
+					nodesToRestart[attachedNode.Name] = true
+				}
+
+				for _, stNode := range stNodes {
+					//Restarting Px only if sharedv4 or sharedv4 svc volume is attached to the provided node
+					if nodesToRestart[stNode.Name] {
+						StopVolDriverAndWait([]node.Node{stNode})
+						log.Infof("waiting for 1 min before starting PX for volumes corordinator to failover")
+						time.Sleep(1 * time.Second)
+						StartVolDriverAndWait([]node.Node{stNode})
+						status, err := IsPxRunningOnNode(&stNode)
+						log.FailOnError(err, "error checking px status on node [%s]", stNode.Name)
+						dash.VerifyFatal(status, true, fmt.Sprintf("verfiy px is running on node [%s]", stNode.Name))
+					}
+				}
+
+				//Setting it false to obtain refreshed nodes once volumes failover
+				for _, stNode := range stNodes {
+					nodesToRestart[stNode.Name] = false
+				}
+
+			}
+
+			Step("validate apps after all failovers", func() {
+				for _, ctx := range contexts {
+					log.InfoD("Validating application [%s]", ctx.App.Key)
+					ValidateContext(ctx)
+				}
+			})
+			PerformSystemCheck()
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

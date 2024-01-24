@@ -1742,7 +1742,7 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := "get nodes and perform maintenance cycle"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageDriverNodes() {
+		for _, appNode := range node.GetStorageNodes() {
 			err := isNodeHealthy(appNode, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -1822,7 +1822,7 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := "get nodes and perform pool maintenance cycle"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageDriverNodes() {
+		for _, appNode := range node.GetStorageNodes() {
 			err := isNodeHealthy(appNode, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
