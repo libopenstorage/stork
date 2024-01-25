@@ -100,7 +100,7 @@ const (
 	pxVersionsConfigmapName                   = "px-versions"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
-	clusterUUIDFile                           = "/etc/pwx/cluster_uuid"
+	clusterUUIDFile                           = "cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
@@ -1254,7 +1254,7 @@ func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
 			poolId = strings.Trim(poolId, " ")
 		}
 		if poolId != "" && poolUUID != "" {
- 			if _, ok := poolsData[poolUUID]; !ok {
+			if _, ok := poolsData[poolUUID]; !ok {
 				poolsData[poolUUID] = poolId
 			}
 			poolUUID = ""
@@ -4439,7 +4439,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
 	log.Infof("Validating diags got uploaded to the s3 bucket for node [%s]", n.Name)
 
 	// Diag file to look for
@@ -4456,7 +4456,7 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	}
 
 	// Get cluster UUID to determine the S3 folder to look for
-	clusterUUID, err := d.GetClusterUUID(n, opts)
+	clusterUUID, err := d.GetClusterUUID(n, opts, pxDir)
 	if err != nil {
 		return fmt.Errorf("Failed to get cluster UUID, Err: %v", err)
 	}
@@ -4499,8 +4499,9 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	}
 }
 
-func (d *portworx) GetClusterUUID(n node.Node, opts node.ConnectionOpts) (string, error) {
-	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterUUIDFile), opts)
+// GetClusterUUID Gets Portworx cluster UUID from cluster_uuid file and returns it
+func (d *portworx) GetClusterUUID(n node.Node, opts node.ConnectionOpts, pxDir string) (string, error) {
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", path.Join(pxDir, clusterUUIDFile)), opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status, Err: %v", err)
 	}
@@ -4547,7 +4548,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	} else { // Collecting diags via API
 		diagsPort := 9014
 		// Need to get the diags server port based on the px mgmnt port for OCP its not the standard 9001
-		out, err := d.nodeDriver.RunCommand(n, "cat /etc/pwx/px_env", opts)
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", path.Join(diagOps.PxDir, "px_env")), opts)
 		if err == nil {
 			envVars := map[string]string{}
 			for _, line := range strings.Split(out, "\n") {

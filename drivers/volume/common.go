@@ -63,6 +63,12 @@ type DiagOps struct {
 	Async bool
 	// PxIsStopped
 	PxStopped bool
+
+	// PxDir is a directory where PX bits are installed
+	PxDir string
+
+	// PxDiagDir is a directory where PX diags are collected
+	PxDiagDir string
 }
 
 // MetadataNode TODO temporary solution until sdk supports metadataNode response
@@ -701,7 +707,7 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 }
 
 // ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
-func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateDiagsOnS3()",
