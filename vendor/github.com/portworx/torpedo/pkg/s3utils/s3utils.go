@@ -32,9 +32,9 @@ type Object struct {
 type sseType string
 
 const (
-	sseS3  sseType = "SSE-S3"
-	sseKms sseType = "SSE-KMS"
-	sseC   sseType = "SSE-C"
+	SseS3        sseType = "SSE-S3"
+	SseKms       sseType = "SSE-KMS"
+	SseCustomKey sseType = "SSE-C"
 )
 
 type sseEncryptionPolicy string
@@ -112,11 +112,11 @@ func GetS3SSEDetailsFromEnv() (*S3SseEnv, error) {
 
 	var expectedSseType sseType
 	switch strings.ToUpper(sseTypeEnv) {
-	case string(sseS3):
+	case string(SseS3):
 		expectedSseType = "SSE-S3"
-	case string(sseKms):
+	case string(SseKms):
 		expectedSseType = "SSE-KMS"
-	case string(sseC):
+	case string(SseCustomKey):
 		expectedSseType = "SSE-C"
 	default:
 		return nil, fmt.Errorf("SSE_TYPE type invalid %v", sseTypeEnv)
@@ -154,7 +154,7 @@ func GetTimeStamp(getPreviousFolder bool) string {
 	if getPreviousFolder {
 		tnow = tnow.Add(-1 * time.Hour)
 	}
-	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
+	return fmt.Sprintf("%d_%02d_%02d/%02d", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
 }
 
 // GetS3Objects lists the objects in S3

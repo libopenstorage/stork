@@ -24,6 +24,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -36,6 +37,10 @@ const (
 	PXDaemonSet = "portworx"
 	// PXServiceLabelKey is the label key used for px systemd service control
 	PXServiceLabelKey = "px/service"
+	//PXPodlabelKey is the label key used for portworx pods
+	PXPodlabelKey = "name"
+	//PXPodLabelValue is the label value used for portworx pods
+	PXPodLabelValue = "portworx"
 	// k8sServiceOperationStart is label value for starting Portworx service
 	k8sServiceOperationStart = "start"
 	// k8sServiceOperationStop is label value for stopping Portworx service
@@ -66,10 +71,10 @@ const (
 	talismanImage               = "portworx/talisman:latest"
 	rancherControlPlaneLabelKey = "node-role.kubernetes.io/controlplane"
 
-	// pureVolumeOUI is used to identify if a mapper device is of Pure origin
+	// PureVolumeOUI is used to identify if a mapper device is of Pure origin
 	// (if it matches with /dev/mapper/.*24a937.*, it's a Pure volume, if it's some other format it's not)
-	pureVolumeOUI   = "24a937"
-	pureMapperRegex = "/dev/mapper/.*" + pureVolumeOUI + ".*"
+	PureVolumeOUI   = "24a937"
+	PureMapperRegex = "/dev/mapper/.*" + PureVolumeOUI + ".*"
 )
 
 const (
@@ -228,7 +233,7 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) error {
 	pvName := k.GetVolumeName(vol)
 	if len(pvName) == 0 {
-		return fmt.Errorf("failed to get PV name for : %v", vol)
+		return fmt.Errorf("failed to get PV name for volume [%v]", vol)
 	}
 
 	t := func() (interface{}, bool, error) {
@@ -242,14 +247,12 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		if vol.Raw {
 			resp, err = k.validateDevicesInPods(vol, pvName, pods, d)
 			if err != nil {
-				log.Errorf("failed to validate devices in pod. Cause: %v", err)
-				return nil, true, err
+				return nil, true, fmt.Errorf("failed to validate devices in pod. Err: %v", err)
 			}
 		} else {
 			resp, err = k.validateMountsInPods(vol, pvName, pods, d)
 			if err != nil {
-				log.Errorf("failed to validate mount in pod. Cause: %v", err)
-				return nil, true, err
+				return nil, true, fmt.Errorf("failed to validate mount in pod. Err: %v", err)
 			}
 		}
 
@@ -307,11 +310,11 @@ func (k *k8sSchedOps) validateDevicesInPods(
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8serrors.ErrPodsNotFound {
-			log.Warnf("pod %s not found. probably it got rescheduled", p.Name)
+			log.Warnf("pod [%s/%s] not found, it probably got rescheduled", p.Namespace, p.Name)
 			continue
 		} else if !pod.DeletionTimestamp.IsZero() {
 			// pod is being terminated, skip
-			log.Warnf("pod %s/%s is being terminated, not validating the devices...", p.Namespace, p.Name)
+			log.Warnf("pod [%s/%s] is being terminated, not validating the devices...", p.Namespace, p.Name)
 			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
@@ -320,14 +323,14 @@ func (k *k8sSchedOps) validateDevicesInPods(
 		} else if err != nil {
 			return validatedDevicePods, err
 		}
-		log.Debugf("validating the devices in pod %s/%s", p.Namespace, p.Name)
-		containerPaths := getContainerPVCMountMap(*pod)
+		log.Debugf("validating the devices in pod [%s/%s]", p.Namespace, p.Name)
+		containerPaths := GetContainerPVCMountMap(*pod)
 		if len(containerPaths) == 0 {
-			return validatedDevicePods, fmt.Errorf("pod: [%s] %s does not have raw block devices.", pod.Namespace, pod.Name)
+			return validatedDevicePods, fmt.Errorf("pod [%s/%s] does not have raw block devices.", pod.Namespace, pod.Name)
 		}
 		currentNode, nodeExists := nodes[p.Spec.NodeName]
 		if !nodeExists {
-			return validatedDevicePods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+			return validatedDevicePods, fmt.Errorf("node [%s] for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
 		}
 
 		// ignore error when a command not exactly fail, like grep when empty return exit 1
@@ -341,7 +344,7 @@ func (k *k8sSchedOps) validateDevicesInPods(
 		volDevice, _ := d.RunCommand(currentNode,
 			fmt.Sprintf("findmnt | grep \\\\[ | grep %s", pvName), connOpts)
 		if len(volDevice) == 0 {
-			return validatedDevicePods, fmt.Errorf("volume %s not bind mounted on node %s", vol.Name, currentNode.Name)
+			return validatedDevicePods, fmt.Errorf("volume [%s] not bind mounted on node [%s]", vol.Name, currentNode.Name)
 		}
 
 		validatedDevicePods = append(validatedDevicePods, pod.Name)
@@ -361,11 +364,11 @@ PodLoop:
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8serrors.ErrPodsNotFound {
-			log.Warnf("pod %s not found. probably it got rescheduled", p.Name)
+			log.Warnf("pod [%s/%s] not found. probably it got rescheduled", p.Namespace, p.Name)
 			continue
 		} else if !pod.DeletionTimestamp.IsZero() {
 			// pod is being terminated, skip
-			log.Warnf("pod %s/%s is being terminated, not validating the mounts...", p.Namespace, p.Name)
+			log.Warnf("pod [%s/%s] is being terminated, not validating the mounts...", p.Namespace, p.Name)
 			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
@@ -375,18 +378,18 @@ PodLoop:
 			return validatedMountPods, err
 		}
 
-		log.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
-		containerPaths := getContainerPVCMountMap(*pod)
+		log.Debugf("validating the mounts in pod [%s/%s]", p.Namespace, p.Name)
+		containerPaths := GetContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
 			log.Infof("container [%s] has paths [%v]", containerName, paths)
 			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
-				log.Warnf("Failed to execute command in pod. Cause %v", err)
+				log.Warnf("Failed to execute command [cat /proc/mounts] in pod [%s/%s] due to pod might not be found or in completed state. Err: %v %v", pod.Namespace, pod.Name, output, err)
 				continue PodLoop
 			} else if err != nil {
-				return validatedMountPods, err
+				return validatedMountPods, fmt.Errorf("Failed to execute command [cat /proc/mounts] in pod [%s/%s]. Err: %v %v", pod.Namespace, pod.Name, output, err)
 			}
 			mounts := strings.Split(output, "\n")
 
@@ -400,13 +403,13 @@ PodLoop:
 				}
 				symlinkPath = strings.TrimSpace(symlinkPath)
 				if symlinkPath != "" && symlinkPath != path {
-					paths = append(paths[:i], paths[i+1:]...)
-					paths = append(paths, symlinkPath)
+					log.Infof("Linked path found for [%s] -> [%s]", path, symlinkPath)
+					paths[i] = symlinkPath
 				}
 			}
 			log.Infof("container [%s] and paths [%v] after checking sym links", containerName, paths)
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", pureMapperRegex, path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", PureMapperRegex, path))
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
@@ -414,12 +417,6 @@ PodLoop:
 					if len(pxMounts) > 0 {
 						log.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 						pxMountFound = true
-
-						// If we encounter a Pure volume, we should skip the host mount check as we can't get the
-						// volume serial to confirm which volume it is (which is what the path contains)
-						if regexp.MustCompile(pureMapperRegex).MatchString(line) {
-							skipHostMountCheck = true
-						}
 
 						// in case there are two pods running with non shared volume, one of them will be in read-only
 						if isMountReadOnly(line) {
@@ -453,8 +450,12 @@ PodLoop:
 			IgnoreError:     true,
 		}
 
+		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
+		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
+			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+		}
 		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_)' | grep %s", pvName), connOpts)
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), connOpts)
 		if len(volMount) == 0 {
 			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
 		}
@@ -758,6 +759,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		log.Errorf("Failed to get portworx namespace. Error : %v", err)
 		return false
 	}
+
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, namespace)
 	if err != nil {
 		log.Errorf("Failed to get apps on node %s. Error : %v", n.Name, err)
@@ -860,9 +862,9 @@ func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, erro
 	return remoteNodeList, nil
 }
 
-// getContainerPVCMountMap is a helper routine to return map of containers in the pod that
+// GetContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
-func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
+func GetContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 	containerPaths := make(map[string][]string)
 
 	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).
@@ -895,6 +897,48 @@ func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 	}
 
 	return containerPaths
+}
+
+// GetContainerPVCMountMapWithSC fetches storage class along with mount paths for containers using PVCs
+func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]*storagev1.StorageClass, error) {
+	scMountPathsMap := make(map[string]*storagev1.StorageClass)
+	pvcNamesInSpec := make(map[string]string)
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			pvcNamesInSpec[v.Name] = v.PersistentVolumeClaim.ClaimName
+		}
+	}
+	for _, c := range pod.Spec.Containers {
+
+		for _, cMount := range c.VolumeMounts {
+			if pvcName, ok := pvcNamesInSpec[cMount.Name]; ok {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
+				storageClass, err := k8sCore.GetStorageClassForPVC(pvc)
+				if err != nil {
+					return nil, err
+				}
+				scMountPathsMap[cMount.MountPath] = storageClass
+			}
+		}
+
+		for _, cDevice := range c.VolumeDevices {
+			if pvcName, ok := pvcNamesInSpec[cDevice.Name]; ok {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
+				storageClass, err := k8sCore.GetStorageClassForPVC(pvc)
+				if err != nil {
+					return nil, err
+				}
+				scMountPathsMap[cDevice.DevicePath] = storageClass
+			}
+		}
+	}
+	return scMountPathsMap, nil
 }
 
 func separateFilePaths(volDirList string) []string {
@@ -978,18 +1022,25 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 }
 
 func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
-	var allServices *corev1.ServiceList
+	var pods *corev1.PodList
 	var err error
+	var ns string
 
-	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
-		return "", fmt.Errorf("Failed to get list of services. Err: %v", err)
+	pods, err = k8sCore.ListPods(map[string]string{
+		PXPodlabelKey: PXPodLabelValue,
+	})
+	if err != nil {
+		return ns, err
 	}
-	for _, svc := range allServices.Items {
-		if svc.Name == PXServiceName {
-			return svc.Namespace, nil
-		}
+
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
 	}
-	return "", fmt.Errorf("can't find %s Portworx service from list of services.", PXServiceName)
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("error: can't find portworx namespace using pods with label [%s=%s]", PXPodlabelKey, PXPodLabelValue)
+	}
+	return ns, nil
+
 }
 
 func printStatus(k *k8sSchedOps, pods ...corev1.Pod) {

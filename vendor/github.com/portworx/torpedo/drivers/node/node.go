@@ -229,6 +229,8 @@ type Driver interface {
 
 	// GetNodeState returns current state of the given node
 	GetNodeState(n Node) (string, error)
+	// GetSupportedDriveTypes returns the types of drives supported by the provider
+	GetSupportedDriveTypes() ([]string, error)
 }
 
 // Register registers the given node driver
@@ -486,5 +488,12 @@ func (d *notSupportedDriver) GetNodeState(Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNodeState()",
+	}
+}
+
+func (d *notSupportedDriver) GetSupportedDriveTypes() ([]string, error) {
+	return []string{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetSupportedDriveTypes()",
 	}
 }

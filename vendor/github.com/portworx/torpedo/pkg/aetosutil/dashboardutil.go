@@ -427,6 +427,11 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	expect(err).NotTo(haveOccurred())
 }
 
+// VerifyNotNilFatal verify error is nil and abort operation upon failure
+func (d *Dashboard) VerifyNotNilFatal(err error, description string) {
+	d.VerifyFatal(err != nil, true, description)
+}
+
 // Info logging info message
 func (d *Dashboard) Info(message string) {
 	if d.IsEnabled {
@@ -540,12 +545,17 @@ func (d *Dashboard) UpdateStats(name, product, statType, version string, dashSta
 		}
 
 		statsURL := fmt.Sprintf("%s/stats", DashBoardBaseURL)
+		logrus.Infof("pushing stats to aetos: %v", st)
 
 		resp, respStatusCode, err := rest.POST(statsURL, st, nil, nil)
 		if err != nil {
 			logrus.Errorf("Error in updating stats to dashboard, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Error updating the stats, resp : %s", string(resp))
+		} else {
+			logrus.Infof("stats response: %v", resp)
+			logrus.Infof("stats status code: %d", respStatusCode)
 		}
+
 	}
 }

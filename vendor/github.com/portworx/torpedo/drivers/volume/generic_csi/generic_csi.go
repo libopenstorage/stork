@@ -2,6 +2,7 @@ package csi
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -38,6 +39,16 @@ func (d *genericCsi) ValidateVolumeCleanup() error {
 
 func (d *genericCsi) RefreshDriverEndpoints() error {
 	return nil
+}
+
+func (d *genericCsi) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
+func (d *genericCsi) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
 }
 
 func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {

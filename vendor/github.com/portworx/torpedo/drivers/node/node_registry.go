@@ -215,18 +215,6 @@ func CleanupRegistry() {
 	nodeRegistry = make(map[string]Node)
 }
 
-// GetNodeDetailsByNodeName get node details for a given node name
-func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
-	storageNodes := GetStorageNodes()
-
-	for _, each := range storageNodes {
-		if each.Name == nodeName {
-			return each, nil
-		}
-	}
-	return Node{}, fmt.Errorf("failed to get Node Details by Node Name [%s] ", nodeName)
-}
-
 // GetNodeDetailsByNodeID get node details for a given node name
 func GetNodeDetailsByNodeID(nodeID string) (Node, error) {
 	storageNodes := GetStorageNodes()
