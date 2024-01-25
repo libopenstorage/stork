@@ -8617,7 +8617,13 @@ func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 
 // IsDMthin returns true if setup is dmthin enabled
 func IsDMthin() (bool, error) {
+	opBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 	dmthinEnabled := false
+	if !opBasedInstall {
+		log.Warn("This is not PX Operator based install, DMTHIN is not supported on legacy Daemonset installs, skipping this check..")
+		return dmthinEnabled, nil
+	}
+
 	cluster, err := Inst().V.GetDriver()
 	if err != nil {
 		return dmthinEnabled, err
