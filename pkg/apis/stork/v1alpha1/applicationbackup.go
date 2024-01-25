@@ -43,6 +43,8 @@ type ApplicationBackupSpec struct {
 	IncludeResources []ObjectInfo      `json:"includeResources"`
 	ResourceTypes    []string          `json:"resourceTypes"`
 	BackupType       string            `json:"backupType"`
+	// CSISnapshotClassMap is 1 to 1 Map of CSI Provisioner to its Corresponding VolumeSnapshotClass to be used for backup
+	CSISnapshotClassMap map[string]string `json:"csiSnapshotClassMap"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
