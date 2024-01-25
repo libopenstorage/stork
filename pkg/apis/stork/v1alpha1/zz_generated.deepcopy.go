@@ -340,6 +340,13 @@ func (in *ApplicationBackupSpec) DeepCopyInto(out *ApplicationBackupSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.CSISnapshotClassMap != nil {
+		in, out := &in.CSISnapshotClassMap, &out.CSISnapshotClassMap
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 
