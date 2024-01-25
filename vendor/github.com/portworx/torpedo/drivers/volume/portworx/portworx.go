@@ -48,6 +48,7 @@ import (
 	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -99,7 +100,7 @@ const (
 	pxVersionsConfigmapName                   = "px-versions"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
-	clusterIDFile                             = "/etc/pwx/cluster_uuid"
+	clusterUUIDFile                           = "/etc/pwx/cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
@@ -111,7 +112,7 @@ const (
 	defaultRetryInterval              = 10 * time.Second
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
-	maintenanceWaitTimeout            = 2 * time.Minute
+	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
 	validateDeleteVolumeTimeout       = 6 * time.Minute
@@ -136,8 +137,10 @@ const (
 	upgradePerNodeTimeout             = 15 * time.Minute
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
-	asyncTimeout                      = 15 * time.Minute
-	timeToTryPreviousFolder           = 10 * time.Minute
+	sdkDiagCollectionTimeout          = 30 * time.Minute
+	sdkDiagCollectionRetryInterval    = 10 * time.Second
+	validateDiagsOnS3RetryTimeout     = 60 * time.Minute
+	validateDiagsOnS3RetryInterval    = 30 * time.Second
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
@@ -214,6 +217,8 @@ type portworx struct {
 	skipPXSvcEndpoint     bool
 	skipPxOperatorUpgrade bool
 	DiagsFile             string
+
+	pureDeviceBaseline map[string]map[string]pureLocalPathEntry // Stores a list of Pure mapper devices present on each storage node
 }
 
 type statusJSON struct {
@@ -224,7 +229,7 @@ type statusJSON struct {
 
 // ExpandPool resizes a pool of a given ID
 func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
-	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
+	log.Infof("Initiating pool %v resize by %v with operation type %v", poolUUID, size, operation.String())
 
 	// start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -667,7 +672,7 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 		return nNode, false, nil
 	}
 
-	result, err := task.DoRetryWithTimeout(t, asyncTimeout, validateStoragePoolSizeInterval)
+	result, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, validateStoragePoolSizeInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -796,7 +801,7 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 		return "", fmt.Errorf("failed to create volume, Err: %v", err)
 	}
 
-	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
+	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
 	return resp.VolumeId, nil
 }
 
@@ -1160,6 +1165,8 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 		return fmt.Errorf("error when exiting pool maintenance on node [%s], Err: %v", n.Name, err)
 	}
 	log.Infof("Exit pool maintenance %s", out)
+	log.Infof("waiting for 3 mins allowing pool to completely transition out of maintenance mode")
+	time.Sleep(3 * time.Minute)
 	return nil
 }
 
@@ -1218,6 +1225,45 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 	return poolsData, nil
 }
 
+// Return latest node PoolUUID -> ID
+func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e Pool -e UUID", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool info on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var poolUUID string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolUUID = strings.Split(line, ":")[1]
+			poolUUID = strings.Trim(poolUUID, " ")
+		}
+		if strings.Contains(line, "Pool") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if poolId != "" && poolUUID != "" {
+ 			if _, ok := poolsData[poolUUID]; !ok {
+				poolsData[poolUUID] = poolId
+			}
+			poolUUID = ""
+		}
+		poolId = ""
+	}
+	return poolsData, nil
+}
+
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1256,6 +1302,15 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 			}
 		}
+
+		// DevicePath
+		// TODO: remove this retry once PWX-27773 is fixed
+		// It is noted that the DevicePath is intermittently empty.
+		// This check ensures the device path is not empty for attached volumes
+		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.DevicePath == "" {
+			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
+		}
+
 		return vol, false, nil
 	}
 
@@ -1776,6 +1831,291 @@ func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params ma
 	return nil
 }
 
+type pureLocalPathEntry struct {
+	WWID        string
+	SinglePaths []string
+	Size        uint64
+}
+
+func GetSerialFromWWID(wwid string) (string, error) {
+	if !strings.Contains(wwid, schedops.PureVolumeOUI) {
+		return "", fmt.Errorf("not a Pure Storage multipath WWID '%s'", wwid)
+	}
+
+	if strings.HasPrefix(wwid, "eui.") {
+		// NVMe
+		return strings.ToLower(fmt.Sprintf("%s%s", wwid[6:20], wwid[26:36])), nil
+	}
+	// SCSI
+	return strings.TrimPrefix(strings.ToLower(wwid), fmt.Sprintf("36%s0", schedops.PureVolumeOUI)), nil
+}
+
+func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
+	/* Parses output like this
+	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
+	sdd                               137438953472
+	sdb                                34359738368
+	3624a9370ea876434795b4b54000a4128   6442450944
+	|-sdf                               6442450944
+	|-sdi                               6442450944
+	|-sdg                               6442450944
+	`-sdh                               6442450944
+	sde2                              134217728000
+	`-sde                             137438953472
+	sde1                                3219128320
+	`-sde                             137438953472
+	sdc                               137438953472
+	sda2                              133438636032
+	`-sda                             137438953472
+	sda1                                3999268864
+	`-sda                             137438953472
+	*/
+
+	foundDevices := map[string]pureLocalPathEntry{}
+
+	var currentEntry *pureLocalPathEntry = nil
+
+	for _, l := range strings.Split(out, "\n") {
+		line := strings.TrimSpace(l)
+		if len(line) == 0 {
+			continue
+		}
+
+		// If we see a WWID, we are starting a new entry
+		if strings.Contains(line, schedops.PureVolumeOUI) {
+			if currentEntry != nil {
+				foundDevices[currentEntry.WWID] = *currentEntry
+			}
+			parts := strings.Fields(line)
+			wwid := parts[0]
+			sizeStr := parts[1]
+			size, err := strconv.ParseUint(sizeStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse size '%s' from lsblk output, Err: %v", sizeStr, err)
+			}
+			currentEntry = &pureLocalPathEntry{
+				WWID:        wwid,
+				Size:        size,
+				SinglePaths: []string{},
+			}
+			continue
+		}
+
+		if currentEntry != nil {
+			// If we see a pipe or a tick, we are starting a single path inside a WWID
+			if strings.HasPrefix(line, "|-") || strings.HasPrefix(line, "`-") {
+				parts := strings.Fields(line[2:])
+				currentEntry.SinglePaths = append(currentEntry.SinglePaths, parts[0])
+				continue
+			} else {
+				// This is some other path not part of a WWID, ignore it and also finish off any WWID we had going before
+				foundDevices[currentEntry.WWID] = *currentEntry
+				currentEntry = nil
+			}
+		}
+	}
+	if currentEntry != nil {
+		foundDevices[currentEntry.WWID] = *currentEntry
+	}
+
+	return foundDevices, nil
+}
+
+// collectLocalNodeInfo interrogates dmsetup and lsblk to get a comprehensive list of mapper devices, their single paths,
+// and checks for common error conditions such as devices missing single paths or only appearing in dmsetup/lsblk
+func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEntry, error) {
+	// Run `dmsetup ls` to get all the known mapper devices
+	out, err := d.nodeDriver.RunCommandWithNoRetry(n, "dmsetup ls", node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check dmsetup ls output on node %s, Err: %v", n.MgmtIp, err)
+	}
+	dmsetupFoundMappers := []string{}
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, schedops.PureVolumeOUI) {
+			continue
+		}
+		mapperName := strings.Split(line, "\t")[0]
+		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
+	}
+
+	// Then run `lsblk` to get the WWN and size of each device. Flags:
+	// * --inverse: show parents before children (instead of the default output that has single paths as the top level)
+	// * --ascii: show ASCII characters only (no unicode, normally it displays the fancy tree characters, this makes it only show |- and `-)
+	// * --noheadings: don't show the header line
+	// * -o NAME,SIZE: only show the name and size columns
+	// * -b: show size in bytes instead of human-readable with a suffix
+	out, err = d.nodeDriver.RunCommandWithNoRetry(n, "lsblk --inverse --ascii --noheadings -o NAME,SIZE -b", node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check 'lsblk --inverse --ascii --noheadings -o NAME,SIZE' output on node %s, Err: %v", n.MgmtIp, err)
+	}
+
+	lsblkParsed, err := parseLsblkOutput(out)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lsblk output on node %s, Err: %v", n.MgmtIp, err)
+	}
+
+	if len(lsblkParsed) != len(dmsetupFoundMappers) {
+		return nil, fmt.Errorf("found %d mappers in dmsetup but %d devices in lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", len(dmsetupFoundMappers), len(lsblkParsed), n.MgmtIp)
+	}
+
+	// Also, raise an error if there is a mismatch in the devices in the two outputs (e.g. if there is a mapper
+	// in dmsetup but not lsblk, something is very wrong and we didn't clean up right)
+	for _, mapper := range dmsetupFoundMappers {
+		lsblkEntry, exists := lsblkParsed[mapper]
+		if !exists {
+			return nil, fmt.Errorf("found mapper %s in dmsetup but not lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", mapper, n.MgmtIp)
+		}
+		// Ensure there are no WWIDs with empty single paths, as that is a malformed device
+		if len(lsblkEntry.SinglePaths) == 0 {
+			return nil, fmt.Errorf("found mapper %s with no single paths on node %s, this should not happen (we didn't clean something up right?)", mapper, n.MgmtIp)
+		}
+	}
+
+	return lsblkParsed, nil
+}
+
+func (d *portworx) getCurrentPureLocalVolumePaths() (map[string]map[string]pureLocalPathEntry, error) {
+	// Iterate through all nodes, and for each node collect local paths
+	currentDevices := make(map[string]map[string]pureLocalPathEntry)
+	nodes := node.GetStorageDriverNodes()
+	for _, n := range nodes {
+		localPathMap, err := d.collectLocalNodeInfo(n)
+		if err != nil {
+			return nil, err
+		}
+		currentDevices[n.MgmtIp] = localPathMap
+	}
+
+	return currentDevices, nil
+}
+
+// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are attached to each node, so that we can compare against it later
+func (d *portworx) InitializePureLocalVolumePaths() error {
+	currentDevices, err := d.getCurrentPureLocalVolumePaths()
+	if err != nil {
+		return err
+	}
+	logrus.Infof("Pure device baseline initialized to: %+v", currentDevices)
+	d.pureDeviceBaseline = currentDevices
+
+	// TODO: we should only include non-FACD drives here. Eventually, we should handle FACD as its own kind of volume in ValidatePureLocalVolumePaths and validate it matches the pxctl cd l output
+
+	return nil
+}
+
+// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+func (d *portworx) ValidatePureLocalVolumePaths() error {
+	t := func() error {
+		currentDevices, err := d.getCurrentPureLocalVolumePaths()
+		if err != nil {
+			return err
+		}
+		logrus.Infof("Current pure devices: %+v", currentDevices)
+
+		// TODO: handle FACD drive failovers properly (these will show up as new devices but they're actually fine)
+		// Remove all devices that are in the baseline (complex set math time!). Also warn if any baseline devices are now missing?
+		for node, baselineDevices := range d.pureDeviceBaseline {
+			currentNodeDevices := currentDevices[node]
+			for wwid := range baselineDevices {
+				if _, exists := currentNodeDevices[wwid]; exists {
+					delete(currentNodeDevices, wwid)
+				} else {
+					return fmt.Errorf("baseline FA device %s originally present on node %s is missing, this should not happen", wwid, node)
+				}
+			}
+		}
+
+		allVolNames, err := d.ListAllVolumes()
+		if err != nil {
+			return err
+		}
+		// Inspect all volumes provided to get the PX spec
+		fadaVolumes := []*api.Volume{}
+		for _, volName := range allVolNames {
+			v, err := d.InspectVolume(volName)
+			if err != nil {
+				return err
+			}
+			if !v.Spec.IsPureVolume() {
+				continue
+			}
+			if v.Spec.ProxySpec.PureBlockSpec == nil {
+				// TODO: handle FBDA volumes properly as well
+				continue
+			}
+			fadaVolumes = append(fadaVolumes, v)
+		}
+
+		// For each volume, check which nodes it should be on. Remove it from the list of devices on that node. Error if we can't find it.
+		for _, v := range fadaVolumes {
+			// Find the node this volume is on
+			var foundNode *node.Node
+			attachedOn := v.GetAttachedOn()
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.MgmtIp == attachedOn { // TODO: RWX support
+					tempVar := n
+					foundNode = &tempVar
+					break
+				}
+			}
+			if foundNode == nil {
+				logrus.Infof("Volume %s is not attached to any node, skipping", v.Locator.Name)
+				continue
+			}
+
+			// Find the device for this volume
+			var device *pureLocalPathEntry
+			for _, deviceEntry := range currentDevices[foundNode.MgmtIp] {
+				serial, err := GetSerialFromWWID(deviceEntry.WWID)
+				if err != nil {
+					return err
+				}
+				if serial == strings.ToLower(v.Spec.GetProxySpec().PureBlockSpec.SerialNum) {
+					device = &deviceEntry
+					break
+				}
+			}
+			if device == nil {
+				return fmt.Errorf("volume %s is attached to node %s but not found in any local path", v.Locator.Name, foundNode.MgmtIp)
+			}
+
+			// Check that the device is actually of the correct size
+			if device.Size != v.Spec.Size {
+				return fmt.Errorf("volume %s is attached to node %s but has incorrect size %d instead of expected size %d", v.Locator.Name, foundNode.MgmtIp, device.Size, v.Spec.Size)
+			}
+
+			// Remove the device from the list of devices on that node
+			delete(currentDevices[foundNode.MgmtIp], device.WWID)
+		}
+
+		logrus.Infof("Remaining devices after removing all attached FADA volumes: %+v", currentDevices)
+
+		// At the very end, ensure that all the lists are empty. If they aren't, there is an extra device on that node not matching to a pod.
+		// TODO: check if this is an FACD drive device, if so then it's also fine
+		for node, devices := range currentDevices {
+			if len(devices) > 0 {
+				return fmt.Errorf("found %d extra devices on node %s that are not attached to any torpedo app volume (it may be from a clone test pod)", len(devices), node)
+			}
+		}
+
+		return nil
+	}
+	_, err := task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+		err := t()
+		if err != nil {
+			return nil, true, err
+		}
+		return nil, false, nil
+	}, time.Minute*2, defaultRetryInterval)
+	return err
+}
+
 func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	log.Infof("Setting IO Throttle for volume [%s]", volumeName)
@@ -1958,6 +2298,51 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
+func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	stopFn := func() error {
+		for _, n := range nodes {
+
+			log.InfoD("Stopping px-daemon on [%s].", n.Name)
+			var processPid string
+			command := "ps -ef | grep \"px -daemon\""
+			out, err := d.nodeDriver.RunCommand(n, command, node.ConnectionOpts{
+				Timeout:         20 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			})
+			if err != nil {
+				return err
+			}
+
+			lines := strings.Split(string(out), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "/usr/local/bin/px -daemon") && !strings.Contains(line, "grep") {
+					fields := strings.Fields(line)
+					processPid = fields[1]
+					break
+				}
+			}
+
+			if processPid == "" {
+				return fmt.Errorf("unable to find PID for px daemon in output [%s]", out)
+			}
+
+			pxCrashCmd := fmt.Sprintf("sudo pkill -9 %s", processPid)
+			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to run cmd [%s] on node [%s], Err: %v", pxCrashCmd, n.Name, err)
+			}
+			log.Infof("Sleeping for %v for volume driver to go down", waitVolDriverToCrash)
+			time.Sleep(waitVolDriverToCrash)
+		}
+		return nil
+	}
+	return driver_api.PerformTask(stopFn, triggerOpts)
+}
+
 // GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
@@ -2062,9 +2447,17 @@ func (d *portworx) RandomizeVolumeName(params string) string {
 	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
+func (d *portworx) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	currentClusterResponse, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return currentClusterResponse, nil
+}
+
 func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
-		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
+		cluster, err := d.InspectCurrentCluster()
 		if err != nil {
 			return nil, true, err
 		}
@@ -2175,7 +2568,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
-			pxStatus, err := d.getPxctlStatus(n)
+			pxStatus, err := d.GetPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
@@ -2290,7 +2683,7 @@ func (d *portworx) ValidateStoragePools() error {
 							err := fmt.Errorf("node [%s], pool: %s was expanded to size: %d larger than expected: %d",
 								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
 							log.Errorf(err.Error())
-							return "", false, err
+							return "", false, nil
 						}
 
 						log.Infof("node [%s], pool: %s, size is not as expected. Expected: %v, Actual: %v",
@@ -2486,7 +2879,7 @@ func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
 func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 	var proxySpec *api.ProxySpec
 	var err error
-	if proxySpec, err = d.getProxySpecForAVolume(volume); err != nil {
+	if proxySpec, err = d.GetProxySpecForAVolume(volume); err != nil {
 		return false, err
 	}
 
@@ -2503,8 +2896,8 @@ func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
 	return false, nil
 }
 
-// getProxySpecForAVolume return proxy spec for a pure volumes
-func (d *portworx) getProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+// GetProxySpecForAVolume return proxy spec for a pure volumes
+func (d *portworx) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
 	name := d.schedOps.GetVolumeName(volume)
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: name})
@@ -2530,7 +2923,7 @@ func (d *portworx) getProxySpecForAVolume(volume *torpedovolume.Volume) (*api.Pr
 func (d *portworx) IsPureFileVolume(volume *torpedovolume.Volume) (bool, error) {
 	var proxySpec *api.ProxySpec
 	var err error
-	if proxySpec, err = d.getProxySpecForAVolume(volume); err != nil {
+	if proxySpec, err = d.GetProxySpecForAVolume(volume); err != nil {
 		return false, err
 	}
 	if proxySpec == nil {
@@ -3291,10 +3684,8 @@ func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
 
 	for ind, container := range opDep.Spec.Template.Spec.Containers {
 		if container.Name == "portworx-operator" {
-			fmt.Printf("KOKADBG: IMAGE BEFORE: [%s]\n", container.Image)
 			container.Image = strings.Replace(container.Image, strings.Split(container.Image, ":")[1], pxOperatorNewImageTag, -1)
 			opDep.Spec.Template.Spec.Containers[ind] = container
-			fmt.Printf("KOKADBG: IMAGE AFTER: [%s]\n", opDep.Spec.Template.Spec.Containers[ind].Image)
 		}
 	}
 
@@ -3496,15 +3887,22 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	if err := d.EnterMaintenance(*n); err != nil {
-		return &ErrFailedToDecommissionNode{
-			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to enter maintenence mode on node [%s], Err: %v", n.Name, err),
+	err := d.EnterMaintenance(*n)
+	//check for storageless node
+	if err != nil && len(n.StoragePools) == 0 {
+		log.Infof("validating status for storageless node [%s]", n.Name)
+		stNode, nodeStatusErr := d.GetDriverNode(n)
+		if nodeStatusErr != nil {
+			return nodeStatusErr
+		}
+		if stNode.Status == api.Status_STATUS_OFFLINE {
+			//setting nil as OFFLINE status is expected for storageless nodes
+			err = nil
 		}
 	}
-
-	log.Infof("Waiting for a minute for node [%s] to transition to maintenance mode", n.Name)
-	time.Sleep(1 * time.Minute)
+	if err != nil {
+		return err
+	}
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
@@ -3520,7 +3918,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		if err != nil {
 			return false, true, fmt.Errorf("failed getting node [%s] status", n.Name)
 		}
-		if stNode.Status == api.Status_STATUS_MAINTENANCE {
+		if stNode.Status == api.Status_STATUS_MAINTENANCE || stNode.Status == api.Status_STATUS_OFFLINE {
 			return true, false, nil
 		}
 		return false, true, fmt.Errorf("waiting for node [%s] to be in maintenence mode, current Status: %v", n.Name, stNode.Status)
@@ -3615,8 +4013,8 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 func (d *portworx) RejoinNode(n *node.Node) error {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		TimeBeforeRetry: podUpRetryInterval,
+		Timeout:         10 * time.Minute,
 	}
 
 	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
@@ -4033,66 +4431,76 @@ func GetTimeStamp() string {
 }
 
 func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps) error {
-
 	if diagOps.Async {
-		return collectAsyncDiags(n, config, diagOps, d)
+		// Diag collection is done via SDK request
+		return collectDiagsSdk(n, config, diagOps, d)
 	}
+	// Diag collection is done via CLI or API
 	return collectDiags(n, config, diagOps, d)
 }
 
 func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
-	log.Info("Validating diags uploaded on S3")
+	log.Infof("Validating diags got uploaded to the s3 bucket for node [%s]", n.Name)
+
+	// Diag file to look for
+	if diagsFile == "" {
+		return fmt.Errorf("Empty diag file was passed, cannot continue with validation")
+	}
+	d.DiagsFile = diagsFile
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	}
-	clusterUUID, err := d.GetClusterID(n, opts)
+
+	// Get cluster UUID to determine the S3 folder to look for
+	clusterUUID, err := d.GetClusterUUID(n, opts)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get cluster UUID, Err: %v", err)
 	}
 
-	//// Check S3 bucket for diags
-	log.Debugf("Node name [%s]", n.Name)
-	if diagsFile != "" {
-		d.DiagsFile = diagsFile
-	}
+	// Check S3 bucket for diags
+	log.Debugf("Validating diag file [%s] got uploaded to the s3 bucket", d.DiagsFile)
 	start := time.Now()
 	for {
-		if time.Since(start) >= asyncTimeout {
-			return fmt.Errorf("waiting for async diags job timed out")
+		if time.Since(start) >= validateDiagsOnS3RetryTimeout {
+			return fmt.Errorf("waiting for diags job timed out after [%v], failed to find diag file [%s] on s3 bucket", validateDiagsOnS3RetryTimeout, d.DiagsFile)
 		}
 		var objects []s3utils.Object
 		var err error
-		if time.Since(start) >= timeToTryPreviousFolder {
-			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
-			if err != nil {
-				return fmt.Errorf("Failed to get g3 objects, Err: %v", err)
-			}
-		} else {
-			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
-			if err != nil {
-				return fmt.Errorf("Failed to get g3 objects, Err: %v", err)
-			}
+
+		// Check latest s3 folder for diags
+		latestObjects, err := s3utils.GetS3Objects(clusterUUID, n.Name, false)
+		if err != nil {
+			return fmt.Errorf("Failed to get g3 objects from latest folder, Err: %v", err)
 		}
+		objects = append(objects, latestObjects...)
+
+		// Check previous s3 folder for diags, if exists, due to some race condition of how/when diags can occasionally be uploaded
+		previousObjects, err := s3utils.GetS3Objects(clusterUUID, n.Name, true)
+		if err != nil {
+			return fmt.Errorf("Failed to get g3 objects from previous folder, Err: %v", err)
+		}
+		objects = append(objects, previousObjects...)
+
 		for _, obj := range objects {
 			if strings.Contains(obj.Key, d.DiagsFile) {
-				log.Debugf("File validated on S3")
-				log.Debugf("Object Name is %s", obj.Key)
-				log.Debugf("Object Created on %s", obj.LastModified.String())
-				log.Debugf("Object Size %d", obj.Size)
+				log.Debugf("File validated on s3")
+				log.Debugf("Object Name is [%s]", obj.Key)
+				log.Debugf("Object Created on [%s]", obj.LastModified.String())
+				log.Debugf("Object Size [%d]", obj.Size)
 				return nil
-
 			}
 		}
-		log.Debugf("File [%s] not found in S3 yet, re-trying in 30s", d.DiagsFile)
-		time.Sleep(30 * time.Second)
+		log.Debugf("File [%s] not found in the s3 bucket yet, re-trying in [%v]", d.DiagsFile, validateDiagsOnS3RetryInterval)
+		time.Sleep(validateDiagsOnS3RetryInterval)
 	}
 }
 
-func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error) {
-	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterIDFile), opts)
+func (d *portworx) GetClusterUUID(n node.Node, opts node.ConnectionOpts) (string, error) {
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterUUIDFile), opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status, Err: %v", err)
 	}
@@ -4115,6 +4523,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		status = api.Status_STATUS_OFFLINE
 	}
 	log.InfoD("Collecting diags on node [%s]", hostname)
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -4126,6 +4535,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		log.Infof("Skip validate on node [%s] during diags collection", hostname)
 	}
 
+	// If PX status is OFFLINE, we collect diags via CLI
 	if status == api.Status_STATUS_OFFLINE {
 		log.Debugf("Node [%s] is offline, collecting diags using pxctl", hostname)
 
@@ -4134,7 +4544,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node [%s], Err: %v %v", hostname, err, out)
 		}
-	} else {
+	} else { // Collecting diags via API
 		diagsPort := 9014
 		// Need to get the diags server port based on the px mgmnt port for OCP its not the standard 9001
 		out, err := d.nodeDriver.RunCommand(n, "cat /etc/pwx/px_env", opts)
@@ -4156,7 +4566,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		if len(d.token) > 0 {
 			config.Token = d.token
-			log.Infof("Added securty token: %s", config.Token)
+			log.Infof("Added securty token [%s]", config.Token)
 		}
 
 		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
@@ -4174,25 +4584,12 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 	}
 
-	if diagOps.Validate {
+	// Validate diags, only works for none profile only diags, because OutputFile for the diags.tgz
+	if diagOps.Validate && !config.Profile {
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
 			return fmt.Errorf("failed to locate diags on node [%s], Err: %v %v", hostname, err, out)
-		}
-
-		out, err = d.GetPxctlCmdOutputConnectionOpts(n, "status | egrep ^Telemetry:", opts, true)
-		if err != nil {
-			return fmt.Errorf("failed to get pxctl status on node [%s], Err: %v", n.Name, err)
-		}
-		telStatus, err := regexp.MatchString(`Telemetry:.*Healthy`, out)
-		if err != nil {
-			return fmt.Errorf("Failed to check telemetry status on node [%s], Err: %v", n.Name, err)
-		}
-		log.Debugf("Status returned by pxctl [%s]", out)
-		if !telStatus {
-			log.Debugf("Telemetry not enabled in PX Status on node [%s]. Skipping validation on s3", n.Name)
-			return nil
 		}
 
 		log.Infof("Found diags file [%s]", config.OutputFile)
@@ -4203,7 +4600,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	return nil
 }
 
-func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
+func collectDiagsSdk(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
 	diagsMgr := d.getDiagsManager()
 	jobMgr := d.getDiagsJobManager()
 
@@ -4223,19 +4620,20 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		NodeIds: []string{pxNode.Id},
 	}
 
+	// Collect diags via SDK request
 	resp, err := diagsMgr.Collect(d.getContext(), req)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to collect diags, Err: %v", err)
 	}
 	if resp.Job == nil {
-		err = fmt.Errorf("diags collection request submitted but did not get a Job ID in response")
-		return err
+		return fmt.Errorf("diags collection SDK request submitted, but did not get a Job ID in response")
 	}
 
+	// Wait for diags job to finish
 	start := time.Now()
 	for {
-		if time.Since(start) >= asyncTimeout {
-			return fmt.Errorf("waiting for async diags job timed out")
+		if time.Since(start) >= sdkDiagCollectionTimeout {
+			return fmt.Errorf("waiting for diags job timed out after [%v]", sdkDiagCollectionTimeout)
 		}
 
 		resp, _ := jobMgr.GetStatus(d.getContext(), &api.SdkGetJobStatusRequest{
@@ -4244,22 +4642,18 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		})
 
 		state := resp.GetJob().GetState()
-
 		if state == api.Job_DONE || state == api.Job_FAILED || state == api.Job_CANCELLED {
+			log.Debugf("Diag job state is [%v]", state)
 			break
 		}
-		fmt.Println("Waiting 5 seconds to check job status again.")
-		// Sleep 5 seconds until we check jobs again.
-		time.Sleep(5 * time.Second)
+
+		// Sleep before checking state of diags job again
+		log.Debugf("Diag job state is [%v], waiting for [%v] to check job status again", state, sdkDiagCollectionRetryInterval)
+		time.Sleep(sdkDiagCollectionRetryInterval)
 	}
 
-	//TODO: Verify we can see the files once we return a filename
-	if diagOps.Validate {
-		pxNode, err := d.GetDriverNode(&n)
-		if err != nil {
-			return err
-		}
-
+	// Validate diags, only works for none profile only diags, because OutputFile for the diags.tgz
+	if diagOps.Validate && !config.Profile {
 		opts := node.ConnectionOpts{
 			IgnoreError:     false,
 			TimeBeforeRetry: defaultRetryInterval,
@@ -4270,39 +4664,13 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate async diags on node [%s], Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node [%s], Err: %v %v", pxNode.Hostname, err, out)
 		}
 
 		log.Infof("Found diags file [%s]", config.OutputFile)
-		/*
-									logrus.Debug("Validating CCM health")
-									// Change to config package.
-									url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-									ccmresp, err := http.Get(url)
-									if err != nil {
-										return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-									}
-						>>>>>>> 261b8e726 (Topic/aghodke/ptx 11487 (#872))
-
-									defer ccmresp.Body.Close()
-			=======
-					logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
-					/*
-						logrus.Debug("Validating CCM health")
-						// Change to config package.
-						url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-						ccmresp, err := http.Get(url)
-						if err != nil {
-							return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-						}
-
-						defer ccmresp.Body.Close()
-			>>>>>>> master
-		*/
-		// Check S3 bucket for diags
-		// TODO: Waiting for S3 credentials.
-
+		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
+
 	log.Infof("Successfully collected diags on node [%s]", n.Name)
 	return nil
 }
@@ -4808,7 +5176,8 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	return strings.TrimSpace(out)
 }
 
-func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
+// GetPxctlStatus returns the PX status using pxctl
+func (d *portworx) GetPxctlStatus(n node.Node) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,

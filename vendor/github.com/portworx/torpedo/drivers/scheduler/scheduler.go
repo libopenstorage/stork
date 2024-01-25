@@ -120,6 +120,8 @@ type InitOptions struct {
 	AnthosAdminWorkStationNodeIP string
 	// AnthosInstancePath needed for anthos scheduler
 	AnthosInstancePath string
+	// UpgradeHops needed for a scheduler like Anthos to decide whether to upgrade admin cluster
+	UpgradeHops string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -385,6 +387,9 @@ type Driver interface {
 
 	// CSICloneTest clones a volume and validate the content
 	CSICloneTest(*Context, CSICloneRequest) error
+
+	// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
+	WaitForSinglePVCToBound(pvcName, namespace string) error
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
 	CreateCsiSnapsForVolumes(*Context, string) (map[string]*volsnapv1.VolumeSnapshot, error)

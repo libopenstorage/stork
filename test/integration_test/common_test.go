@@ -42,7 +42,9 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/stats"
 	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -145,6 +147,7 @@ var volumeDriver volume.Driver
 
 var storkVolumeDriver storkdriver.Driver
 var objectStoreDriver objectstore.Driver
+var dash *aetosutil.Dashboard
 
 var snapshotScaleCount int
 var migrationScaleCount int
@@ -1922,4 +1925,23 @@ func getByteDataFromFile(filePath string) ([]byte, error) {
 		return nil, fmt.Errorf("error reading file %v: %v", filePath, err)
 	}
 	return data, nil
+}
+
+func updateLongevityStats(name, eventStatName string, dashStats map[string]string) {
+	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
+	version, err := volumeDriver.GetDriverVersion()
+	if err != nil {
+		log.Errorf("error getting px version. err: %+v", err)
+	}
+	dashStats["node-driver"] = nodeDriver.String()
+	dashStats["scheduler-driver"] = schedulerDriver.String()
+	eventStat := &stats.EventStat{
+		EventName: eventStatName,
+		EventTime: time.Now().Format(time.RFC1123),
+		Version:   version,
+		DashStats: dashStats,
+	}
+
+	stats.PushStatsToAetos(dash, name, "px-enterprise", "Longevity", eventStat)
+
 }

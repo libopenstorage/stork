@@ -295,6 +295,14 @@ func (d *DefaultDriver) GetNodePoolsStatus(n node.Node) (map[string]string, erro
 	}
 }
 
+// GetNodePoolsStatus returns latest map of pool UUID and id
+func (d *DefaultDriver) GetNodePools(n node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePools()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -399,6 +407,22 @@ func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, para
 	}
 }
 
+// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are already attached to the node
+func (d *DefaultDriver) InitializePureLocalVolumePaths() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InitializePureLocalVolumePaths()",
+	}
+}
+
+// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+func (d *DefaultDriver) ValidatePureLocalVolumePaths() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureLocalVolumePaths()",
+	}
+}
+
 // ValidateUpdateVolume validates if volume changes has been applied
 func (d *DefaultDriver) ValidateUpdateVolume(vol *Volume, params map[string]string) error {
 	return &errors.ErrNotSupported{
@@ -452,6 +476,14 @@ func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool, triggerOpts *d
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StopDriver()",
+	}
+}
+
+// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+func (d *DefaultDriver) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "KillPXDaemon()",
 	}
 }
 
@@ -1149,6 +1181,14 @@ func (d *DefaultDriver) IsVolumeAttachedOnNode(volume *api.Volume, node node.Nod
 	return true, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsVolumeAttachedOnNode()",
+	}
+}
+
+// GetPxctlStatus returns the PX status
+func (d *DefaultDriver) GetPxctlStatus(n node.Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlStatus()",
 	}
 }
 

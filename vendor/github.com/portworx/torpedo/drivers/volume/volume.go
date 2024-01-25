@@ -155,6 +155,12 @@ type Driver interface {
 	// ValidatePureVolumesNoReplicaSets validates pure volumes has no replicaset
 	ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error
 
+	// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are already attached to the node
+	InitializePureLocalVolumePaths() error
+
+	// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+	ValidatePureLocalVolumePaths() error
+
 	// ValidateVolumeInPxctlList validates that the given volume appears in the output of `pxctl v l`
 	ValidateVolumeInPxctlList(name string) error
 
@@ -178,6 +184,9 @@ type Driver interface {
 
 	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
 	StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error
+
+	// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+	KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error
 
 	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
@@ -209,6 +218,9 @@ type Driver interface {
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
 
+	// InspectCurrentCluster inspects the current cluster
+	InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error)
+
 	// RecoverDriver will recover a volume driver from a failure/storage down state.
 	// This could be used by a volume driver to recover itself from any underlying storage
 	// failure.
@@ -236,6 +248,9 @@ type Driver interface {
 
 	//GetNodePoolsStatus returns map of pool UUID and status
 	GetNodePoolsStatus(n node.Node) (map[string]string, error)
+
+	//GetNodePools returns latest map of pool UUID and id
+	GetNodePools(n node.Node) (map[string]string, error)
 
 	//DeletePool deletes the pool with given poolID
 	DeletePool(n node.Node, poolID string, retry bool) error
@@ -321,11 +336,14 @@ type Driver interface {
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 
-	// IsPureVolume(volume *torpedovolume.Volume) return true if given volume is FA/FB DA volumes
+	// IsPureVolume returns true if given volume belongs FA/FB DA volumes
 	IsPureVolume(volume *Volume) (bool, error)
 
-	// IsPureFileVolume(volume *torpedovolume.Volume) return true if given volume is FB volumes
+	// IsPureFileVolume returns true if given volume belongs to FBDA volumes
 	IsPureFileVolume(volume *Volume) (bool, error)
+
+	// GetProxySpecForAVolume returns the api.ProxySpec associated with the given volume
+	GetProxySpecForAVolume(volume *Volume) (*api.ProxySpec, error)
 
 	// EstimatePoolExpandSize calculates expected pool size based on autopilot rule
 	EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.StoragePool, node node.Node) (uint64, error)
@@ -481,6 +499,9 @@ type Driver interface {
 
 	// IsPxReadyOnNode returns true is Px is ready on the node
 	IsPxReadyOnNode(n node.Node) bool
+
+	// GetPxctlStatus returns the PX status using pxctl
+	GetPxctlStatus(n node.Node) (string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
