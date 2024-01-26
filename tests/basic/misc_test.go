@@ -2,14 +2,19 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume"
 	"math/rand"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/drivers/volume/portworx"
+
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -53,6 +58,74 @@ var _ = Describe("{SetupTeardown}", func() {
 	})
 })
 
+func pureWriteRoutine(ctx *scheduler.Context, podName string, dataDir string, shouldStop *bool, errOutChan chan error) {
+	for {
+		if *shouldStop {
+			return
+		}
+		// Proceed to the write
+
+		// Get the current time in unix timestamp
+		filename := fmt.Sprintf("purewritetest-%s-%d", podName, time.Now().Unix())
+		log.Debugf("Writing to pod '%s' in namespace '%s' in data dir '%s'. This will be filename %s", podName, ctx.App.NameSpace, dataDir, filename)
+		cmdArgs := []string{"exec", "-it", podName, "-n", ctx.App.NameSpace, "--", "touch", path.Join(dataDir, filename)}
+		err = osutils.Kubectl(cmdArgs)
+		if err != nil {
+			log.Errorf("Error writing to pod '%s' in namespace '%s' in data dir '%s': %v", podName, ctx.App.NameSpace, dataDir, err)
+			errOutChan <- fmt.Errorf("Error writing to pod '%s' in namespace '%s' in data dir '%s': %v", podName, ctx.App.NameSpace, dataDir, err)
+			return
+		}
+
+		// Sleep for 10 seconds
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func StartPureBackgroundWriteRoutines() func() {
+	pureStopWriteRoutine := false
+	pureErrOutChan := make(chan error, 1) // We only need one failure to fail the entire test: no reason to store more than we need
+
+	Step("start write routine on all Pure volumes to ensure data continuity", func() {
+		for _, ctx := range contexts {
+			var vols []*volume.Volume
+			Step(fmt.Sprintf("get %s app's volumes", ctx.App.Key), func() {
+				vols, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+			})
+
+			podNames := map[string]bool{}
+			for _, vol := range vols {
+				pods, err := Inst().S.GetPodsForPVC(vol.Name, vol.Namespace)
+				log.FailOnError(err, "Failed to get pods for PVC %s in app %s", vol.Name, ctx.App.Key)
+				for _, pod := range pods {
+					podNames[pod.Name] = true
+				}
+			}
+
+			dataDir, _ := pureutils.GetAppDataDir(ctx.App.NameSpace)
+			for podName := range podNames {
+				// Start a routine that will repeatedly write to this pod's data directory until we send something to the stop channel
+				// If any errors occur, they will be sent to the err channel, and checked at the end of the test
+				log.Infof("Starting background write routine for pod '%s' in namespace '%s' in data dir '%s'", podName, ctx.App.NameSpace, dataDir)
+				go pureWriteRoutine(ctx, podName, dataDir, &pureStopWriteRoutine, pureErrOutChan)
+			}
+		}
+	})
+	return func() {
+		// Finish up the write routines from earlier
+		// First, check for any errors
+		var err error
+		select {
+		case err = <-pureErrOutChan:
+			log.FailOnError(err, "Error writing to Pure volume")
+		default:
+			log.Infof("No errors found in error channel for Pure volume write validation")
+		}
+		// Then, close all the routines out so they stop writing
+		pureStopWriteRoutine = true
+	}
+}
+
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDown}", func() {
 	var testrailID = 35259
@@ -74,6 +147,11 @@ var _ = Describe("{VolumeDriverDown}", func() {
 		}
 
 		ValidateApplications(contexts)
+
+		var pureCleanupFunction func()
+		if Inst().V.String() == portworx.PureDriverName {
+			pureCleanupFunction = StartPureBackgroundWriteRoutines()
+		}
 
 		Step("get nodes bounce volume driver", func() {
 			for _, appNode := range node.GetStorageDriverNodes() {
@@ -105,6 +183,12 @@ var _ = Describe("{VolumeDriverDown}", func() {
 					}
 				})
 			}
+
+			if pureCleanupFunction != nil {
+				pureCleanupFunction() // Checks for any errors during the background writes and fails the test if any occurred
+				return
+			}
+
 			err := ValidateDataIntegrity(&contexts)
 			log.FailOnError(err, "error validating data integrity")
 		})
@@ -218,6 +302,11 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 
 		ValidateApplications(contexts)
 
+		var pureCleanupFunction func()
+		if Inst().V.String() == portworx.PureDriverName {
+			pureCleanupFunction = StartPureBackgroundWriteRoutines()
+		}
+
 		stepLog = "crash volume driver in all nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -231,6 +320,11 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 					})
 			}
 		})
+
+		if pureCleanupFunction != nil {
+			pureCleanupFunction() // Checks for any errors during the background writes and fails the test if any occurred
+			return
+		}
 
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
