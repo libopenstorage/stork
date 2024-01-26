@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -18,27 +19,27 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/hashicorp/go-version"
-	"github.com/libopenstorage/cloudops"
+	kvdb_api "github.com/portworx/kvdb/api/bootstrap"
+	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/libopenstorage/openstorage/pkg/auth"
-	"github.com/libopenstorage/openstorage/pkg/grpcserver"
-	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	"github.com/libopenstorage/operator/pkg/constants"
-	"github.com/libopenstorage/operator/pkg/preflight"
-	"github.com/libopenstorage/operator/pkg/util"
-	k8sutil "github.com/libopenstorage/operator/pkg/util/k8s"
-	coreops "github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/libopenstorage/cloudops"
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/pkg/auth"
+	"github.com/libopenstorage/openstorage/pkg/grpcserver"
+	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	"github.com/libopenstorage/operator/pkg/constants"
+	"github.com/libopenstorage/operator/pkg/util"
+	k8sutil "github.com/libopenstorage/operator/pkg/util/k8s"
 )
 
 const (
@@ -129,6 +130,9 @@ const (
 	AnnotationRunOnMaster = pxAnnotationPrefix + "/run-on-master"
 	// AnnotationPodDisruptionBudget annotation indicating whether to create pod disruption budgets
 	AnnotationPodDisruptionBudget = pxAnnotationPrefix + "/pod-disruption-budget"
+	// AnnotationStoragePodDisruptionBudget annotation to specify the min available value of the px-storage
+	// pod disruption budget
+	AnnotationStoragePodDisruptionBudget = pxAnnotationPrefix + "/storage-pdb-min-available"
 	// AnnotationPodSecurityPolicy annotation indicating whether to enable creation
 	// of pod security policies
 	AnnotationPodSecurityPolicy = pxAnnotationPrefix + "/pod-security-policy"
@@ -243,6 +247,20 @@ const (
 	InternalEtcdConfigMapPrefix = "px-bootstrap-"
 	// CloudDriveConfigMapPrefix is prefix of the cloud drive configmap.
 	CloudDriveConfigMapPrefix = "px-cloud-drive-"
+
+	// VsphereInstallModeLocal env value for Vsphere 'local' install
+	VsphereInstallModeLocal = "local"
+
+	// NdoeLabelPortworxVersion is the label key in the node labels that has the
+	// Portworx version of that node.
+	NodeLabelPortworxVersion = "PX Version"
+)
+const (
+	// pxEntriesKey is key which holds all the bootstrap entries
+	PxEntriesKey = "px-entries"
+)
+const (
+	BootstrapCloudDriveNamespace = "kube-system"
 )
 
 // TLS related constants
@@ -290,6 +308,9 @@ var (
 	MinimumPxVersionMetricsCollector, _ = version.NewVersion("2.9.1")
 	// MinimumPxVersionAutoTLS is a minimal PX version that supports "auto-TLS" setup
 	MinimumPxVersionAutoTLS, _ = version.NewVersion("4.0.0")
+	// MinimumPxVersionQuorumFlag is a minimal PX version that introduces the quorum member
+	// flag in the node object of the PX SDK response.
+	MinimumPxVersionQuorumFlag, _ = version.NewVersion("3.1.0")
 
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
@@ -363,22 +384,30 @@ func IsOpenshift(cluster *corev1.StorageCluster) bool {
 	return err == nil && enabled
 }
 
+// GetClusterEnvValue helper routine to get the env value from cluster spec.
+func GetClusterEnvValue(cluster *corev1.StorageCluster, envName string) (string, bool) {
+	for _, env := range cluster.Spec.Env {
+		if env.Name == envName {
+			return env.Value, true
+		}
+	}
+	return "", false
+}
+
 // IsVsphere returns true if VSPHERE_VCENTER is present in the spec
 func IsVsphere(cluster *corev1.StorageCluster) bool {
-	for _, env := range cluster.Spec.Env {
-		if env.Name == "VSPHERE_VCENTER" && len(env.Value) > 0 {
-			return true
-		}
+	envValue, exists := GetClusterEnvValue(cluster, "VSPHERE_VCENTER")
+	if exists && len(envValue) > 0 {
+		return true
 	}
 	return false
 }
 
 // IsPure true if PURE_FLASHARRAY_SAN_TYPE is present in the spec
 func IsPure(cluster *corev1.StorageCluster) bool {
-	for _, env := range cluster.Spec.Env {
-		if env.Name == "PURE_FLASHARRAY_SAN_TYPE" && len(env.Value) > 0 {
-			return true
-		}
+	envValue, exists := GetClusterEnvValue(cluster, "PURE_FLASHARRAY_SAN_TYPE")
+	if exists && len(envValue) > 0 {
+		return true
 	}
 	return false
 }
@@ -397,10 +426,6 @@ func GetCloudProvider(cluster *corev1.StorageCluster) string {
 
 	if IsPure(cluster) {
 		return cloudops.Pure
-	}
-
-	if len(preflight.Instance().ProviderName()) > 0 {
-		return preflight.Instance().ProviderName()
 	}
 
 	// TODO: implement conditions for other providers
@@ -773,6 +798,34 @@ func ParsePxProxyURL(proxy string) (string, string, string, error) {
 
 func getSpecsBaseDir() string {
 	return PortworxSpecsDir
+}
+func GetStorageNodes(
+	cluster *corev1.StorageCluster, k8sClient client.Client, sdkConn *grpc.ClientConn) (*grpc.ClientConn, []*api.StorageNode, error) {
+
+	sdkConn, err := GetPortworxConn(sdkConn, k8sClient, cluster.Namespace)
+	if err != nil {
+		if IsFreshInstall(cluster) && strings.HasPrefix(err.Error(), ErrMsgGrpcConnection) {
+			// Don't return grpc connection error during initialization,
+			// as SDK server won't be up anyway
+			logrus.Warn(err)
+			return nil, []*api.StorageNode{}, nil
+		}
+		return sdkConn, nil, err
+	}
+
+	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
+	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient)
+	if err != nil {
+		return sdkConn, nil, err
+	}
+	nodeEnumerateResponse, err := nodeClient.EnumerateWithFilters(
+		ctx,
+		&api.SdkNodeEnumerateWithFiltersRequest{},
+	)
+	if err != nil {
+		return sdkConn, nil, err
+	}
+	return sdkConn, nodeEnumerateResponse.Nodes, nil
 }
 
 // GetPortworxConn returns a new Portworx SDK client
@@ -1248,6 +1301,13 @@ func GetClusterID(cluster *corev1.StorageCluster) string {
 	return cluster.Name
 }
 
+func MinAvailableForStoragePDB(cluster *corev1.StorageCluster) (int, error) {
+	if cluster.Annotations[AnnotationStoragePodDisruptionBudget] != "" {
+		return strconv.Atoi(cluster.Annotations[AnnotationStoragePodDisruptionBudget])
+	}
+	return -1, nil
+}
+
 // CountStorageNodes counts how many px storage node are there on given k8s cluster,
 // use this to count number of storage pods as well
 func CountStorageNodes(
@@ -1285,6 +1345,28 @@ func CountStorageNodes(
 		}
 	}
 
+	// Use the quorum member flag from the node enumerate response if all the nodes are upgraded to the
+	// newer version. The Enumerate response could be coming from any node and we want to make sure that
+	// we are not talking to an old node when enumerating.
+	useQuorumFlag := true
+	for _, node := range nodeEnumerateResponse.Nodes {
+		if node.Status == api.Status_STATUS_DECOMMISSION {
+			continue
+		}
+		v := node.NodeLabels[NodeLabelPortworxVersion]
+		nodeVersion, err := version.NewVersion(v)
+		if err != nil {
+			logrus.Warnf("Failed to parse node version %s for node %s: %v", v, node.Id, err)
+			useQuorumFlag = false
+			break
+		}
+		if nodeVersion.LessThan(MinimumPxVersionQuorumFlag) {
+			logrus.Tracef("Node %s is older than %s. Not using quorum member flag", node.Id, MinimumPxVersionQuorumFlag.String())
+			useQuorumFlag = false
+			break
+		}
+	}
+
 	storageNodesCount := 0
 	for _, node := range nodeEnumerateResponse.Nodes {
 		if node.SchedulerNodeName == "" {
@@ -1298,14 +1380,25 @@ func CountStorageNodes(
 			}
 			node.SchedulerNodeName = k8sNode.Name
 		}
-		if len(node.Pools) > 0 && node.Pools[0] != nil {
+
+		var isQuorumMember bool
+		if useQuorumFlag {
+			isQuorumMember = !node.NonQuorumMember
+		} else {
+			// Older version of Portworx doesn't not have the quorum flag in the node response.
+			// So we rely on the pools to determine whether the node contributes to quorum. All
+			// storage nodes contribute to quorum of the cluster.
+			isQuorumMember = len(node.Pools) > 0 && node.Pools[0] != nil
+		}
+
+		if isQuorumMember {
 			if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
 				storageNodesCount++
 			} else {
 				logrus.Debugf("node %s should not run portworx", node.SchedulerNodeName)
 			}
 		} else {
-			logrus.Debugf("node pools is empty, node: %+v", node)
+			logrus.Debugf("node %s is not a quorum member, node: %+v", node.Id, node)
 		}
 	}
 
@@ -1530,4 +1623,94 @@ func GetTLSCipherSuites(cluster *corev1.StorageCluster) (string, error) {
 		}
 	}
 	return strings.Join(outList, ","), nil
+}
+
+func GetKvdbMap(k8sClient client.Client,
+	cluster *corev1.StorageCluster,
+) map[string]*kvdb_api.BootstrapEntry {
+	// If cluster is running internal kvdb, get current bootstrap nodes
+	kvdbNodeMap := make(map[string]*kvdb_api.BootstrapEntry)
+	if cluster.Spec.Kvdb != nil && cluster.Spec.Kvdb.Internal {
+		clusterID := GetClusterID(cluster)
+		strippedClusterName := strings.ToLower(ConfigMapNameRegex.ReplaceAllString(clusterID, ""))
+		cmName := fmt.Sprintf("%s%s", InternalEtcdConfigMapPrefix, strippedClusterName)
+
+		cm := &v1.ConfigMap{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{
+			Name:      cmName,
+			Namespace: BootstrapCloudDriveNamespace,
+		}, cm)
+		if err != nil {
+			logrus.Warnf("failed to get internal kvdb bootstrap config map: %v", err)
+		}
+
+		// Get the bootstrap entries
+		entriesBlob, ok := cm.Data[PxEntriesKey]
+		if ok {
+			kvdbNodeMap, err = blobToBootstrapEntries([]byte(entriesBlob))
+			if err != nil {
+				logrus.Warnf("failed to get internal kvdb bootstrap config map: %v", err)
+			}
+		}
+	}
+	return kvdbNodeMap
+}
+
+func blobToBootstrapEntries(
+	entriesBlob []byte,
+) (map[string]*kvdb_api.BootstrapEntry, error) {
+
+	var bEntries []*kvdb_api.BootstrapEntry
+	if err := json.Unmarshal(entriesBlob, &bEntries); err != nil {
+		return nil, err
+	}
+
+	// return as a map by ID to facilitate callers
+	retMap := make(map[string]*kvdb_api.BootstrapEntry)
+	for _, e := range bEntries {
+		retMap[e.ID] = e
+	}
+	return retMap, nil
+}
+
+// AppendUserVolumeMounts appends "user" vol specs to the pod spec
+//   - note, the user volume specs will override container mounts, if the mount
+//     destination directory is the same
+//   - caveat: caller needs to ensure that the volume specs NAMES are unique
+func AppendUserVolumeMounts(
+	podSpec *v1.PodSpec,
+	userVolSpecList []corev1.VolumeSpec,
+) {
+	if podSpec == nil {
+		return
+	} else if len(userVolSpecList) == 0 {
+		return
+	}
+
+	// make map of user-volumes, also append vols to pod spec
+	usrSpecMap := make(map[string]corev1.VolumeSpec)
+	for _, v := range userVolSpecList {
+		usrSpecMap[v.MountPath] = v
+		podSpec.Volumes = append(podSpec.Volumes, v1.Volume{
+			Name:         UserVolumeName(v.Name),
+			VolumeSource: v.VolumeSource,
+		})
+	}
+
+	// update container volumes, when destination-dir matches
+	for idx1, cntr := range podSpec.Containers {
+		for idx2, cv := range cntr.VolumeMounts {
+			if uv, has := usrSpecMap[cv.MountPath]; has {
+				logrus.Debugf("Replacing container %s:%s mount '%s' with user-mount '%s'",
+					cntr.Name, cv.MountPath, cv.Name, uv.Name)
+
+				podSpec.Containers[idx1].VolumeMounts[idx2] = v1.VolumeMount{
+					Name:             UserVolumeName(uv.Name),
+					MountPath:        uv.MountPath,
+					ReadOnly:         uv.ReadOnly,
+					MountPropagation: uv.MountPropagation,
+				}
+			}
+		}
+	}
 }

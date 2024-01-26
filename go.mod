@@ -1,6 +1,6 @@
 module github.com/portworx/torpedo
 
-go 1.19
+go 1.21
 
 require (
 	cloud.google.com/go/storage v1.30.1
@@ -29,7 +29,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20231004002935-494c2edc384a
+	github.com/libopenstorage/operator v0.0.0-20240125095322-f80d3553e81d
 	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.24.1
@@ -80,6 +80,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.10.0 // indirect
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
+	github.com/moby/sys/mountinfo v0.6.0 // indirect
 	github.com/montanaflynn/stats v0.0.0-20180911141734-db72e6cae808 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -138,8 +139,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
-	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
-	github.com/codeskyblue/go-sh v0.0.0-20170112005953-b097669b1569 // indirect
 	github.com/container-storage-interface/spec v1.7.0 // indirect
 	github.com/containerd/containerd v1.6.6 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
@@ -352,11 +351,11 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 
 	// PX dependencies
-	//github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20230714011749-8b9217492993
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20231025225342-bd3d3ceba556
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
+
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

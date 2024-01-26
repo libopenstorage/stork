@@ -123,8 +123,8 @@ var _ = Describe("{Sharedv4Functional}", func() {
 						if mnt.Mountpoint != devicePath {
 							continue
 						}
-						Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
-						Expect(volumeMountRO.MatchString(mnt.VfsOpts)).To(BeTrue())
+						Expect(volumeMountRW.MatchString(mnt.Options)).To(BeTrue())
+						Expect(volumeMountRO.MatchString(mnt.VFSOptions)).To(BeTrue())
 					}
 				})
 
@@ -165,8 +165,8 @@ var _ = Describe("{Sharedv4Functional}", func() {
 						if mnt.Mountpoint != devicePath {
 							continue
 						}
-						Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
-						Expect(volumeMountRW.MatchString(mnt.VfsOpts)).To(BeTrue())
+						Expect(volumeMountRW.MatchString(mnt.Options)).To(BeTrue())
+						Expect(volumeMountRW.MatchString(mnt.VFSOptions)).To(BeTrue())
 					}
 				})
 			}

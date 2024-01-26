@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/libopenstorage/openstorage/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -14,10 +15,11 @@ import (
 // SdkServers consists of different mock servers that the mock
 // sdk server can implement
 type SdkServers struct {
-	Cluster *MockOpenStorageClusterServer
-	Node    *MockOpenStorageNodeServer
-	Role    *MockOpenStorageRoleServer
-	Volume  *MockOpenStorageVolumeServer
+	Cluster         *MockOpenStorageClusterServer
+	Node            *MockOpenStorageNodeServer
+	Role            *MockOpenStorageRoleServer
+	Volume          *MockOpenStorageVolumeServer
+	PortworxService *MockPortworxServiceServer
 }
 
 // SdkServer can be used to create a sdk server which implements mock server
@@ -58,6 +60,9 @@ func (m *SdkServer) StartOnAddress(ip, port string) error {
 	}
 	if m.servers.Volume != nil {
 		api.RegisterOpenStorageVolumeServer(m.server, m.servers.Volume)
+	}
+	if m.servers.PortworxService != nil {
+		pxapi.RegisterPortworxServiceServer(m.server, m.servers.PortworxService)
 	}
 
 	reflection.Register(m.server)

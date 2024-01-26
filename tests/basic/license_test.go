@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
 
 	. "github.com/onsi/ginkgo"

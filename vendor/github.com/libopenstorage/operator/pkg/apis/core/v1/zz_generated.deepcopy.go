@@ -455,7 +455,7 @@ func (in *GitOpsSpec) DeepCopyInto(out *GitOpsSpec) {
 	*out = *in
 	if in.Params != nil {
 		in, out := &in.Params, &out.Params
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]interface{}, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}

@@ -13,6 +13,7 @@ import (
 
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/operator/pkg/constants"
+	"github.com/libopenstorage/operator/pkg/util/maps"
 )
 
 /*
@@ -50,10 +51,10 @@ func IsNodeBeingDeleted(node *v1.Node, cl client.Client) (bool, error) {
 // within the delay, exponential backoff is applied here.
 func IsPodRecentlyCreatedAfterNodeCordoned(
 	node *v1.Node,
-	nodeInfoMap map[string]*NodeInfo,
+	nodeInfoMap maps.SyncMap[string, *NodeInfo],
 	cluster *corev1.StorageCluster,
 ) bool {
-	nodeInfo, ok := nodeInfoMap[node.Name]
+	nodeInfo, ok := nodeInfoMap.Load(node.Name)
 	// The pod has never been created
 	if !ok || nodeInfo == nil {
 		return false

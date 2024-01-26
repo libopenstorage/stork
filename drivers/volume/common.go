@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"time"
 
-	pxapi "github.com/portworx/torpedo/porx/px/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"

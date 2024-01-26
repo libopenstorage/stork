@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
-	"github.com/libopenstorage/openstorage/pkg/auth"
 	"github.com/mohae/deepcopy"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
+	"github.com/libopenstorage/openstorage/pkg/auth"
 )
 
 // Strings for VolumeSpec
@@ -112,6 +113,7 @@ const (
 	SpecIoThrottleRdBW                      = "io_throttle_rd_bw"
 	SpecIoThrottleWrBW                      = "io_throttle_wr_bw"
 	SpecReadahead                           = "readahead"
+	SpecWinshare                            = "winshare"
 )
 
 // OptionKey specifies a set of recognized query params.
@@ -157,6 +159,8 @@ const (
 	OptCredSecretKey = "CredSecretKey"
 	// OptCredBucket is the optional bucket name
 	OptCredBucket = "CredBucket"
+	// OptCredSSE for s3 sse flag
+	OptCredSSE = "CredSSE"
 	// OptCredGoogleProjectID projectID for google cloud
 	OptCredGoogleProjectID = "CredProjectID"
 	// OptCredGoogleJsonKey for google cloud
@@ -238,6 +242,8 @@ type Node struct {
 	SchedulerNodeName string
 	// Cpu usage of the node.
 	Cpu float64 // percentage.
+	// Number of CPU cores
+	CpuCores int
 	// Total Memory of the node
 	MemTotal uint64
 	// Used Memory of the node
@@ -276,6 +282,8 @@ type Node struct {
 	SecurityStatus StorageNode_SecurityStatus
 	// SchedulerTopology topology information of the node in scheduler context
 	SchedulerTopology *SchedulerTopology
+	// Flag indicating whether the node is a quorum member or not
+	NonQuorumMember bool
 }
 
 // FluentDConfig describes ip and port of a fluentdhost.
@@ -333,7 +341,8 @@ type CredUpdateRequest struct {
 
 // StatPoint represents the basic structure of a single Stat reported
 // TODO: This is the first step to introduce stats in openstorage.
-//       Follow up task is to introduce an API for logging stats
+//
+//	Follow up task is to introduce an API for logging stats
 type StatPoint struct {
 	// Name of the Stat
 	Name string
@@ -743,7 +752,6 @@ type CapacityUsageResponse struct {
 	Error error
 }
 
-//
 // DriverTypeSimpleValueOf returns the string format of DriverType
 func DriverTypeSimpleValueOf(s string) (DriverType, error) {
 	obj, err := simpleValueOf("driver_type", DriverType_value, s)
@@ -1013,6 +1021,7 @@ func (s *Node) ToStorageNode() *StorageNode {
 		Id:                s.Id,
 		SchedulerNodeName: s.SchedulerNodeName,
 		Cpu:               s.Cpu,
+		CpuCores:          int64(s.CpuCores),
 		MemTotal:          s.MemTotal,
 		MemUsed:           s.MemUsed,
 		MemFree:           s.MemFree,
@@ -1024,6 +1033,7 @@ func (s *Node) ToStorageNode() *StorageNode {
 		HWType:            s.HWType,
 		SecurityStatus:    s.SecurityStatus,
 		SchedulerTopology: s.SchedulerTopology,
+		NonQuorumMember:   s.NonQuorumMember,
 	}
 
 	node.Disks = make(map[string]*StorageResource)
@@ -1308,6 +1318,9 @@ func (v *VolumeSpec) IsPureVolume() bool {
 	return v.GetProxySpec() != nil && v.GetProxySpec().IsPureBackend()
 }
 
+func (v *VolumeSpec) IsPureBlockVolume() bool {
+	return v.GetProxySpec() != nil && v.GetProxySpec().IsPureBlockBackend()
+}
 // GetCloneCreatorOwnership returns the appropriate ownership for the
 // new snapshot and if an update is required
 func (v *VolumeSpec) GetCloneCreatorOwnership(ctx context.Context) (*Ownership, bool) {
@@ -1442,6 +1455,14 @@ func (s *ProxySpec) IsPureBackend() bool {
 		s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_FILE
 }
 
+func (s *ProxySpec) IsPureBlockBackend() bool {
+	return s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK
+}
+
+func (s *ProxySpec) IsPureFileBackend() bool {
+	return s.ProxyProtocol == ProxyProtocol_PROXY_PROTOCOL_PURE_FILE
+}
+
 func (s *ProxySpec) IsPureImport() bool {
 	if !s.IsPureBackend() {
 		return false
@@ -1470,3 +1491,21 @@ func (s *ProxySpec) GetPureFullVolumeName() string {
 func GetAllEnumInfo() []protoimpl.EnumInfo {
 	return file_api_api_proto_enumTypes
 }
+
+// Constants defined for proxy mounts
+const (
+	// OptProxyCaller is an option to pass NodeID of the client requesting a sharedv4
+	// mount from the server
+	OptProxyCaller = "caller"
+	// OptProxyCallerIP is an option to pass NodeIP of the client requesting a sharedv4
+	// mount from the server
+	OptProxyCallerIP = "caller_ip"
+	// OptMountID is an option to pass mount path of the client requesting a sharedv4
+	// mount from the server
+	OptMountID = "mountID"
+)
+
+const (
+	// SharedVolExportPrefix is the export path where shared volumes are mounted
+	SharedVolExportPrefix = "/var/lib/osd/pxns"
+)

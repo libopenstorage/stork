@@ -32,7 +32,6 @@ COPY Makefile Makefile
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY pkg pkg
-COPY porx porx
 COPY scripts scripts
 COPY drivers drivers
 COPY deployments deployments

@@ -1,107 +1,27 @@
-/*
-Copyright © 2017 Moby and Kubernetes Authors
-
-Mount parse code originally from:
-https://github.com/moby/sys/blob/65f80e71a828ef17e6f573176dc569e55f519937/mountinfo/mountinfo_linux.go
-
-Consistent read code originally from:
-https://github.com/kubernetes/utils/blob/a0dff01d8ea5b4e8799d52a7fad727caafc9c685/io/read.go#L33-L35
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package mount
+package mountinfo
 
 import (
 	"bufio"
-	"bytes"
-	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"strings"
+	"os"
 	"strconv"
-
-	"github.com/moby/sys/mountinfo"
+	"strings"
 )
 
-const (
-	/* 36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue
-	   (1)(2)(3)   (4)   (5)      (6)      (7)   (8) (9)   (10)         (11)
-
-	   (1) mount ID:  unique identifier of the mount (may be reused after umount)
-	   (2) parent ID:  ID of parent (or of self for the top of the mount tree)
-	   (3) major:minor:  value of st_dev for files on filesystem
-	   (4) root:  root of the mount within the filesystem
-	   (5) mount point:  mount point relative to the process's root
-	   (6) mount options:  per mount options
-	   (7) optional fields:  zero or more fields of the form "tag[:value]"
-	   (8) separator:  marks the end of the optional fields
-	   (9) filesystem type:  name of filesystem of the form "type[.subtype]"
-	   (10) mount source:  filesystem specific information or "none"
-	   (11) super options:  per super block options*/
-	mountinfoFormat = "%d %d %d:%d %s %s %s %s"
-)
-
-// ErrLimitReached means that the read limit is reached.
-var ErrLimitReached = errors.New("the read limit is reached")
-
-// Parse /proc/self/mountinfo because comparing Dev and ino does not work from
-// bind mounts. function is originally from
-// https://github.com/moby/sys/blob/65f80e71a828ef17e6f573176dc569e55f519937/mountinfo/mountinfo_linux.go
-func parseMountTable() ([]*mountinfo.Info, error) {
-	mountInfoBytes, err := consistentRead("/proc/self/mountinfo", 3)
-	if err != nil {
-		return nil, err
-	}
-
-	return ParseInfoFile(bytes.NewReader(mountInfoBytes))
-}
-
-// consistentRead repeatedly reads a file until it gets the same content twice.
-// This is useful when reading files in /proc that are larger than page size
-// and kernel may modify them between individual read() syscalls.
-// originally from https://github.com/kubernetes/utils/blob/a0dff01d8ea5b4e8799d52a7fad727caafc9c685/io/read.go#L33-L35
-func consistentRead(filename string, attempts int) ([]byte, error) {
-	oldContent, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	for i := 0; i < attempts; i++ {
-		newContent, err := ioutil.ReadFile(filename)
-		if err != nil {
-			return nil, err
-		}
-		if bytes.Compare(oldContent, newContent) == 0 {
-			return newContent, nil
-		}
-		// Files are different, continue reading
-		oldContent = newContent
-	}
-	return nil, fmt.Errorf("could not get consistent content of mount table after %d attempts", attempts)
-}
-
-func ParseInfoFile(r io.Reader) ([]*mountinfo.Info, error) {
-	var (
-		s   = bufio.NewScanner(r)
-		out = []*mountinfo.Info{}
-	)
-
+// GetMountsFromReader retrieves a list of mounts from the
+// reader provided, with an optional filter applied (use nil
+// for no filter). This can be useful in tests or benchmarks
+// that provide fake mountinfo data, or when a source other
+// than /proc/self/mountinfo needs to be read from.
+//
+// This function is Linux-specific.
+func GetMountsFromReader(r io.Reader, filter FilterFunc) ([]*Info, error) {
+	s := bufio.NewScanner(r)
+	out := []*Info{}
 	for s.Scan() {
 		var err error
-		if err = s.Err(); err != nil {
-			return nil, err
-		}
+
 		/*
 		   See http://man7.org/linux/man-pages/man5/proc.5.html
 
@@ -151,7 +71,7 @@ func ParseInfoFile(r io.Reader) ([]*mountinfo.Info, error) {
 			}
 		}
 
-		p := &mountinfo.Info{}
+		p := &Info{}
 
 		p.Mountpoint, err = unescape(fields[4])
 		if err != nil {
@@ -187,19 +107,61 @@ func ParseInfoFile(r io.Reader) ([]*mountinfo.Info, error) {
 		// zero or more optional fields
 		p.Optional = strings.Join(fields[6:sepIdx], " ")
 
+		// Run the filter after parsing all fields.
+		var skip, stop bool
+		if filter != nil {
+			skip, stop = filter(p)
+			if skip {
+				continue
+			}
+		}
+
 		out = append(out, p)
+		if stop {
+			break
+		}
+	}
+	if err := s.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
+func parseMountTable(filter FilterFunc) ([]*Info, error) {
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	return GetMountsFromReader(f, filter)
+}
+
+// PidMountInfo retrieves the list of mounts from a given process' mount
+// namespace. Unless there is a need to get mounts from a mount namespace
+// different from that of a calling process, use GetMounts.
+//
+// This function is Linux-specific.
+//
+// Deprecated: this will be removed before v1; use GetMountsFromReader with
+// opened /proc/<pid>/mountinfo as an argument instead.
+func PidMountInfo(pid int) ([]*Info, error) {
+	f, err := os.Open(fmt.Sprintf("/proc/%d/mountinfo", pid))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	return GetMountsFromReader(f, nil)
+}
 
 // A few specific characters in mountinfo path entries (root and mountpoint)
 // are escaped using a backslash followed by a character's ascii code in octal.
 //
-//	space              -- as \040
-//	tab (aka \t)       -- as \011
-//	newline (aka \n)   -- as \012
-//	backslash (aka \\) -- as \134
+//   space              -- as \040
+//   tab (aka \t)       -- as \011
+//   newline (aka \n)   -- as \012
+//   backslash (aka \\) -- as \134
 //
 // This function converts path from mountinfo back, i.e. it unescapes the above sequences.
 func unescape(path string) (string, error) {

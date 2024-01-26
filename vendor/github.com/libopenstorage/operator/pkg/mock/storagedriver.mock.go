@@ -55,6 +55,21 @@ func (mr *MockDriverMockRecorder) DeleteStorage(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStorage", reflect.TypeOf((*MockDriver)(nil).DeleteStorage), arg0)
 }
 
+// GetKVDBMembers mocks base method.
+func (m *MockDriver) GetKVDBMembers(arg0 *v1.StorageCluster) (map[string]bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetKVDBMembers", arg0)
+	ret0, _ := ret[0].(map[string]bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetKVDBMembers indicates an expected call of GetKVDBMembers.
+func (mr *MockDriverMockRecorder) GetKVDBMembers(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKVDBMembers", reflect.TypeOf((*MockDriver)(nil).GetKVDBMembers), arg0)
+}
+
 // GetKVDBPodSpec mocks base method.
 func (m *MockDriver) GetKVDBPodSpec(arg0 *v1.StorageCluster, arg1 string) (v10.PodSpec, error) {
 	m.ctrl.T.Helper()

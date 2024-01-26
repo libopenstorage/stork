@@ -7,11 +7,11 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
