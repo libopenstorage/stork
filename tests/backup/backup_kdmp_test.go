@@ -338,7 +338,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 
 		})
@@ -1010,7 +1010,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 
 		})

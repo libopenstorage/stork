@@ -4728,7 +4728,7 @@ func GetAllRestoresForUser(username string, password string) ([]string, error) {
 }
 
 // CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
-func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context, ObjectLock bool, AutoDeleteForObjectLock bool) (err error) {
 	backupDriver := Inst().Backup
 	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4739,8 +4739,8 @@ func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCo
 
 		SchedulePolicy: &api.SchedulePolicyInfo{
 			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
-			ForObjectLock: false,
-			AutoDelete:    false,
+			ForObjectLock: ObjectLock,
+			AutoDelete:    AutoDeleteForObjectLock,
 		},
 	}
 
@@ -6743,6 +6743,50 @@ func validateCRCleanup(resourceInterface interface{},
 
 	return err
 
+}
+
+// SuspendAndDeleteAllSchedulesForUsers suspends and delete the backup schedule for a give list of users
+func SuspendAndDeleteAllSchedulesForUsers(userNames []string, clusterName string, orgID string, deleteBackupFlag bool) error {
+
+	for _, user := range userNames {
+		log.InfoD("Getting context for non admin user %s", user)
+		ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+		if err != nil {
+			return err
+		}
+
+		SchedulePolices, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		log.InfoD("Getting list of all schedule polices %s", SchedulePolices)
+
+		for _, schedulePolicyName := range SchedulePolices {
+			clusterUID, err := Inst().Backup.GetClusterUID(ctx, orgID, clusterName)
+			if err != nil {
+				return err
+			}
+			backupEnumreateRequest := &api.BackupScheduleEnumerateRequest{
+				OrgId: orgID,
+				EnumerateOptions: &api.EnumerateOptions{
+					ClusterNameFilter: clusterName,
+					ClusterUidFilter:  clusterUID,
+				},
+			}
+			listOfBackupSchedules, err := Inst().Backup.EnumerateBackupScheduleByUser(ctx, backupEnumreateRequest)
+			if err != nil {
+				return err
+			}
+			for _, backupScheduleName := range listOfBackupSchedules.GetBackupSchedules() {
+				log.InfoD("Suspend and delete backup schedule [%s] for schedule policy [%s]", backupScheduleName, schedulePolicyName)
+				err := SuspendAndDeleteSchedule(backupScheduleName.GetName(), schedulePolicyName, clusterName, orgID, ctx, deleteBackupFlag)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // SuspendAndDeleteSchedule suspends and deletes the backup schedule

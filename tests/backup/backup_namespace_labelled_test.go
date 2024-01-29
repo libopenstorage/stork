@@ -1337,7 +1337,7 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
-			err = CreateBackupScheduleIntervalPolicy(5, 15, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, 15, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx, false, false)
 		})
 
 		Step("Creating a schedule backup of empty namespace with namespace label filter", func() {

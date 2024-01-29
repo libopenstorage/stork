@@ -3787,7 +3787,7 @@ var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(5))
 			schedulePolicyUID = uuid.New()
-			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, orgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, orgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
 		})
 
