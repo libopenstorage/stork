@@ -1485,7 +1485,9 @@ func createActionCR(
 		Spec: storkv1.ActionSpec{
 			ActionType: storkv1.ActionTypeFailover,
 		},
-		Status: storkv1.ActionStatusScheduled,
+		Status: storkv1.ActionStatus{
+			Status: storkv1.ActionStatusScheduled,
+		},
 	}
 	return storkops.Instance().CreateAction(&actionSpec)
 }
