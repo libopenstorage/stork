@@ -2226,6 +2226,53 @@ func (a *ApplicationBackupController) cleanupResources(
 		log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
 		return err
 	}
+
+	if IsBackupObjectTypeVirtualMachine(backup) {
+		preExecRule := backup.Spec.PreExecRule
+		postExecRule := backup.Spec.PostExecRule
+
+		deleteRuleIfExists := func(ruleName string) error {
+			rule, err := storkops.Instance().GetRule(ruleName, backup.Namespace)
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					logrus.Infof("rule CR [%v] not found, skipping deletion: %v", ruleName, err)
+					return nil
+				}
+				errMsg := fmt.Sprintf("failed to retrieve the rule CR [%v]: %v", ruleName, err)
+				log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+				return err
+			}
+
+			if rule.Annotations[backupUIDKey] == string(backup.UID) &&
+				rule.Annotations[createdByKey] == createdByValue {
+				logrus.Infof("deleting rule CR: %v", rule.Name)
+				err := storkops.Instance().DeleteRule(rule.Name, backup.Namespace)
+				if err != nil && !k8s_errors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("failed to delete the rule CR [%v]: %v", rule.Name, err)
+					log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+					return err
+				}
+				logrus.Infof("rule CR deleted successfully: %v", rule.Name)
+			}
+
+			return nil
+		}
+
+		if preExecRule != "" {
+			logrus.Infof("deleting the preExec rule: %v", preExecRule)
+			if err := deleteRuleIfExists(preExecRule); err != nil {
+				return err
+			}
+		}
+
+		if postExecRule != "" {
+			logrus.Infof("deleting the postExec rule: %v", postExecRule)
+			if err := deleteRuleIfExists(postExecRule); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
