@@ -45,6 +45,8 @@ type ApplicationBackupSpec struct {
 	BackupType       string            `json:"backupType"`
 	// CSISnapshotClassMap is 1 to 1 Map of CSI Provisioner to its Corresponding VolumeSnapshotClass to be used for backup
 	CSISnapshotClassMap map[string]string `json:"csiSnapshotClassMap"`
+	BackupObjectType    string            `json:"backupObjectType"`
+	SkipAutoExecRules   bool              `json:"skipAutoExecRules"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
@@ -130,6 +132,8 @@ type ApplicationBackupStageType string
 const (
 	// ApplicationBackupStageInitial for when backup is created
 	ApplicationBackupStageInitial ApplicationBackupStageType = ""
+	// ApplicationBackupStageImportResource for when vm resources are imported
+	ApplicationBackupStageImportResource ApplicationBackupStageType = "ImportResource"
 	// ApplicationBackupStagePreExecRule for when the PreExecRule is being executed
 	ApplicationBackupStagePreExecRule ApplicationBackupStageType = "PreExecRule"
 	// ApplicationBackupStagePostExecRule for when the PostExecRule is being executed
