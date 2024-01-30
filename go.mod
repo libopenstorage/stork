@@ -334,7 +334,7 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240129132809-c902e2ee3c42
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240124012200-74280fbb6e27
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3

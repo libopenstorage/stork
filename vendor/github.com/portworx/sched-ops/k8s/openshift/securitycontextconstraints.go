@@ -14,6 +14,8 @@ type SecurityContextConstraintsOps interface {
 	ListSecurityContextConstraints() (*ocpsecurityv1api.SecurityContextConstraintsList, error)
 	// GetSecurityContextConstraints takes name of the securityContextConstraints and returns the corresponding securityContextConstraints object, and an error if there is any.
 	GetSecurityContextConstraints(string) (*ocpsecurityv1api.SecurityContextConstraints, error)
+	// CreateSecurityContextConstraints creates securityContextConstraints
+	CreateSecurityContextConstraints(*ocpsecurityv1api.SecurityContextConstraints) (*ocpsecurityv1api.SecurityContextConstraints, error)
 	// UpdateSecurityContextConstraints takes the representation of a securityContextConstraints and updates it. Returns the server's representation of the securityContextConstraints, and an error, if there is any.
 	UpdateSecurityContextConstraints(*ocpsecurityv1api.SecurityContextConstraints) (*ocpsecurityv1api.SecurityContextConstraints, error)
 }
@@ -36,6 +38,14 @@ func (c *Client) GetSecurityContextConstraints(name string) (result *ocpsecurity
 		return nil, err
 	}
 	return c.getOcpSecurityClient().SecurityContextConstraints().Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+// CreateSecurityContextConstraints creates securityContextConstraints
+func (c *Client) CreateSecurityContextConstraints(securityContextConstraints *ocpsecurityv1api.SecurityContextConstraints) (result *ocpsecurityv1api.SecurityContextConstraints, err error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.getOcpSecurityClient().SecurityContextConstraints().Create(context.TODO(), securityContextConstraints, metav1.CreateOptions{})
 }
 
 // UpdateSecurityContextConstraints takes the representation of a securityContextConstraints and updates it. Returns the server's representation of the securityContextConstraints, and an error, if there is any.
