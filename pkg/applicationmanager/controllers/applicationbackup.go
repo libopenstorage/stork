@@ -98,9 +98,13 @@ const (
 	// for vm freeze and unfreeze operation.
 	annotationKeyPrefix = "portworx.io/"
 	backupUIDKey        = annotationKeyPrefix + "backup-uid"
+	backupNameKey       = annotationKeyPrefix + "backup-name"
+	clusterNameKey      = annotationKeyPrefix + "cluster-name"
+	clusterUIDKey       = annotationKeyPrefix + "cluster-uid"
 	createdByKey        = annotationKeyPrefix + "created-by"
 	createdByValue      = annotationKeyPrefix + "stork"
 	lastUpdateKey       = annotationKeyPrefix + "last-update"
+	VmResourcePopulated = annotationKeyPrefix + "vm-resources-populated"
 )
 
 var (
@@ -429,16 +433,8 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 		fallthrough
 	case stork_api.ApplicationBackupStageImportResource:
-		if IsBackupObjectTypeVirtualMachine(backup) {
+		if IsBackupObjecyTypeVirtualMachine(backup) {
 			logrus.Infof("This is a VM specific backup, processing resource collection of vm resources")
-			updateCrFunction := func() error {
-				err = a.client.Update(context.TODO(), backup)
-				if err != nil {
-					log.ApplicationBackupLog(backup).Errorf("error updating Cr in VMBackupProcessingStage: %v", err)
-					return err
-				}
-				return nil
-			}
 			updateCr, err := a.createVMSpecificBackupResources(backup)
 			if err != nil {
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
@@ -452,14 +448,19 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 					v1.EventTypeWarning,
 					string(stork_api.ApplicationBackupStatusFailed),
 					err.Error())
-				return updateCrFunction()
+				updateCr = true
 			}
 			if updateCr {
+				//backup.Spec.IncludeResources = a.vmIncludeResource
 				backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
 				backup.Status.LastUpdateTimestamp = metav1.Now()
-				log.ApplicationBackupLog(backup).Infof("Auto exec Rules created, updating the CR")
-				//return updateCrFunction()
 
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf("error updating Cr in VMBackupProcessingStage: %v", err)
+					return err
+				}
+				return nil
 			}
 		}
 		fallthrough
@@ -519,6 +520,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 	case stork_api.ApplicationBackupStageFinal:
+		logrus.Errorf("########## Reached final stage return safely ############")
 		// Do Nothing
 		return nil
 	default:
@@ -625,7 +627,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	if a.IsVolsToBeBackedUp(backup) {
 		isResourceTypePVC := IsResourceTypePVC(backup)
 		var objectMap map[stork_api.ObjectInfo]bool
-		if IsBackupObjectTypeVirtualMachine(backup) {
+		if IsBackupObjecyTypeVirtualMachine(backup) {
 			objectMap = a.vmIncludeResourceMap[string(backup.UID)]
 		} else {
 			objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
@@ -1648,7 +1650,7 @@ func (a *ApplicationBackupController) backupResources(
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	var objectMap map[stork_api.ObjectInfo]bool
-	if IsBackupObjectTypeVirtualMachine(backup) {
+	if IsBackupObjecyTypeVirtualMachine(backup) {
 		objectMap = a.vmIncludeResourceMap[string(backup.UID)]
 	} else {
 		objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
@@ -2111,7 +2113,7 @@ func (a *ApplicationBackupController) IsVolsToBeBackedUp(backup *stork_api.Appli
 		// which could have entry to backup a PVC
 
 		objectInfo := backup.Spec.IncludeResources
-		if IsBackupObjectTypeVirtualMachine(backup) {
+		if IsBackupObjecyTypeVirtualMachine(backup) {
 			objectInfo = a.vmIncludeResource[string(backup.UID)]
 		}
 		for _, object := range objectInfo {
@@ -2192,13 +2194,15 @@ func createRuleCrObject(rules []stork_api.RuleItem, backup *stork_api.Applicatio
 		Rules:      rules,
 	}
 
-	rulesObject.Name = name + "-" + string(backup.GetUID())
+	rulesObject.Name = name + "-" + backup.Annotations[backupUIDKey]
 	rulesObject.Namespace = backup.GetNamespace()
 
 	var annotations = make(map[string]string)
-	annotations[backupUIDKey] = string(backup.GetUID())
+	annotations[backupUIDKey] = backup.Annotations[backupUIDKey]
 	annotations[createdByKey] = createdByValue
 	annotations[lastUpdateKey] = metav1.Now().String()
+	annotations[clusterNameKey] = backup.Annotations[clusterNameKey]
+	annotations[clusterUIDKey] = backup.Annotations[clusterUIDKey]
 
 	rulesObject.Annotations = annotations
 
@@ -2257,8 +2261,9 @@ func (a *ApplicationBackupController) createVMIncludeResources(backup *stork_api
 	*stork_api.Rule,
 	error) {
 
+	objectMap := map[stork_api.ObjectInfo]bool{}
 	// First VMs from various filters provided.
-	vmList, objectMap, err := resourcecollector.GetVMIncludeListFromBackup(backup)
+	vmList, objectMap, err := resourcecollector.GetVMIncludeListFromBackup(backup, objectMap)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2282,7 +2287,7 @@ func (a *ApplicationBackupController) createVMIncludeResources(backup *stork_api
 	return freezeRulesObject, unFreezeRulesObject, nil
 }
 
-// IsBackupObjectTypeVirtualMachine returns true if backupObjectType is VirtualMachine
-func IsBackupObjectTypeVirtualMachine(backup *stork_api.ApplicationBackup) bool {
+// IsBackupObjecyTypeVirtualMachine returns true if backupObjectType is VirtualMachine
+func IsBackupObjecyTypeVirtualMachine(backup *stork_api.ApplicationBackup) bool {
 	return backup.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine
 }
