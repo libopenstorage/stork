@@ -2164,6 +2164,28 @@ func (a *ApplicationBackupController) cleanupResources(
 		log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
 		return err
 	}
+	// Check if the backup is of the type virtual machine and then collect the rules and only then delete it.
+	if backup.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine {
+		storkVmRules, err := storkops.Instance().ListRules(backup.Namespace, metav1.ListOptions{})
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("failed to retrieve the rule CRs related to VM backup: %v", err)
+			log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+			return err
+		}
+		for _, rule := range storkVmRules.Items {
+			ruleName := rule.Name
+			// Check if the rules found belong to the vm related backup only
+			if strings.Contains(ruleName, vmFreezePrefix) || strings.Contains(ruleName, vmUnFreezePrefix) {
+				logrus.Infof("deleting rule CR: %v", ruleName)
+				err := storkops.Instance().DeleteRule(ruleName, backup.Namespace)
+				if err != nil && !k8s_errors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("failed to delete the rule CR [%v]: %v", ruleName, err)
+					log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
