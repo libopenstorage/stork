@@ -2194,9 +2194,66 @@ func IsResourceTypePVC(backup *stork_api.ApplicationBackup) bool {
 func (a *ApplicationBackupController) cleanupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
+	if IsBackupObjectTypeVirtualMachine(backup) && !backup.Spec.SkipAutoExecRules {
+		preExecRule := backup.Spec.PreExecRule
+		postExecRule := backup.Spec.PostExecRule
+
+		deleteRuleIfExists := func(ruleName string) (bool, error) {
+			rule, err := storkops.Instance().GetRule(ruleName, backup.Namespace)
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					log.ApplicationBackupLog(backup).Infof("rule CR [%v] not found, skipping deletion: %v", ruleName, err)
+					return false, nil
+				}
+				errMsg := fmt.Sprintf("failed to retrieve the rule CR [%v]: %v", ruleName, err)
+				log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+				return false, err
+			}
+
+			if rule.Annotations[backupUIDKey] == string(backup.UID) &&
+				rule.Annotations[createdByKey] == createdByValue {
+				log.ApplicationBackupLog(backup).Infof("deleting rule CR: %v", rule.Name)
+				err := storkops.Instance().DeleteRule(rule.Name, backup.Namespace)
+				if err != nil && !k8s_errors.IsNotFound(err) {
+					errMsg := fmt.Sprintf("failed to delete the rule CR [%v]: %v", rule.Name, err)
+					log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
+					return false, err
+				}
+				log.ApplicationBackupLog(backup).Infof("rule CR deleted successfully: %v", rule.Name)
+				return true, nil
+			}
+			log.ApplicationBackupLog(backup).Debugf("the clean of rule CR resources was related to VM based backup, but UIDs for the rules and backup did not seem to match. Hence, skipping the deletion.")
+			return false, nil
+		}
+
+		if preExecRule != "" {
+			log.ApplicationBackupLog(backup).Infof("deleting the preExec rule: %v", preExecRule)
+			deleted, err := deleteRuleIfExists(preExecRule)
+			if err != nil {
+				return err
+			} else if deleted {
+				backup.Spec.PreExecRule = ""
+			}
+		}
+
+		if postExecRule != "" {
+			log.ApplicationBackupLog(backup).Infof("deleting the postExec rule: %v", postExecRule)
+			deleted, err := deleteRuleIfExists(postExecRule)
+			if err != nil {
+				return err
+			} else if deleted {
+				backup.Spec.PostExecRule = ""
+			}
+		}
+	}
+
 	// Delete post-exec rule CR only for the manual backup as it is managed and created through the px-backup
 	// And also here the deletion will be skipped if the backupCR is created by the backup schedule or for the restore from the px-backup.
-	if len(backup.Spec.PostExecRule) != 0 && backup.Annotations[utils.PxbackupAnnotationCreateByKey] == utils.PxbackupAnnotationCreateByValue && backup.Annotations["portworx.io/backup-by"] != "backup-schedule" && backup.Annotations["portworx.io/backup-by"] != "restore" {
+	// Cleanup/Deletion of pre-exec rule CR is handled in the px-backup and only post-exec is done here to make sure apps are unfreezed during abrupt backup cancellation.
+	if len(backup.Spec.PostExecRule) != 0 &&
+		backup.Annotations[utils.PxbackupAnnotationCreateByKey] == utils.PxbackupAnnotationCreateByValue &&
+		backup.Annotations["portworx.io/backup-by"] != "backup-schedule" &&
+		backup.Annotations["portworx.io/backup-by"] != "restore" {
 		log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Delete post-exec rule CR as it is a manual backup created by the px-backup")
 
 		err := storkops.Instance().DeleteRule(backup.Spec.PostExecRule, backup.Namespace)
@@ -2226,6 +2283,7 @@ func (a *ApplicationBackupController) cleanupResources(
 		log.ApplicationBackupLog(backup).Errorf("%v", errMsg)
 		return err
 	}
+
 	return nil
 }
 
