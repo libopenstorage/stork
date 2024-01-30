@@ -4,6 +4,10 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
+if [ -z "${ENABLE_GRAFANA}" ]; then
+    ENABLE_GRAFANA=false
+fi
+
 if [ -z "${DATA_INTEGRITY_VALIDATION_TESTS}" ]; then
     DATA_INTEGRITY_VALIDATION_TESTS=""
 fi
@@ -743,6 +747,8 @@ spec:
       value: "${PX_BACKUP_MONGODB_USERNAME}"
     - name: PX_BACKUP_MONGODB_PASSWORD
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
+    - name: ENABLE_GRAFANA
+      value: "${ENABLE_GRAFANA}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

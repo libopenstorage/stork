@@ -575,6 +575,10 @@ func InitInstance() {
 	if pxVersion != "" {
 		t.Tags["px-version"] = pxVersion
 	}
+
+	ns, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Error occured while getting volume driver namespace")
+	installGrafana(ns)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -10345,4 +10349,38 @@ func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
 	}
 
 	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
+}
+
+func installGrafana(namespace string) {
+	enableGrafana := false
+
+	// If true, enable grafana on the set up
+	if enableGrafanaVar := os.Getenv("ENABLE_GRAFANA"); enableGrafanaVar != "" {
+		enableGrafana, _ = strconv.ParseBool(enableGrafanaVar)
+	}
+	if enableGrafana {
+		grafanaScript := "/torpedo/deployments/setup_grafana.sh"
+		if _, err := os.Stat(grafanaScript); errors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find grafana set up script in path %s", grafanaScript)
+			return
+		}
+
+		// Change permission on file to be able to execute
+		if err := osutils.Chmod("+x", grafanaScript); err != nil {
+			log.Warnf("error changing permission for script [%s], err: %v", grafanaScript, err)
+			return
+		}
+
+		output, stErr, err := osutils.ExecTorpedoShell(fmt.Sprintf("%s %s", grafanaScript, namespace))
+		if err != nil {
+			log.Warnf("error running script [%s], err: %v", grafanaScript, err)
+			return
+		}
+		if stErr != "" {
+			log.Warnf("got standard error while running script [%s], err: %s", grafanaScript, stErr)
+			return
+		}
+		log.Infof(output)
+	}
+
 }
