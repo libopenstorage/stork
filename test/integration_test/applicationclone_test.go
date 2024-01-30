@@ -14,6 +14,7 @@ import (
 func TestApplicationClone(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	currentTestSuite = t.Name()
 
 	t.Run("deploymentTest", deploymentApplicationCloneTest)
 	t.Run("statefulsetTest", statefulsetApplicationCloneTest)
@@ -121,6 +122,7 @@ func deploymentApplicationCloneTest(t *testing.T) {
 	var testrailID, testResult = 50840, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -142,6 +144,7 @@ func statefulsetApplicationCloneTest(t *testing.T) {
 	var testrailID, testResult = 50841, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -163,6 +166,7 @@ func statefulsetApplicationCloneRuleTest(t *testing.T) {
 	var testrailID, testResult = 50842, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -184,6 +188,7 @@ func applicationCloneRulePreExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50843, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -205,6 +210,7 @@ func applicationCloneRulePostExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50844, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -226,6 +232,7 @@ func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 	var testrailID, testResult = 50845, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -247,6 +254,7 @@ func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50846, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -268,6 +276,7 @@ func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50847, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,
@@ -289,6 +298,7 @@ func applicationCloneLabelSelectorTest(t *testing.T) {
 	var testrailID, testResult = 50848, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerApplicationCloneTest(
 		t,

@@ -11,8 +11,10 @@ import (
 )
 
 func testWebhook(t *testing.T) {
+	var testResult = testResultFail
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	defer updateDashStats(t.Name(), &testResult)
 
 	t.Run("simpleDryRunTest", simpleDryRunTest)
 	err = setRemoteConfig("")

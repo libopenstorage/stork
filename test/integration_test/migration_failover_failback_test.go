@@ -27,6 +27,8 @@ const (
 )
 
 func testMigrationFailoverFailback(t *testing.T) {
+	var testResult = testResultFail
+	defer updateDashStats(t.Name(), &testResult)
 	// Create secrets on source and destination
 	// Since the secrets need to be created on the destination before migration
 	// is triggered using the API instead of spec factory in torpedo

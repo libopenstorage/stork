@@ -124,6 +124,7 @@ const (
 	cloudDeletionValidation  = "CLOUD_DELETION_VALIDATION"
 	internalLBAws            = "INTERNAL_AWS_LB"
 	portworxNamespace        = "PX_NAMESPACE"
+	enableDashStats          = "ENABLE_DASH"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -170,8 +171,10 @@ var testrailPassword string
 var testrailSetupSuccessful bool
 var bidirectionalClusterpair bool
 var unidirectionalClusterpair bool
+var currentTestSuite string
 
 func TestSnapshot(t *testing.T) {
+	currentTestSuite = t.Name()
 	t.Run("testSnapshot", testSnapshot)
 	t.Run("testSnapshotRestore", testSnapshotRestore)
 	t.Run("testWebhook", testWebhook)
@@ -327,6 +330,10 @@ func setup() error {
 		return fmt.Errorf("TEST_MODE environment variable not set for stork: %v", err)
 	}
 	SetupTestRail()
+	dash = aetosutil.Get()
+	if dash == nil {
+		logrus.Infof("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+	}
 
 	return nil
 }
@@ -1927,21 +1934,33 @@ func getByteDataFromFile(filePath string) ([]byte, error) {
 	return data, nil
 }
 
-func updateLongevityStats(name, eventStatName string, dashStats map[string]string) {
-	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
-	version, err := volumeDriver.GetDriverVersion()
+func updateDashStats(testName string, testResult *string) {
+	var err error
+	dash.IsEnabled, err = strconv.ParseBool(os.Getenv(enableDashStats))
+	if dash.IsEnabled && err == nil {
+		logrus.Infof("Dash is not enabled, stork integration tests will NOT push stats from this run to Aetos.")
+	}
+	dashStats := make(map[string]string)
+	dashStats["test_suite"] = currentTestSuite
+	dashStats["test_name"] = testName
+	dashStats["stork_version"] = storkVersion
+	dashStats["test_result"] = *testResult
+	dashStats["node_driver"] = nodeDriver.String()
+	dashStats["volume_driver"] = volumeDriver.String()
+	provisioner := os.Getenv(storageProvisioner)
+	dashStats["storage_provisioner"] = provisioner
+	dashStats["scheduler_driver"] = schedulerDriver.String()
+	pxVersion, err := volumeDriver.GetDriverVersion()
 	if err != nil {
 		log.Errorf("error getting px version. err: %+v", err)
 	}
-	dashStats["node-driver"] = nodeDriver.String()
-	dashStats["scheduler-driver"] = schedulerDriver.String()
 	eventStat := &stats.EventStat{
-		EventName: eventStatName,
+		EventName: "Automated Stork Integration Tests",
 		EventTime: time.Now().Format(time.RFC1123),
-		Version:   version,
+		Version:   pxVersion,
 		DashStats: dashStats,
 	}
 
-	stats.PushStatsToAetos(dash, name, "px-enterprise", "Longevity", eventStat)
+	stats.PushStatsToAetos(dash, testName, dashProductName, dashStatsType, eventStat)
 
 }

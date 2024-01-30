@@ -32,8 +32,11 @@ const (
 )
 
 func TestDataExportRsync(t *testing.T) {
+	var testResult = testResultFail
 	instanceID := "dataexport-test"
 	appKey := "fio-dataexport"
+	currentTestSuite = t.Name()
+	defer updateDashStats(t.Name(), &testResult)
 
 	// Check if default storage class is set. This allows us to run this
 	// test on all platforms such as AWS, AKS where a default storage class

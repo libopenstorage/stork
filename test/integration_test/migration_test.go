@@ -44,6 +44,7 @@ func TestMigration(t *testing.T) {
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
 	setDefaultsForBackup(t)
+	currentTestSuite = t.Name()
 
 	t.Run("testMigration", testMigration)
 	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
@@ -277,6 +278,7 @@ func deploymentMigrationTest(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration"
 	appKey := "mysql-1-pvc"
 
@@ -301,6 +303,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	var testrailID, testResult = 54210, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration"
 	appKey := "mysql-1-pvc"
 
@@ -389,6 +392,7 @@ func statefulsetMigrationTest(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "cassandra-migration"
 	appKey := "cassandra"
 
@@ -413,6 +417,7 @@ func statefulsetMigrationStartAppFalseTest(t *testing.T) {
 	var testrailID, testResult = 86243, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "cassandra-migration"
 	appKey := "cassandra"
 
@@ -437,6 +442,7 @@ func statefulsetMigrationRuleTest(t *testing.T) {
 	var testrailID, testResult = 50805, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "cassandra-migration-rule"
 	appKey := "cassandra"
 
@@ -461,6 +467,7 @@ func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50806, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-pre-exec-missing"
 	appKey := "mysql-1-pvc"
 
@@ -484,6 +491,7 @@ func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50807, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-post-exec-missing"
 	appKey := "mysql-1-pvc"
 
@@ -508,6 +516,7 @@ func migrationDisallowedNamespaceTest(t *testing.T) {
 	var testrailID, testResult = 50808, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-disallowed-namespace"
 	appKey := "mysql-1-pvc"
 
@@ -532,6 +541,7 @@ func migrationFailingPreExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50809, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-failing-pre-exec-rule"
 	appKey := "mysql-1-pvc"
 
@@ -556,6 +566,7 @@ func migrationFailingPostExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50810, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-failing-post-exec-rule"
 	appKey := "mysql-1-pvc"
 
@@ -580,6 +591,7 @@ func migrationLabelSelectorTest(t *testing.T) {
 	var testrailID, testResult = 50811, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-label-selector-test"
 	appKey := "cassandra"
 
@@ -604,6 +616,7 @@ func migrationLabelExcludeSelectorTest(t *testing.T) {
 	var testrailID, testResult = 86245, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "migration-label-exclude-selector-test"
 	appKey := "cassandra"
 
@@ -628,6 +641,7 @@ func namespaceLabelSelectorTest(t *testing.T) {
 	var testrailID, testResult = 86244, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "ns-selector-test"
 	appKey := "cassandra"
 
@@ -706,6 +720,7 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50812, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration-schedule-interval"
 	appKey := "mysql-1-pvc"
 
@@ -750,6 +765,7 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	var testrailID, testResult = 86246, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration-schedule-interval"
 	appKey := "mysql-1-pvc"
 
@@ -867,6 +883,7 @@ func migrationDailyScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50813, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeDaily, "mysql-migration-schedule-daily", "", -1)
 
@@ -879,6 +896,7 @@ func migrationWeeklyScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50814, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeWeekly, "mysql-migration-schedule-weekly", "Monday", -1)
 
@@ -891,6 +909,7 @@ func migrationMonthlyScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50815, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	migrationScheduleTest(t, v1alpha1.SchedulePolicyTypeMonthly, "mysql-migration-schedule-monthly", "", 11)
 
@@ -903,6 +922,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 	var testrailID, testResult = 50816, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration-schedule-invalid"
 	appKey := "mysql-1-pvc"
 
@@ -1151,6 +1171,7 @@ func migrationScaleTest(t *testing.T) {
 	var testrailID, testResult = 86247, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration"
 	appKey := "mysql-1-pvc"
 
@@ -1237,6 +1258,7 @@ func clusterPairFailuresTest(t *testing.T) {
 	var testrailID, testResult = 86248, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule("cluster-pair-failures",
 		scheduler.ScheduleOptions{AppKeys: []string{testKey}})
@@ -1330,6 +1352,7 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	var testrailID, testResult = 86249, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	clusterPairName := "birectional-cluster-pair"
 	clusterPairNamespace := "bidirectional-clusterpair-ns"
@@ -1405,6 +1428,7 @@ func unidirectionalClusterPairTest(t *testing.T) {
 	var testrailID, testResult = 91979, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	clusterPairName := "unirectional-cluster-pair"
 	clusterPairNamespace := "unidirectional-clusterpair-ns"
@@ -1462,6 +1486,7 @@ func operatorMigrationMongoTest(t *testing.T) {
 	var testrailID, testResult = 86250, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	triggerMigrationTest(
 		t,
@@ -1484,6 +1509,7 @@ func operatorMigrationRabbitmqTest(t *testing.T) {
 	var testrailID, testResult = 86251, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	_, err := core.Instance().CreateNamespace(&v1.Namespace{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -1590,6 +1616,7 @@ func pvcResizeMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86252, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration-schedule-interval"
 	appKey := "mysql-1-pvc"
 
@@ -1707,6 +1734,7 @@ func getStorageClassNameForPVC(pvc *v1.PersistentVolumeClaim) (string, error) {
 func suspendMigrationTest(t *testing.T) {
 	var err error
 	var namespace string
+	var testResult = testResultFail
 	// Reset config in case of error
 	defer func() {
 		err = setSourceKubeConfig()
@@ -1714,6 +1742,7 @@ func suspendMigrationTest(t *testing.T) {
 	}()
 	err = setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration-schedule-interval-autosuspend"
 	appKey := "mysql-1-pvc"
 
@@ -1784,6 +1813,7 @@ func endpointMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86256, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "endpoint-migration-schedule-interval"
 	appKey := "endpoint"
 
@@ -1859,6 +1889,7 @@ func networkPolicyMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86257, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	// validate default behaviour of network policy migration where policy which has CIDR set
 	// will not be migrated
@@ -1967,6 +1998,7 @@ func transformResourceTest(t *testing.T) {
 	var testrailID, testResult = 86253, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "mysql-migration-transform-interval"
 	appKey := "mysql-1-pvc"
 
@@ -2036,6 +2068,7 @@ func excludeResourceTypeDeploymentTest(t *testing.T) {
 	var testrailID, testResult = 93402, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "exclude-resourcetype-deployment"
 	appKey := "mysql-1-pvc"
 	pvcName := "mysql-data"
@@ -2093,6 +2126,7 @@ func excludeResourceTypePVCTest(t *testing.T) {
 	var testrailID, testResult = 93403, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "exclude-resourcetype-pvc"
 	appKey := "mysql-1-pvc"
 	pvcName := "mysql-data"
@@ -2150,6 +2184,7 @@ func excludeMultipleResourceTypesTest(t *testing.T) {
 	var testrailID, testResult = 93404, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "exclude-multiple-resourcetypes-migration"
 	appKey := "mysql-1-pvc"
 	pvcName := "mysql-data"
@@ -2207,6 +2242,7 @@ func excludeResourceTypesWithSelectorsTest(t *testing.T) {
 	var testrailID, testResult = 93466, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "exclude-resourcetype-selector"
 	appKey := "mysql-1-pvc"
 	pvcName := "mysql-data"
@@ -2263,6 +2299,7 @@ func excludeNonExistingResourceTypesTest(t *testing.T) {
 	var testrailID, testResult = 93503, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "exclude-nonexisting-resourcetype-migration"
 	appKey := "mysql-1-pvc"
 	pvcName := "mysql-data"
@@ -2343,6 +2380,7 @@ func serviceAndServiceAccountUpdate(t *testing.T) {
 	var testrailID, testResult = 85741, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	var err error
 	// Reset config in case of error

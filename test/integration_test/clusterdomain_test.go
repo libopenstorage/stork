@@ -31,6 +31,9 @@ var (
 )
 
 func TestClusterDomains(t *testing.T) {
+	var testResult = testResultFail
+	currentTestSuite = t.Name()
+	defer updateDashStats(t.Name(), &testResult)
 	enabled, err := strconv.ParseBool(os.Getenv(enableClusterDomainTests))
 	if enabled && err == nil {
 		logrus.Info("Running cluster domain tests")

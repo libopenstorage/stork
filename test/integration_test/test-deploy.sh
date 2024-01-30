@@ -27,6 +27,7 @@ internal_aws_lb=false
 px_namespace="kube-system"
 bidirectional_cluster_pair=false
 unidirectional_cluster_pair=false
+enable_dash_stats=false
 for i in "$@"
 do
 case $i in
@@ -192,6 +193,12 @@ case $i in
         shift
         shift
         ;;	
+    --enable_dash_stats)
+        echo "Flag to indicate if test results should be pushed to aetos dashboard: $2"
+        enable_dash_stats=$2
+        shift
+        shift
+        ;;	
 esac
 done
 
@@ -309,6 +316,13 @@ if [ "$auth_secret_configmap" != "" ] ; then
 else
 	sed -i 's/'auth_secret_configmap'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
+
+if [ "$enable_dash_stats" = "true" ] ; then
+	sed -i 's/'enable_dash'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
+else 
+	sed -i 's/'enable_dash'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
 
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml

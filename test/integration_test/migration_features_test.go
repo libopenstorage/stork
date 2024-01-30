@@ -33,6 +33,7 @@ func TestStashStrategyMigration(t *testing.T) {
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
 	setDefaultsForBackup(t)
+	currentTestSuite = t.Name()
 
 	t.Run("testMigrationStashStrategyMongoDB", testMigrationStashStrategyMongoDB)
 	t.Run("testMigrationStashStrategyKafka", testMigrationStashStrategyKafka)
@@ -45,6 +46,7 @@ func testMigrationStashStrategyMongoDB(t *testing.T) {
 	var testrailID, testResult = 64408114, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	migrationStashStrategy(t, appNameMongo, appPathMongo)
 	// If we are here then the test has passed
@@ -57,6 +59,7 @@ func testMigrationStashStrategyKafka(t *testing.T) {
 	var testrailID, testResult = 64408112, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	migrationStashStrategy(t, appNameKafka, appPathKafka)
 	// If we are here then the test has passed
@@ -265,6 +268,7 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	var testrailID, testResult = 64408118, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
@@ -362,6 +366,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	for _, testrailID := range testrailIDList {
 		runID := testrailSetupForTest(testrailID, &testResult)
 		defer updateTestRail(&testResult, testrailID, runID)
+		defer updateDashStats(t.Name(), &testResult)
 	}
 
 	err := setSourceKubeConfig()
@@ -502,6 +507,7 @@ func testFailbackWithStashStrategy(t *testing.T) {
 	var testrailID, testResult = 64408117, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
