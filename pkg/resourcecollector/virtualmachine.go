@@ -5,6 +5,9 @@ import (
 	"strings"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	kubevirtops "github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/sirupsen/logrus"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -348,5 +351,197 @@ func getObjectInfo(resourceNames []string, namespace string, objectKind string) 
 		objectInfoList = append(objectInfoList, info)
 	}
 	return objectInfoList
+
+}
+
+// GetRuleItemWithVMAction return PreRuleItem and PostRuleItem with freeze/thaw rule for the given VM
+// This function is also used by torpedo for testing.
+func GetRuleItemWithVMAction(vm kubevirtv1.VirtualMachine) (storkapi.RuleItem, storkapi.RuleItem) {
+
+	vmPodSelector := GetVMPodLabel(vm)
+	vmfreezeAction := GetVMFreezeRule(vm)
+	vmUnFreezeAction := GetVMUnFreezeRule(vm)
+
+	//create RuleItem from podselector and freeze/unfreeze actions
+	preRuleItem := getRuleItemWithAction(vmPodSelector, vmfreezeAction)
+	postRuleItem := getRuleItemWithAction(vmPodSelector, vmUnFreezeAction)
+
+	return preRuleItem, postRuleItem
+}
+
+// getRuleItemWithAction helper function that returns RuleItem from podSelector and action string
+func getRuleItemWithAction(podSelector map[string]string, ruleAction string) storkapi.RuleItem {
+	var actions []storkapi.RuleAction
+
+	action := storkapi.RuleAction{
+		Type:  storkapi.RuleActionCommand,
+		Value: ruleAction,
+	}
+	actions = append(actions, action)
+	ruleInfoItem := storkapi.RuleItem{
+		PodSelector: podSelector,
+		Actions:     actions,
+	}
+	return ruleInfoItem
+}
+func getVmsFromNamespaceList(namespaces []string, objectMap map[storkapi.ObjectInfo]bool) (
+	[]kubevirtv1.VirtualMachine,
+	error) {
+
+	if len(namespaces) == 0 {
+		return nil, nil
+	}
+	kv := kubevirtops.Instance()
+
+	listOptions := &metav1.ListOptions{
+		Limit: 500,
+	}
+	VmList := make([]kubevirtv1.VirtualMachine, 0)
+	for _, ns := range namespaces {
+		if IsNsPresentInIncludeResource(objectMap, ns) {
+			//We don't need to fetch resources from this ns
+			// priority is for includeResource. We already
+			// added those list to includeResources
+			continue
+		}
+		for {
+			blist, err := kv.BatchListVirtualMachines(ns, listOptions)
+			if err != nil {
+				return nil, fmt.Errorf("error fetching list VM for ns %v: %v", ns, err)
+			}
+			VmList = append(VmList, blist.Items...)
+			if blist.Continue == "" {
+				break
+			} else {
+				listOptions.Continue = blist.Continue
+			}
+		}
+	}
+	return VmList, nil
+}
+
+func getVmsFromIncludeResourceList(includeResources []storkapi.ObjectInfo) (
+	[]kubevirtv1.VirtualMachine,
+	map[storkapi.ObjectInfo]bool,
+	error) {
+
+	objectMap := make(map[storkapi.ObjectInfo]bool)
+	if len(includeResources) == 0 {
+		return nil, objectMap, nil
+	}
+
+	vmList := make([]kubevirtv1.VirtualMachine, 0)
+	kv := kubevirtops.Instance()
+	for _, resourceInfo := range includeResources {
+		if resourceInfo.Kind != "VirtualMachine" {
+			logrus.Debugf("found nonVM entry for VM BackupObject type in includeResources name:%v, kind:%v, ignoring..", resourceInfo.Name, resourceInfo.Kind)
+			continue
+		}
+		vm, err := kv.GetVirtualMachine(resourceInfo.Name, resourceInfo.Namespace)
+		if err != nil {
+			// if we could not fetch the VM specified, we error out.
+			// we continue with rest of the list if the VM is not found.
+			// If none of the VMs in the includeResource is found,
+			// we will still proceed. This will cause empty resource backup.
+			if k8s_errors.IsNotFound(err) {
+				objectMap[resourceInfo] = true
+				continue
+			}
+			logrus.Errorf("error fetching VM from includeResource list %v(%v)", resourceInfo.Name, resourceInfo.Namespace)
+			return nil, objectMap, err
+		}
+		objectMap[resourceInfo] = true
+		vmList = append(vmList, *vm)
+	}
+	return vmList, objectMap, nil
+}
+
+// GetVMIncludeListFromBackup returns all the VMs from various filters,
+func GetVMIncludeListFromBackup(backup *storkapi.ApplicationBackup) (
+	[]kubevirtv1.VirtualMachine,
+	map[storkapi.ObjectInfo]bool,
+	error) {
+
+	// First Fetch VM List from backup.Spec.IncludeResources
+	vmIncList, objectMap, err := getVmsFromIncludeResourceList(backup.Spec.IncludeResources)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Second fetch VM List from Namespace and Namespace label list
+	vmNsList, err := getVmsFromNamespaceList(backup.Spec.Namespaces, objectMap)
+	if err != nil {
+		return nil, nil, err
+	}
+	vmIncList = append(vmIncList, vmNsList...)
+	return vmIncList, objectMap, nil
+}
+
+// GetVMIncludeResourceInfoList returns VMs and VM resources in IncludeResource format.
+// Also returns preExec and postExec rule Item with freeze/thaw rule for each of the filter VMs
+func GetVMIncludeResourceInfoList(vmList []kubevirtv1.VirtualMachine, objectMap map[storkapi.ObjectInfo]bool, skipAutoVMRule bool) (
+	[]storkapi.ObjectInfo,
+	map[storkapi.ObjectInfo]bool,
+	[]storkapi.RuleItem,
+	[]storkapi.RuleItem,
+
+) {
+
+	freezeRulesItems := make([]storkapi.RuleItem, 0)
+	unFreezeRulesItems := make([]storkapi.RuleItem, 0)
+	vmResourceInfoList := make([]storkapi.ObjectInfo, 0)
+	for _, vm := range vmList {
+		addRule := false
+		resourceInfoList := GetObjectInfoFromVMResources(vm)
+		vmInfo := storkapi.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "kubevirt.io",
+				Version: "v1",
+				Kind:    "VirtualMachine",
+			},
+			Name:      vm.Name,
+			Namespace: vm.Namespace,
+		}
+		// We would have mapped vmInfo specified in backup.Spec.IncludeResource but,
+		// VMList from namespaces would not have been. Map them here.
+		if !objectMap[vmInfo] {
+			objectMap[vmInfo] = true
+			vmResourceInfoList = append(vmResourceInfoList, vmInfo)
+		}
+
+		for _, info := range resourceInfoList {
+			if !objectMap[info] {
+				objectMap[info] = true
+				vmResourceInfoList = append(vmResourceInfoList, info)
+			}
+			if info.Kind == "PersistentVolumeClaim" {
+				addRule = true
+			}
+		}
+
+		if skipAutoVMRule {
+			// Auto Rules are disabled hence skip it.
+			continue
+		}
+		if !IsVirtualMachineRunning(vm) {
+			// Skip auto rules for non running VMs.
+			continue
+		}
+		if !IsVMAgentConnected(vm) {
+			// qemu-guest-agent is not running, skip autoRules for this VM
+			logrus.Warnf("skipping freeze/thaw rules for VirtualMachine %v(%v) reason : Agent Not Connected",
+				vm.Name, vm.Namespace)
+			continue
+		}
+		// Only add rule if there are PVCs associated to the VM.
+		if addRule {
+			preRuleItem, postRuleItem := GetRuleItemWithVMAction(vm)
+			freezeRulesItems = append(freezeRulesItems, preRuleItem)
+			unFreezeRulesItems = append(unFreezeRulesItems, postRuleItem)
+		} else {
+			logrus.Debugf("skipping freeze/thaw rules for VirtualMachine %v(%v) reason: No PVCs attached to the VM",
+				vm.Name, vm.Namespace)
+		}
+	}
+	return vmResourceInfoList, objectMap, freezeRulesItems, unFreezeRulesItems
 
 }

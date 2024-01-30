@@ -15,6 +15,8 @@ type VirtualMachineOps interface {
 	CreateVirtualMachine(*kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
 	// ListVirtualMachines List Kubevirt VirtualMachine in given namespace
 	ListVirtualMachines(namespace string) (*kubevirtv1.VirtualMachineList, error)
+	// BatchListVirtualMachines List Kubevirt VirtualMachine in given namespace in batches
+	BatchListVirtualMachines(namespace string, listOptions *k8smetav1.ListOptions) (*kubevirtv1.VirtualMachineList, error)
 	// ValidateVirtualMachineRunning check if VirtualMachine is running, if not
 	// start VirtualMachine and wait for it get started.
 	ValidateVirtualMachineRunning(string, string, time.Duration, time.Duration) error
@@ -26,6 +28,18 @@ type VirtualMachineOps interface {
 	StartVirtualMachine(*kubevirtv1.VirtualMachine) error
 	// StopVirtualMachine Stop VirtualMachine
 	StopVirtualMachine(*kubevirtv1.VirtualMachine) error
+	// RestartVirtualMachine restarts VirtualMachine
+	RestartVirtualMachine(*kubevirtv1.VirtualMachine) error
+	// GetVMDataVolumes returns DataVolumes used by the VM
+	GetVMDataVolumes(vm *kubevirtv1.VirtualMachine) []string
+	// GetVMPersistentVolumeClaims returns persistentVolumeClaim names used by the VMs
+	GetVMPersistentVolumeClaims(vm *kubevirtv1.VirtualMachine) []string
+	// GetVMSecrets returns references to secrets in all supported formats of VM configs
+	GetVMSecrets(vm *kubevirtv1.VirtualMachine) []string
+	// GetVMConfigMaps returns ConfigMaps referenced in the VirtualMachine.
+	GetVMConfigMaps(*kubevirtv1.VirtualMachine) []string
+	//IsVirtualMachineRunning returns true if virtualMachine is in running state
+	IsVirtualMachineRunning(*kubevirtv1.VirtualMachine) bool
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -35,6 +49,15 @@ func (c *Client) ListVirtualMachines(namespace string) (*kubevirtv1.VirtualMachi
 	}
 
 	return c.kubevirt.VirtualMachine(namespace).List(&k8smetav1.ListOptions{})
+}
+
+// BatchListVirtualMachines List Kubevirt VirtualMachine in given namespace
+func (c *Client) BatchListVirtualMachines(namespace string, listOptions *k8smetav1.ListOptions) (*kubevirtv1.VirtualMachineList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubevirt.VirtualMachine(namespace).List(listOptions)
 }
 
 // CreateVirtualMachine calls VirtualMachine create client method
@@ -76,8 +99,9 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 	}
 
 	// Start the VirtualMachine if its not Started yet
-	if !*vm.Spec.Running {
-		if err = instance.StartVirtualMachine(vm); err != nil {
+	if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopped ||
+		vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopping {
+		if err = c.StartVirtualMachine(vm); err != nil {
 			return fmt.Errorf("Failed to start VirtualMachine %v", err)
 		}
 	}
@@ -119,4 +143,110 @@ func (c *Client) StopVirtualMachine(vm *kubevirtv1.VirtualMachine) error {
 	}
 
 	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Stop(vm.GetName(), &kubevirtv1.StopOptions{})
+}
+
+// RestartVirtualMachine restarts VirtualMachine
+func (c *Client) RestartVirtualMachine(vm *kubevirtv1.VirtualMachine) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Restart(vm.GetName(), &kubevirtv1.RestartOptions{})
+}
+
+// IsVirtualMachineRunning returns true if virtualMachine is in running state
+func (c *Client) IsVirtualMachineRunning(vm *kubevirtv1.VirtualMachine) bool {
+	if err := c.initClient(); err != nil {
+		return false
+	}
+	if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning {
+		return true
+	}
+	return false
+
+}
+
+// GetVMDataVolumes returns DataVolumes used by the VM
+func (c *Client) GetVMDataVolumes(vm *kubevirtv1.VirtualMachine) []string {
+	volList := vm.Spec.Template.Spec.Volumes
+	dvList := make([]string, 0)
+	for _, vol := range volList {
+		if vol.VolumeSource.DataVolume != nil {
+			dvList = append(dvList, vol.VolumeSource.DataVolume.Name)
+		}
+	}
+	return dvList
+}
+
+// GetVMPersistentVolumeClaims returns persistentVolumeClaim names used by the VMs
+func (c *Client) GetVMPersistentVolumeClaims(vm *kubevirtv1.VirtualMachine) []string {
+	volList := vm.Spec.Template.Spec.Volumes
+	PVCList := make([]string, 0)
+	for _, vol := range volList {
+		if vol.VolumeSource.PersistentVolumeClaim != nil {
+			PVCList = append(PVCList, vol.VolumeSource.PersistentVolumeClaim.ClaimName)
+		}
+	}
+	return PVCList
+}
+
+// GetVMSecrets returns references to secrets in all supported formats of VM configs
+func (c *Client) GetVMSecrets(vm *kubevirtv1.VirtualMachine) []string {
+	volList := vm.Spec.Template.Spec.Volumes
+	secretList := make([]string, 0)
+	for _, vol := range volList {
+		// secret as VolumeType
+		if vol.VolumeSource.Secret != nil {
+			secretList = append(secretList, vol.Secret.SecretName)
+		}
+		// Secret reference as sysprep
+		if vol.VolumeSource.Sysprep != nil {
+			if vol.VolumeSource.Sysprep.Secret != nil {
+				secretList = append(secretList, vol.VolumeSource.Sysprep.Secret.Name)
+			}
+		}
+		if vol.VolumeSource.CloudInitNoCloud != nil {
+			cloudInitNoCloud := vol.VolumeSource.CloudInitNoCloud
+			// secret as NetworkDataSecretRef
+			if cloudInitNoCloud.NetworkDataSecretRef != nil {
+				secretList = append(secretList, cloudInitNoCloud.NetworkDataSecretRef.Name)
+			}
+			// secret as UserDataSecretRef
+			if cloudInitNoCloud.UserDataSecretRef != nil {
+				secretList = append(secretList, cloudInitNoCloud.UserDataSecretRef.Name)
+			}
+		}
+		if vol.VolumeSource.CloudInitConfigDrive != nil {
+			cloudInitConfigDrive := vol.VolumeSource.CloudInitConfigDrive
+			// Secret from configDrive for NetworkData
+			if cloudInitConfigDrive.NetworkDataSecretRef != nil {
+				secretList = append(secretList, cloudInitConfigDrive.NetworkDataSecretRef.Name)
+			}
+			// Secret from confifDrive aka Ignition
+			if cloudInitConfigDrive.UserDataSecretRef != nil {
+				secretList = append(secretList, cloudInitConfigDrive.UserDataSecretRef.Name)
+			}
+
+		}
+	}
+	return secretList
+}
+
+// GetVMConfigMaps returns ConfigMaps referenced in the VirtualMachine.
+func (c *Client) GetVMConfigMaps(vm *kubevirtv1.VirtualMachine) []string {
+	volList := vm.Spec.Template.Spec.Volumes
+	configMaps := make([]string, 0)
+	for _, vol := range volList {
+		// ConfigMap as volumeType
+		if vol.ConfigMap != nil {
+			configMaps = append(configMaps, vol.ConfigMap.Name)
+		}
+		// configMap reference in sysprep
+		if vol.VolumeSource.Sysprep != nil {
+			if vol.VolumeSource.Sysprep.ConfigMap != nil {
+				configMaps = append(configMaps, vol.VolumeSource.Sysprep.ConfigMap.Name)
+			}
+		}
+
+	}
+	return configMaps
 }
