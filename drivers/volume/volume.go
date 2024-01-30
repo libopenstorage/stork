@@ -54,16 +54,7 @@ const (
 	// provisioner name
 	PvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 	pureCSIProvisioner        = "pure-csi"
-	ocpCephfsProvisioner      = "openshift-storage.cephfs.csi.ceph.com"
-	ocpRbdProvisioner         = "openshift-storage.rbd.csi.ceph.com"
-	vSphereCSIProvisioner     = "csi.vsphere.vmware.com"
-	efsCSIProvisioner         = "efs.csi.aws.com"
-	azureFileCSIProvisioner   = "file.csi.azure.com"
 
-	azureFileIntreeProvisioner = "kubernetes.io/azure-file"
-	googleFileCSIProvisioner   = "com.google.csi.filestore"
-	// Note: filestore.csi.storage.gke.io this provisoner supports snapshot. So not adding in csiDriverWithoutSnapshotSupport list
-	gkeFileCSIProvisioner       = "filestore.csi.storage.gke.io"
 	pureBackendParam            = "backend"
 	pureFileParam               = "file"
 	csiDriverWithOutSnapshotKey = "CSI_DRIVER_WITHOUT_SNAPSHOT"
@@ -82,13 +73,6 @@ var (
 		LinstorDriverName,
 		CSIDriverName,
 		KDMPDriverName,
-	}
-	csiDriverWithoutSnapshotSupport = []string{
-		vSphereCSIProvisioner,
-		efsCSIProvisioner,
-		azureFileCSIProvisioner,
-		azureFileIntreeProvisioner,
-		googleFileCSIProvisioner,
 	}
 )
 
@@ -775,13 +759,6 @@ func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
 		// pure FB csi driver does not support snapshot
 		if driverName == pureCSIProvisioner {
 			if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
-				return true
-			}
-		}
-		// vsphere, efs, azure file and google file does not support snapshot.
-		// So defaulting to kdmp by not setting volumesnapshot class.
-		for _, name := range csiDriverWithoutSnapshotSupport {
-			if name == driverName {
 				return true
 			}
 		}
