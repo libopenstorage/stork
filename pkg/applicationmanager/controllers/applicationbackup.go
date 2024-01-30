@@ -90,6 +90,21 @@ const (
 	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
 	restoreObjectUIDKey             = kdmpAnnotationPrefix + "restoreobject-uid"
 	skipResourceAnnotation          = "stork.libopenstorage.org/skip-resource"
+	//VmFreezePrefix prefix for freeze rule action
+	vmFreezePrefix = "vm-freeze-pre-rule"
+	//VmUnFreezePrefix prefix for freeze rule action
+	vmUnFreezePrefix = "vm-unfreeze-post-rule"
+	// AnnotationsKeys used in ruleCr auto created during VirtualMachine specific Backup request
+	// for vm freeze and unfreeze operation.
+	annotationKeyPrefix = "portworx.io/"
+	backupUIDKey        = annotationKeyPrefix + "backup-uid"
+	backupNameKey       = annotationKeyPrefix + "backup-name"
+	clusterNameKey      = annotationKeyPrefix + "cluster-name"
+	clusterUIDKey       = annotationKeyPrefix + "cluster-uid"
+	createdByKey        = annotationKeyPrefix + "created-by"
+	createdByValue      = annotationKeyPrefix + "stork"
+	lastUpdateKey       = annotationKeyPrefix + "last-update"
+	VmResourcePopulated = annotationKeyPrefix + "vm-resources-populated"
 )
 
 var (
@@ -116,6 +131,8 @@ type ApplicationBackupController struct {
 	terminationChannels  map[string][]chan bool
 	execRulesCompleted   map[string]bool
 	reconcileTime        time.Duration
+	vmIncludeResource    map[string][]stork_api.ObjectInfo
+	vmIncludeResourceMap map[string]map[stork_api.ObjectInfo]bool
 }
 
 // Init Initialize the application backup controller
@@ -133,6 +150,8 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 	a.reconcileTime = time.Duration(syncTime) * time.Second
 	a.terminationChannels = make(map[string][]chan bool)
 	a.execRulesCompleted = make(map[string]bool)
+	a.vmIncludeResource = make(map[string][]stork_api.ObjectInfo)
+	a.vmIncludeResourceMap = make(map[string]map[stork_api.ObjectInfo]bool)
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
 
@@ -265,6 +284,14 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			if _, ok := a.execRulesCompleted[string(backup.UID)]; ok {
 				delete(a.execRulesCompleted, string(backup.UID))
 				log.ApplicationBackupLog(backup).Infof("deleted post exec flag entry from controller map for backup [%v/%v]", backup.Namespace, backup.Name)
+			}
+			if _, ok := a.vmIncludeResource[string(backup.UID)]; ok {
+				delete(a.vmIncludeResource, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("cleaning up vmIncludeResources for VM backupObjectType %v", a.vmIncludeResource)
+			}
+			if _, ok := a.vmIncludeResourceMap[string(backup.UID)]; ok {
+				delete(a.vmIncludeResourceMap, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("cleaning up vmIncludeResources for VM backupObjectType")
 			}
 			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller.
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
@@ -405,6 +432,38 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			}
 		}
 		fallthrough
+	case stork_api.ApplicationBackupStageImportResource:
+		if IsBackupObjecyTypeVirtualMachine(backup) {
+			logrus.Infof("This is a VM specific backup, processing resource collection of vm resources")
+			updateCr, err := a.createVMSpecificBackupResources(backup)
+			if err != nil {
+				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Reason = fmt.Sprintf("error Updating Backup CR for VMObject Backup : %v", err)
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Status.FinishTimestamp = metav1.Now()
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				err = fmt.Errorf("error Updating Backup CR for VMObject Backup : %v", err)
+				log.ApplicationBackupLog(backup).Errorf(err.Error())
+				a.recorder.Event(backup,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationBackupStatusFailed),
+					err.Error())
+				updateCr = true
+			}
+			if updateCr {
+				//backup.Spec.IncludeResources = a.vmIncludeResource
+				backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf("error updating Cr in VMBackupProcessingStage: %v", err)
+					return err
+				}
+				return nil
+			}
+		}
+		fallthrough
 	case stork_api.ApplicationBackupStagePreExecRule:
 		var inProgress bool
 		a.terminationChannels[string(backup.UID)], inProgress, err = a.runPreExecRule(backup)
@@ -461,6 +520,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 	case stork_api.ApplicationBackupStageFinal:
+		logrus.Errorf("########## Reached final stage return safely ############")
 		// Do Nothing
 		return nil
 	default:
@@ -564,9 +624,14 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 	backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 	namespacedName := types.NamespacedName{}
-	if IsVolsToBeBackedUp(backup) {
+	if a.IsVolsToBeBackedUp(backup) {
 		isResourceTypePVC := IsResourceTypePVC(backup)
-		objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
+		var objectMap map[stork_api.ObjectInfo]bool
+		if IsBackupObjecyTypeVirtualMachine(backup) {
+			objectMap = a.vmIncludeResourceMap[string(backup.UID)]
+		} else {
+			objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
+		}
 		info := stork_api.ObjectInfo{
 			GroupVersionKind: metav1.GroupVersionKind{
 				Group:   "core",
@@ -1584,7 +1649,13 @@ func (a *ApplicationBackupController) backupResources(
 
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
-	objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
+	var objectMap map[stork_api.ObjectInfo]bool
+	if IsBackupObjecyTypeVirtualMachine(backup) {
+		objectMap = a.vmIncludeResourceMap[string(backup.UID)]
+	} else {
+		objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
+	}
+
 	namespacelist := backup.Spec.Namespaces
 	// GetResources takes more time, if we have more number of namespaces
 	// So, submitting it in batches and in between each batch,
@@ -2030,7 +2101,7 @@ func (a *ApplicationBackupController) createCRD() error {
 }
 
 // IsVolsToBeBackedUp for a given backupspec do we need to have volumes backed up
-func IsVolsToBeBackedUp(backup *stork_api.ApplicationBackup) bool {
+func (a *ApplicationBackupController) IsVolsToBeBackedUp(backup *stork_api.ApplicationBackup) bool {
 	// If ResourceType is mentioned and doesn't have PVC in it we would
 	// like to skip the vol backups IFF includeResources doesn't have any ref to PVC
 	if len(backup.Spec.ResourceTypes) != 0 {
@@ -2040,7 +2111,11 @@ func IsVolsToBeBackedUp(backup *stork_api.ApplicationBackup) bool {
 
 		// Now we know ResourceType doesn't have PVC, but user could have given a includeResource
 		// which could have entry to backup a PVC
+
 		objectInfo := backup.Spec.IncludeResources
+		if IsBackupObjecyTypeVirtualMachine(backup) {
+			objectInfo = a.vmIncludeResource[string(backup.UID)]
+		}
 		for _, object := range objectInfo {
 			if object.Kind == "PersistentVolumeClaim" {
 				return true
@@ -2108,4 +2183,111 @@ func (a *ApplicationBackupController) checkVolumeDriverCombination(volumes []*st
 		return nonKdmpDriverOnly
 	}
 	return mixedDriver
+}
+
+// createRuleCrObject create RuleCr from RuleItems
+func createRuleCrObject(rules []stork_api.RuleItem, backup *stork_api.ApplicationBackup, name string) *stork_api.Rule {
+
+	rulesObject := &stork_api.Rule{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
+		Rules:      rules,
+	}
+
+	rulesObject.Name = name + "-" + backup.Annotations[backupUIDKey]
+	rulesObject.Namespace = backup.GetNamespace()
+
+	var annotations = make(map[string]string)
+	annotations[backupUIDKey] = backup.Annotations[backupUIDKey]
+	annotations[createdByKey] = createdByValue
+	annotations[lastUpdateKey] = metav1.Now().String()
+	annotations[clusterNameKey] = backup.Annotations[clusterNameKey]
+	annotations[clusterUIDKey] = backup.Annotations[clusterUIDKey]
+
+	rulesObject.Annotations = annotations
+
+	return rulesObject
+}
+
+// createVMRuleCr calls CreateRule if rule doesn't exist.
+func createVMRuleCr(rule *stork_api.Rule) error {
+	_, err := storkops.Instance().CreateRule(rule)
+	if err != nil {
+		if k8s_errors.IsAlreadyExists(err) {
+			// rule already exists, its not error for us
+			logrus.Debugf("Rule %v in %v namespace alreay exists, skipping recreate", rule.Name, rule.Namespace)
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// createVMSpecificBackupResources creates rulesCr and populateInclude resources with resources
+// associated to each of the VM specified in backup.Spec.IncludeResources
+func (a *ApplicationBackupController) createVMSpecificBackupResources(backup *stork_api.ApplicationBackup) (bool, error) {
+
+	returnErrorm := func(message string, err error) error {
+		logrus.Errorf(message, err)
+		return err
+	}
+	preExecRule, postExecRule, err := a.createVMIncludeResources(backup)
+	if err != nil {
+		return false, err
+	}
+	if preExecRule != nil && postExecRule != nil {
+		// create preExec ruleCr with freeze actions for the VMs
+		err = createVMRuleCr(preExecRule)
+		if err != nil {
+			return false, returnErrorm("error Creating PreExec ruleCR for vm freeze: %v", err)
+		}
+		backup.Spec.PreExecRule = preExecRule.Name
+
+		// create postExec ruleCr with unfreeze actions for the VMs
+		err = createVMRuleCr(postExecRule)
+		if err != nil {
+			return false, returnErrorm("error Creating PostExec ruleCR for vm unfreeze: %v", err)
+		}
+		backup.Spec.PostExecRule = postExecRule.Name
+		return true, nil
+	}
+	return false, nil
+}
+
+// createVMIncludeResources fetches resources for VM specified in includreResources or in namespace
+// and namespace filter.
+func (a *ApplicationBackupController) createVMIncludeResources(backup *stork_api.ApplicationBackup) (
+	*stork_api.Rule,
+	*stork_api.Rule,
+	error) {
+
+	objectMap := map[stork_api.ObjectInfo]bool{}
+	// First VMs from various filters provided.
+	vmList, objectMap, err := resourcecollector.GetVMIncludeListFromBackup(backup, objectMap)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Second fetch VM resources from the list of filtered VMs and freeze/thaw rule for each of them.
+	vmIncludeResources, objectMap, preExecRule, postExecRule := resourcecollector.GetVMIncludeResourceInfoList(vmList,
+		objectMap, backup.Spec.SkipAutoExecRules)
+
+	// update in memory data structure for later use.
+	a.vmIncludeResourceMap[string(backup.UID)] = objectMap
+	a.vmIncludeResource[string(backup.UID)] = vmIncludeResources
+
+	if len(preExecRule) <= 0 || len(postExecRule) <= 0 {
+		// No VMs needed free/thaw rule, skip creating ruleCr
+		return nil, nil, nil
+	}
+	// create preExecRuleCr with freeze actions
+	freezeRulesObject := createRuleCrObject(preExecRule, backup, vmFreezePrefix)
+	// create postExecRuleCr with unfreeze actions
+	unFreezeRulesObject := createRuleCrObject(postExecRule, backup, vmUnFreezePrefix)
+
+	return freezeRulesObject, unFreezeRulesObject, nil
+}
+
+// IsBackupObjecyTypeVirtualMachine returns true if backupObjectType is VirtualMachine
+func IsBackupObjecyTypeVirtualMachine(backup *stork_api.ApplicationBackup) bool {
+	return backup.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine
 }
