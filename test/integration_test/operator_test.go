@@ -36,6 +36,7 @@ func TestOperatorMig(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	currentTestSuite = t.Name()
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	t.Run("testMongoMig", testMongoMig)
@@ -43,17 +44,21 @@ func TestOperatorMig(t *testing.T) {
 }
 
 func testMongoMig(t *testing.T) {
+	var testResult = testResultFail
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	defer updateDashStats(t.Name(), &testResult)
 
 	validateAndDestroyCrMigration(t, appNameMongo, appPathMongo)
 }
 
 func testKafkaMig(t *testing.T) {
+	var testResult = testResultFail
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	defer updateDashStats(t.Name(), &testResult)
 
 	validateAndDestroyCrMigration(t, appNameKafka, appPathKafka)
 }

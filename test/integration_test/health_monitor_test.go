@@ -28,6 +28,7 @@ const (
 func TestHealthMonitor(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	currentTestSuite = t.Name()
 
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("stopKubeletTest", stopKubeletTest)
@@ -43,6 +44,7 @@ func stopDriverTest(t *testing.T) {
 	var testrailID, testResult = 50790, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "stopdrivertest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -100,6 +102,7 @@ func stopKubeletTest(t *testing.T) {
 	var testrailID, testResult = 50791, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	// Cordon node where the test is running. This is so that we don't end up stopping
 	// kubelet on the node where the stork-test pod is running
@@ -159,6 +162,7 @@ func poolMaintenanceHealthTest(t *testing.T) {
 	var testrailID, testResult = 86081, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "pool-health"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -206,6 +210,7 @@ func healthCheckFixTest(t *testing.T) {
 	var testrailID, testResult = 85900, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	// When a node's storage is offline stork should not bounce pods right away.
 	// It now waits for a minute and checks again to see if the storage driver is still offline.
@@ -295,6 +300,7 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 	var testrailID, testResult = 85901, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	// Verify CSI pods are running on online nodes
 	logrus.Infof("Checking if CSI pods are initially scheduled on online PX nodes")

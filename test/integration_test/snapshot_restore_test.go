@@ -53,6 +53,7 @@ func simpleSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50799, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	// foldername + name as namespaces
 	snapCtx, err := schedulerDriver.Schedule("splocal",
@@ -77,6 +78,7 @@ func groupSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50800, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	snapCtx, err := schedulerDriver.Schedule("spgroup",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
@@ -106,6 +108,7 @@ func cloudSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50801, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	if testing.Short() {
 		t.Skip("Skipping test: cloudSnapshotRestoreTest.")
@@ -135,6 +138,7 @@ func groupCloudSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50802, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	if testing.Short() {
 		t.Skip("Skipping test: groupCloudSnapshotRestoreTest.")

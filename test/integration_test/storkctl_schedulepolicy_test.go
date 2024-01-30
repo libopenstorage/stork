@@ -24,6 +24,7 @@ import (
 func TestStorkCtlSchedulePolicy(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	currentTestSuite = t.Name()
 	t.Run("createDefaultIntervalSchedulePolicyTest", createDefaultIntervalSchedulePolicyTest)
 	t.Run("createDefaultDailySchedulePolicyTest", createDefaultDailySchedulePolicyTest)
 	t.Run("createDefaultWeeklySchedulePolicyTest", createDefaultWeeklySchedulePolicyTest)
@@ -43,6 +44,7 @@ func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]s
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer SchedulePolicyCleanup(t, schedulePolicyName)
+	defer updateDashStats(t.Name(), &testResult)
 
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
@@ -80,6 +82,7 @@ func deleteSchedulePolicyTest(t *testing.T) {
 	var testrailID, testResult = 93195, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	factory := storkctl.NewFactory()
 	schedulePolicyName := "delete-test-policy"
 	schedulePolicy := &storkv1.SchedulePolicy{

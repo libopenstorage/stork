@@ -60,6 +60,7 @@ func simpleSnapshotTest(t *testing.T) {
 	var testrailID, testResult = 50792, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctx := createSnapshot(t, []string{"mysql-snap-restore"}, "simple-snap-restore")
 	verifySnapshot(t, ctx, "mysql-data", 3, 2, true, defaultWaitTimeout)
@@ -74,6 +75,7 @@ func cloudSnapshotTest(t *testing.T) {
 	var testrailID, testResult = 50793, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
@@ -126,6 +128,7 @@ func groupSnapshotTest(t *testing.T) {
 	var testrailID, testResult = 50795, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxsToDestroy := make([]*scheduler.Context, 0)
 	// Positive tests
@@ -193,6 +196,7 @@ func groupSnapshotScaleTest(t *testing.T) {
 	var testrailID, testResult = 50796, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	allContexts := make([]*scheduler.Context, 0)
 	// Triggers 2 snaps, so use half the count in the loop
@@ -461,6 +465,7 @@ func cloudSnapshotScaleTest(t *testing.T) {
 	var testrailID, testResult = 86218, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs := make([][]*scheduler.Context, snapshotScaleCount)
 	for i := 0; i < snapshotScaleCount; i++ {
@@ -503,6 +508,7 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50797, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctx := createApp(t, "interval-snap-sched-test")
 	policyName := "intervalpolicy"
@@ -577,6 +583,7 @@ func dailySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86219, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctx := createApp(t, "daily-snap-sched-test")
 	policyName := "dailypolicy"
@@ -642,6 +649,7 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86220, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctx := createApp(t, "weekly-snap-sched-test")
 	policyName := "weeklypolicy"
@@ -708,6 +716,7 @@ func monthlySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50786, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctx := createApp(t, "monthly-snap-sched-test")
 	policyName := "monthlypolicy"
@@ -829,6 +838,7 @@ func invalidPolicySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86222, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctx := createApp(t, "invalid-snap-sched-test")
 	policyName := "invalidpolicy"

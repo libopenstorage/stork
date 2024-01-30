@@ -41,6 +41,7 @@ func TestKubevirt(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	currentTestSuite = t.Name()
 
 	err = createImageTemplates(t)
 	require.NoError(t, err, "Error creating kubevirt templates")
@@ -59,6 +60,7 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
 	appKey := "kubevirt-fedora"
 	deployedVMName := "fedora-test-vm"
@@ -82,6 +84,7 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
 	appKey := "kubevirt-windows-22k-server"
 	deployedVMName := "windows-test-vm"
@@ -132,6 +135,7 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
 	appKey := "kubevirt-fedora-wait-first-consumer"
 	deployedVMName := "fedora-test-vm-wait-first-consumer"
@@ -155,6 +159,7 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
 	appKey := "kubevirt-windows-22k-server-wait-first-consumer"
 	deployedVMName := "windows-test-vm-wait-first-consumer"
@@ -178,6 +183,7 @@ func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
 	appKey := "kubevirt-fedora-multiple-disks"
 	deployedVMName := "fedora-vm-multidisk"

@@ -23,6 +23,8 @@ import (
 
 const (
 	annotationStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
+	dashProductName              = "stork"
+	dashStatsType                = "stork-integration-test"
 
 	maxPodBringupTime time.Duration = 2 * time.Minute
 )
@@ -30,6 +32,7 @@ const (
 func TestExtender(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	currentTestSuite = t.Name()
 
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("noPVCTest", noPVCTest)
@@ -52,6 +55,7 @@ func noPVCTest(t *testing.T) {
 	var testrailID, testResult = 50785, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "nopvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-nopvc"}})
@@ -72,6 +76,7 @@ func singlePVCTest(t *testing.T) {
 	var testrailID, testResult = 50786, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "singlepvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -101,6 +106,7 @@ func statefulsetTest(t *testing.T) {
 	var testrailID, testResult = 50787, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "sstest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"elasticsearch"}})
@@ -138,6 +144,7 @@ func multiplePVCTest(t *testing.T) {
 	var testrailID, testResult = 50788, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "multipvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
@@ -166,6 +173,7 @@ func driverNodeErrorTest(t *testing.T) {
 	var testrailID, testResult = 50789, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "drivererrtest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -223,6 +231,7 @@ func poolMaintenanceTest(t *testing.T) {
 	var testrailID, testResult = 86080, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "pool-test"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -279,6 +288,7 @@ func pvcOwnershipTest(t *testing.T) {
 	var testrailID, testResult = 50781, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "ownershiptest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-repl-1"}})
@@ -360,6 +370,7 @@ func antihyperconvergenceTest(t *testing.T) {
 	var testrailID, testResult = 85859, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule("antihyperconvergencetest",
 		scheduler.ScheduleOptions{
@@ -393,6 +404,7 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 	var testrailID, testResult = 85860, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule("preferremoteonlytest",
 		scheduler.ScheduleOptions{
@@ -457,6 +469,7 @@ func antihyperconvergenceAfterVolumeLabelUpdate(t *testing.T) {
 	var testrailID, testResult = 94378, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule("volumelabelupdate",
 		scheduler.ScheduleOptions{
@@ -522,6 +535,7 @@ func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
 	var testrailID, testResult = 92964, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule("preferremotenodefalsetest",
 		scheduler.ScheduleOptions{
@@ -605,6 +619,7 @@ func equalPodSpreadTest(t *testing.T) {
 	var testrailID, testResult = 84664, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule("equal-pod-spread-test",
 		scheduler.ScheduleOptions{

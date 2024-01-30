@@ -23,6 +23,9 @@ type configTestAppWithNearSync struct {
 }
 
 func TestApplicationsWithNearSync(t *testing.T) {
+	var testResult = testResultFail
+	currentTestSuite = t.Name()
+	defer updateDashStats(t.Name(), &testResult)
 
 	// create secret on source and destination
 	funcCreateSecret := func() {

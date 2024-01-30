@@ -30,6 +30,7 @@ func TestMigrationStorkFailures(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	currentTestSuite = t.Name()
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
@@ -43,6 +44,7 @@ func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {
 	var testrailID, testResult = 51458, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	deleteStorkPodsDuringMigrationTest(t, "source", false)
 
@@ -55,6 +57,7 @@ func deleteStorkPodsDestDuringMigrationTest(t *testing.T) {
 	var testrailID, testResult = 51459, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	deleteStorkPodsDuringMigrationTest(t, "destination", true)
 

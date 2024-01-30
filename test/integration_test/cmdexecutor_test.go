@@ -21,6 +21,7 @@ import (
 func TestCommandExecutor(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	currentTestSuite = t.Name()
 
 	t.Run("cmdExecutorTest", cmdExecutorTest)
 
@@ -32,6 +33,7 @@ func cmdExecutorTest(t *testing.T) {
 	var testrailID, testResult = 86261, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)

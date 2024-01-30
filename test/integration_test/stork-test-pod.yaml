@@ -107,6 +107,8 @@ spec:
       value: testrail_pwd
     - name: TESTRAIL_MILESTONE
       value: testrail_milestone
+    - name: ENABLE_DASH
+      value: enable_dash 
   hostNetwork: false
   hostNetwork: false
   hostPID: false

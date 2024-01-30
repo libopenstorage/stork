@@ -27,9 +27,12 @@ const (
 
 // This test is named starting with "TestExtender" so that is runs as part of the TestExtender suite
 func TestExtenderWebhookStatfs(t *testing.T) {
+	var testResult = testResultFail
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
+	currentTestSuite = t.Name()
+	defer updateDashStats(t.Name(), &testResult)
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 

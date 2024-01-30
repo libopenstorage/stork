@@ -36,6 +36,7 @@ const (
 func TestStorkCtlMigrationSchedule(t *testing.T) {
 	err := setSourceKubeConfig()
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	currentTestSuite = t.Name()
 	createPrerequisiteResources(t)
 	defer cleanUpPrerequisiteResources(t)
 	t.Run("createDefaultAsyncMigrationScheduleTest", createDefaultAsyncMigrationScheduleTest)
@@ -111,6 +112,7 @@ func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]s
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer migrationScheduleCleanup(t, migrationScheduleName, migrationScheduleNs)
+	defer updateDashStats(t.Name(), &testResult)
 
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer

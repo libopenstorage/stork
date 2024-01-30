@@ -20,6 +20,7 @@ func TestMigrationBackup(t *testing.T) {
 	require.NoError(t, err, "Error resetting mock time")
 
 	setDefaultsForBackup(t)
+	currentTestSuite = t.Name()
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
@@ -31,6 +32,7 @@ func deploymentMigrationBackupTest(t *testing.T) {
 	var testrailID, testResult = 54209, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult)
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	for location, secret := range allConfigMap {
 		logrus.Infof("Backing up to cloud: %v using secret %v", location, secret)
