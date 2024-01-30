@@ -10351,6 +10351,70 @@ func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
 	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
 }
 
+
+// GetProcessPID returns the PID of KVDB master node
+func GetProcessPID(memberNode node.Node, processName string) (string, error) {
+	var processPid string
+	command := fmt.Sprintf("ps -ef | grep -i %s", processName)
+	out, err := Inst().N.RunCommand(memberNode, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, fmt.Sprintf("/usr/local/bin/%s", processName)) && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
+}
+
+// KillPxExecUsingPid return error in case of command failure
+func KillPxExecUsingPid(memberNode node.Node) error {
+	pid, err := GetProcessPID(memberNode, "pxexec")
+	if err != nil {
+		return err
+	}
+	if pid == "" {
+		log.InfoD("Procrss with PID doesnot exists !! ")
+		return nil
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, memberNode)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// KillPxStorageUsingPid return error in case of command failure
+func KillPxStorageUsingPid(memberNode node.Node) error {
+	nodes := []node.Node{}
+	nodes = append(nodes, memberNode)
+	err := Inst().V.StopDriver(nodes, true, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllPodsInNameSpace Returns list of pods running in the namespace
+func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+	pods, err := k8sCore.GetPods(nameSpace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
 func installGrafana(namespace string) {
 	enableGrafana := false
 

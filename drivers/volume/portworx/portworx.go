@@ -805,6 +805,24 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 	return resp.VolumeId, nil
 }
 
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *portworx) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	log.InfoD("Initiate Volume create with Volume Name %s", volName)
+	cmd := fmt.Sprintf("pxctl volume create %s --size %v --repl %v", volName, size, haLevel)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return err
+	}
+	log.Infof("Create Volume with Name [%v] to Size [%v] Successful. response: [%v]", volName, size, out)
+	return nil
+}
+
 // ResizeVolume resizes Volume to specific size provided
 func (d *portworx) ResizeVolume(volName string, size uint64) error {
 	volDriver := d.getVolDriver()

@@ -88,6 +88,9 @@ type Driver interface {
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
 
+	// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+	CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error
+
 	// ResizeVolume resizes Volume to specific size provided
 	ResizeVolume(volName string, size uint64) error
 

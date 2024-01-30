@@ -129,6 +129,14 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	}
 }
 
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *DefaultDriver) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeUsingPxctlCmd()",
+	}
+}
+
 // ResizeVolume resizes Volume to specific size provided
 func (d *DefaultDriver) ResizeVolume(volName string, size uint64) error {
 	return &errors.ErrNotSupported{
