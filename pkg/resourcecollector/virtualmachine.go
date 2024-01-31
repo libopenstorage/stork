@@ -420,13 +420,12 @@ func getVmsFromNamespaceList(namespaces []string, objectMap map[storkapi.ObjectI
 	return VmList, nil
 }
 
-func getVmsFromIncludeResourceList(
-	includeResources []storkapi.ObjectInfo,
-	objectMap map[storkapi.ObjectInfo]bool) (
+func getVmsFromIncludeResourceList(includeResources []storkapi.ObjectInfo) (
 	[]kubevirtv1.VirtualMachine,
 	map[storkapi.ObjectInfo]bool,
 	error) {
 
+	objectMap := make(map[storkapi.ObjectInfo]bool)
 	if len(includeResources) == 0 {
 		return nil, objectMap, nil
 	}
@@ -458,20 +457,20 @@ func getVmsFromIncludeResourceList(
 }
 
 // GetVMIncludeListFromBackup returns all the VMs from various filters,
-func GetVMIncludeListFromBackup(backup *storkapi.ApplicationBackup, objectMap map[storkapi.ObjectInfo]bool) (
+func GetVMIncludeListFromBackup(backup *storkapi.ApplicationBackup) (
 	[]kubevirtv1.VirtualMachine,
 	map[storkapi.ObjectInfo]bool,
 	error) {
 
 	// First Fetch VM List from backup.Spec.IncludeResources
-	vmIncList, objectMap, err := getVmsFromIncludeResourceList(backup.Spec.IncludeResources, objectMap)
+	vmIncList, objectMap, err := getVmsFromIncludeResourceList(backup.Spec.IncludeResources)
 	if err != nil {
-		return nil, objectMap, err
+		return nil, nil, err
 	}
 	// Second fetch VM List from Namespace and Namespace label list
 	vmNsList, err := getVmsFromNamespaceList(backup.Spec.Namespaces, objectMap)
 	if err != nil {
-		return nil, objectMap, err
+		return nil, nil, err
 	}
 	vmIncList = append(vmIncList, vmNsList...)
 	return vmIncList, objectMap, nil
