@@ -266,7 +266,7 @@ func jobFor(
 ) (*batchv1.Job, error) {
 	backupName := jobName
 
-	labels := addJobLabels(jobOption.Labels)
+	labels := addJobLabels(jobOption)
 
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
@@ -451,12 +451,14 @@ func toRepoName(pvcName, pvcNamespace string) string {
 	return fmt.Sprintf("%s-%s", pvcNamespace, pvcName)
 }
 
-func addJobLabels(labels map[string]string) map[string]string {
+func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
+	labels := jobOpts.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaBackup
+	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 
