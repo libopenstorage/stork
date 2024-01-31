@@ -168,12 +168,14 @@ func roleFor() *rbacv1.ClusterRole {
 	return role
 }
 
-func addJobLabels(labels map[string]string) map[string]string {
+func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
+	labels := jobOpts.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.NFSRestore
+	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 
@@ -193,7 +195,7 @@ func jobForRestoreCSISnapshot(
 		jobOption.Namespace,
 	}, " ")
 
-	labels := addJobLabels(jobOption.Labels)
+	labels := addJobLabels(jobOption)
 	// changing job name to nfcsirestore-backupUID-volumeUID instead of deName for better identification
 	jobName := utils.GetCsiRestoreJobName(drivers.NFSCSIRestore, jobOption.DataExportName)
 	nfsExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
