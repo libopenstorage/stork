@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -11,6 +12,8 @@ import (
 	"fmt"
 
 	"github.com/portworx/torpedo/drivers/node/gke"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/portworx/torpedo/pkg/stats"
 
@@ -5315,6 +5318,42 @@ func DeleteS3Bucket(bucketName string) {
 		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
 }
 
+func DeleteGcpBucket(bucketName string) {
+
+	ctx := context1.Background()
+
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.FailOnError(err, "Failed to create gcp client")
+	}
+	defer client.Close()
+
+	// List all objects in the bucket
+	it := client.Bucket(bucketName).Objects(ctx, nil)
+	for {
+		objAttrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.FailOnError(err, "error iterating over gcp bucket objects")
+		}
+
+		// Delete each object in the bucket
+		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
+		if err != nil {
+			log.FailOnError(err, "error deleting object from gcp bucket %s", objAttrs.Name)
+		}
+		log.Infof("Deleted object: %s\n", objAttrs.Name)
+	}
+
+	// Delete the bucket
+	bucket := client.Bucket(bucketName)
+	if err := bucket.Delete(ctx); err != nil {
+		log.FailOnError(err, "failed to delete bucket [%v]", bucketName)
+	}
+}
+
 // DeleteAzureBucket delete bucket in azure
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
@@ -5425,6 +5464,8 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteAzureBucket(bucketName)
 		case drivers.ProviderNfs:
 			DeleteNfsSubPath(bucketName)
+		case drivers.ProviderGke:
+			DeleteGcpBucket(bucketName)
 		}
 	})
 }
@@ -5832,6 +5873,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderNfs:
 		result, err := IsNFSSubPathEmpty(bucketName)
 		return result, err
+	case drivers.ProviderGke:
+		result, err := IsGCPBucketEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -5911,6 +5955,30 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// IsGCPBucketEmpty returns true if bucket empty else false
+func IsGCPBucketEmpty(bucketName string) (bool, error) {
+	query := &storage.Query{Prefix: "", Delimiter: ""}
+	ctx := context1.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.Infof("Failed to create client gcp client : %v", err)
+		return false, fmt.Errorf("failed to create client gcp storage %s", err)
+	}
+	defer client.Close()
+
+	it := client.Bucket(bucketName).Objects(ctx, query)
+	_, err = it.Next()
+	if err == iterator.Done {
+		// Iterator finished, bucket is empty
+		return true, nil
+	} else if err != nil {
+		return false, fmt.Errorf("error occured while iterating over objects of gcp bucket %s", err)
+	}
+
+	// Iterator didn't finish, bucket is not empty
+	return false, nil
 }
 
 // CreateS3Bucket creates bucket in S3

@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -3253,11 +3254,13 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			srcClusterConfigPath, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "Fetching source clusterconfigpath")
 			_, err = UpdateCluster(SourceClusterName, srcClusterUid, srcClusterConfigPath, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", SourceClusterName, nonAdminUserName))
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true,
+				fmt.Sprintf("Verification of update of cluster [%s] of user [%s] with wrong credentials is expected to fail", SourceClusterName, nonAdminUserName))
 			dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 			log.FailOnError(err, "Fetching destination clusterconfigpath")
 			_, err = UpdateCluster(destinationClusterName, destClusterUid, dstClusterConfigPath, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", destinationClusterName, nonAdminUserName))
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true,
+				fmt.Sprintf("Verification of update of cluster [%s] of user [%s] with wrong credentials is expected to fail", destinationClusterName, nonAdminUserName))
 		})
 
 		Step(fmt.Sprintf("Verifying  deletion of clusters of non-admin user from px-admin user"), func() {
