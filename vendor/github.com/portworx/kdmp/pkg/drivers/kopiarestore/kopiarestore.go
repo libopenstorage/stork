@@ -174,7 +174,7 @@ func jobFor(
 	vb *v1alpha1.VolumeBackup,
 	jobName string,
 ) (*batchv1.Job, error) {
-	labels := addJobLabels(jobOption.Labels)
+	labels := addJobLabels(jobOption)
 
 	resources, err := utils.KopiaResourceRequirements(jobOption.JobConfigMap, jobOption.JobConfigMapNs)
 	if err != nil {
@@ -350,12 +350,14 @@ func jobFor(
 	return job, nil
 }
 
-func addJobLabels(labels map[string]string) map[string]string {
+func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
+	labels := jobOpts.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaRestore
+	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 

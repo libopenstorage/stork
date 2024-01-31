@@ -388,7 +388,8 @@ func addVolumeBackupDeleteLabels(jobOpts drivers.JobOpts) map[string]string {
 	return labels
 }
 
-func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]string {
+func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
+	labels := jobOpts.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -396,6 +397,7 @@ func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]
 	labels[drivers.DriverNameLabel] = drivers.KopiaDelete
 	labels[utils.BackupObjectNameKey] = utils.GetValidLabel(jobOpts.BackupObjectName)
 	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
+	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 
@@ -405,7 +407,7 @@ func buildJob(jobName string, jobOpts drivers.JobOpts) (*batchv1.Job, error) {
 		return nil, err
 	}
 
-	labels := addJobLabels(jobOpts.Labels, jobOpts)
+	labels := addJobLabels(jobOpts)
 	return jobFor(
 		jobOpts,
 		jobName,
