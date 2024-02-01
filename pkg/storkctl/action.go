@@ -20,23 +20,22 @@ const (
 	actionWaitInterval   time.Duration = 10 * time.Second
 )
 
-func newTriggerCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	triggerCommands := &cobra.Command{
-		Use:    "trigger",
-		Short:  "trigger actions",
-		Hidden: true,
+func newPerformCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	performCommands := &cobra.Command{
+		Use:   "perform",
+		Short: "perform actions",
 	}
 
-	triggerCommands.AddCommand(
+	performCommands.AddCommand(
 		newFailoverCommand(cmdFactory, ioStreams),
 	)
-	return triggerCommands
+	return performCommands
 }
 
 func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	failoverCommand := &cobra.Command{
 		Use:   failoverCommand,
-		Short: "Initiate failover for the given namespaces",
+		Short: "Initiate failover of the given migration schedule",
 		Run: func(c *cobra.Command, args []string) {
 			namespaces, err := cmdFactory.GetAllNamespaces()
 			if err != nil {
@@ -86,6 +85,9 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			}
 		},
 	}
+	failoverCommand.Flags().BoolVar(&deactivateSource, "deactivate-source", false, "If present, resources in the source cluster will be deactivated as part of the failover")
+	failoverCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the migration schedule to be failovered")
+
 	return failoverCommand
 }
 
