@@ -174,6 +174,11 @@ if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
 fi
 
+SCALE_APP_TIMEOUT_ARG=""
+if [ -n "${SCALE_APP_TIMEOUT}" ]; then
+    SCALE_APP_TIMEOUT_ARG="--scale-app-timeout=$SCALE_APP_TIMEOUT"
+fi
+
 if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
     LICENSE_EXPIRY_TIMEOUT_HOURS="1h0m0s"
     echo "Using default license expiry timeout of ${LICENSE_EXPIRY_TIMEOUT_HOURS}"
@@ -565,6 +570,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCALE_APP_TIMEOUT_ARG",
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
