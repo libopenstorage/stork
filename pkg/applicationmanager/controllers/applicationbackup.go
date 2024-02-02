@@ -266,18 +266,18 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			// Run the post exec rules if the backup is in ApplicationBackupStageVolumes stage(After the ApplicationBackupStagePreExecRule Stage) AND execRulesCompleted check is negative
-			if _, ok := a.execRulesCompleted[string(backup.UID)]; !ok && backup.Status.Stage == stork_api.ApplicationBackupStageVolumes {
-				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("BackpCR is marked for deletion before execting the post exec rules, will execute the same during the finalizer cleanup if any")
+			if backup.Status.Stage == stork_api.ApplicationBackupStageVolumes {
+				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Infof("BackpCR is marked for deletion during the %v stage", backup.Status.Stage)
 				if terminationChannels, ok := a.terminationChannels[string(backup.UID)]; ok {
 					for _, channel := range terminationChannels {
-						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
+						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Sending termination commands to kill pre-exec pod")
 						channel <- true
 					}
 				}
-				if backup.Spec.PostExecRule != "" {
+				if isexecRulesCompleted, isExists := a.execRulesCompleted[string(backup.UID)]; backup.Spec.PostExecRule != "" && isExists && !isexecRulesCompleted {
 					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Starting post-exec rule during the backup cr finalizer cleanup")
 					err := a.runPostExecRule(backup)
-					if err != nil {
+					if err != nil && !k8s_errors.IsNotFound(err) {
 						message := fmt.Sprintf("Error running PostExecRule during the finalizer cleanup: %v", err)
 						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Errorf(message)
 						a.recorder.Event(backup,
@@ -290,23 +290,12 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				}
 			}
 
-			// Delete post-exec rule CR after executing the postexec rules only for the manual backup as it is managed and created through the px-backup
-			// And also here the deletion will be skipped if the backupCR is created by the schedule or for the restore from the px-backup.
-			if len(backup.Spec.PostExecRule) != 0 && backup.Annotations[utils.PxbackupAnnotationCreateByKey] == utils.PxbackupAnnotationCreateByValue && backup.Annotations["portworx.io/backup-by"] != "backup-schedule" && backup.Annotations["portworx.io/backup-by"] != "restore" {
-				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Delete post-exec rule CR as it is a manual backup created by the px-backup")
-
-				err := storkops.Instance().DeleteRule(backup.Spec.PostExecRule, backup.Namespace)
-				if err != nil && !k8s_errors.IsNotFound(err) {
-					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Infof("Error while deleting post exec rule CR: %v", err)
-					return err
-				}
-			}
-
 			canDelete, err := a.deleteBackup(backup)
 			if err != nil {
 				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
 			}
 			if !canDelete {
+				log.ApplicationBackupLog(backup).Infof("Is backup [%v/%v] can be deleted: value is %v ", backup.Namespace, backup.Name, canDelete)
 				return nil
 			}
 
@@ -327,17 +316,23 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				delete(a.vmIncludeResourceMap, string(backup.UID))
 				log.ApplicationBackupLog(backup).Infof("cleaning up vmIncludeResources for VM backupObjectType")
 			}
-			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller.
+			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller. Including the post exec rule CR for manual backup when created through the px-backup
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
 			err = a.cleanupResources(backup)
 			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error while cleanupResources which will cleanup the resources created by applicationbackup controller [%v/%v]: %v", backup.Namespace, backup.Name, err)
 				return err
 			}
 		}
 
 		if backup.GetFinalizers() != nil {
 			controllers.RemoveFinalizer(backup, controllers.FinalizerCleanup)
-			return a.client.Update(ctx, backup)
+			err := a.client.Update(ctx, backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error while updating applicationbackup [%v/%v]: %v", backup.Namespace, backup.Name, err)
+				return err
+			}
+			return nil
 		}
 
 		return nil
@@ -347,6 +342,12 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
 		return nil
 	}
+
+	// Initialize execRulesCompleted for the backup UID
+	if _, isExists := a.execRulesCompleted[string(backup.UID)]; backup.Spec.PostExecRule != "" && !isExists {
+		a.execRulesCompleted[string(backup.UID)] = false
+	}
+
 	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
 		var pxNs string
 		namespaces, err := core.Instance().ListNamespacesV2(labelSelector)
@@ -2193,6 +2194,18 @@ func IsResourceTypePVC(backup *stork_api.ApplicationBackup) bool {
 func (a *ApplicationBackupController) cleanupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
+	// Delete post-exec rule CR only for the manual backup as it is managed and created through the px-backup
+	// And also here the deletion will be skipped if the backupCR is created by the backup schedule or for the restore from the px-backup.
+	if len(backup.Spec.PostExecRule) != 0 && backup.Annotations[utils.PxbackupAnnotationCreateByKey] == utils.PxbackupAnnotationCreateByValue && backup.Annotations["portworx.io/backup-by"] != "backup-schedule" && backup.Annotations["portworx.io/backup-by"] != "restore" {
+		log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Delete post-exec rule CR as it is a manual backup created by the px-backup")
+
+		err := storkops.Instance().DeleteRule(backup.Spec.PostExecRule, backup.Namespace)
+		if err != nil && !k8s_errors.IsNotFound(err) {
+			log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Errorf("Error while deleting post exec rule CR: %v", err)
+			return err
+		}
+	}
+
 	drivers := a.getDriversForBackup(backup)
 	for driverName := range drivers {
 
