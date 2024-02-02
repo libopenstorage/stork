@@ -266,18 +266,18 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			// Run the post exec rules if the backup is in ApplicationBackupStageVolumes stage(After the ApplicationBackupStagePreExecRule Stage) AND execRulesCompleted check is negative
-			if _, ok := a.execRulesCompleted[string(backup.UID)]; !ok && backup.Status.Stage == stork_api.ApplicationBackupStageVolumes {
-				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("BackpCR is marked for deletion before execting the post exec rules, will execute the same during the finalizer cleanup if any")
+			if backup.Status.Stage == stork_api.ApplicationBackupStageVolumes {
+				log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Infof("BackpCR is marked for deletion during the %v stage", backup.Status.Stage)
 				if terminationChannels, ok := a.terminationChannels[string(backup.UID)]; ok {
 					for _, channel := range terminationChannels {
-						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Sending termination commands to kill pre-exec pod in non-kdmp driver path")
+						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Sending termination commands to kill pre-exec pod")
 						channel <- true
 					}
 				}
-				if backup.Spec.PostExecRule != "" {
+				if isexecRulesCompleted, isExists := a.execRulesCompleted[string(backup.UID)]; backup.Spec.PostExecRule != "" && isExists && !isexecRulesCompleted {
 					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Info("Starting post-exec rule during the backup cr finalizer cleanup")
 					err := a.runPostExecRule(backup)
-					if err != nil {
+					if err != nil && !k8s_errors.IsNotFound(err) {
 						message := fmt.Sprintf("Error running PostExecRule during the finalizer cleanup: %v", err)
 						log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Errorf(message)
 						a.recorder.Event(backup,
@@ -297,7 +297,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 
 				err := storkops.Instance().DeleteRule(backup.Spec.PostExecRule, backup.Namespace)
 				if err != nil && !k8s_errors.IsNotFound(err) {
-					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Infof("Error while deleting post exec rule CR: %v", err)
+					log.ApplicationBackupLog(backup).WithField("Event", "Finalizer Cleanup").Errorf("Error while deleting post exec rule CR: %v", err)
 					return err
 				}
 			}
@@ -307,6 +307,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
 			}
 			if !canDelete {
+				log.ApplicationBackupLog(backup).Infof("Is backup [%v/%v] can be deleted: value is %v ", backup.Namespace, backup.Name, canDelete)
 				return nil
 			}
 
@@ -331,13 +332,19 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
 			err = a.cleanupResources(backup)
 			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error while cleanupResources which will cleanup the resources created by applicationbackup controller [%v/%v]: %v", backup.Namespace, backup.Name, err)
 				return err
 			}
 		}
 
 		if backup.GetFinalizers() != nil {
 			controllers.RemoveFinalizer(backup, controllers.FinalizerCleanup)
-			return a.client.Update(ctx, backup)
+			err := a.client.Update(ctx, backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error while updating applicationbackup [%v/%v]: %v", backup.Namespace, backup.Name, err)
+				return err
+			}
+			return nil
 		}
 
 		return nil
@@ -347,6 +354,12 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
 		return nil
 	}
+
+	// Initialize execRulesCompleted for the backup UID
+	if _, isExists := a.execRulesCompleted[string(backup.UID)]; backup.Spec.PostExecRule != "" && !isExists {
+		a.execRulesCompleted[string(backup.UID)] = false
+	}
+
 	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
 		var pxNs string
 		namespaces, err := core.Instance().ListNamespacesV2(labelSelector)
