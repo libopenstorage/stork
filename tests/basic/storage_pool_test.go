@@ -9695,7 +9695,8 @@ func pickPoolToResize() string {
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
 	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Found no pool used by persistent volumes. ")
-	poolIDToResize := poolIDsInUseByTestingApp[0]
+	rand.Seed(time.Now().UnixNano())
+	poolIDToResize := poolIDsInUseByTestingApp[rand.Intn(len(poolIDsInUseByTestingApp))]
 	return poolIDToResize
 }
 
