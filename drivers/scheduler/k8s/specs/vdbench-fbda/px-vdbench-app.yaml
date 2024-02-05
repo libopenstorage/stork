@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vdbench-fb-volumes
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: vdbench-fb-volumes
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: vdbench-fb-volumes
+    spec:
+      containers:
+      - args:
+        - |
+          while true; do
+            dd if=/dev/urandom of=/tmp/pvc-fbda-1/file-$(date +%s).txt bs=1M count=1 &
+            dd if=/dev/urandom of=/tmp/pvc-fbda-2/file-$(date +%s).txt bs=1M count=1 &
+            sleep 500;
+          done
+        command:
+        - /bin/sh
+        - -c
+        image: portworx/vdbench:torpedo
+        imagePullPolicy: IfNotPresent
+        name: vdbench
+        resources:
+          limits:
+            cpu: "1"
+            memory: 500Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tmp/pvc-fbda-1
+          name: pvc-fbda-1
+        - mountPath: /tmp/pvc-fbda-2
+          name: pvc-fbda-2
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: stork
+      securityContext:
+        fsGroupChangePolicy: OnRootMismatch
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: pvc-fbda-1
+        persistentVolumeClaim:
+          claimName: pvc-fbda-1
+      - name: pvc-fbda-2
+        persistentVolumeClaim:
+          claimName: pvc-fbda-2
