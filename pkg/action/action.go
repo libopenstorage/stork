@@ -69,7 +69,7 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	if action.Status == storkv1.ActionStatusScheduled {
+	if action.Status.Status == storkv1.ActionStatusScheduled {
 		if err = ac.handle(context.TODO(), action); err != nil {
 			log.ActionLog(action).Errorf("ActionController handle failed with %s", err)
 			ac.recorder.Event(action, v1.EventTypeWarning, "ActionController", err.Error())
@@ -84,7 +84,7 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) error {
 	ac.updateStatus(action, storkv1.ActionStatusInProgress)
 	switch action.Spec.ActionType {
-	case storkv1.ActionTypeFailover:
+	case storkv1.ActionTypeNearSyncFailover:
 		log.ActionLog(action).Info("started failover")
 		err := ac.volDriver.Failover(action)
 		if err != nil {
@@ -118,8 +118,8 @@ func (ac *ActionController) printFunc(action *storkv1.Action, reason string) fun
 	}
 }
 
-func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus storkv1.ActionStatus) {
-	action.Status = actionStatus
+func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus storkv1.ActionStatusType) {
+	action.Status.Status = actionStatus
 	err := ac.client.Update(context.TODO(), action)
 	if err != nil {
 		log.ActionLog(action).Errorf("failed to update action status to %v with error %v", action.Status, err)
@@ -128,7 +128,7 @@ func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus st
 
 // delete any action older than actionExpiryTime
 func (ac *ActionController) pruneActionIfExpired(action *storkv1.Action) {
-	if action.Status == storkv1.ActionStatusFailed || action.Status == storkv1.ActionStatusSuccessful {
+	if action.Status.Status == storkv1.ActionStatusFailed || action.Status.Status == storkv1.ActionStatusSuccessful {
 		if time.Since(action.CreationTimestamp.Local()) >= actionExpiryTime {
 			err := storkops.Instance().DeleteAction(action.Name, action.Namespace)
 			if err != nil {
