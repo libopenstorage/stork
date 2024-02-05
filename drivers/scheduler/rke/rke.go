@@ -184,6 +184,109 @@ func (r *Rancher) GetProjectID(projectName string) (string, error) {
 	return projectId, fmt.Errorf("no project matching the given projectName %s was found", projectName)
 }
 
+// CreateUserForRancherProject Creates a rancher user and adds the user to the project
+func (r *Rancher) CreateUserForRancherProject(projectName string, username string, password string) (string, error) {
+	userAnnotation := make(map[string]string)
+	userLabel := make(map[string]string)
+
+	projectId, err := r.GetProjectID(projectName)
+	if err != nil {
+		return "", err
+	}
+	userAnnotation["field.cattle.io/projectId"] = projectId
+	userLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
+
+	userRequest := &rancherClient.User{
+		Username:    username,
+		Password:    password,
+		Name:        fmt.Sprintf("Test " + username),
+		Annotations: userAnnotation,
+		Labels:      userLabel,
+	}
+	newUser, err := r.client.User.Create(userRequest)
+	if err != nil {
+		return "", fmt.Errorf("failed to create the user %s: %w", username, err)
+	}
+	// ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
+	// the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
+	roleRequest := &rancherClient.ProjectRoleTemplateBinding{
+		ProjectID:      projectId,
+		UserID:         newUser.ID,
+		RoleTemplateID: "project-member",
+	}
+	_, err = r.client.ProjectRoleTemplateBinding.Create(roleRequest)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("User [%s] is successfully created with user id [%s] and was added to the project [%s]", username, newUser.ID, projectName)
+	return newUser.ID, nil
+}
+
+// CreateMultipleUsersForRancherProject Creates multiple rancher users based on the supplied user map
+func (r *Rancher) CreateMultipleUsersForRancherProject(projectName string, userMap map[string]string) ([]string, error) {
+	log.InfoD("Creating multiple users for rancher project")
+	var userIDList []string
+	for username, password := range userMap {
+		userID, err := r.CreateUserForRancherProject(projectName, username, password)
+		if err != nil {
+			return nil, err
+		}
+		userIDList = append(userIDList, userID)
+	}
+	return userIDList, nil
+}
+
+// ValidateUsersInProject Validates the rancher users for a project by comparing the project members and the supplied list of users
+func (r *Rancher) ValidateUsersInProject(projectName string, userList []string) error {
+	var actualUserListForProject []string
+	projectId, err := r.GetProjectID(projectName)
+	if err != nil {
+		return err
+	}
+	//the returned roleMapping collection would include details about the permissions and roles assigned for the entire rancher cluster
+	roleMapping, err := r.client.ProjectRoleTemplateBinding.List(nil)
+	if err != nil {
+		return err
+	}
+	//the if condition filters the data based on the supplied project and the role.Name, the value for role.Name will either be "creator-project-owner" or a user id of a user associated with that project.
+	for _, role := range roleMapping.Data {
+		if role.ProjectID == projectId && role.Name != "creator-project-owner" {
+			actualUserListForProject = append(actualUserListForProject, role.UserID)
+		}
+	}
+	//here we are trying to compare if all the users supplied to this function are present in the project
+	for _, user := range userList {
+		userFound := false
+		for _, actualUser := range actualUserListForProject {
+			if user == actualUser {
+				userFound = true
+				break
+			}
+		}
+		//even if a single user from the supplied list isn't found in actualUserListForProject, we return an error
+		if !userFound {
+			return fmt.Errorf("user %s is not part of the actual user list for the project", user)
+		}
+	}
+	return nil
+}
+
+// DeleteRancherUsers Deletes all the users who are a part of the supplied list
+func (r *Rancher) DeleteRancherUsers(userIDList []string) error {
+	for _, userID := range userIDList {
+		userObj, err := r.client.User.ByID(userID)
+		if err != nil {
+			return err
+		}
+		err = r.client.User.Delete(userObj)
+		if err != nil {
+			return err
+		}
+		log.InfoD("The user [%s] is deleted", userID)
+	}
+	return nil
+}
+
 //Reason for updating the namespace with label and annotation for moving it to any project instead of using the inbuilt function:
 //For project related operation we need to import https://github.com/rancher/rancher/tree/release/v2.7/pkg/client/generated/management
 //For namespace related operation we need to import https://github.com/rancher/rancher/tree/release/v2.7/pkg/client/generated/cluster
