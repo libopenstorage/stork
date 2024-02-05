@@ -68,7 +68,9 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 					Spec: storkv1.ActionSpec{
 						ActionType: storkv1.ActionTypeFailover,
 					},
-					Status: storkv1.ActionStatusScheduled,
+					Status: storkv1.ActionStatus{
+						Status: storkv1.ActionStatusScheduled,
+					},
 				}
 				_, err = storkops.Instance().CreateAction(&action)
 				if err != nil {
@@ -88,7 +90,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 }
 
 func isActionIncomplete(action *storkv1.Action) bool {
-	return action.Status == storkv1.ActionStatusScheduled || action.Status == storkv1.ActionStatusInProgress
+	return action.Status.Status == storkv1.ActionStatusScheduled || action.Status.Status == storkv1.ActionStatusInProgress
 }
 
 // check if there is already an Action scheduled or in-progress
