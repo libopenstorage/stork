@@ -33,7 +33,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 		restoreNames                  []string
 		numberOfBackupLocation        = 1000
 		numberOfBackups               = 30
-		providers                     = getProviders()
+		providers                     = GetBackupProviders()
 		timeBetweenConsecutiveBackups = 10 * time.Second
 		controlChannel                chan string
 		errorGroup                    *errgroup.Group
@@ -44,10 +44,10 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = appReadinessTimeout
+				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 				namespace := GetAppNamespace(appCtx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
@@ -67,8 +67,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				cloudCredUID = uuid.New()
-				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
 			}
 		})
 		Step(fmt.Sprintf("Creating [%d] backup locations from px-admin", numberOfBackupLocation), func() {
@@ -78,7 +78,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 					log.InfoD(fmt.Sprintf("Creating backup locations with index [%d]", i))
 					backupLocationNameMap[i] = fmt.Sprintf("%s-%d-%s", getGlobalBucketName(provider), i, RandomString(6))
 					backupLocationUIDMap[i] = uuid.New()
-					err := CreateBackupLocation(provider, backupLocationNameMap[i], backupLocationUIDMap[i], cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
+					err := CreateBackupLocation(provider, backupLocationNameMap[i], backupLocationUIDMap[i], cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s]", backupLocationNameMap[i]))
 					backupLocationMap[backupLocationUIDMap[i]] = backupLocationNameMap[i]
 				}
@@ -88,16 +88,16 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			log.InfoD("Registering cluster for backup from px-admin")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateApplicationClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			log.InfoD("Verifying cluster status for both source and destination clusters")
-			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
-			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 		Step(fmt.Sprintf("Taking [%d] backup for the each application from px-admin", numberOfBackups), func() {
@@ -108,7 +108,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 				defer GinkgoRecover()
 				defer wg.Done()
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNameMap[index], backupLocationUIDMap[index], appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNameMap[index], backupLocationUIDMap[index], appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 			}
 			semaphore := make(chan int, 4)
@@ -140,14 +140,14 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 				customNamespace := "custom-" + namespace + RandomString(4)
 				namespaceMapping := map[string]string{namespace: customNamespace}
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
 				restoreNames = SafeAppend(&mutex, restoreNames, restoreName).([]string)
 			}
 			for index := 0; index < numberOfBackups; index++ {
 				for backupName, namespace := range userBackupMap[index] {
 					wg.Add(1)
-					restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+					restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
 					go createRestore(backupName, restoreName, namespace)
 				}
 			}
@@ -162,7 +162,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 				go func(backupLocationName, backupLocationUID string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err := DeleteBackupLocationWithContext(backupLocationName, backupLocationUID, orgID, true, ctx)
+					err := DeleteBackupLocationWithContext(backupLocationName, backupLocationUID, BackupOrgID, true, ctx)
 					Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", backupLocationName))
 				}(backupLocationName, backupLocationUID)
 			}
@@ -172,14 +172,14 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			log.InfoD("Wait for Backup location deletion")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "failed to fetch ctx for admin")
-			AllBackupLocationMap, err := getAllBackupLocations(ctx)
+			AllBackupLocationMap, err := GetAllBackupLocations(ctx)
 			log.FailOnError(err, "Fetching all backup locations")
 			for backupLocationUID, backupLocationName := range AllBackupLocationMap {
 				wg.Add(1)
 				go func(backupLocationName, backupLocationUID string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err := Inst().Backup.WaitForBackupLocationDeletion(ctx, backupLocationName, backupLocationUID, orgID, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
+					err := Inst().Backup.WaitForBackupLocationDeletion(ctx, backupLocationName, backupLocationUID, BackupOrgID, BackupLocationDeleteTimeout, BackupLocationDeleteRetryTime)
 					Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying waiting for backup location [%s] deletion", backupLocationName))
 				}(backupLocationName, backupLocationUID)
 			}
@@ -196,7 +196,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			go func(restoreName string) {
 				defer GinkgoRecover()
 				defer wg.Done()
-				err = DeleteRestore(restoreName, orgID, ctx)
+				err = DeleteRestore(restoreName, BackupOrgID, ctx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 			}(restoreName)
 		}

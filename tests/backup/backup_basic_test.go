@@ -63,22 +63,22 @@ func getBucketNameSuffix() string {
 func getGlobalBucketName(provider string) string {
 	switch provider {
 	case drivers.ProviderAws:
-		return globalAWSBucketName
+		return GlobalAWSBucketName
 	case drivers.ProviderAzure:
-		return globalAzureBucketName
+		return GlobalAzureBucketName
 	case drivers.ProviderGke:
-		return globalGCPBucketName
+		return GlobalGCPBucketName
 	case drivers.ProviderNfs:
-		return globalNFSBucketName
+		return GlobalNFSBucketName
 	default:
-		return globalAWSBucketName
+		return GlobalAWSBucketName
 	}
 }
 
 func getGlobalLockedBucketName(provider string) string {
 	switch provider {
 	case drivers.ProviderAws:
-		return globalAWSLockedBucketName
+		return GlobalAWSLockedBucketName
 	default:
 		log.Errorf("environment variable [%s] not provided with valid values", "PROVIDERS")
 		return ""
@@ -146,7 +146,7 @@ func BackupInitInstance() {
 
 	Inst().Dash.TestSetUpdate(t)
 	// Setting the common password
-	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
+	CommonPassword = backup.PxCentralAdminPwd + RandomString(4)
 	// Dumping source and destination kubeconfig to file system path
 	log.Infof("Dumping source and destination kubeconfig to file system path")
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -178,34 +178,34 @@ var _ = BeforeSuite(func() {
 	GlobalCredentialConfig, err = GetConfigObj()
 	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
-	providers := getProviders()
+	providers := GetBackupProviders()
 	bucketNameSuffix := getBucketNameSuffix()
 	for _, provider := range providers {
 		switch provider {
 		case drivers.ProviderAws:
-			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
-			CreateBucket(provider, globalAWSBucketName)
-			log.Infof("Bucket created with name - %s", globalAWSBucketName)
+			GlobalAWSBucketName = fmt.Sprintf("%s-%s", GlobalAWSBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, GlobalAWSBucketName)
+			log.Infof("Bucket created with name - %s", GlobalAWSBucketName)
 			s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
 			if s3EncryptionPolicy != "" {
 				sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
 				log.FailOnError(err, "Failed to get sse details form environment")
-				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
+				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), GlobalAWSBucketName)
 				log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-				err = UpdateS3BucketPolicy(globalAWSBucketName, policy)
+				err = UpdateS3BucketPolicy(GlobalAWSBucketName, policy)
 				log.FailOnError(err, "Failed to apply bucket policy")
-				log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
+				log.Infof("Updated S3 bucket policy - %s", GlobalAWSBucketName)
 			}
 		case drivers.ProviderAzure:
-			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
-			CreateBucket(provider, globalAzureBucketName)
-			log.Infof("Bucket created with name - %s", globalAzureBucketName)
+			GlobalAzureBucketName = fmt.Sprintf("%s-%s", GlobalAzureBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, GlobalAzureBucketName)
+			log.Infof("Bucket created with name - %s", GlobalAzureBucketName)
 		case drivers.ProviderGke:
-			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
-			CreateBucket(provider, globalGCPBucketName)
-			log.Infof("Bucket created with name - %s", globalGCPBucketName)
+			GlobalGCPBucketName = fmt.Sprintf("%s-%s", GlobalGCPBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, GlobalGCPBucketName)
+			log.Infof("Bucket created with name - %s", GlobalGCPBucketName)
 		case drivers.ProviderNfs:
-			globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, RandomString(6))
+			GlobalNFSBucketName = fmt.Sprintf("%s-%s", GlobalNFSBucketPrefix, RandomString(6))
 		}
 	}
 	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")
@@ -213,11 +213,11 @@ var _ = BeforeSuite(func() {
 		for _, provider := range providers {
 			switch provider {
 			case drivers.ProviderAws:
-				globalAWSLockedBucketName = fmt.Sprintf("%s-%s", globalAWSLockedBucketPrefix, lockedBucketNameSuffix)
+				GlobalAWSLockedBucketName = fmt.Sprintf("%s-%s", GlobalAWSLockedBucketPrefix, lockedBucketNameSuffix)
 			case drivers.ProviderAzure:
-				globalAzureLockedBucketName = fmt.Sprintf("%s-%s", globalAzureLockedBucketPrefix, lockedBucketNameSuffix)
+				GlobalAzureLockedBucketName = fmt.Sprintf("%s-%s", GlobalAzureLockedBucketPrefix, lockedBucketNameSuffix)
 			case drivers.ProviderGke:
-				globalGCPLockedBucketName = fmt.Sprintf("%s-%s", globalGCPLockedBucketPrefix, lockedBucketNameSuffix)
+				GlobalGCPLockedBucketName = fmt.Sprintf("%s-%s", GlobalGCPLockedBucketPrefix, lockedBucketNameSuffix)
 			}
 		}
 	} else {
@@ -236,23 +236,23 @@ var _ = AfterSuite(func() {
 	//Cleanup policy
 	s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
 	if s3EncryptionPolicy != "" {
-		err = RemoveS3BucketPolicy(globalAWSBucketName)
+		err = RemoveS3BucketPolicy(GlobalAWSBucketName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 	}
 
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
 	for _, backupName := range allBackups {
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
 	}
 
 	// Cleanup all restores
 	allRestores, err := GetAllRestoresAdmin()
 	for _, restoreName := range allRestores {
-		err = DeleteRestore(restoreName, orgID, ctx)
+		err = DeleteRestore(restoreName, BackupOrgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 	}
 
@@ -263,12 +263,12 @@ var _ = AfterSuite(func() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	for _, kubeconfig := range kubeconfigList {
 		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
-		isPresent, err := IsClusterPresent(clusterName, ctx, orgID)
+		isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
 		if err != nil {
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
 		}
 		if isPresent {
-			clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
+			clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName}
 			clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
 			if err != nil {
 				if strings.Contains(err.Error(), "object not found") {
@@ -296,10 +296,10 @@ var _ = AfterSuite(func() {
 							log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
 						}
 					}
-					err = DeleteCluster(clusterName, orgID, ctx, false)
+					err = DeleteCluster(clusterName, BackupOrgID, ctx, false)
 					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 					clusterDeleteStatus := func() (interface{}, bool, error) {
-						status, err := IsClusterPresent(clusterName, ctx, orgID)
+						status, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
 						if err != nil {
 							return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
 						}
@@ -308,10 +308,10 @@ var _ = AfterSuite(func() {
 						}
 						return "", false, nil
 					}
-					_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
+					_, err = task.DoRetryWithTimeout(clusterDeleteStatus, ClusterDeleteTimeout, ClusterDeleteRetryTime)
 					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 					if clusterCredName != "" {
-						err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+						err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
 						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
 					}
 				}
@@ -319,15 +319,15 @@ var _ = AfterSuite(func() {
 		}
 	}
 	// Cleanup all backup locations
-	allBackupLocations, err := getAllBackupLocations(ctx)
+	allBackupLocations, err := GetAllBackupLocations(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 	for backupLocationUid, backupLocationName := range allBackupLocations {
-		err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
+		err = DeleteBackupLocation(backupLocationName, backupLocationUid, BackupOrgID, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 	}
 
 	backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-		allBackupLocations, err := getAllBackupLocations(ctx)
+		allBackupLocations, err := GetAllBackupLocations(ctx)
 		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 		if len(allBackupLocations) > 0 {
 			return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
@@ -339,15 +339,15 @@ var _ = AfterSuite(func() {
 	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
 	// Cleanup all cloud credentials
-	allCloudCredentials, err := getAllCloudCredentials(ctx)
+	allCloudCredentials, err := GetAllCloudCredentials(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 	for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
-		err = DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+		err = DeleteCloudCredential(cloudCredentialName, BackupOrgID, cloudCredentialUid)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
 	}
 
 	cloudCredentialDeletionSuccess := func() (interface{}, bool, error) {
-		allCloudCredentials, err := getAllCloudCredentials(ctx)
+		allCloudCredentials, err := GetAllCloudCredentials(ctx)
 		dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 		if len(allCloudCredentials) > 0 {
 			return "", true, fmt.Errorf("found %d cloud credentials", len(allBackupLocations))
@@ -359,21 +359,21 @@ var _ = AfterSuite(func() {
 	dash.VerifySafely(err, nil, "Verifying cloud credential deletion success")
 
 	// Cleanup all buckets after suite
-	providers := getProviders()
+	providers := GetBackupProviders()
 	for _, provider := range providers {
 		switch provider {
 		case drivers.ProviderAws:
-			DeleteBucket(provider, globalAWSBucketName)
-			log.Infof("Bucket deleted - %s", globalAWSBucketName)
+			DeleteBucket(provider, GlobalAWSBucketName)
+			log.Infof("Bucket deleted - %s", GlobalAWSBucketName)
 		case drivers.ProviderAzure:
-			DeleteBucket(provider, globalAzureBucketName)
-			log.Infof("Bucket deleted - %s", globalAzureBucketName)
+			DeleteBucket(provider, GlobalAzureBucketName)
+			log.Infof("Bucket deleted - %s", GlobalAzureBucketName)
 		case drivers.ProviderGke:
-			DeleteBucket(provider, globalGCPBucketName)
-			log.Infof("Bucket deleted - %s", globalGCPBucketName)
+			DeleteBucket(provider, GlobalGCPBucketName)
+			log.Infof("Bucket deleted - %s", GlobalGCPBucketName)
 		case drivers.ProviderNfs:
-			DeleteBucket(provider, globalNFSBucketName)
-			log.Infof("NFS subpath deleted - %s", globalNFSBucketName)
+			DeleteBucket(provider, GlobalNFSBucketName)
+			log.Infof("NFS subpath deleted - %s", GlobalNFSBucketName)
 		}
 	}
 
