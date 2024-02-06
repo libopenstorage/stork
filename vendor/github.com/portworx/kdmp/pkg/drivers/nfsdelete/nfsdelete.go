@@ -141,12 +141,11 @@ func buildJob(
 	if err != nil {
 		return nil, err
 	}
-	labels := addJobLabels(jobOptions)
+	labels := addJobLabels(jobOptions.Labels, jobOptions)
 	return jobForDeleteResource(jobOptions, resources, labels)
 }
 
-func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
-	labels := jobOpts.Labels
+func addJobLabels(labels map[string]string, jobOpts drivers.JobOpts) map[string]string {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -154,7 +153,6 @@ func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
 	labels[drivers.DriverNameLabel] = drivers.NFSDelete
 	labels[utils.BackupObjectNameKey] = jobOpts.BackupObjectName
 	labels[utils.BackupObjectUIDKey] = jobOpts.BackupObjectUID
-	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 
