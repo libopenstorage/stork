@@ -2,13 +2,11 @@
 // Use of this source code is governed by the Apache 2.0
 // license that can be found in the LICENSE file.
 
-//go:build appengine
 // +build appengine
 
 package socket
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/appengine/internal"
 
 	pb "google.golang.org/appengine/internal/socket"

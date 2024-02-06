@@ -166,14 +166,12 @@ func roleFor() *rbacv1.ClusterRole {
 	return role
 }
 
-func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
-	labels := jobOpts.Labels
+func addJobLabels(labels map[string]string) map[string]string {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.NFSBackup
-	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 
@@ -196,7 +194,7 @@ func jobForBackupResource(
 		jobOption.ResoureBackupNamespace,
 	}, " ")
 
-	labels := addJobLabels(jobOption)
+	labels := addJobLabels(jobOption.Labels)
 
 	nfsExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
