@@ -180,19 +180,26 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				}
 			}
 			for _, ns := range migrationScheduleNamespaces {
-				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
+				migrationSchedules, err := storkops.Instance().ListMigrationSchedules(ns)
 				if err != nil {
 					util.CheckErr(err)
 					return
 				}
-				for _, migr := range migrSched.Items {
-					migr.Status.ApplicationActivated = true
-					_, err := storkops.Instance().UpdateMigrationSchedule(&migr)
+				for _, migrSched := range migrationSchedules.Items {
+					isMigrSchedRelevant, err := isMigrationScheduleRelevant(migrSched, activationNamespaces)
 					if err != nil {
 						util.CheckErr(err)
 						return
 					}
-					printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to true", migr.Namespace, migr.Name), ioStreams.Out)
+					if isMigrSchedRelevant {
+						migrSched.Status.ApplicationActivated = true
+						_, err := storkops.Instance().UpdateMigrationSchedule(&migrSched)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to true", migrSched.Namespace, migrSched.Name), ioStreams.Out)
+					}
 				}
 			}
 			for _, ns := range activationNamespaces {
@@ -203,6 +210,29 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 	activateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Activate applications in all namespaces")
 
 	return activateMigrationCommand
+}
+
+// MigrationSchedule will only be relevant if it migrates at least one of the activation namespaces
+// Only for such migrationSchedules we will need to update applicationActivated:true
+func isMigrationScheduleRelevant(migrSched storkv1.MigrationSchedule, activationNs []string) (bool, error) {
+	namespaceList := migrSched.Spec.Template.Spec.Namespaces
+	namespaceSelectors := migrSched.Spec.Template.Spec.NamespaceSelectors
+	migrationNamespaces, err := getMigrationNamespaces(namespaceList, namespaceSelectors)
+	if err != nil {
+		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
+	}
+	activationNamespacesSet := make(map[string]bool)
+	for _, ns := range activationNs {
+		activationNamespacesSet[ns] = true
+	}
+	found := false
+	for _, ns := range migrationNamespaces {
+		if activationNamespacesSet[ns] {
+			found = true
+			break
+		}
+	}
+	return found, nil
 }
 
 func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
