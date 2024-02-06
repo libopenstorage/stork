@@ -62,6 +62,11 @@ func (r *ResourceTransformationController) Init(mgr manager.Manager) error {
 	return controllers.RegisterTo(mgr, ResourceTransformationControllerName, r, &stork_api.ResourceTransformation{})
 }
 
+const (
+	rtCreatedForAnnotationKey          = "portworx.io/CreatedFor"
+	rtCreatedForRestoreAnnotationValue = "restore"
+)
+
 // Reconcile manages ResourceTransformation resources.
 func (r *ResourceTransformationController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	resourceTransformation := &stork_api.ResourceTransformation{}
@@ -121,6 +126,9 @@ func (r *ResourceTransformationController) handle(ctx context.Context, transform
 			return nil
 		}
 		transform.Status.Status = stork_api.ResourceTransformationStatusInProgress
+		if value, ok := transform.GetAnnotations()[rtCreatedForAnnotationKey]; ok && value == rtCreatedForRestoreAnnotationValue {
+			transform.Status.Status = stork_api.ResourceTransformationStatusReady
+		}
 		if err = r.client.Update(ctx, transform); err != nil {
 			return err
 		}
@@ -154,9 +162,7 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 		if err != nil {
 			return err
 		}
-		if !resourcecollector.GetSupportedK8SResources(kind, []string{}) {
-			return fmt.Errorf("unsupported resource kind for transformation: %s", kind)
-		}
+
 		for _, path := range spec.Paths {
 			// TODO: this can be validated via CRDs as well, when we have defined schema
 			// for stork crds

@@ -1131,7 +1131,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	opts *Options,
 	backuplocationName string,
 	backuplocationNamespace string,
+	gvkResourceTransform map[schema.GroupVersionKind][]stork_api.TransformSpecs,
 ) (bool, error) {
+	logrus.Info("Starting PrepareResourceForApply")
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
 		return false, err
@@ -1158,6 +1160,31 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		// Update the namespace of the object, will be no-op for clustered resources
 		metadata.SetNamespace(val)
 	}
+
+	logrus.Infof("gvkResourceTransform: %v", gvkResourceTransform)
+	if gvkResourceTransform != nil {
+		gv, err := schema.ParseGroupVersion(objectType.GetAPIVersion())
+		logrus.Infof("Parse groupVersion %v", gv)
+		if err != nil {
+			logrus.Error("Error while parsing the group version for the object: ", object)
+		}
+		gvk := gv.WithKind(objectType.GetKind())
+		logrus.Infof("groupVersion %v with kind %v is gvk: %v", gv, objectType.GetKind(), gvk)
+
+		if transforms, ok := gvkResourceTransform[gvk]; ok {
+			logrus.Infof("[]stork_api.TransformSpecs %v for gvk %v", transforms, gvk)
+			for _, transform := range transforms {
+				logrus.Infof("TransformSpec %v for gvk %v", transform, gvk)
+				if IsObjectLabelsMatched(object.UnstructuredContent(), transform.Selectors) {
+					err := TransformObject(object, transform)
+					if err != nil {
+						logrus.Error("Error Transforming the Object")
+					}
+				}
+			}
+		}
+	}
+
 	switch objectType.GetKind() {
 	case "Job":
 		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
