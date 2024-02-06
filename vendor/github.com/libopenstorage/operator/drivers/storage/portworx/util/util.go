@@ -19,6 +19,8 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/hashicorp/go-version"
+	ocpconfig "github.com/openshift/api/config/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	kvdb_api "github.com/portworx/kvdb/api/bootstrap"
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
@@ -254,6 +256,15 @@ const (
 	// NdoeLabelPortworxVersion is the label key in the node labels that has the
 	// Portworx version of that node.
 	NodeLabelPortworxVersion = "PX Version"
+
+	ClusterOperatorVersion              = "config.openshift.io/v1"
+	ClusterOperatorKind                 = "ClusterOperator"
+	OpenshiftAPIServer                  = "openshift-apiserver"
+	OpenshiftPrometheusSupportedVersion = "4.14"
+	// OpenshiftMonitoringRouteName name of OCP user-workload route
+	OpenshiftMonitoringRouteName = "thanos-querier"
+	// OpenshiftMonitoringRouteName namespace of OCP user-workload route
+	OpenshiftMonitoringNamespace = "openshift-monitoring"
 )
 const (
 	// pxEntriesKey is key which holds all the bootstrap entries
@@ -308,6 +319,10 @@ var (
 	MinimumPxVersionMetricsCollector, _ = version.NewVersion("2.9.1")
 	// MinimumPxVersionAutoTLS is a minimal PX version that supports "auto-TLS" setup
 	MinimumPxVersionAutoTLS, _ = version.NewVersion("4.0.0")
+	// MinimumPxVersionCO minimum PX version to use 'container orchestrator'
+	MinimumPxVersionCO, _ = version.NewVersion("3.2")
+	// MinimumCcmGoVersionCO minimum ccm-go version to use 'container orchestrator'
+	MinimumCcmGoVersionCO, _ = version.NewVersion("1.2.3")
 	// MinimumPxVersionQuorumFlag is a minimal PX version that introduces the quorum member
 	// flag in the node object of the PX SDK response.
 	MinimumPxVersionQuorumFlag, _ = version.NewVersion("3.1.0")
@@ -1214,6 +1229,45 @@ func IsCCMGoSupported(pxVersion *version.Version) bool {
 	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCCMGO)
 }
 
+// IsCOSupported returns true if px version is >= than MinimumPxVersionCO & ccm-go >= MinimumCcmGoVersionCO
+func IsCOSupported(cluster *corev1.StorageCluster) bool {
+	pxVersion := GetPortworxVersion(cluster)
+
+	if !IsCCMGoSupported(pxVersion) {
+		return false
+	}
+
+	ccmGoImage := strings.TrimSpace(cluster.Spec.Monitoring.Telemetry.Image)
+	if cluster.Spec.Monitoring.Telemetry.Image == "" {
+		if cluster.Status.DesiredImages == nil {
+			return false
+		}
+		ccmGoImage = cluster.Status.DesiredImages.Telemetry
+	}
+	ccmGoImage = util.GetImageURN(cluster, ccmGoImage)
+
+	logrus.Infof("ccmGoImage: %s", ccmGoImage)
+
+	if !strings.Contains(ccmGoImage, "ccm-go") {
+		return false
+	}
+
+	parts := strings.Split(ccmGoImage, ":")
+	if len(parts) < 2 {
+		logrus.Warnf("Failed to parse ccm-go image name:  %s.  Unable to determine tag.", ccmGoImage)
+		return false
+	}
+
+	ccmGoVersionStr := parts[len(parts)-1]
+	ccmGoVersion, err := version.NewVersion(ccmGoVersionStr)
+	if err != nil {
+		logrus.Warnf("Failed to extract ccm-go version from image tag [%s]: %s", ccmGoVersionStr, ccmGoImage)
+		return false
+	}
+	logrus.Infof("Using ccm-go version: %s", ccmGoVersionStr)
+	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCO) && ccmGoVersion.GreaterThanOrEqual(MinimumCcmGoVersionCO)
+}
+
 // IsPxRepoEnabled returns true is pxRepo is enabled
 func IsPxRepoEnabled(spec corev1.StorageClusterSpec) bool {
 	return spec.PxRepo != nil &&
@@ -1246,6 +1300,19 @@ func ApplyStorageClusterSettingsToPodSpec(cluster *corev1.StorageCluster, podSpe
 			container.Image = util.GetImageURN(cluster, container.Image)
 		}
 		container.ImagePullPolicy = ImagePullPolicy(cluster)
+
+		// Check PX version to update the env for registration pod to use the "container orchestrator"
+		if container.Name == "registration" && IsCOSupported(cluster) {
+			refreshTokenEnv := "REFRESH_TOKEN"
+			_, exists := GetClusterEnvValue(cluster, refreshTokenEnv)
+			if !exists {
+				container.Env = append(container.Env,
+					v1.EnvVar{
+						Name:  refreshTokenEnv,
+						Value: "",
+					})
+			}
+		}
 	}
 
 	if cluster.Spec.ImagePullSecret != nil && *cluster.Spec.ImagePullSecret != "" {
@@ -1321,6 +1388,12 @@ func CountStorageNodes(
 		return -1, err
 	}
 
+	// To check if metro DR setup or not
+	isDRSetup := false
+	clusterDomainClient := api.NewOpenStorageClusterDomainsClient(sdkConn)
+	clusterDomains, err := clusterDomainClient.Enumerate(ctx, &api.SdkClusterDomainsEnumerateRequest{})
+	isDRSetup = err == nil && len(clusterDomains.ClusterDomainNames) > 1
+
 	nodeEnumerateResponse, err := nodeClient.EnumerateWithFilters(
 		ctx,
 		&api.SdkNodeEnumerateWithFiltersRequest{},
@@ -1391,12 +1464,20 @@ func CountStorageNodes(
 			isQuorumMember = len(node.Pools) > 0 && node.Pools[0] != nil
 		}
 
+		// In case of non metro-DR setup, all portworx nodes that contain backend storage in the enumerate response are storage nodes
+		// In the case of metro DR setup, temporarily using existing logic to determine storage nodes count
+		// TODO: Need to update this logic in metro DR setup to use portworx nodes in the current domain
 		if isQuorumMember {
-			if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
+			if !isDRSetup {
 				storageNodesCount++
 			} else {
-				logrus.Debugf("node %s should not run portworx", node.SchedulerNodeName)
+				if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
+					storageNodesCount++
+				} else {
+					logrus.Debugf("node %s should not run portworx", node.SchedulerNodeName)
+				}
 			}
+
 		} else {
 			logrus.Debugf("node %s is not a quorum member, node: %+v", node.Id, node)
 		}
@@ -1713,4 +1794,81 @@ func AppendUserVolumeMounts(
 			}
 		}
 	}
+}
+
+func IsSupportedOCPVersion(k8sClient client.Client, targetVersion string) (bool, error) {
+	gvk := schema.GroupVersionKind{
+		Kind:    ClusterOperatorKind,
+		Version: ClusterOperatorVersion,
+	}
+
+	exists, err := coreops.Instance().ResourceExists(gvk)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
+		operator := &ocpconfig.ClusterOperator{}
+		err := k8sClient.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name: OpenshiftAPIServer,
+			},
+			operator,
+		)
+
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		for _, v := range operator.Status.Versions {
+			if v.Name == OpenshiftAPIServer && isVersionSupported(v.Version, targetVersion) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+func GetOCPPrometheusHost(k8sClient client.Client) (string, error) {
+
+	route := &routev1.Route{}
+	err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{
+			Name:      OpenshiftMonitoringRouteName,
+			Namespace: OpenshiftMonitoringNamespace,
+		},
+		route,
+	)
+	if err != nil {
+		return "", fmt.Errorf("error fetching route %s", err.Error())
+	}
+
+	if route.Spec.Host == "" {
+		return "", fmt.Errorf("host is empty")
+	}
+
+	return "https://" + route.Spec.Host, nil
+
+}
+
+func isVersionSupported(current, target string) bool {
+	targetVersion, err := version.NewVersion(target)
+	if err != nil {
+		logrus.Errorf("Error during parsing version : %s ", err)
+		return false
+	}
+
+	currentVersion, err := version.NewVersion(current)
+	if err != nil {
+		logrus.Errorf("Error during parsing version : %s ", err)
+		return false
+	}
+
+	return currentVersion.GreaterThanOrEqual(targetVersion)
 }

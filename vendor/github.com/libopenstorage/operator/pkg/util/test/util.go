@@ -30,10 +30,12 @@ import (
 	"github.com/libopenstorage/operator/pkg/util"
 	ocp_configv1 "github.com/openshift/api/config/v1"
 	consolev1 "github.com/openshift/api/console/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	ocp_secv1 "github.com/openshift/api/security/v1"
 	appops "github.com/portworx/sched-ops/k8s/apps"
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	k8serrors "github.com/portworx/sched-ops/k8s/errors"
+	openshiftops "github.com/portworx/sched-ops/k8s/openshift"
 	operatorops "github.com/portworx/sched-ops/k8s/operator"
 	prometheusops "github.com/portworx/sched-ops/k8s/prometheus"
 	rbacops "github.com/portworx/sched-ops/k8s/rbac"
@@ -144,6 +146,9 @@ const (
 	arcusPingInterval               = 6 * time.Second
 	arcusPingRetry                  = 5
 
+	defaultOcpClusterCheckTimeout  = 15 * time.Minute
+	defaultOcpClusterCheckInterval = 1 * time.Minute
+
 	// OCP Plugin
 	clusterOperatorKind    = "ClusterOperator"
 	clusterOperatorVersion = "config.openshift.io/v1"
@@ -222,6 +227,9 @@ func FakeK8sClient(initObjects ...runtime.Object) client.Client {
 		logrus.Error(err)
 	}
 	if err := consolev1.AddToScheme(s); err != nil {
+		logrus.Error(err)
+	}
+	if err := routev1.AddToScheme(s); err != nil {
 		logrus.Error(err)
 	}
 	return fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(initObjects...).Build()
@@ -812,7 +820,87 @@ func ValidateStorageCluster(
 		return err
 	}
 
+	// Validate cluster provider health
+	if err = ValidateClusterProviderHealth(liveCluster); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// ValidateClusterProviderHealth validates health of the cluster provider environment
+func ValidateClusterProviderHealth(cluster *corev1.StorageCluster) error {
+	// NOTE: For now only checking this for Openshift, will add for other providers in future when its needed
+	if isOpenshift(cluster) {
+		t := func() (interface{}, bool, error) {
+			logrus.Debug("This is Openshift cluster, checking ClusterVersion object status..")
+			clusterVersion, err := openshiftops.Instance().GetClusterVersion("version")
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to get Openshift ClusterVersion object, Err: %v", err)
+			}
+
+			var listOfBadConditions []ocp_configv1.ClusterOperatorStatusCondition
+			for _, condition := range clusterVersion.Status.Conditions {
+				logrus.Debugf("ClusterVersions condition [%v=%v], message [%s]", condition.Type, condition.Status, condition.Message)
+				if condition.Type == "Available" && condition.Status == ocp_configv1.ConditionFalse {
+					listOfBadConditions = append(listOfBadConditions, condition)
+				} else if condition.Type == "Degraded" && condition.Status == ocp_configv1.ConditionTrue {
+					listOfBadConditions = append(listOfBadConditions, condition)
+				} else if condition.Type == "Progressing" && condition.Status == ocp_configv1.ConditionTrue {
+					listOfBadConditions = append(listOfBadConditions, condition)
+				}
+			}
+
+			if len(listOfBadConditions) > 0 {
+				logrus.Debugf("ClusterVersion object list of all bad conditions:\n%s", listOfBadConditions)
+			}
+
+			lastCondition := clusterVersion.Status.Conditions[len(clusterVersion.Status.Conditions)-1]
+			logrus.Debugf("ClusterVersion object last known condition [%v=%v], message [%s]", lastCondition.Type, lastCondition.Status, lastCondition.Message)
+			if strings.Contains(strings.ToLower(lastCondition.Message), "cluster version is") { // This type of message is most likely an indication that cluster is healthy
+				logrus.Debugf("ClusterVersion object indicates that cluster is healthy, see latest status message [%s]", lastCondition.Message)
+				return nil, false, nil
+			}
+			return nil, true, fmt.Errorf("clusterVersion object returned message that does not indicate it is healthy, see [%s]", lastCondition.Message)
+		}
+		if _, err := task.DoRetryWithTimeout(t, defaultOcpClusterCheckTimeout, defaultOcpClusterCheckInterval); err != nil {
+			logrus.Warnf("Cluster does not seem to be healthy, Err: %v", err)
+			return nil // Will not be returning any errors here, this is just for observation of condition statuses
+		}
+	}
+	return nil
+}
+
+// GetOpenshiftVersion gets Openshift version from ClusterVersion object and returns it as a string
+func GetOpenshiftVersion() (string, error) {
+	logrus.Debug("Getting Openshift version from ClusterVersion object..")
+	clusterVersion, err := openshiftops.Instance().GetClusterVersion("version")
+	if err != nil {
+		return "", fmt.Errorf("failed to get Openshift ClusterVersion object, Err: %v", err)
+	}
+
+	if clusterVersion.Status.Desired.Version == "" {
+		return "", fmt.Errorf("ClusterVersion object returned empty Openshift version string")
+	}
+	logrus.Debugf("Got Openshift version [%s]", clusterVersion.Status.Desired.Version)
+	return clusterVersion.Status.Desired.Version, nil
+}
+
+// IsOpenshiftCluster checks if its Openshift cluster by seeing if ClusterVersion resource exists
+func IsOpenshiftCluster() bool {
+	clusterVersionKind := "ClusterVersion"
+	clusterVersionApiVersion := "config.openshift.io/v1"
+
+	gvk := schema.GroupVersionKind{
+		Kind:    clusterVersionKind,
+		Version: clusterVersionApiVersion,
+	}
+	exists, err := coreops.Instance().ResourceExists(gvk)
+	if err != nil {
+		logrus.Error(err)
+		return false
+	}
+	return exists
 }
 
 // ValidatePxPodsAreReadyOnGivenNodes takes list of node and validates PX pods are present and ready on these nodes
@@ -1396,6 +1484,7 @@ func validatePortworxAPIService(cluster *corev1.StorageCluster, timeout, interva
 // node selectors and affinities.
 func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 	var nodeListWithPxPods []v1.Node
+	var runOnMaster bool
 
 	nodeList, err := coreops.Instance().GetNodes()
 	if err != nil {
@@ -1408,11 +1497,15 @@ func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 			NodeAffinity: cluster.Spec.Placement.NodeAffinity.DeepCopy(),
 		}
 	} else {
-		dummyPod.Spec.Affinity = &v1.Affinity{
-			NodeAffinity: defaultPxNodeAffinityRules(IsK3sCluster()),
+		if IsK3sCluster() || IsPxDeployedOnMaster(cluster) {
+			runOnMaster = true
 		}
 
-		if IsK3sCluster() {
+		dummyPod.Spec.Affinity = &v1.Affinity{
+			NodeAffinity: defaultPxNodeAffinityRules(runOnMaster),
+		}
+
+		if runOnMaster {
 			masterTaintFound := false
 			for _, t := range dummyPod.Spec.Tolerations {
 				if t.Key == "node-role.kubernetes.io/master" &&
@@ -1434,7 +1527,7 @@ func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 	}
 
 	for _, node := range nodeList.Items {
-		if coreops.Instance().IsNodeMaster(node) && !IsK3sCluster() {
+		if coreops.Instance().IsNodeMaster(node) && !runOnMaster {
 			continue
 		}
 
@@ -1445,6 +1538,12 @@ func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 	}
 
 	return nodeListWithPxPods, nil
+}
+
+// IsPxDeployedOnMaster look for PX StorageCluster annotation that tells PX Operator wether to deploy PX on master or not and return true or false
+func IsPxDeployedOnMaster(cluster *corev1.StorageCluster) bool {
+	deployOnMaster, err := strconv.ParseBool(cluster.Annotations["portworx.io/run-on-master"])
+	return err == nil && deployOnMaster
 }
 
 // ConvertNodeListToNodeNameList takes list of nodes and return list of node names

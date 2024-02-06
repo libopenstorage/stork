@@ -20,6 +20,7 @@ type SdkServers struct {
 	Role            *MockOpenStorageRoleServer
 	Volume          *MockOpenStorageVolumeServer
 	PortworxService *MockPortworxServiceServer
+	ClusterDomains  *MockOpenStorageClusterDomainsServer
 }
 
 // SdkServer can be used to create a sdk server which implements mock server
@@ -63,6 +64,9 @@ func (m *SdkServer) StartOnAddress(ip, port string) error {
 	}
 	if m.servers.PortworxService != nil {
 		pxapi.RegisterPortworxServiceServer(m.server, m.servers.PortworxService)
+	}
+	if m.servers.ClusterDomains != nil {
+		api.RegisterOpenStorageClusterDomainsServer(m.server, m.servers.ClusterDomains)
 	}
 
 	reflection.Register(m.server)
