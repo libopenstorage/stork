@@ -558,6 +558,13 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 							log.FailOnError(fmt.Errorf(""), err.Error())
 						}
 					}
+					Step(fmt.Sprintf("Delete user %s restores from the admin", user), func() {
+						log.InfoD(fmt.Sprintf("Deleting user %s restores from the admin", user))
+						for restoreUid, restoreName := range userRestoreMap[user] {
+							err = DeleteRestoreWithUID(restoreName, restoreUid, BackupOrgID, ctx)
+							log.FailOnError(err, "failed to delete restore %s of the user %s", restoreName, user)
+						}
+					})
 				})
 				if i == 0 {
 					Step(fmt.Sprintf("Delete user %s source and destination cluster", user), func() {
@@ -656,13 +663,6 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 						log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
 						err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
 						log.FailOnError(err, fmt.Sprintf("failed waiting for user %s backup %s deletion", user, backupName))
-					}
-				})
-				Step(fmt.Sprintf("Delete user %s restores from the admin", user), func() {
-					log.InfoD(fmt.Sprintf("Deleting user %s restores from the admin", user))
-					for restoreUid, restoreName := range userRestoreMap[user] {
-						err = DeleteRestoreWithUID(restoreName, restoreUid, BackupOrgID, ctx)
-						log.FailOnError(err, "failed to delete restore %s of the user %s", restoreName, user)
 					}
 				})
 			}
