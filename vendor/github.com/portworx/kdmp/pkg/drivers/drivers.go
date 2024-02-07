@@ -81,6 +81,7 @@ const (
 	NFSExecutorRequestMemory     = "KDMP_NFSEXECUTOR_REQUEST_MEMORY"
 	NFSExecutorLimitCPU          = "KDMP_NFSEXECUTOR_LIMIT_CPU"
 	NFSExecutorLimitMemory       = "KDMP_NFSEXECUTOR_LIMIT_MEMORNFS"
+	KdmpDisableIstioConfig       = "KDMP_DISABLE_ISTIO_CONFIG"
 )
 
 // Default parameters for job options.
