@@ -154,15 +154,15 @@ func getProvisionerName(pvc v1.PersistentVolumeClaim) string {
 	return provisioner
 }
 
-func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
+func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) (string, bool) {
 	pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
 	if err != nil {
 		errMsg := fmt.Sprintf("error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 		logrus.Warnf("ifCSISnapshotSupported: %v", errMsg)
 		// In the case errors, we will allow the kdmp controller csi steps to decide on snapshot support.
-		return true
+		return "", true
 	}
-	return !storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
+	return storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
 }
 
 func getZones(pv *v1.PersistentVolume) ([]string, error) {
@@ -296,9 +296,9 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			Namespace:  pvc.Namespace,
 			APIVersion: pvc.APIVersion,
 		}
-		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
-		if snapshotClassRequired {
-			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+		driverName, snapshotClassNotRequired := isCSISnapshotClassRequired(&pvc)
+		if !snapshotClassNotRequired {
+			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(driverName, backup)
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
@@ -353,7 +353,7 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				if len(dataExport.Status.VolumeSnapshot) == 0 {
 					vInfo.VolumeSnapshot = ""
 				} else {
-					volumeSnapshot := k.getSnapshotClassName(backup)
+					volumeSnapshot := k.getSnapshotClassName(dataExport.Spec.SnapshotStorageClass, backup)
 					if len(volumeSnapshot) > 0 {
 						vInfo.VolumeSnapshot = fmt.Sprintf("%s,%s", volumeSnapshot, dataExport.Status.VolumeSnapshot)
 					}
@@ -980,8 +980,8 @@ func GetGenericDriverName() string {
 	return storkvolume.KDMPDriverName
 }
 
-func (k *kdmp) getSnapshotClassName(backup *storkapi.ApplicationBackup) string {
-	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok {
+func (k *kdmp) getSnapshotClassName(driver string, backup *storkapi.ApplicationBackup) string {
+	if snapshotClassName, ok := backup.Spec.CSISnapshotClassMap[driver]; ok {
 		return snapshotClassName
 	}
 	return ""

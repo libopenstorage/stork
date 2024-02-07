@@ -131,9 +131,14 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		return "", "", "", fmt.Errorf("error getting pv %v: %v", pvName, err)
 	}
 
-	// In case the PV does not contain CSI secion itself, we will error out.
+	// In case the PV does not contain CSI section itself, we will error out.
 	if pv.Spec.CSI == nil {
 		return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
+	} else {
+		// If CSI Section Exist
+		if snapshotClass, ok := o.CSISnapshotMapping[pv.Spec.CSI.Driver]; ok {
+			o.SnapshotClassName = snapshotClass
+		}
 	}
 
 	if o.SnapshotClassName == "" {

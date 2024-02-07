@@ -58,8 +58,6 @@ const (
 
 	// optCSIDriverName is an option for storing which CSI Driver a volumesnapshot was created with
 	optCSIDriverName = "csi-driver-name"
-	// optCSISnapshotClassName is an option for providing a snapshot class name
-	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
 	// optVolumeSnapshotContentName is used for recording which vsc to check has been deleted
 	optVolumeSnapshotContentName = "volumesnapshotcontent-name"
 
@@ -216,7 +214,7 @@ func (c *csi) OwnsPVCForBackup(
 	crBackupType string,
 ) bool {
 	if cmBackupType == storkapi.ApplicationBackupGeneric || crBackupType == storkapi.ApplicationBackupGeneric {
-		// If user has forced the backupType in config map or applicationbackup CR, default to generic always
+		// If user has forced the backupType in config map or applicationBackup CR, default to generic always
 		return false
 	}
 	return c.OwnsPVC(coreOps, pvc)
@@ -232,48 +230,26 @@ func (c *csi) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	return c.OwnsPV(pv)
 }
 
-func (c *csi) HasNativeVolumeDriverSupport(driverName string) bool {
-	return driverName == snapv1.PortworxCsiProvisionerName ||
-		driverName == snapv1.PortworxCsiDeprecatedProvisionerName ||
-		driverName == "pd.csi.storage.gke.io" ||
-		driverName == "ebs.csi.aws.com" ||
-		driverName == "disk.csi.azure.com"
-}
-
 func (c *csi) OwnsPV(pv *v1.PersistentVolume) bool {
 	// check if CSI volume
 	if pv.Spec.CSI != nil {
-		// We support certain CSI drivers natively
-		if c.HasNativeVolumeDriverSupport(pv.Spec.CSI.Driver) {
-			return false
-		}
-		// If the CSI driver does not support snapshot feature, we will return false,
-		// It will default to kdmp generic backup.
-		if storkvolume.IsCSIDriverWithoutSnapshotSupport(pv) {
-			return false
-		}
+		//check if vsc is given in map for that provisioner, if not we will consider this as kdmp
+		if pv.Spec.CSI.Driver == "" {
 
+		}
 		log.PVLog(pv).Tracef("CSI Owns PV: %s", pv.Name)
 		return true
 	}
-
 	log.PVLog(pv).Tracef("CSI does not own PV: %s", pv.Name)
 	return false
-}
-
-func (c *csi) getDefaultSnapshotClassName(driverName string) string {
-	return snapshotClassNamePrefix + driverName
 }
 
 func (c *csi) getSnapshotClassName(
 	backup *storkapi.ApplicationBackup,
 	driverName string,
 ) string {
-	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok {
+	if snapshotClassName, ok := backup.Spec.CSISnapshotClassMap[driverName]; ok {
 		return snapshotClassName
-	}
-	if driverName != "" {
-		return c.getDefaultSnapshotClassName(driverName)
 	}
 	return ""
 }
@@ -410,7 +386,7 @@ func (c *csi) StartBackup(
 			snapshotter.Name(vsName),
 			snapshotter.PVCName(pvc.Name),
 			snapshotter.PVCNamespace(pvc.Namespace),
-			snapshotter.SnapshotClassName(c.getSnapshotClassName(backup, "")),
+			snapshotter.CSISnapshotMapping(backup.Spec.CSISnapshotClassMap),
 		)
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)

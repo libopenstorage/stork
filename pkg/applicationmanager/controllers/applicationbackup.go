@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	v12 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -101,6 +102,8 @@ const (
 	createdByKey        = annotationKeyPrefix + "created-by"
 	createdByValue      = annotationKeyPrefix + "stork"
 	lastUpdateKey       = annotationKeyPrefix + "last-update"
+	// optCSISnapshotClassName is an option for providing a snapshot class name
+	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
 )
 
 var (
@@ -349,6 +352,20 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	}
 
 	var err error
+
+	// Check whether if VolumeSnapshotClassName is given. If yes, check it's using the older way of request then migrate
+	// to new one
+	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok && len(backup.Spec.CSISnapshotClassMap) == 0 {
+		var vsc v12.VolumeSnapshotClass
+		err = a.client.Get(context.TODO(), types.NamespacedName{Name: snapshotClassName}, &vsc)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error getting volumesnapshotclass: %v", err)
+		}
+		if backup.Spec.CSISnapshotClassMap == nil {
+			backup.Spec.CSISnapshotClassMap = make(map[string]string)
+		}
+		backup.Spec.CSISnapshotClassMap[vsc.Driver] = vsc.Name
+	}
 
 	if a.setDefaults(backup) {
 		err = a.client.Update(context.TODO(), backup)
