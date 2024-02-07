@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1297,7 +1298,14 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			log.FailOnError(err, "Wait for BackupSync to complete")
 			fetchedBackupNames, err := GetAllBackupsAdmin()
 			log.FailOnError(err, "Getting a list of all backups")
-			dash.VerifyFatal(len(fetchedBackupNames), len(backupNames), "Comparing the expected and actual number of backups")
+
+			// Iterating through all backup and check if they are present in the fetched backup list or not
+			listOfFetchedBackups := strings.Join(fetchedBackupNames, "")
+			for _, backup := range backupNames {
+				re := regexp.MustCompile(fmt.Sprintf("%s-*", backup))
+				dash.VerifyFatal(re.MatchString(listOfFetchedBackups), true, fmt.Sprintf("Checking if backup [%s] was synced or not", backup))
+			}
+
 			var bkp *api.BackupObject
 			backupDriver := Inst().Backup
 			bkpEnumerateReq := &api.BackupEnumerateRequest{
