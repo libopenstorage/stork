@@ -1045,7 +1045,7 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kdmp v0.4.1-0.20240201054218-ab9ae1d8091d => github.com/portworx/kdmp v0.4.1-0.20231130175942-e8a1e0c64972
+# github.com/portworx/kdmp v0.4.1-0.20240205164620-891c5ff76a0a => github.com/portworx/kdmp v0.4.1-0.20240205164620-891c5ff76a0a
 ## explicit; go 1.21
 github.com/portworx/kdmp/pkg/apis/kdmp
 github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
@@ -1483,7 +1483,7 @@ google.golang.org/api/transport
 google.golang.org/api/transport/grpc
 google.golang.org/api/transport/http
 google.golang.org/api/transport/http/internal/propagation
-# google.golang.org/appengine v1.6.7
+# google.golang.org/appengine v1.6.8
 ## explicit; go 1.11
 google.golang.org/appengine
 google.golang.org/appengine/internal
@@ -1509,7 +1509,7 @@ google.golang.org/genproto/protobuf/field_mask
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/httpbody
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20230803162519-f966b187b2e5
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20231002182017-d307bd883b97
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/errdetails
@@ -2484,12 +2484,9 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 # github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
-# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231130175942-e8a1e0c64972
+# github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240205164620-891c5ff76a0a
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240124012200-74280fbb6e27
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240124200451-5928195f61c0
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240124012200-74280fbb6e27
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0

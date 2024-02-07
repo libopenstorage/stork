@@ -376,13 +376,19 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		return true, c.updateStatus(dataExport, data)
 	case kdmpapi.DataExportStageTransferInProgress:
+		var reason string
+		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful {
+			reason = ""
+		} else {
+			reason = dataExport.Status.Reason
+		}
 		if dataExport.Status.Status == kdmpapi.DataExportStatusSuccessful ||
 			dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
 			// set to the next stage
 			data := updateDataExportDetail{
 				stage:  kdmpapi.DataExportStageCleanup,
 				status: dataExport.Status.Status,
-				reason: "",
+				reason: reason,
 			}
 			return false, c.updateStatus(dataExport, data)
 		}
@@ -1622,6 +1628,12 @@ func (c *Controller) cleanupLocalRestoredSnapshotResources(de *kdmpapi.DataExpor
 			}
 			if err := core.Instance().DeletePersistentVolumeClaim(pvcSpec.Name, de.Namespace); err != nil && !k8sErrors.IsNotFound(err) {
 				return nil, false, fmt.Errorf("delete %s/%s pvc: %s", de.Namespace, pvcSpec.Name, err)
+			}
+			// If local csi restore fails, we will delete the PVC created to restore from local csi snapshot.
+			// Will wait for the deletion of the PVC to complete by calling get PVC.
+			// Otherwise, the PVC creation in the kdmp snapshot restore, does not creates the new PVC as we will use same name.
+			if _, err := core.Instance().GetPersistentVolumeClaim(pvcSpec.Name, de.Namespace); (err != nil && !k8sErrors.IsNotFound(err)) || (err == nil) {
+				return nil, true, fmt.Errorf("get %v/%v pvc: %v", de.Namespace, pvcSpec.Name, err)
 			}
 		}
 		return nil, false, nil

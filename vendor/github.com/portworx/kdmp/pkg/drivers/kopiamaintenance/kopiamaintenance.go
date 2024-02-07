@@ -180,7 +180,7 @@ func jobFor(
 	requiresV1 bool,
 ) (interface{}, error) {
 
-	labels := addJobLabels(jobOption.Labels)
+	labels := addJobLabels(jobOption)
 	var successfulJobsHistoryLimit int32 = defaultSuccessfulJobsHistoryLimit
 	var failedJobsHistoryLimit int32 = defaultFailedJobsHistoryLimit
 
@@ -429,12 +429,14 @@ func toJobName(jobName, backupLocation string) string {
 	return fmt.Sprintf("%s-%s", kopiaMaintenanceJobPrefix, backupLocation)
 }
 
-func addJobLabels(labels map[string]string) map[string]string {
+func addJobLabels(jobOpts drivers.JobOpts) map[string]string {
+	labels := jobOpts.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels[drivers.DriverNameLabel] = drivers.KopiaMaintenance
+	labels = utils.SetDisableIstioLabel(labels, jobOpts)
 	return labels
 }
 
