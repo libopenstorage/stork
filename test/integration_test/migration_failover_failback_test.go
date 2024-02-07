@@ -100,7 +100,7 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false, nil, nil)
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
@@ -151,7 +151,7 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false)
+	validateAndDestroyMigration(t, ctxs, instanceID, appKey, preMigrationCtx, true, false, true, true, true, false, nil, nil)
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
