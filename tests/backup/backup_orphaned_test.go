@@ -3253,14 +3253,25 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			log.FailOnError(err, "Fetching px-admin ctx")
 			srcClusterConfigPath, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "Fetching source clusterconfigpath")
-			_, err = UpdateCluster(SourceClusterName, srcClusterUid, srcClusterConfigPath, BackupOrgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true,
-				fmt.Sprintf("Verification of update of cluster [%s] of user [%s] with wrong credentials is expected to fail", SourceClusterName, nonAdminUserName))
-			dstClusterConfigPath, err := GetDestinationClusterConfigPath()
-			log.FailOnError(err, "Fetching destination clusterconfigpath")
-			_, err = UpdateCluster(DestinationClusterName, destClusterUid, dstClusterConfigPath, BackupOrgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true,
-				fmt.Sprintf("Verification of update of cluster [%s] of user [%s] with wrong credentials is expected to fail", DestinationClusterName, nonAdminUserName))
+			// cloud clusters which is associated with cloud credentials
+			cloudCredClusters := []string{"aws", "azure", "gke"}
+			if IsPresent(cloudCredClusters, GetClusterProviders()[0]) {
+				_, err = UpdateCluster(SourceClusterName, srcClusterUid, srcClusterConfigPath, BackupOrgID, invalidCredName, invalidCloudCredUID, adminCtx)
+				dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true,
+					fmt.Sprintf("Verification of update of cluster [%s] of user [%s] with wrong credentials is expected to fail", SourceClusterName, nonAdminUserName))
+				dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+				log.FailOnError(err, "Fetching destination clusterconfigpath")
+				_, err = UpdateCluster(DestinationClusterName, destClusterUid, dstClusterConfigPath, BackupOrgID, invalidCredName, invalidCloudCredUID, adminCtx)
+				dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true,
+					fmt.Sprintf("Verification of update of cluster [%s] of user [%s] with wrong credentials is expected to fail", DestinationClusterName, nonAdminUserName))
+			} else {
+				_, err = UpdateCluster(SourceClusterName, srcClusterUid, srcClusterConfigPath, BackupOrgID, invalidCredName, invalidCloudCredUID, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", SourceClusterName, nonAdminUserName))
+				dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+				log.FailOnError(err, "Fetching destination clusterconfigpath")
+				_, err = UpdateCluster(DestinationClusterName, destClusterUid, dstClusterConfigPath, BackupOrgID, invalidCredName, invalidCloudCredUID, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", DestinationClusterName, nonAdminUserName))
+			}
 		})
 
 		Step(fmt.Sprintf("Verifying  deletion of clusters of non-admin user from px-admin user"), func() {
