@@ -115,7 +115,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			for _, provider := range providers {
 				for _, mode := range modes {
 					bucketName := fmt.Sprintf("%s-%s-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock", getGlobalLockedBucketName(provider), strings.ToLower(mode))
+					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 					BackupLocationUID = uuid.New()
@@ -131,7 +131,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.InfoD("Creating backup location for unlocked bucket")
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%v", getGlobalBucketName(provider), time.Now().Unix())
-				backupLocation = fmt.Sprintf("%s-%s-unlockedbucket", provider, getGlobalBucketName(provider))
+				backupLocation = fmt.Sprintf("%s-%s-unlockedbucket-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
 				BackupLocationUID = uuid.New()
 				err := CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
@@ -320,7 +320,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 			for _, provider := range providers {
 				for _, mode := range modes {
 					bucketName := fmt.Sprintf("%s-%v", getGlobalLockedBucketName(provider), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock", getGlobalLockedBucketName(provider), strings.ToLower(mode))
+					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 					BackupLocationUID = uuid.New()
@@ -562,7 +562,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 			for _, provider := range providers {
 				for _, mode := range modes {
 					bucketName := fmt.Sprintf("%s-%v", getGlobalLockedBucketName(provider), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock", getGlobalLockedBucketName(provider), strings.ToLower(mode))
+					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating locked s3 bucket %s", bucketName))
 					BackupLocationUID = uuid.New()
@@ -1200,7 +1200,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				for _, mode := range modes {
 
 					bucketName := fmt.Sprintf("%s-%s-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock", getGlobalLockedBucketName(provider), strings.ToLower(mode))
+					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 
