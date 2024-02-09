@@ -660,6 +660,8 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
+    - name: VSPHERE_DATACENTER
+      value: "${VSPHERE_DATACENTER}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
     - name: CONTROL_PLANE_URL

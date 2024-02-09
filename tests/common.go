@@ -580,6 +580,16 @@ func InitInstance() {
 		t.Tags["px-version"] = pxVersion
 	}
 
+	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], "pxctl status", node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("failed to get pxctl status, Err: %v", err)
+	}
+	log.Infof(output)
 	ns, err := Inst().V.GetVolumeDriverNamespace()
 	log.FailOnError(err, "Error occured while getting volume driver namespace")
 	installGrafana(ns)

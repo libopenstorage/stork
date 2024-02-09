@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
@@ -27,9 +28,10 @@ const (
 )
 
 const (
-	vsphereUname = "VSPHERE_USER"
-	vspherePwd   = "VSPHERE_PWD"
-	vsphereIP    = "VSPHERE_HOST_IP"
+	vsphereUname      = "VSPHERE_USER"
+	vspherePwd        = "VSPHERE_PWD"
+	vsphereIP         = "VSPHERE_HOST_IP"
+	vsphereDatacenter = "VSPHERE_DATACENTER"
 )
 
 const (
@@ -143,8 +145,28 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 
 	// Find one and only datacenter
 	dc, err := f.DefaultDatacenter(v.ctx)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "default datacenter resolves to multiple instances") {
 		return nil, fmt.Errorf("Failed to find data center: %v", err)
+	}
+	if dc == nil {
+		vcDatacenter := os.Getenv(vsphereDatacenter)
+		if len(vcDatacenter) == 0 {
+			return nil, fmt.Errorf("default datacenter resolves to multiple instances. please pass env variable VSPHERE_DATACENTER")
+		}
+
+		dcList, err := f.DatacenterList(v.ctx, "*")
+		if err != nil {
+			return nil, err
+		}
+
+		for _, dcObj := range dcList {
+			log.Debugf("checking dc name: %s", dcObj.Name())
+			if dcObj.Name() == vcDatacenter {
+				dc = dcObj
+				break
+			}
+		}
+
 	}
 
 	// Make future calls local to this datacenter
@@ -384,7 +406,6 @@ func init() {
 	node.Register(DriverName, v)
 }
 
-
-func(v *vsphere) GetSupportedDriveTypes() ([]string, error) {
+func (v *vsphere) GetSupportedDriveTypes() ([]string, error) {
 	return []string{"thin", "zeroedthick", "eagerzeroedthick", "lazyzeroedthick"}, nil
 }
