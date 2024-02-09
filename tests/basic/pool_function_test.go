@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"

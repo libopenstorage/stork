@@ -84,7 +84,7 @@ fmt:
 
 # Tools
 $(GOPATH)/bin/ginkgo:
-	GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+	GOFLAGS= GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.15.0
 
 # this target builds the basic.test binary only. Use build-pds for pds.test binary.
 build: GINKGO_BUILD_DIR=./tests/basic

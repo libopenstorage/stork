@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"

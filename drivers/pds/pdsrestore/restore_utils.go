@@ -2,7 +2,7 @@ package pdsrestore
 
 import (
 	"fmt"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	ds "github.com/portworx/torpedo/drivers/pds/dataservice"
@@ -83,8 +83,8 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 // WaitForRestoreAndValidate will wait for the restore to complete and validate its configuration
 func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds.ModelsRestore, bkpDsEntity DSEntity, nsName string) error {
 
-	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
-	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	testName := strings.Split(currentSpecReport.FullText(), " ")[0]
 	log.Debugf("Testcase Name %v", testName)
 
 	if testName == "{ValidateDSHealthStatusOnNodeFailures}" {

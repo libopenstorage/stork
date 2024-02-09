@@ -50,9 +50,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
@@ -471,7 +471,8 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
+            "--poll-progress-after", "10m",
+            --junit-report=/testresults/junit_basic.xml,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,

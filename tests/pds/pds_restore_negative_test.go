@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"

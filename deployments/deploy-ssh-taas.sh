@@ -63,9 +63,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""

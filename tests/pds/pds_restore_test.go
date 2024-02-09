@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/dataservice"

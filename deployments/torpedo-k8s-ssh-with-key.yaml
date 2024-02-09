@@ -50,9 +50,10 @@ spec:
   - name: torpedo
     image: portworx/torpedo:latest
     command: [ "ginkgo",
-               "--slowSpecThreshold", "180",
+               "--poll-progress-after", "3m",
                "-v",
                "bin/basic.test",
+               "--junit-report=/testresults/junit_basic.xml",
                "--",
                "--spec-dir", "../drivers/scheduler/k8s/specs"]
                # "../drivers/scheduler/k8s/specs" is the default k8s specs checked-in with torpedo. If you have custom

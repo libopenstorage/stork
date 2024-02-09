@@ -12,20 +12,14 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/log"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 )
 
 func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : pds", specReporters)
-
+	RunSpecs(t, "Torpedo : pds")
 }
 
 var _ = BeforeSuite(func() {

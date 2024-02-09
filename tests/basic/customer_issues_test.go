@@ -4,7 +4,7 @@ import (
 	"fmt"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"

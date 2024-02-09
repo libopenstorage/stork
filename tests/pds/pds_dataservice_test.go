@@ -15,7 +15,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/pds/dataservice"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
@@ -40,9 +40,9 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 		StartTorpedoTest("ValidateDNSEndpoint", "validate dns endpoitns", pdsLabels, 0)
 	})
 
-	Step(steplog, func() {
+	It(steplog, func() {
 		log.InfoD(steplog)
-		It("validate dns endpoints", func() {
+		Step("validate dns endpoints", func() {
 			var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 			var dsVersions = make(map[string]map[string][]string)
 
@@ -90,9 +90,9 @@ var _ = Describe("{PingTest}", func() {
 	})
 
 	steplog := "Invoke whoami api and validate the api response "
-	Step(steplog, func() {
+	It(steplog, func() {
 		log.InfoD(steplog)
-		It("validate api response", func() {
+		Step("validate api response", func() {
 			_, httpResp, err := controlPlane.WhoAmI()
 			log.FailOnError(err, "Error while fetching user details")
 			dash.VerifyFatal(httpResp.StatusCode, 200, "validating whoami api response")

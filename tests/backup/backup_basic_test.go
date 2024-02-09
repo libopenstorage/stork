@@ -7,8 +7,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
@@ -87,11 +86,7 @@ func getGlobalLockedBucketName(provider string) string {
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
+	RunSpecs(t, "Torpedo : Backup")
 }
 
 // triggerCleanup returns if cleanup should happen or not based on ENVs set in torpedo

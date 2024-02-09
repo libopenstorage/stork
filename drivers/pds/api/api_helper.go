@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
@@ -46,8 +46,8 @@ var (
 // GetContext return context for api call.
 func GetContext() (context.Context, error) {
 	var token string
-	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
-	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	testName := strings.Split(currentSpecReport.FullText(), " ")[0]
 	serviceIdFlag := customParams.ReturnServiceIdentityFlag()
 	PDSControlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
 	endpointURL, err := url.Parse(PDSControlPlaneURL)

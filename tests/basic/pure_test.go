@@ -37,7 +37,7 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/units"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 )

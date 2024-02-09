@@ -9,7 +9,7 @@ import (
 	"time"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -159,7 +159,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 	AfterEach(func() {
 		Step("destroy apps", func() {
 			log.InfoD("destroying apps")
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				log.InfoD("not destroying apps because the test failed\n")
 				return
 			}

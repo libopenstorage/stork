@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	postmanLib "github.com/portworx/torpedo/drivers/postmanApiLoadDriver"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
