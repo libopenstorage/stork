@@ -161,7 +161,6 @@ const (
 	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
-	autopilotDefaultNamespace         = "kube-system"
 	portworxServiceName               = "portworx-service"
 	resizeSupportedAnnotationKey      = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey     = "torpedo.io/autopilot-enabled"
@@ -3796,30 +3795,31 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 			}
-
 			log.Infof("[%v] Validated PVC: %v, Namespace: %v", ctx.App.Key, obj.Name, obj.Namespace)
 
-			autopilotEnabled := false
+			autopilotEnabledOnPvc := false
 			if pvcAnnotationValue, ok := obj.Annotations[autopilotEnabledAnnotationKey]; ok {
-				autopilotEnabled, err = strconv.ParseBool(pvcAnnotationValue)
+				autopilotEnabledOnPvc, err = strconv.ParseBool(pvcAnnotationValue)
 				if err != nil {
 					return err
 				}
 			}
+
+			// Get autopilot namespace
+			autopilotNamespace, err := k.GetAutopilotNamespace()
+			if err != nil {
+				return fmt.Errorf("failed to get [autopilot] namespace, Err: %v", err)
+			}
+
 			autopilotLabels := make(map[string]string)
 			autopilotLabels["name"] = "autopilot"
-			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
+			autopilotPods, err := k8sCore.GetPods(autopilotNamespace, autopilotLabels)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get [autopilot] pods, Err: %v", err)
 			}
-			prometheusLabels := make(map[string]string)
-			prometheusLabels["app.kubernetes.io/name"] = "prometheus"
-			prometheusPods, err := k8sCore.GetPods(autopilotDefaultNamespace, prometheusLabels)
-			if err != nil {
-				return err
-			}
-			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
-			if autopilotEnabled {
+
+			autopilotEnabledOnPvc = autopilotEnabledOnPvc && !(len(autopilotPods.Items) == 0)
+			if autopilotEnabledOnPvc {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
 					return err
@@ -3836,7 +3836,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			} else {
-				log.Infof("[%v] Autopilot is not enabled, skipping PVC: %v size validation", ctx.App.Key, obj.Name)
+				log.Warnf("[%v] Autopilot is not enabled, PVC: %v size validation is not possible", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -6493,18 +6493,60 @@ func (k *K8s) addAnnotationsToPVC(pvc *corev1.PersistentVolumeClaim, annotations
 	}
 }
 
-// GetAutopilotNamespace returns the autopilot namespace
-func (k *K8s) GetAutopilotNamespace() (string, error) {
+// GetPortworxNamespace returns namespace where Portworx is deployed based on the portworx-service location
+func (k *K8s) GetPortworxNamespace() (string, error) {
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
+
+	var namespaces []string
 	for _, svc := range allServices.Items {
 		if svc.Name == portworxServiceName {
-			return svc.Namespace, nil
+			namespaces = append(namespaces, svc.Name)
 		}
 	}
-	return autopilotDefaultNamespace, nil
+
+	if len(namespaces) > 0 {
+		// If portworx-service is deployed in 2 namespaces, return the none kube-system namespace
+		if len(namespaces) == 2 {
+			log.Debugf("Found [%s] service in 2 different namespaces %s", portworxServiceName, namespaces)
+			for _, namespace := range namespaces {
+				if namespace != "kube-system" {
+					log.Debugf("When Portworx deployed outside of [kube-system] namespace, it also creates [%s] service in the [kube-system ] namespace as well as in the namespace it is deployed in", portworxServiceName)
+					log.Debugf("Will assume Portworx is deployed in [%s] namespace", namespace)
+					return namespace, nil
+				}
+			}
+		}
+
+		// If portworx-service is deployed in more than 2 namespaces, something is wrong here
+		if len(namespaces) > 2 {
+			return "", fmt.Errorf("Portworx service [%s] is deployed in too many namespaces %s, something is wrong here", portworxServiceName, namespaces)
+		}
+
+		// portworx-service is deployed in kube-system if only 1 namesapce is found
+		return namespaces[0], nil
+	}
+
+	return "", fmt.Errorf("failed to determine which namespace Portowrx is deployed in, if deployed at all")
+}
+
+// GetAutopilotNamespace looks for StorageCluster object and returns the namespace of the object
+// If StorageCluster object is not found, will try to determine namespace by checking portworx-service location
+func (k *K8s) GetAutopilotNamespace() (string, error) {
+	stc, err := k8sOperator.ListStorageClusters("")
+	if err != nil {
+		return "", err
+	}
+	if len(stc.Items) > 0 {
+		log.Debugf("Found StorageCluster object, will assume Portworx and Autopilot are deployed in [%s] namespace", stc.Items[0].Namespace)
+		return stc.Items[0].Namespace, nil
+	}
+
+	// If StorageCluster object is not found, will try to determine namespace by checking portworx-service location
+	log.Debugf("Did not find any StorageCluster objects, will try to determine Portworx and Autopilot namespace based on [%s] service location", portworxServiceName)
+	return k.GetPortworxNamespace()
 }
 
 // CreateAutopilotRule creates the AutopilotRule object

@@ -780,11 +780,21 @@ func (d *dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error
 	return 0, nil
 }
 
+// GetAutopilotNamespace returns the autopilot namespace
 func (d *dcos) GetAutopilotNamespace() (string, error) {
 	// TODO implement this method
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetAutopilotNamespace()",
+	}
+}
+
+// GetPortworxNamespace returns portworx namespace
+func (d *dcos) GetPortworxNamespace() (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPortworxNamespace()",
 	}
 }
 
