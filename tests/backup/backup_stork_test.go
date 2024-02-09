@@ -43,7 +43,6 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		periodicSchedulePolicyName            string
 		schPolicyUid                          string
 		scheduleName                          string
-		scheduleBackupName                    string
 		scheduleNames                         []string
 		periodicSchedulePolicyNameAfterUpdate string
 		scheduleBackupNameBeforeUpdate        string
@@ -184,7 +183,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			scheduleNames = append(scheduleNames, scheduleNameAfterUpdate)
 			scheduleAndBackup[scheduleNameAfterUpdate] = periodicSchedulePolicyNameAfterUpdate
 		})
-		Step("Restoring backup of from before admin namespace update", func() {
+		Step("Restoring backup from before admin namespace update", func() {
 			log.InfoD("Restoring backup of multiple namespaces")
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			selectedBkpNamespaceMapping = make(map[string]string)
@@ -289,7 +288,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.InfoD("Namespace - %v - deleted successfully", newAdminNamespace)
 		})
 		Step("Restoring backup of multiple namespaces after admin namespace removal", func() {
-			log.InfoD("Restoring backup of multiple namespaces - Admin namespace will be recreated")
+			log.InfoD("Restoring backup of multiple namespaces")
 			selectedBkpNamespaceMapping = make(map[string]string)
 			multipleRestoreMapping = make(map[string]string)
 			restoreName = fmt.Sprintf("%s-%s", RestoreNamePrefix, RandomString(7))
@@ -300,7 +299,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateRestoreWithCRValidation(restoreName, backupName, selectedBkpNamespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("Restore create: failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Restore creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 
 			// Restore to custom namespace
 			for _, namespace := range bkpNamespaces {
@@ -310,13 +309,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.Infof("Custom restore map %v", multipleRestoreMapping)
 			customRestoreName := fmt.Sprintf("%s-%v", "multiple-application", time.Now().Unix())
 			err = CreateRestoreWithCRValidation(customRestoreName, backupName, multipleRestoreMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
-		})
-		Step("Deleting new admin namespace again", func() {
-			log.Info("Deleting namespace - %v", newAdminNamespace)
-			err := DeleteAppNamespace(newAdminNamespace)
-			log.FailOnError(err, "Unable to delete admin namespace")
-			log.InfoD("Namespace - %v - deleted successfully", newAdminNamespace)
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("Restore create: failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Restore creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 		Step("Taking backup of multiple namespaces after admin namespace removal", func() { // This step should fail
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -325,30 +318,16 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateBackupWithCRValidation(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to create backup location [%s] CR", bkpLocationName)), true, fmt.Sprintf("Backup creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Backup creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 		Step("Creating schedule backups for applications after admin namespace removal", func() {
-			log.InfoD("Creating schedule backups - This should recreate the admin namespace")
+			log.InfoD("Creating schedule backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicSchedulePolicyNameAfterUpdate)
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			scheduleBackupName, err = CreateScheduleBackupWithCRValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyNameAfterUpdate, schPolicyUid)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
-			scheduleNames = append(scheduleNames, scheduleName)
-		})
-		Step("Restoring scheduled backups", func() {
-			log.InfoD("Restoring scheduled backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			selectedBkpNamespaceMapping = make(map[string]string)
-			for _, namespace := range bkpNamespaces {
-				selectedBkpNamespaceMapping[namespace] = namespace
-			}
-			restoreName = fmt.Sprintf("%s-%s-%v", RestoreNamePrefix, scheduleBackupName, time.Now().Unix())
-			err = CreateRestoreWithCRValidation(restoreName, scheduleBackupName, selectedBkpNamespaceMapping, SourceClusterName, BackupOrgID, ctx, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
-			restoreNames = append(restoreNames, restoreName)
+			_, err = CreateScheduleBackupWithCRValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyNameAfterUpdate, schPolicyUid)
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Backup schedule creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 	})
 	JustAfterEach(func() {
@@ -357,11 +336,6 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		log.InfoD("Removing Stork Namespace")
-		_, err = ChangeStorkAdminNamespace("")
-		log.FailOnError(err, "Unable to remove stork custom admin namespace")
-		err = DeleteAppNamespace(newAdminNamespace)
-		log.FailOnError(err, "Unable to delete custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
