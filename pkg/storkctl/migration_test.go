@@ -4,27 +4,27 @@
 package storkctl
 
 import (
-	"github.com/libopenstorage/stork/pkg/appregistration"
-	"github.com/portworx/sched-ops/k8s/dynamic"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	fakedynamicclient "k8s.io/client-go/dynamic/fake"
 	"strings"
 	"testing"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/appregistration"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	ocpv1 "github.com/openshift/api/apps/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/openshift"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedynamicclient "k8s.io/client-go/dynamic/fake"
 )
 
 func TestGetMigrationsNoMigration(t *testing.T) {
@@ -380,6 +380,7 @@ func createMigratedDeploymentConfig(t *testing.T) {
 }
 
 func TestActivateDeactivateMigrations(t *testing.T) {
+	defer resetTest()
 	createMigratedDeployment(t)
 	createMigratedReplicaset(t)
 	createMigratedStatefulSet(t)
