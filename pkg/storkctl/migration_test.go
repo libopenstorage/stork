@@ -4,6 +4,12 @@
 package storkctl
 
 import (
+	"github.com/libopenstorage/stork/pkg/appregistration"
+	"github.com/portworx/sched-ops/k8s/dynamic"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedynamicclient "k8s.io/client-go/dynamic/fake"
 	"strings"
 	"testing"
 	"time"
@@ -247,7 +253,7 @@ func TestDeleteMigrations(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
-func TestExclueVolumesForMigrations(t *testing.T) {
+func TestExcludeVolumesForMigrations(t *testing.T) {
 	defer resetTest()
 	name := "excludevolumestest"
 	namespace := "test"
@@ -267,7 +273,7 @@ func TestExclueVolumesForMigrations(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
-func TestExclueResourcesForMigrations(t *testing.T) {
+func TestExcludeResourcesForMigrations(t *testing.T) {
 	defer resetTest()
 	name := "excluderesourcstest"
 	namespace := "test"
@@ -297,6 +303,7 @@ func createMigratedDeployment(t *testing.T) {
 			Namespace: "dep",
 			Annotations: map[string]string{
 				migration.StorkMigrationReplicasAnnotation: "1",
+				migration.StorkMigrationNamespace:          "adminNs",
 			},
 		},
 		Spec: appv1.DeploymentSpec{
@@ -339,6 +346,7 @@ func createMigratedStatefulSet(t *testing.T) {
 			Namespace: "sts",
 			Annotations: map[string]string{
 				migration.StorkMigrationReplicasAnnotation: "3",
+				migration.StorkMigrationNamespace:          "adminNs",
 			},
 		},
 		Spec: appv1.StatefulSetSpec{
@@ -424,6 +432,41 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
+func TestActivateDeactivateMigrationsAutoSuspend(t *testing.T) {
+	defer resetTest()
+	createMigratedDeployment(t)
+	createMigratedStatefulSet(t)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "adminNs"}})
+	require.NoError(t, err, "Error creating adminNs namespace")
+	createTestMigrationSchedule("test-migrationSchedule-1", "default-migration-policy",
+		"clusterPair1", []string{"dep"}, "adminNs", true, t)
+	createTestMigrationSchedule("test-migrationSchedule-2", "default-migration-policy",
+		"clusterPair1", []string{"sts"}, "adminNs", true, t)
+
+	//fake the dynamic client
+	scheme := runtime.NewScheme()
+	gvrToListKind := appregistration.GetSupportedGVR()
+	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}] = "DeploymentList"
+	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}] = "StatefulSetList"
+	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}] = "PersistentVolumeClaimList"
+	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}] = "ServiceList"
+	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] = "ConfigMapList"
+	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind,
+		newUnstructured("apps/v1", "deployment", "dep", "migratedDeployment", map[string]interface{}{migration.StorkMigrationNamespace: "adminNs"}),
+		newUnstructured("apps/v1", "statefulset", "sts", "migratedStatefulSet", map[string]interface{}{migration.StorkMigrationNamespace: "adminNs"}))
+	dynamic.SetInstance(dynamic.New(fakeDynamicClient))
+
+	cmdArgs := []string{"activate", "migrations", "-n", "dep"}
+	// Only test-migrationSchedule-1 should be updated with applicationActivated: true since test-migrationSchedule-2 doesn't migrate namespace `dep`
+	// Only applications in dep namespace should be scaled up
+	expected := "Setting the ApplicationActivated status in the MigrationSchedule adminNs/test-migrationSchedule-1 to true\nUpdated replicas for deployment dep/migratedDeployment to 1\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"deactivate", "migrations", "-n", "dep"}
+	expected = "Updated replicas for deployment dep/migratedDeployment to 0\nSetting the ApplicationActivated status in the MigrationSchedule adminNs/test-migrationSchedule-1 to false\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func TestCreateMigrationWaitSuccess(t *testing.T) {
 	migrRetryTimeout = 10 * time.Second
 	defer resetTest()
@@ -465,4 +508,41 @@ func setMigrationStatus(name, namespace string, isFail bool, t *testing.T) {
 
 	_, err = storkops.Instance().UpdateMigration(migrResp)
 	require.NoError(t, err, "Error updating Migrations")
+}
+
+func createTestMigrationSchedule(name string, schedPolicy string, cp string, nsList []string, msNamespace string, remote bool, t *testing.T) {
+	migrationScheduleObj := storkv1.MigrationSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: msNamespace,
+		},
+		Spec: storkv1.MigrationScheduleSpec{
+			SchedulePolicyName: schedPolicy,
+			Template: storkv1.MigrationTemplateSpec{
+				Spec: storkv1.MigrationSpec{
+					ClusterPair: cp,
+					Namespaces:  nsList,
+				},
+			},
+		},
+	}
+	if remote {
+		migrationScheduleObj.Annotations = map[string]string{StorkMigrationScheduleCopied: "true"}
+	}
+	_, err := storkops.Instance().CreateMigrationSchedule(&migrationScheduleObj)
+	require.NoError(t, err, "Error creating migrationSchedule")
+}
+
+func newUnstructured(apiVersion string, kind string, namespace string, name string, annotations map[string]interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": apiVersion,
+			"kind":       kind,
+			"metadata": map[string]interface{}{
+				"namespace":   namespace,
+				"name":        name,
+				"annotations": annotations,
+			},
+		},
+	}
 }

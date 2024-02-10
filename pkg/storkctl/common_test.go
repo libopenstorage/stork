@@ -5,6 +5,7 @@ package storkctl
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"net/http"
 	"os"
 	"testing"
@@ -61,7 +62,13 @@ func resetTest() {
 	fakeOCPClient := fakeocpclient.NewSimpleClientset()
 	fakeOCPSecurityClient := fakeocpsecurityclient.NewSimpleClientset()
 	fakeOCPConfigClient := fakeocpconfigclient.NewSimpleClientset()
-	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, appregistration.GetSupportedGVR())
+	gvrToListKind := appregistration.GetSupportedGVR()
+	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}] = "DeploymentList"
+	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}] = "StatefulSetList"
+	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}] = "PersistentVolumeClaimList"
+	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}] = "ServiceList"
+	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] = "ConfigMapList"
+	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind)
 
 	if testFactory != nil {
 		testFactory.TestFactory.WithNamespace("test").Cleanup()
@@ -97,7 +104,7 @@ func testCommon(t *testing.T, cmdArgs []string, obj runtime.Object, expected str
 
 	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
 	cmd := NewCommand(testFactory, streams.In, streams.Out, streams.ErrOut)
-	cmd.SetOutput(buf)
+	cmd.SetOut(buf)
 	cmd.SetArgs(cmdArgs)
 
 	calledFatal := false
