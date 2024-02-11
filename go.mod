@@ -65,7 +65,7 @@ require (
 require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/mock v1.6.0
-	github.com/portworx/kdmp v0.4.1-0.20240205164620-891c5ff76a0a
+	github.com/portworx/kdmp v0.4.1-0.20240208103902-f9d00faa1277
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	kubevirt.io/api v1.0.0
 )
@@ -334,7 +334,7 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240205164620-891c5ff76a0a
+	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240208103902-f9d00faa1277
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240124012200-74280fbb6e27
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240124200451-5928195f61c0
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
