@@ -203,6 +203,15 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 		}
 		switch progress.State {
 		case drivers.JobStateFailed:
+			// Append the job-pod description,logs and events to stork's pod log in case of failure
+			if resourceExport.Status.Status == kdmpapi.ResourceExportStatusFailed && resourceExport.Status.TransferID != "" {
+				namespace, name, err := utils.ParseJobID(resourceExport.Status.TransferID)
+				if err != nil {
+					logrus.Errorf("job name and namespace extraction failed: %v", err)
+				} else {
+					utils.DisplayJobpodLogandEvents(name, namespace)
+				}
+			}
 			errMsg := fmt.Sprintf("%s transfer job failed: %s", resourceExport.Status.TransferID, progress.Reason)
 			// If a job has failed it means it has tried all possible retires and given up.
 			// In such a scenario we need to fail RE CR and move to clean up stage
