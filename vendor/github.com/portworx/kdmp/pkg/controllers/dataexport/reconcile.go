@@ -520,13 +520,12 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		}
 		// Append the job-pod log to stork's pod log in case of failure
 		// it is best effort approach, hence errors are ignored.
-		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-			if dataExport.Status.TransferID != "" {
-				namespace, name, err := utils.ParseJobID(dataExport.Status.TransferID)
-				if err != nil {
-					logrus.Infof("job-pod name and namespace extraction failed: %v", err)
-				}
-				appendPodLogToStork(name, namespace)
+		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed && dataExport.Status.TransferID != "" {
+			namespace, name, err := utils.ParseJobID(dataExport.Status.TransferID)
+			if err != nil {
+				logrus.Errorf("job name and namespace extraction failed: %v", err)
+			} else {
+				utils.DisplayJobpodLogandEvents(name, namespace)
 			}
 		}
 		cleanupTask := func() (interface{}, bool, error) {
@@ -605,41 +604,6 @@ func parseExcludeFileListKey(pvcStorageClass string, excludeFileListValue string
 	}
 	logrus.Infof("parseExcludeFileListKey: configured excludeFileList - %v", excludeFileList)
 	return excludeFileList, nil
-}
-
-func appendPodLogToStork(jobName string, namespace string) {
-	// Get job and check whether it has live pod attaced to it
-	job, err := batch.Instance().GetJob(jobName, namespace)
-	if err != nil && !k8sErrors.IsNotFound(err) {
-		logrus.Infof("failed in getting job %v/%v with err: %v", namespace, jobName, err)
-	}
-	pods, err := core.Instance().GetPods(
-		job.Namespace,
-		map[string]string{
-			"job-name": job.Name,
-		},
-	)
-	if err != nil {
-		logrus.Infof("failed in fetching job pods %s/%s: %v", namespace, jobName, err)
-	}
-	for _, pod := range pods.Items {
-		numLogLines := int64(50)
-		podDescribe, err := core.Instance().GetPodByName(pod.Name, pod.Namespace)
-		if err != nil {
-			logrus.Infof("Error fetching description of job-pod[%s] :%v", pod.Name, err)
-		}
-		logrus.Infof("start of job-pod [%s]'s description", pod.Name)
-		logrus.Infof("Describe %v", podDescribe)
-		logrus.Infof("end of job-pod [%s]'s description", pod.Name)
-		podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
-		if err != nil {
-			logrus.Infof("error fetching log of job-pod %s: %v", pod.Name, err)
-		} else {
-			logrus.Infof("start of job-pod [%s]'s log...", pod.Name)
-			logrus.Infof(podLog)
-			logrus.Infof("end of job-pod [%s]'s log...", pod.Name)
-		}
-	}
 }
 
 func (c *Controller) createJobCredCertSecrets(
