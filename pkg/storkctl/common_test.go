@@ -5,7 +5,8 @@ package storkctl
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"maps"
 	"net/http"
 	"os"
 	"testing"
@@ -63,11 +64,7 @@ func resetTest() {
 	fakeOCPSecurityClient := fakeocpsecurityclient.NewSimpleClientset()
 	fakeOCPConfigClient := fakeocpconfigclient.NewSimpleClientset()
 	gvrToListKind := appregistration.GetSupportedGVR()
-	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}] = "DeploymentList"
-	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}] = "StatefulSetList"
-	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}] = "PersistentVolumeClaimList"
-	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}] = "ServiceList"
-	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] = "ConfigMapList"
+	maps.Copy(gvrToListKind, resourcecollector.GetSupportedK8sGVR())
 	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind)
 
 	if testFactory != nil {

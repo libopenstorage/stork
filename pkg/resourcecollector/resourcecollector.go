@@ -1514,3 +1514,149 @@ func GetDefaultRuleSet() *inflect.Ruleset {
 	}
 	return ruleset
 }
+
+func GetSupportedK8sGVR() map[schema.GroupVersionResource]string {
+	return map[schema.GroupVersionResource]string{
+		{
+			Resource: "persistentvolumeclaims",
+			Group:    "",
+			Version:  "v1",
+		}: "PersistentVolumeClaimList",
+		{
+			Resource: "persistentvolumes",
+			Group:    "",
+			Version:  "v1",
+		}: "PersistentVolumeList",
+		{
+			Resource: "services",
+			Group:    "",
+			Version:  "v1",
+		}: "ServiceList",
+		{
+			Resource: "configmaps",
+			Group:    "",
+			Version:  "v1",
+		}: "ConfigMapList",
+		{
+			Resource: "secrets",
+			Group:    "",
+			Version:  "v1",
+		}: "SecretList",
+		{
+			Resource: "serviceaccounts",
+			Group:    "",
+			Version:  "v1",
+		}: "ServiceAccountList",
+		{
+			Resource: "resourcequotas",
+			Group:    "",
+			Version:  "v1",
+		}: "ResourceQuotaList",
+		{
+			Resource: "endpoints",
+			Group:    "",
+			Version:  "v1",
+		}: "EndpointsList",
+		{
+			Resource: "limitranges",
+			Group:    "",
+			Version:  "v1",
+		}: "LimitRangeList",
+		{
+			Resource: "statefulsets",
+			Group:    "apps",
+			Version:  "v1",
+		}: "StatefulSetList",
+		{
+			Resource: "deployments",
+			Group:    "apps",
+			Version:  "v1",
+		}: "DeploymentList",
+		{
+			Resource: "daemonsets",
+			Group:    "apps",
+			Version:  "v1",
+		}: "DaemonSetList",
+		{
+			Resource: "replicasets",
+			Group:    "apps",
+			Version:  "v1",
+		}: "ReplicaSetList",
+		{
+			Resource: "ingresses",
+			Group:    "networking.k8s.io",
+			Version:  "v1",
+		}: "IngressList",
+		{
+			Resource: "roles",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "RoleList",
+		{
+			Resource: "clusterroles",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "ClusterRoleList",
+		{
+			Resource: "rolebindings",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "RoleBindingList",
+		{
+			Resource: "clusterrolebindings",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "ClusterRoleBindingList",
+		{
+			Resource: "jobs",
+			Group:    "batch",
+			Version:  "v1",
+		}: "JobList",
+		{
+			Resource: "cronjobs",
+			Group:    "batch",
+			Version:  "v1",
+		}: "CronJobList",
+		{
+			Resource: "poddisruptionbudgets",
+			Group:    "policy",
+			Version:  "v1",
+		}: "PodDisruptionBudgetList",
+		{
+			Resource: "networkpolicies",
+			Group:    "crd.projectcalico.org",
+			Version:  "v1",
+		}: "NetworkPolicyList",
+		{
+			Resource: "mutatingwebhookconfigurations",
+			Group:    "admissionregistration.k8s.io",
+			Version:  "v1",
+		}: "MutatingWebhookConfigurationList",
+		{
+			Resource: "validatingwebhookconfigurations",
+			Group:    "admissionregistration.k8s.io",
+			Version:  "v1",
+		}: "ValidatingWebhookConfigurationList",
+		//Openshift Resources
+		{
+			Resource: "deploymentconfigs",
+			Group:    "apps.openshift.io",
+			Version:  "v1",
+		}: "DeploymentConfigList",
+		{
+			Resource: "imagestreams",
+			Group:    "image.openshift.io",
+			Version:  "v1",
+		}: "ImageStreamList",
+		{
+			Resource: "templates",
+			Group:    "template.openshift.io",
+			Version:  "v1",
+		}: "TemplateList",
+		{
+			Resource: "routes",
+			Group:    "route.openshift.io",
+			Version:  "v1",
+		}: "RouteList",
+	}
+}

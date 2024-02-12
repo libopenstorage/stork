@@ -4,6 +4,8 @@
 package storkctl
 
 import (
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakedynamicclient "k8s.io/client-go/dynamic/fake"
 )
 
@@ -447,11 +448,7 @@ func TestActivateDeactivateMigrationsAutoSuspend(t *testing.T) {
 	//fake the dynamic client
 	scheme := runtime.NewScheme()
 	gvrToListKind := appregistration.GetSupportedGVR()
-	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}] = "DeploymentList"
-	gvrToListKind[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}] = "StatefulSetList"
-	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}] = "PersistentVolumeClaimList"
-	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}] = "ServiceList"
-	gvrToListKind[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] = "ConfigMapList"
+	maps.Copy(gvrToListKind, resourcecollector.GetSupportedK8sGVR())
 	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind,
 		newUnstructured("apps/v1", "deployment", "dep", "migratedDeployment", map[string]interface{}{migration.StorkMigrationNamespace: "adminNs"}),
 		newUnstructured("apps/v1", "statefulset", "sts", "migratedStatefulSet", map[string]interface{}{migration.StorkMigrationNamespace: "adminNs"}))
@@ -460,7 +457,7 @@ func TestActivateDeactivateMigrationsAutoSuspend(t *testing.T) {
 	cmdArgs := []string{"activate", "migrations", "-n", "dep"}
 	// Only test-migrationSchedule-1 should be updated with applicationActivated: true since test-migrationSchedule-2 doesn't migrate namespace `dep`
 	// Only applications in dep namespace should be scaled up
-	expected := "Setting the ApplicationActivated status in the MigrationSchedule adminNs/test-migrationSchedule-1 to true\nUpdated replicas for deployment dep/migratedDeployment to 1\n"
+	expected := "Updated replicas for deployment dep/migratedDeployment to 1\nSetting the ApplicationActivated status in the MigrationSchedule adminNs/test-migrationSchedule-1 to true\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"deactivate", "migrations", "-n", "dep"}

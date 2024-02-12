@@ -175,6 +175,11 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 					migrationScheduleNamespaces = append(migrationScheduleNamespaces, cmdFactory.GetNamespace())
 				}
 			}
+
+			for _, ns := range activationNamespaces {
+				resourceutils.ScaleReplicas(ns, true, printFunc(ioStreams), config)
+			}
+
 			for _, ns := range migrationScheduleNamespaces {
 				migrationSchedules, err := storkops.Instance().ListMigrationSchedules(ns)
 				if err != nil {
@@ -197,9 +202,6 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 						printMsg(fmt.Sprintf("Setting the ApplicationActivated status in the MigrationSchedule %v/%v to true", migrSched.Namespace, migrSched.Name), ioStreams.Out)
 					}
 				}
-			}
-			for _, ns := range activationNamespaces {
-				resourceutils.ScaleReplicas(ns, true, printFunc(ioStreams), config)
 			}
 		},
 	}
@@ -669,10 +671,33 @@ func GetMigrationScheduleCRNamespace(namespace string) string {
 		apiVersion string
 	}{
 		{"PersistentVolumeClaim", "v1"},
+		{"PersistentVolume", "v1"},
 		{"StatefulSet", "apps/v1"},
 		{"Deployment", "apps/v1"},
+		{"DeploymentConfig", "apps.openshift.io/v1"},
 		{"Service", "v1"},
 		{"ConfigMap", "v1"},
+		{"DaemonSet", "apps/v1"},
+		{"ReplicaSet", "apps/v1"},
+		{"Secret", "v1"},
+		{"ServiceAccount", "v1"},
+		{"ResourceQuota", "v1"},
+		{"Endpoints", "v1"},
+		{"Ingress", "networking.k8s.io/v1"},
+		{"Role", "rbac.authorization.k8s.io/v1"},
+		{"RoleBinding", "rbac.authorization.k8s.io/v1"},
+		{"ClusterRole", "rbac.authorization.k8s.io/v1"},
+		{"ClusterRoleBinding", "rbac.authorization.k8s.io/v1"},
+		{"Job", "batch/v1"},
+		{"CronJob", "batch/v1"},
+		{"NetworkPolicy", "crd.projectcalico.org/v1"},
+		{"LimitRange", "v1"},
+		{"PodDisruptionBudget", "policy/v1"},
+		{"ValidatingWebhookConfiguration", "admissionregistration.k8s.io/v1"},
+		{"MutatingWebhookConfiguration", "admissionregistration.k8s.io/v1"},
+		{"ImageStream", "image.openshift.io/v1"},
+		{"Template", "template.openshift.io/v1"},
+		{"Route", "route.openshift.io/v1"},
 	}
 	for _, resource := range resources {
 		objects, err := dynamicClient.ListObjects(&metav1.ListOptions{
