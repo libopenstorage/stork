@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
@@ -876,6 +877,64 @@ func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 		}
 	}
 	return false
+}
+
+// DisplayJobpodLogandEvents - Prints the Job pod description, log and events
+func DisplayJobpodLogandEvents(jobName string, namespace string) {
+	// Get job from the namespace
+	job, err := batch.Instance().GetJob(jobName, namespace)
+	if err != nil && !apierrors.IsNotFound(err) {
+		logrus.Errorf("failed to get job [%v] in namespace [%v]. Error is: %v", jobName, namespace, err)
+		return
+	}
+	// Get the pods of the job from the namespace
+	pods, err := core.Instance().GetPods(
+		job.Namespace,
+		map[string]string{
+			"job-name": job.Name,
+		},
+	)
+	if err != nil {
+		logrus.Errorf("failed to fetch pod of job [%v] in namespace [%v]. Error is: %v", jobName, namespace, err)
+	} else {
+		for _, pod := range pods.Items {
+			numLogLines := int64(50)
+			podDescribe, err := core.Instance().GetPodByName(pod.Name, pod.Namespace)
+			if err != nil {
+				logrus.Errorf("error fetching description of job-pod [%s] in namespace [%s]. Error is: %v", pod.Name, pod.Namespace, err)
+			}
+			logrus.Info("###---POD DESCRIBE---###")
+			logrus.Infof("start of job-pod [%s] description", pod.Name)
+			logrus.Infof("%v", podDescribe)
+			logrus.Infof("end of job-pod [%s] description", pod.Name)
+			logrus.Info("###---POD DESCRIBE---###")
+
+			opts := metav1.ListOptions{
+				FieldSelector: "involvedObject.name=" + pod.Name,
+			}
+			events, err := core.Instance().ListEvents(namespace, opts)
+			if err != nil {
+				logrus.Errorf("error fetching events for pod [%s] of namespace [%s]. Error is: %v", namespace, pod.Name, err)
+			} else {
+				logrus.Info("###---POD EVENTS---###")
+				logrus.Infof("start of events of pod [%s] of job [%s] of namespace [%s]", pod.Name, jobName, pod.Namespace)
+				logrus.Infof("%v", events)
+				logrus.Infof("end of events of pod [%s]", pod.Name)
+				logrus.Info("###---POD EVENTS---###")
+			}
+
+			podLog, err := core.Instance().GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{TailLines: &numLogLines})
+			if err != nil {
+				logrus.Errorf("error fetching log of job-pod %s. Error is: %v", pod.Name, err)
+			} else {
+				logrus.Info("###---POD LOGS---###")
+				logrus.Infof("start of job-pod [%s] log", pod.Name)
+				logrus.Infof("%v", podLog)
+				logrus.Infof("end of job-pod [%s] log", pod.Name)
+				logrus.Info("###---POD LOGS---###")
+			}
+		}
+	}
 }
 
 func GetDisableIstioConfig(jobOpts drivers.JobOpts) bool {
