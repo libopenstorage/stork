@@ -120,14 +120,11 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				includeVolumes = false
 			}
 
-			migrationNamespaces := namespaceList
-			if len(namespaceSelectors) != 0 {
-				// update the migrationNamespaces list by fetching namespaces based on provided label selectors
-				migrationNamespaces, err = getMigrationNamespaces(namespaceList, namespaceSelectors)
-				if err != nil {
-					util.CheckErr(fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err))
-					return
-				}
+			// get the namespaces being migrated by also fetching namespaces based on provided label selectors
+			migrationNamespaces, err := getMigrationNamespaces(namespaceList, namespaceSelectors)
+			if err != nil {
+				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err))
+				return
 			}
 
 			// User must provide at-least one namespace to migrate
@@ -578,6 +575,9 @@ func validateNamespaceList(migrationScheduleNs string, migrationNamespaces []str
 }
 
 func getMigrationNamespaces(namespaceList []string, namespaceSelectors map[string]string) ([]string, error) {
+	if len(namespaceSelectors) == 0 {
+		return namespaceList, nil
+	}
 	uniqueNamespaces := make(map[string]bool)
 	for _, ns := range namespaceList {
 		uniqueNamespaces[ns] = true

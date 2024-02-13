@@ -5,6 +5,8 @@ package storkctl
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"maps"
 	"net/http"
 	"os"
 	"testing"
@@ -61,7 +63,9 @@ func resetTest() {
 	fakeOCPClient := fakeocpclient.NewSimpleClientset()
 	fakeOCPSecurityClient := fakeocpsecurityclient.NewSimpleClientset()
 	fakeOCPConfigClient := fakeocpconfigclient.NewSimpleClientset()
-	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, appregistration.GetSupportedGVR())
+	gvrToListKind := appregistration.GetSupportedGVR()
+	maps.Copy(gvrToListKind, resourcecollector.GetSupportedK8sGVR())
+	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind)
 
 	if testFactory != nil {
 		testFactory.TestFactory.WithNamespace("test").Cleanup()
@@ -97,7 +101,7 @@ func testCommon(t *testing.T, cmdArgs []string, obj runtime.Object, expected str
 
 	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
 	cmd := NewCommand(testFactory, streams.In, streams.Out, streams.ErrOut)
-	cmd.SetOutput(buf)
+	cmd.SetOut(buf)
 	cmd.SetArgs(cmdArgs)
 
 	calledFatal := false

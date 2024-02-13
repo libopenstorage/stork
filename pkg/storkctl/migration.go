@@ -3,7 +3,6 @@ package storkctl
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -14,17 +13,15 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/portworx/sched-ops/k8s/core"
+	dynamicops "github.com/portworx/sched-ops/k8s/dynamic"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	k8sdynamic "k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
@@ -141,7 +138,6 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 
 func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var allNamespaces bool
-
 	activateMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
 		Aliases: migrationAliases,
@@ -172,37 +168,69 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				migrationScheduleNamespaces = append(migrationScheduleNamespaces, activationNamespaces...)
 			} else {
 				activationNamespaces = append(activationNamespaces, cmdFactory.GetNamespace())
-				migrationScheduleNamespace := GetMigrationScheduleCRNamespace(cmdFactory.GetNamespace(), config, ioStreams)
+				migrationScheduleNamespace := GetMigrationScheduleCRNamespace(cmdFactory.GetNamespace())
 				if len(migrationScheduleNamespace) > 0 {
 					migrationScheduleNamespaces = append(migrationScheduleNamespaces, migrationScheduleNamespace)
 				} else {
 					migrationScheduleNamespaces = append(migrationScheduleNamespaces, cmdFactory.GetNamespace())
 				}
 			}
+
+			for _, ns := range activationNamespaces {
+				resourceutils.ScaleReplicas(ns, true, printFunc(ioStreams), config)
+			}
+
 			for _, ns := range migrationScheduleNamespaces {
-				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
+				migrationSchedules, err := storkops.Instance().ListMigrationSchedules(ns)
 				if err != nil {
 					util.CheckErr(err)
 					return
 				}
-				for _, migr := range migrSched.Items {
-					migr.Status.ApplicationActivated = true
-					_, err := storkops.Instance().UpdateMigrationSchedule(&migr)
+				for _, migrSched := range migrationSchedules.Items {
+					isMigrSchedRelevant, err := doesMigrationScheduleMigrateNamespaces(migrSched, activationNamespaces)
 					if err != nil {
 						util.CheckErr(err)
 						return
 					}
-					printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to true", migr.Namespace, migr.Name), ioStreams.Out)
+					if isMigrSchedRelevant {
+						migrSched.Status.ApplicationActivated = true
+						_, err := storkops.Instance().UpdateMigrationSchedule(&migrSched)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						printMsg(fmt.Sprintf("Setting the ApplicationActivated status in the MigrationSchedule %v/%v to true", migrSched.Namespace, migrSched.Name), ioStreams.Out)
+					}
 				}
-			}
-			for _, ns := range activationNamespaces {
-				resourceutils.ScaleReplicas(ns, true, printFunc(ioStreams), config)
 			}
 		},
 	}
 	activateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Activate applications in all namespaces")
 
 	return activateMigrationCommand
+}
+
+// MigrationSchedule will only be relevant if it migrates at least one of the activation namespaces
+// Only for such migrationSchedules we will need to update applicationActivated:true
+func doesMigrationScheduleMigrateNamespaces(migrSched storkv1.MigrationSchedule, activationNs []string) (bool, error) {
+	namespaceList := migrSched.Spec.Template.Spec.Namespaces
+	namespaceSelectors := migrSched.Spec.Template.Spec.NamespaceSelectors
+	migrationNamespaces, err := getMigrationNamespaces(namespaceList, namespaceSelectors)
+	if err != nil {
+		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
+	}
+	activationNamespacesSet := make(map[string]bool)
+	for _, ns := range activationNs {
+		activationNamespacesSet[ns] = true
+	}
+	found := false
+	for _, ns := range migrationNamespaces {
+		if activationNamespacesSet[ns] {
+			found = true
+			break
+		}
+	}
+	return found, nil
 }
 
 func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
@@ -233,7 +261,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 
 			} else {
 				deactivationNamespaces = append(deactivationNamespaces, cmdFactory.GetNamespace())
-				migrationScheduleNamespace := GetMigrationScheduleCRNamespace(cmdFactory.GetNamespace(), config, ioStreams)
+				migrationScheduleNamespace := GetMigrationScheduleCRNamespace(cmdFactory.GetNamespace())
 				if len(migrationScheduleNamespace) > 0 {
 					migrationScheduleNamespaces = append(migrationScheduleNamespaces, migrationScheduleNamespace)
 				} else {
@@ -246,22 +274,27 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 			}
 
 			for _, ns := range migrationScheduleNamespaces {
-				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
+				migrationSchedules, err := storkops.Instance().ListMigrationSchedules(ns)
 				if err != nil {
 					util.CheckErr(err)
 					return
 				}
-				for _, migr := range migrSched.Items {
-					if migr.GetAnnotations() != nil {
-						if _, ok := migr.GetAnnotations()[StorkMigrationScheduleCopied]; ok {
+				for _, migrSched := range migrationSchedules.Items {
+					isMigrSchedRelevant, err := doesMigrationScheduleMigrateNamespaces(migrSched, deactivationNamespaces)
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+					if isMigrSchedRelevant && migrSched.GetAnnotations() != nil {
+						if _, ok := migrSched.GetAnnotations()[StorkMigrationScheduleCopied]; ok {
 							// check status of all migrated app in cluster
-							migr.Status.ApplicationActivated = false
-							_, err := storkops.Instance().UpdateMigrationSchedule(&migr)
+							migrSched.Status.ApplicationActivated = false
+							_, err := storkops.Instance().UpdateMigrationSchedule(&migrSched)
 							if err != nil {
 								util.CheckErr(err)
 								return
 							}
-							printMsg(fmt.Sprintf("Set the ApplicationActivated status in the MigrationSchedule %v/%v to false", migr.Namespace, migr.Name), ioStreams.Out)
+							printMsg(fmt.Sprintf("Setting the ApplicationActivated status in the MigrationSchedule %v/%v to false", migrSched.Namespace, migrSched.Name), ioStreams.Out)
 						}
 					}
 				}
@@ -629,34 +662,50 @@ func ValidateMigration(migr *storkv1.Migration) error {
 	return nil
 }
 
-func GetMigrationScheduleCRNamespace(namespace string, config *rest.Config, ioStreams genericclioptions.IOStreams) string {
+func GetMigrationScheduleCRNamespace(namespace string) string {
 	var migrationScheduleNamespace string
-
-	dynamicClient, err := k8sdynamic.NewForConfig(config)
-	if err != nil {
-		util.CheckErr(err)
-		return migrationScheduleNamespace
-	}
-
+	dynamicClient := dynamicops.Instance()
 	// Checking in following resources for migrationschedule namespace annotation
 	resources := []struct {
-		kind      string
-		gvr       schema.GroupVersionResource
-		namespace string
+		kind       string
+		apiVersion string
 	}{
-		{"PersistentVolumeClaim", schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}, namespace},
-		{"StatefulSet", schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}, namespace},
-		{"Deployment", schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, namespace},
-		{"Service", schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, namespace},
-		{"ConfigMap", schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, namespace},
+		{"PersistentVolumeClaim", "v1"},
+		{"PersistentVolume", "v1"},
+		{"StatefulSet", "apps/v1"},
+		{"Deployment", "apps/v1"},
+		{"DeploymentConfig", "apps.openshift.io/v1"},
+		{"Service", "v1"},
+		{"ConfigMap", "v1"},
+		{"DaemonSet", "apps/v1"},
+		{"ReplicaSet", "apps/v1"},
+		{"Secret", "v1"},
+		{"ServiceAccount", "v1"},
+		{"ResourceQuota", "v1"},
+		{"Role", "rbac.authorization.k8s.io/v1"},
+		{"RoleBinding", "rbac.authorization.k8s.io/v1"},
+		{"ClusterRole", "rbac.authorization.k8s.io/v1"},
+		{"ClusterRoleBinding", "rbac.authorization.k8s.io/v1"},
+		{"Job", "batch/v1"},
+		{"CronJob", "batch/v1"},
+		{"LimitRange", "v1"},
+		{"PodDisruptionBudget", "policy/v1"},
+		{"ValidatingWebhookConfiguration", "admissionregistration.k8s.io/v1"},
+		{"MutatingWebhookConfiguration", "admissionregistration.k8s.io/v1"},
+		{"ImageStream", "image.openshift.io/v1"},
+		{"Template", "template.openshift.io/v1"},
+		{"Route", "route.openshift.io/v1"},
 	}
-
 	for _, resource := range resources {
-		objects, err := dynamicClient.Resource(resource.gvr).Namespace(resource.namespace).List(context.TODO(), metav1.ListOptions{})
+		objects, err := dynamicClient.ListObjects(&metav1.ListOptions{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       resource.kind,
+				APIVersion: resource.apiVersion,
+			},
+		}, namespace)
 		if err != nil {
 			continue
 		}
-
 		for _, o := range objects.Items {
 			if _, ok := o.GetAnnotations()[StorkMigrationNamespace]; ok {
 				migrationScheduleNamespace = o.GetAnnotations()[StorkMigrationNamespace]
