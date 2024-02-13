@@ -23,7 +23,13 @@ PX_STATFS_SRC_DIR := /go/src/github.com/libopenstorage/stork/drivers/volume/port
 PX_STATFS_DEST_DIR := /go/src/github.com/libopenstorage/stork/bin
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork' | grep -v 'hack')
+PKGS := $(shell docker run --rm $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+/bin/bash -c "cd /go/src/github.com/libopenstorage/stork && go list -buildvcs=false ./... 2>&1 | \
+grep -v 'github.com/libopenstorage/stork/vendor' | \
+grep -v 'pkg/client/informers/externalversions' | \
+grep -v versioned | \
+grep -v 'pkg/apis/stork' | \
+grep -v 'hack'")
 endif
 
 GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
@@ -112,14 +118,16 @@ gocyclo:
 pretest: check-fmt vet errcheck staticcheck
 
 test:
-	echo "" > coverage.txt
-	for pkg in $(PKGS);	do \
-		go test -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
-		if [ -f profile.out ]; then \
-			cat profile.out >> coverage.txt; \
-			rm profile.out; \
-		fi; \
-	done
+	  docker run --rm $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
+		      /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork; \
+			  echo "" > coverage.txt; \
+			  for pkg in $(PKGS);	do \
+				  go test -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
+				  if [ -f profile.out ]; then \
+					  cat profile.out >> coverage.txt; \
+					  rm profile.out; \
+				  fi; \
+			  done'
 
 integration-test:
 	@echo "Building stork integration tests"
