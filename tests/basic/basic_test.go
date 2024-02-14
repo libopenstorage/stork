@@ -45,29 +45,38 @@ func TestBasic(t *testing.T) {
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	log.Infof("Init instance")
-	InitInstance()
-	dash.TestSetBegin(dash.TestSet)
-	EnableAutoFSTrim()
+	value, exists := os.LookupEnv("NOMAD_ADDR")
+	if !exists {
+		InitInstance()
+		dash.TestSetBegin(dash.TestSet)
+		EnableAutoFSTrim()
+	} else {
+		log.Infof("Value set for Nomad cluster is: %v", value)
+		dash.TestSetBegin(dash.TestSet)
+	}
 })
 
 var _ = AfterSuite(func() {
-	TestLogger = CreateLogger("SystemCheck.log")
-	defer dash.TestSetEnd()
-	defer CloseLogger(TestLogger)
-	defer dash.TestCaseEnd()
-	// making sure validate clean up executed even if systemcheck failed
-	defer func() {
-		if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
-			dash.TestCaseBegin("Validate Cleanup", "Validating clean up", "", nil)
-			ValidateCleanup()
-		}
-	}()
+	_, exists := os.LookupEnv("NOMAD_ADDR")
+	if !exists {
+		TestLogger = CreateLogger("SystemCheck.log")
+		defer dash.TestSetEnd()
+		defer CloseLogger(TestLogger)
+		defer dash.TestCaseEnd()
+		// making sure validate clean up executed even if systemcheck failed
+		defer func() {
+			if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
+				dash.TestCaseBegin("Validate Cleanup", "Validating clean up", "", nil)
+				ValidateCleanup()
+			}
+		}()
 
-	log.SetTorpedoFileOutput(TestLogger)
-	if !Inst().SkipSystemChecks {
-		if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
-			dash.TestCaseBegin("System Checks", "Perform system checks", "", nil)
-			PerformSystemCheck()
+		log.SetTorpedoFileOutput(TestLogger)
+		if !Inst().SkipSystemChecks {
+			if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
+				dash.TestCaseBegin("System Checks", "Perform system checks", "", nil)
+				PerformSystemCheck()
+			}
 		}
 	}
 })
