@@ -24,6 +24,8 @@ const (
 	VMFreezeCmd = "/usr/bin/virt-freezer --freeze --name %s --namespace %s"
 	//VMUnFreezeCmd is the template for VM unfreeze command
 	VMUnFreezeCmd = "/usr/bin/virt-freezer --unfreeze --name %s --namespace %s"
+	// VMContainerName is the name of the container to use for freeze/thaw
+	VMContainerName = "compute"
 )
 
 // IsVirtualMachineRunning returns true if virtualMachine is in running state
@@ -381,6 +383,7 @@ func getRuleItemWithAction(podSelector map[string]string, ruleAction string) sto
 	ruleInfoItem := storkapi.RuleItem{
 		PodSelector: podSelector,
 		Actions:     actions,
+		Container:   VMContainerName,
 	}
 	return ruleInfoItem
 }
