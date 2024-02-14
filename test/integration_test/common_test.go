@@ -13,12 +13,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	"github.com/libopenstorage/stork/pkg/aetosutils"
+	aetosLogger "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -42,7 +45,6 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/stats"
 	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
@@ -142,13 +144,19 @@ const (
 	testrailMilestoneVar       = "TESTRAIL_MILESTONE"
 )
 
+var (
+	enableDashboard = true
+	aetosLog        *logrus.Logger
+	testLogFile     *os.File
+	Dash            = aetosutils.Get()
+)
+
 var nodeDriver node.Driver
 var schedulerDriver scheduler.Driver
 var volumeDriver volume.Driver
 
 var storkVolumeDriver storkdriver.Driver
 var objectStoreDriver objectstore.Driver
-var dash *aetosutil.Dashboard
 
 var snapshotScaleCount int
 var migrationScaleCount int
@@ -201,11 +209,77 @@ func TestStorkCbtBackup(t *testing.T) {
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 }
 
+func doDashboardSetup() {
+	aetosLog = aetosLogger.GetLogInstance()
+	logrus.Infof("Getting dashboard utils in dosetup")
+	Dash = aetosutils.Get()
+	Dash.TestLog = aetosLog
+	aetosLog.Out = io.MultiWriter(aetosLog.Out)
+	logLevel := os.Getenv("LOG_LEVEL")
+	aetosLogger.SetLoglevel(aetosLog, logLevel)
+	logDir := os.Getenv("LOG_DIR")
+	testLogPath := aetosLogger.GetLogDir(logDir)
+	fmt.Printf("testLogPath is %s //n", testLogPath)
+	testLogFile = aetosLogger.CreateLogFile(testLogPath)
+	if testLogFile != nil {
+		aetosLogger.SetStorkTestFileOutput(aetosLog, testLogFile)
+	}
+	if enableDashboard && !aetosLogger.IsDashboardReachable() {
+		enableDashboard = false
+		aetosLogger.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+	}
+	Dash.IsEnabled = enableDashboard
+	tagsProvided := make(map[string]string)
+	aetosUser := os.Getenv("TEST_USER")
+	testProduct := os.Getenv("PRODUCT")
+	testDescription := os.Getenv("TEST_DESCRIPTION")
+	testBranch := os.Getenv("TEST_BRANCH")
+	testType := os.Getenv("TEST_TYPE")
+	testTags := os.Getenv("TEST_TAG")
+	testSetId, err := strconv.Atoi(os.Getenv("TESTSET_ID"))
+	if err != nil {
+		testSetId = 0
+	}
+	tagsProvided["stork"] = "true"
+	if testTags != "" {
+		tags := strings.Split(testTags, ",")
+		for _, tag := range tags {
+			var key, val string
+			if !strings.Contains(tag, ":") {
+				logrus.Infof("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+			} else {
+				key = strings.SplitN(tag, ":", 2)[0]
+				val = strings.SplitN(tag, ":", 2)[1]
+				tagsProvided[key] = val
+			}
+		}
+	}
+	if testSetId != 0 {
+		Dash.TestSetID = testSetId
+	}
+
+	testSet := aetosutils.TestSet{
+		User:        aetosUser,
+		Product:     testProduct,
+		Description: testDescription,
+		Branch:      testBranch,
+		TestType:    testType,
+		Tags:        tagsProvided,
+		Status:      aetosutils.NOTSTARTED,
+	}
+
+	Dash.TestSet = &testSet
+}
+
 // TODO: Take driver name from input
 // TODO: Parse storageclass specs based on driver name
 func setup() error {
 	var err error
-
+	Dash.TestSetBegin(Dash.TestSet)
+	tags := make(map[string]string)
+	defer Dash.TestCaseEnd()
+	Dash.TestCaseBegin("SetupTest", "Setup for stork-test", "", tags)
+	log.Info("Setup test")
 	externalTest, err = strconv.ParseBool(os.Getenv(externalTestCluster))
 	if err == nil {
 		logrus.Infof("Three cluster config mode has been activated for test: %t", externalTest)
@@ -330,10 +404,6 @@ func setup() error {
 		return fmt.Errorf("TEST_MODE environment variable not set for stork: %v", err)
 	}
 	SetupTestRail()
-	dash = aetosutil.Get()
-	if dash == nil {
-		logrus.Infof("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
-	}
 
 	return nil
 }
@@ -1841,11 +1911,18 @@ func TestMain(m *testing.M) {
 		false,
 		"Turn on/off unidirectional cluster pair creation for all migrations. Default off.")
 	flag.Parse()
+	var once sync.Once
+	once.Do(func() {
+		doDashboardSetup()
+	})
+
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
 		os.Exit(1)
 	}
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	Dash.TestSetEnd()
+	os.Exit(exitCode)
 }
 
 // activates/deactivate the source cluster domain
@@ -1936,10 +2013,6 @@ func getByteDataFromFile(filePath string) ([]byte, error) {
 
 func updateDashStats(testName string, testResult *string) {
 	var err error
-	dash.IsEnabled, err = strconv.ParseBool(os.Getenv(enableDashStats))
-	if dash.IsEnabled && err == nil {
-		logrus.Infof("Dash is not enabled, stork integration tests will NOT push stats from this run to Aetos.")
-	}
 	dashStats := make(map[string]string)
 	dashStats["test_suite"] = currentTestSuite
 	dashStats["test_name"] = testName
@@ -1961,6 +2034,6 @@ func updateDashStats(testName string, testResult *string) {
 		DashStats: dashStats,
 	}
 
-	stats.PushStatsToAetos(dash, testName, dashProductName, dashStatsType, eventStat)
+	stats.PushStatsToAetos(testName, dashProductName, dashStatsType, eventStat)
 
 }
