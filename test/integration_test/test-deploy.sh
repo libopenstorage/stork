@@ -198,7 +198,61 @@ case $i in
         enable_dash_stats=$2
         shift
         shift
-        ;;	
+        ;;
+    --log_level)
+        echo "log_level = $2"
+        log_level=$2
+        shift
+        shift
+        ;;
+      --log_dir)
+          echo "log_dir = $2"
+          log_dir=$2
+          shift
+          shift
+          ;;
+      --testset_id)
+        echo "testset_id = $2"
+        testset_id=$2
+        shift
+        shift
+        ;;
+      --test_user)
+        echo "test_user = $2"
+        test_user=$2
+        shift
+        shift
+        ;;
+      --product)
+        echo "product = $2"
+        product=$2
+        shift
+        shift
+        ;;
+      --test_branch)
+        echo "test_branch = $2"
+        test_branch=$2
+        shift
+        shift
+        ;;
+      --test_type)
+        echo "test_type = $2"
+        test_type=$2
+        shift
+        shift
+        ;;
+      --test_tag)
+        echo "test_tag = $2"
+        test_tag=$2
+        shift
+        shift
+        ;;
+      --test_description)
+        echo "test_description = $2"
+        test_description=$2
+        shift
+        shift
+        ;;
 esac
 done
 
@@ -324,6 +378,65 @@ else
 fi
 
 
+if [ "$log_dir" != "" ]; then
+	sed -i 's/'log_dir'/'\"$log_dir\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'log_dir'/\".\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$log_level" != "" ]; then
+	sed -i 's/'log_level'/'\"$log_level\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'log_level'/\"debug\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ -e /build.properties ]; then
+    testset_id=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
+else
+    testset_id=""
+fi
+
+if [ "$testset_id" != "" ]; then
+	sed -i 's/'testset_id'/'\"$testset_id\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'testset_id'/\"0\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$test_user" != "" ]; then
+	sed -i 's/'test_user'/'\"$test_user\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$product" != "" ]; then
+	sed -i 's/'product'/'\"$product\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'product'/\"stork\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$test_branch" != "" ]; then
+	sed -i 's/'test_branch'/'\"$test_branch\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'test_branch'/\"master\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$test_type" != "" ]; then
+	sed -i 's/'test_type'/'\"$test_type\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'test_type'/\"stork-integration-test\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$test_tag" != "" ]; then
+	sed -i 's/'test_tag'/'\"$test_tag\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'test_tag'/\"\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$test_description" != "" ]; then
+	sed -i 's/'test_description'/'\"$test_description\"'/g' /testspecs/stork-test-pod.yaml
+else
+  sed -i 's/'test_description'/\"stork-test workflows\"/g' /testspecs/stork-test-pod.yaml
+fi
+
+
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -migration-scale-count=10/- -migration-scale-count='"$migration_scale"'/g' /testspecs/stork-test-pod.yaml
@@ -433,3 +546,4 @@ else
     echo "Unknown test status $test_status"
     exit 1
 fi
+
