@@ -1,0 +1,14 @@
+pipeline {
+	agent {
+		label "stork-builder"
+	}
+
+	stages {
+		stage("Build Stork") {
+			steps {
+				build(job: "${STORK_OPERATOR_BUILD_JOB_NAME}", parameters: [string(name: "GIT_BRANCH", value: GIT_BRANCH)])
+			}
+		}
+	}
+}
+
