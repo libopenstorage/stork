@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -27,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	"kubevirt.io/client-go/kubecli"
 	cdiv1beta1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 )
 
@@ -49,7 +51,15 @@ type vmDisk struct {
 }
 
 func (d *vmDisk) String() string {
-	return fmt.Sprintf("VM disk [%s, %s, %s]", d.diskName, d.volume.ID, d.apiVol.Id)
+	volName := ""
+	if d.volume != nil {
+		volName = d.volume.ID
+	}
+	volID := ""
+	if d.apiVol != nil {
+		volID = d.apiVol.Id
+	}
+	return fmt.Sprintf("VM disk [%s, %s, %s]", d.diskName, volName, volID)
 }
 
 type hotPlugDisk struct {
@@ -60,7 +70,11 @@ type hotPlugDisk struct {
 }
 
 func (d *hotPlugDisk) String() string {
-	return fmt.Sprintf("hotplug disk [%s, %s, %s]", d.pvcName, d.pvName, d.apiVol.Id)
+	volID := ""
+	if d.apiVol != nil {
+		volID = d.apiVol.Id
+	}
+	return fmt.Sprintf("hotplug disk [%s, %s, %s]", d.pvcName, d.pvName, volID)
 }
 
 type kubevirtTestState struct {
@@ -101,6 +115,7 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 			appCtx:   appCtx,
 			allNodes: allNodes,
 		}
+		gatherInitialVMIInfo(t, testState)
 		verifyInitialVMI(t, testState)
 
 		// Simulate OCP node upgrade by:
@@ -154,6 +169,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 			allNodes: allNodes,
 		}
 
+		gatherInitialVMIInfo(t, testState)
 		verifyInitialVMI(t, testState)
 
 		// Cordon off all non-replica nodes so that the next live migration moves the VM pod to a replica node.
@@ -212,6 +228,7 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 			appCtx:   appCtx,
 			allNodes: allNodes,
 		}
+		gatherInitialVMIInfo(t, testState)
 		verifyInitialVMI(t, testState)
 
 		addAndVerifyHotPlugDisks(t, testState)
@@ -223,7 +240,43 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
+// Deploy VM with a special label on the PVCs to skip adding VPS during vol creation.
+// Then, wait for the VPS fix job to collocate the volumes.
+func kubeVirtHypercVPSFixJob(t *testing.T) {
+	var testrailID, testResult = 257177, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "vps-fix-job"
+
+	ctxs := kubevirtVMsDeployAndValidate(
+		t,
+		instanceID,
+		[]string{
+			"kubevirt-fedora-no-vps",
+		},
+	)
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	for _, appCtx := range ctxs {
+		testState := &kubevirtTestState{
+			appCtx:   appCtx,
+			allNodes: allNodes,
+		}
+		gatherInitialVMIInfo(t, testState)
+
+		// TODO: need to set the cluster option --fix-vps-frequency-in-minutes to reduce the wait time
+		require.Eventuallyf(t, func() bool {
+			return checkVMDisksCollocation(testState)
+		}, time.Hour, 5*time.Second, "vm disks were not collocated")
+	}
+	log.Infof("Destroying apps")
+	destroyAndWait(t, ctxs)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 	appCtx := testState.appCtx
 
 	err := schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
@@ -281,44 +334,89 @@ func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 		log.Infof("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
 	}
 
-	// verify all volumes are using the same set of replica nodes
-	var prevReplicaNodeIDs map[string]bool
-	var prevDisk *vmDisk
-	var prevVPSLabelVal string
-	for _, vmDisk := range testState.vmDisks {
-		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
-		if prevReplicaNodeIDs != nil {
-			require.True(t, matchReplicaNodeIDs(prevReplicaNodeIDs, replicaNodeIDs),
-				"%s and %s have replicas on different nodes", prevDisk, vmDisk)
-		} else {
-			prevReplicaNodeIDs = replicaNodeIDs
-			prevDisk = vmDisk
-		}
-		// verify that our vps label is set
-		vpsLabelVal := vmDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
-		require.NotEmpty(t, vpsLabelVal, "PX volume for %s does not have % label", vmDisk, vpsVolAffinityLabel)
-		log.Infof("Found label %s=%s on VM disk %s", vpsVolAffinityLabel, vpsLabelVal, vmDisk)
-		if prevVPSLabelVal != "" {
-			require.Equal(t, prevVPSLabelVal, vpsLabelVal, "VPS label values don't match for VM disk volumes")
-		}
-		prevVPSLabelVal = vpsLabelVal
-	}
-
-	// VM should have a bind-mount initially
-	verifyBindMount(t, testState, true /*initialCheck*/)
+	testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
+	require.NoError(t, err)
 
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
 	require.NoError(t, err)
+
 	testState.vmiUID, testState.vmiPhase, testState.vmiPhaseTransitionTime, testState.vmUID, err = getVMIDetails(
 		testState.vmPod.Namespace, testState.vmiName)
 	require.NoError(t, err)
 	require.Equal(t, "Running", testState.vmiPhase)
 }
 
-func addAndVerifyHotPlugDisks(t *testing.T, testState *kubevirtTestState) {
-	kvCli := kubevirt.Instance().GetKubevirtClient()
-	require.NotNil(t, kvCli)
+func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
+	// verify all volumes are using the same set of replica nodes
+	require.True(t, checkVMDisksCollocation(testState), "vm disks are not collocated")
 
+	// VM should have a bind-mount initially
+	verifyBindMount(t, testState, true /*initialCheck*/)
+}
+
+// check if all volumes are using the same set of replica nodes and have VPS label+rule
+func checkVMDisksCollocation(testState *kubevirtTestState) bool {
+	var err error
+	var prevReplicaNodeIDs map[string]bool
+	var prevDisk *vmDisk
+	var prevVPSLabelVal string
+	for _, vmDisk := range testState.vmDisks {
+		// refresh the apiVol to get the current state of the replicas
+		vmDisk.apiVol, err = volumeDriver.InspectVolume(vmDisk.volume.ID)
+		if err != nil {
+			log.Warnf("Failed to inspect volume for %s: %v", vmDisk, err)
+			return false
+		}
+
+		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
+		if prevReplicaNodeIDs != nil {
+			if !matchReplicaNodeIDs(prevReplicaNodeIDs, replicaNodeIDs) {
+				log.Warnf("%s and %s have replicas on different nodes", prevDisk, vmDisk)
+				return false
+			}
+		} else {
+			prevReplicaNodeIDs = replicaNodeIDs
+			prevDisk = vmDisk
+		}
+		// verify that our vps label is set
+		vpsLabelVal := vmDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
+		if vpsLabelVal == "" {
+			log.Warnf("PX volume for %s does not have %s label", vmDisk, vpsVolAffinityLabel)
+			return false
+		}
+		log.Infof("Found label %s=%s on %s", vpsVolAffinityLabel, vpsLabelVal, vmDisk)
+		if prevVPSLabelVal != "" && vpsLabelVal != prevVPSLabelVal {
+			log.Warnf("VPS label values (%s vs %s) don't match for %s and %s",
+				prevVPSLabelVal, vpsLabelVal, prevDisk, vmDisk)
+			return false
+		}
+		prevVPSLabelVal = vpsLabelVal
+	}
+	return true
+}
+
+func getKubevirtClient(t *testing.T) kubecli.KubevirtClient {
+	// TODO: use reflect to get kubevirt typed client until sched-ops is vendored into stork.
+	// Currently, there are vendoring issues. When those issues are fixed, we can just use the following.
+	//
+	//	kvCli := kubevirt.Instance().GetKubevirtClient()
+
+	const ptrSize = unsafe.Sizeof(new(int))
+
+	kc := kubevirt.Instance().(*kubevirt.Client)
+	_, err := kc.GetVersion() // for initClient()
+	if err != nil {
+		log.Warnf("kubevirt GetVersion failed: %v", err)
+		// continue
+	}
+
+	kvCli := *(*kubecli.KubevirtClient)(unsafe.Pointer(uintptr(unsafe.Pointer(kc)) + uintptr(ptrSize)))
+
+	require.NotNil(t, kvCli)
+	return kvCli
+}
+
+func addAndVerifyHotPlugDisks(t *testing.T, testState *kubevirtTestState) {
 	// add 3 disks with ownerRef in DataVolume. PX will deduce VM UID from that ownerref during preCreate.
 	// This simulates how OCP web interface adds the hotplug disks.
 	for i := 0; i < 3; i++ {
@@ -361,8 +459,7 @@ func addHotPlugDisk(t *testing.T, testState *kubevirtTestState, dvName string, w
 	appCtx := testState.appCtx
 	ns := appCtx.App.NameSpace
 
-	kvCli := kubevirt.Instance().GetKubevirtClient()
-	require.NotNil(t, kvCli)
+	kvCli := getKubevirtClient(t)
 
 	dv := &cdiv1beta1.DataVolume{
 		ObjectMeta: metav1.ObjectMeta{

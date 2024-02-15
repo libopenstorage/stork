@@ -18,7 +18,6 @@ var (
 
 // Ops is an interface to perform kubernetes related operations on the core resources.
 type Ops interface {
-	GetKubevirtClient() kubecli.KubevirtClient
 	VirtualMachineOps
 
 	// SetConfig sets the config and resets the client
@@ -163,11 +162,4 @@ func (c *Client) loadClient() error {
 	}
 
 	return nil
-}
-
-func (c *Client) GetKubevirtClient() kubecli.KubevirtClient {
-	if err := c.initClient(); err != nil {
-		return nil
-	}
-	return c.kubevirt
 }

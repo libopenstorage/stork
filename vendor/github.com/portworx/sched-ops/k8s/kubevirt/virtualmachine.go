@@ -40,8 +40,6 @@ type VirtualMachineOps interface {
 	GetVMConfigMaps(*kubevirtv1.VirtualMachine) []string
 	//IsVirtualMachineRunning returns true if virtualMachine is in running state
 	IsVirtualMachineRunning(*kubevirtv1.VirtualMachine) bool
-	// AddVolume adds a hot plug volume to an existing vm
-	AddVolume(name, namespace string, opts *kubevirtv1.AddVolumeOptions) error
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -87,15 +85,6 @@ func (c *Client) DeleteVirtualMachine(name, namespace string) error {
 	}
 
 	return c.kubevirt.VirtualMachine(namespace).Delete(name, &k8smetav1.DeleteOptions{})
-}
-
-// AddVolume adds a hot plug volume to an existing vm
-func (c *Client) AddVolume(name, namespace string, opts *kubevirtv1.AddVolumeOptions) error {
-	if err := c.initClient(); err != nil {
-		return err
-	}
-
-	return c.kubevirt.VirtualMachine(namespace).AddVolume(name, opts)
 }
 
 // ValidateVirtualMachineRunning check if VirtualMachine is running, if not
