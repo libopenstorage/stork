@@ -2333,7 +2333,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			log.InfoD("Validating data inserted after backup")
 			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
 			if err == nil {
-				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Rows Found - [%v]", dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()]))
 			}
 		} else {
 			log.InfoD("Skipping data validation added after backup as no data was found")
