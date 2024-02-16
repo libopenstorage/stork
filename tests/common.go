@@ -2091,7 +2091,7 @@ func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)

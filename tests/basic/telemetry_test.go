@@ -90,7 +90,8 @@ func IsPKS() bool {
 		spec, err := Inst().V.GetDriver()
 		Expect(err).ToNot(HaveOccurred())
 		isPks, err := strconv.ParseBool(spec.Annotations["portworx.io/is-pks"])
-		return err == nil && isOpBased && isPks
+		Expect(err).ToNot(HaveOccurred())
+		return isOpBased && isPks
 	}
 	log.Warn("This is not PX Operator based install, will not be able to check if this is PKS cluster or not")
 	return false
@@ -211,18 +212,18 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		if !isTelemetryOperatorEnabled {
 			Skip("Skip test because telemetry is not enabled...")
 		}
-	})
 
-	// Check if this is PKS and change PX diag directory
-	if IsPKS() {
-		pxDiagDir = PksPxDiagDir
-		pxDir = PksPxDir
-		log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
-	}
+	})
 
 	var contexts []*scheduler.Context
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
@@ -282,16 +283,15 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 		Profile:    true,
 	}
 
-	// Check if this is PKS and change PX diag directory
-	if IsPKS() {
-		pxDiagDir = PksPxDiagDir
-		pxDir = PksPxDir
-		log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
-	}
-
 	testSummaryMsg := "has to collect and validate profile diags on S3"
 	It(testSummaryMsg, func() {
 		log.InfoD(testSummaryMsg)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		contexts = make([]*scheduler.Context, 0)
 
 		// Collect diags and verify in S3 on each worker node
@@ -434,15 +434,14 @@ var _ = Describe("{DiagsClusterWide}", func() {
 	var diagFile string
 	var err error
 
-	// Check if this is PKS and change PX diag directory
-	if IsPKS() {
-		pxDiagDir = PksPxDiagDir
-		pxDir = PksPxDir
-		log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
-	}
-
 	It("has to collect diags on entire cluster, validate diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl sv diags to collect cluster wide diags  %v", currNode.Name), func() {
@@ -551,15 +550,14 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 		}
 	})
 
-	// Check if this is PKS and change PX diag directory
-	if IsPKS() {
-		pxDiagDir = PksPxDiagDir
-		pxDir = PksPxDir
-		log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
-	}
-
 	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 
 		for pxProcessNm = range testProcNmsTestRailIDs {
 			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
@@ -670,15 +668,14 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 		}
 	})
 
-	// Check if this is PKS and change PX diag directory
-	if IsPKS() {
-		pxDiagDir = PksPxDiagDir
-		pxDir = PksPxDir
-		log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
-	}
-
 	It("Validate, pxctl displays telemetry status", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 
 		Step(fmt.Sprintf("Stop portworx on all nodes..."), func() {
 			for _, currNode := range node.GetWorkerNodes() {
@@ -754,15 +751,14 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 	var existingDiags string
 	var err error
 
-	// Check if this is PKS and change PX diag directory
-	if IsPKS() {
-		pxDiagDir = PksPxDiagDir
-		pxDir = PksPxDir
-		log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
-	}
-
 	It("has to collect diags on specific node from another node, validate diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		nodes := node.GetWorkerNodes()
 		currNode := nodes[0]
 		diagNode := nodes[1]
