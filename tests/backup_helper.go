@@ -57,6 +57,7 @@ import (
 	"encoding/json"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	storageapi "k8s.io/api/storage/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
@@ -1911,10 +1912,46 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 			}
 		}
 
+		var updatedSpec interface{}
+		var name, kind, ns string
 	specloop:
 		for _, spec := range scheduledAppContext.App.SpecList {
 
-			name, kind, ns, err := GetSpecNameKindNamepace(spec)
+			if tektonspec, ok := spec.(*tektoncdv1.Task); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonspec)
+				if err != nil {
+					err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinespec, ok := spec.(*tektoncdv1.Pipeline); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinespec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinerunspec, ok := spec.(*tektoncdv1.PipelineRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinerunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektontaskrunspec, ok := spec.(*tektoncdv1.TaskRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektontaskrunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			}
+
+			if updatedSpec != nil {
+				name, kind, ns, err = GetSpecNameKindNamepace(updatedSpec)
+			} else {
+				name, kind, ns, err = GetSpecNameKindNamepace(spec)
+			}
 			if err != nil {
 				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
 				errors = append(errors, err)
@@ -2386,13 +2423,47 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 				restoredObjectsInNS = append(restoredObjectsInNS, resource)
 			}
 		}
-
+		var updatedSpec interface{}
+		var name, kind, ns string
 	specloop:
-		for _, specObj := range expectedRestoredAppContext.App.SpecList {
+		for _, spec := range expectedRestoredAppContext.App.SpecList {
+			if tektonspec, ok := spec.(*tektoncdv1.Task); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonspec)
+				if err != nil {
+					err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinespec, ok := spec.(*tektoncdv1.Pipeline); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinespec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s]  spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinerunspec, ok := spec.(*tektoncdv1.PipelineRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinerunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektontaskrunspec, ok := spec.(*tektoncdv1.TaskRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektontaskrunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			}
 
-			name, kind, ns, err := GetSpecNameKindNamepace(specObj)
+			if updatedSpec != nil {
+				name, kind, ns, err = GetSpecNameKindNamepace(updatedSpec)
+			} else {
+				name, kind, ns, err = GetSpecNameKindNamepace(spec)
+			}
 			if err != nil {
-				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (restoredAppContext) [%s], spec: [%+v]", err, expectedRestoredAppContextNamespace, specObj)
+				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (restoredAppContext) [%s], spec: [%+v]", err, expectedRestoredAppContextNamespace, spec)
 				errors = append(errors, err)
 				continue specloop
 			}
@@ -2433,7 +2504,7 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 							}
 						}
 
-						_, err := k8s.GetUpdatedSpec(specObj)
+						_, err := k8s.GetUpdatedSpec(spec)
 						if err == nil {
 							log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 						} else {

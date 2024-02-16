@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: busybox-tekton
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: busybox-tekton
+  template:
+    metadata:
+      labels:
+        app: busybox-tekton
+    spec:
+      serviceAccountName: tekton-pipeline-run-sa
+      containers:
+        - name: busybox
+          image: kshithijiyer/tektonpipelineruncreator:1.0.6

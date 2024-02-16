@@ -95,6 +95,7 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -2161,6 +2162,10 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 
 	log.InfoD("Destroying apps")
 	for _, ctx := range contexts {
+		// In case of tektoncd skip the volume validation
+		if Contains(Inst().AppList, "tektoncd") {
+			ctx.SkipVolumeValidation = true
+		}
 		TearDownContext(ctx, opts)
 	}
 
@@ -2777,6 +2782,18 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
 		clone := *specObj
 		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
+		clone := *specObj
+		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
@@ -3027,6 +3044,26 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			specObj.SetNamespace(namespace)
 		}
 		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.TaskRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
@@ -3120,6 +3157,14 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	}
 
 	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
