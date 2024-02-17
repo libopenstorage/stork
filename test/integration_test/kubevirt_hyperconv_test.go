@@ -544,44 +544,47 @@ func addHotPlugDisk(t *testing.T, testState *kubevirtTestState, dvName string, w
 }
 
 func verifyHotPlugDisk(t *testing.T, testState *kubevirtTestState, hpDisk *hotPlugDisk, waitForVPSFixJob bool) {
+	if !waitForVPSFixJob {
+		require.True(t, isHotplugDiskCollocated(testState, hpDisk), "%s was not collocated", hpDisk)
+		return
+	}
+	// TODO: need to set the cluster option --fix-vps-frequency-in-minutes to reduce the wait time
+	require.Eventuallyf(t, func() bool {
+		return isHotplugDiskCollocated(testState, hpDisk)
+	}, time.Hour, 5*time.Second, "%s was not collocated", hpDisk)
+}
+
+func isHotplugDiskCollocated(testState *kubevirtTestState, hpDisk *hotPlugDisk) bool {
+	var err error
+
 	vmDisk := testState.vmDisks[0]
 	vmDiskReplicas := getReplicaNodeIDs(vmDisk.apiVol)
 	vmDiskLabelVal := vmDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
 
-	isCollocatedFn := func() bool {
-		var err error
-
-		// refresh the apiVol to get the current state of the replicas
-		hpDisk.apiVol, err = volumeDriver.InspectVolume(hpDisk.pvName)
-		if err != nil {
-			log.Warnf("Failed to inspect PV %s for %s: %v", hpDisk.pvName, hpDisk, err)
-			return false
-		}
-		hpDiskReplicas := getReplicaNodeIDs(hpDisk.apiVol)
-		if !matchReplicaNodeIDs(vmDiskReplicas, hpDiskReplicas) {
-			log.Warnf("%s and %s have replicas on different nodes", hpDisk, vmDisk)
-			return false
-		}
-		// verify that our vps label is set
-		hpDiskLabelVal := hpDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
-		if hpDiskLabelVal == "" {
-			log.Warnf("PX volume for %s does not have %s label", hpDisk, vpsVolAffinityLabel)
-			return false
-		}
-		if hpDiskLabelVal != vmDiskLabelVal {
-			log.Warnf("VPS label value %s for %s doesn't match with the label %s for %s",
-				hpDiskLabelVal, hpDisk, vmDiskLabelVal, vmDisk)
-			return false
-		}
-		log.Infof("Verified collocation for %s", hpDisk)
-		return true
+	// refresh the apiVol to get the current state of the replicas
+	hpDisk.apiVol, err = volumeDriver.InspectVolume(hpDisk.pvName)
+	if err != nil {
+		log.Warnf("Failed to inspect PV %s for %s: %v", hpDisk.pvName, hpDisk, err)
+		return false
 	}
-	if !waitForVPSFixJob {
-		require.True(t, isCollocatedFn(), "%s was not collocated", hpDisk)
-		return
+	hpDiskReplicas := getReplicaNodeIDs(hpDisk.apiVol)
+	if !matchReplicaNodeIDs(vmDiskReplicas, hpDiskReplicas) {
+		log.Warnf("%s and %s have replicas on different nodes", hpDisk, vmDisk)
+		return false
 	}
-	// TODO: need to set the cluster option --fix-vps-frequency-in-minutes to reduce the wait time
-	require.Eventuallyf(t, isCollocatedFn, time.Hour, 5*time.Second, "%s was not collocated", hpDisk)
+	// verify that our vps label is set
+	hpDiskLabelVal := hpDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
+	if hpDiskLabelVal == "" {
+		log.Warnf("PX volume for %s does not have %s label", hpDisk, vpsVolAffinityLabel)
+		return false
+	}
+	if hpDiskLabelVal != vmDiskLabelVal {
+		log.Warnf("VPS label value %s for %s doesn't match with the label %s for %s",
+			hpDiskLabelVal, hpDisk, vmDiskLabelVal, vmDisk)
+		return false
+	}
+	log.Infof("%s is collocated", hpDisk)
+	return true
 }
 
 func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, migrateToReplicaNode bool) {
