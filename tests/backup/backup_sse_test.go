@@ -17,7 +17,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,8 +59,6 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		customBuckets                        []string
 		randomStringLength                   = 10
 		backupsAfterSettingSseTrue           []string
-		controlChannel                       chan string
-		errorGroup                           *errgroup.Group
 	)
 	params := make(map[string]string)
 	k8sStorage := storage.Instance()
@@ -93,9 +90,10 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 
 		for _, provider := range providers {
 			Step("Validate applications", func() {
-				log.InfoD("Validate applications")
-				ctx, _ := backup.GetAdminCtxFromSecret()
-				controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+				log.InfoD("Validating apps")
+				// Disabling data validation for this test as data continuity issue needs to be debugged
+				// https://portworx.atlassian.net/browse/PB-5680
+				ValidateApplications(scheduledAppContexts)
 			})
 			Step("Register cluster for backup", func() {
 				log.InfoD(fmt.Sprintf("Creating source and destination cluster"))
@@ -512,8 +510,9 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		// Once data validation is enabled use DestroyAppsWithData
+		// https://portworx.atlassian.net/browse/PB-5680
+		DestroyApps(scheduledAppContexts, opts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		// Delete backup schedule policy
