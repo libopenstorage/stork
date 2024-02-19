@@ -80,6 +80,9 @@ WORKDIR /go/src/github.com/portworx/torpedo
 # Install docker
 RUN apk add --update --no-cache docker
 
+# Install openssh and sshpass
+RUN apk add --no-cache openssh sshpass
+
 # Install dependancy for OCP 4.14 CLI
 RUN apk --update add gcompat
 

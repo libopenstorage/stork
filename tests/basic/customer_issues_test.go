@@ -879,7 +879,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 				time.Sleep(2 * time.Minute)
 				_, restartNodeAfter, err := isPodStuckNotRunning(nameSpace)
 				if podRestarting && len(restartNode) > 1 {
-					for key, _ := range restartNodeAfter {
+					for key := range restartNodeAfter {
 						if restartNodeAfter[key] == restartNode[key] {
 							isPodRestarting = true
 						}

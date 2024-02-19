@@ -650,7 +650,7 @@ func nodePoolsExpansion(testName string) {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		for poolUUID, _ := range poolsExpectedSizeMap {
+		for poolUUID := range poolsExpectedSizeMap {
 			exitPoolMaintenance(poolUUID)
 		}
 

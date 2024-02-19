@@ -1,0 +1,27 @@
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-cirros-containerdisk
+spec:
+  running: true
+  template:
+    metadata:
+      name: vmi-ephemeral
+      labels:
+        special: key
+        username: cirros
+    spec:
+      domain:
+        devices:
+          disks:
+            - disk:
+                bus: virtio
+              name: containerdisk
+        resources:
+          requests:
+            memory: 64M
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: kubevirt/cirros-registry-disk-demo:latest

@@ -129,6 +129,8 @@ const (
 	MultiAppNfsPodDeploymentNamespace         = "kube-system"
 	backupScheduleDeleteTimeout               = 60 * time.Minute
 	backupScheduleDeleteRetryTime             = 30 * time.Second
+	sshPodName                                = "ssh-pod"
+	sshPodNamespace                           = "ssh-pod-namespace"
 )
 
 var (
@@ -5983,6 +5985,188 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 		return fmt.Errorf("Errors generated while restarting VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
 	}
 	return nil
+}
+
+// GetAllVMsInNamespace returns all the Kubevirt VMs in the given namespace
+func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error) {
+	k8sKubevirt := kubevirt.Instance()
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return nil, err
+	}
+	return vms.Items, nil
+
+}
+
+// RunCmdInVM runs a command in the VM by SSHing into it
+func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) (string, error) {
+	// Kubevirt client
+	k8sKubevirt := kubevirt.Instance()
+
+	// Getting IP of the VM
+	vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
+	if err != nil {
+		return "", err
+	}
+	log.Infof("VM Name - %s", vm.Name)
+	ipAddress := vmInstance.Status.Interfaces[0].IP
+	log.Infof("IP Address - %s", ipAddress)
+
+	// Getting username of the VM
+	// Username has to be added as a label to the VM Spec
+	username := vmInstance.Labels["username"]
+	log.Infof("Username - %s", username)
+
+	// Get password of the VM
+	// Password has to be added as a value in the ConfigMap named kubevirt-creds whose key the name of the VM
+	cm, err := core.Instance().GetConfigMap("kubevirt-creds", "default")
+	if err != nil {
+		return "", err
+	}
+	password := cm.Data[vm.Name]
+
+	// SSH command to be executed
+	sshCmd := fmt.Sprintf("sshpass -p '%s' ssh -o StrictHostKeyChecking=no %s@%s %s", password, username, ipAddress, cmd)
+	log.Infof("SSH Command - %s", sshCmd)
+
+	// If the cluster provider is openshift then we are creating ssh pod and running the command in it
+	if os.Getenv("CLUSTER_PROVIDER") == "openshift" {
+		log.Infof("Cluster is openshift hence creating the SSH Pod")
+		err = initSSHPod(sshPodNamespace)
+		if err != nil {
+			return "", err
+		}
+
+		testCmdArgs := getSSHCommandArgs(username, password, ipAddress, "hostname")
+		cmdArgs := getSSHCommandArgs(username, password, ipAddress, cmd)
+
+		// To check if the ssh server is up and running
+		t := func() (interface{}, bool, error) {
+			output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", "default")
+			if err != nil {
+				log.Infof("Error encountered")
+				if isConnectionError(err.Error()) {
+					log.Infof("Test connection output - \n%s", output)
+					return "", true, err
+				} else {
+					return "", false, err
+				}
+			}
+			log.Infof("Test connection success output - \n%s", output)
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+		if err != nil {
+			return "", err
+		}
+
+		// Executing the actual command
+		output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", "default")
+		if err != nil {
+			return output, err
+		}
+		log.Infof("Output of cmd %s - \n%s", cmd, output)
+		return output, nil
+	} else {
+		workerNode := node.GetWorkerNodes()[0]
+		t := func() (interface{}, bool, error) {
+			output, err := runCmdGetOutput(sshCmd, workerNode)
+			if err != nil {
+				log.Infof("Error encountered")
+				if isConnectionError(err.Error()) {
+					log.Infof("Output of cmd %s - \n%s", cmd, output)
+					return "", true, err
+				} else {
+					return output, false, err
+				}
+			}
+			log.Infof("Output of cmd %s - \n%s", cmd, output)
+			return output, false, nil
+		}
+		commandOutput, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+		return commandOutput.(string), err
+	}
+}
+
+// initSSHPod creates a pod with ssh server installed and running along with sshpass utility
+func initSSHPod(namespace string) error {
+	var p *corev1.Pod
+	var err error
+	// Check if namespace exists
+	_, err = k8sCore.GetNamespace(namespace)
+	if err != nil {
+		// Namespace doesn't exist, create it
+		log.Infof("Namespace %s does not exist. Creating...", namespace)
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		if _, err = k8sCore.CreateNamespace(ns); err != nil {
+			log.Errorf("Failed to create namespace %s: %v", namespace, err)
+			return err
+		}
+		log.Infof("Namespace %s created successfully", namespace)
+	}
+	if p, err = k8sCore.GetPodByName(sshPodName, namespace); p == nil {
+		sshPodSpec := &corev1.Pod{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Pod",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sshPodName,
+				Namespace: namespace,
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "ssh-container",
+						Image: "ubuntu:latest",
+						Command: []string{
+							"/bin/bash",
+							"-c",
+						},
+						Args: []string{
+							"apt-get update && apt-get install -y openssh-server sshpass && service ssh start && echo 'root:toor' | chpasswd && sleep infinity",
+						},
+					},
+				},
+			},
+		}
+		log.Infof("Creating ssh pod")
+		_, err = k8sCore.CreatePod(sshPodSpec)
+		if err != nil {
+			log.Errorf("An Error Occured while creating %v", err)
+			return err
+		}
+		t := func() (interface{}, bool, error) {
+			pod, err := k8sCore.GetPodByName(sshPodName, namespace)
+			if err != nil {
+				return "", false, err
+			}
+			if !k8sCore.IsPodRunning(*pod) {
+				return "", true, fmt.Errorf("waiting for pod %s to be in running state", sshPodName)
+			}
+			// Adding static sleep to let the ssh server start
+			time.Sleep(30 * time.Second)
+			log.Infof("ssh pod creation complete")
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		return err
+	}
+	return err
+}
+
+// isConnectionError checks if the error message is a connection error
+func isConnectionError(errorMessage string) bool {
+	return strings.Contains(errorMessage, "Connection refused") || strings.Contains(errorMessage, "Host is unreachable") ||
+		strings.Contains(errorMessage, "No route to host")
+}
+
+func getSSHCommandArgs(username, password, ipAddress, cmd string) []string {
+	return []string{"sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", username, ipAddress), cmd}
 }
 
 // UpgradeKubevirt upgrades the kubevirt control plane to the given version

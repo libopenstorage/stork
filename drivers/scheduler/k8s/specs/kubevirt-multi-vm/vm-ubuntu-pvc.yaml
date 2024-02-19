@@ -4,6 +4,7 @@ kind: VirtualMachine
 metadata:
   labels:
     kubevirt.io/os: linux
+    app: vm-ubuntu-pvc
   name: vm-ubuntu-pvc
 spec:
   running: true

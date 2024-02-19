@@ -5,7 +5,7 @@ metadata:
     kubevirt.io/vm: ubuntu-vm-dvtemplate
   name: ubuntu-vm-dvtemplate
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:
