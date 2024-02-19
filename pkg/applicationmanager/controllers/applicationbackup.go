@@ -31,6 +31,7 @@ import (
 	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -101,6 +102,8 @@ const (
 	createdByKey        = annotationKeyPrefix + "created-by"
 	createdByValue      = annotationKeyPrefix + "stork"
 	lastUpdateKey       = annotationKeyPrefix + "last-update"
+	// optCSISnapshotClassName is an option for providing a snapshot class name
+	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
 )
 
 var (
@@ -388,6 +391,24 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	}
 
 	var err error
+
+	// Check whether if VolumeSnapshotClassName is given. If yes, check it's using the older way of requestParams. If yes, then migrate
+	// to new map in case of csi based backups
+	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok && len(backup.Spec.CSISnapshotClassMap) == 0 {
+		vsc, err := externalsnapshotter.Instance().GetSnapshotClass(snapshotClassName)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error getting volumesnapshotclass: %v", err)
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				err.Error())
+			return nil
+		}
+		if backup.Spec.CSISnapshotClassMap == nil {
+			backup.Spec.CSISnapshotClassMap = make(map[string]string)
+		}
+		backup.Spec.CSISnapshotClassMap[vsc.Driver] = vsc.Name
+	}
 
 	if a.setDefaults(backup) {
 		err = a.client.Update(context.TODO(), backup)

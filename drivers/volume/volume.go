@@ -16,7 +16,6 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/libopenstorage/stork/drivers"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -50,14 +49,12 @@ const (
 	ZoneSeperator = "__"
 	// EbsProvisionerName EBS provisioner name
 	EbsProvisionerName = "kubernetes.io/aws-ebs"
-	// pvProvisionedByAnnotation is the annotation on PV which has the
-	// provisioner name
+	// PvProvisionedByAnnotation is the annotation on PV which has the provisioner name
 	PvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 	pureCSIProvisioner        = "pure-csi"
 
-	pureBackendParam            = "backend"
-	pureFileParam               = "file"
-	csiDriverWithOutSnapshotKey = "CSI_DRIVER_WITHOUT_SNAPSHOT"
+	pureBackendParam = "backend"
+	pureFileParam    = "file"
 )
 
 var (
@@ -67,10 +64,6 @@ var (
 	// mechanism if none of drivers satisfy a PVC
 	orderedListOfDrivers = []string{
 		PortworxDriverName,
-		AWSDriverName,
-		AzureDriverName,
-		GCEDriverName,
-		LinstorDriverName,
 		CSIDriverName,
 		KDMPDriverName,
 	}
@@ -107,7 +100,7 @@ type Driver interface {
 	OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool
 
 	// OwnsPVCForBackup returns true if the PVC is owned by the driver
-	// Since we have extra check need to done for backup case, added seperate version of API.
+	// Since we have extra check need to do for backup case, added separate version of API.
 	OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool
 
 	// OwnsPV returns true if the PV is owned by the driver
@@ -169,26 +162,25 @@ type GroupSnapshotPluginInterface interface {
 
 // ClusterPairPluginInterface Interface to pair clusters
 type ClusterPairPluginInterface interface {
-	// Create a pair with a remote cluster
+	// CreatePair Create a pair with a remote cluster
 	CreatePair(*storkapi.ClusterPair) (string, error)
-	// Deletes a pairing with a remote cluster
+	// DeletePair Deletes a pairing with a remote cluster
 	DeletePair(*storkapi.ClusterPair) error
-	// Get the pairing info with remote cluster
+	// GetPair Get the pairing info with remote cluster
 	GetPair(string) (*api.ClusterPairInfo, error)
 }
 
 // MigratePluginInterface Interface to migrate data between clusters
 type MigratePluginInterface interface {
-	// Start migration of volumes specified by the spec. Should only migrate
+	// StartMigration Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
 	StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error)
-	// Get the status of migration of the volumes specified in the status
+	// GetMigrationStatus Get the status of migration of the volumes specified in the status
 	// for the migration spec
 	GetMigrationStatus(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
-	// Cancel the migration of volumes specified in the status
+	// CancelMigration Cancel the migration of volumes specified in the status
 	CancelMigration(*storkapi.Migration) error
-	// Update the PVC spec to point to the migrated volume on the destination
-	// cluster
+	// UpdateMigratedPersistentVolumeSpec Update the PVC spec to point to the migrated volume on the destination cluster
 	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string, string, string) (*v1.PersistentVolume, error)
 }
 
@@ -208,29 +200,29 @@ type ClusterDomainsPluginInterface interface {
 
 // BackupRestorePluginInterface Interface to backup and restore volumes
 type BackupRestorePluginInterface interface {
-	// Start backup of volumes specified by the spec. Should only backup
+	// StartBackup Start backup of volumes specified by the spec. Should only backup
 	// volumes, not the specs associated with them
 	StartBackup(*storkapi.ApplicationBackup, []v1.PersistentVolumeClaim) ([]*storkapi.ApplicationBackupVolumeInfo, error)
-	// Get the status of backup of the volumes specified in the status
+	// GetBackupStatus Get the status of backup of the volumes specified in the status
 	// for the backup spec
 	GetBackupStatus(*storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error)
-	// Cancel the backup of volumes specified in the status
+	// CancelBackup Cancel the backup of volumes specified in the status
 	CancelBackup(*storkapi.ApplicationBackup) error
 	// CleanupBackupResources the backup of resource specified backup
 	CleanupBackupResources(*storkapi.ApplicationBackup) error
-	// Delete the backups specified in the status
+	// DeleteBackup Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) (bool, error)
-	// Get any resources that should be created before the restore is started
+	// GetPreRestoreResources Get any resources that should be created before the restore is started
 	GetPreRestoreResources(*storkapi.ApplicationBackup, *storkapi.ApplicationRestore, []runtime.Unstructured, []byte) ([]runtime.Unstructured, error)
-	// Start restore of volumes specified by the spec. Should only restore
+	// StartRestore Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo, []runtime.Unstructured) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
-	// Get the status of restore of the volumes specified in the status
+	// GetRestoreStatus Get the status of restore of the volumes specified in the status
 	// for the restore spec
 	GetRestoreStatus(*storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
-	// Cancel the restore of volumes specified in the status
+	// CancelRestore Cancel the restore of volumes specified in the status
 	CancelRestore(*storkapi.ApplicationRestore) error
-	// CleanupRestoreResources for specigied restore
+	// CleanupRestoreResources for specified restore
 	CleanupRestoreResources(*storkapi.ApplicationRestore) error
 }
 
@@ -243,7 +235,7 @@ type SnapshotRestorePluginInterface interface {
 	// Returns error if restore failed
 	CompleteVolumeSnapshotRestore(*storkapi.VolumeSnapshotRestore) error
 
-	// GetVolumeSnapshotRestore returns snapshot restore status
+	// GetVolumeSnapshotRestoreStatus returns snapshot restore status
 	GetVolumeSnapshotRestoreStatus(*storkapi.VolumeSnapshotRestore) error
 
 	// CleanupSnapshotRestoreObjects deletes restore objects if any
@@ -753,39 +745,21 @@ func GetPVCFromObjects(objects []runtime.Unstructured, volumeBackupInfo *storkap
 }
 
 // IsCSIDriverWithoutSnapshotSupport - check whether CSI PV supports snapshot
-// This function will called in csi driver and kdmp volume driver.
+// This function will call in csi driver and kdmp volume driver.
 // In csi driver, this api is called to default to kdmp by not owning in CSI driver.
-// In kdmp driver, this api is called to decide whether we need to set the volumesnapclass,
-// to try local snapshot first.
-func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) bool {
+func IsCSIDriverWithoutSnapshotSupport(pv *v1.PersistentVolume) (string, bool) {
 	// check if CSI volume
 	if pv.Spec.CSI != nil {
 		driverName := pv.Spec.CSI.Driver
 		// pure FB csi driver does not support snapshot
 		if driverName == pureCSIProvisioner {
 			if pv.Spec.CSI.VolumeAttributes[pureBackendParam] == pureFileParam {
-				return true
+				return "", true
 			}
 		}
-		// If csiDriverWithOutSnapshotKey is set in kdmp-config configmap,
-		// include it in the check.
-		kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
-		if err != nil {
-			logrus.Warnf("IsCSIDriverWithoutSnapshotSupport: error in reading configMap [%v/%v]",
-				drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
-			return false
-		}
-		if len(kdmpData.Data[csiDriverWithOutSnapshotKey]) != 0 {
-			nameList := strings.Split(kdmpData.Data[csiDriverWithOutSnapshotKey], ",")
-			for _, name := range nameList {
-				if driverName == name {
-					return true
-				}
-			}
-		}
-		return false
+		return driverName, false
 	}
-	return true
+	return "", true
 }
 
 // GetNodeRegion - get the node region

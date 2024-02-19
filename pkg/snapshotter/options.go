@@ -32,6 +32,8 @@ type Options struct {
 	Annotations map[string]string
 	// Labels are the labels that can be applied on the snapshot related objects
 	Labels map[string]string
+	// CSISnapshotMapping is the map of all csi drivers to their respective volumeSnapshotClass to be used
+	CSISnapshotMapping map[string]string
 }
 
 // Name is used to set a snapshot name.
@@ -130,6 +132,16 @@ func Labels(labels map[string]string) Option {
 		opts.Labels = make(map[string]string)
 		for k, v := range labels {
 			opts.Labels[k] = v
+		}
+		return nil
+	}
+}
+
+func CSISnapshotMapping(snapshotMap map[string]string) Option {
+	return func(opts *Options) error {
+		opts.CSISnapshotMapping = make(map[string]string)
+		for k, v := range snapshotMap {
+			opts.CSISnapshotMapping[k] = v
 		}
 		return nil
 	}

@@ -24,6 +24,7 @@ import (
 	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -52,8 +53,6 @@ const (
 	secretNamespace   = "kube-system"
 	// KdmpAnnotation for pvcs created by kdmp
 	KdmpAnnotation = "stork.libopenstorage.org/created-by"
-	// optCSISnapshotClassName is an option for providing a snapshot class name
-	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
 	// StorkAnnotation for pvcs created by stork-kdmp driver
 	StorkAnnotation = "stork.libopenstorage.org/kdmp"
 	// backupUID annotation key
@@ -73,16 +72,17 @@ const (
 	kdmpStorageClassKey = utils.KdmpAnnotationPrefix + "storage-class"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
-	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
-	pureCSIProvisioner       = "pure-csi"
-	bindCompletedKey         = "pv.kubernetes.io/bind-completed"
-	boundByControllerKey     = "pv.kubernetes.io/bound-by-controller"
-	storageClassKey          = "volume.beta.kubernetes.io/storage-class"
-	storageProvisioner       = "volume.beta.kubernetes.io/storage-provisioner"
-	storageNodeAnnotation    = "volume.kubernetes.io/selected-node"
-	gkeNodeLabelKey          = "topology.gke.io/zone"
-	awsNodeLabelKey          = "alpha.eksctl.io/cluster-name"
-	ocpAWSNodeLabelKey       = "topology.ebs.csi.aws.com/zone"
+	pvcProvisionerAnnotation             = "volume.beta.kubernetes.io/storage-provisioner"
+	pureCSIProvisioner                   = "pure-csi"
+	bindCompletedKey                     = "pv.kubernetes.io/bind-completed"
+	boundByControllerKey                 = "pv.kubernetes.io/bound-by-controller"
+	storageClassKey                      = "volume.beta.kubernetes.io/storage-class"
+	storageProvisioner                   = "volume.beta.kubernetes.io/storage-provisioner"
+	storageNodeAnnotation                = "volume.kubernetes.io/selected-node"
+	gkeNodeLabelKey                      = "topology.gke.io/zone"
+	awsNodeLabelKey                      = "alpha.eksctl.io/cluster-name"
+	ocpAWSNodeLabelKey                   = "topology.ebs.csi.aws.com/zone"
+	defaultVolumeSnapshotClassAnnotation = "snapshot.storage.kubernetes.io/is-default-class"
 )
 
 var (
@@ -154,15 +154,15 @@ func getProvisionerName(pvc v1.PersistentVolumeClaim) string {
 	return provisioner
 }
 
-func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) bool {
+func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) (string, bool) {
 	pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
 	if err != nil {
 		errMsg := fmt.Sprintf("error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
-		logrus.Warnf("ifCSISnapshotSupported: %v", errMsg)
+		logrus.Warnf("ifCSISnapshotClassRequired: %v", errMsg)
 		// In the case errors, we will allow the kdmp controller csi steps to decide on snapshot support.
-		return true
+		return "", true
 	}
-	return !storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
+	return storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
 }
 
 func getZones(pv *v1.PersistentVolume) ([]string, error) {
@@ -296,9 +296,32 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			Namespace:  pvc.Namespace,
 			APIVersion: pvc.APIVersion,
 		}
-		snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
-		if snapshotClassRequired {
-			dataExport.Spec.SnapshotStorageClass = k.getSnapshotClassName(backup)
+
+		driverName, snapshotClassNotRequired := isCSISnapshotClassRequired(&pvc)
+		if !snapshotClassNotRequired {
+			snapshotStorageClass := k.getSnapshotClassName(driverName, backup)
+			// In case of KDMP, if VolumeSnapshot is given and user want to use Default VolumeSnapshotClass then we need to
+			// get the default volumesnapshotclass name to populate in applicationBackup status VolumeInfo.VoluneSnapshot along with snapshot name
+
+			// Retaining "default" and "Default" because previous users who are using api based or CRD method to create Backup
+			// might be using those string, from newer version we will be using "Use-default-volumesnapshotclass" as identifier for using
+			// default volumesnapshotclass for creating volumeSnapshot
+			if snapshotStorageClass == "Default" || snapshotStorageClass == "default" || snapshotStorageClass == "Use-default-volumesnapshotclass" {
+				vscs, err := externalsnapshotter.Instance().ListSnapshotClasses()
+				if err != nil {
+					return nil, fmt.Errorf("unable to list volumesnapshotclasses : %+v", err.Error())
+				}
+
+				for _, vsc := range vscs.Items {
+					if pv.Spec.CSI.Driver == vsc.Driver {
+						if _, ok := vsc.Annotations[defaultVolumeSnapshotClassAnnotation]; ok {
+							dataExport.Spec.SnapshotStorageClass = vsc.GetName()
+						}
+					}
+				}
+			} else {
+				dataExport.Spec.SnapshotStorageClass = snapshotStorageClass
+			}
 		}
 		_, err = kdmpShedOps.Instance().CreateDataExport(dataExport)
 		if err != nil {
@@ -353,9 +376,8 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				if len(dataExport.Status.VolumeSnapshot) == 0 {
 					vInfo.VolumeSnapshot = ""
 				} else {
-					volumeSnapshot := k.getSnapshotClassName(backup)
-					if len(volumeSnapshot) > 0 {
-						vInfo.VolumeSnapshot = fmt.Sprintf("%s,%s", volumeSnapshot, dataExport.Status.VolumeSnapshot)
+					if len(dataExport.Spec.SnapshotStorageClass) > 0 {
+						vInfo.VolumeSnapshot = fmt.Sprintf("%s,%s", dataExport.Spec.SnapshotStorageClass, dataExport.Status.VolumeSnapshot)
 					}
 				}
 			}
@@ -980,8 +1002,8 @@ func GetGenericDriverName() string {
 	return storkvolume.KDMPDriverName
 }
 
-func (k *kdmp) getSnapshotClassName(backup *storkapi.ApplicationBackup) string {
-	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok {
+func (k *kdmp) getSnapshotClassName(driver string, backup *storkapi.ApplicationBackup) string {
+	if snapshotClassName, ok := backup.Spec.CSISnapshotClassMap[driver]; ok {
 		return snapshotClassName
 	}
 	return ""

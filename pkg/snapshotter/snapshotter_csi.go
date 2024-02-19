@@ -131,16 +131,27 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 		return "", "", "", fmt.Errorf("error getting pv %v: %v", pvName, err)
 	}
 
-	// In case the PV does not contain CSI secion itself, we will error out.
+	fmt.Printf("PV SPEC : %+v", pv.Spec)
+	// In case the PV does not contain CSI section itself, we will error out.
 	if pv.Spec.CSI == nil {
 		return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
+	} else {
+		// If CSI Section Exist assign respective volumeSnapshotClass of its provisioner
+		if snapshotClass, ok := o.CSISnapshotMapping[pv.Spec.CSI.Driver]; ok {
+			o.SnapshotClassName = snapshotClass
+		}
 	}
 
 	if o.SnapshotClassName == "" {
-		return "", "", "", fmt.Errorf("snapshot class cannot be empty, use 'default' to choose the default snapshot class")
+		return "", "", "", fmt.Errorf("snapshot class cannot be empty for pvc [%s] having driver [%s] in case of "+
+			"CSI based backup or use 'default' to choose the default snapshot class, use csiSnapshotMapping in case of "+
+			"multiple provisioner", pvc.GetName(), pv.Spec.CSI.Driver)
 	}
 
-	if o.SnapshotClassName == "default" || o.SnapshotClassName == "Default" {
+	// Retaining "default" and "Default" because previous users who are using api based or CRD method to create Backup
+	// might be using those string, from newer version we will be using "Use-default-volumesnapshotclass" as identifier for using
+	// default volumesnapshotclass for creating volumeSnapshot
+	if o.SnapshotClassName == "default" || o.SnapshotClassName == "Default" || o.SnapshotClassName == "Use-default-volumesnapshotclass" {
 		// Let kubernetes choose the default snapshot class to use
 		// for this snapshot. If none is set then the volume snapshot will fail
 		o.SnapshotClassName = ""
