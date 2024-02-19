@@ -218,7 +218,8 @@ func GetSupportedK8SResources(kind string, optionalResourceTypes []string) bool 
 		"PodDisruptionBudget",
 		"Endpoints",
 		"ValidatingWebhookConfiguration",
-		"MutatingWebhookConfiguration":
+		"MutatingWebhookConfiguration",
+		"PriorityClass":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -651,7 +652,6 @@ func (r *ResourceCollector) getParticularResourceInNamespaces(
 			// is backed up.
 			// With this now a user can choose to backup all resources in a ns and some
 			// selected resources from different ns
-
 			collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
 			if err != nil {
 				if apierrors.IsForbidden(err) {
@@ -830,6 +830,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.mutatingWebHookToBeCollected(object, namespace)
 	case "ValidatingWebhookConfiguration":
 		return r.validatingWebHookToBeCollected(object, namespace)
+	case "PriorityClass":
+		return r.validatePriorityClassToBeCollected(object, namespace)
 	}
 
 	return true, nil
