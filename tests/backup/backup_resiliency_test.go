@@ -1825,3 +1825,183 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 	})
 })
+
+// BackupNetworkErrorTest verifies backups and restore operation when network errors are injected.
+var _ = Describe("{BackupNetworkErrorTest}", func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		appNamespaces        []string
+		cloudAccountName     string
+		cloudAccountUID      string
+		bkpLocationName      string
+		backupLocationUID    string
+		srcClusterUid        string
+		appNodesMap          = make(map[string][]node.Node)
+		backupLocationMap    = make(map[string]string)
+		labelSelectors       = make(map[string]string)
+		backupNamespaceMap   = make(map[string]string)
+		wg                   sync.WaitGroup
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("BackupNetworkErrorTest", "verifies backups and restore operation when network errors are injected", nil, 257180, Ak, Q4FY24)
+		log.InfoD("Deploying applications required for the testcase")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+				ValidateApplications(scheduledAppContexts)
+				appNodes, _ := Inst().S.GetNodesForApp(ctx)
+				appNodesMap[namespace] = appNodes
+			}
+		}
+	})
+
+	It("backups and restores with injected network error", func() {
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+		Step("Adding cloud account and backup location", func() {
+			log.InfoD("Adding cloud account and backup location")
+			providers := GetBackupProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudAccountUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudAccountName, cloudAccountUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud account named [%s] for org [%s] with [%s] as provider", cloudAccountName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudAccountName, cloudAccountUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, DestinationClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Taking backup of applications without any injected network delay", func() {
+			log.InfoD("Taking backup of applications without any injected network delay")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(10))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
+			}
+		})
+
+		Step("Taking backup of applications with incremental iteration of network delay in Milliseconds", func() {
+			log.InfoD("Taking backup of applications with incremental iteration of network delay in Milliseconds")
+			incrementalMilliseconds := 1000
+			MinDelayInMilliseconds := 100
+			MaxDelayInMilliseconds := 100000
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			var lastErrorDelay int
+
+			for _, namespace := range appNamespaces {
+				var failedBackupTaken bool
+				currentNamespace := namespace
+
+				for i := MinDelayInMilliseconds; i <= MaxDelayInMilliseconds && !failedBackupTaken; i += incrementalMilliseconds {
+					lastErrorDelay = i
+					func() {
+						defer func() {
+							log.Infof(fmt.Sprintf("Deleting the delay of %dms to the applications nodes", lastErrorDelay))
+							err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "del", 0, lastErrorDelay)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", lastErrorDelay))
+						}()
+
+						log.Infof(fmt.Sprintf("Adding a delay of %dms to the applications nodes", i))
+						err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "add", 0, i)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", i))
+
+						backupName := fmt.Sprintf("%s-%s-delay-%dms-%s", BackupNamePrefix, namespace, i, RandomString(5))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+
+						if err != nil {
+							log.Infof(fmt.Sprintf("The backup creation failed with error [%v]", err))
+							bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(backupName, ctx, BackupOrgID)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backup status for backup [%s]", backupName))
+
+							if bkpStatus == api.BackupInfo_StatusInfo_Failed && strings.Contains(bkpReason, "Timed out while waiting for a status update.") {
+								log.InfoD(fmt.Sprintf("Backup [%s] failed when network delay of %dms injected to the applications node", backupName, i))
+								lastErrorDelay = i
+								failedBackupTaken = true
+							} else {
+								dash.VerifyFatal(err, nil, fmt.Sprintf("The backup creation failed with error [%v]", err))
+								lastErrorDelay = i
+							}
+						} else {
+							log.Infof(fmt.Sprintf("Backup [%s] succeeded with a network delay of [%d]", backupName, i))
+						}
+					}()
+				}
+
+				log.Infof("Create the backup when delay is removed and verify backup is succeeded")
+				finalBackupName := fmt.Sprintf("%s-%s-nodelay-%s", BackupNamePrefix, namespace, RandomString(5))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, finalBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] after removing the network delay", finalBackupName))
+				backupNamespaceMap[namespace] = finalBackupName
+			}
+		})
+
+		Step("Restoring of backup when network delay is removed", func() {
+			log.InfoD("Restoring of backup when network delay is removed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[namespace]})
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, backupNamespaceMap[namespace])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNamespaceMap[namespace], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		backupNames, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Fetching all backups for admin")
+		for _, backupName := range backupNames {
+			wg.Add(1)
+			go func(backupName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				backupUid, _ := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Delete the backup %s ", backupName))
+				err = DeleteBackupAndWait(backupName, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+			}(backupName)
+		}
+		wg.Wait()
+		restoreNames, err := GetAllRestoresAdmin()
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
+	})
+})

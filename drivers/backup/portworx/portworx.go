@@ -2028,6 +2028,26 @@ func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID st
 	return "", fmt.Errorf("backup with uid '%s' not found for org '%s'", backupUid, orgID)
 }
 
+// func GetBackupStatusWithReason return backup status and reason for a given backup name.
+func (p *portworx) GetBackupStatusWithReason(backupName string, ctx context.Context, orgID string) (api.BackupInfo_StatusInfo_Status, string, error) {
+	backupUid, err := p.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return 0, "", err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := p.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return 0, "", err
+	}
+	status := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	return status, reason, nil
+}
+
 func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
 	var scheduleBackupNames []string
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
