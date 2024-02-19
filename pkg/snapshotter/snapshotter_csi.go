@@ -1561,6 +1561,11 @@ func (c *csiDriver) RestoreFromLocalSnapshot(backupLocation *storkapi.BackupLoca
 	}
 
 	// create a new pvc for restore from the snapshot
+	if pvc.Spec.Selector != nil {
+		// Remove the labelselector, as it is a dynamic provisioning.
+		logrus.Debugf("RestoreFromLocalSnapshot: pvc:%v/%v - pvc.Spec.Selector: %v", pvc.Namespace, pvc.Name, pvc.Spec.Selector)
+		pvc.Spec.Selector = nil
+	}
 	pvcName := pvc.Name
 	pvc, err = c.RestoreVolumeClaim(
 		RestoreSnapshotName(vsName),
