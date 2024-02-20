@@ -182,6 +182,7 @@ var testrailSetupSuccessful bool
 var bidirectionalClusterpair bool
 var unidirectionalClusterpair bool
 var currentTestSuite string
+var kubevirtScale int
 
 func TestSnapshot(t *testing.T) {
 	currentTestSuite = t.Name()
@@ -1913,6 +1914,10 @@ func TestMain(m *testing.M) {
 		"unidirectional-cluster-pair",
 		false,
 		"Turn on/off unidirectional cluster pair creation for all migrations. Default off.")
+	flag.IntVar(&kubevirtScale,
+		"kubevirt-scale-count",
+		1,
+		"Number of different kubevirt VMs deployed and validated in kubevirt tests")
 	flag.Parse()
 	var once sync.Once
 	once.Do(func() {

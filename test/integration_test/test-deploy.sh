@@ -28,6 +28,7 @@ px_namespace="kube-system"
 bidirectional_cluster_pair=false
 unidirectional_cluster_pair=false
 enable_dash_stats=false
+kubevirt_scale=1
 for i in "$@"
 do
 case $i in
@@ -250,6 +251,10 @@ case $i in
       --test_description)
         echo "test_description = $2"
         test_description=$2
+        ;;	
+    --kubevirt-scale-count)
+        echo "Scale for Kubevirt tests (default 1): $2"
+        kubevirt_scale=$2
         shift
         shift
         ;;
@@ -441,6 +446,7 @@ sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-tes
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -migration-scale-count=10/- -migration-scale-count='"$migration_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -backup-scale-count=10/- -backup-scale-count='"$backup_scale"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/- -kubevirt-scale-count=1/- -kubevirt-scale-count='"$kubevirt_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml

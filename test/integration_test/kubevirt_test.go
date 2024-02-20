@@ -5,16 +5,22 @@ package integrationtest
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
+	kubevirt "github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var templatePVCSpecs = map[string]string{
@@ -34,7 +40,10 @@ const (
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
 	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
 
-	volumeBindingImmediate = "kubevirt-templates"
+	volumeBindingImmediate       = "kubevirt-templates"
+	dataVolumeClusterrole        = "datavol-clusterrole"
+	dataVolumeClusterroleBinding = "datavol-clusterrolebinding"
+	dataDiskClusterroleBinding   = "datadisk-clusterrolebinding"
 )
 
 func TestKubevirt(t *testing.T) {
@@ -48,6 +57,13 @@ func TestKubevirt(t *testing.T) {
 
 	err = createDatadiskTemplates(t)
 	require.NoError(t, err, "Error creating kubevirt templates")
+
+	err = createClusterroleDataVolume(dataVolumeClusterrole)
+	require.NoError(t, err, "Error creating cluste role for datavolume clone")
+
+	err = createClusterroleBindingDatavolume(dataVolumeClusterrole, kubevirtDatadiskNamespace)
+	require.NoError(t, err, "Error creating/updating data volume clusterrole binding %s with namespace: %s",
+		dataVolumeClusterroleBinding, kubevirtDatadiskNamespace)
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
 	t.Run("kubevirtDeployWindowsServerWithClonePVC", kubevirtDeployWindowsServerWithClonePVC)
@@ -66,16 +82,12 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKey := "kubevirt-fedora"
+	appKeys := []string{"kubevirt-fedora"}
 
-	ctxs := kubevirtVMsDeployAndValidate(
-		t,
-		instanceID,
-		[]string{appKey},
-	)
+	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
 	log.Infof("Destroying apps")
-	destroyAndWait(t, ctxs)
+	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -88,49 +100,16 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKey := "kubevirt-windows-22k-server"
+	appKeys := []string{"kubevirt-windows-22k-server"}
 
-	ctxs := kubevirtVMsDeployAndValidate(
-		t,
-		instanceID,
-		[]string{appKey},
-	)
+	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
 	log.Infof("Destroying apps")
-	destroyAndWait(t, ctxs)
+	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
 	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
-}
-
-func kubevirtVMsDeployAndValidate(
-	t *testing.T,
-	instanceID string,
-	appKeys []string,
-) []*scheduler.Context {
-	ctxs, err := schedulerDriver.Schedule(instanceID,
-		scheduler.ScheduleOptions{
-			AppKeys: appKeys,
-		})
-	require.NoError(t, err, "Error scheduling tasks")
-	require.Equal(t, len(appKeys), len(ctxs), "wrong number of tasks started")
-
-	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx, 30*time.Minute, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for app %s to get to running state", ctx.App.Key)
-
-		namespace := appKey + "-" + instanceID
-		vms, err := kubevirt.Instance().ListVirtualMachines(namespace)
-		require.NoError(t, err, "Error listing virtual machines")
-
-		for _, vm := range vms.Items {
-			require.Equal(t, vm.Status.Created, true, "VM %s not created yet", vm.Name)
-			require.Equal(t, vm.Status.Ready, true, "VM %s not ready yet", vm.Name)
-			logrus.Infof("VM %s has %d disks", vm.Name, len(vm.Spec.Template.Spec.Volumes))
-		}
-	}
-	return ctxs
 }
 
 func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
@@ -139,15 +118,12 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKey := "kubevirt-fedora-wait-first-consumer"
+	appKeys := []string{"kubevirt-fedora-wait-first-consumer"}
 
-	ctxs := kubevirtVMsDeployAndValidate(
-		t,
-		instanceID,
-		[]string{appKey},
-	)
+	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	destroyAndWait(t, ctxs)
+	log.Infof("Destroying apps")
+	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -160,15 +136,12 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKey := "kubevirt-windows-22k-server-wait-first-consumer"
+	appKeys := []string{"kubevirt-windows-22k-server-wait-first-consumer"}
 
-	ctxs := kubevirtVMsDeployAndValidate(
-		t,
-		instanceID,
-		[]string{appKey},
-	)
+	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	destroyAndWait(t, ctxs)
+	log.Infof("Destroying apps")
+	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -181,15 +154,12 @@ func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKey := "kubevirt-fedora-multiple-disks"
+	appKeys := []string{"kubevirt-fedora-multiple-disks"}
 
-	ctxs := kubevirtVMsDeployAndValidate(
-		t,
-		instanceID,
-		[]string{appKey},
-	)
+	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	destroyAndWait(t, ctxs)
+	log.Infof("Destroying apps")
+	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
@@ -243,6 +213,90 @@ func createDatadiskTemplates(t *testing.T) error {
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	if err != nil {
 		return fmt.Errorf("error waiting to provision kubevirt data disk PVCs")
+	}
+	return nil
+}
+
+func kubevirtVMScaledDeployAndValidate(t *testing.T, instanceID string, appKeys []string, scale int) []*scheduler.Context {
+	var allCtxs []*scheduler.Context
+	logrus.Infof("Deploying %d VMs and validating them.", len(appKeys)*scale)
+	for i := 1; i <= scale; i++ {
+		logrus.Infof("Deploying VM: %d", i)
+		// Before validating the VM create required clusterrolebindings for datavolume cloning in the VM namespace
+		var testNamespaces []string
+		for _, app := range appKeys {
+			testNamespace := app + "-" + instanceID + "-" + strconv.Itoa(i)
+			testNamespaces = append(testNamespaces, testNamespace)
+			err := createClusterroleBindingDatavolume(dataVolumeClusterrole, testNamespace)
+			require.NoError(t, err, "Error creating/updating data volumeclusterrole binding %s with namespace: %s",
+				dataVolumeClusterroleBinding, testNamespace)
+		}
+		ctxs, err := schedulerDriver.Schedule(instanceID+"-"+strconv.Itoa(i),
+			scheduler.ScheduleOptions{
+				AppKeys: appKeys,
+			})
+		require.NoError(t, err, "Error scheduling tasks")
+		require.Equal(t, len(appKeys), len(ctxs), "wrong number of tasks started")
+
+		for _, ctx := range ctxs {
+			err = schedulerDriver.WaitForRunning(ctx, 30*time.Minute, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for app %s to get to running state", ctx.App.Key)
+
+			vms, err := kubevirt.Instance().ListVirtualMachines(ctx.App.NameSpace)
+			require.NoError(t, err, "Error listing virtual machines")
+			for _, vm := range vms.Items {
+				require.Equal(t, vm.Status.Created, true, "VM %s not created yet", vm.Name)
+				require.Equal(t, vm.Status.Ready, true, "VM %s not ready yet", vm.Name)
+				logrus.Infof("VM %s in namespace %s, has %d disks", vm.Name, vm.Namespace, len(vm.Spec.Template.Spec.Volumes))
+				logrus.Infof("Validated VM in iteration: %d, name: %s, namespace: %s", i, vm.Name, vm.Namespace)
+			}
+
+		}
+		allCtxs = append(allCtxs, ctxs...)
+	}
+	return allCtxs
+}
+
+func createClusterroleDataVolume(clusterroleName string) error {
+	clusterRoleDatavolume := &rbacv1.ClusterRole{
+		ObjectMeta: meta.ObjectMeta{
+			Name: clusterroleName,
+		},
+		Rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{"cdi.kubevirt.io"},
+			Resources: []string{"datavolumes/source"},
+			Verbs:     []string{"*"},
+		},
+		},
+	}
+	_, err := rbac.Instance().CreateClusterRole(clusterRoleDatavolume)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+// creates/updates clusterrolebindings by adding default ServiceAccount in the given namespace
+func createClusterroleBindingDatavolume(clusterRoleName, namespace string) error {
+	newSubject := rbacv1.Subject{Kind: "ServiceAccount", Name: "default", Namespace: namespace}
+
+	// append subjects if clusterrolebinding already exists else create new cluster role binding
+	cB, err := rbac.Instance().GetClusterRoleBinding(dataVolumeClusterroleBinding)
+	if err == nil && cB != nil {
+		cB.Subjects = append(cB.Subjects, newSubject)
+		_, err = rbac.Instance().UpdateClusterRoleBinding(cB)
+	} else {
+		clusterRoleBindingDatavolume := &rbacv1.ClusterRoleBinding{
+			ObjectMeta: meta.ObjectMeta{
+				Name: dataVolumeClusterroleBinding,
+			},
+			Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "default", Namespace: namespace}},
+			RoleRef:  rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: clusterRoleName},
+		}
+		_, err = rbac.Instance().CreateClusterRoleBinding(clusterRoleBindingDatavolume)
+	}
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
 	}
 	return nil
 }
