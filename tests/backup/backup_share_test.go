@@ -43,6 +43,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 		Step("Create Groups", func() {
 			log.InfoD("Creating %d groups", numberOfGroups)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfGroups; i++ {
 				groupName := fmt.Sprintf("testGroup%v", time.Now().Unix())
 				time.Sleep(2 * time.Second)
@@ -52,7 +53,9 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
+					mutex.Lock()
 					groups = append(groups, groupName)
+					mutex.Unlock()
 				}(groupName)
 			}
 			wg.Wait()
@@ -61,6 +64,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 		Step("Create Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfUsers; i++ {
 				userName := fmt.Sprintf("testuser%v", time.Now().Unix())
 				firstName := fmt.Sprintf("FirstName%v", i)
@@ -73,7 +77,9 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
+					mutex.Lock()
 					users = append(users, userName)
+					mutex.Unlock()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -484,6 +490,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		Step("Create Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfUsers; i++ {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
@@ -495,7 +502,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
+					mutex.Lock()
 					users = append(users, userName)
+					mutex.Unlock()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -504,6 +513,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		Step("Create Groups", func() {
 			log.InfoD("Creating %d groups", numberOfGroups)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfGroups; i++ {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
@@ -512,7 +522,9 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
+					mutex.Lock()
 					groups = append(groups, groupName)
+					mutex.Unlock()
 				}(groupName)
 			}
 			wg.Wait()
@@ -943,6 +955,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		Step("Create Users", func() {
 			log.InfoD("Creating %d users to be added to the group", numberOfUsers)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfUsers; i++ {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
@@ -953,7 +966,9 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
+					mutex.Lock()
 					users = append(users, userName)
+					mutex.Unlock()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -962,6 +977,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		Step("Create Groups", func() {
 			log.InfoD("Creating %d groups", numberOfGroups)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfGroups; i++ {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
@@ -970,7 +986,9 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
+					mutex.Lock()
 					groups = append(groups, groupName)
+					mutex.Unlock()
 				}(groupName)
 			}
 			wg.Wait()
@@ -1291,6 +1309,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		Step("Create Users", func() {
 			log.InfoD("Creating %d users to be added to the group", numberOfUsers)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfUsers; i++ {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
@@ -1303,7 +1322,9 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
+					mutex.Lock()
 					users = append(users, userName)
+					mutex.Unlock()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -1319,6 +1340,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		Step("Create Groups", func() {
 			log.InfoD("Creating %d groups", numberOfGroups)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfGroups; i++ {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
@@ -1327,7 +1349,9 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
+					mutex.Lock()
 					groups = append(groups, groupName)
+					mutex.Unlock()
 				}(groupName)
 			}
 			wg.Wait()
@@ -1827,6 +1851,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		Step("Create Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfUsers; i++ {
 				userName := fmt.Sprintf("testuser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
@@ -1838,7 +1863,9 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
+					mutex.Lock()
 					users = append(users, userName)
+					mutex.Unlock()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -3974,6 +4001,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		Step("Create Users", func() {
 			log.InfoD("Creating %d users", numberOfUsers)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			for i := 1; i <= numberOfUsers; i++ {
 				time.Sleep(3 * time.Second)
 				userName := fmt.Sprintf("testautouser%v", time.Now().Unix())
@@ -3986,7 +4014,9 @@ var _ = Describe("{SwapShareBackup}", func() {
 					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 					log.FailOnError(err, "Failed to create user - %s", userName)
+					mutex.Lock()
 					users = append(users, userName)
+					mutex.Unlock()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
