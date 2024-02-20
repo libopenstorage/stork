@@ -100,13 +100,14 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "one-live-migr"
 
-	ctxs := kubevirtVMsDeployAndValidate(
+	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
 		[]string{
 			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
 			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
 		},
+		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
@@ -153,13 +154,14 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "two-live-migr"
 
-	ctxs := kubevirtVMsDeployAndValidate(
+	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
 		[]string{
 			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
 			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
 		},
+		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
@@ -214,12 +216,13 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "hotplug-colo"
 
-	ctxs := kubevirtVMsDeployAndValidate(
+	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
 		[]string{
 			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer",
 		},
+		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
@@ -248,12 +251,13 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vps-fix-job"
 
-	ctxs := kubevirtVMsDeployAndValidate(
+	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
 		[]string{
 			"kubevirt-fedora-no-vps",
 		},
+		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
