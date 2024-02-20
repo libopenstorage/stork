@@ -1737,6 +1737,11 @@ func (c *Controller) restoreSnapshot(ctx context.Context, snapshotDriver snapsho
 
 func (c *Controller) createPVC(dataExport *kdmpapi.DataExport) (*corev1.PersistentVolumeClaim, error) {
 	pvc := dataExport.Status.RestorePVC
+	if pvc.Spec.Selector != nil {
+		// Remove the labelselector, as it is a dynamic provisioning.
+		logrus.Infof("createPVC: dataexport %v/%v pvc.Spec.Selector: %v", dataExport.Name, dataExport.Namespace, pvc.Spec.Selector)
+		pvc.Spec.Selector = nil
+	}
 	newPVC, err := core.Instance().CreatePersistentVolumeClaim(pvc)
 	if err != nil {
 		if k8sErrors.IsAlreadyExists(err) {
