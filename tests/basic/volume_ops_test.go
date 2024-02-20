@@ -1520,9 +1520,10 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 	var pxNode node.Node
 	var contexts []*scheduler.Context
 	var volumrlidttr []*api.Volume
-	var applist = Inst().AppList
+
 	stepLog := "Create fastpath Volume reboot node and check if fastpath is active"
 	It(stepLog, func() {
+		applist := Inst().AppList
 		log.InfoD(stepLog)
 		revertAppList := func() {
 			Inst().AppList = applist

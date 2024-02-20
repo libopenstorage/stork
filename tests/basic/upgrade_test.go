@@ -48,9 +48,8 @@ var _ = Describe("{UpgradeStork}", func() {
 	})
 	var contexts []*scheduler.Context
 
-	for i := 0; i < Inst().GlobalScaleFactor; i++ {
-
-		It("upgrade Stork and ensure everything is running fine", func() {
+	It("upgrade Stork and ensure everything is running fine", func() {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			log.InfoD("upgrade Stork and ensure everything is running fine")
 			contexts = make([]*scheduler.Context, 0)
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradestork-%d", i))...)
@@ -96,9 +95,9 @@ var _ = Describe("{UpgradeStork}", func() {
 					TearDownContext(ctx, opts)
 				}
 			})
+		}
 
-		})
-	}
+	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
