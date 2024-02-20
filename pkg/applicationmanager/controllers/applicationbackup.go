@@ -132,6 +132,7 @@ type ApplicationBackupController struct {
 	reconcileTime        time.Duration
 	vmIncludeResource    map[string][]stork_api.ObjectInfo
 	vmIncludeResourceMap map[string]map[stork_api.ObjectInfo]bool
+	vmNsListMap          map[string]map[string]bool
 }
 
 // Init Initialize the application backup controller
@@ -151,6 +152,7 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 	a.execRulesCompleted = make(map[string]bool)
 	a.vmIncludeResource = make(map[string][]stork_api.ObjectInfo)
 	a.vmIncludeResourceMap = make(map[string]map[stork_api.ObjectInfo]bool)
+	a.vmNsListMap = make(map[string]map[string]bool)
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
 
@@ -320,6 +322,10 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			if _, ok := a.vmIncludeResourceMap[string(backup.UID)]; ok {
 				delete(a.vmIncludeResourceMap, string(backup.UID))
 				log.ApplicationBackupLog(backup).Infof("cleaning up vmIncludeResources for VM backupObjectType")
+			}
+			if _, ok := a.vmNsListMap[string(backup.UID)]; ok {
+				delete(a.vmNsListMap, string(backup.UID))
+				log.ApplicationBackupLog(backup).Infof("cleaning up vmNsListMap for VM backupObjectType")
 			}
 			// Calling cleanupResources which will cleanup the resources created by applicationbackup controller. Including the post exec rule CR for manual backup when created through the px-backup
 			// In the case of kdmp driver, it will cleanup the dataexport CRs.
@@ -726,6 +732,11 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 		var pvcCount int
 		for _, namespace := range backup.Spec.Namespaces {
+			if !a.isNsPresentForVmBackup(backup, namespace) {
+				// For VM Backup, if namespace does not have any VMs to backup we would
+				// want to skip the volumes from this namespace for backup.
+				continue
+			}
 			pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
 			if err != nil {
 				return fmt.Errorf("error getting list of volumes to backup: %v", err)
@@ -1748,6 +1759,11 @@ func (a *ApplicationBackupController) backupResources(
 		var incResNsBatch []string
 		var resourceTypeNsBatch []string
 		for _, ns := range batch {
+			if !a.isNsPresentForVmBackup(backup, ns) {
+				// For VM Backup, if namespace does not have any VMs to backup we would
+				// want to skip resources from this namespace for backup.
+				continue
+			}
 			// As we support both includeResource and ResourceType to be mentioned
 			// match out ns for which we want to take includeResource path and
 			// for which we want to take ResourceType path
@@ -1758,7 +1774,7 @@ func (a *ApplicationBackupController) backupResources(
 					incResNsBatch = append(incResNsBatch, ns)
 				}
 			} else {
-				incResNsBatch = batch
+				incResNsBatch = append(incResNsBatch, ns)
 			}
 		}
 		if len(incResNsBatch) != 0 {
@@ -2416,13 +2432,15 @@ func (a *ApplicationBackupController) createVMIncludeResources(backup *stork_api
 	if err != nil {
 		return nil, nil, err
 	}
+	nsMap := make(map[string]bool)
 	// Second fetch VM resources from the list of filtered VMs and freeze/thaw rule for each of them.
 	vmIncludeResources, objectMap, preExecRule, postExecRule := resourcecollector.GetVMIncludeResourceInfoList(vmList,
-		objectMap, backup.Spec.SkipAutoExecRules)
+		objectMap, nsMap, backup.Spec.SkipAutoExecRules)
 
 	// update in memory data structure for later use.
 	a.vmIncludeResourceMap[string(backup.UID)] = objectMap
 	a.vmIncludeResource[string(backup.UID)] = vmIncludeResources
+	a.vmNsListMap[string(backup.UID)] = nsMap
 
 	if len(preExecRule) <= 0 || len(postExecRule) <= 0 {
 		// No VMs needed free/thaw rule, skip creating ruleCr
@@ -2439,4 +2457,15 @@ func (a *ApplicationBackupController) createVMIncludeResources(backup *stork_api
 // IsBackupObjectTypeVirtualMachine returns true if backupObjectType is VirtualMachine
 func IsBackupObjectTypeVirtualMachine(backup *stork_api.ApplicationBackup) bool {
 	return backup.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine
+}
+
+// isNsPresentForVmBackup check if namspace had any VMs to backup.
+func (a *ApplicationBackupController) isNsPresentForVmBackup(backup *stork_api.ApplicationBackup, ns string) bool {
+
+	if !IsBackupObjectTypeVirtualMachine(backup) {
+		return true
+	}
+	nsMap := a.vmNsListMap[string(backup.UID)]
+	return nsMap[ns]
+
 }

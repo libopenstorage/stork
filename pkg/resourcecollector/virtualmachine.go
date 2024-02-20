@@ -481,7 +481,7 @@ func GetVMIncludeListFromBackup(backup *storkapi.ApplicationBackup) (
 
 // GetVMIncludeResourceInfoList returns VMs and VM resources in IncludeResource format.
 // Also returns preExec and postExec rule Item with freeze/thaw rule for each of the filter VMs
-func GetVMIncludeResourceInfoList(vmList []kubevirtv1.VirtualMachine, objectMap map[storkapi.ObjectInfo]bool, skipAutoVMRule bool) (
+func GetVMIncludeResourceInfoList(vmList []kubevirtv1.VirtualMachine, objectMap map[storkapi.ObjectInfo]bool, nsMap map[string]bool, skipAutoVMRule bool) (
 	[]storkapi.ObjectInfo,
 	map[storkapi.ObjectInfo]bool,
 	[]storkapi.RuleItem,
@@ -503,6 +503,9 @@ func GetVMIncludeResourceInfoList(vmList []kubevirtv1.VirtualMachine, objectMap 
 			},
 			Name:      vm.Name,
 			Namespace: vm.Namespace,
+		}
+		if !nsMap[vm.Namespace] {
+			nsMap[vm.Namespace] = true
 		}
 		// We would have mapped vmInfo specified in backup.Spec.IncludeResource but,
 		// VMList from namespaces would not have been. Map them here.
