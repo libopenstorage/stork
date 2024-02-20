@@ -88,10 +88,9 @@ func IsPKS() bool {
 	if isOpBased {
 		log.Info("This is PX Operator based install, checking if StorageCluster has PKS annotation set to true...")
 		spec, err := Inst().V.GetDriver()
-		Expect(err).ToNot(HaveOccurred())
+		log.FailOnError(err, "Failed to get StorageCluster object")
 		isPks, err := strconv.ParseBool(spec.Annotations["portworx.io/is-pks"])
-		Expect(err).ToNot(HaveOccurred())
-		return isOpBased && isPks
+		return err == nil && isPks
 	}
 	log.Warn("This is not PX Operator based install, will not be able to check if this is PKS cluster or not")
 	return false
