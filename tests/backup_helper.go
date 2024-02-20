@@ -2067,6 +2067,8 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 							expectedVolumeDriver = "kdmp"
 						case string(NativeCSI):
 							expectedVolumeDriver = "csi"
+						case string(NativeAzure):
+							expectedVolumeDriver = "azure"
 						case string(DirectKDMP):
 							expectedVolumeDriver = "kdmp"
 						default:
@@ -2082,6 +2084,8 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 							switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 							case string(NativeCSI):
 								log.Infof("in case of native CSI backup volumes in backup object is not updated with storage class")
+							case string(NativeAzure):
+								log.Infof("in case of native azure backup volumes in backup object is not updated with storage class")
 							default:
 								err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
 								errors = append(errors, err)
@@ -2590,6 +2594,8 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 					expectedVolumeDriver = "csi"
 				case string(DirectKDMP):
 					expectedVolumeDriver = "kdmp"
+				case string(NativeAzure):
+					expectedVolumeDriver = "azure"
 				default:
 					expectedVolumeDriver = Inst().V.String()
 				}
@@ -4279,6 +4285,7 @@ const (
 	NativeCSIWithOffloadToS3 BackupTypeForCSI = "csi_offload_s3"
 	NativeCSI                BackupTypeForCSI = "native_csi"
 	DirectKDMP               BackupTypeForCSI = "direct_kdmp"
+	NativeAzure              BackupTypeForCSI = "azure"
 )
 
 // AdditionalBackupRequestParams decorates the backupRequest with additional parameters required
@@ -4296,6 +4303,15 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
+		backupRequest.BackupType = api.BackupCreateRequest_Normal
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(NativeAzure):
+		log.Infof("Detected backup type - %s", NativeAzure)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
 		var csiSnapshotClassName string
 		var err error
@@ -4327,6 +4343,15 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(NativeAzure):
+		log.Infof("Detected backup type - %s", NativeAzure)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
 		var csiSnapshotClassName string
 		var err error

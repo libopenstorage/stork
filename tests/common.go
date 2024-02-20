@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bufio"
-	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -10,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
+	"cloud.google.com/go/storage"
 
 	"github.com/portworx/torpedo/drivers/node/gke"
 	"google.golang.org/api/iterator"
@@ -4456,7 +4457,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
+		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
@@ -7508,7 +7509,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if currentSpecReport.Failed() {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-
 	// Cleanup all the namespaces created by the testcase
 	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
@@ -7530,7 +7530,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
-
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
