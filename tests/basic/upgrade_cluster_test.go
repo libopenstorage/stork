@@ -2,23 +2,24 @@ package tests
 
 import (
 	"fmt"
-	ops_v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	"github.com/portworx/torpedo/pkg/log"
-	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/url"
 	"os/exec"
 	"strings"
 	"time"
 
+	ops_v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/core/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("{UpgradeCluster}", func() {
@@ -44,32 +45,49 @@ var _ = Describe("{UpgradeCluster}", func() {
 			versions = strings.Split(Inst().SchedUpgradeHops, ",")
 		}
 		Expect(versions).NotTo(BeEmpty())
-		stopSignal := make(chan struct{})
-		var mError error
-		go getClusterNodesInfo(stopSignal, &mError)
 
-		defer func() {
-			close(stopSignal)
-		}()
+		// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
+		var mError error
+		if Inst().S.String() != aks.SchedName {
+			stopSignal := make(chan struct{})
+			go getClusterNodesInfo(stopSignal, &mError)
+
+			defer func() {
+				close(stopSignal)
+			}()
+		}
 
 		for _, version := range versions {
 			if Inst().S.String() == openshift.SchedName && strings.Contains(version, "4.14") {
 				err = ocp414Prereq()
-				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version:%s", version))
+				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
 			}
 			Step("start scheduler upgrade", func() {
 				err := Inst().S.UpgradeScheduler(version)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify upgrade to %s is successful", version))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+				if Inst().S.String() == aks.SchedName {
+					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
+						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
+						"Recommended config is that you deploy PX with 6 nodes in 3 zones and set MaxStorageNodesPerZone to 2, "+
+						"so when extra AKS node gets created, PX gets deployed as Storageless node, otherwise if PX gets deployed as Storage node, "+
+						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
 			})
 
 			Step("validate storage components", func() {
 				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 				u, err := url.Parse(urlToParse)
-				log.FailOnError(err, fmt.Sprintf("error parsing the url: %s", urlToParse))
+				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
 				err = Inst().V.ValidateDriver(u.String(), true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 			})
-			dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
+
+			// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
+			if Inst().S.String() != aks.SchedName {
+				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
+			}
 
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)

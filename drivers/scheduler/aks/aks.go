@@ -3,29 +3,35 @@ package aks
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"os"
 	"time"
 
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/azure"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
 )
 
 const (
-	// DriverName is the name of the aks driver
-	DriverName    = "aks"
-	azCli         = "az"
-	AKSPXNodepool = "nodepool1"
+	// SchedName is the name of the kubernetes scheduler driver implementation
+	SchedName = "aks"
+
+	// az is the CLI to perform AKS commands
+	azCli = "az"
+
+	defaultAksInstanceGroupName = "nodepool1"
+	defaultAksUpgradeTimeout    = 90 * time.Minute
+	defaultAksUpgradeInterval   = 5 * time.Minute
 )
 
 type aks struct {
-	ssh.SSH
+	kube.K8s
 	ops           cloudops.Ops
 	instanceGroup string
+	clusterName   string
 }
 
 type AKSCluster struct {
@@ -207,18 +213,22 @@ type AKSCluster struct {
 	} `json:"workloadAutoScalerProfile"`
 }
 
+// String returns the string name of this driver.
 func (a *aks) String() string {
-	return DriverName
+	return SchedName
 }
 
-func (a *aks) Init(nodeOpts node.InitOptions) error {
-	a.SSH.Init(nodeOpts)
+func init() {
+	a := &aks{}
+	scheduler.Register(SchedName, a)
+}
 
+func (a *aks) Init(schedOpts scheduler.InitOptions) error {
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
 		a.instanceGroup = instanceGroup
 	} else {
-		a.instanceGroup = "nodepool1"
+		a.instanceGroup = defaultAksInstanceGroupName
 	}
 
 	ops, err := azure.NewClientFromMetadata()
@@ -227,106 +237,27 @@ func (a *aks) Init(nodeOpts node.InitOptions) error {
 	}
 	a.ops = ops
 
-	return nil
-}
-
-func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
-	// Azure SDK requires total cluster size
-	zones, err := a.GetZones()
-	if err != nil {
+	if err := a.AzureLogin(); err != nil {
 		return err
 	}
-	totalClusterSize := perZoneCount * int64(len(zones))
-	err = a.ops.SetInstanceGroupSize(a.instanceGroup, totalClusterSize, timeout)
+
+	err = a.K8s.Init(schedOpts)
 	if err != nil {
-		log.Errorf("failed to set size of node pool %s. Error: %v", a.instanceGroup, err)
 		return err
 	}
 
 	return nil
 }
 
-func (a *aks) GetASGClusterSize() (int64, error) {
-	nodeCount, err := a.ops.GetInstanceGroupSize(a.instanceGroup)
-	if err != nil {
-		log.Errorf("failed to get size of node pool %s. Error: %v", a.instanceGroup, err)
-		return 0, err
-	}
-
-	return nodeCount, nil
-}
-
-func (a *aks) GetZones() ([]string, error) {
-
-	aksCluster, err := GetAKSCluster()
-
-	if err != nil {
-		return []string{""}, err
-	}
-
-	agentProfiles := aksCluster.AgentPoolProfiles
-
-	for _, profile := range agentProfiles {
-		if profile.Name == AKSPXNodepool {
-			return profile.AvailabilityZones, nil
-		}
-	}
-
-	return []string{""}, fmt.Errorf("profile with name %s not found", AKSPXNodepool)
-}
-
-func (a *aks) SetClusterVersion(version string, timeout time.Duration) error {
-
-	err := azLogin()
-	if err != nil {
-		return err
-	}
-
-	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
-
-	cmd := fmt.Sprintf("%s aks upgrade --resource-group %s --name %s  --kubernetes-version %s --control-plane-only --no-wait --yes", azCli, envAzureClusterName, envAzureClusterName, version)
-	stdout, stderr, err := osutils.ExecShell(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to set cluser %s master version to %s. Error: %v %v %v", envAzureClusterName, version, stderr, err, stdout)
-	}
-	log.Infof("Initiated AKS upgrade successfully.")
-
-	return nil
-}
-
-func init() {
-	a := &aks{
-		SSH: *ssh.New(),
-	}
-
-	node.Register(DriverName, a)
-}
-
-func UpgradeNodePool(nodePoolName, version string) error {
-	err := azLogin()
-	if err != nil {
-		return err
-	}
-
-	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
-
-	cmd := fmt.Sprintf("%s aks nodepool upgrade --resource-group %s --cluster-name %s --nodepool-name %s  --kubernetes-version %s --no-wait --yes", azCli, envAzureClusterName, envAzureClusterName, nodePoolName, version)
-	stdout, stderr, err := osutils.ExecShell(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to set cluser %s master version to %s. Error: %v %v %v", envAzureClusterName, version, stderr, err, stdout)
-	}
-	log.Infof("Initiated AKS upgrade successfully.")
-
-	return nil
-}
-
-func azLogin() error {
-	log.Infof("authenticating with Azure")
+func (a *aks) AzureLogin() error {
+	log.Info("Authenticating with Azure")
 
 	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
 	if envAzureClusterName == "" {
 		return fmt.Errorf("environment variable AZURE_CLUSTER_NAME is not defined")
 	}
+	a.clusterName = envAzureClusterName
+
 	envAzureClientId := os.Getenv("AZURE_CLIENT_ID")
 	if envAzureClientId == "" {
 		return fmt.Errorf("environment variable AZURE_CLIENT_ID is not defined")
@@ -345,88 +276,181 @@ func azLogin() error {
 	cmd := fmt.Sprintf("%s login --service-principal --username %s --password %s --tenant %s", azCli, envAzureClientId, envAzureClientSecret, envAzureTenantId)
 	_, stdErr, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("error while doing `az login`, Err: %v %v", err, stdErr)
+		return fmt.Errorf("failed performing `az login`, Err: %v %v", err, stdErr)
 	}
-	log.Debug("[%s] successfully authenticated with Azure", envAzureClusterName)
+	log.Info("Successfully authenticated with Azure")
 	return nil
 }
 
-func GetAKSCluster() (AKSCluster, error) {
-	err := azLogin()
+func (a *aks) UpgradeScheduler(version string) error {
+	aksCluster, err := a.GetAKSCluster()
 	if err != nil {
-		return AKSCluster{}, err
+		return fmt.Errorf("failed to get AKS cluster, Err: %v", err)
 	}
-	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
+	log.Infof("Starting AKS cluster upgrade from [%s] to [%s]", aksCluster.CurrentKubernetesVersion, version)
 
-	cmd := fmt.Sprintf("%s aks show -g %s -n %s --output json", azCli, envAzureClusterName, envAzureClusterName)
+	// Set version to upgrade to
+	if err := a.UpgradeControlPlane(version); err != nil {
+		return fmt.Errorf("failed to set AKS cluster version, Err: %v", err)
+	}
+
+	// Wait for Control Plane to be upgraded
+	if err := a.WaitForControlPlaneToUpgrade(version); err != nil {
+		return fmt.Errorf("failed to wait for AKS Control Plane to be upgraded to [%s], Err: %v", version, err)
+	}
+
+	// Upgrade node pool
+	if err := a.UpgradeNodePool(a.instanceGroup, version); err != nil {
+		return fmt.Errorf("failed to upgrade AKS Node Pool [%s] to [%s], Err: %v", a.instanceGroup, version, err)
+	}
+
+	// Wait for Node Poll to be upgraded
+	if err := a.WaitForAKSNodePoolToUpgrade(a.instanceGroup, version); err != nil {
+		return fmt.Errorf("failed to wait for AKS Node Pool [%s] to be upgraded to [%s], Err: %v", a.instanceGroup, version, err)
+	}
+
+	log.Infof("Successfully finished AKS cluster [%s] upgrade from [%s] to [%s]", aksCluster.Name, aksCluster.CurrentKubernetesVersion, version)
+	return nil
+}
+
+func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// Azure SDK requires total cluster size
+	zones, err := a.GetZones()
+	if err != nil {
+		return err
+	}
+
+	totalClusterSize := perZoneCount * int64(len(zones))
+	if err := a.ops.SetInstanceGroupSize(a.instanceGroup, totalClusterSize, timeout); err != nil {
+		return fmt.Errorf("failed to set size of node pool %s. Error: %v", a.instanceGroup, err)
+	}
+	return nil
+}
+
+func (a *aks) GetASGClusterSize() (int64, error) {
+	nodeCount, err := a.ops.GetInstanceGroupSize(a.instanceGroup)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get size of node pool %s. Error: %v", a.instanceGroup, err)
+	}
+
+	return nodeCount, nil
+}
+
+func (a *aks) GetZones() ([]string, error) {
+	aksCluster, err := a.GetAKSCluster()
+	if err != nil {
+		return []string{""}, err
+	}
+	agentProfiles := aksCluster.AgentPoolProfiles
+
+	for _, profile := range agentProfiles {
+		if profile.Name == a.instanceGroup {
+			return profile.AvailabilityZones, nil
+		}
+	}
+
+	return []string{""}, fmt.Errorf("profile with name %s not found", a.instanceGroup)
+}
+
+// UpgradeControlPlane Upgrades Control Plane only to a specific version
+func (a *aks) UpgradeControlPlane(version string) error {
+	log.Infof("Upgrade AKS Control Plane to [%s]", version)
+	cmd := fmt.Sprintf("%s aks upgrade --resource-group %s --name %s  --kubernetes-version %s --control-plane-only --no-wait --yes", azCli, a.clusterName, a.clusterName, version)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to set cluser [%s] version to [%s], Err: %v %v %v", a.clusterName, version, stderr, err, stdout)
+	}
+	log.Infof("Initiated AKS Control Place upgrade to [%s] successfully", version)
+	return nil
+}
+
+// UpgradeNodePool Upgrades Node Pool to specified version
+func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
+	log.Infof("Upgrade AKS Node Pool [%s] to [%s]", nodePoolName, version)
+	cmd := fmt.Sprintf("%s aks nodepool upgrade --resource-group %s --cluster-name %s --nodepool-name %s  --kubernetes-version %s --no-wait --yes", azCli, a.clusterName, a.clusterName, nodePoolName, version)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to set cluser [%s] version to [%s], Err: %v %v %v", a.clusterName, version, stderr, err, stdout)
+	}
+	log.Infof("Initiated AKS Node Pool [%s] upgrade to [%s] successfully", nodePoolName, version)
+	return nil
+}
+
+// GetAKSCluster Gets and return AKS cluster object
+func (a *aks) GetAKSCluster() (AKSCluster, error) {
+	log.Info("Get AKS cluster object")
+	var aksCluster AKSCluster
+
+	cmd := fmt.Sprintf("%s aks show -g %s -n %s --output json", azCli, a.clusterName, a.clusterName)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return AKSCluster{}, fmt.Errorf("failed to get workers list info. Error: %v %v %v", stderr, err, stdout)
 	}
-	var aksCluster AKSCluster
-	err = json.Unmarshal([]byte(stdout), &aksCluster)
-	if err != nil {
-		return AKSCluster{}, err
-	}
 
+	if err := json.Unmarshal([]byte(stdout), &aksCluster); err != nil {
+		return AKSCluster{}, fmt.Errorf("failed to unmarshal AKS cluster object to json struct, Err: %v", err)
+	}
+	log.Infof("Successfully got AKS cluster [%s] object", aksCluster.Name)
 	return aksCluster, nil
-
 }
 
-func WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
+// WaitForAKSNodePoolToUpgrade Waits for AKS Node Pool to be upgraded to a specific version
+func (a *aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
+	log.Infof("Waiting for AKS Node Pool [%s] to be upgraded to [%s]", nodePoolName, version)
+	expectedUpgradeStatus := "Succeeded"
+
 	t := func() (interface{}, bool, error) {
-
-		aksCluster, err := GetAKSCluster()
-
+		aksCluster, err := a.GetAKSCluster()
 		if err != nil {
 			return nil, false, err
 		}
 
+		foundNodePool := false
 		for _, profile := range aksCluster.AgentPoolProfiles {
-			if profile.Name == nodePoolName && profile.ProvisioningState == "Upgrading" {
-				return nil, true, fmt.Errorf("waiting for node pool %s upgrade complete.Current status : %s", nodePoolName, aksCluster.ProvisioningState)
-			}
-			if profile.Name == nodePoolName && profile.ProvisioningState == "Failed" {
-				return nil, false, fmt.Errorf("node pool %s update to %s failed", nodePoolName, version)
-			}
-			if profile.Name == nodePoolName && profile.ProvisioningState == "Succeeded" {
-				return nil, false, nil
+			if profile.Name == nodePoolName {
+				foundNodePool = true
+				if profile.ProvisioningState != expectedUpgradeStatus {
+					return nil, true, fmt.Errorf("waiting for AKS Node Pool [%s] upgrade to [%s] to complete, expected status [%s], actual status [%s]", nodePoolName, version, expectedUpgradeStatus, profile.ProvisioningState)
+				}
 			}
 		}
 
-		return nil, false, fmt.Errorf("node pool %s update to %s timed out", nodePoolName, version)
-	}
-	_, err := task.DoRetryWithTimeout(t, 90*time.Minute, 3*time.Minute)
-
-	return err
-
-}
-
-func WaitForControlPlaneToUpgrade(version string) error {
-	t := func() (interface{}, bool, error) {
-
-		aksCluster, err := GetAKSCluster()
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		if aksCluster.ProvisioningState == "Upgrading" {
-			return nil, true, fmt.Errorf("waiting for upgrade complete.Current status : %s", aksCluster.ProvisioningState)
-		}
-
-		if aksCluster.ProvisioningState == "Failed" {
-			return nil, false, fmt.Errorf("control-plane update to %s failed", version)
-		}
-
-		if aksCluster.ProvisioningState == "Succeeded" {
+		if foundNodePool {
+			log.Infof("Upgrade status for AKS Node Pool [%s] to [%s] is [%s]", nodePoolName, version, expectedUpgradeStatus)
 			return nil, false, nil
 		}
-
-		return nil, false, fmt.Errorf("control-plane update to %s timed out", version)
+		return nil, false, fmt.Errorf("failed to find AKS Node Pool [%s]", nodePoolName)
 	}
-	_, err := task.DoRetryWithTimeout(t, 90*time.Minute, 3*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, defaultAksUpgradeTimeout, defaultAksUpgradeInterval)
+	if err != nil {
+		return fmt.Errorf("failed to upgrade AKS Node Pool [%s] version to [%s], Err: %v", nodePoolName, version, err)
+	}
+	log.Infof("Successfully upgraded AKS Node Pool [%s] to [%s]", nodePoolName, version)
+	return nil
+}
 
-	return err
+// WaitForControlPlaneToUpgrade Waits for AKS Control Plane to be upgraded to a specific version
+func (a *aks) WaitForControlPlaneToUpgrade(version string) error {
+	log.Infof("Waiting for AKS Control Plane to be upgraded to [%s]", version)
+	expectedUpgradeStatus := "Succeeded"
 
+	t := func() (interface{}, bool, error) {
+		aksCluster, err := a.GetAKSCluster()
+		if err != nil {
+			return nil, false, err
+		}
+
+		if aksCluster.ProvisioningState != expectedUpgradeStatus {
+			return nil, true, fmt.Errorf("waiting for AKS Control Plane upgrade to [%s] to complete, expected status [%s], actual status [%s]", version, expectedUpgradeStatus, aksCluster.ProvisioningState)
+		}
+
+		log.Infof("Upgrade status for AKS Control Plane to [%s] is [%s]", version, aksCluster.ProvisioningState)
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultAksUpgradeTimeout, defaultAksUpgradeInterval)
+	if err != nil {
+		return fmt.Errorf("failed to upgrade AKS Control Plane version to [%s], Err: %v", version, err)
+	}
+	log.Infof("Successfully upgraded AKS Control Plane to [%s]", version)
+	return nil
 }

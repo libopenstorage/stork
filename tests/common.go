@@ -113,7 +113,6 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
@@ -142,6 +141,11 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
+
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import scheduler drivers to invoke it's init
 	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
