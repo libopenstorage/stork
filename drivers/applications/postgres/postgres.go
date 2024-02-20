@@ -61,11 +61,12 @@ func (app *PostgresConfig) DefaultPort() int { return 5432 }
 func (app *PostgresConfig) DefaultDBName() string { return "postgres" }
 
 // ExecuteCommand executes a SQL command for postgres database
-func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context) error {
+func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context) ([]string, error) {
 
+	var dummy []string
 	conn, err := app.GetConnection(ctx)
 	if err != nil {
-		return err
+		return dummy, err
 	}
 
 	defer conn.Close(ctx)
@@ -73,10 +74,10 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 	for _, eachCommand := range commands {
 		_, err = conn.Exec(ctx, eachCommand)
 		if err != nil {
-			return err
+			return dummy, err
 		}
 	}
-	return nil
+	return dummy, nil
 }
 
 // InsertBackupData inserts the rows generated initially by utilities or rows passed
@@ -86,10 +87,10 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier stri
 	log.InfoD("Inserting data")
 	if len(commnads) == 0 {
 		log.Infof("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
-		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
+		_, err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
 	} else {
 		log.Infof("Inserting below data : %s", strings.Join(commnads, "\n"))
-		err = app.ExecuteCommand(commnads, ctx)
+		_, err = app.ExecuteCommand(commnads, ctx)
 	}
 
 	return err
@@ -144,7 +145,7 @@ func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.
 func (app *PostgresConfig) UpdateBackupData(ctx context.Context, identifier string) error {
 
 	log.InfoD("Running Update Queries")
-	err := app.ExecuteCommand(app.SQLCommands[identifier]["update"], ctx)
+	_, err := app.ExecuteCommand(app.SQLCommands[identifier]["update"], ctx)
 
 	return err
 }
@@ -153,7 +154,7 @@ func (app *PostgresConfig) UpdateBackupData(ctx context.Context, identifier stri
 func (app *PostgresConfig) DeleteBackupData(ctx context.Context, identifier string) error {
 
 	log.InfoD("Running Delete Queries")
-	err := app.ExecuteCommand(app.SQLCommands[identifier]["delete"], ctx)
+	_, err := app.ExecuteCommand(app.SQLCommands[identifier]["delete"], ctx)
 
 	return err
 }
@@ -169,7 +170,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 		key varchar(45) NOT NULL,
 		value varchar(45) NOT NULL
 	  )`, tableName)
-	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
+	_, err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
 		allErrors = append(allErrors, err.Error())
 	}
@@ -207,7 +208,7 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 
 	commandPair := GenerateSQLCommandPair(tableName, Postgres)
 
-	err := app.ExecuteCommand(commandPair["insert"], ctx)
+	_, err := app.ExecuteCommand(commandPair["insert"], ctx)
 	if err != nil {
 		return commandPair, err
 	}
@@ -240,4 +241,10 @@ func (app *PostgresConfig) GetApplicationType() string {
 // Get Namespace of the app
 func (app *PostgresConfig) GetNamespace() string {
 	return app.Namespace
+}
+
+// WaitForVMToBoot waits for VM to boot
+func (app *PostgresConfig) WaitForVMToBoot() error {
+	log.Warnf("Not implemented for Mysql")
+	return nil
 }

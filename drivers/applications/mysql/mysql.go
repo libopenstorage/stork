@@ -62,12 +62,13 @@ func (app *MySqlConfig) DefaultPort() int { return 3306 }
 func (app *MySqlConfig) DefaultDBName() string { return "mysql" }
 
 // ExecuteCommand executes a SQL command for mysql database
-func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) error {
+func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) ([]string, error) {
 
+	var dummy []string
 	conn, err := app.GetConnection(ctx)
 
 	if err != nil {
-		return err
+		return dummy, err
 	}
 
 	defer conn.Close()
@@ -75,10 +76,10 @@ func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) e
 	for _, eachCommand := range commands {
 		_, err = conn.ExecContext(ctx, eachCommand)
 		if err != nil {
-			return err
+			return dummy, err
 		}
 	}
-	return nil
+	return dummy, nil
 }
 
 // InsertBackupData inserts the rows generated initially by utilities or rows passed
@@ -88,10 +89,10 @@ func (app *MySqlConfig) InsertBackupData(ctx context.Context, identifier string,
 	log.InfoD("Inserting data")
 	if len(commnads) == 0 {
 		log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
-		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
+		_, err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
 	} else {
 		log.InfoD("Inserting below data : %s", strings.Join(commnads, "\n"))
-		err = app.ExecuteCommand(commnads, ctx)
+		_, err = app.ExecuteCommand(commnads, ctx)
 	}
 
 	return err
@@ -144,7 +145,7 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 
 	log.InfoD("Running Update Queries")
-	err := app.ExecuteCommand(app.SQLCommands["default"]["update"], ctx)
+	_, err := app.ExecuteCommand(app.SQLCommands["default"]["update"], ctx)
 
 	return err
 }
@@ -153,7 +154,7 @@ func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 
 	log.InfoD("Running Delete Queries")
-	err := app.ExecuteCommand(app.SQLCommands["default"]["delete"], ctx)
+	_, err := app.ExecuteCommand(app.SQLCommands["default"]["delete"], ctx)
 
 	return err
 }
@@ -169,7 +170,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 		`+"`key` "+`VARCHAR(45) NOT NULL,
 		value VARCHAR(255)
 	  )`, tableName)
-	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
+	_, err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
 		log.InfoD("Error while creating table - [%s]", err.Error())
 		allErrors = append(allErrors, err.Error())
@@ -208,7 +209,7 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 
 	commandPair := GenerateSQLCommandPair(tableName, MySql)
 
-	err := app.ExecuteCommand(commandPair["insert"], ctx)
+	_, err := app.ExecuteCommand(commandPair["insert"], ctx)
 	if err != nil {
 		return commandPair, err
 	}
@@ -241,4 +242,10 @@ func (app *MySqlConfig) GetApplicationType() string {
 // Get Namespace of the app
 func (app *MySqlConfig) GetNamespace() string {
 	return app.Namespace
+}
+
+// WaitForVMToBoot waits for VM to boot
+func (app *MySqlConfig) WaitForVMToBoot() error {
+	log.Warnf("Not implemented for Mysql")
+	return nil
 }

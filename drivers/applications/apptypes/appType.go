@@ -4,6 +4,7 @@ package applications
 const (
 	MySql    = "mysql"
 	Postgres = "postgres"
+	Kubevirt = "kubevirt"
 )
 
 // Commands to start, pause or stop data

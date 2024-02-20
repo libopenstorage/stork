@@ -12,6 +12,7 @@ import (
 
 	"cloud.google.com/go/storage"
 
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/node/gke"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -1952,7 +1953,7 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
 	// Resetting the global map before starting the new App Validations
 	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
@@ -1960,17 +1961,17 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 	log.InfoD("Validate applications")
 	for _, ctx := range contexts {
 		ValidateContext(ctx)
-		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
 		if err != nil {
 			log.InfoD("Some error occurred - [%s]", err)
 		}
 		log.InfoD("App Info - [%+v]", appInfo)
-		if appContext == nil {
-			log.Warnf("App Context is not proper - [%v]", appContext)
+		if context == nil {
+			log.Warnf("App Context is not proper - [%v]", context)
 			continue
 		}
 		if appInfo.StartDataSupport {
-			appHandler, _ := appDriver.GetApplicationDriver(
+			appHandler, err := appDriver.GetApplicationDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -1978,7 +1979,16 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 				appInfo.Port,
 				appInfo.DBName,
 				appInfo.NodePort,
-				appInfo.Namespace)
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
+			if err != nil {
+				log.Infof("Error - %s", err.Error())
+			}
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				log.FailOnError(err, "Some error occured while starting the VM")
+			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 		}
@@ -1991,7 +2001,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 		for _, handler := range allhandler {
 			currentHandler := handler
 			errGroup.Go(func() error {
-				err := currentHandler.StartData(controlChannel, appContext)
+				err := currentHandler.StartData(controlChannel, context)
 				return err
 			})
 		}
