@@ -188,7 +188,7 @@ func (s *ApplicationBackupScheduleController) updateApplicationBackupStatus(back
 					s.recorder.Event(backupSchedule,
 						v1.EventTypeWarning,
 						string(stork_api.ApplicationBackupStatusFailed),
-						fmt.Sprintf("Error getting status of backup %v from namespace %s: %v", backup.Name, backupSchedule.Namespace, err))
+						fmt.Sprintf("Error getting status of backup %v: %v", backup.Name, err))
 					// If there was an error other than not found move to
 					// the next one. Otherwise we want to mark it as failed
 					// since the applicationbackup object is no longer
@@ -206,12 +206,12 @@ func (s *ApplicationBackupScheduleController) updateApplicationBackupStatus(back
 						s.recorder.Event(backupSchedule,
 							v1.EventTypeNormal,
 							string(stork_api.ApplicationBackupStatusSuccessful),
-							fmt.Sprintf("Scheduled backup (%v) completed successfully for namespace %s", backup.Name, backupSchedule.Namespace))
+							fmt.Sprintf("Scheduled backup (%v) completed successfully", backup.Name))
 					} else {
 						s.recorder.Event(backupSchedule,
 							v1.EventTypeWarning,
 							string(stork_api.ApplicationBackupStatusFailed),
-							fmt.Sprintf("Scheduled backup (%v) failed for namespace %s", backup.Name, backupSchedule.Namespace))
+							fmt.Sprintf("Scheduled backup (%v) failed", backup.Name))
 					}
 				}
 				updated = true

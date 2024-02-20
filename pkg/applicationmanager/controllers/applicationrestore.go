@@ -901,7 +901,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				return nil
 			} else {
 				var message string
-				logrus.Infof("%s: resource-export cr [%v] status: %v", funct, crName, resourceExport.Status.Status)
+				logrus.Infof("%s re cr %v status %v", funct, crName, resourceExport.Status.Status)
 				switch resourceExport.Status.Status {
 				case kdmpapi.ResourceExportStatusFailed:
 					message = fmt.Sprintf("%s Error creating CR %v for pvc creation: %v", funct, crName, resourceExport.Status.Reason)
@@ -979,13 +979,13 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		for _, vInfo := range volumeInfos {
 			if vInfo.Status == storkapi.ApplicationRestoreStatusInProgress || vInfo.Status == storkapi.ApplicationRestoreStatusInitial ||
 				vInfo.Status == storkapi.ApplicationRestoreStatusPending {
-				log.ApplicationRestoreLog(restore).Infof("Volume restore still in progress: %v->%v for namespace %s", vInfo.SourceVolume, vInfo.RestoreVolume, vInfo.SourceNamespace)
+				log.ApplicationRestoreLog(restore).Infof("Volume restore still in progress: %v->%v", vInfo.SourceVolume, vInfo.RestoreVolume)
 				inProgress = true
 			} else if vInfo.Status == storkapi.ApplicationRestoreStatusFailed {
 				a.recorder.Event(restore,
 					v1.EventTypeWarning,
 					string(vInfo.Status),
-					fmt.Sprintf("Error restoring volume %v->%v for namespace %s: %v", vInfo.SourceVolume, vInfo.RestoreVolume, vInfo.SourceNamespace, vInfo.Reason))
+					fmt.Sprintf("Error restoring volume %v->%v: %v", vInfo.SourceVolume, vInfo.RestoreVolume, vInfo.Reason))
 				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 				restore.Status.FinishTimestamp = metav1.Now()
 				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
@@ -995,7 +995,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				a.recorder.Event(restore,
 					v1.EventTypeNormal,
 					string(vInfo.Status),
-					fmt.Sprintf("Volume %v->%v restored successfully for namespace %s", vInfo.SourceVolume, vInfo.RestoreVolume, vInfo.SourceNamespace))
+					fmt.Sprintf("Volume %v->%v restored successfully", vInfo.SourceVolume, vInfo.RestoreVolume))
 			}
 		}
 	}
@@ -1021,7 +1021,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		}
 		err = a.restoreResources(restore, updateCr)
 		if err != nil {
-			log.ApplicationRestoreLog(restore).Errorf("Error restoring resources from namespace %s: %v", restore.Namespace, err)
+			log.ApplicationRestoreLog(restore).Errorf("Error restoring resources: %v", err)
 			return err
 		}
 	}

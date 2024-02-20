@@ -773,7 +773,7 @@ func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClai
 		// Try to get info from the PV since storage class could be deleted
 		pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
-			logrus.Errorf("Error getting pv %v for pvc %v in namespace %s: %v", pvc.Spec.VolumeName, pvc.Name, pvc.Namespace, err)
+			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false
 		}
 		return p.OwnsPV(pv)

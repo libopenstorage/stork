@@ -225,8 +225,6 @@ func (a *ApplicationBackupController) setDefaults(backup *stork_api.ApplicationB
 	return updated
 }
 
-// updateWithAllNamespaces checks all the namespaces in the cluster, selects the ones to be backed up
-// and writes them in the backup object.
 func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.ApplicationBackup) error {
 	namespaces, err := core.Instance().ListNamespaces(nil)
 	if err != nil {
@@ -807,8 +805,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						// as Cancelling, cancel any other started backups and then mark
 						// it as failed
 						if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
-							inProgressMsg := fmt.Sprintf("error: %v. Volume backups are in progress. Backups are failing for some volumes"+
-								" since the storage provider is busy. Backup will be retried", err)
+							inProgressMsg := fmt.Sprintf("Volume backups are in progress. Backups are failing for some volumes"+
+								" since the storage provider is busy: %v. Backup will be retried", err)
 							log.ApplicationBackupLog(backup).Errorf(inProgressMsg)
 							a.recorder.Event(backup,
 								v1.EventTypeWarning,
@@ -870,7 +868,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 				for _, volInfo := range volumeInfos {
 					if volInfo.BackupID == "" {
-						log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] from namespace [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim, volInfo.Namespace)
+						log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim)
 						// Some portworx volume snapshot is not completed yet
 						// hence we will retry checking the status in the next reconciler iteration
 						// *stork_api.ApplicationBackupVolumeInfo.Status is not being checked here
@@ -949,28 +947,25 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			// Now check if there is any failure or success
 			// TODO: On failure of one volume cancel other backups?
 			for _, vInfo := range volumeInfos {
-				switch vInfo.Status {
-				case stork_api.ApplicationBackupStatusInitial, stork_api.ApplicationBackupStatusPending, stork_api.ApplicationBackupStatusInProgress:
-					log.ApplicationBackupLog(backup).Infof("Volume backup still in progress: %v, namespace: %v ", vInfo.Volume, vInfo.Namespace)
+				if vInfo.Status == stork_api.ApplicationBackupStatusInProgress || vInfo.Status == stork_api.ApplicationBackupStatusInitial ||
+					vInfo.Status == stork_api.ApplicationBackupStatusPending {
+					log.ApplicationBackupLog(backup).Infof("Volume backup still in progress: %v", vInfo.Volume)
 					inProgress = true
-
-				case stork_api.ApplicationBackupStatusFailed:
-					errorMsg := fmt.Sprintf("Error backing up volume %v from namespace: %v : %v", vInfo.Volume, vInfo.Namespace, vInfo.Reason)
+				} else if vInfo.Status == stork_api.ApplicationBackupStatusFailed {
 					a.recorder.Event(backup,
 						v1.EventTypeWarning,
 						string(vInfo.Status),
-						errorMsg)
-
+						fmt.Sprintf("Error backing up volume %v: %v", vInfo.Volume, vInfo.Reason))
 					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 					backup.Status.FinishTimestamp = metav1.Now()
 					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-					backup.Status.Reason = errorMsg
-
-				case stork_api.ApplicationBackupStatusSuccessful:
+					backup.Status.Reason = vInfo.Reason
+					break
+				} else if vInfo.Status == stork_api.ApplicationBackupStatusSuccessful {
 					a.recorder.Event(backup,
 						v1.EventTypeNormal,
 						string(vInfo.Status),
-						fmt.Sprintf("Volume %v from %v namespace backed up successfully", vInfo.Volume, vInfo.Namespace))
+						fmt.Sprintf("Volume %v backed up successfully", vInfo.Volume))
 				}
 			}
 		}
@@ -1986,7 +1981,7 @@ func (a *ApplicationBackupController) backupResources(
 			// Check the status of the resourceExport CR and update it to the applicationBackup CR
 			switch resourceExport.Status.Status {
 			case kdmpapi.ResourceExportStatusFailed:
-				message = fmt.Sprintf("Error uploading resources: %v, namespace: %s", resourceExport.Status.Reason, resourceExport.Namespace)
+				message = fmt.Sprintf("Error uploading resources: %v", resourceExport.Status.Reason)
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.Reason = message
@@ -2026,7 +2021,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 	// Upload the resources to the backup location
 	if err = a.uploadResources(backup, allObjects); err != nil {
-		message := fmt.Sprintf("Error uploading resources: %v, namespace: %s", err, backup.Namespace)
+		message := fmt.Sprintf("Error uploading resources: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 		backup.Status.Reason = message
@@ -2047,7 +2042,7 @@ func (a *ApplicationBackupController) backupResources(
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
 	if len(backup.Spec.NamespaceSelector) != 0 && len(backup.Spec.Namespaces) == 0 {
-		backup.Status.Reason = fmt.Sprintf("Namespace label selector [%s] did not find any namespaces with selected labels for backup", backup.Spec.NamespaceSelector)
+		backup.Status.Reason = "Namespace label selector did not find any namespaces with selected labels for backup"
 	} else {
 		backup.Status.Reason = "Volumes and resources were backed up successfully"
 	}
