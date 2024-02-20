@@ -147,7 +147,7 @@ func (a *aws) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 		// Try to get info from the PV since storage class could be deleted
 		pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
-			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
+			logrus.Errorf("Error getting pv %v for pvc %v in namespace %s: %v", pvc.Spec.VolumeName, pvc.Name, pvc.Namespace, err)
 			return false
 		}
 		return a.OwnsPV(pv)
