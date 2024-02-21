@@ -1,7 +1,7 @@
 DOCKER_HUB_REPO ?= openstorage
 
 DOCKER_HUB_STORK_IMAGE ?= stork
-DOCKER_HUB_STORK_TAG ?= dev
+DOCKER_HUB_STORK_TAG ?= novol-bkp
 
 DOCKER_HUB_CMD_EXECUTOR_IMAGE ?= cmdexecutor
 DOCKER_HUB_CMD_EXECUTOR_TAG ?= dev
@@ -44,7 +44,7 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 2.7.0
+RELEASE_VER := 23.11.0
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin

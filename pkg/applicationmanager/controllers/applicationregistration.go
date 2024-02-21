@@ -137,8 +137,10 @@ func RegisterDefaultCRDs() error {
 	if err == nil {
 		for _, crd := range crdv1.Items {
 			// skip stork/volumesnap crd registration
-			if _, ok := skipCrds[crd.Spec.Group]; ok {
-				continue
+			if crd.Spec.Names.Kind != "StorageCluster" {
+				if _, ok := skipCrds[crd.Spec.Group]; ok {
+					continue
+				}
 			}
 			if err := registerCRDV1(crd); err != nil {
 				return err

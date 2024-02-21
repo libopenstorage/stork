@@ -553,7 +553,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 		fallthrough
 	case stork_api.ApplicationBackupStageVolumes:
-		err := a.backupVolumes(backup, a.terminationChannels[string(backup.UID)])
+		/*err := a.backupVolumes(backup, a.terminationChannels[string(backup.UID)])
 		if err != nil {
 			message := fmt.Sprintf("Error backing up volumes: %v", err)
 			log.ApplicationBackupLog(backup).Errorf(message)
@@ -565,7 +565,8 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				return errResourceBusy
 			}
 			return nil
-		}
+		}*/
+		fallthrough
 	case stork_api.ApplicationBackupStageApplications:
 		err := a.backupResources(backup)
 		if err != nil {

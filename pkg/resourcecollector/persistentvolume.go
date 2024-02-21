@@ -147,21 +147,23 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	backuplocationName string,
 	backuplocationNamespace string,
 ) (bool, error) {
-	var updatedName string
-	var present bool
+	//var updatedName string
+	//var present bool
 
 	var pv v1.PersistentVolume
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
 		return false, fmt.Errorf("error converting to persistent volume: %v", err)
 	}
-
+	logrus.Infof("line 157 pv: %+v", pv)
 	// Skip the PV if it isn't bound to a PVC that needs to be restored
-	if len(pvNameMappings) == 0 {
+	/*if len(pvNameMappings) == 0 {
+		logrus.Infof("line 160")
 		return true, nil
 	}
 	if updatedName, present = pvNameMappings[pv.Name]; !present {
+		logrus.Infof("line 164")
 		return true, nil
-	}
+	} */
 	// get the storage class name from the CurrentStorageClassName annotation
 	var oldSc string
 	var exists bool
@@ -192,7 +194,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 		utils.ParseRancherProjectMapping(pv.Labels, opts.RancherProjectMappings)
 	}
 
-	pv.Name = updatedName
+	// pv.Name = updatedName
 	var driverName string
 	var volumeInfo *stork_api.ApplicationRestoreVolumeInfo
 	for _, vol := range vInfo {

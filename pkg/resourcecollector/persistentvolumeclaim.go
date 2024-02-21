@@ -59,24 +59,26 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 	opts Options,
 ) (bool, error) {
 	var pvc v1.PersistentVolumeClaim
-	var updatedName string
+	/*var updatedName string
 	var present bool
 
 	metadata, err := meta.Accessor(object)
 	if err != nil {
 		return false, err
 	}
-
+	*/
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pvc); err != nil {
 		return false, fmt.Errorf("error converting PVC object: %v: %v", object, err)
 	}
 
-	if len(pvNameMappings) != 0 {
+	/*if len(pvNameMappings) != 0 {
 		if updatedName, present = pvNameMappings[pvc.Spec.VolumeName]; !present {
 			return false, fmt.Errorf("PV name mapping not found for %v", metadata.GetName())
 		}
 	}
-	pvc.Spec.VolumeName = updatedName
+
+	pvc.Spec.VolumeName = updatedName*/
+
 	nodes, err := core.Instance().GetNodes()
 	if err != nil {
 		return false, fmt.Errorf("failed in getting the nodes: %v", err)

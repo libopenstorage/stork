@@ -435,7 +435,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 		fallthrough
 	case storkapi.ApplicationRestoreStageVolumes:
-		err := a.restoreVolumes(restore, updateCr)
+		/*err := a.restoreVolumes(restore, updateCr)
 		if err != nil {
 			message := fmt.Sprintf("Error restoring volumes: %v", err)
 			log.ApplicationRestoreLog(restore).Errorf(message)
@@ -447,7 +447,8 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 				return errResourceBusy
 			}
 			return nil
-		}
+		}*/
+		fallthrough
 	case storkapi.ApplicationRestoreStageApplications:
 		err := a.restoreResources(restore, updateCr)
 		if err != nil {
@@ -1289,6 +1290,8 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 ) (map[string]string, error) {
 	pvNameMappings := make(map[string]string)
 	for _, vInfo := range restore.Status.Volumes {
+		logrus.Infof("line 1293 vInfo.SourceVolume: %v", vInfo.SourceVolume)
+		logrus.Infof(" vInfo.RestoreVolume: %v", vInfo.RestoreVolume)
 		if vInfo.SourceVolume == "" {
 			return nil, fmt.Errorf("SourceVolume missing for restore")
 		}
@@ -1588,6 +1591,7 @@ func (a *ApplicationRestoreController) applyResources(
 	namespacedName.Name = restore.Name
 
 	pvNameMappings, err := a.getPVNameMappings(restore, objects)
+	logrus.Infof("line 1592 pvNameMappings: %+v", pvNameMappings)
 	if err != nil {
 		return err
 	}
