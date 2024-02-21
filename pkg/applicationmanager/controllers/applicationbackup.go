@@ -949,12 +949,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			// Now check if there is any failure or success
 			// TODO: On failure of one volume cancel other backups?
 			for _, vInfo := range volumeInfos {
-				switch vInfo.Status {
-				case stork_api.ApplicationBackupStatusInitial, stork_api.ApplicationBackupStatusPending, stork_api.ApplicationBackupStatusInProgress:
+				if vInfo.Status == stork_api.ApplicationBackupStatusInProgress || vInfo.Status == stork_api.ApplicationBackupStatusInitial ||
+					vInfo.Status == stork_api.ApplicationBackupStatusPending {
 					log.ApplicationBackupLog(backup).Infof("Volume backup still in progress: %v, namespace: %v ", vInfo.Volume, vInfo.Namespace)
 					inProgress = true
 
-				case stork_api.ApplicationBackupStatusFailed:
+				} else if vInfo.Status == stork_api.ApplicationBackupStatusFailed {
 					errorMsg := fmt.Sprintf("Error backing up volume %v from namespace: %v : %v", vInfo.Volume, vInfo.Namespace, vInfo.Reason)
 					a.recorder.Event(backup,
 						v1.EventTypeWarning,
@@ -965,8 +965,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					backup.Status.FinishTimestamp = metav1.Now()
 					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 					backup.Status.Reason = errorMsg
-
-				case stork_api.ApplicationBackupStatusSuccessful:
+					break
+				} else if vInfo.Status == stork_api.ApplicationBackupStatusSuccessful {
 					a.recorder.Event(backup,
 						v1.EventTypeNormal,
 						string(vInfo.Status),
