@@ -1682,6 +1682,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 	var (
 		batchSize                                int
 		desiredNumLabels                         int
+		defaultLabelMapLength                    int
 		backupLocationUID                        string
 		cloudCredUID                             string
 		clusterUid                               string
@@ -1699,6 +1700,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		cloudCredUidList                         []string
 		scheduledAppContexts                     []*scheduler.Context
 		scheduleRestoreMapping                   map[string]string
+		defaultLabelMap                          map[string]string
 		fetchedLabelMap                          map[string]string
 		labelMap                                 map[string]string
 		err                                      error
@@ -1731,20 +1733,26 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding labels to namespaces in multiple of 10 until 1000", func() {
+			log.InfoD("Verifying default labels in the namespace %s", bkpNamespaces[0])
+			defaultLabelMap, err = Inst().S.GetNamespaceLabel(bkpNamespaces[0])
+			log.FailOnError(err, fmt.Sprintf("Default labels presented in the namespace %s : %v", bkpNamespaces[0], defaultLabelMap))
+			defaultLabelMapLength = len(defaultLabelMap)
+			log.InfoD("Length of default labels in the namespace %s : %v", bkpNamespaces[0], defaultLabelMapLength)
 			log.InfoD("Adding labels to namespaces in multiple of 10 until 1000")
 			for i := 0; i < desiredNumLabels/batchSize; i++ {
 				labelMap = GenerateRandomLabels(batchSize)
 				err := AddLabelsToMultipleNamespaces(labelMap, []string{bkpNamespaces[0]})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding [%v] labels to namespaces [%v]", batchSize, bkpNamespaces[0]))
 			}
+
 		})
 		Step("Verifying labels added to namespace", func() {
 			log.InfoD("Verifying number of labels added to namespace")
 			fetchedLabelMap, err = Inst().S.GetNamespaceLabel(bkpNamespaces[0])
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the labels added to namespace %s", bkpNamespaces[0]))
-			length := len(fetchedLabelMap)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", length-3, bkpNamespaces[0]))
-			dash.VerifyFatal(length-3, desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", bkpNamespaces[0]))
+			updatedLabelMapLength := len(fetchedLabelMap)
+			log.InfoD(fmt.Sprintf("Length of updated labels for namespace %s : %v", bkpNamespaces[0], updatedLabelMapLength))
+			dash.VerifyFatal(updatedLabelMapLength-defaultLabelMapLength, desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", bkpNamespaces[0]))
 		})
 		Step("Creating cloud credentials and registering backup location", func() {
 			log.InfoD("Creating cloud credentials and registering backup location")
