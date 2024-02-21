@@ -10626,3 +10626,192 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
+	/*
+		PTX:
+		https://portworx.atlassian.net/browse/PTX-15465
+
+		TestRail:
+		https://portworx.testrail.net/index.php?/cases/view/57783
+
+		 1. Trigger HA increase for volumes
+		 2. Pool resize trigger
+		 3. Add disk to the pool
+		All three steps should occur parallel and should not cause any issue
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("HAIncreasePoolresizeAndAdddisk", "HA increase, pool resize and add disk run all this parallely", nil, 57783)
+	})
+	var contexts []*scheduler.Context
+	var poolToBeUpdated string
+	var wg sync.WaitGroup
+
+	itLog := "HAIncreasePoolresizeAndAdddisk"
+	It(itLog, func() {
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				for _, app := range Inst().AppList {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%s", app, "ha-increase-pool-add-resize"))...)
+				}
+			}
+
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		for _, eachContext := range contexts {
+			stepLog = "HA increase for volumes of app: " + eachContext.App.Key
+			Step(stepLog, func() {
+				// First get volumes of the application
+
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to get volumes from context")
+
+				vol := vols[rand.Intn(len(vols))]
+				curReplSet, err := Inst().V.GetReplicationFactor(vol)
+				log.InfoD("Node selected for repl increase")
+
+				var nodesToBeUpdated []string
+				var poolsToBeUpdated []string
+
+				// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 2
+				if curReplSet == 3 {
+					inspectVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect volume: %v", vol.ID)
+					replicaSets := inspectVol.ReplicaSets
+					replicaset := replicaSets[len(replicaSets)-1]
+					nodeToBeUpdated, err := GetNodeWithGivenPoolID(replicaset.PoolUuids[0])
+					poolToBeUpdated = replicaset.PoolUuids[0]
+
+					log.InfoD("Node selected for pool expand: %v", nodeToBeUpdated.Name)
+					log.InfoD("pool selected for pool expand: %v", poolToBeUpdated)
+					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
+					poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+
+					newRepl := int64(curReplSet - 1)
+					log.FailOnError(Inst().V.SetReplicationFactor(vol, newRepl,
+						nodesToBeUpdated, poolsToBeUpdated, true),
+						"Failed to set Replicaiton factor")
+				} else {
+					// pick nodes which are not in replicaset
+					inspectVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect volume: %v", vol.ID)
+					replicaSets := inspectVol.ReplicaSets
+					found := false
+					nodeToBeUpdated := node.Node{}
+					//pick a node which is not present in replicaset
+					for _, n := range replicaSets {
+						for _, storageNode := range node.GetStorageNodes() {
+							log.Infof("Storage node: %v", storageNode.Id)
+							for _, node := range n.Nodes {
+								log.InfoD("replica set: %v", node)
+								if storageNode.Id == node {
+									found = true
+									break
+								}
+							}
+							if !found {
+								nodeToBeUpdated = storageNode
+								break
+							}
+							found = false
+						}
+					}
+					log.InfoD("Node selected: %v", nodeToBeUpdated.Id)
+
+					poolsUuid, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
+					log.FailOnError(err, "Failed to get pool using node %s", nodeToBeUpdated.Id)
+
+					poolToBeUpdated = poolsUuid[0]
+					log.InfoD("pool selected for pool expand: %v", poolToBeUpdated)
+
+					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
+					poolsToBeUpdated = append(poolsToBeUpdated, poolsUuid[0])
+
+				}
+
+				var maxReplicaFactor int64
+				maxReplicaFactor = 3
+
+				log.FailOnError(Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
+					nodesToBeUpdated, poolsToBeUpdated, false),
+					"Failed to set Replicaiton factor")
+				t := func() (interface{}, bool, error) {
+					volDetails, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						return nil, true, fmt.Errorf("error getting volume by using id %s", vol.ID)
+					}
+					resync := false
+					for _, v := range volDetails.RuntimeState {
+						log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
+						if v.GetRuntimeState()["RuntimeState"] == "resync" ||
+							v.GetRuntimeState()["RuntimeState"] == "clean" {
+							resync = true
+						}
+					}
+					if resync {
+						return fmt.Sprintf("Volume resync has started"), false, nil
+
+					}
+					return nil, true, fmt.Errorf("volume resync hasn't started")
+				}
+				_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+				log.FailOnError(err, "Error checking volume resync")
+
+			})
+			stepLog = "Pool resize trigger"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				//initiate pool expand on the pool where ha increase is happening.
+				wg.Add(1)
+				go func() {
+					defer GinkgoRecover()
+					defer wg.Done()
+					pool, err := GetStoragePoolByUUID(poolToBeUpdated)
+					log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
+
+					expectedSize := (pool.TotalSize / units.GiB) + 100
+					err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+					log.FailOnError(err, "Failed to initiate pool resize")
+
+					//wait for pool expand to complete
+					err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+					log.FailOnError(err, "Failed to wait for pool to be resized")
+					log.InfoD("Successfully expanded the pool with resize disk: %s", pool.Uuid)
+				}()
+			})
+
+			stepLog = "Pool expand add disk trigger"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pool, err := GetStoragePoolByUUID(poolToBeUpdated)
+					log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
+
+					expectedSize := (pool.TotalSize / units.GiB) + 100
+					err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+					log.FailOnError(err, "Failed to initiate pool resize")
+
+					//wait for pool expand to complete
+					err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+					log.FailOnError(err, "Failed to wait for pool to be resized")
+					log.InfoD("Successfully expanded the pool with add disk pool id: %s", pool.Uuid)
+				}()
+
+			})
+			wg.Wait()
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
