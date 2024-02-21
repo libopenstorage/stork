@@ -1472,6 +1472,12 @@ SPECS:
 						continue SPECS
 					}
 				}
+			} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
+				if removeObj, ok := removeSpec.(*storkapi.ClusterPair); ok {
+					if specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
 			}
 		}
 		remainSpecs = append(remainSpecs, spec)

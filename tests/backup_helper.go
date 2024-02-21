@@ -19,9 +19,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
-	"github.com/portworx/torpedo/drivers/backup/portworx"
-
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	appsapi "k8s.io/api/apps/v1"
 
@@ -7213,5 +7213,61 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
+	return nil
+}
+
+// ScaleApplicationToDesiredReplicas scales Application to desired replicas for migrated application namespace.
+func ScaleApplicationToDesiredReplicas(namespace string) error {
+	var options metav1.ListOptions
+	var parsedReplicas int
+	deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+	if err != nil {
+		return err
+	}
+	statefulSetList, err := apps.Instance().ListStatefulSets(namespace, options)
+	if err != nil {
+		return err
+	}
+	if len(deploymentList.Items) != 0 {
+		deployments := deploymentList.Items
+		for _, deployment := range deployments {
+			if replicas, present := deployment.Annotations[migration.StorkMigrationReplicasAnnotation]; present {
+				parsedReplicas, _ = strconv.Atoi(replicas)
+
+			}
+			deploymentObj, err := apps.Instance().GetDeployment(deployment.Name, namespace)
+			if err != nil {
+				return err
+			}
+			*deploymentObj.Spec.Replicas = int32(parsedReplicas)
+			updatedBackupDeploymentobj, err := apps.Instance().UpdateDeployment(deploymentObj)
+			if err != nil {
+				return err
+			}
+			log.Infof("Deployment [%s] replica count after scaling to %d  is %v", deployment.Name, int32(parsedReplicas), *updatedBackupDeploymentobj.Spec.Replicas)
+		}
+	}
+
+	if len(statefulSetList.Items) != 0 {
+		statefulSets := statefulSetList.Items
+		for _, statefulSet := range statefulSets {
+			if replicas, present := statefulSet.Annotations[migration.StorkMigrationReplicasAnnotation]; present {
+				parsedReplicas, _ = strconv.Atoi(replicas)
+
+			}
+			statefulSetObj, err := apps.Instance().GetStatefulSet(statefulSet.Name, namespace)
+			if err != nil {
+				return err
+			}
+			*statefulSetObj.Spec.Replicas = int32(parsedReplicas)
+			updatedBackupstatefulSetobj, err := apps.Instance().UpdateStatefulSet(statefulSetObj)
+			if err != nil {
+				return err
+			}
+			log.Infof("statefulSet [%s] replica count after scaling to %d  is %v", statefulSet.Name, int32(parsedReplicas), *updatedBackupstatefulSetobj.Spec.Replicas)
+		}
+
+	}
+
 	return nil
 }
