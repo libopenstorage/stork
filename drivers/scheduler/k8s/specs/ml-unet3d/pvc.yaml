@@ -1,0 +1,11 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: ml-unet3d-pvc
+spec:
+  storageClassName: ml-unet3d-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 800Gi
