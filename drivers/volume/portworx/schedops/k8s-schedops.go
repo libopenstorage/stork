@@ -2,7 +2,6 @@ package schedops
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8serrors "github.com/portworx/sched-ops/k8s/errors"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"

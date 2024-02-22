@@ -345,35 +345,8 @@ func (k *openshift) UpgradeScheduler(version string) error {
 	if err := waitNodesToBeReady(); err != nil {
 		return err
 	}
-	log.Info(getCluterInfo())
-
 	log.Infof("Cluster is now %s", upgradeVersion)
 	return nil
-}
-
-func getCluterInfo() string {
-	var output interface{}
-	var err error
-
-	t := func() (interface{}, bool, error) {
-		nodeList, err := k8sCore.GetNodes()
-		if err != nil {
-			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
-		}
-		if len(nodeList.Items) > 0 {
-			firstNodeInfo := nodeList.Items[0].Status.NodeInfo
-			info := fmt.Sprintf(
-				"K8s version: %s\nOS: %s\nKernel: %s\nContainer Runtime: %s\n", firstNodeInfo.KubeletVersion,
-				firstNodeInfo.OSImage, firstNodeInfo.KernelVersion, firstNodeInfo.ContainerRuntimeVersion)
-			return info, false, nil
-		}
-		return "", false, nil
-	}
-	if output, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
-		log.Errorf("Failed to get cluster info, Err: %v", err)
-		return ""
-	}
-	return output.(string)
 }
 
 func getClientVersion() (string, error) {

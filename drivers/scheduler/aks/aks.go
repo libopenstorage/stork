@@ -23,8 +23,12 @@ const (
 	azCli = "az"
 
 	defaultAksInstanceGroupName = "nodepool1"
-	defaultAksUpgradeTimeout    = 90 * time.Minute
-	defaultAksUpgradeInterval   = 5 * time.Minute
+
+	defaultAksUpgradeTimeout  = 90 * time.Minute
+	defaultAksUpgradeInterval = 5 * time.Minute
+
+	defaultGetAksClusterTimeout  = 5 * time.Minute
+	defaultGetAksClusterInterval = 20 * time.Second
 )
 
 type aks struct {
@@ -381,15 +385,23 @@ func (a *aks) GetAKSCluster() (AKSCluster, error) {
 	log.Info("Get AKS cluster object")
 	var aksCluster AKSCluster
 
-	cmd := fmt.Sprintf("%s aks show -g %s -n %s --output json", azCli, a.clusterName, a.clusterName)
-	stdout, stderr, err := osutils.ExecShell(cmd)
+	t := func() (interface{}, bool, error) {
+		cmd := fmt.Sprintf("%s aks show -g %s -n %s --output json", azCli, a.clusterName, a.clusterName)
+		stdout, stderr, err := osutils.ExecShell(cmd)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get AKS cluster info, Err: %v %v %v", stderr, err, stdout)
+		}
+
+		if err := json.Unmarshal([]byte(stdout), &aksCluster); err != nil {
+			return nil, true, fmt.Errorf("failed to unmarshal AKS cluster object to json struct, Err: %v", err)
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultGetAksClusterTimeout, defaultGetAksClusterInterval)
 	if err != nil {
-		return AKSCluster{}, fmt.Errorf("failed to get workers list info. Error: %v %v %v", stderr, err, stdout)
+		return aksCluster, fmt.Errorf("failed to get AKS cluster object, Err: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(stdout), &aksCluster); err != nil {
-		return AKSCluster{}, fmt.Errorf("failed to unmarshal AKS cluster object to json struct, Err: %v", err)
-	}
 	log.Infof("Successfully got AKS cluster [%s] object", aksCluster.Name)
 	return aksCluster, nil
 }
