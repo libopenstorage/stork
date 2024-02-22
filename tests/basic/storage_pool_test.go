@@ -10815,3 +10815,145 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolResizeInTrashCanNode}", func() {
+	/*
+	  1. Deploy apps
+	  2. Pick a volume and locate the node where this is attached
+	  3. Delete the volume and let it be placed in trashcan
+	  4. Trigger pool expand in the node where the trashcan volume is present
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolResizeInTrashCanNode", "Pool resize with volumes in trashcan", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var vol *volume.Volume
+	var volDetails *api.Volume
+	var trashcanVolsBeforePoolExpand []string
+
+	itLog := "PoolResizeInTrashCanNode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Enable trashCan for the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currNode := node.GetStorageDriverNodes()[0]
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "600",
+			})
+			log.FailOnError(err, "Failed to enable trashCan")
+		})
+
+		// Deploy apps
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("trash-can-pool-exopand-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "Get a volume, locate the node where this is attached and enable trashcan in that node"
+		for _, eachContext := range contexts {
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to get volumes from context")
+
+				//Pick a random volume
+				vol = vols[rand.Intn(len(vols))]
+
+				//Get the node where the volume is attached
+				volDetails, err = Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, "Failed to inspect volume: %v", vol.Name)
+				log.InfoD("Volume attached on node: %v", volDetails.AttachedOn)
+
+				nodeToEnableTrashCan, err := node.GetNodeByIP(volDetails.AttachedOn)
+
+				//Enable trashcan in the node
+				err = Inst().V.SetClusterOptsWithConfirmation(nodeToEnableTrashCan, map[string]string{
+					"--volume-expiration-minutes": "600",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully enabled on node: %v", nodeToEnableTrashCan.Name)
+
+			})
+
+			stepLog = "Destroy apps and let it's volumes be placed in trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				destroyContext := make([]*scheduler.Context, 0)
+				destroyContext = append(destroyContext, eachContext)
+				DestroyApps(destroyContext, nil)
+			})
+
+			stepLog = "Check if volumes are in trashcan before pool expand"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// wait for few seconds for pvc to get deleted and volume to get detached
+				time.Sleep(30 * time.Second)
+				node := node.GetStorageDriverNodes()[0]
+				log.InfoD(stepLog)
+				trashcanVolsBeforePoolExpand, err = Inst().V.GetTrashCanVolumeIds(node)
+				log.FailOnError(err, "error While getting trashcan volumes")
+				log.Infof("trashcan len before pool expand: %d", len(trashcanVolsBeforePoolExpand))
+				dash.VerifyFatal(len(trashcanVolsBeforePoolExpand) > 0, true, "validate volumes exist in trashcan")
+
+			})
+
+			stepLog = "Expand pool using resize"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				pool, err := GetStoragePoolByUUID(volDetails.ReplicaSets[0].PoolUuids[0])
+				log.FailOnError(err, "Failed to get pool using UUID %s", volDetails.ReplicaSets[0].PoolUuids[0])
+
+				expectedSize := (pool.TotalSize / units.GiB) + 100
+				err = Inst().V.ExpandPool(pool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to initiate pool resize")
+
+				//wait for pool expand to complete
+				err = waitForPoolToBeResized(expectedSize, pool.Uuid, true)
+			})
+
+			stepLog = "Check trashcan after pool expand"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				node := node.GetStorageDriverNodes()[0]
+				log.InfoD(stepLog)
+				trashcanVolsAfterPoolExpand, err := Inst().V.GetTrashCanVolumeIds(node)
+				log.FailOnError(err, "error While getting trashcan volumes")
+
+				log.Infof("trashcan len after pool expand: %d", len(trashcanVolsAfterPoolExpand))
+
+				dash.VerifyFatal(len(trashcanVolsAfterPoolExpand) > 0, true, "validate volumes exist in trashcan")
+				dash.VerifyFatal(len(trashcanVolsAfterPoolExpand) == len(trashcanVolsBeforePoolExpand), true, "trashcan size same before and after pool expand")
+				// Create a exist map to check if all the volumes in trashcan are present
+				trashCanMap := map[string]bool{}
+				for _, vol := range trashcanVolsAfterPoolExpand {
+					if vol != "" {
+						trashCanMap[vol] = true
+					}
+				}
+				// check if the values are same before and after pool expand
+				for _, vol := range trashcanVolsBeforePoolExpand {
+					if vol != "" {
+						if trashCanMap[vol] == false {
+							log.Errorf("Volume not present in trashcan after pool expand: %v", vol)
+						}
+					}
+				}
+				log.InfoD("Succesfully verified all the volumes in trashcan after pool expand")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
