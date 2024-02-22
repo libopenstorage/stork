@@ -89,6 +89,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fedora-data-disk-1
+  labels:
+    portworx.io/kubevirt: "true"
 spec:
   storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
   accessModes:
@@ -101,6 +103,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fedora-data-disk-2
+  labels:
+    portworx.io/kubevirt: "true"
 spec:
   storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
   accessModes:
@@ -113,6 +117,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fedora-data-disk-3
+  labels:
+    portworx.io/kubevirt: "true"
 spec:
   storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
   accessModes:
