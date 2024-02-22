@@ -65,7 +65,7 @@ spec:
             password: password1
             chpasswd: { expire: False }
         name: cloudinitdisk
-  dataVolumeTemplates:      
+  dataVolumeTemplates:
   - metadata:
       name: fedora-root-disk
     spec:
@@ -96,11 +96,13 @@ spec:
             storage: 25Gi
         storageClassName: sc-sharedv4svc-nolock
         volumeMode: Filesystem
----        
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fedora-data-disk-2
+  labels:
+    portworx.io/kubevirt: "true"
 spec:
   storageClassName: sc-sharedv4svc-nolock
   accessModes:
