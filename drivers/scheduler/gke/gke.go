@@ -38,13 +38,6 @@ func init() {
 }
 
 func (g *Gke) Init(schedOpts scheduler.InitOptions) error {
-	instanceGroup := os.Getenv("INSTANCE_GROUP")
-	if len(instanceGroup) != 0 {
-		g.instanceGroup = instanceGroup
-	} else {
-		g.instanceGroup = "default-pool"
-	}
-
 	ops, err := gce.NewClient()
 	if err != nil {
 		return err
@@ -62,6 +55,14 @@ func (g *Gke) Init(schedOpts scheduler.InitOptions) error {
 // UpgradeScheduler performs GKE cluster upgrade to a specified version
 func (g *Gke) UpgradeScheduler(version string) error {
 	log.Infof("Starting GKE cluster upgrade to [%s]", version)
+
+	instanceGroup := os.Getenv("INSTANCE_GROUP")
+	if len(instanceGroup) != 0 {
+		g.instanceGroup = instanceGroup
+	} else {
+		g.instanceGroup = "default-pool"
+	}
+
 	// Upgrade GKE Control Plane version
 	if err := g.upgradeGkeControlPlaneVersion(version, defaultGkeUpgradeTimeout); err != nil {
 		return err

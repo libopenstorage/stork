@@ -228,13 +228,6 @@ func init() {
 }
 
 func (a *aks) Init(schedOpts scheduler.InitOptions) error {
-	instanceGroup := os.Getenv("INSTANCE_GROUP")
-	if len(instanceGroup) != 0 {
-		a.instanceGroup = instanceGroup
-	} else {
-		a.instanceGroup = defaultAksInstanceGroupName
-	}
-
 	ops, err := azure.NewClientFromMetadata()
 	if err != nil {
 		return err
@@ -255,12 +248,6 @@ func (a *aks) Init(schedOpts scheduler.InitOptions) error {
 
 func (a *aks) AzureLogin() error {
 	log.Info("Authenticating with Azure")
-
-	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
-	if envAzureClusterName == "" {
-		return fmt.Errorf("environment variable AZURE_CLUSTER_NAME is not defined")
-	}
-	a.clusterName = envAzureClusterName
 
 	envAzureClientId := os.Getenv("AZURE_CLIENT_ID")
 	if envAzureClientId == "" {
@@ -287,6 +274,21 @@ func (a *aks) AzureLogin() error {
 }
 
 func (a *aks) UpgradeScheduler(version string) error {
+	instanceGroup := os.Getenv("INSTANCE_GROUP")
+	if len(instanceGroup) != 0 {
+		a.instanceGroup = instanceGroup
+	} else {
+		a.instanceGroup = defaultAksInstanceGroupName
+	}
+
+	log.Info("Authenticating with Azure")
+
+	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
+	if envAzureClusterName == "" {
+		return fmt.Errorf("environment variable AZURE_CLUSTER_NAME is not defined")
+	}
+	a.clusterName = envAzureClusterName
+
 	aksCluster, err := a.GetAKSCluster()
 	if err != nil {
 		return fmt.Errorf("failed to get AKS cluster, Err: %v", err)

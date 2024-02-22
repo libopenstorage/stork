@@ -379,14 +379,9 @@ K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
     NODE_DRIVER="ssh"
 fi
+
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
-        aks)
-            NODE_DRIVER="aks"
-            ;;
         oracle)
             NODE_DRIVER="oracle"
             ;;
