@@ -181,6 +181,17 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 		} else if err != nil {
 			return err
 		}
+		if remoteMigrSched.GetAnnotations() == nil || remoteMigrSched.GetAnnotations()[StorkMigrationScheduleCopied] != "true" {
+			// handling the corner case where user has already created a migrationSchedule with the same name
+			// and namespace in remote cluster before upgrading to stork 24.2.0
+			// we will fail the migrationSchedule in this case
+			err = fmt.Errorf("a non static-copy migrationSchedule with the same name and namespace found in the remote cluster")
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
+			return err
+		}
 		if migrationSchedule.Spec.AutoSuspend && remoteMigrSched.Status.ApplicationActivated {
 			suspend := true
 			migrationSchedule.Spec.Suspend = &suspend
