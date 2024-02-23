@@ -7,10 +7,8 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -70,13 +68,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			var transformSpecs []string
 			var includeOptionalResourceTypes []string
 
-			// We fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
-			adminNs, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, meta.NamespaceSystem, k8sutils.AdminNsKey)
-			if err != nil {
-				logrus.Warnf("Error in reading %v cm for the key %v, switching to default value : %v",
-					k8sutils.StorkControllerConfigMapName, k8sutils.AdminNsKey, err)
-				adminNs = k8sutils.DefaultAdminNamespace
-			}
+			adminNs := getAdminNamespace()
 
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for migration schedule name"))

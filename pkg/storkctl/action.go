@@ -32,89 +32,132 @@ func newPerformCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams
 	return performCommands
 }
 
+var mockTime *time.Time
+
+// setMockTime is used in tests to update the time
+func setMockTime(mt *time.Time) {
+	mockTime = mt
+}
+
+// GetCurrentTime returns the current time as per the scheduler
+func GetCurrentTime() time.Time {
+	if mockTime != nil {
+		return *mockTime
+	}
+	return time.Now()
+}
+
 func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	failoverCommand := &cobra.Command{
+	var referenceMigrationSchedule string
+	var skipDeactivateSource bool
+	var includeNamespaceList []string
+	var excludeNamespaceList []string
+	var namespaceList []string
+	performFailoverCommand := &cobra.Command{
 		Use:   failoverCommand,
 		Short: "Initiate failover of the given migration schedule",
 		Run: func(c *cobra.Command, args []string) {
-			namespaces, err := cmdFactory.GetAllNamespaces()
+			if len(referenceMigrationSchedule) == 0 {
+				util.CheckErr(fmt.Errorf("referenceMigrationSchedule name needs to be provided for failover"))
+				return
+			}
+			// namespace of the migrationSchedule is provided by user using the -n / --namespace global flag
+			migrationScheduleNs := cmdFactory.GetNamespace()
+			migrSchedObj, err := storkops.Instance().GetMigrationSchedule(referenceMigrationSchedule, migrationScheduleNs)
 			if err != nil {
-				util.CheckErr(err)
+				util.CheckErr(fmt.Errorf("unable to find the referenceMigrationSchedule %v in the %v namespace", referenceMigrationSchedule, migrationScheduleNs))
 				return
 			}
-			failedToStart := false
-			for _, namespace := range namespaces {
-				if incompleteAction := getAnyIncompleteAction(namespace); incompleteAction != nil {
-					if !failedToStart {
-						printMsg("Failed to start failover as there pending actions for following namespaces:", ioStreams.Out)
-						failedToStart = true
-					}
-					printMsg(fmt.Sprintf(
-						"Namespace %v has action %v in state %v",
-						namespace, incompleteAction.Name, incompleteAction.Status),
-						ioStreams.Out)
-				}
-			}
-			if failedToStart {
-				return
-			}
-			for _, namespace := range namespaces {
-				action := storkv1.Action{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      newActionName(storkv1.ActionTypeFailover),
-						Namespace: namespace,
-					},
-					Spec: storkv1.ActionSpec{
-						ActionType: storkv1.ActionTypeFailover,
-					},
-					Status: storkv1.ActionStatus{
-						Status: storkv1.ActionStatusScheduled,
-					},
-				}
-				_, err = storkops.Instance().CreateAction(&action)
+			if !skipDeactivateSource {
+				clusterPair := migrSchedObj.Spec.Template.Spec.ClusterPair
+				_, err = storkops.Instance().GetClusterPair(clusterPair, migrationScheduleNs)
 				if err != nil {
-					printMsg(
-						fmt.Sprintf(
-							"Failed to start failover for namespace %v due to error %v",
-							namespace, err),
-						ioStreams.ErrOut)
-					continue
+					util.CheckErr(fmt.Errorf("unable to find the cluster pair %v in the %v namespace", clusterPair, migrationScheduleNs))
+					return
 				}
-				printMsg(fmt.Sprintf("Started failover for namespace %v", namespace), ioStreams.Out)
-				printMsg(getDescribeActionMessage(&action), ioStreams.Out)
 			}
+			migrationNamespaceList := migrSchedObj.Spec.Template.Spec.Namespaces
+			migrationNamespaceSelectors := migrSchedObj.Spec.Template.Spec.NamespaceSelectors
+			// update the migrationNamespaces list by fetching namespaces based on provided label selectors
+			migrationNamespaces, err := getMigrationNamespaces(migrationNamespaceList, migrationNamespaceSelectors)
+			if err != nil {
+				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the --namespace-selectors in the provided migrationSchedule: %v", err))
+				return
+			}
+			// at most one of exclude-namespaces or include-namespaces can be provided
+			if len(includeNamespaceList) != 0 && len(excludeNamespaceList) != 0 {
+				util.CheckErr(fmt.Errorf("can provide only one of --include-namespaces or --exclude-namespaces values at once"))
+				return
+			} else if len(includeNamespaceList) != 0 {
+				if isSubset, nonSubsetStrings := isSubset(includeNamespaceList, migrationNamespaces); isSubset {
+					// Branch 1: Only failover some of the namespaces being migrated by the given migrationSchedule
+					namespaceList = includeNamespaceList
+				} else {
+					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given migrationSchedule", nonSubsetStrings))
+					return
+				}
+			} else if len(excludeNamespaceList) != 0 {
+				if isSubset, nonSubsetStrings := isSubset(excludeNamespaceList, migrationNamespaces); isSubset {
+					// Branch 2: Exclude some of the namespaces being migrated by the given migrationSchedule from failover
+					namespaceList = excludeListAFromListB(excludeNamespaceList, migrationNamespaces)
+				} else {
+					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given migrationSchedule", nonSubsetStrings))
+					return
+				}
+			} else {
+				// Branch 3: Failover all the namespaces being migrated by the given migrationSchedule
+				namespaceList = migrationNamespaces
+			}
+			actionType := storkv1.ActionTypeFailover
+			actionParameters := storkv1.ActionParameter{
+				FailoverParameter: &storkv1.FailoverParameter{
+					FailoverNamespaces:         namespaceList,
+					MigrationScheduleReference: referenceMigrationSchedule,
+					DeactivateSource:           !skipDeactivateSource,
+				},
+			}
+			actionName := getActionName(actionType, referenceMigrationSchedule)
+			action, err := createActionCR(actionName, migrationScheduleNs, actionType, actionParameters)
+			migrationScheduleName := migrationScheduleNs + "/" + referenceMigrationSchedule
+			if err != nil {
+				util.CheckErr(fmt.Errorf("failed to start failover for migrationSchedule %v : %v", migrationScheduleName, err))
+				return
+			}
+			printMsg(fmt.Sprintf("Started failover for migrationSchedule %v", migrationScheduleName), ioStreams.Out)
+			printMsg(getActionStatusMessage(action), ioStreams.Out)
 		},
 	}
-	failoverCommand.Flags().BoolVar(&deactivateSource, "deactivate-source", false, "If present, resources in the source cluster will be deactivated as part of the failover")
-	failoverCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the migration schedule to be failovered")
-
-	return failoverCommand
+	performFailoverCommand.Flags().BoolVar(&skipDeactivateSource, "skip-deactivate-source", false, "If present, applications in the source cluster will not be scaled down as part of the failover.")
+	performFailoverCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the migration schedule to failover. Also specify the namespace of this migrationSchedule using the -n flag")
+	performFailoverCommand.Flags().StringSliceVar(&includeNamespaceList, "include-namespaces", nil, "Specify the comma-separated list of subset namespaces to be failed over. By default, all namespaces part of the migrationSchedule are failed over")
+	performFailoverCommand.Flags().StringSliceVar(&excludeNamespaceList, "exclude-namespaces", nil, "Specify the comma-separated list of subset namespaces to be skipped during the failover. By default, all namespaces part of the migrationSchedule are failed over")
+	return performFailoverCommand
 }
 
-func isActionIncomplete(action *storkv1.Action) bool {
-	return action.Status.Status == storkv1.ActionStatusScheduled || action.Status.Status == storkv1.ActionStatusInProgress
-}
-
-// check if there is already an Action scheduled or in-progress
-func getAnyIncompleteAction(namespace string) *storkv1.Action {
-	actionList, err := storkops.Instance().ListActions(namespace)
+// given the name, namespace, actionType and actionParameters create an Action CR
+func createActionCR(actionName string, namespace string, actionType storkv1.ActionType, actionParameters storkv1.ActionParameter) (*storkv1.Action, error) {
+	action := storkv1.Action{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      actionName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ActionSpec{
+			ActionType:      actionType,
+			ActionParameter: &actionParameters,
+		},
+		Status: storkv1.ActionStatus{Status: storkv1.ActionStatusInitial},
+	}
+	actionObj, err := storkops.Instance().CreateAction(&action)
 	if err != nil {
-		util.CheckErr(err)
-		return nil
+		return nil, err
 	}
-	for _, action := range actionList.Items {
-		if isActionIncomplete(&action) {
-			return &action
-		}
-	}
-	return nil
+	return actionObj, nil
 }
 
-func newActionName(action storkv1.ActionType) string {
-	return strings.Join([]string{string(action), time.Now().Format(nameTimeSuffixFormat)}, "-")
+func getActionStatusMessage(action *storkv1.Action) string {
+	return fmt.Sprintf("To check %v status use the command : `storkctl get %v %v -n %v`", action.Spec.ActionType, action.Spec.ActionType, action.Name, action.Namespace)
 }
 
-func getDescribeActionMessage(action *storkv1.Action) string {
-	return "To check Action status use: " +
-		fmt.Sprintf("kubectl describe action %v -n %v", action.Name, action.Namespace)
+func getActionName(actionType storkv1.ActionType, referenceResourceName string) string {
+	return strings.Join([]string{string(actionType), referenceResourceName, GetCurrentTime().Format(nameTimeSuffixFormat)}, "-")
 }
