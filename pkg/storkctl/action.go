@@ -2,6 +2,7 @@ package storkctl
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"strings"
 	"time"
 
@@ -159,5 +160,11 @@ func getActionStatusMessage(action *storkv1.Action) string {
 }
 
 func getActionName(actionType storkv1.ActionType, referenceResourceName string) string {
-	return strings.Join([]string{string(actionType), referenceResourceName, GetCurrentTime().Format(nameTimeSuffixFormat)}, "-")
+	actionPrefix := string(actionType)
+	actionSuffix := GetCurrentTime().Format(nameTimeSuffixFormat)
+	lenAffixes := len(actionPrefix) + len(actionSuffix) + 2 // +2 for the 2 '-'s
+	if len(referenceResourceName) >= validation.DNS1123SubdomainMaxLength-lenAffixes {
+		referenceResourceName = referenceResourceName[:validation.DNS1123SubdomainMaxLength-lenAffixes]
+	}
+	return strings.Join([]string{actionPrefix, referenceResourceName, actionSuffix}, "-")
 }

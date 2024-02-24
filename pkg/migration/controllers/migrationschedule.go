@@ -163,21 +163,20 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return err
 			}
-			// create new migrationschedule on remote cluster
-			remoteMigrSched = migrationSchedule.DeepCopy()
-			remoteMigrSched.ResourceVersion = ""
-			remoteMigrSched.UID = ""
-			if remoteMigrSched.Annotations == nil {
-				remoteMigrSched.Annotations = make(map[string]string)
+			// create new migrationSchedule on remote cluster
+			var remoteMigrSchedObj = migrationSchedule.DeepCopy()
+			remoteMigrSchedObj.ResourceVersion = ""
+			remoteMigrSchedObj.UID = ""
+			if remoteMigrSchedObj.Annotations == nil {
+				remoteMigrSchedObj.Annotations = make(map[string]string)
 			}
-			remoteMigrSched.Annotations[StorkMigrationScheduleCopied] = "true"
+			remoteMigrSchedObj.Annotations[StorkMigrationScheduleCopied] = "true"
 			suspend := true
-			remoteMigrSched.Spec.Suspend = &suspend
-			remoteMigrSched.Status = stork_api.MigrationScheduleStatus{}
-			if _, err := remoteOps.CreateMigrationSchedule(remoteMigrSched); err != nil {
+			remoteMigrSchedObj.Spec.Suspend = &suspend
+			remoteMigrSchedObj.Status = stork_api.MigrationScheduleStatus{}
+			if remoteMigrSched, err = remoteOps.CreateMigrationSchedule(remoteMigrSchedObj); err != nil {
 				return err
 			}
-
 		} else if err != nil {
 			return err
 		}
@@ -201,8 +200,6 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				"Suspended",
 				msg)
 			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
-			// deactivate apps in namespace
-			// TODO: suspend deploy/sts,crds
 			return m.client.Update(context.TODO(), migrationSchedule)
 		}
 	}

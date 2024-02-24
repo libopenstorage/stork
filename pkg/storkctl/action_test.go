@@ -5,10 +5,9 @@ package storkctl
 
 import (
 	"fmt"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
-	"strings"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"testing"
 	"time"
 )
@@ -53,6 +52,7 @@ func TestPerformFailoverWithInvalidExcludeNamespaceList(t *testing.T) {
 
 func TestPerformFailoverMissingClusterPair(t *testing.T) {
 	defer resetTest()
+	mockTheTime()
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "-n", "kube-system"}
 	expected := "error: unable to find the cluster pair clusterPair1 in the kube-system namespace"
@@ -60,16 +60,17 @@ func TestPerformFailoverMissingClusterPair(t *testing.T) {
 
 	//create clusterPair and try again
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	failoverActionName := mockGetActionName(storkv1.ActionTypeFailover, "test-migrationschedule")
+	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	expected = fmt.Sprintf("Started failover for migrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestPerformFailoverWithIncludeNamespaceList(t *testing.T) {
 	defer resetTest()
+	mockTheTime()
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
-	failoverActionName := mockGetActionName(storkv1.ActionTypeFailover, "test-migrationschedule")
+	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	expected := fmt.Sprintf("Started failover for migrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
@@ -80,10 +81,11 @@ func TestPerformFailoverWithIncludeNamespaceList(t *testing.T) {
 
 func TestPerformFailoverWithExcludeNamespaceList(t *testing.T) {
 	defer resetTest()
+	mockTheTime()
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--exclude-namespaces", "ns1", "-n", "kube-system"}
-	failoverActionName := mockGetActionName(storkv1.ActionTypeFailover, "test-migrationschedule")
+	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	expected := fmt.Sprintf("Started failover for migrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
@@ -91,8 +93,19 @@ func TestPerformFailoverWithExcludeNamespaceList(t *testing.T) {
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns2"})
 }
 
-func mockGetActionName(actionType storkv1.ActionType, referenceResourceName string) string {
+func TestFailoverActionNameTruncation(t *testing.T) {
+	defer resetTest()
+	mockTheTime()
+	strWithLen253 := "utttaxvjedvxmjexmnapepwctfmjgydmidpcaantcarptudqufcpvideuttwbzgqxtexuceqnwnecxabuwaqzqypjxcvyubkwtpapziwkpdxzqfyjkyxnikfiauqvpktpkdurfzjrmyjzmhqhuqnpfjdnavfbkrrjqamtmjiphpdggcafmqugrmvqzwfchkukdeudbpxdzqqzeayjgcnphprurepjrqcwxbxrpnyhbdzkqveiukyzeghenfvp"
+	truncatedStr := strWithLen253[:validation.DNS1123SubdomainMaxLength-len("failover")-len("2024-01-01-000000")-2]
+	createTestMigrationSchedule(strWithLen253, "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	cmdArgs := []string{"perform", "failover", "-m", strWithLen253, "--exclude-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
+	failoverActionName := fmt.Sprintf("failover-%v-2024-01-01-000000", truncatedStr)
+	expected := fmt.Sprintf("Started failover for migrationSchedule kube-system/%v\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", strWithLen253, failoverActionName)
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func mockTheTime() {
 	mockNow := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.Local)
 	setMockTime(&mockNow)
-	return strings.Join([]string{string(actionType), referenceResourceName, GetCurrentTime().Format(nameTimeSuffixFormat)}, "-")
 }
