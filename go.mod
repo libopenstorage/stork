@@ -29,7 +29,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20231013094113-8ca7856dbe86
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240124012200-74280fbb6e27
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
@@ -64,10 +64,12 @@ require (
 
 require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
-	github.com/portworx/kdmp v0.4.1-0.20231204032720-337bcd4db162
 	github.com/golang/mock v1.6.0
+	github.com/portworx/kdmp v0.4.1-0.20231204032720-337bcd4db162
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	kubevirt.io/api v1.0.0
+	kubevirt.io/client-go v0.59.2
+	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1
 )
 
 require (
@@ -304,8 +306,6 @@ require (
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
-	kubevirt.io/client-go v0.59.2 // indirect
-	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
@@ -334,7 +334,7 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v0.0.0-20230511212757-41751b27d69f
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20231204032720-337bcd4db162
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230930052008-186afa1e82c4
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240124012200-74280fbb6e27
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20231013194137-84e2957806f0
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
