@@ -89,13 +89,22 @@ func (c *Client) GetVirtualMachineInstance(
 	//        name: disk-efficient-seahorse
 	//
 	disks, found, err := unstructured.NestedSlice(vmiRaw.Object, "spec", "domain", "devices", "disks")
-	if err != nil || !found {
+	if err != nil || !found || len(disks) == 0 {
 		return nil, fmt.Errorf("failed to find vmi disks: %w", err)
 	}
 	rootDiskName := ""
 	bootDisk, err := c.unstructuredFindKeyValInt64(disks, "bootOrder", 1)
-	if err != nil || bootDisk == nil {
+	if err != nil {
 		return nil, fmt.Errorf("failed to find boot disk in vmi: %w", err)
+	}
+	if bootDisk == nil {
+		// No "bootOrder" present in the VM spec. Assume that the first disk is the boot disk.
+		var ok bool
+		rawMap := disks[0]
+		bootDisk, ok = rawMap.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("wrong type of element in slice: expected map[string]interface{}, actual %T", rawMap)
+		}
 	}
 	rootDiskName, found, err = c.unstructuredGetValString(bootDisk, "name")
 	if err != nil || !found || rootDiskName == "" {
