@@ -280,6 +280,11 @@ func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) er
 		logrus.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}
+	if err := core.Instance().DeleteSecret(utils.GetImageSecretName(rbName), rbNamespace); err != nil && !k8sErrors.IsNotFound(err) {
+		errMsg := fmt.Sprintf("deletion of image secret %s failed: %v", rbName, err)
+		logrus.Errorf(errMsg)
+		return fmt.Errorf(errMsg)
+	}
 	return nil
 }
 
