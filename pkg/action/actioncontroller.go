@@ -205,7 +205,8 @@ func getLatestMigrationPolicyAndStatus(migrationSchedule storkv1.MigrationSchedu
 }
 
 func isMigrationComplete(status storkv1.MigrationStatusType) bool {
-	if status == storkv1.MigrationStatusPending ||
+	if status == storkv1.MigrationStatusInitial ||
+		status == storkv1.MigrationStatusPending ||
 		status == storkv1.MigrationStatusInProgress {
 		return false
 	}

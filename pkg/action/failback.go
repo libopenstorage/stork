@@ -23,7 +23,6 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		return
 	} else if action.Status.Status == storkv1.ActionStatusFailed {
 		action.Status.Stage = storkv1.ActionStageFinal
-		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
@@ -127,7 +126,6 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		if alreadyTriggered {
 			log.ActionLog(action).Infof("The latest migration %s is in threshold range", latestMigration.Name)
 			// Suspend migration schedule
-			log.ActionLog(action).Infof("Suspending the migration schedule %s", migrationSchedule.Name)
 			suspend := true
 			if *migrationSchedule.Spec.Suspend {
 				migrationSchedule.Spec.Suspend = &suspend
@@ -166,7 +164,6 @@ func (ac *ActionController) performDeactivateFailBackStage(action *storkv1.Actio
 		return
 	} else if action.Status.Status == storkv1.ActionStatusFailed {
 		action.Status.Stage = storkv1.ActionStageFinal
-		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
