@@ -181,6 +181,13 @@
             "items": {
               "type": "string"
             }
+          },
+          {
+            "name": "enumerate_options.backup_object_type",
+            "description": "filter to use backupObjectType on object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -690,6 +697,13 @@
             "items": {
               "type": "string"
             }
+          },
+          {
+            "name": "enumerate_options.backup_object_type",
+            "description": "filter to use backupObjectType on object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -1557,6 +1571,364 @@
         ]
       }
     },
+    "/v1/receiver": {
+      "post": {
+        "summary": "Create new alert manager receiver",
+        "operationId": "Create",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ReceiverCreateResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReceiverCreateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Receiver"
+        ]
+      },
+      "put": {
+        "summary": "Update the details of a alert manager receiver",
+        "operationId": "Update",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ReceiverUpdateResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReceiverUpdateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Receiver"
+        ]
+      }
+    },
+    "/v1/receiver/validate": {
+      "post": {
+        "summary": "Validates SMTP service",
+        "operationId": "ValidateSMTP",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ReceiverValidateSMTPResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReceiverValidateSMTPRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Receiver"
+        ]
+      }
+    },
+    "/v1/receiver/{org_id}": {
+      "get": {
+        "summary": "Returns a list of alert manager receivers",
+        "operationId": "Enumerate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ReceiverEnumerateResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
+          }
+        ],
+        "tags": [
+          "Receiver"
+        ]
+      }
+    },
+    "/v1/receiver/{org_id}/{name}/{uid}": {
+      "delete": {
+        "summary": "Delete a specific alert manager receiver",
+        "operationId": "Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ReceiverDeleteResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Receiver"
+        ]
+      }
+    },
+    "/v1/receiver/{org_id}/{name}/{uid}/{include_secrets}/{type}": {
+      "get": {
+        "summary": "Returns the details of a specific alert manager receiver",
+        "operationId": "Inspect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ReceiverInspectResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "in": "path",
+            "required": true,
+            "type": "boolean",
+            "format": "boolean"
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Receiver"
+        ]
+      }
+    },
+    "/v1/recipient": {
+      "post": {
+        "operationId": "Create",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RecipientCreateResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RecipientCreateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Recipient"
+        ]
+      },
+      "put": {
+        "summary": "Update the details of a recipient",
+        "operationId": "Update",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RecipientUpdateResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RecipientUpdateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Recipient"
+        ]
+      }
+    },
+    "/v1/recipient/{org_id}": {
+      "get": {
+        "summary": "Returns a list of recipients for alerting",
+        "operationId": "Enumerate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RecipientEnumerateResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "description": "Type of notification on user level.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "INVALID",
+              "EMAIL"
+            ],
+            "default": "INVALID"
+          }
+        ],
+        "tags": [
+          "Recipient"
+        ]
+      }
+    },
+    "/v1/recipient/{org_id}/{name}/{uid}": {
+      "get": {
+        "summary": "Returns the details of a specific recipient",
+        "operationId": "Inspect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RecipientInspectResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Recipient"
+        ]
+      },
+      "delete": {
+        "summary": "Delete a specific recipient",
+        "operationId": "Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RecipientDeleteResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Recipient"
+        ]
+      }
+    },
     "/v1/restore": {
       "post": {
         "summary": "Creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
@@ -1696,6 +2068,13 @@
             "items": {
               "type": "string"
             }
+          },
+          {
+            "name": "enumerate_options.backup_object_type",
+            "description": "filter to use backupObjectType on object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -2014,6 +2393,13 @@
             "items": {
               "type": "string"
             }
+          },
+          {
+            "name": "enumerate_options.backup_object_type",
+            "description": "filter to use backupObjectType on object.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -2598,7 +2984,7 @@
         },
         "csi_snapshot_class_name": {
           "type": "string",
-          "title": "Snapshot class name to use for backup (optional)"
+          "description": "Snapshot class name to use for backup (optional)\ndeprecated, not to be used."
         },
         "resource_types": {
           "type": "array",
@@ -2625,9 +3011,42 @@
         },
         "ns_label_selectors": {
           "type": "string"
+        },
+        "backup_object_type": {
+          "$ref": "#/definitions/BackupCreateRequestBackupObjectType",
+          "title": "backup object type is all namespace or virtualMachine specific backup"
+        },
+        "skip_vm_auto_exec_rules": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Skip auto rules for VirtualMachine Backup Object type"
+        },
+        "volume_snapshot_class_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
         }
       },
       "title": "Request message structure for backup create"
+    },
+    "BackupCreateRequestBackupObjectType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/BackupCreateRequestBackupObjectTypeType"
+        }
+      }
+    },
+    "BackupCreateRequestBackupObjectTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "All",
+        "VirtualMachine"
+      ],
+      "default": "Invalid"
     },
     "BackupCreateRequestBackupType": {
       "type": "string",
@@ -2748,7 +3167,8 @@
           "type": "string"
         },
         "csi_snapshot_class_name": {
-          "type": "string"
+          "type": "string",
+          "description": "deprecated, not to be used."
         },
         "resource_types": {
           "type": "array",
@@ -2806,8 +3226,41 @@
           "type": "boolean",
           "format": "boolean",
           "title": "this flag signifies if the backup involves large number of resources or not"
+        },
+        "backup_object_type": {
+          "$ref": "#/definitions/BackupInfoBackupObjectType",
+          "title": "backup object type is all namespace or virtualMachine specific backup"
+        },
+        "skip_vm_auto_exec_rules": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Skip auto rules for VirtualMachine Backup Object type"
+        },
+        "volume_snapshot_class_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
         }
       }
+    },
+    "BackupInfoBackupObjectType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/BackupInfoBackupObjectTypeType"
+        }
+      }
+    },
+    "BackupInfoBackupObjectTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "All",
+        "VirtualMachine"
+      ],
+      "default": "Invalid"
     },
     "BackupInfoBackupSchedule": {
       "type": "object",
@@ -3193,7 +3646,7 @@
         },
         "csi_snapshot_class_name": {
           "type": "string",
-          "title": "Snapshot class name to use for backup schedule (optional)"
+          "description": "Snapshot class name to use for backup schedule (optional)\ndeprecated, not to be used."
         },
         "resource_types": {
           "type": "array",
@@ -3223,9 +3676,42 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "backup_object_type": {
+          "$ref": "#/definitions/BackupScheduleCreateRequestBackupObjectType",
+          "title": "backup object type is all namespace or virtualMachine specific backup"
+        },
+        "skip_vm_auto_exec_rules": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Skip auto rules for VirtualMachine Backup Object type"
+        },
+        "volume_snapshot_class_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
+    },
+    "BackupScheduleCreateRequestBackupObjectType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/BackupScheduleCreateRequestBackupObjectTypeType"
+        }
+      }
+    },
+    "BackupScheduleCreateRequestBackupObjectTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "All",
+        "VirtualMachine"
+      ],
+      "default": "Invalid"
     },
     "BackupScheduleCreateRequestBackupType": {
       "type": "string",
@@ -3329,7 +3815,8 @@
           "type": "string"
         },
         "csi_snapshot_class_name": {
-          "type": "string"
+          "type": "string",
+          "description": "deprecated, not to be used."
         },
         "resource_types": {
           "type": "array",
@@ -3363,8 +3850,41 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "backup_object_type": {
+          "$ref": "#/definitions/BackupScheduleInfoBackupObjectType",
+          "title": "backup object type is all namespace or virtualMachine specific backup"
+        },
+        "skip_vm_auto_exec_rules": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Skip auto rules for VirtualMachine Backup Object type"
+        },
+        "volume_snapshot_class_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
         }
       }
+    },
+    "BackupScheduleInfoBackupObjectType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/BackupScheduleInfoBackupObjectTypeType"
+        }
+      }
+    },
+    "BackupScheduleInfoBackupObjectTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "All",
+        "VirtualMachine"
+      ],
+      "default": "Invalid"
     },
     "BackupScheduleInfoBackupType": {
       "type": "object",
@@ -3525,7 +4045,7 @@
         },
         "csi_snapshot_class_name": {
           "type": "string",
-          "title": "Snapshot class name to use for backup schedule (optional)"
+          "description": "Snapshot class name to use for backup schedule (optional)\ndeprecated, not to be used."
         },
         "schedule_policy_ref": {
           "$ref": "#/definitions/ObjectRef"
@@ -3538,6 +4058,13 @@
         },
         "post_exec_rule_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "volume_snapshot_class_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
         }
       },
       "title": "Define BackupScheduleUpdateRequest struct"
@@ -4067,6 +4594,43 @@
         }
       }
     },
+    "EmailConfig": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "title": "Sender email address"
+        },
+        "host": {
+          "type": "string",
+          "title": "Host IP Address"
+        },
+        "port": {
+          "type": "string",
+          "title": "Host port default value is 25"
+        },
+        "encryption_ssl": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Encryption if any (optional) default value is false"
+        },
+        "encryption_starttls": {
+          "type": "boolean",
+          "format": "boolean"
+        },
+        "authentication": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Authentication if any (optional) default values is false"
+        },
+        "auth_username": {
+          "type": "string"
+        },
+        "auth_password": {
+          "type": "string"
+        }
+      }
+    },
     "EnumerateOptions": {
       "type": "object",
       "properties": {
@@ -4113,6 +4677,10 @@
             "type": "string"
           },
           "title": "Filter to use owner uids on objects. Any object that contains the\nfilter will be returned"
+        },
+        "backup_object_type": {
+          "type": "string",
+          "title": "filter to use backupObjectType on object"
         }
       }
     },
@@ -4762,6 +5330,255 @@
         }
       }
     },
+    "ReceiverCreateRequest": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/CreateMetadata"
+        },
+        "receiver_info": {
+          "$ref": "#/definitions/ReceiverInfo"
+        }
+      }
+    },
+    "ReceiverCreateResponse": {
+      "type": "object",
+      "properties": {
+        "receiver": {
+          "$ref": "#/definitions/ReceiverObject"
+        }
+      }
+    },
+    "ReceiverDeleteResponse": {
+      "type": "object"
+    },
+    "ReceiverEnumerateResponse": {
+      "type": "object",
+      "properties": {
+        "receivers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReceiverObject"
+          }
+        }
+      }
+    },
+    "ReceiverInfo": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/ReceiverInfoType"
+        },
+        "email_config": {
+          "$ref": "#/definitions/EmailConfig"
+        }
+      }
+    },
+    "ReceiverInfoType": {
+      "type": "string",
+      "enum": [
+        "INVALID",
+        "EMAIL"
+      ],
+      "default": "INVALID"
+    },
+    "ReceiverInspectRequest": {
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "include_secrets": {
+          "type": "boolean",
+          "format": "boolean"
+        },
+        "uid": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "ReceiverInspectResponse": {
+      "type": "object",
+      "properties": {
+        "receiver": {
+          "$ref": "#/definitions/ReceiverObject"
+        }
+      }
+    },
+    "ReceiverObject": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/Metadata"
+        },
+        "receiver_info": {
+          "$ref": "#/definitions/ReceiverInfo"
+        }
+      }
+    },
+    "ReceiverUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/CreateMetadata"
+        },
+        "receiver_info": {
+          "$ref": "#/definitions/ReceiverInfo"
+        }
+      }
+    },
+    "ReceiverUpdateResponse": {
+      "type": "object"
+    },
+    "ReceiverValidateSMTPRequest": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/CreateMetadata"
+        },
+        "recipient_id": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "receiver_info_config": {
+          "$ref": "#/definitions/ReceiverInfo"
+        },
+        "receiver_inspect_config": {
+          "$ref": "#/definitions/ReceiverInspectRequest"
+        }
+      }
+    },
+    "ReceiverValidateSMTPResponse": {
+      "type": "object"
+    },
+    "RecipientCreateRequest": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/CreateMetadata"
+        },
+        "recipient_info": {
+          "$ref": "#/definitions/RecipientInfo"
+        }
+      }
+    },
+    "RecipientCreateResponse": {
+      "type": "object"
+    },
+    "RecipientDeleteResponse": {
+      "type": "object"
+    },
+    "RecipientEnumerateRequestType": {
+      "type": "string",
+      "enum": [
+        "INVALID",
+        "EMAIL"
+      ],
+      "default": "INVALID"
+    },
+    "RecipientEnumerateResponse": {
+      "type": "object",
+      "properties": {
+        "recipients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RecipientObject"
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Enabled will be an in memory value always fetched from Recevier Info"
+        }
+      }
+    },
+    "RecipientInfo": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/RecipientInfoType",
+          "title": "Type of notification on user level"
+        },
+        "recipient_id": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Based on type recipient list is added"
+        },
+        "active": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "current status set by user"
+        },
+        "receiver_ref": {
+          "$ref": "#/definitions/ObjectRef",
+          "title": "Link receiver object"
+        },
+        "severity": {
+          "$ref": "#/definitions/RecipientInfoSeverity",
+          "title": "Filter level of alert by severity"
+        }
+      }
+    },
+    "RecipientInfoSeverity": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "CRITICAL",
+        "WARNING"
+      ],
+      "default": "UNKNOWN"
+    },
+    "RecipientInfoType": {
+      "type": "string",
+      "enum": [
+        "INVALID",
+        "EMAIL"
+      ],
+      "default": "INVALID"
+    },
+    "RecipientInspectResponse": {
+      "type": "object",
+      "properties": {
+        "recipient": {
+          "$ref": "#/definitions/RecipientObject"
+        }
+      }
+    },
+    "RecipientObject": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/Metadata"
+        },
+        "recipient_info": {
+          "$ref": "#/definitions/RecipientInfo"
+        }
+      }
+    },
+    "RecipientUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/CreateMetadata"
+        },
+        "recipient_info": {
+          "$ref": "#/definitions/RecipientInfo"
+        }
+      }
+    },
+    "RecipientUpdateResponse": {
+      "type": "object"
+    },
     "ReplacePolicyType": {
       "type": "string",
       "enum": [
@@ -4857,9 +5674,30 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "backup_object_type": {
+          "$ref": "#/definitions/RestoreCreateRequestBackupObjectType",
+          "title": "backup object type is all namespace or virtualMachine specific backup"
         }
       },
       "title": "Define RestoreCreateRequest struct"
+    },
+    "RestoreCreateRequestBackupObjectType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/RestoreCreateRequestBackupObjectTypeType"
+        }
+      }
+    },
+    "RestoreCreateRequestBackupObjectTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "All",
+        "VirtualMachine"
+      ],
+      "default": "Invalid"
     },
     "RestoreCreateResponse": {
       "type": "object",
@@ -5004,9 +5842,30 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "backup_object_type": {
+          "$ref": "#/definitions/RestoreInfoBackupObjectType",
+          "title": "backup object type is all namespace or virtualMachine specific backup"
         }
       },
       "title": "Message for restore info"
+    },
+    "RestoreInfoBackupObjectType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/RestoreInfoBackupObjectTypeType"
+        }
+      }
+    },
+    "RestoreInfoBackupObjectTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "All",
+        "VirtualMachine"
+      ],
+      "default": "Invalid"
     },
     "RestoreInfoRestoreResourceState": {
       "type": "object",

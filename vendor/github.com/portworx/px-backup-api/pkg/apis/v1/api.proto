@@ -331,6 +331,7 @@ message BackupScheduleInfo {
     SuspendedBy suspended_by = 13;
     repeated ResourceInfo include_resources = 14;
     string stork_version = 15;
+    // deprecated, not to be used.
     string csi_snapshot_class_name = 16;
     repeated string resource_types = 17;
     ObjectRef schedule_policy_ref = 18;
@@ -344,6 +345,13 @@ message BackupScheduleInfo {
     // Target namespace of CR
     string target_namespace = 24;
     ObjectRef cluster_ref = 25;
+    // backup object type is all namespace or virtualMachine specific backup
+    BackupObjectType backup_object_type = 26;
+    // Skip auto rules for VirtualMachine Backup Object type
+    bool skip_vm_auto_exec_rules = 27;
+    // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
+    map<string, string> volume_snapshot_class_mapping = 28;
+
 
     message BackupType {
         Type type = 1;
@@ -391,6 +399,14 @@ message BackupScheduleInfo {
         Delete = 1;
         Retain = 2;
     }
+    message BackupObjectType {
+        Type type = 1;
+         enum Type {
+             Invalid = 0;
+             All = 1; // for All application backup
+             VirtualMachine = 2; // virtualMachine for VirtualMachine specific backup
+         }
+     }
 }
 
 message BackupScheduleObject {
@@ -491,6 +507,7 @@ message BackupInfo {
     repeated ResourceInfo include_resources = 16;
     uint64 resource_count = 17;
     string stork_version = 18;
+    // deprecated, not to be used.
     string csi_snapshot_class_name = 19;
     repeated string resource_types = 20;
     ObjectRef backup_location_ref = 21;
@@ -511,6 +528,12 @@ message BackupInfo {
     string target_namespace = 33;
     // this flag signifies if the backup involves large number of resources or not
     bool large_resource_enabled = 34;
+    // backup object type is all namespace or virtualMachine specific backup
+    BackupObjectType backup_object_type = 35;
+    // Skip auto rules for VirtualMachine Backup Object type
+    bool skip_vm_auto_exec_rules = 36;
+    // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
+    map<string, string> volume_snapshot_class_mapping = 37;
 
     message BackupType {
         Type type = 1;
@@ -575,6 +598,16 @@ message BackupInfo {
         Applications = 5;
         Final = 6;
     }
+    message BackupObjectType {
+        Type type= 1;
+        enum Type {
+            Invalid = 0;
+            All = 1; // for All application backup
+            VirtualMachine = 2; // virtualMachine for VirtualMachine specific backup
+        }
+    }
+
+
 }
 
 // Message for Backup object which will be stored in Datastore.
@@ -656,6 +689,8 @@ message RestoreInfo {
     // current activity while doing resource restore
     RestoreResourceState restore_status = 22;
     ObjectRef cluster_ref = 23;
+    // backup object type is all namespace or virtualMachine specific backup
+    BackupObjectType backup_object_type = 24;
 
     message RestoreResourceState {
         ResourceStatus restore_status = 1;
@@ -706,6 +741,14 @@ message RestoreInfo {
 
         Status status = 1;
         string reason = 2;
+    }
+    message BackupObjectType {
+       Type type = 1;
+        enum Type {
+            Invalid = 0;
+            All = 1; // for All application backup
+            VirtualMachine = 2; // virtualMachine for VirtualMachine specific backup
+        }
     }
 }
 
@@ -760,6 +803,9 @@ message EnumerateOptions {
     // Filter to use owner uids on objects. Any object that contains the
     // filter will be returned
     repeated string owners = 9;
+    // filter to use backupObjectType on object
+    string backup_object_type = 10;
+
 }
 
 service SchedulePolicy {
@@ -940,6 +986,7 @@ message BackupScheduleCreateRequest {
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 10;
     // Snapshot class name to use for backup schedule (optional)
+    // deprecated, not to be used.
     string csi_snapshot_class_name = 11;
     // List of resource types to backup (optional)
     repeated string resource_types = 12;
@@ -951,11 +998,25 @@ message BackupScheduleCreateRequest {
     BackupType backup_type = 17;
     string ns_label_selectors = 18;
     ObjectRef cluster_ref = 19;
+    // backup object type is all namespace or virtualMachine specific backup
+    BackupObjectType backup_object_type = 20;
+    // Skip auto rules for VirtualMachine Backup Object type
+    bool skip_vm_auto_exec_rules = 21;
+    // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
+    map<string, string> volume_snapshot_class_mapping = 22;
 
     enum BackupType {
         Invalid = 0;
         Generic = 1;
         Normal = 2;
+    }
+    message BackupObjectType {
+        Type type = 1;
+        enum Type {
+            Invalid = 0;
+            All = 1; // for All application backup
+            VirtualMachine = 2; // virtualMachine for VirtualMachine specific backup
+        }
     }
 }
 
@@ -983,11 +1044,14 @@ message BackupScheduleUpdateRequest {
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 11;
     // Snapshot class name to use for backup schedule (optional)
+    // deprecated, not to be used.
     string csi_snapshot_class_name = 12;
     ObjectRef schedule_policy_ref = 13;
     ObjectRef backup_location_ref = 14;
     ObjectRef pre_exec_rule_ref = 15;
     ObjectRef post_exec_rule_ref = 16;
+    // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
+    map<string, string> volume_snapshot_class_mapping = 17;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -1006,6 +1070,7 @@ message BackupScheduleEnumerateRequest {
     ObjectRef backup_location_ref = 4;
     // Optional arguments for enumeration
     EnumerateOptions enumerate_options = 5;
+
 }
 
 // Define BackupScheduleEnumerateResponse struct
@@ -1318,6 +1383,275 @@ message CloudCredentialOwnershipUpdateRequest {
 
 message CloudCredentialOwnershipUpdateResponse {}
 
+service Receiver {
+    // Create new alert manager receiver
+    rpc Create(ReceiverCreateRequest) 
+        returns (ReceiverCreateResponse) {
+            option (google.api.http) = {
+                post : "/v1/receiver"
+                body : "*"
+            };
+    }
+
+    // Returns a list of alert manager receivers
+    rpc Enumerate(ReceiverEnumerateRequest)
+        returns (ReceiverEnumerateResponse) {
+            option (google.api.http) = {
+                get : "/v1/receiver/{org_id}"
+            };
+        }
+
+    // Returns the details of a specific alert manager receiver
+    rpc Inspect(ReceiverInspectRequest)
+        returns (ReceiverInspectResponse) {
+            option (google.api.http) = {
+            get : "/v1/receiver/{org_id}/{name}/{uid}/{include_secrets}/{type}"
+        };
+    }
+
+    // Update the details of a alert manager receiver
+    rpc Update(ReceiverUpdateRequest)
+        returns (ReceiverUpdateResponse) {
+         option (google.api.http) = {
+            put : "/v1/receiver"
+            body : "*"
+        };
+    }
+
+    // Delete a specific alert manager receiver
+    rpc Delete(ReceiverDeleteRequest)
+    returns (ReceiverDeleteResponse) {
+        option (google.api.http) = {
+            delete : "/v1/receiver/{org_id}/{name}/{uid}"
+        };
+    }
+
+    // Validates SMTP service
+    rpc ValidateSMTP(ReceiverValidateSMTPRequest)
+    returns (ReceiverValidateSMTPResponse) {
+        option (google.api.http) = {
+            post: "/v1/receiver/validate"
+            body: "*"
+        };
+    }
+}
+
+message EmailConfig {
+    // Sender email address
+    string from = 1;
+    // Host IP Address
+    string host = 2;
+    // Host port default value is 25
+    string port = 3;
+    // Encryption if any (optional) default value is false
+    bool encryption_ssl = 4;
+    bool encryption_starttls = 5;
+    // Authentication if any (optional) default values is false
+    bool authentication = 6;
+    string auth_username = 7;
+    string auth_password = 8 [
+        (gogoproto.jsontag) = "encryptionkey",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+}
+
+message ReceiverInfo {
+    Type type = 1;
+
+    enum Type {
+        INVALID  = 0;
+        EMAIL = 1;
+    }
+
+    oneof config {
+        EmailConfig email_config = 100;
+    }
+}
+
+message ReceiverObject {
+    Metadata metadata = 1
+    [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
+    ReceiverInfo receiver_info = 2;
+}
+
+message ReceiverCreateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    ReceiverInfo receiver_info = 2;
+}
+
+message ReceiverCreateResponse {
+    ReceiverObject receiver = 1; 
+}
+
+
+message ReceiverEnumerateRequest {
+    string org_id = 1;
+    bool include_secrets = 2;
+}
+
+message ReceiverEnumerateResponse {
+    repeated ReceiverObject receivers = 1;
+}
+
+message ReceiverInspectRequest {
+    string org_id = 1;
+    string name  = 2;
+    bool include_secrets = 3;
+    string uid = 4;
+    string type = 5;
+}
+
+message ReceiverInspectResponse {
+    ReceiverObject receiver = 1;
+}
+
+message ReceiverUpdateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    ReceiverInfo receiver_info = 2;
+}
+
+message ReceiverUpdateResponse {}
+
+message ReceiverDeleteRequest {
+    string org_id = 1;
+    string name = 2;
+    string uid = 3;
+}
+
+message ReceiverDeleteResponse {}
+
+message ReceiverValidateSMTPRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    repeated string recipient_id = 2;
+    oneof config {
+        ReceiverInfo receiver_info_config = 100;
+        ReceiverInspectRequest receiver_inspect_config = 101;
+
+    }
+}
+
+message ReceiverValidateSMTPResponse {}
+
+service Recipient {
+    rpc Create(RecipientCreateRequest) 
+        returns (RecipientCreateResponse) {
+            option (google.api.http) = {
+                post : "/v1/recipient"
+                body : "*"
+            };
+    }
+
+    // Returns a list of recipients for alerting
+    rpc Enumerate(RecipientEnumerateRequest)
+        returns (RecipientEnumerateResponse) {
+            option (google.api.http) = {
+                get : "/v1/recipient/{org_id}"
+            };
+        }
+
+    // Returns the details of a specific recipient
+    rpc Inspect(RecipientInspectRequest)
+        returns (RecipientInspectResponse) {
+            option (google.api.http) = {
+            get : "/v1/recipient/{org_id}/{name}/{uid}"
+        };
+    }
+
+    // Update the details of a recipient
+    rpc Update(RecipientUpdateRequest)
+        returns (RecipientUpdateResponse) {
+         option (google.api.http) = {
+            put : "/v1/recipient"
+            body : "*"
+        };
+    }
+
+    // Delete a specific recipient
+    rpc Delete(RecipientDeleteRequest)
+    returns (RecipientDeleteResponse) {
+        option (google.api.http) = {
+            delete : "/v1/recipient/{org_id}/{name}/{uid}"
+        };
+    }
+}
+
+message RecipientObject {
+    Metadata metadata = 1
+    [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
+    RecipientInfo recipient_info = 2;
+}
+
+message RecipientInfo {
+    // Type of notification on user level
+    Type type = 1;
+    enum Type {
+        INVALID = 0;
+        EMAIL = 1;
+    }
+    // Based on type recipient list is added
+    repeated string recipient_id = 2;
+    // current status set by user
+    bool active = 3;
+    // Link receiver object
+    ObjectRef receiver_ref = 4;
+    // Filter level of alert by severity
+    Severity severity = 5;
+    enum Severity {
+        UNKNOWN = 0;
+        CRITICAL = 1;
+        WARNING = 2;
+    }
+
+}
+
+message RecipientCreateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    RecipientInfo recipient_info = 2;
+}
+
+message RecipientCreateResponse {}
+
+message RecipientEnumerateRequest {
+    string org_id = 1;
+    // Type of notification on user level
+    Type type = 2;
+    enum Type {
+        INVALID = 0;
+        EMAIL = 1;
+    }
+}
+
+message RecipientEnumerateResponse {
+    repeated RecipientObject recipients = 1;
+    // Enabled will be an in memory value always fetched from Recevier Info
+    bool enabled = 2;
+}
+
+message RecipientInspectRequest {
+    string org_id = 1;
+    string name = 2;
+    string uid = 3;
+}
+
+message RecipientInspectResponse {
+    RecipientObject recipient = 1;
+}
+
+message RecipientUpdateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    RecipientInfo recipient_info = 2;
+}
+
+message RecipientUpdateResponse {}
+
+message RecipientDeleteRequest {
+    string org_id = 1;
+    string name = 2;
+    string uid = 3;
+}
+
+message RecipientDeleteResponse {}
+
 service BackupLocation {
     // Creates new backup location
     rpc Create(BackupLocationCreateRequest)
@@ -1561,6 +1895,7 @@ message BackupCreateRequest {
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 8;
     // Snapshot class name to use for backup (optional)
+    // deprecated, not to be used.
     string csi_snapshot_class_name = 9;
     // List of resource types to backup (optional)
     repeated string resource_types = 10;
@@ -1571,12 +1906,26 @@ message BackupCreateRequest {
     BackupType backup_type = 14;
     ObjectRef cluster_ref = 15;
     string ns_label_selectors = 16;
+    // backup object type is all namespace or virtualMachine specific backup
+    BackupObjectType backup_object_type = 17;
+    // Skip auto rules for VirtualMachine Backup Object type
+    bool skip_vm_auto_exec_rules = 18;
+    // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
+    map<string, string> volume_snapshot_class_mapping = 19;
 
     enum BackupType {
         Invalid = 0;
         Generic = 1;
         Normal = 2;
     }
+    message BackupObjectType {
+        Type type = 1;
+         enum Type {
+             Invalid = 0;
+             All = 1; // for All application backup
+             VirtualMachine = 2; // virtualMachine for VirtualMachine specific backup
+         }
+     }
 }
 
 // Response message structure for backup create
@@ -1709,7 +2058,17 @@ message RestoreCreateRequest {
     // mapping of source rancher project display names to target rancher project display names
     map<string, string> rancher_project_name_mapping = 11;
     ObjectRef cluster_ref = 12;
+    // backup object type is all namespace or virtualMachine specific backup
+    BackupObjectType backup_object_type = 13;
 
+    message BackupObjectType {
+        Type type = 1;
+         enum Type {
+             Invalid = 0;
+             All = 1; // for All application backup
+             VirtualMachine = 2; // virtualMachine for VirtualMachine specific backup
+         }
+     }
 }
 
 // Define RestoreCreateResponse struct
