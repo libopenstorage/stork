@@ -572,19 +572,28 @@ func InitInstance() {
 		t.Tags["px-version"] = pxVersion
 	}
 
-	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], "pxctl status", node.ConnectionOpts{
+	PrintPxctlStatus()
+	ns, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Error occured while getting volume driver namespace")
+	installGrafana(ns)
+}
+
+func PrintPxctlStatus() {
+	PrintCommandOutput("pxctl status")
+}
+
+func PrintCommandOutput(cmnd string) {
+	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	})
 	if err != nil {
-		log.Errorf("failed to get pxctl status, Err: %v", err)
+		log.Errorf("failed to run command [%s], Err: %v", cmnd, err)
 	}
 	log.Infof(output)
-	ns, err := Inst().V.GetVolumeDriverNamespace()
-	log.FailOnError(err, "Error occured while getting volume driver namespace")
-	installGrafana(ns)
+
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -6651,6 +6660,9 @@ func ParseFlags() {
 				IsPDSApps:                           deployPDSApps,
 				SkipSystemChecks:                    skipSystemChecks,
 			}
+			if instance.S.String() == "openshift" {
+				instance.LogLoc = "/mnt"
+			}
 		})
 	}
 	printFlags()
@@ -7784,7 +7796,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
-	var maxCloudDrives int32
+	var maxCloudDrives int
 
 	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
@@ -7798,32 +7810,15 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	var currentNodeDrives int
+
+	drvM, err := Inst().V.GetPoolDrives(stNode)
 	if err != nil {
 		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
 	}
-	var currentNodeDrives int32
 
-	driveCountMap := make(map[string]int32, 0)
-
-	for _, b := range drivesMap {
-		labels := b.Labels
-		for k, v := range labels {
-			if k == "pxpool" {
-				driveCountMap[v] += 1
-			}
-		}
-	}
-
-	for _, vals := range driveCountMap {
-		currentNodeDrives += vals
+	for _, devices := range drvM {
+		currentNodeDrives += len(devices)
 	}
 	eligibilityMap := make(map[string]bool)
 
@@ -7832,13 +7827,21 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	if currentNodeDrives == maxCloudDrives {
 		eligibilityMap[stNode.Id] = false
 	}
+	nodePoolStatus, err := Inst().V.GetNodePoolsStatus(*stNode)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, pool := range stNode.StoragePools {
 		eligibilityMap[pool.Uuid] = true
 
-		d := driveCountMap[fmt.Sprintf("%d", pool.ID)]
-		log.Infof("pool %s has %d drives", pool.Uuid, d)
-		if d == POOL_MAX_CLOUD_DRIVES {
+		d := drvM[fmt.Sprintf("%d", pool.ID)]
+		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
+		if len(d) == POOL_MAX_CLOUD_DRIVES {
+			eligibilityMap[pool.Uuid] = false
+		}
+
+		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
 		}
 	}

@@ -268,14 +268,18 @@ func (v *vsphere) AddMachine(vmName string) error {
 
 // RebootVM reboots vsphere VM
 func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
+	//Reestblish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
 	if _, ok := vmMap[n.Name]; !ok {
 		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
 	}
-	//Reestblish connection to avoid session timeout.
-	v.connect()
+
 	vm := vmMap[n.Name]
 	log.Infof("Rebooting VM: %s  ", vm.Name())
-	err := vm.RebootGuest(v.ctx)
+	err = vm.RebootGuest(v.ctx)
 	if err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
@@ -287,6 +291,7 @@ func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 
 // powerOnVM powers on VM by providing VM object
 func (v *vsphere) powerOnVM(vm *object.VirtualMachine) error {
+
 	// Checking the VM state before powering it On
 	powerState, err := vm.PowerState(v.ctx)
 	if err != nil {
@@ -303,7 +308,7 @@ func (v *vsphere) powerOnVM(vm *object.VirtualMachine) error {
 		return fmt.Errorf("failed to power on %s: %v", vm.Name(), err)
 	}
 	if _, err := tsk.WaitForResult(v.ctx); err != nil {
-		return fmt.Errorf("failed to reboot VM %s. cause %v", vm.Name(), err)
+		return fmt.Errorf("failed to power on VM %s. cause %v", vm.Name(), err)
 	}
 	return nil
 }
@@ -311,13 +316,19 @@ func (v *vsphere) powerOnVM(vm *object.VirtualMachine) error {
 // PowerOnVM powers on the VM if not already on
 func (v *vsphere) PowerOnVM(n node.Node) error {
 	var err error
+	//Reestblish connection to avoid session timeout.
+	err = v.connect()
+	if err != nil {
+		return err
+	}
+
 	vm := vmMap[n.Name]
 
 	log.Infof("Powering on VM: %s  ", vm.Name())
 	if err = v.powerOnVM(vm); err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to reboot VM %s. cause %v", vm.Name(), err),
+			Cause: fmt.Sprintf("failed to power on VM %s. cause %v", vm.Name(), err),
 		}
 	}
 
@@ -327,7 +338,13 @@ func (v *vsphere) PowerOnVM(n node.Node) error {
 // PowerOnVMByName powers on VM by using name
 func (v *vsphere) PowerOnVMByName(vmName string) error {
 	// Make sure vmName is part of vmMap before using this method
+
 	var err error
+	//Reestblish connection to avoid session timeout.
+	err = v.connect()
+	if err != nil {
+		return err
+	}
 	vm := vmMap[vmName]
 
 	log.Infof("Powering on VM: %s  ", vm.Name())
@@ -340,6 +357,11 @@ func (v *vsphere) PowerOnVMByName(vmName string) error {
 // PowerOffVM powers off the VM if not already off
 func (v *vsphere) PowerOffVM(n node.Node) error {
 	var err error
+	//Reestblish connection to avoid session timeout.
+	err = v.connect()
+	if err != nil {
+		return err
+	}
 	vm := vmMap[n.Name]
 
 	log.Infof("\nPowering off VM: %s  ", vm.Name())
@@ -360,13 +382,18 @@ func (v *vsphere) PowerOffVM(n node.Node) error {
 // DestroyVM powers off the VM if not already off
 func (v *vsphere) DestroyVM(n node.Node) error {
 	var err error
+	//Reestblish connection to avoid session timeout.
+	err = v.connect()
+	if err != nil {
+		return err
+	}
 	vm := vmMap[n.Name]
 
 	log.Infof("\nDestroying VM: %s  ", vm.Name())
 	tsk, err := vm.Destroy(v.ctx)
 
 	if err != nil {
-		return fmt.Errorf("Failed to power off %s: %v", vm.Name(), err)
+		return fmt.Errorf("Failed to destroy %s: %v", vm.Name(), err)
 	}
 	if _, err := tsk.WaitForResult(v.ctx); err != nil {
 
@@ -381,6 +408,11 @@ func (v *vsphere) DestroyVM(n node.Node) error {
 
 // ShutdownNode shutsdown the vsphere VM
 func (v *vsphere) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
+	//Reestblish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
 	if _, ok := vmMap[n.Name]; !ok {
 		return fmt.Errorf("Could not fetch VM for node: %s", n.Name)
 	}
@@ -388,7 +420,7 @@ func (v *vsphere) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error
 	vm := vmMap[n.Name]
 
 	log.Infof("Shutting down VM: %s  ", vm.Name())
-	err := vm.ShutdownGuest(v.ctx)
+	err = vm.ShutdownGuest(v.ctx)
 	if err != nil {
 		return &node.ErrFailedToShutdownNode{
 			Node:  n,

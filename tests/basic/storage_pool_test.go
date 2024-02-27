@@ -5644,28 +5644,17 @@ var _ = Describe("{PoolDelete}", func() {
 				log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
 			}
 
-			systemOpts := node.SystemctlOpts{
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: defaultRetryInterval,
-				},
-				Action: "start",
-			}
-
-			drivesMap, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
+			drivesMap, err := Inst().V.GetPoolDrives(&nodeSelected)
 			jPath := jDev[:len(jDev)-1]
 		outer:
 			for k, v := range drivesMap {
-				if strings.Contains(k, jPath) {
-					drvlabels := v.Labels
-					for k, v := range drvlabels {
-						if k == "pxpool" {
-							log.Infof("Journal partitioned with drive path: %s with pool id: %s", k, v)
-							jrnlPartPoolID = v
-							break outer
-						}
+				for _, dv := range v {
+					if strings.Contains(dv, jPath) {
+						jrnlPartPoolID = k
+						break outer
 					}
 				}
+
 			}
 			if jrnlPartPoolID != "" {
 				err = DeleteGivenPoolInNode(nodeSelected, jrnlPartPoolID, false)

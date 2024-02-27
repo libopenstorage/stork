@@ -836,7 +836,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	}
 
 	if !isPXOnControlplane && len(kubeNode.Spec.Taints) > 0 {
-		log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		log.Infof("PX is not enabled on node %v due to taints [%v]. Will be skipped for tests.", n.Name, kubeNode.Spec.Taints)
 		return false, nil
 	}
 

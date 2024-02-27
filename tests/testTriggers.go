@@ -929,6 +929,12 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 		UpdateOutcome(event, err)
 
 		for _, n := range storageNodes {
+			//selecting healthy nodes for repl add operation
+			err = isNodeHealthy(n, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			storageNodeMap[n.Id] = n
 		}
 
@@ -936,7 +942,6 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
-			var err error
 			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -972,9 +977,7 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 		}
 
 		if selctx != nil {
-
 			var appVolumes []*volume.Volume
-			var err error
 			stepLog = fmt.Sprintf("get volumes for %s app", selctx.App.Key)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -987,30 +990,50 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 			})
 
 			for _, v := range appVolumes {
-
 				currRep, err := Inst().V.GetReplicationFactor(v)
 				UpdateOutcome(event, err)
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					log.Error(err)
+					UpdateOutcome(event, err)
+					continue
+				}
+				if replStatus != "Up" {
+					continue
+				}
 
 				if currRep != 0 {
-					//Changing replication factor to 1
-					if currRep > 1 {
-						log.Infof("Current replication is > 1, reducing it before proceeding")
-						opts := volume.Options{
-							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-						}
-						dashStats := make(map[string]string)
-						dashStats["volume-name"] = v.Name
-						dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-						dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-						updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
-						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
-						if err != nil {
-							log.Errorf("There is an error decreasing repl [%v]", err.Error())
-							UpdateOutcome(event, err)
-						}
+					for {
 
-						log.Infof("waiting for 5 mins for data to deleted completely")
-						time.Sleep(5 * time.Minute)
+						//Changing replication factor to 1
+						if currRep > 1 {
+							log.Infof("Current replication is > 1, reducing it before proceeding")
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+							updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+							if err != nil {
+								log.Errorf("There is an error decreasing repl [%v]", err.Error())
+								UpdateOutcome(event, err)
+								return
+							}
+
+							log.Infof("waiting for 5 mins for data to deleted completely")
+							time.Sleep(5 * time.Minute)
+							currRep, err = Inst().V.GetReplicationFactor(v)
+							if err != nil {
+								log.Errorf("There is an error getting  repl  factor for vol [%s],err:[%v]", v.Name, err.Error())
+								UpdateOutcome(event, err)
+								return
+							}
+						} else {
+							break
+						}
 					}
 				}
 
@@ -1074,6 +1097,14 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 				if isPureVol {
 					log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
+					continue
+				}
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+				if replStatus != "Up" {
 					continue
 				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
@@ -1259,6 +1290,15 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 				}
 				if isPureVol {
 					log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
+					continue
+				}
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+
+				if replStatus != "Up" {
 					continue
 				}
 				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
@@ -1553,6 +1593,11 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, appNode := range node.GetStorageDriverNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 				Inst().V.String(), appNode.Name)
 			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
@@ -1919,11 +1964,6 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 		log.InfoD(stepLog)
 		for _, appNode := range node.GetStorageNodes() {
 
-			err := isNodeHealthy(appNode, event.Event.Type)
-			if err != nil {
-				UpdateOutcome(event, err)
-				continue
-			}
 			poolsStatus, err := Inst().V.GetNodePoolsStatus(appNode)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -2091,18 +2131,17 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, appNode := range driverNodesToRestart {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			dashStats := make(map[string]string)
 			dashStats["node"] = appNode.Name
 			updateLongevityStats(RestartManyVolDriver, stats.PXRestartEventName, dashStats)
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
-				err := isNodeHealthy(appNode, event.Event.Type)
-				if err != nil {
-					UpdateOutcome(event, err)
-					return
-				}
-
 				stepLog = fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -2398,6 +2437,11 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
 		selectedNodes := make([]string, len(nodesToReboot))
 		for _, n := range nodesToReboot {
+			err := isNodeHealthy(n, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			selectedNodes = append(selectedNodes, n.Name)
 		}
 		// Reboot node and check driver status
@@ -5188,6 +5232,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	if err != nil {
 		log.Error(err.Error())
 		UpdateOutcome(event, err)
+		return
 	}
 
 	expansionType := "resize-disk"
@@ -5198,6 +5243,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 
 	if poolValidity {
 		initialPoolSize := pool.TotalSize / units.GiB
+		var pNode *node.Node
 
 		dashStats := make(map[string]string)
 		dashStats["pool-uuid"] = pool.Uuid
@@ -5207,6 +5253,22 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		if resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK {
 			statType = stats.ResizeDiskEventName
 		}
+		isDmthin, _ := IsDMthin()
+		if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+			pNode, err = GetNodeFromPoolUUID(pool.Uuid)
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+				return
+			}
+			err = EnterPoolMaintenance(*pNode)
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+				return
+			}
+		}
+
 		updateLongevityStats(event.Event.Type, statType, dashStats)
 		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
 		if err != nil {
@@ -5216,27 +5278,43 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		} else {
 			if doNodeReboot {
 				err = WaitForExpansionToStart(pool.Uuid)
-				log.Error(err.Error())
-				UpdateOutcome(event, err)
-				if err == nil {
-					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
+				if err != nil {
 					log.Error(err.Error())
 					UpdateOutcome(event, err)
+				}
+
+				if err == nil {
+					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
+					if err != nil {
+						log.Error(err.Error())
+						UpdateOutcome(event, err)
+					}
 					dashStats = make(map[string]string)
 					dashStats["node"] = storageNode.Name
 
 					updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 					err = RebootNodeAndWait(*storageNode)
-					log.Error(err.Error())
-					UpdateOutcome(event, err)
+					if err != nil {
+						log.Error(err.Error())
+						UpdateOutcome(event, err)
+					}
 				}
 
 			}
 			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 			if err != nil {
 				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
+				UpdateOutcome(event, err)
+			}
+
+		}
+
+		if pNode != nil {
+			err := ExitPoolMaintenance(*pNode)
+			if err != nil {
 				log.Error(err.Error())
 				UpdateOutcome(event, err)
+				return
 			}
 		}
 	}
@@ -5646,7 +5724,6 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling auto fstrim, Error:%v", err)
-						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					} else {
 						log.InfoD("AutoFsTrim is successfully enabled")
@@ -6124,7 +6201,6 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling trashcan, Error:%v", err)
-						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					} else {
@@ -6215,8 +6291,8 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						"--relaxedreclaim-delete-seconds": "600",
 					})
 					if err != nil {
+						log.Errorf(err.Error())
 						err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
-						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					} else {
@@ -6330,6 +6406,10 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			} else {
 				decommissionedNode = nodeToDecomm
 			}
+			err = Inst().S.RefreshNodeRegistry()
+			UpdateOutcome(event, err)
+			err = Inst().V.RefreshDriverEndpoints()
+			UpdateOutcome(event, err)
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
 		})
@@ -8953,7 +9033,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 		if int(maxStorageNodesPerZone) < numOfStorageNodes {
 			//updating max per zone
-			updatedMaxStorageNodesPerZone = uint32(numOfStorageNodes)
+			updatedMaxStorageNodesPerZone = uint32(numOfStorageNodes) + 1
 		}
 		if updatedMaxStorageNodesPerZone != 0 {
 
@@ -9011,7 +9091,11 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
-	dash.VerifySafely(numOfStorageNodes+1, updatedStorageNodesCount, "verify new storage node is added")
+	expectedStorageNodeCount := numOfStorageNodes + 1
+	if updatedStorageNodesCount != expectedStorageNodeCount {
+		PrintPxctlStatus()
+	}
+	dash.VerifySafely(updatedStorageNodesCount, expectedStorageNodeCount, "verify new storage node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
@@ -9119,7 +9203,12 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
-	dash.VerifySafely(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")
+
+	expectedStorageLessNodeCount := numOfStoragelessNodes + 1
+	if updatedStoragelessNodesCount != expectedStorageLessNodeCount {
+		PrintPxctlStatus()
+	}
+	dash.VerifySafely(updatedStoragelessNodesCount, expectedStorageLessNodeCount, "verify new storageless node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
@@ -9308,14 +9397,16 @@ func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan 
 					log.InfoD("wait for %v for node reboot", 1*time.Minute)
 					time.Sleep(1 * time.Minute)
 
-					// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
-					err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
-						Action: "start",
-						ConnectionOpts: node.ConnectionOpts{
-							Timeout:         5 * time.Minute,
-							TimeBeforeRetry: 10 * time.Second,
-						}})
-					UpdateOutcome(event, err)
+					if Inst().S.String() != openshift.SchedName {
+						// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
+						err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
+							Action: "start",
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         5 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							}})
+						UpdateOutcome(event, err)
+					}
 
 					ctx.RefreshStorageEndpoint = true
 					n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 10*time.Second)

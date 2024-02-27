@@ -88,6 +88,7 @@ func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error 
 		return err
 	}
 	log.Info("[Torpedo] Cluster version set successfully. Setting up node group version now ...")
+	time.Sleep(2 * time.Minute)
 
 	err = o.ops.SetInstanceGroupVersion(o.instanceGroupName, version, timeout)
 	if err != nil {
