@@ -26,7 +26,7 @@ var _ = Describe("{UpgradePxBackup}", func() {
 	It("Upgrade Px Backup", func() {
 		Step("Upgrade Px Backup", func() {
 			log.InfoD("Upgrade Px Backup to version %s", LatestPxBackupVersion)
-			err := UpgradePxBackup(LatestPxBackupVersion)
+			err := PxBackupUpgrade(LatestPxBackupVersion)
 			dash.VerifyFatal(err, nil, "Verifying Px Backup upgrade completion")
 		})
 	})
@@ -485,7 +485,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				LatestPxBackupVersionFromEnv = LatestPxBackupVersion
 			}
 			log.InfoD("Upgrading px-backup to latest version [%s]", LatestPxBackupVersionFromEnv)
-			err := UpgradePxBackup(LatestPxBackupVersionFromEnv)
+			err := PxBackupUpgrade(LatestPxBackupVersionFromEnv)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying completion of px-backup upgrade to latest version [%s]", LatestPxBackupVersionFromEnv))
 			// Stork Version will be upgraded on both source and destination if env variable TARGET_STORK_VERSION is defined.
 			targetStorkVersion := os.Getenv("TARGET_STORK_VERSION")
