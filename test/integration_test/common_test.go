@@ -45,6 +45,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	aetosutil "github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/stats"
 	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
@@ -157,6 +158,7 @@ var volumeDriver volume.Driver
 
 var storkVolumeDriver storkdriver.Driver
 var objectStoreDriver objectstore.Driver
+var dash *aetosutil.Dashboard
 
 var snapshotScaleCount int
 var migrationScaleCount int
@@ -2013,6 +2015,10 @@ func getByteDataFromFile(filePath string) ([]byte, error) {
 
 func updateDashStats(testName string, testResult *string) {
 	var err error
+	dash.IsEnabled, err = strconv.ParseBool(os.Getenv(enableDashStats))
+	if dash.IsEnabled && err == nil {
+		logrus.Infof("Dash is not enabled, stork integration tests will NOT push stats from this run to Aetos.")
+	}
 	dashStats := make(map[string]string)
 	dashStats["test_suite"] = currentTestSuite
 	dashStats["test_name"] = testName
@@ -2034,6 +2040,5 @@ func updateDashStats(testName string, testResult *string) {
 		DashStats: dashStats,
 	}
 
-	stats.PushStatsToAetos(testName, dashProductName, dashStatsType, eventStat)
-
+	stats.PushStatsToAetos(dash, testName, dashProductName, dashStatsType, eventStat)
 }
