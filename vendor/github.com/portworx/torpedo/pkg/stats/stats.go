@@ -87,7 +87,7 @@ func PushStats(dashUtils *aetosutil.Dashboard, eventType interface{}) error {
 	return nil
 }
 
-func PushStatsToAetos(name, product, statsType string, eventStat *EventStat) {
+func PushStatsToAetos(dashUtils *aetosutil.Dashboard, name, product, statsType string, eventStat *EventStat) {
 	data, err := json.Marshal(flattenDashStats(eventStat))
 	if err != nil {
 		log.Errorf("error marshalling event stat: %v ", err)
@@ -100,9 +100,7 @@ func PushStatsToAetos(name, product, statsType string, eventStat *EventStat) {
 		return
 	}
 	log.Infof("Stats are: %v", statsMap)
-	if Dash.IsEnabled {
-		Dash.UpdateStats(name, product, statsType, eventStat.Version, statsMap)
-	}
+	dashUtils.UpdateStats(name, product, statsType, eventStat.Version, statsMap)
 }
 
 func flattenDashStats(eventStat *EventStat) map[string]string {
