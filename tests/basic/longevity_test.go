@@ -9,17 +9,18 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+  
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -101,6 +102,9 @@ var _ = Describe("{Longevity}", func() {
 		ValidateDeviceMapper:     TriggerValidateDeviceMapperCleanup,
 		MetroDR:                  TriggerMetroDR,
 		AsyncDR:                  TriggerAsyncDR,
+		AsyncDRPXRestartSource:   TriggerAsyncDRPXRestartSource,
+		AsyncDRPXRestartDest:   TriggerAsyncDRPXRestartDest,
+		AsyncDRPXRestartKvdb: TriggerAsyncDRPXRestartKvdb,
 		AsyncDRMigrationSchedule: TriggerAsyncDRMigrationSchedule,
 		ConfluentAsyncDR:         TriggerConfluentAsyncDR,
 		KafkaAsyncDR:             TriggerKafkaAsyncDR,
@@ -946,6 +950,9 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[MetroDRMigrationSchedule] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRPXRestartSource] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRPXRestartDest] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRPXRestartKvdb] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[DeleteOldNamespaces] = make(map[int]time.Duration)
@@ -1134,6 +1141,39 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][3] = 21 * baseInterval
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRPXRestartSource][10] = 1 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][9] = 3 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][8] = 6 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][7] = 9 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][6] = 12 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][5] = 15 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][4] = 18 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][3] = 21 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][2] = 24 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][1] = 27 * baseInterval
+	
+	triggerInterval[AsyncDRPXRestartDest][10] = 1 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][9] = 3 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][8] = 6 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][7] = 9 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][6] = 12 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][5] = 15 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][4] = 18 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][3] = 21 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][2] = 24 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRPXRestartKvdb][10] = 1 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][9] = 3 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][8] = 6 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][7] = 9 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][6] = 12 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][5] = 15 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][4] = 18 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][3] = 21 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][2] = 24 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRMigrationSchedule][10] = 1 * baseInterval
 	triggerInterval[AsyncDRMigrationSchedule][9] = 3 * baseInterval
@@ -1922,6 +1962,9 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[AsyncDRPXRestartSource][0] = 0
+	triggerInterval[AsyncDRPXRestartDest][0] = 0
+	triggerInterval[AsyncDRPXRestartKvdb][0] = 0
 	triggerInterval[MetroDR][0] = 0
 	triggerInterval[MetroDRMigrationSchedule][0] = 0
 	triggerInterval[AsyncDRMigrationSchedule][0] = 0
