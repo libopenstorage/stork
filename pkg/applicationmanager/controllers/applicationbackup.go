@@ -489,6 +489,17 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				return nil
 			}
 		}
+
+		kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+		if err != nil {
+			return fmt.Errorf("error reading kdmp config map: %v", err)
+		}
+		driverType := kdmpData.Data[genericBackupKey]
+		if driverType == stork_api.ApplicationBackupGeneric {
+			backup.Spec.DirectKDMP = true
+			logrus.Tracef("driverType: %v", driverType)
+		}
+
 		fallthrough
 	case stork_api.ApplicationBackupStageImportResource:
 		if IsBackupObjectTypeVirtualMachine(backup) {
@@ -719,12 +730,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if err != nil {
 				return fmt.Errorf("error getting list of volumes to backup: %v", err)
 			}
-			kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
-			if err != nil {
-				return fmt.Errorf("error reading kdmp config map: %v", err)
-			}
-			driverType := kdmpData.Data[genericBackupKey]
-			logrus.Tracef("driverType: %v", driverType)
 			for _, pvc := range pvcList.Items {
 				// If a list of resources was specified during backup check if
 				// this PVC was included
@@ -756,7 +761,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					continue
 				}
 				var driverName string
-				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, driverType, backup.Spec.BackupType)
+				driverName, err = volume.GetPVCDriverForBackup(core.Instance(), &pvc, backup.Spec.DirectKDMP, backup.Spec.BackupType)
 				if err != nil {
 					// Skip unsupported PVCs
 					if _, ok := err.(*errors.ErrNotSupported); ok {

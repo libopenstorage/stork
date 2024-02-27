@@ -135,16 +135,16 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 	// In case the PV does not contain CSI section itself, we will error out.
 	if pv.Spec.CSI == nil {
 		return "", "", "", fmt.Errorf("pv [%v] does not contain CSI section", pv.Name)
-	} else {
-		// If CSI Section Exist assign respective volumeSnapshotClass of its provisioner
-		if snapshotClass, ok := o.CSISnapshotMapping[pv.Spec.CSI.Driver]; ok {
-			o.SnapshotClassName = snapshotClass
-		}
+	}
+
+	// If CSI Section Exist assign respective volumeSnapshotClass of its provisioner
+	if snapshotClass, ok := o.CSISnapshotMapping[pv.Spec.CSI.Driver]; ok {
+		o.SnapshotClassName = snapshotClass
 	}
 
 	if o.SnapshotClassName == "" {
-		return "", "", "", fmt.Errorf("snapshot class cannot be empty for pvc [%s] having driver [%s] in case of "+
-			"CSI based backup or use 'default' to choose the default snapshot class, use csiSnapshotMapping in case of "+
+		return "", "", "", fmt.Errorf("volume snapshot class cannot be empty for pvc [%s] having driver [%s] "+
+			"or use 'default' to choose the default snapshot class, update/use csiSnapshotMapping in case of "+
 			"multiple provisioner", pvc.GetName(), pv.Spec.CSI.Driver)
 	}
 

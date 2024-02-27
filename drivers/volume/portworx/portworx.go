@@ -709,8 +709,8 @@ func (p *portworx) GetClusterID() (string, error) {
 	return cluster.Id, nil
 }
 
-func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
-	if enablePXGenericBackup() {
+func (p *portworx) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, directKDMP bool, crBackupType string) bool {
+	if directKDMP || enablePXGenericBackup() {
 		logrus.Tracef("Provisioner in Storageclass is Portworx but will take generic backup")
 		return false
 	}

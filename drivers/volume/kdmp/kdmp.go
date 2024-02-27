@@ -111,7 +111,7 @@ func (k *kdmp) Stop() error {
 	return nil
 }
 
-func (k *kdmp) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, cmBackupType string, crBackupType string) bool {
+func (k *kdmp) OwnsPVCForBackup(coreOps core.Ops, pvc *v1.PersistentVolumeClaim, directKDMP bool, crBackupType string) bool {
 	// KDMP can handle any PVC type. KDMP driver will always be a fallback
 	// option when none of the other supported drivers by stork own the PVC
 	return true
@@ -162,7 +162,9 @@ func isCSISnapshotClassRequired(pvc *v1.PersistentVolumeClaim) (string, bool) {
 		// In the case errors, we will allow the kdmp controller csi steps to decide on snapshot support.
 		return "", true
 	}
-	return storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
+
+	driverName, isWithoutSnapshotSupport := storkvolume.IsCSIDriverWithoutSnapshotSupport(pv)
+	return driverName, !isWithoutSnapshotSupport
 }
 
 func getZones(pv *v1.PersistentVolume) ([]string, error) {
@@ -297,8 +299,8 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 			APIVersion: pvc.APIVersion,
 		}
 
-		driverName, snapshotClassNotRequired := isCSISnapshotClassRequired(&pvc)
-		if !snapshotClassNotRequired {
+		driverName, snapshotClassRequired := isCSISnapshotClassRequired(&pvc)
+		if !backup.Spec.DirectKDMP && snapshotClassRequired {
 			snapshotStorageClass := k.getSnapshotClassName(driverName, backup)
 			// In case of KDMP, if VolumeSnapshot is given and user want to use Default VolumeSnapshotClass then we need to
 			// get the default volumesnapshotclass name to populate in applicationBackup status VolumeInfo.VoluneSnapshot along with snapshot name
@@ -318,6 +320,11 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 							dataExport.Spec.SnapshotStorageClass = vsc.GetName()
 						}
 					}
+				}
+
+				// if no default volumesnapshotclass found for that Provisioner we should fail backup for KDMP + LocalSnapshot Driver
+				if dataExport.Spec.SnapshotStorageClass == "" {
+					return nil, fmt.Errorf("no default volumesnapshotclass found for driver : %s", pv.Spec.CSI.Driver)
 				}
 			} else {
 				dataExport.Spec.SnapshotStorageClass = snapshotStorageClass
