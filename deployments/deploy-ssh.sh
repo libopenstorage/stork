@@ -312,7 +312,7 @@ fi
 
 JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
 if [ "${SCHEDULER}" == "openshift" ]; then
- JUNIT_REPORT_PATH="/tmp/junit_basic.xml"
+    SECURITY_CONTEXT=true
 fi
 
 if [ -n "${PROVIDERS}" ]; then
