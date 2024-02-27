@@ -2,16 +2,15 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume"
 	"strings"
 	"time"
-
-	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -94,6 +93,11 @@ var _ = Describe("{RebootOneNode}", func() {
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
 				log.InfoD("reboot node one at a time from the node(s): %v", nodesToReboot)
 				for _, n := range nodesToReboot {
+					// Skip rebooting master nodes, even if PX is installed on them to avoid torpedo pod crashing
+					if node.IsMasterNode(n) {
+						log.InfoD("This node [%s] is master, will skip rebooting it..", n.Name)
+						continue
+					}
 					err := updateSharedV4Map(contexts[0])
 					if err != nil {
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Error getting sharedv4 svc vols %v", err))
