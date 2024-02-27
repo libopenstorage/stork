@@ -97,10 +97,10 @@ func (g *gcp) Stop() error {
 func (g *gcp) OwnsPVCForBackup(
 	coreOps core.Ops,
 	pvc *v1.PersistentVolumeClaim,
-	cmBackupType string,
+	directKDMP bool,
 	crBackupType string,
 ) bool {
-	if cmBackupType == storkapi.ApplicationBackupGeneric {
+	if directKDMP {
 		// If user has forced the backupType in config map, default to generic always
 		return false
 	}
