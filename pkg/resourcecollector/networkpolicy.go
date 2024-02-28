@@ -2,8 +2,9 @@ package resourcecollector
 
 import (
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/utils"
 	"strings"
+
+	"github.com/libopenstorage/stork/pkg/utils"
 
 	v1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -111,7 +112,7 @@ func (r *ResourceCollector) mergeAndUpdateNetworkPolicy(
 	opts *Options,
 ) error {
 
-	if len(opts.RancherProjectMappings) == 0 {
+	if (opts == nil) || len(opts.RancherProjectMappings) == 0 {
 		return nil
 	}
 
