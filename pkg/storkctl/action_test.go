@@ -5,22 +5,23 @@ package storkctl
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"testing"
-	"time"
 )
 
 func TestPerformFailoverNoMigrationSchedule(t *testing.T) {
 	cmdArgs := []string{"perform", "failover"}
-	expected := "error: referenceMigrationSchedule name needs to be provided for failover"
+	expected := "error: reference MigrationSchedule name needs to be provided for failover"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestPerformFailoverInvalidMigrationSchedule(t *testing.T) {
 	cmdArgs := []string{"perform", "failover", "-m", "invalid-migr-sched"}
-	expected := "error: unable to find the referenceMigrationSchedule invalid-migr-sched in the default namespace"
+	expected := "error: unable to find the reference MigrationSchedule invalid-migr-sched in the default namespace"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -37,7 +38,7 @@ func TestPerformFailoverWithInvalidIncludeNamespaceList(t *testing.T) {
 	createClusterPair(t, "clusterPair1", "ns1", "async-dr")
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1"}, "ns1", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "namespace1", "-n", "ns1"}
-	expected := "error: provided namespaces [namespace1] are not a subset of the namespaces being migrated by the given migrationSchedule"
+	expected := "error: provided namespaces [namespace1] are not a subset of the namespaces being migrated by the given MigrationSchedule"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -46,7 +47,7 @@ func TestPerformFailoverWithInvalidExcludeNamespaceList(t *testing.T) {
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--exclude-namespaces", "ns3", "-n", "kube-system"}
-	expected := "error: provided namespaces [ns3] are not a subset of the namespaces being migrated by the given migrationSchedule"
+	expected := "error: provided namespaces [ns3] are not a subset of the namespaces being migrated by the given MigrationSchedule"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -61,7 +62,7 @@ func TestPerformFailoverMissingClusterPair(t *testing.T) {
 	//create clusterPair and try again
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
-	expected = fmt.Sprintf("Started failover for migrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
+	expected = fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -71,7 +72,7 @@ func TestPerformFailoverWithIncludeNamespaceList(t *testing.T) {
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
-	expected := fmt.Sprintf("Started failover for migrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
+	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
@@ -86,7 +87,7 @@ func TestPerformFailoverWithExcludeNamespaceList(t *testing.T) {
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--exclude-namespaces", "ns1", "-n", "kube-system"}
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
-	expected := fmt.Sprintf("Started failover for migrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
+	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
@@ -101,7 +102,7 @@ func TestFailoverActionNameTruncation(t *testing.T) {
 	createTestMigrationSchedule(strWithLen253, "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
 	cmdArgs := []string{"perform", "failover", "-m", strWithLen253, "--exclude-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
 	failoverActionName := fmt.Sprintf("failover-%v-2024-01-01-000000", truncatedStr)
-	expected := fmt.Sprintf("Started failover for migrationSchedule kube-system/%v\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", strWithLen253, failoverActionName)
+	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/%v\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", strWithLen253, failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 

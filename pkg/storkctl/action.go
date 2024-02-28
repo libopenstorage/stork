@@ -2,7 +2,6 @@ package storkctl
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"strings"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
 )
@@ -59,14 +59,14 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 		Short: "Initiate failover of the given migration schedule",
 		Run: func(c *cobra.Command, args []string) {
 			if len(referenceMigrationSchedule) == 0 {
-				util.CheckErr(fmt.Errorf("referenceMigrationSchedule name needs to be provided for failover"))
+				util.CheckErr(fmt.Errorf("reference MigrationSchedule name needs to be provided for failover"))
 				return
 			}
 			// namespace of the migrationSchedule is provided by user using the -n / --namespace global flag
 			migrationScheduleNs := cmdFactory.GetNamespace()
 			migrSchedObj, err := storkops.Instance().GetMigrationSchedule(referenceMigrationSchedule, migrationScheduleNs)
 			if err != nil {
-				util.CheckErr(fmt.Errorf("unable to find the referenceMigrationSchedule %v in the %v namespace", referenceMigrationSchedule, migrationScheduleNs))
+				util.CheckErr(fmt.Errorf("unable to find the reference MigrationSchedule %v in the %v namespace", referenceMigrationSchedule, migrationScheduleNs))
 				return
 			}
 			if !skipDeactivateSource {
@@ -82,7 +82,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			// update the migrationNamespaces list by fetching namespaces based on provided label selectors
 			migrationNamespaces, err := getMigrationNamespaces(migrationNamespaceList, migrationNamespaceSelectors)
 			if err != nil {
-				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the --namespace-selectors in the provided migrationSchedule: %v", err))
+				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the --namespace-selectors in the provided MigrationSchedule: %v", err))
 				return
 			}
 			// at most one of exclude-namespaces or include-namespaces can be provided
@@ -94,7 +94,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 					// Branch 1: Only failover some of the namespaces being migrated by the given migrationSchedule
 					namespaceList = includeNamespaceList
 				} else {
-					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given migrationSchedule", nonSubsetStrings))
+					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings))
 					return
 				}
 			} else if len(excludeNamespaceList) != 0 {
@@ -102,7 +102,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 					// Branch 2: Exclude some of the namespaces being migrated by the given migrationSchedule from failover
 					namespaceList = excludeListAFromListB(excludeNamespaceList, migrationNamespaces)
 				} else {
-					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given migrationSchedule", nonSubsetStrings))
+					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings))
 					return
 				}
 			} else {
@@ -121,17 +121,17 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			action, err := createActionCR(actionName, migrationScheduleNs, actionType, actionParameters)
 			migrationScheduleName := migrationScheduleNs + "/" + referenceMigrationSchedule
 			if err != nil {
-				util.CheckErr(fmt.Errorf("failed to start failover for migrationSchedule %v : %v", migrationScheduleName, err))
+				util.CheckErr(fmt.Errorf("failed to start failover for MigrationSchedule %v : %v", migrationScheduleName, err))
 				return
 			}
-			printMsg(fmt.Sprintf("Started failover for migrationSchedule %v", migrationScheduleName), ioStreams.Out)
+			printMsg(fmt.Sprintf("Started failover for MigrationSchedule %v", migrationScheduleName), ioStreams.Out)
 			printMsg(getActionStatusMessage(action), ioStreams.Out)
 		},
 	}
 	performFailoverCommand.Flags().BoolVar(&skipDeactivateSource, "skip-deactivate-source", false, "If present, applications in the source cluster will not be scaled down as part of the failover.")
-	performFailoverCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the migration schedule to failover. Also specify the namespace of this migrationSchedule using the -n flag")
-	performFailoverCommand.Flags().StringSliceVar(&includeNamespaceList, "include-namespaces", nil, "Specify the comma-separated list of subset namespaces to be failed over. By default, all namespaces part of the migrationSchedule are failed over")
-	performFailoverCommand.Flags().StringSliceVar(&excludeNamespaceList, "exclude-namespaces", nil, "Specify the comma-separated list of subset namespaces to be skipped during the failover. By default, all namespaces part of the migrationSchedule are failed over")
+	performFailoverCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the MigrationSchedule to failover. Also specify the namespace of this MigrationSchedule using the -n flag")
+	performFailoverCommand.Flags().StringSliceVar(&includeNamespaceList, "include-namespaces", nil, "Specify the comma-separated list of subset namespaces to be failed over. By default, all namespaces part of the MigrationSchedule are failed over")
+	performFailoverCommand.Flags().StringSliceVar(&excludeNamespaceList, "exclude-namespaces", nil, "Specify the comma-separated list of subset namespaces to be skipped during the failover. By default, all namespaces part of the MigrationSchedule are failed over")
 	return performFailoverCommand
 }
 
