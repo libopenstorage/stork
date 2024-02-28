@@ -135,6 +135,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			_, err := storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 			if err != nil {
 				log.ActionLog(action).Errorf("Error suspending migration schedule %s: %v", migrationSchedule.Name, err)
+				return
 			}
 			action.Status.Status = storkv1.ActionStatusSuccessful
 			ac.updateAction(action)
@@ -142,7 +143,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			// Fail the action failback if latest successful migration is older than latestMigrationThresholdTime
 			// And migrationschedule is in suspended state
 			log.ActionLog(action).Infof("The latest migration %s is not in threshold range", latestMigration.Name)
-			msg := fmt.Sprintf("Failing failback operation as the latest migration %s is not in threshold range", latestMigration.Name)
+			msg := fmt.Sprintf("Failing failback operation as the latest migration %s was not completed from the scheduled policy duration from now", latestMigration.Name)
 			log.ActionLog(action).Errorf(msg)
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg

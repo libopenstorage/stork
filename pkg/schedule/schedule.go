@@ -153,8 +153,7 @@ func hasTriggered(
 	lastTriggerEarliest time.Time,
 	now time.Time,
 ) (bool, error) {
-	// If the last trigger is before the  we had triggered before the scheduled time this month, don't
-	// triggered again
+	// Check if the last trigger falls between the allowed earliest trigger time and now
 	if lastTrigger.Before(lastTriggerEarliest) || lastTrigger.After(now) {
 		return false, nil
 	}
