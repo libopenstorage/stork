@@ -1212,7 +1212,7 @@ func (r *ResourceCollector) mergeSupportedForRancherResource(
 	opts *Options,
 ) bool {
 	// return false if there is no project mapping
-	if len(opts.RancherProjectMappings) == 0 {
+	if (opts == nil) || len(opts.RancherProjectMappings) == 0 {
 		return false
 	}
 
@@ -1434,7 +1434,7 @@ func (r *ResourceCollector) mergeAndUpdateApplicationResource(
 	dynamicClient dynamic.ResourceInterface,
 	opts *Options) error {
 
-	if len(opts.RancherProjectMappings) == 0 {
+	if (opts == nil) || len(opts.RancherProjectMappings) == 0 {
 		return nil
 	}
 

@@ -705,9 +705,13 @@ func (a *ApplicationCloneController) applyResources(
 
 		log.ApplicationCloneLog(clone).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		retained := false
+		// clone path doesn't need any options to be set yet,
+		// hence creating an empty structure for preventing any
+		// accidental panic while accesing the elements of it deep down.
+		var opts resourcecollector.Options
 		err = a.resourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o, nil)
+			o, &opts)
 		if err != nil && errors.IsAlreadyExists(err) {
 			switch clone.Spec.ReplacePolicy {
 			case stork_api.ApplicationCloneReplacePolicyDelete:
