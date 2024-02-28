@@ -3388,6 +3388,10 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 				}
 				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
 				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+				if err == nil {
+					err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
+					UpdateOutcome(event, err)
+				}
 			}
 		}
 		for k := range cloudsnapMap {

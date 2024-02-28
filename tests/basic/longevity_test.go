@@ -344,6 +344,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			log.InfoD("Deploying new apps")
 			TriggerDeployNewApps(&contexts, &triggerEventsChan)
 			dash.VerifySafely(len(contexts) > 0, true, "Verifying if the new apps are deployed")
+
 		})
 
 		Step("Register test triggers", func() {
@@ -1547,6 +1548,17 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShot][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShot][1] = 27 * baseInterval
 
+	triggerInterval[CloudSnapShotRestore][10] = 1 * baseInterval
+	triggerInterval[CloudSnapShotRestore][9] = 3 * baseInterval
+	triggerInterval[CloudSnapShotRestore][8] = 6 * baseInterval
+	triggerInterval[CloudSnapShotRestore][7] = 9 * baseInterval
+	triggerInterval[CloudSnapShotRestore][6] = 12 * baseInterval
+	triggerInterval[CloudSnapShotRestore][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CloudSnapShotRestore][4] = 18 * baseInterval
+	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
+	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
+	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
+
 	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
 	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
 	triggerInterval[LocalSnapShot][8] = 6 * baseInterval
@@ -1862,17 +1874,6 @@ func populateIntervals() {
 	triggerInterval[AddDrive][7] = 4 * baseInterval
 	triggerInterval[AddDrive][6] = 5 * baseInterval
 	triggerInterval[AddDrive][5] = 6 * baseInterval
-
-	triggerInterval[CloudSnapShotRestore][10] = 1 * baseInterval
-	triggerInterval[CloudSnapShotRestore][9] = 3 * baseInterval
-	triggerInterval[CloudSnapShotRestore][8] = 6 * baseInterval
-	triggerInterval[CloudSnapShotRestore][7] = 9 * baseInterval
-	triggerInterval[CloudSnapShotRestore][6] = 12 * baseInterval
-	triggerInterval[CloudSnapShotRestore][5] = 15 * baseInterval // Default global chaos level, 3 hrs
-	triggerInterval[CloudSnapShotRestore][4] = 18 * baseInterval
-	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
-	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
-	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
 
 	triggerInterval[AggrVolDepReplResizeOps][10] = 1 * baseInterval
 	triggerInterval[AggrVolDepReplResizeOps][9] = 2 * baseInterval
