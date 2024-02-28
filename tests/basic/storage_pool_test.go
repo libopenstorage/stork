@@ -10946,3 +10946,80 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+// PX pool went offline even when 30% of storage still available [PWX-26872]
+
+var _ = Describe("{CheckPoolOffline}", func() {
+	/*
+		    1. Deploy fio apps
+		    2. when capacity 70 percent is reached, check if pool is offline (Pool shouldn't be offline)
+			3. when capacity 80 percent is reached, check if pool is offline (Pool should be offline)
+
+			https://portworx.atlassian.net/browse/PTX-15695
+	*/
+	itLog := "CheckPoolOffline"
+	JustBeforeEach(func() {
+		StartTorpedoTest(itLog, "Check if pool is offline when capacity is reached", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	var selectedNode *node.Node
+
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Label nodes and Deploy fio apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode = GetNodeWithLeastSize()
+
+			AppList := Inst().AppList
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+
+			var err error
+			defer func() {
+				Inst().AppList = AppList
+				err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			}()
+			err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagefull-check-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		// Pool should go offline after using 80% of the storage capacity
+		stepLog = "Keep checking when the pool goes offline"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			t := func() (interface{}, bool, error) {
+				poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+				if err != nil {
+					return nil, true, err
+				}
+
+				for poolUUID, v := range poolsStatus {
+					if v == "Offline" {
+						offlinePool, err := GetStoragePoolByUUID(poolUUID)
+						log.FailOnError(err, "Failed to get uuid of offline pool")
+						log.Infof("Pool %s is offline", offlinePool.Uuid)
+						// Used storage should be greater than 80 percentage
+						if (offlinePool.Used) >= (offlinePool.TotalSize*80)/100 {
+							log.Infof("Pool %s is offline and used storage is greater than 80 percentage", offlinePool.Uuid)
+							return nil, false, nil
+						}
+						return nil, true, fmt.Errorf("Pool %s is offline but used storage is less than 80 percentage", offlinePool.Uuid)
+					}
+				}
+				return nil, true, fmt.Errorf("no pool is offline is node %s", selectedNode.Name)
+			}
+			_, err := task.DoRetryWithTimeout(t, time.Minute*360, time.Minute*2)
+			log.FailOnError(err, "Failed to wait for pool offline")
+
+		})
+
+	})
+
+})
