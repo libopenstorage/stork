@@ -24,8 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	context1 "context"
+
+	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -746,9 +747,12 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 
-		Step("Validate Px pod restart count", func() {
-			ValidatePxPodRestartCount(ctx, errChan...)
-		})
+		// Validating px pod restart count only for portworx volume driver
+		if Inst().V.String() == "pxd" {
+			Step("Validate Px pod restart count", func() {
+				ValidatePxPodRestartCount(ctx, errChan...)
+			})
+		}
 	})
 }
 

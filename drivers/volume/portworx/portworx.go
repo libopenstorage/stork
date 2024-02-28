@@ -38,6 +38,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedok8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -105,6 +106,8 @@ const (
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
+	PxLabelNameKey                            = "name"
+	PxLabelValue                              = "portworx"
 )
 
 const (
@@ -380,6 +383,8 @@ func (d *portworx) GetVolumeDriverNamespace() (string, error) {
 func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
 	log.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
+	pxLabel := make(map[string]string)
+	pxLabel[PxLabelNameKey] = PxLabelValue
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
 		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
@@ -449,6 +454,28 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		}
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
+	}
+
+	// Update node PxPodRestartCount during init
+	schedDriver, err := scheduler.Get(sched)
+	if err != nil {
+		return fmt.Errorf("scheduler with name: [%s] not found. Error: [%v]", sched, err)
+	}
+
+	pxPodRestartCountMap, err := schedDriver.GetPodsRestartCount(namespace, pxLabel)
+	if err != nil {
+		return fmt.Errorf("unable to get portworx pods restart count. Error: [%v]", err)
+	}
+
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		if err != nil {
+			return err
+		}
+		n.PxPodRestartCount = value
+		if err = node.UpdateNode(n); err != nil {
+			return fmt.Errorf("updating the restart count fails for a node: [%s]. Error: [%v]", n.Name, err)
+		}
 	}
 	return nil
 }
