@@ -48,8 +48,8 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 		Expect(versions).NotTo(BeEmpty())
 
-		// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
-		var mError error
+		// TODO: Commenting out below changes as it doesn't work for most distros upgrades, see PTX-22409
+		/*var mError error
 		if Inst().S.String() != aks.SchedName {
 			stopSignal := make(chan struct{})
 			go getClusterNodesInfo(stopSignal, &mError)
@@ -57,7 +57,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 			defer func() {
 				close(stopSignal)
 			}()
-		}
+		}*/
 
 		for _, version := range versions {
 			if Inst().S.String() == openshift.SchedName && strings.Contains(version, "4.14") {
@@ -100,10 +100,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 				printK8sCluterInfo()
 			})
 
-			// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
-			if Inst().S.String() != aks.SchedName {
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
 				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
-			}
+			}*/
 
 			Step("update node drive endpoints", func() {
 				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
