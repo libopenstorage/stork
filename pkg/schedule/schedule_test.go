@@ -37,6 +37,10 @@ func TestSchedule(t *testing.T) {
 	t.Run("validateSchedulePolicyTest", validateSchedulePolicyTest)
 	t.Run("policyRetainTest", policyRetainTest)
 	t.Run("policyOptionsTest", policyOptionsTest)
+	t.Run("triggeredIntervalRequiredTest", triggeredIntervalRequiredTest)
+	t.Run("triggeredDailyRequiredTest", triggeredDailyRequiredTest)
+	t.Run("triggeredWeeklyRequiredTest", triggeredWeeklyRequiredTest)
+	t.Run("triggeredMonthlyRequiredTest", triggeredMonthlyRequiredTest)
 }
 
 func createDefaultPoliciesTest(t *testing.T) {
@@ -211,6 +215,11 @@ func triggerWeeklyRequiredTest(t *testing.T) {
 }
 
 func triggerMonthlyRequiredTest(t *testing.T) {
+	defer func() {
+		err := storkops.Instance().DeleteSchedulePolicy("monthlypolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
 	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "monthlypolicy",
@@ -487,4 +496,212 @@ func policyOptionsTest(t *testing.T) {
 	options, err = GetOptions(policyName, "default", stork_api.SchedulePolicyTypeMonthly)
 	require.NoError(t, err, "Error getting options")
 	require.Equal(t, policy.Policy.Monthly.Options, options, "Options mismatch for monthly policy")
+}
+
+func triggeredIntervalRequiredTest(t *testing.T) {
+	defer func() {
+		err := storkops.Instance().DeleteSchedulePolicy("intervalpolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
+	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "intervalpolicy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 60,
+			},
+		},
+	})
+	require.NoError(t, err, "Error creating policy")
+
+	_, err = AlreadyTriggered("missingpolicy", "default", stork_api.SchedulePolicyTypeInterval, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	require.Error(t, err, "Should return error for missing policy")
+
+	mockNow := time.Date(2023, time.February, 7, 23, 16, 0, 0, time.Local)
+	setMockTime(&mockNow)
+	// Last triggered 2 mins ago
+	triggered, err := AlreadyTriggered("intervalpolicy", "default", stork_api.SchedulePolicyTypeInterval, meta.Date(2023, time.February, 7, 23, 14, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of interval policy")
+	// Last triggered 59 mins ago
+	triggered, err = AlreadyTriggered("intervalpolicy", "default", stork_api.SchedulePolicyTypeInterval, meta.Date(2023, time.February, 7, 22, 17, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of interval policy")
+	// Last triggered 60 mins ago
+	triggered, err = AlreadyTriggered("intervalpolicy", "default", stork_api.SchedulePolicyTypeInterval, meta.Date(2023, time.February, 7, 22, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of interval policy")
+	// Last triggered 61 mins ago
+	triggered, err = AlreadyTriggered("intervalpolicy", "default", stork_api.SchedulePolicyTypeInterval, meta.Date(2023, time.February, 7, 22, 15, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of interval policy")
+	// Last triggered after now
+	triggered, err = AlreadyTriggered("intervalpolicy", "default", stork_api.SchedulePolicyTypeInterval, meta.Date(2023, time.February, 7, 23, 20, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of interval policy")
+}
+
+func triggeredDailyRequiredTest(t *testing.T) {
+	defer func() {
+		err := storkops.Instance().DeleteSchedulePolicy("dailypolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
+	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "dailypolicy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Daily: &stork_api.DailyPolicy{
+				Time: "11:15PM",
+			},
+		},
+	})
+	require.NoError(t, err, "Error creating policy")
+
+	_, err = AlreadyTriggered("missingpolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 7, 23, 14, 0, 0, time.Local))
+	require.Error(t, err, "Should return error for missing policy")
+
+	mockNow := time.Date(2023, time.February, 7, 23, 16, 0, 0, time.Local)
+	setMockTime(&mockNow)
+	// Last triggered 1 hr before
+	triggered, err := AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 7, 22, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of daily policy")
+
+	// Last triggered at schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 7, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of daily policy")
+
+	// Last triggered one day ago but within schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 6, 23, 30, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of daily policy")
+
+	// Last triggered one day ago on schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 6, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of daily policy")
+
+	// Last triggered one day ago but before last schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 6, 22, 15, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of daily policy")
+
+	// Last triggered two day ago before schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 6, 21, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of daily policy")
+
+	// Last triggered after now
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 7, 23, 50, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of daily policy")
+
+	// Set time to first day of a month
+	mockNow = time.Date(2023, time.March, 1, 21, 15, 0, 0, time.Local)
+	setMockTime(&mockNow)
+
+	// Last triggered one day ago within schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 28, 23, 15, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of daily policy")
+
+	// Last triggered one day ago even before last schedule
+	triggered, err = AlreadyTriggered("dailypolicy", "default", stork_api.SchedulePolicyTypeDaily, meta.Date(2023, time.February, 28, 10, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of daily policy")
+}
+
+func triggeredWeeklyRequiredTest(t *testing.T) {
+	defer func() {
+		err := storkops.Instance().DeleteSchedulePolicy("weeklypolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
+	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "weeklypolicy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Weekly: &stork_api.WeeklyPolicy{
+				Day:  "Sunday",
+				Time: "11:15pm",
+			},
+		},
+	})
+	require.NoError(t, err, "Error creating policy")
+
+	_, err = AlreadyTriggered("missingpolicy", "default", stork_api.SchedulePolicyTypeWeekly, meta.Date(2023, time.February, 7, 23, 14, 0, 0, time.Local))
+	require.Error(t, err, "Should return error for missing policy")
+
+	newTime := time.Date(2023, time.February, 7, 23, 16, 0, 0, time.Local) // Current day: Thuesday
+	setMockTime(&newTime)
+	// LastTriggered one week before on Saturday at 11:16pm
+	triggered, err := AlreadyTriggered("weeklypolicy", "default", stork_api.SchedulePolicyTypeWeekly, meta.Date(2023, time.February, 4, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of weekly policy")
+
+	// LastTriggered one week before on Sunday at 11:16pm
+	triggered, err = AlreadyTriggered("weeklypolicy", "default", stork_api.SchedulePolicyTypeWeekly, meta.Date(2023, time.February, 5, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of weekly policy")
+
+	// LastTriggered more than one week before on Saturday at 11:16pm
+	triggered, err = AlreadyTriggered("weeklypolicy", "default", stork_api.SchedulePolicyTypeWeekly, meta.Date(2023, time.January, 27, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of weekly policy")
+
+	// LastTriggered on last tuesday
+	triggered, err = AlreadyTriggered("weeklypolicy", "default", stork_api.SchedulePolicyTypeWeekly, meta.Date(2023, time.January, 31, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should not be in the range of weekly policy")
+
+	// LastTriggered on last tuesday but before 23:16
+	triggered, err = AlreadyTriggered("weeklypolicy", "default", stork_api.SchedulePolicyTypeWeekly, meta.Date(2023, time.January, 31, 10, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of weekly policy")
+}
+
+func triggeredMonthlyRequiredTest(t *testing.T) {
+	defer func() {
+		err := storkops.Instance().DeleteSchedulePolicy("monthlypolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
+	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "monthlypolicy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Monthly: &stork_api.MonthlyPolicy{
+				Date: 28,
+				Time: "11:15pm",
+			},
+		},
+	})
+	require.NoError(t, err, "Error creating policy")
+
+	_, err = AlreadyTriggered("missingpolicy", "default", stork_api.SchedulePolicyTypeMonthly, meta.Date(2023, time.February, 7, 23, 14, 0, 0, time.Local))
+	require.Error(t, err, "Should return error for missing policy")
+
+	newTime := time.Date(2023, time.February, 28, 23, 16, 0, 0, time.Local)
+	setMockTime(&newTime)
+	// Last triggered within a month of last schedule
+	triggered, err := AlreadyTriggered("monthlypolicy", "default", stork_api.SchedulePolicyTypeMonthly, meta.Date(2023, time.January, 30, 12, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, triggered, "Last triggered should be in the range of monthly policy")
+
+	// Last triggered before a month of last schedule
+	triggered, err = AlreadyTriggered("monthlypolicy", "default", stork_api.SchedulePolicyTypeMonthly, meta.Date(2023, time.January, 18, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of monthly policy")
+
+	// Last triggerded after now
+	triggered, err = AlreadyTriggered("monthlypolicy", "default", stork_api.SchedulePolicyTypeMonthly, meta.Date(2023, time.March, 18, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, triggered, "Last triggered should not be in the range of monthly policy")
 }
