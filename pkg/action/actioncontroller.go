@@ -26,9 +26,10 @@ import (
 )
 
 const (
-	validateCRDInterval time.Duration = 5 * time.Second
-	validateCRDTimeout  time.Duration = 1 * time.Minute
-	actionExpiryTime    time.Duration = 24 * time.Hour
+	validateCRDInterval          time.Duration = 5 * time.Second
+	validateCRDTimeout           time.Duration = 1 * time.Minute
+	actionExpiryTime             time.Duration = 24 * time.Hour
+	latestMigrationThresholdTime time.Duration = 1 * time.Hour
 )
 
 func NewActionController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *ActionController {
@@ -69,30 +70,61 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	if action.Status.Status == storkv1.ActionStatusScheduled {
-		if err = ac.handle(context.TODO(), action); err != nil {
-			log.ActionLog(action).Errorf("ActionController handle failed with %s", err)
-			ac.recorder.Event(action, v1.EventTypeWarning, "ActionController", err.Error())
-			return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
-		}
+	if action.Status.Stage == storkv1.ActionStageFinal {
+		// Will not requeue once action is in final stage
+		return reconcile.Result{}, nil
 	}
-	ac.pruneActionIfExpired(action)
+
+	if !controllers.ContainsFinalizer(action, controllers.FinalizerCleanup) {
+		controllers.SetFinalizer(action, controllers.FinalizerCleanup)
+		return reconcile.Result{Requeue: true}, ac.client.Update(context.TODO(), action)
+	}
+
+	if err = ac.handle(context.TODO(), action); err != nil {
+		log.ActionLog(action).Errorf("ActionController handle failed with %s", err)
+		ac.recorder.Event(action, v1.EventTypeWarning, "ActionController", err.Error())
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	if action.Spec.ActionType == storkv1.ActionTypeNearSyncFailover {
+		ac.pruneActionIfExpired(action)
+	}
 
 	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
 
 func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) error {
-	ac.updateStatus(action, storkv1.ActionStatusInProgress)
+	if action.DeletionTimestamp != nil {
+		if action.GetFinalizers() != nil {
+			controllers.RemoveFinalizer(action, controllers.FinalizerCleanup)
+			return ac.client.Update(ctx, action)
+		}
+		return nil
+	}
+
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeNearSyncFailover:
-		log.ActionLog(action).Info("started failover")
-		err := ac.volDriver.Failover(action)
-		if err != nil {
-			ac.updateStatus(action, storkv1.ActionStatusFailed)
-			return err
+		ac.updateStatus(action, storkv1.ActionStatusInProgress)
+		if action.Status.Status == storkv1.ActionStatusScheduled {
+			log.ActionLog(action).Info("started failover")
+			err := ac.volDriver.Failover(action)
+			if err != nil {
+				ac.updateStatus(action, storkv1.ActionStatusFailed)
+				return err
+			}
+			resourceutils.ScaleReplicas(action.Namespace, true, ac.printFunc(action, "ScaleReplicas"), ac.config)
+			ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 		}
-		resourceutils.ScaleReplicas(action.Namespace, true, ac.printFunc(action, "ScaleReplicas"), ac.config)
-		ac.updateStatus(action, storkv1.ActionStatusSuccessful)
+	case storkv1.ActionTypeFailback:
+		log.ActionLog(action).Infof("in stage %s", action.Status.Stage)
+		switch action.Status.Stage {
+		case storkv1.ActionStageInitial:
+			ac.verifyMigrationScheduleBeforeFailback(action)
+		case storkv1.ActionStageScaleDownDestination:
+			ac.performDeactivateFailBackStage(action)
+		case storkv1.ActionStageFinal:
+			return nil
+		}
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
 		return fmt.Errorf("invalid value received for Action.Spec.ActionType")
@@ -126,6 +158,15 @@ func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus st
 	}
 }
 
+func (ac *ActionController) updateAction(action *storkv1.Action) error {
+	err := ac.client.Update(context.TODO(), action)
+	if err != nil {
+		log.ActionLog(action).Errorf("failed to update action status to %v with error %v", action.Status, err)
+		return err
+	}
+	return nil
+}
+
 // delete any action older than actionExpiryTime
 func (ac *ActionController) pruneActionIfExpired(action *storkv1.Action) {
 	if action.Status.Status == storkv1.ActionStatusFailed || action.Status.Status == storkv1.ActionStatusSuccessful {
@@ -148,4 +189,23 @@ func (ac *ActionController) createCRD() error {
 		Kind:    reflect.TypeOf(storkv1.Action{}).Name(),
 	}
 	return k8sutils.CreateCRD(resource, validateCRDInterval, validateCRDTimeout)
+}
+
+// getLatestMigrationStatus returns the a migrationschedule's latest migration's policy type and status
+func getLatestMigrationPolicyAndStatus(migrationSchedule storkv1.MigrationSchedule) (storkv1.SchedulePolicyType, *storkv1.ScheduledMigrationStatus) {
+	var lastMigrationStatus *storkv1.ScheduledMigrationStatus
+	var schedulePolicyType storkv1.SchedulePolicyType
+	for schedulePolicyType, policyMigration := range migrationSchedule.Status.Items {
+		if len(policyMigration) > 0 {
+			lastMigrationStatus = policyMigration[len(policyMigration)-1]
+			return schedulePolicyType, lastMigrationStatus
+		}
+	}
+	return schedulePolicyType, lastMigrationStatus
+}
+
+func isMigrationComplete(status storkv1.MigrationStatusType) bool {
+	return !(status == storkv1.MigrationStatusInitial ||
+		status == storkv1.MigrationStatusPending ||
+		status == storkv1.MigrationStatusInProgress)
 }
