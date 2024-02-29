@@ -158,7 +158,7 @@ var volumeDriver volume.Driver
 
 var storkVolumeDriver storkdriver.Driver
 var objectStoreDriver objectstore.Driver
-var dash *aetosutil.Dashboard
+var tpDash *aetosutil.Dashboard
 
 var snapshotScaleCount int
 var migrationScaleCount int
@@ -215,6 +215,7 @@ func doDashboardSetup() {
 	aetosLog = aetosLogger.GetLogInstance()
 	logrus.Infof("Getting dashboard utils in dosetup")
 	Dash = aetosutils.Get()
+	tpDash = aetosutil.Get()
 	Dash.TestLog = aetosLog
 	aetosLog.Out = io.MultiWriter(aetosLog.Out)
 	logLevel := os.Getenv("LOG_LEVEL")
@@ -2015,8 +2016,8 @@ func getByteDataFromFile(filePath string) ([]byte, error) {
 
 func updateDashStats(testName string, testResult *string) {
 	var err error
-	dash.IsEnabled, err = strconv.ParseBool(os.Getenv(enableDashStats))
-	if dash.IsEnabled && err == nil {
+	tpDash.IsEnabled, err = strconv.ParseBool(os.Getenv(enableDashStats))
+	if tpDash.IsEnabled && err == nil {
 		logrus.Infof("Dash is not enabled, stork integration tests will NOT push stats from this run to Aetos.")
 	}
 	dashStats := make(map[string]string)
@@ -2040,5 +2041,5 @@ func updateDashStats(testName string, testResult *string) {
 		DashStats: dashStats,
 	}
 
-	stats.PushStatsToAetos(dash, testName, dashProductName, dashStatsType, eventStat)
+	stats.PushStatsToAetos(tpDash, testName, dashProductName, dashStatsType, eventStat)
 }
