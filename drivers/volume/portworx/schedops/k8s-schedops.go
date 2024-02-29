@@ -365,50 +365,55 @@ PodLoop:
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8serrors.ErrPodsNotFound {
-			log.Warnf("pod [%s/%s] not found. probably it got rescheduled", p.Namespace, p.Name)
+			log.Warnf("Pod [%s/%s] not found. probably it got rescheduled", p.Namespace, p.Name)
 			continue
 		} else if !pod.DeletionTimestamp.IsZero() {
 			// pod is being terminated, skip
-			log.Warnf("pod [%s/%s] is being terminated, not validating the mounts...", p.Namespace, p.Name)
+			log.Warnf("Pod [%s/%s] is being terminated, not validating the mounts...", p.Namespace, p.Name)
 			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			printStatus(k, *pod)
 			continue
 		} else if err != nil {
-			return validatedMountPods, err
+			return validatedMountPods, fmt.Errorf("failed to get pod [%s/%s]", p.Namespace, p.Name)
 		}
 
-		log.Debugf("validating the mounts in pod [%s/%s]", p.Namespace, p.Name)
+		log.Debugf("Validating the mounts in pod [%s/%s]", p.Namespace, p.Name)
 		containerPaths := GetContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
-			log.Infof("container [%s] has paths [%v]", containerName, paths)
+			log.Infof("Pod [%s/%s] container [%s] has paths [%v]", p.Namespace, p.Name, containerName, paths)
+			log.Debugf("Executing command [cat /proc/mounts] in pod [%s/%s] container [%s]", p.Namespace, p.Name, containerName)
 			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
 				log.Warnf("Failed to execute command [cat /proc/mounts] in pod [%s/%s] due to pod might not be found or in completed state. Err: %v %v", pod.Namespace, pod.Name, output, err)
 				continue PodLoop
 			} else if err != nil {
-				return validatedMountPods, fmt.Errorf("Failed to execute command [cat /proc/mounts] in pod [%s/%s]. Err: %v %v", pod.Namespace, pod.Name, output, err)
+				return validatedMountPods, fmt.Errorf("failed to execute command [cat /proc/mounts] in pod [%s/%s] container [%s]. Err: %v %v", pod.Namespace, pod.Name, containerName, output, err)
 			}
 			mounts := strings.Split(output, "\n")
+			log.Debugf("Command [cat /proc/mounts] output:\n%v\n", mounts)
 
 			// In some cases the container path is sym linked to a local directory in the pod
 			// "/proc/mounts" contains this sym link path instead of the actual container path fetched
 			// To make sure it doesn't fail in validation, we will be appending the sym link path to "paths" and removing the container path
 			for i, path := range paths {
+				log.Debugf("Executing command [readlink -f %s] in pod [%s/%s] container [%s]", path, p.Namespace, p.Name, containerName)
 				symlinkPath, err := k8sCore.RunCommandInPod([]string{"readlink", "-f", path}, pod.Name, containerName, pod.Namespace)
 				if err != nil {
-					return validatedMountPods, err
+					return validatedMountPods, fmt.Errorf("failed to execute command [readlink -f %s] in pod [%s/%s] container [%s]. Err: %v %v", path, p.Namespace, p.Name, containerName, symlinkPath, err)
 				}
 				symlinkPath = strings.TrimSpace(symlinkPath)
+				log.Debugf("Sym link for path [%s] is [%s]", path, symlinkPath)
+
 				if symlinkPath != "" && symlinkPath != path {
 					log.Infof("Linked path found for [%s] -> [%s]", path, symlinkPath)
 					paths[i] = symlinkPath
 				}
 			}
-			log.Infof("container [%s] and paths [%v] after checking sym links", containerName, paths)
+			log.Infof("Pod [%s/%s] container [%s] and paths [%v] after checking sym links", p.Namespace, p.Name, containerName, paths)
 			for _, path := range paths {
 				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", PureMapperRegex, path))
 				pxMountFound := false
@@ -416,7 +421,7 @@ PodLoop:
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
 
 					if len(pxMounts) > 0 {
-						log.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
+						log.Debugf("Pod [%s/%s] container [%s] has PX mount: %v", pod.Namespace, pod.Name, containerName, pxMounts)
 						pxMountFound = true
 
 						// in case there are two pods running with non shared volume, one of them will be in read-only
@@ -428,7 +433,7 @@ PodLoop:
 				}
 
 				if !pxMountFound {
-					return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
+					return validatedMountPods, fmt.Errorf("pod [%s/%s] container [%s] does not have PX mount. Mounts are: [%v]", pod.Namespace, pod.Name, containerName, mounts)
 				}
 			}
 
@@ -441,7 +446,7 @@ PodLoop:
 
 		currentNode, nodeExists := nodes[p.Spec.NodeName]
 		if !nodeExists {
-			return validatedMountPods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+			return validatedMountPods, fmt.Errorf("node [%s] for pod [%s/%s] not found", p.Spec.NodeName, p.Namespace, p.Name)
 		}
 
 		// ignore error when a command not exactly fail, like grep when empty return exit 1
@@ -455,10 +460,11 @@ PodLoop:
 		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
 			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
 		}
+		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)
 		volMount, _ := d.RunCommand(currentNode,
 			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), connOpts)
 		if len(volMount) == 0 {
-			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
+			return validatedMountPods, fmt.Errorf("volume [%s] not mounted on node [%s]", vol.Name, currentNode.Name)
 		}
 
 		validatedMountPods = append(validatedMountPods, pod.Name)
