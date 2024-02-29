@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -343,4 +344,39 @@ func addResourceVersion(patchBytes []byte, resourceVersion string) ([]byte, erro
 		return nil, fmt.Errorf("error marshalling json patch: %v", err)
 	}
 	return versionBytes, nil
+}
+
+func GetMergedNamespacesWithLabelSelector(namespaceList []string, namespaceSelectors map[string]string) ([]string, error) {
+	if len(namespaceSelectors) == 0 {
+		return namespaceList, nil
+	}
+	uniqueNamespaces := make(map[string]bool)
+	for _, ns := range namespaceList {
+		uniqueNamespaces[ns] = true
+	}
+
+	for key, val := range namespaceSelectors {
+		namespaces, err := core.Instance().ListNamespaces(map[string]string{key: val})
+		if err != nil {
+			return nil, err
+		}
+		for _, namespace := range namespaces.Items {
+			uniqueNamespaces[namespace.GetName()] = true
+		}
+	}
+
+	migrationNamespaces := make([]string, 0, len(uniqueNamespaces))
+	for namespace := range uniqueNamespaces {
+		migrationNamespaces = append(migrationNamespaces, namespace)
+	}
+	return migrationNamespaces, nil
+}
+
+func IsSubList(list1 []string, list2 []string) bool {
+	for _, element := range list2 {
+		if !slices.Contains(list1, element) {
+			return false
+		}
+	}
+	return true
 }
