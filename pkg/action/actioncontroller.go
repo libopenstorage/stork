@@ -30,6 +30,12 @@ const (
 	validateCRDTimeout           time.Duration = 1 * time.Minute
 	actionExpiryTime             time.Duration = 24 * time.Hour
 	latestMigrationThresholdTime time.Duration = 1 * time.Hour
+
+	nameTimeSuffixFormat    string = "2006-01-02-150405"
+	lastmileMigrationPrefix string = "lastmile"
+	// StorkLastMileMigrationScheduleName is the annotation to keep track of
+	// from which migrationschedule last mile migration spec was generated
+	StorkLastMileMigrationScheduleName = "stork.libopenstorage.org/lastmile-migration-schedule-name"
 )
 
 func NewActionController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *ActionController {
@@ -121,7 +127,13 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		case storkv1.ActionStageInitial:
 			ac.verifyMigrationScheduleBeforeFailback(action)
 		case storkv1.ActionStageScaleDownDestination:
-			ac.performDeactivateFailBackStage(action)
+			ac.performDeactivateFailBackStageDestination(action)
+		case storkv1.ActionStageLastMileMigration:
+			ac.performLastMileMigration(action)
+		case storkv1.ActionStageScaleUpSource:
+			ac.performActivateFailBackStageSource(action)
+		case storkv1.ActionStageScaleUpDestination:
+			ac.performActivateFailBackStageDestination(action)
 		case storkv1.ActionStageFinal:
 			return nil
 		}
