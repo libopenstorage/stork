@@ -34,8 +34,8 @@ type Action struct {
 
 // ActionSpec specifies the type of Action
 type ActionSpec struct {
-	ActionType      ActionType       `json:"actionType"`
-	ActionParameter *ActionParameter `json:"actionParameter"`
+	ActionType      ActionType      `json:"actionType"`
+	ActionParameter ActionParameter `json:"actionParameter"`
 }
 
 // ActionType lists the various actions that can be performed
@@ -54,18 +54,18 @@ const (
 type ActionParameter ActionParameterItem
 
 type ActionParameterItem struct {
-	FailoverParameter *FailoverParameter `json:"failoverParameter,omitempty"`
-	FailbackParameter *FailbackParameter `json:"failbackParameter,omitempty"`
+	FailoverParameter FailoverParameter `json:"failoverParameter,omitempty"`
+	FailbackParameter FailbackParameter `json:"failbackParameter,omitempty"`
 }
 
 type FailoverParameter struct {
 	FailoverNamespaces         []string `json:"failoverNamespaces"`
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
-	DeactivateSource           bool     `json:"deactivateSource"`
+	SkipDeactivateSource       *bool    `json:"skipDeactivateSource"`
 }
 
 type FailbackParameter struct {
-	Namespaces                 []string `json:"namespaces"`
+	Namespaces                 []string `json:"failbackNamespaces"`
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
 }
 
@@ -99,6 +99,8 @@ const (
 	ActionStageScaleUpDestination ActionStageType = "ScaleUpDestination"
 	// ActionStageScaleUpSource for scaling apps in source
 	ActionStageScaleUpSource ActionStageType = "ScaleUpSource"
+	// ActionStageLastMileMigration for doing a last migration before failover/failback to ensure data integrity
+	ActionStageLastMileMigration ActionStageType = "LastMileMigration"
 	// ActionStageFinal is the final stage for action
 	ActionStageFinal ActionStageType = "Final"
 )
