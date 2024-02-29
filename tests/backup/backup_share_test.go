@@ -4085,6 +4085,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 		})
 		Step(fmt.Sprintf("validate the backup shared %s is present in user context %s", backupName, users[1]), func() {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
 			userBackups, _ := GetAllBackupsForUser(users[1], CommonPassword)
 			backupCount := 0
 			for _, backup := range userBackups {
@@ -4093,6 +4095,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 				}
 			}
 			dash.VerifyFatal(backupCount, numberOfUsers, fmt.Sprintf("Validating the shared backup [%s] is present in user context [%s]", backupName, users[1]))
+			bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(backupName, ctxNonAdmin, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Backup [%s] has status: %s with reason: %s", backupName, bkpStatus, bkpReason))
 		})
 		Step(fmt.Sprintf("Restore the shared backup  %s with user context %s", backupName, users[1]), func() {
 			log.InfoD(fmt.Sprintf("Restore the shared backup  %s with user context %s", users[1], users[0]))
@@ -4111,6 +4115,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.FailOnError(err, "Failed to share backup %s", backupName)
 		})
 		Step(fmt.Sprintf("validate the backup shared %s is present in user context %s", backupName, users[0]), func() {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
 			userBackups, _ := GetAllBackupsForUser(users[0], CommonPassword)
 			backupCount := 0
 			for _, backup := range userBackups {
@@ -4119,6 +4125,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 				}
 			}
 			dash.VerifyFatal(backupCount, numberOfUsers, fmt.Sprintf("Validating the shared backup [%s] is present in user context [%s]", backupName, users[0]))
+			bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(backupName, ctxNonAdmin, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Backup [%s] has status: %s with reason: %s", backupName, bkpStatus, bkpReason))
 		})
 		Step(fmt.Sprintf("Restore the shared backup  %s with user context %s", backupName, users[0]), func() {
 			log.InfoD(fmt.Sprintf("Restore the shared backup  %s with user context %s", users[0], users[0]))
