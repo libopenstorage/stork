@@ -2,8 +2,6 @@ package storkctl
 
 import (
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
-	"github.com/sirupsen/logrus"
 	"io"
 	"strings"
 	"time"
@@ -55,46 +53,4 @@ func isValidResourceType(resourceType string, apiResource metav1.APIResource) bo
 		return true
 	}
 	return false
-}
-
-// We fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
-func getAdminNamespace() string {
-	adminNs, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.AdminNsKey)
-	if err != nil {
-		logrus.Warnf("Error in reading %v cm for the key %v, switching to default value : %v",
-			k8sutils.StorkControllerConfigMapName, k8sutils.AdminNsKey, err)
-		adminNs = k8sutils.DefaultAdminNamespace
-	}
-	return adminNs
-}
-
-// isSubset returns true if the first slice is subset of the second slice.
-// If false it also returns the list of non subset strings.
-func isSubset(listA []string, listB []string) (bool, []string) {
-	nonSubsetStrings := make([]string, 0)
-	superset := make(map[string]bool)
-	for _, str := range listB {
-		superset[str] = true
-	}
-	for _, str := range listA {
-		if !superset[str] {
-			nonSubsetStrings = append(nonSubsetStrings, str)
-		}
-	}
-	return len(nonSubsetStrings) == 0, nonSubsetStrings
-}
-
-// excludeListAFromListB takes 2 slices of strings as input and returns subset of B which is disjoint from A
-func excludeListAFromListB(listA []string, listB []string) []string {
-	nonCommonStrings := make([]string, 0)
-	setA := make(map[string]bool)
-	for _, str := range listA {
-		setA[str] = true
-	}
-	for _, str := range listB {
-		if !setA[str] {
-			nonCommonStrings = append(nonCommonStrings, str)
-		}
-	}
-	return nonCommonStrings
 }

@@ -2,6 +2,7 @@ package storkctl
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"strings"
 	"time"
 
@@ -80,7 +81,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			migrationNamespaceList := migrSchedObj.Spec.Template.Spec.Namespaces
 			migrationNamespaceSelectors := migrSchedObj.Spec.Template.Spec.NamespaceSelectors
 			// update the migrationNamespaces list by fetching namespaces based on provided label selectors
-			migrationNamespaces, err := getMigrationNamespaces(migrationNamespaceList, migrationNamespaceSelectors)
+			migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationNamespaceList, migrationNamespaceSelectors)
 			if err != nil {
 				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the --namespace-selectors in the provided MigrationSchedule: %v", err))
 				return
@@ -90,7 +91,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				util.CheckErr(fmt.Errorf("can provide only one of --include-namespaces or --exclude-namespaces values at once"))
 				return
 			} else if len(includeNamespaceList) != 0 {
-				if isSubset, nonSubsetStrings := isSubset(includeNamespaceList, migrationNamespaces); isSubset {
+				if isSubList, nonSubsetStrings := utils.IsSubList(includeNamespaceList, migrationNamespaces); isSubList {
 					// Branch 1: Only failover some of the namespaces being migrated by the given migrationSchedule
 					namespaceList = includeNamespaceList
 				} else {
@@ -98,9 +99,9 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 					return
 				}
 			} else if len(excludeNamespaceList) != 0 {
-				if isSubset, nonSubsetStrings := isSubset(excludeNamespaceList, migrationNamespaces); isSubset {
+				if isSubList, nonSubsetStrings := utils.IsSubList(excludeNamespaceList, migrationNamespaces); isSubList {
 					// Branch 2: Exclude some of the namespaces being migrated by the given migrationSchedule from failover
-					namespaceList = excludeListAFromListB(excludeNamespaceList, migrationNamespaces)
+					namespaceList = utils.ExcludeListAFromListB(excludeNamespaceList, migrationNamespaces)
 				} else {
 					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings))
 					return
@@ -153,10 +154,6 @@ func createActionCR(actionName string, namespace string, actionType storkv1.Acti
 		return nil, err
 	}
 	return actionObj, nil
-}
-
-func isActionIncomplete(action *storkv1.Action) bool {
-	return action.Status.Status == storkv1.ActionStatusScheduled || action.Status.Status == storkv1.ActionStatusInProgress
 }
 
 func getActionStatusMessage(action *storkv1.Action) string {
