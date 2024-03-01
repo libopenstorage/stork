@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	"net/url"
 	"os/exec"
 	"strings"
@@ -60,8 +61,8 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}*/
 
 		for _, version := range versions {
-			if Inst().S.String() == openshift.SchedName && strings.Contains(version, "4.14") {
-				err = ocp414Prereq()
+			if Inst().S.String() == openshift.SchedName && hasOCPPrereq(version) {
+				err = ocpPrometheusPrereq()
 				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
 			}
 			Step(fmt.Sprintf("start [%s] scheduler upgrade", Inst().S.String()), func() {
@@ -133,6 +134,20 @@ var _ = Describe("{UpgradeCluster}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func hasOCPPrereq(ocpVer string) bool {
+
+	if strings.Contains(ocpVer, "stable-") {
+		ocpVer = strings.Split(ocpVer, "-")[1]
+	}
+	parsedVersion, err := semver.NewVersion(ocpVer)
+	log.FailOnError(err, fmt.Sprintf("error parsion ocp version [%s]", ocpVer))
+	compareVersion, _ := semver.NewVersion("4.12") //giving compare version as 4.11 will make below condition true for 4.11.X
+	if parsedVersion.Equal(compareVersion) || parsedVersion.GreaterThan(compareVersion) {
+		return true
+	}
+	return false
+}
 
 func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	stNodes := node.GetStorageNodes()
@@ -208,7 +223,7 @@ func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	}
 }
 
-func ocp414Prereq() error {
+func ocpPrometheusPrereq() error {
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return err
@@ -282,6 +297,7 @@ func updatePrometheusAndAutopilot(stc *ops_v1.StorageCluster) error {
 	}
 	thanosQuerierHost := strings.TrimSpace(string(output))
 	log.Infof("Thanos Querier Host:%s", thanosQuerierHost)
+	thanosQuerierHostUrl := fmt.Sprintf("https://%s", thanosQuerierHost)
 
 	if stc.Spec.Monitoring.Prometheus.Enabled {
 		stc.Spec.Monitoring.Prometheus.Enabled = false
@@ -291,7 +307,15 @@ func updatePrometheusAndAutopilot(stc *ops_v1.StorageCluster) error {
 
 	for _, dataProvider := range dataProviders {
 		if dataProvider.Type == "prometheus" {
-			dataProvider.Params["url"] = fmt.Sprintf("https://%s", thanosQuerierHost)
+			isUrlUpdated := false
+			if val, ok := dataProvider.Params["url"]; ok {
+				if val == thanosQuerierHostUrl {
+					isUrlUpdated = true
+				}
+			}
+			if !isUrlUpdated {
+				dataProvider.Params["url"] = thanosQuerierHostUrl
+			}
 		}
 
 	}

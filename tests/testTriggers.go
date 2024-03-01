@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"container/ring"
 	"fmt"
 	"math"
 	"math/rand"
@@ -15,47 +16,46 @@ import (
 	"sync"
 	"text/template"
 	"time"
-	"container/ring"
 
-	"github.com/portworx/sched-ops/k8s/operator"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"gopkg.in/natefinch/lumberjack.v2"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	"github.com/onsi/ginkgo/v2"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apios "github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
-	apios "github.com/libopenstorage/openstorage/api"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
+	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/stats"
-	"github.com/portworx/torpedo/pkg/applicationbackup"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 const (
@@ -488,7 +488,7 @@ const (
 	// MetroDRMigrationSchedule runs Metro DR migration schedule between two clusters
 	MetroDRMigrationSchedule = "metrodrmigrationschedule"
 	// AsyncDR runs Async DR between two clusters
-	AsyncDR = "asyncdr"	
+	AsyncDR = "asyncdr"
 	// AsyncDR PX restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRPXRestartSource = "asyncdrpxrestartsource"
 	// AsyncDR PX restart on destination runs Async DR migration between two clusters with px restart
@@ -5148,28 +5148,58 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 
 func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 
+	cnt := 0
+	currentLastMsg := ""
 	f := func() (interface{}, bool, error) {
-		pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
 		if err != nil {
-			return nil, false, fmt.Errorf("error getting pools list, Error :%v", err)
+			return nil, true, fmt.Errorf("error getting pool by using id %s", poolIDToResize)
 		}
 
-		expandedPool := pools[poolIDToResize]
+		if expandedPool == nil {
+			return nil, false, fmt.Errorf("expanded pool value is nil")
+		}
 		if expandedPool.LastOperation != nil {
-			log.InfoD("Current pool %s last operation status : %v", poolIDToResize, expandedPool.LastOperation.Status)
+			log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-				return nil, false, fmt.Errorf("PoolResize for %s has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+				return nil, false, fmt.Errorf("pool %s expansion has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+			}
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
+				return nil, true, fmt.Errorf("pool %s is in pending state, waiting to start", poolIDToResize)
+			}
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
+					if currentLastMsg == expandedPool.LastOperation.Msg {
+						cnt += 1
+					} else {
+						cnt = 0
+					}
+					if cnt == 5 {
+						return nil, false, fmt.Errorf("pool rebalance stuck at %s", currentLastMsg)
+					}
+					currentLastMsg = expandedPool.LastOperation.Msg
+
+					return nil, true, fmt.Errorf("wait for pool rebalance to complete")
+				}
+
+				if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
+					strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
+					return nil, false, nil
+				}
+
+				return nil, true, fmt.Errorf("waiting for pool status to update")
 			}
 		}
-
 		newPoolSize := expandedPool.TotalSize / units.GiB
-		if newPoolSize > initialSize {
+
+		if newPoolSize >= initialSize {
 			// storage pool resize has been completed
-			return nil, true, nil
+			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d", poolIDToResize, newPoolSize)
+		return nil, true, fmt.Errorf("pool has not been resized. Waiting...Current size is %d", newPoolSize)
 	}
-	_, err := task.DoRetryWithTimeout(f, time.Minute*120, 2*time.Minute)
+
+	_, err := task.DoRetryWithTimeout(f, 120*time.Minute, 2*time.Minute)
 	return err
 }
 
@@ -7411,65 +7441,65 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 	log.Infof("Async DR PX restart on source trigger triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
-			Event: Event{
-					ID:   GenerateUUID(),
-					Type: AsyncDRPXRestartSource,
-			},
-			Start:   time.Now().Format(time.RFC1123),
-			Outcome: []error{},
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRPXRestartSource,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
 	}
 	defer func() {
-			event.End = time.Now().Format(time.RFC1123)
-			*recordChan <- event
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
 	}()
 
 	setMetrics(*event)
 
 	chaosLevel := ChaosMap[AsyncDRPXRestartSource]
 	var (
-			migrationNamespaces   []string
-			taskNamePrefix        = "async-dr-pxrs"
-			allMigrations         []*storkapi.Migration
-			includeVolumesFlag    = true
-			includeResourcesFlag  = true
-			startApplicationsFlag = false
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-pxrs"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
 	)
 
 	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
 
-			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
-			err := asyncdr.WriteKubeconfigToFiles()
-			if err != nil {
-					log.Errorf("Failed to write kubeconfig: %v", err)
-					UpdateOutcome(event, err)
-                    return
-			}
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
 
-			err = SetSourceKubeConfig()
-			if err != nil {
-					log.Errorf("Failed to Set source kubeconfig: %v", err)
-					UpdateOutcome(event, err)
-                    return
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
 			}
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
-					log.Infof("Task name %s\n", taskName)
-					appContexts := ScheduleApplications(taskName)
-					*contexts = append(*contexts, appContexts...)
-					ValidateApplications(*contexts)
-					for _, ctx := range appContexts {
-							// Override default App readiness time out of 5 mins with 10 mins
-							ctx.ReadinessTimeout = appReadinessTimeout
-							namespace := GetAppNamespace(ctx, taskName)
-							migrationNamespaces = append(migrationNamespaces, namespace)
-					}
-					Step("Create cluster pair between source and destination clusters", func() {
-							// Set cluster context to cluster where torpedo is running
-							ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-					})
-			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			})
+		}
 
-			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
 
 	})
 
@@ -7498,17 +7528,17 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 
 	// Validate all migrations
 	for _, mig := range allMigrations {
-			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
-			if err != nil {
-					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-					return
-			}
-			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-			if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-					return
-			}
-			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			return
+		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+			return
+		}
+		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -7521,65 +7551,65 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 	log.Infof("Async DR PX restart on destination trigger triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
-			Event: Event{
-					ID:   GenerateUUID(),
-					Type: AsyncDRPXRestartDest,
-			},
-			Start:   time.Now().Format(time.RFC1123),
-			Outcome: []error{},
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRPXRestartDest,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
 	}
 	defer func() {
-			event.End = time.Now().Format(time.RFC1123)
-			*recordChan <- event
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
 	}()
 
 	setMetrics(*event)
 
 	chaosLevel := ChaosMap[AsyncDRPXRestartDest]
 	var (
-			migrationNamespaces   []string
-			taskNamePrefix        = "async-dr-pxrd"
-			allMigrations         []*storkapi.Migration
-			includeVolumesFlag    = true
-			includeResourcesFlag  = true
-			startApplicationsFlag = false
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-pxrd"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
 	)
 
 	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
 
-			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
-			err := asyncdr.WriteKubeconfigToFiles()
-			if err != nil {
-					log.Errorf("Failed to write kubeconfig: %v", err)
-					UpdateOutcome(event, err)
-                    return
-			}
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
 
-			err = SetSourceKubeConfig()
-			if err != nil {
-					log.Errorf("Failed to Set source kubeconfig: %v", err)
-					UpdateOutcome(event, err)
-                    return
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
 			}
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
-					log.Infof("Task name %s\n", taskName)
-					appContexts := ScheduleApplications(taskName)
-					*contexts = append(*contexts, appContexts...)
-					ValidateApplications(*contexts)
-					for _, ctx := range appContexts {
-							// Override default App readiness time out of 5 mins with 10 mins
-							ctx.ReadinessTimeout = appReadinessTimeout
-							namespace := GetAppNamespace(ctx, taskName)
-							migrationNamespaces = append(migrationNamespaces, namespace)
-					}
-					Step("Create cluster pair between source and destination clusters", func() {
-							// Set cluster context to cluster where torpedo is running
-							ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-					})
-			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			})
+		}
 
-			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
 
 	})
 
@@ -7589,8 +7619,8 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
-				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
-				return
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+			return
 		} else {
 			allMigrations = append(allMigrations, currMig)
 			Step("Restart Portworx", func() {
@@ -7598,7 +7628,7 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 				if err != nil {
 					log.Errorf("Failed to Set destination kubeconfig: %v", err)
 					UpdateOutcome(event, err)
-                    return
+					return
 				}
 				nodes := node.GetStorageDriverNodes()
 				nodeIndex := rand.Intn(len(nodes))
@@ -7619,17 +7649,17 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 
 	// Validate all migrations
 	for _, mig := range allMigrations {
-			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
-			if err != nil {
-					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-					return
-			}
-			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-			if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-					return
-			}
-			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			return
+		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+			return
+		}
+		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -7642,65 +7672,65 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 	log.Infof("Async DR kvdb restart trigger triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
-			Event: Event{
-					ID:   GenerateUUID(),
-					Type: AsyncDRPXRestartKvdb,
-			},
-			Start:   time.Now().Format(time.RFC1123),
-			Outcome: []error{},
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRPXRestartKvdb,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
 	}
 	defer func() {
-			event.End = time.Now().Format(time.RFC1123)
-			*recordChan <- event
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
 	}()
 
 	setMetrics(*event)
 
 	chaosLevel := ChaosMap[AsyncDRPXRestartKvdb]
 	var (
-			migrationNamespaces   []string
-			taskNamePrefix        = "async-dr-rkvdb"
-			allMigrations         []*storkapi.Migration
-			includeVolumesFlag    = true
-			includeResourcesFlag  = true
-			startApplicationsFlag = false
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-rkvdb"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
 	)
 
 	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
 
-			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
-			err := asyncdr.WriteKubeconfigToFiles()
-			if err != nil {
-					log.Errorf("Failed to write kubeconfig: %v", err)
-					UpdateOutcome(event, err)
-                    return
-			}
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
 
-			err = SetSourceKubeConfig()
-			if err != nil {
-					log.Errorf("Failed to Set source kubeconfig: %v", err)
-					UpdateOutcome(event, err)
-                    return
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
 			}
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
-					log.Infof("Task name %s\n", taskName)
-					appContexts := ScheduleApplications(taskName)
-					*contexts = append(*contexts, appContexts...)
-					ValidateApplications(*contexts)
-					for _, ctx := range appContexts {
-							// Override default App readiness time out of 5 mins with 10 mins
-							ctx.ReadinessTimeout = appReadinessTimeout
-							namespace := GetAppNamespace(ctx, taskName)
-							migrationNamespaces = append(migrationNamespaces, namespace)
-					}
-					Step("Create cluster pair between source and destination clusters", func() {
-							// Set cluster context to cluster where torpedo is running
-							ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-					})
-			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			})
+		}
 
-			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
 	})
 
 	log.InfoD("Collect KVDB node")
@@ -7725,33 +7755,33 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
-				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
-				return
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+			return
 		} else {
-				allMigrations = append(allMigrations, currMig)
-				Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
-					StopVolDriverAndWait([]node.Node{appNode})
-					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), appNode.Name)
-					StartVolDriverAndWait([]node.Node{appNode})
-					log.Infof("Giving a few seconds for volume driver to stabilize")
-					time.Sleep(20 * time.Second)
-				})
-			}
+			allMigrations = append(allMigrations, currMig)
+			Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
+				StopVolDriverAndWait([]node.Node{appNode})
+				log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), appNode.Name)
+				StartVolDriverAndWait([]node.Node{appNode})
+				log.Infof("Giving a few seconds for volume driver to stabilize")
+				time.Sleep(20 * time.Second)
+			})
 		}
+	}
 
 	// Validate all migrations
 	for _, mig := range allMigrations {
-			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
-			if err != nil {
-					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-					return
-			}
-			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-			if err != nil {
-					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-					return
-			}
-			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			return
+		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+			return
+		}
+		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -9449,10 +9479,26 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
 	expectedStorageNodeCount := numOfStorageNodes + 1
+	//In some cases after new storage node is added, existing storageless node is converted to storage, and this needs some time to repo to update
+	t := func() (interface{}, bool, error) {
+		err := Inst().V.RefreshDriverEndpoints()
+		if err != nil {
+			log.Warnf("failed to refesh node drivers, err: %v", err)
+			return nil, true, err
+		}
+		updatedStorageNodesCount = len(node.GetStorageNodes())
+		if updatedStorageNodesCount != expectedStorageNodeCount {
+			return nil, true, fmt.Errorf("storage nodes [%d] didnt match with expected [%d]. Retrying the check after 30 secs", updatedStorageNodesCount, expectedStorageNodeCount)
+		}
+
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
 	if updatedStorageNodesCount != expectedStorageNodeCount {
+		log.Errorf(fmt.Sprintf("storage nodes [%d] didnt match with expected [%d]. Retrying the check after 30 secs", updatedStorageNodesCount, expectedStorageNodeCount))
 		PrintPxctlStatus()
 	}
-	dash.VerifySafely(updatedStorageNodesCount, expectedStorageNodeCount, "verify new storage node is added")
+	dash.VerifySafely(err, nil, "verify new storage node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)

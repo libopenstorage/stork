@@ -383,6 +383,7 @@ const (
 )
 
 var pxRuntimeOpts string
+var pxClusterOpts string
 var PxBackupVersion string
 
 var (
@@ -577,6 +578,8 @@ func InitInstance() {
 	ns, err := Inst().V.GetVolumeDriverNamespace()
 	log.FailOnError(err, "Error occured while getting volume driver namespace")
 	installGrafana(ns)
+	err = updatePxClusterOpts()
+	log.Errorf("%v", err)
 }
 
 func PrintPxctlStatus() {
@@ -6423,6 +6426,7 @@ func ParseFlags() {
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
+	flag.StringVar(&pxClusterOpts, "px-cluster-opts", "", "comma separated list of cluster options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
@@ -7399,6 +7403,30 @@ func updatePxRuntimeOpts() error {
 		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
 	} else {
 		log.Info("No run time options provided to update")
+	}
+	return nil
+
+}
+
+func updatePxClusterOpts() error {
+	if pxClusterOpts != "" {
+		log.InfoD("Setting cluster options: %s", pxClusterOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxClusterOpts)
+		log.FailOnError(err, "Error parsing run time options")
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				log.Fatalf("Given cluster option is not in expected format key=val, Actual : %v", opt)
+			}
+			optArr := strings.Split(opt, "=")
+			ketString := "--" + optArr[0]
+			optionsMap[ketString] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterOptsWithConfirmation(currNode, optionsMap)
+	} else {
+		log.Info("No cluster options provided to update")
 	}
 	return nil
 

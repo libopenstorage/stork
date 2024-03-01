@@ -544,6 +544,7 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
+            "--px-cluster-opts=$PX_CLUSTER_OPTS",
             "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
             "--anthos-inst-path=$ANTHOS_INST_PATH",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
