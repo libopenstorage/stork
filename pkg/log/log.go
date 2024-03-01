@@ -1,7 +1,20 @@
 package log
 
 import (
+	"crypto/tls"
+	"fmt"
+
+	"io"
+	defaultLogger "log"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	aetosutil "github.com/libopenstorage/stork/pkg/aetosutils"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -11,6 +24,189 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
+
+var (
+	Dash            = aetosutil.Get()
+	log             *logrus.Logger
+	lock            = &sync.Mutex{}
+	storkLogFile    *os.File
+	enableDashboard = true
+)
+
+const (
+	NfsLogServer = "http://aetos-nfs-01.pwx.purestorage.com/"
+)
+
+// CreateLogFile creates file and return the file object
+func CreateLogFile(filename string) *os.File {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		log.Errorf("Failed to create logfile %s", filename)
+		log.Errorf("Error: %v", err)
+	}
+	return f
+}
+
+// SetStorkTestFileOutput adds output destination for logging
+func SetStorkTestFileOutput(log *logrus.Logger, f *os.File) {
+	log.Out = io.MultiWriter(log.Out, f)
+	log.Debugf("Log Dir: %s", f.Name())
+}
+
+func IsDashboardReachable() bool {
+	timeout := 5 * time.Second
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := http.Client{
+		Transport: tr,
+		Timeout:   timeout,
+	}
+	if _, err := client.Get(aetosutil.AetosUrl); err != nil {
+		log.Warn("dashboard is not reachable", err)
+		return false
+	}
+	return true
+}
+func GenerateNFSUrl(inputPath string) string {
+	return strings.ReplaceAll(inputPath, "/pwx/aetos/", NfsLogServer)
+}
+
+func dirExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
+
+func GetLogDir(testLogDir string) string {
+	var err error
+	if testLogDir != "." {
+		if !dirExists(testLogDir) {
+			err = os.Mkdir(testLogDir, os.ModePerm)
+			if err != nil {
+				log.Error(err)
+				return "."
+			}
+		}
+	}
+	Dash.LogDir = testLogDir
+	storkLogPath := fmt.Sprintf("%s/%s", Dash.LogDir, "test.log")
+	logUrl := GenerateNFSUrl(storkLogPath)
+	Dash.LogUrl = logUrl
+	return storkLogPath
+}
+
+func SetLoglevel(testLog *logrus.Logger, logLevel string) {
+	switch logLevel {
+	case "debug":
+		testLog.Level = logrus.DebugLevel
+	case "info":
+		testLog.Level = logrus.InfoLevel
+	case "error":
+		testLog.Level = logrus.ErrorLevel
+	case "warn":
+		testLog.Level = logrus.WarnLevel
+	default:
+		testLog.Level = logrus.DebugLevel
+
+	}
+}
+
+func verifyDashboard() {
+	if Dash == nil {
+		aeosLogs := GetLogInstance()
+		Dash.TestLog = aeosLogs
+		aeosLogs.Out = io.MultiWriter(aeosLogs.Out)
+		SetLoglevel(aeosLogs, "debug")
+		storkLogPath := GetLogDir(".")
+		fmt.Printf("inside verifyDashboard testLogPath is %s \n", storkLogPath)
+		storkLogFile = CreateLogFile(storkLogPath)
+		if storkLogFile != nil {
+			SetStorkTestFileOutput(aeosLogs, storkLogFile)
+		}
+		if enableDashboard && !IsDashboardReachable() {
+			enableDashboard = false
+			log.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+		}
+		fmt.Println("Dashboard in verifyDashboard is enabled: ", enableDashboard)
+		Dash.IsEnabled = enableDashboard
+	}
+}
+
+func Fatal(format string, args ...interface{}) {
+	Dash.Fatal(format, args...)
+	logrus.Fatalf(format, args...)
+}
+
+func FailOnError(t *testing.T, err error, description string, args ...interface{}) {
+	if err != nil {
+		Dash.VerifyFatal(t, "Error", "NoError", fmt.Sprintf("%v. Err: %v", fmt.Sprintf(description, args...), err))
+	}
+}
+
+func FailOnNoError(t *testing.T, err error, description string, args ...interface{}) {
+	if err == nil {
+		Dash.VerifyFatal(t, "NoError", "Error", fmt.Sprintf("%v. Err: %v", fmt.Sprintf(description, args...), err))
+	}
+}
+
+func Error(format string, args ...interface{}) {
+	verifyDashboard()
+	Dash.Errorf(format, args...)
+	Dash.TestLog.Errorf(format, args...)
+	defaultLogger.Printf("ERROR: %s", fmt.Sprintf(format, args...))
+}
+
+func Debug(msg string) {
+	Dash.TestLog.Debug(msg)
+	defaultLogger.Printf("DEBUG: %s", msg)
+}
+
+func Debugf(format string, args ...interface{}) {
+	Dash.TestLog.Debugf(format, args...)
+	defaultLogger.Printf("DEBUG: %s", fmt.Sprintf(format, args...))
+}
+
+func Warn(format string, args ...interface{}) {
+	verifyDashboard()
+	Dash.TestLog.Warnf(format, args...)
+	Dash.Warnf(format, args...)
+	defaultLogger.Printf("WARN: %s", fmt.Sprintf(format, args...))
+}
+
+func Info(format string, args ...interface{}) {
+	Dash.TestLog.Infof(format, args...)
+	defaultLogger.Printf("INFO: %s", fmt.Sprintf(format, args...))
+}
+
+func InfoD(format string, args ...interface{}) {
+	verifyDashboard()
+	Dash.TestLog.Infof(format, args...)
+	Dash.Infof(format, args...)
+	defaultLogger.Printf("INFO: %s", fmt.Sprintf(format, args...))
+}
+
+// GetLogInstance returns the logrus instance
+func GetLogInstance() *logrus.Logger {
+
+	//To-DO: add rolling file appender
+	//max: 50MB and 10 files
+
+	if log == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if log == nil {
+			log = logrus.New()
+			log.Out = io.MultiWriter(os.Stdout)
+		}
+	}
+	return log
+}
 
 // PodLog Format a log message with pod information
 func PodLog(pod *v1.Pod) *logrus.Entry {

@@ -111,10 +111,10 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			}
 			actionType := storkv1.ActionTypeFailover
 			actionParameters := storkv1.ActionParameter{
-				FailoverParameter: &storkv1.FailoverParameter{
+				FailoverParameter: storkv1.FailoverParameter{
 					FailoverNamespaces:         namespaceList,
 					MigrationScheduleReference: referenceMigrationSchedule,
-					DeactivateSource:           !skipDeactivateSource,
+					SkipDeactivateSource:       &skipDeactivateSource,
 				},
 			}
 			actionName := getActionName(actionType, referenceMigrationSchedule)
@@ -144,7 +144,7 @@ func createActionCR(actionName string, namespace string, actionType storkv1.Acti
 		},
 		Spec: storkv1.ActionSpec{
 			ActionType:      actionType,
-			ActionParameter: &actionParameters,
+			ActionParameter: actionParameters,
 		},
 		Status: storkv1.ActionStatus{Status: storkv1.ActionStatusInitial},
 	}
@@ -153,6 +153,10 @@ func createActionCR(actionName string, namespace string, actionType storkv1.Acti
 		return nil, err
 	}
 	return actionObj, nil
+}
+
+func isActionIncomplete(action *storkv1.Action) bool {
+	return action.Status.Status == storkv1.ActionStatusScheduled || action.Status.Status == storkv1.ActionStatusInProgress
 }
 
 func getActionStatusMessage(action *storkv1.Action) string {

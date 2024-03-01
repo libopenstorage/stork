@@ -148,6 +148,87 @@ func checkTrigger(
 	return false, nil
 }
 
+func hasTriggered(
+	lastTrigger time.Time,
+	lastTriggerEarliest time.Time,
+	now time.Time,
+) (bool, error) {
+	// Check if the last trigger falls between the allowed earliest trigger time and now
+	if lastTrigger.Before(lastTriggerEarliest) || lastTrigger.After(now) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func AlreadyTriggered(
+	policyName string,
+	namespace string,
+	policyType stork_api.SchedulePolicyType,
+	lastTrigger meta.Time,
+) (bool, error) {
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
+	if err != nil {
+		return false, err
+	}
+
+	if err := ValidateSchedulePolicy(schedulePolicy); err != nil {
+		return false, err
+	}
+
+	now := GetCurrentTime()
+	switch policyType {
+	case stork_api.SchedulePolicyTypeInterval:
+		if schedulePolicy.Policy.Interval == nil {
+			return false, nil
+		}
+		duration := time.Duration(schedulePolicy.Policy.Interval.IntervalMinutes) * time.Minute
+		// Triggerred if last trigger is within the duration from now
+		earliestTrigger := now.Add(-duration)
+		return hasTriggered(lastTrigger.Time, earliestTrigger, now)
+
+	case stork_api.SchedulePolicyTypeDaily:
+		if schedulePolicy.Policy.Daily == nil {
+			return false, nil
+		}
+
+		policyHour, policyMinute, err := schedulePolicy.Policy.Daily.GetHourMinute()
+		if err != nil {
+			return false, err
+		}
+
+		nextTrigger := time.Date(now.Year(), now.Month(), now.Day(), policyHour, policyMinute, 0, 0, time.Local)
+		earliestTrigger := nextTrigger.AddDate(0, 0, -1)
+		return hasTriggered(lastTrigger.Time, earliestTrigger, now)
+
+	case stork_api.SchedulePolicyTypeWeekly:
+		if schedulePolicy.Policy.Weekly == nil {
+			return false, nil
+		}
+		policyHour, policyMinute, err := schedulePolicy.Policy.Weekly.GetHourMinute()
+		if err != nil {
+			return false, err
+		}
+		nextTrigger := time.Date(now.Year(), now.Month(), now.Day(), policyHour, policyMinute, 0, 0, time.Local)
+		earliestTrigger := nextTrigger.AddDate(0, 0, -7)
+
+		return hasTriggered(lastTrigger.Time, earliestTrigger, now)
+
+	case stork_api.SchedulePolicyTypeMonthly:
+		if schedulePolicy.Policy.Monthly == nil {
+			return false, nil
+		}
+		policyHour, policyMinute, err := schedulePolicy.Policy.Monthly.GetHourMinute()
+		if err != nil {
+			return false, err
+		}
+		nextTrigger := time.Date(now.Year(), now.Month(), schedulePolicy.Policy.Monthly.Date, policyHour, policyMinute, 0, 0, time.Local)
+		earliestTrigger := nextTrigger.AddDate(0, -1, 0)
+		return hasTriggered(lastTrigger.Time, earliestTrigger, now)
+
+	}
+	return false, nil
+}
+
 // ValidateSchedulePolicy Validate if a given schedule policy is valid
 func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 	if policy == nil {

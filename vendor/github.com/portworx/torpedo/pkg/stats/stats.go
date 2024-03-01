@@ -52,6 +52,7 @@ type EventStat struct {
 	DashStats map[string]string
 }
 
+var Dash = aetosutil.Get()
 func getRebootStats(rebootTime, nodeID, pxVersion string) (map[string]string, error) {
 	rebootStats := &NodeRebootStatsType{
 		RebootTime: rebootTime,

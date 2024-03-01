@@ -64,6 +64,10 @@ func TestPerformFailoverMissingClusterPair(t *testing.T) {
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	expected = fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
+	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
+	require.NoError(t, err, "Error getting action")
+	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1", "ns2"})
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, false)
 }
 
 func TestPerformFailoverWithIncludeNamespaceList(t *testing.T) {
@@ -77,7 +81,7 @@ func TestPerformFailoverWithIncludeNamespaceList(t *testing.T) {
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1"})
-	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.DeactivateSource, false)
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, true)
 }
 
 func TestPerformFailoverWithExcludeNamespaceList(t *testing.T) {
@@ -92,6 +96,7 @@ func TestPerformFailoverWithExcludeNamespaceList(t *testing.T) {
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns2"})
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, false)
 }
 
 func TestFailoverActionNameTruncation(t *testing.T) {

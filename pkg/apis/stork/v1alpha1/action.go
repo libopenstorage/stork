@@ -34,8 +34,8 @@ type Action struct {
 
 // ActionSpec specifies the type of Action
 type ActionSpec struct {
-	ActionType      ActionType       `json:"actionType"`
-	ActionParameter *ActionParameter `json:"actionParameter"`
+	ActionType      ActionType      `json:"actionType"`
+	ActionParameter ActionParameter `json:"actionParameter"`
 }
 
 // ActionType lists the various actions that can be performed
@@ -54,22 +54,22 @@ const (
 type ActionParameter ActionParameterItem
 
 type ActionParameterItem struct {
-	FailoverParameter *FailoverParameter `json:"failoverParameter,omitempty"`
-	FailbackParameter *FailbackParameter `json:"failbackParameter,omitempty"`
+	FailoverParameter FailoverParameter `json:"failoverParameter,omitempty"`
+	FailbackParameter FailbackParameter `json:"failbackParameter,omitempty"`
 }
 
 type FailoverParameter struct {
 	FailoverNamespaces         []string `json:"failoverNamespaces"`
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
-	DeactivateSource           bool     `json:"deactivateSource"`
+	SkipDeactivateSource       *bool    `json:"skipDeactivateSource"`
 }
 
 type FailbackParameter struct {
-	Namespaces                 []string `json:"namespaces"`
+	Namespaces                 []string `json:"failbackNamespaces"`
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
 }
 
-// ActionStatus is the current status of the Action
+// ActionStatusType is the current status of the Action
 type ActionStatusType string
 
 const (
@@ -99,6 +99,8 @@ const (
 	ActionStageScaleUpDestination ActionStageType = "ScaleUpDestination"
 	// ActionStageScaleUpSource for scaling apps in source
 	ActionStageScaleUpSource ActionStageType = "ScaleUpSource"
+	// ActionStageLastMileMigration for doing a last migration before failover/failback to ensure data integrity
+	ActionStageLastMileMigration ActionStageType = "LastMileMigration"
 	// ActionStageFinal is the final stage for action
 	ActionStageFinal ActionStageType = "Final"
 )
@@ -115,7 +117,7 @@ type ActionStatus struct {
 // ActionSummary lists the summary of the action
 type ActionSummary ActionSummaryItem
 
-// ActionSummary has summary for each action type
+// ActionSummaryItem has summary for each action type
 type ActionSummaryItem struct {
 	FailoverSummaryItem []*FailoverSummary `json:"failoverSummary,omitempty"`
 	FailbackSummaryItem []*FailbackSummary `json:"failbackSummary,omitempty"`

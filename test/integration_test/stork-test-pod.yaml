@@ -108,7 +108,25 @@ spec:
     - name: TESTRAIL_MILESTONE
       value: testrail_milestone
     - name: ENABLE_DASH
-      value: enable_dash 
+      value: enable_dash
+    - name: LOG_DIR
+      value: log_dir
+    - name: LOG_LEVEL
+      value: log_level
+    - name: TESTSET_ID
+      value: testset_id
+    - name: TEST_USER
+      value: test_user
+    - name: PRODUCT
+      value: product
+    - name: TEST_BRANCH
+      value: test_branch
+    - name: TEST_TYPE
+      value: test_type
+    - name: TEST_TAG
+      value: test_tag
+    - name: TEST_DESCRIPTION
+      value: test_description
   hostNetwork: false
   hostNetwork: false
   hostPID: false
