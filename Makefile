@@ -64,7 +64,7 @@ PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
 
-all: vet build build-pds build-backup build-taas fmt
+all: vet build build-pds build-backup build-taas build-longevity fmt
 
 deps:
 	go get -d -v $(PKGS)
@@ -115,6 +115,16 @@ build-backup: $(GOPATH)/bin/ginkgo
 	ginkgo build -r $(GINKGO_BUILD_DIR)
 	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
+
+build-longevity: GINKGO_BUILD_DIR=./tests/longevity
+build-longevity: $(GOPATH)/bin/ginkgo
+	mkdir -p $(BIN)
+	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
+
+	ginkgo build -r $(GINKGO_BUILD_DIR)
+	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	chmod -R 755 bin/*
+
 
 # this target builds the taas binary only.
 build-taas: TAAS_BUILD_DIR=./apiServer/taas
@@ -184,6 +194,13 @@ container-taas:
 	@echo "Building taas container "$(TORPEDO_IMG)
 	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-taas -f Dockerfile-taas .
 
+# this target builds a container with torpedo longevity binary only. Repo is hardcoded to ".../longevity".
+container-longevity: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-longevity:$(DOCKER_HUB_TAG)
+container-longevity:
+	@echo "Building longevity container "$(TORPEDO_IMG)
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-longevity -f Dockerfile .
+
+
 deploy: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 deploy: container
 	sudo docker push $(TORPEDO_IMG)
@@ -200,6 +217,10 @@ deploy-taas: TORPEDO_IMG=$(DOCKER_HUB_REPO)/taas:$(DOCKER_HUB_TAG)
 deploy-taas: container-taas
 	sudo docker push $(TORPEDO_IMG)
 
+deploy-longevity: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-longevity:$(DOCKER_HUB_TAG)
+deploy-longevity: container-longevity
+	sudo docker push $(TORPEDO_IMG)
+
 clean:
 	-sudo rm -rf bin
 	-sudo find . -type f -name "*.test" -delete
@@ -211,6 +232,8 @@ clean:
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
 	@echo "Deleting taas image"
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-taas:$(DOCKER_HUB_TAG)
+	@echo "Deleting longevity image"
+		-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-longevity:$(DOCKER_HUB_TAG)
 	go clean -i $(PKGS)
 
 sidecar: sidecar-wp-cli

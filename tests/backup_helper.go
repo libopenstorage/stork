@@ -62,6 +62,34 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
+// TestcaseAuthor List
+const (
+	Ak             TestcaseAuthor = "ak-px"
+	Apimpalgaonkar TestcaseAuthor = "apimpalgaonkar"
+	KPhalgun       TestcaseAuthor = "kphalgun-px"
+	Kshithijiyer   TestcaseAuthor = "kshithijiyer-px"
+	Mkoppal        TestcaseAuthor = "mkoppal-px"
+	Sagrawal       TestcaseAuthor = "sagrawal-px"
+	Skonda         TestcaseAuthor = "skonda-px"
+	Sn             TestcaseAuthor = "sn-px"
+	Tthurlapati    TestcaseAuthor = "tthurlapati-px"
+	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
+	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
+	ATrivedi       TestcaseAuthor = "atrivedi-px"
+)
+
+// TestcaseQuarter List
+const (
+	Q4FY23 TestcaseQuarter = "Q4FY23"
+	Q1FY24 TestcaseQuarter = "Q1FY24"
+	Q2FY24 TestcaseQuarter = "Q2FY24"
+	Q3FY24 TestcaseQuarter = "Q3FY24"
+	Q4FY24 TestcaseQuarter = "Q4FY24"
+	Q1FY25 TestcaseQuarter = "Q1FY25"
+	Q2FY25 TestcaseQuarter = "Q2FY25"
+	Q3FY25 TestcaseQuarter = "Q3FY25"
+)
+
 const (
 	CloudAccountDeleteTimeout                 = 5 * time.Minute
 	CloudAccountDeleteRetryTime               = 30 * time.Second
@@ -163,6 +191,7 @@ var (
 	NfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
+	IsBackupLongevityRun       = false
 )
 
 type UserRoleAccess struct {

@@ -15,13 +15,10 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
-	v1 "k8s.io/api/core/v1"
-	storageApi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
@@ -2990,88 +2987,3 @@ var _ = Describe("{SharedVolFuseTest}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-
-func SetupProxyServer(n node.Node) error {
-
-	createDirCommand := "mkdir -p /exports/testnfsexportdir"
-	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
-	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
-	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
-	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
-	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-	exportCmd := "exportfs -a"
-	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
-	enableNfsServerCmd := "systemctl enable nfs-server"
-	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
-	startNfsServerCmd := "systemctl restart nfs-server"
-	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
-	return nil
-}
-
-func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
-	params := make(map[string]string)
-	params["repl"] = "1"
-	params["io_profile"] = "none"
-	params["proxy_endpoint"] = fmt.Sprintf("nfs://%s", nfsServer)
-	params["proxy_nfs_exportpath"] = fmt.Sprintf("%s", mountPath)
-	params["mount_options"] = "vers=4.0"
-	v1obj := meta_v1.ObjectMeta{
-		Name: scName,
-	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
-	bindMode := storageApi.VolumeBindingImmediate
-	allowWxpansion := true
-	scObj := storageApi.StorageClass{
-		ObjectMeta:           v1obj,
-		Provisioner:          "kubernetes.io/portworx-volume",
-		Parameters:           params,
-		ReclaimPolicy:        &reclaimPolicyDelete,
-		VolumeBindingMode:    &bindMode,
-		AllowVolumeExpansion: &allowWxpansion,
-	}
-
-	k8sStorage := storage.Instance()
-	_, err = k8sStorage.CreateStorageClass(&scObj)
-	return err
-}

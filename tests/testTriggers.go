@@ -561,6 +561,24 @@ const (
 
 	// ReallocateSharedMount reallocated shared mount volumes
 	ReallocateSharedMount = "reallocateSharedMount"
+
+	// AddBackupCluster adds source and destination cluster
+	AddBackupCluster = "addBackupCluster"
+
+	//SetupBackupBucketAndCreds add creds and adds bucket for backup
+	SetupBackupBucketAndCreds = "setupBackupBucketAndCreds"
+
+	// DeployBackup Apps deploys backup application
+	DeployBackupApps = "deployBackupApps"
+
+	// CreateBackup creates backup for longevity
+	CreatePxBackup = "createPxBackup"
+
+	// CreateBackupAndRestore creates backup and Restores the backup
+	CreatePxBackupAndRestore = "createBackupAndRestore"
+
+	// CreateBackupAndRestore creates backup and Restores the backup
+	CreateRandomRestore = "createRandomRestore"
 )
 
 // TriggerCoreChecker checks if any cores got generated
