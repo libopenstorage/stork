@@ -646,6 +646,11 @@ func endLongevityTest() {
 func updateLongevityStats(name, eventStatName string, dashStats map[string]string) {
 	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
 	version, err := Inst().V.GetDriverVersion()
+	product := "px-enterprise"
+	if eventStatName == stats.AsyncDREventName || name == stats.MetroDREventName || name == stats.StorkApplicationBackupEventName {
+		version, err = asyncdr.GetStorkVersion()
+		product = "stork"
+	}
 	if err != nil {
 		log.Errorf("error getting px version. err: %+v", err)
 	}
@@ -657,9 +662,7 @@ func updateLongevityStats(name, eventStatName string, dashStats map[string]strin
 		Version:   version,
 		DashStats: dashStats,
 	}
-
-	stats.PushStatsToAetos(dash, name, "px-enterprise", "Longevity", eventStat)
-
+	stats.PushStatsToAetos(dash, name, product, "Longevity", eventStat)
 }
 
 // TriggerDeployNewApps deploys applications in separate namespaces
@@ -7327,12 +7330,10 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			return
 		}
-		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-		}
-		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		dashStats := stats.GetStorkMigrationStats(mig)
+		updateLongevityStats(AsyncDR, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
 }
@@ -7441,12 +7442,10 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			return
 		}
-		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-		}
-		dash.UpdateStats("longevity-migration-metrodr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		dashStats := stats.GetStorkMigrationStats(mig)
+		updateLongevityStats(MetroDR, stats.MetroDREventName, dashStats)
 	}
 	updateMetrics(*event)
 }
@@ -7551,12 +7550,8 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-			return
-		}
-		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		dashStats := stats.GetStorkMigrationStats(mig)
+		updateLongevityStats(AsyncDRPXRestartSource, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
 }
@@ -7672,12 +7667,8 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-			return
-		}
-		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		dashStats := stats.GetStorkMigrationStats(mig)
+		updateLongevityStats(AsyncDRPXRestartDest, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
 }
@@ -7794,12 +7785,8 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-			return
-		}
-		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		dashStats := stats.GetStorkMigrationStats(mig)
+		updateLongevityStats(AsyncDRPXRestartKvdb, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
 }
@@ -7888,10 +7875,12 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			return
 		}
 		resp, get_mig_err := storkops.Instance().GetMigration(mig.Name, mig.Namespace)
 		if get_mig_err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to get migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, get_mig_err))
+			return
 		}
 		volumesMigrated := resp.Status.Summary.NumberOfMigratedVolumes
 		resourcesMigrated := resp.Status.Summary.NumberOfMigratedResources
@@ -7901,11 +7890,8 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		} else {
 			log.InfoD("Number of resources migrated: %d", resourcesMigrated)
 		}
-		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
-		if err != nil {
-			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
-		}
-		dash.UpdateStats("longevity-migration-asyncdr-volonly", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+		dashStats := stats.GetStorkMigrationStats(mig)
+		updateLongevityStats(AsyncDRVolumeOnly, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
 }
@@ -7975,6 +7961,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 			_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 			if bkp_create_err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
+				return
 			}
 			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupname, currbkNamespace, timeout)
 			if bkp_comp_err != nil {
@@ -7982,9 +7969,14 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 				return
 			}
 			log.InfoD("backup successful, backup name - %v, backup location - %v", backupname, backuplocationname)
+			dashStats, err := stats.GetStorkBackupStats(backupname, currbkNamespace)
+			if err != nil {
+				log.InfoD("Not able to get stats, err: %v", err)
+			}
+			updateLongevityStats(StorkApplicationBackup, stats.StorkApplicationBackupEventName, dashStats)
 		}
-		updateMetrics(*event)
 	})
+	updateMetrics(*event)
 }
 
 func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -8081,10 +8073,15 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 					return
 				}
 				log.InfoD("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", backupname, backuplocationname)
+				dashStats, err := stats.GetStorkBackupStats(backupname, currbkNamespace)
+				if err != nil {
+					log.InfoD("Not able to get stats, err: %v", err)
+				}
+				updateLongevityStats(StorkAppBkpVolResize, stats.StorkApplicationBackupEventName, dashStats)
 			}
-			updateMetrics(*event)
 		}
 	})
+	updateMetrics(*event)
 }
 
 func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -8221,10 +8218,15 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
 					return
 				}
-				updateMetrics(*event)
+				dashStats, err := stats.GetStorkBackupStats(backupname, currbkNamespace)
+				if err != nil {
+					log.InfoD("Not able to get stats, err: %v", err)
+				}
+				updateLongevityStats(StorkAppBkpHaUpdate, stats.StorkApplicationBackupEventName, dashStats)
 			}
 		}
 	})
+	updateMetrics(*event)
 }
 
 func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -8312,10 +8314,15 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 					return
 				}
 				log.InfoD("backup successful and px restart injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+				dashStats, err := stats.GetStorkBackupStats(backupname, currbkNamespace)
+				if err != nil {
+					log.InfoD("Not able to get stats, err: %v", err)
+				}
+				updateLongevityStats(StorkAppBkpPxRestart, stats.StorkApplicationBackupEventName, dashStats)
 			}
 		}
-		updateMetrics(*event)
 	})
+	updateMetrics(*event)
 }
 
 func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -8429,11 +8436,15 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 					return
 				}
 				log.InfoD("backup successful and pool resize injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
-
+				dashStats, err := stats.GetStorkBackupStats(backupname, currbkNamespace)
+				if err != nil {
+					log.InfoD("Not able to get stats, err: %v", err)
+				}
+				updateLongevityStats(StorkAppBkpPoolResize, stats.StorkApplicationBackupEventName, dashStats)
 			}
 		}
-		updateMetrics(*event)
 	})
+	updateMetrics(*event)
 }
 
 func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -8713,6 +8724,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+			return
 		} else {
 			allMigrations = append(allMigrations, currMig)
 		}
@@ -8723,6 +8735,8 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			dashStats := stats.GetStorkMigrationStats(mig)
+			updateLongevityStats(AutoFsTrimAsyncDR, stats.AsyncDREventName, dashStats)
 		}
 	}
 
@@ -8736,6 +8750,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 		cVol, err := Inst().V.InspectVolume(vol.ID)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("unable to inspect volume %v, err is %v", vol.Name, err))
+			return
 		}
 		dash.VerifyFatal(cVol.Spec.AutoFstrim, true, fmt.Sprintf("fstrim should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.AutoFstrim))
 		dash.VerifyFatal(cVol.Spec.Nodiscard, true, fmt.Sprintf("nodiscard should be enable for volume %v, It is %v on volume", vol.Name, cVol.Spec.Nodiscard))
@@ -8743,6 +8758,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 	err = SetSourceKubeConfig()
 	if err != nil {
 		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
+		return
 	}
 	updateMetrics(*event)
 }
@@ -8838,6 +8854,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+			return
 		} else {
 			allMigrations = append(allMigrations, currMig)
 		}
@@ -8848,6 +8865,8 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+			dashStats := stats.GetStorkMigrationStats(mig)
+			updateLongevityStats(IopsBwAsyncDR, stats.AsyncDREventName, dashStats)
 		}
 	}
 
@@ -8873,6 +8892,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 	err = SetSourceKubeConfig()
 	if err != nil {
 		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
+		return
 	}
 	updateMetrics(*event)
 }
