@@ -2166,3 +2166,202 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{FADAVolMigrateValidation}", func() {
+
+	/* 
+          1. Attach FADA PVC on Node 1, confirm proper attachment. 
+	  2. Stop PX on Node 1, ensure volume persistence in multipath -ll. 
+          3. Move deployment to Node 2, validate successful pod startup. 
+	  4. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.
+
+        */
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADAVolMigrateValidation", "Migrate pods from node 1 to node and check multipath consistency", nil, 0)
+	})
+
+	stepLog = "Schedule apps, migrate apps from node 1 to node 2 and check if new multipath has been updated and old multipath has been erased"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		//get device path of the volume
+		devicePaths := make([]string, 0)
+
+		stepLog = "Schedule fada deployment apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// select a node for apps to be scheduled
+			applist := Inst().AppList
+			storageNodes := node.GetStorageNodes()
+			selectedNode := storageNodes[0]
+			secondNode := storageNodes[1]
+			log.Infof("Length of storage nodes: %v", len(storageNodes))
+			log.InfoD("Selected Node: %v", selectedNode.Name)
+			defer func() {
+				Inst().AppList = applist
+				err = Inst().S.RemoveLabelOnNode(selectedNode, "apptype")
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			}()
+			Inst().AppList = []string{"nginx-fada-deploy"}
+			err = Inst().S.AddLabelOnNode(selectedNode, "apptype", k8s.PureDAVolumeLabelValueFA)
+
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+			stepLog = fmt.Sprintf("schedule application")
+			Step(stepLog, func() {
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					taskName := fmt.Sprintf("vol-migrate-test-%v", i)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Provisioner,
+					})
+					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+					contexts = append(contexts, context...)
+				}
+				ValidateApplications(contexts)
+			})
+
+			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node")
+			Step(stepLog, func() {
+				//get the volume name and inspect volume to get device path
+				for _, ctx := range contexts {
+					volumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %v", ctx.App.Key)
+					for _, volume := range volumes {
+						volInspect, err := Inst().V.InspectVolume(volume.ID)
+						log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
+						devicePath := volInspect.DevicePath
+						// get part of the device path
+						log.Infof("device path: %v", devicePath)
+						devicePathSplit := strings.Split(devicePath, "/")
+						devicePath = devicePathSplit[len(devicePathSplit)-1]
+						devicePaths = append(devicePaths, devicePath)
+						log.InfoD("Device path of the volume: %v , device path: %v", volumes[0].Name, devicePath)
+					}
+				}
+
+				StopVolDriverAndWait([]node.Node{selectedNode})
+			})
+			defer func() {
+				err = core.Instance().UnCordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to uncordon node %v", selectedNode.Name)
+				log.Infof("uncordoned node %v", selectedNode.Name)
+
+				err = Inst().S.RemoveLabelOnNode(secondNode, "apptype")
+				log.FailOnError(err, "error removing label on node [%s]", secondNode.Name)
+			}()
+			stepLog = "cordon the node where the app is scheduled and delete the apps"
+			Step(stepLog, func() {
+
+				err = core.Instance().CordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to cordon node %v", selectedNode.Name)
+				log.InfoD("cordoned node %v", selectedNode.Name)
+
+				err = Inst().S.AddLabelOnNode(secondNode, "apptype", k8s.PureDAVolumeLabelValueFA)
+				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondNode.Name))
+
+				// delete the pods and wait for it to delete
+				var wg sync.WaitGroup
+				for _, ctx := range contexts {
+					wg.Add(1)
+					go func(ctx *scheduler.Context) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+						for _, pod := range pods.Items {
+							log.InfoD("Delete pod %v", pod.Name)
+							err = core.Instance().DeletePod(pod.Name, ctx.App.NameSpace, true)
+							log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
+							// wait for the pod to delete
+							t := func() (interface{}, bool, error) {
+								currentPodList, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+								log.FailOnError(err, "Failed to get pods in namespace %v", ctx.App.NameSpace)
+								for _, currentPod := range currentPodList.Items {
+									log.InfoD("Delete pod %v", pod.Name)
+
+									if currentPod.Name == pod.Name {
+										log.FailOnError(fmt.Errorf("Pod %v is still present", pod.Name), "Pod %v should be deleted", pod.Name)
+										return nil, true, nil
+									}
+								}
+								return nil, false, nil
+							}
+							_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+							log.FailOnError(err, "Failed to wait for pods to delete")
+						}
+					}(ctx)
+				}
+				wg.Wait()
+			})
+
+			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
+			Step(stepLog, func() {
+				// sleep for 60 seconds for all the entries to update
+				time.Sleep(30 * time.Second)
+				log.InfoD("Sleeping for 30 seconds for all the entries to update")
+				cmd := fmt.Sprintf("multipath -ll")
+				output, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
+				log.InfoD("Output of multipath on provisioned node -ll command: %v", output)
+				//check if the device path is present in multipath
+				if !strings.Contains(output, "failed faulty running") {
+					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
+				}
+
+				stepLog = "Check if pod is scheduled on other node and validate if the volume is attached on the new node"
+				Step(stepLog, func() {
+					pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
+					log.FailOnError(err, "Failed to get pods in namespace %v", contexts[0].App.NameSpace)
+					for _, pod := range pods.Items {
+						log.InfoD("Pod name: %v, node name: %v", pod.Name, pod.Spec.NodeName)
+						if pod.Spec.NodeName != selectedNode.Name {
+							log.InfoD("Pod %v is scheduled on node %v", pod.Name, pod.Spec.NodeName)
+							break
+						}
+					}
+				})
+			})
+			stepLog = "Start portworx on the node where the volume was attached"
+			Step(stepLog, func() {
+				StartVolDriverAndWait([]node.Node{selectedNode})
+			})
+
+			stepLog = "Check if the old multipath device entry is deleted from the node where the volume was attached"
+			Step(stepLog, func() {
+				//sleep for some time for the entries to update
+				time.Sleep(30 * time.Second)
+				
+				//run the multipath -ll command on the node where the volume is attached
+				cmd := fmt.Sprintf("multipath -ll")
+				output, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
+				log.InfoD("Output of multipath -ll command: %v", output)
+				//check if the device path is present in multipath
+				for _, devicePath := range devicePaths {
+					if strings.Contains(output, devicePath) {
+						log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
+					}
+				}
+				//check if the device path is present in multipath
+				if strings.Contains(output, "failed faulty running") {
+					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
+				}
+				log.InfoD("Successfully validated that the old multipath device is deleted")
+			})
+			stepLog = "Destroy apps"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				DestroyApps(contexts, nil)
+			})
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
