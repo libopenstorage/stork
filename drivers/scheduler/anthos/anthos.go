@@ -376,10 +376,13 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse version: %s. Error: %v", fromVersion, err)
 	}
-	if (len(toVersion) > 0 && len(fromVersion) > 0) &&
-		(toVersion[0][1] != fromVersion[0][1] || (val2-val1) > 1) {
-		return fmt.Errorf("incorrect upgrade version:%s is provided."+
-			"One major version upgrade support at a time", upgradeVersion)
+	// Skip below check when current version is 1.16 and upgrading to version 1.28
+	if !strings.Contains(anth.version, "1.16") && !strings.Contains(upgradeVersion, "1.28") {
+		if (len(toVersion) > 0 && len(fromVersion) > 0) &&
+			(toVersion[0][1] != fromVersion[0][1] || (val2-val1) > 1) {
+			return fmt.Errorf("incorrect upgrade version:%s is provided."+
+				"One major version upgrade support at a time", upgradeVersion)
+		}
 	}
 	log.Debugf("Successfully verified the version:[%]", upgradeVersion)
 	return nil
