@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"io"
 	"log"
 	"os"
@@ -215,7 +216,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 func doesMigrationScheduleMigrateNamespaces(migrSched storkv1.MigrationSchedule, activationNs []string) (bool, error) {
 	namespaceList := migrSched.Spec.Template.Spec.Namespaces
 	namespaceSelectors := migrSched.Spec.Template.Spec.NamespaceSelectors
-	migrationNamespaces, err := getMigrationNamespaces(namespaceList, namespaceSelectors)
+	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(namespaceList, namespaceSelectors)
 	if err != nil {
 		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
 	}
