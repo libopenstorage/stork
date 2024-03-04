@@ -142,7 +142,7 @@ func main() {
 		},
 		cli.BoolTFlag{
 			Name:  "action-controller",
-			Usage: "Start the Action controller (default: false)",
+			Usage: "Start the Action controller (default: true)",
 		},
 		cli.BoolTFlag{
 			Name:  "migration-controller",
