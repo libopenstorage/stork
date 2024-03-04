@@ -184,7 +184,7 @@ func (app *KubevirtConfig) GetRandomDataCommands(count int) map[string][]string 
 
 // Update the existing file io commands
 func (app *KubevirtConfig) UpdateDataCommands(count int, identifier string) {
-	app.DataCommands[identifier] = GenerateRandomSQLCommands(count, MySql)
+	app.DataCommands[identifier] = GenerateRandomCommandToCreateFiles(count)
 	log.InfoD("Data Commands updated")
 }
 
@@ -205,9 +205,9 @@ func (app *KubevirtConfig) GetNamespace() string {
 }
 
 // CheckDataPresent checks if the mentioned entry is present or not in the database
-func (app *KubevirtConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
-	log.Warnf("Not implemeneted for kubevirt")
-	return nil
+func (app *KubevirtConfig) CheckDataPresent(lsCommands []string, ctx context.Context) error {
+	_, err := app.ExecuteCommand(lsCommands, ctx)
+	return err
 }
 
 // isConnectionError checks if the error message is a connection error

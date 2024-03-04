@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -2515,7 +2517,12 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.Namespace,
 				appInfo.IPAddress,
 				Inst().N)
-
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				if err != nil {
+					return fmt.Errorf("Unable to boot VM on destination. Error - [%s]", err.Error())
+				}
+			}
 			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
 			if err != nil {
 				return err
@@ -7502,6 +7509,53 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 			log.Infof("statefulSet [%s] replica count after scaling to %d  is %v", statefulSet.Name, int32(parsedReplicas), *updatedBackupstatefulSetobj.Spec.Replicas)
 		}
 
+	}
+
+	return nil
+}
+
+// AddNodeToVirtualMachine applies node selector to the virtual machine
+func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[string]string, ctx context1.Context) error {
+	k8sKubevirt := kubevirt.Instance()
+
+	vm.Spec.Template.Spec.NodeSelector = nodeSelector
+
+	vmUpdate, err := k8sKubevirt.UpdateVirtualMachine(&vm)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Node selector for [%s] is updated successfully to [%v]", vmUpdate.Name, vmUpdate.Spec.Template.Spec.NodeSelector)
+
+	return nil
+}
+
+// CompareNodeAndStatusOfVMInNamespace compares the status and Nodes of the VMI from a particular namespace
+func CompareNodeAndStatusOfVMInNamespace(namespace string, expectedNode node.Node, expectedState string, ctx context1.Context) error {
+	k8sKubevirt := kubevirt.Instance()
+
+	allVmsInNamespaces, err := GetAllVMsInNamespace(namespace)
+	if err != nil {
+		return err
+	}
+
+	for _, eachVM := range allVmsInNamespaces {
+		vmi, err := k8sKubevirt.GetVirtualMachineInstance(ctx, eachVM.Name, eachVM.Namespace)
+		if err != nil {
+			return err
+		}
+		log.Infof("Current state of [%s] is [%s]", vmi.Name, vmi.Status.Phase)
+		log.Infof("Node of [%s] is [%s]", vmi.Name, vmi.Status.NodeName)
+		if string(vmi.Status.Phase) == expectedState {
+			if expectedState == "Scheduling" {
+				return nil
+			}
+		} else {
+			return fmt.Errorf("VMI state Validation failed for [%s]. Expected State - [%s], State Found [%s]", vmi.Name, expectedState, vmi.Status.Phase)
+		}
+		if vmi.Status.NodeName != expectedNode.Name {
+			return fmt.Errorf("Node Validation failed for [%s]. Expected Node - [%s], Node Found [%s]", vmi.Name, expectedNode.Name, vmi.Status.NodeName)
+		}
 	}
 
 	return nil

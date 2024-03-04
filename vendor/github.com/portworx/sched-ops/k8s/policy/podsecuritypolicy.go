@@ -27,7 +27,7 @@ func (c *Client) CreatePodSecurityPolicy(policy *policyv1beta1.PodSecurityPolicy
 		return nil, err
 	}
 
-	return c.policy.PodSecurityPolicies().Create(context.TODO(), policy, metav1.CreateOptions{})
+	return c.client.PolicyV1beta1().PodSecurityPolicies().Create(context.TODO(), policy, metav1.CreateOptions{})
 }
 
 // GetPodSecurityPolicy gets the given pod security policy
@@ -36,7 +36,7 @@ func (c *Client) GetPodSecurityPolicy(name string) (*policyv1beta1.PodSecurityPo
 		return nil, err
 	}
 
-	return c.policy.PodSecurityPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+	return c.client.PolicyV1beta1().PodSecurityPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListPodSecurityPolicies gets the given pod security policy
@@ -45,7 +45,7 @@ func (c *Client) ListPodSecurityPolicies() (*policyv1beta1.PodSecurityPolicyList
 		return nil, err
 	}
 
-	return c.policy.PodSecurityPolicies().List(context.TODO(), metav1.ListOptions{})
+	return c.client.PolicyV1beta1().PodSecurityPolicies().List(context.TODO(), metav1.ListOptions{})
 }
 
 // UpdatePodSecurityPolicy updates the give pod security policy
@@ -54,7 +54,7 @@ func (c *Client) UpdatePodSecurityPolicy(policy *policyv1beta1.PodSecurityPolicy
 		return nil, err
 	}
 
-	return c.policy.PodSecurityPolicies().Update(context.TODO(), policy, metav1.UpdateOptions{})
+	return c.client.PolicyV1beta1().PodSecurityPolicies().Update(context.TODO(), policy, metav1.UpdateOptions{})
 }
 
 // DeletePodSecurityPolicy deletes the given pod security policy
@@ -63,5 +63,5 @@ func (c *Client) DeletePodSecurityPolicy(name string) error {
 		return err
 	}
 
-	return c.policy.PodSecurityPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return c.client.PolicyV1beta1().PodSecurityPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
