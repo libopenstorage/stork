@@ -7506,3 +7506,38 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 
 	return nil
 }
+
+// DeleteAllVMsInNamespace delete all the Kubevirt VMs in the given namespace
+func DeleteAllVMsInNamespace(namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+	errors := make([]string, 0)
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := k8sKubevirt.DeleteVirtualMachine(vm.Name, namespace)
+			if err != nil {
+				mutex.Lock()
+				errors = append(errors, fmt.Sprintf("Failed to delete [%s]. Error - [%s]", vm.Name, err.Error()))
+				mutex.Unlock()
+			} else {
+				log.Infof("Deleted vm - %s", vm.Name)
+			}
+		}(vm)
+	}
+	wg.Wait()
+
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors occured while deleting VMs. Errors:\n\n %s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
