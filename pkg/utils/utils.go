@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"os"
 	"strings"
 	"time"
@@ -23,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -372,11 +372,44 @@ func GetMergedNamespacesWithLabelSelector(namespaceList []string, namespaceSelec
 	return migrationNamespaces, nil
 }
 
-func IsSubList(list1 []string, list2 []string) bool {
-	for _, element := range list2 {
-		if !slices.Contains(list1, element) {
-			return false
+// IsSubList returns true if the first slice is sublist of the second slice.
+// If false it also returns the list of non subset strings.
+func IsSubList(listA []string, listB []string) (bool, []string) {
+	nonSubsetStrings := make([]string, 0)
+	superset := make(map[string]bool)
+	for _, str := range listB {
+		superset[str] = true
+	}
+	for _, str := range listA {
+		if !superset[str] {
+			nonSubsetStrings = append(nonSubsetStrings, str)
 		}
 	}
-	return true
+	return len(nonSubsetStrings) == 0, nonSubsetStrings
+}
+
+// ExcludeListAFromListB takes 2 slices of strings as input and returns subset of B which is disjoint from A
+func ExcludeListAFromListB(listA []string, listB []string) []string {
+	nonCommonStrings := make([]string, 0)
+	setA := make(map[string]bool)
+	for _, str := range listA {
+		setA[str] = true
+	}
+	for _, str := range listB {
+		if !setA[str] {
+			nonCommonStrings = append(nonCommonStrings, str)
+		}
+	}
+	return nonCommonStrings
+}
+
+// GetAdminNamespace we fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
+func GetAdminNamespace() string {
+	adminNs, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.AdminNsKey)
+	if err != nil {
+		logrus.Warnf("Error in reading %v cm for the key %v, switching to default value : %v",
+			k8sutils.StorkControllerConfigMapName, k8sutils.AdminNsKey, err)
+		adminNs = k8sutils.DefaultAdminNamespace
+	}
+	return adminNs
 }
