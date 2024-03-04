@@ -149,50 +149,58 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				err.Error())
 			return nil
 		}
-		if migrationSchedule.Spec.AutoSuspend {
-			var remoteMigrSched *stork_api.MigrationSchedule
-			remoteMigrSched, err = remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
-			if errors.IsNotFound(err) {
-				namespace, err := core.Instance().GetNamespace(migrationSchedule.Namespace)
-				if err != nil {
-					return err
-				}
-				namespace.ResourceVersion = ""
-				_, err = coreOps.CreateNamespace(namespace)
-				if err != nil && !errors.IsAlreadyExists(err) {
-					return err
-				}
-				// create new migrationschedule on remote cluster
-				remoteMigrSched = migrationSchedule.DeepCopy()
-				remoteMigrSched.ResourceVersion = ""
-				remoteMigrSched.UID = ""
-				if remoteMigrSched.Annotations == nil {
-					remoteMigrSched.Annotations = make(map[string]string)
-				}
-				remoteMigrSched.Annotations[StorkMigrationScheduleCopied] = "true"
-				suspend := true
-				remoteMigrSched.Spec.Suspend = &suspend
-				remoteMigrSched.Status = stork_api.MigrationScheduleStatus{}
-				if _, err := remoteOps.CreateMigrationSchedule(remoteMigrSched); err != nil {
-					return err
-				}
 
-			} else if err != nil {
+		// create migrationSchedule in remote cluster irrespective of autoSuspend value
+		var remoteMigrSched *stork_api.MigrationSchedule
+		remoteMigrSched, err = remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
+		if errors.IsNotFound(err) {
+			namespace, err := core.Instance().GetNamespace(migrationSchedule.Namespace)
+			if err != nil {
 				return err
 			}
-			if remoteMigrSched.Status.ApplicationActivated {
-				suspend := true
-				migrationSchedule.Spec.Suspend = &suspend
-				msg := "Suspending migration schedule since migrated apps on remote cluster are active"
-				m.recorder.Event(migrationSchedule,
-					v1.EventTypeWarning,
-					"Suspended",
-					msg)
-				log.MigrationScheduleLog(migrationSchedule).Warn(msg)
-				// deactivate apps in namespace
-				// TODO: suspend deploy/sts,crds
-				return m.client.Update(context.TODO(), migrationSchedule)
+			namespace.ResourceVersion = ""
+			_, err = coreOps.CreateNamespace(namespace)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
 			}
+			// create new migrationSchedule on remote cluster
+			var remoteMigrSchedObj = migrationSchedule.DeepCopy()
+			remoteMigrSchedObj.ResourceVersion = ""
+			remoteMigrSchedObj.UID = ""
+			if remoteMigrSchedObj.Annotations == nil {
+				remoteMigrSchedObj.Annotations = make(map[string]string)
+			}
+			remoteMigrSchedObj.Annotations[StorkMigrationScheduleCopied] = "true"
+			suspend := true
+			remoteMigrSchedObj.Spec.Suspend = &suspend
+			remoteMigrSchedObj.Status = stork_api.MigrationScheduleStatus{}
+			if remoteMigrSched, err = remoteOps.CreateMigrationSchedule(remoteMigrSchedObj); err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		if remoteMigrSched.GetAnnotations() == nil || remoteMigrSched.GetAnnotations()[StorkMigrationScheduleCopied] != "true" {
+			// handling the corner case where user has already created a migrationSchedule with the same name
+			// and namespace in remote cluster before upgrading to stork 24.2.0
+			// we will fail the migrationSchedule in this case
+			err = fmt.Errorf("a non static-copy migrationSchedule with the same name and namespace found in the remote cluster")
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
+			return err
+		}
+		if migrationSchedule.Spec.AutoSuspend && remoteMigrSched.Status.ApplicationActivated {
+			suspend := true
+			migrationSchedule.Spec.Suspend = &suspend
+			msg := "Suspending migration schedule since migrated apps on remote cluster are active"
+			m.recorder.Event(migrationSchedule,
+				v1.EventTypeWarning,
+				"Suspended",
+				msg)
+			log.MigrationScheduleLog(migrationSchedule).Warn(msg)
+			return m.client.Update(context.TODO(), migrationSchedule)
 		}
 	}
 	// First update the status of any pending migrations
