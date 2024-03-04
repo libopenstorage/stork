@@ -239,6 +239,11 @@ func ExtractConnectionInfo(ctx *scheduler.Context, context context.Context) (App
 		}
 	}
 
+	if appInfo.StartDataSupport {
+		log.Infof("Running sync on all pods in namespace [%s]", appInfo.Namespace)
+		syncData(appInfo.Namespace)
+	}
+
 	return appInfo, nil
 }
 
@@ -285,4 +290,20 @@ func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
 	randomFileCommands["delete"] = deleteCommands
 
 	return randomFileCommands
+}
+
+// syncData will execute 'sync' command on pod post start
+func syncData(namespace string) {
+	var k8sCore = core.Instance()
+	allPods, err := k8sCore.GetPods(namespace, make(map[string]string))
+
+	for _, pod := range allPods.Items {
+		_, err = k8sCore.RunCommandInPod([]string{"sync"}, pod.Name, pod.Spec.Containers[0].Name, namespace)
+		if err != nil {
+			log.Warnf("Some error occurred while running Sync - Error - [%s]", err.Error())
+		} else {
+			log.Infof("Sync ran successfully")
+		}
+	}
+
 }
