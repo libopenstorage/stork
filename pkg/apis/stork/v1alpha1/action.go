@@ -69,7 +69,7 @@ type FailbackParameter struct {
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
 }
 
-// ActionStatus is the current status of the Action
+// ActionStatusType is the current status of the Action
 type ActionStatusType string
 
 const (
@@ -117,7 +117,7 @@ type ActionStatus struct {
 // ActionSummary lists the summary of the action
 type ActionSummary ActionSummaryItem
 
-// ActionSummary has summary for each action type
+// ActionSummaryItem has summary for each action type
 type ActionSummaryItem struct {
 	FailoverSummaryItem []*FailoverSummary `json:"failoverSummary,omitempty"`
 	FailbackSummaryItem []*FailbackSummary `json:"failbackSummary,omitempty"`

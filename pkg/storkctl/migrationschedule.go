@@ -2,15 +2,13 @@ package storkctl
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
-	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -70,13 +68,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			var transformSpecs []string
 			var includeOptionalResourceTypes []string
 
-			// We fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
-			adminNs, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, meta.NamespaceSystem, k8sutils.AdminNsKey)
-			if err != nil {
-				logrus.Warnf("Error in reading %v cm for the key %v, switching to default value : %v",
-					k8sutils.StorkControllerConfigMapName, k8sutils.AdminNsKey, err)
-				adminNs = k8sutils.DefaultAdminNamespace
-			}
+			adminNs := utils.GetAdminNamespace()
 
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for migration schedule name"))
@@ -121,7 +113,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			}
 
 			// get the namespaces being migrated by also fetching namespaces based on provided label selectors
-			migrationNamespaces, err := getMigrationNamespaces(namespaceList, namespaceSelectors)
+			migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(namespaceList, namespaceSelectors)
 			if err != nil {
 				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err))
 				return
@@ -572,32 +564,6 @@ func validateNamespaceList(migrationScheduleNs string, migrationNamespaces []str
 		}
 	}
 	return nil
-}
-
-func getMigrationNamespaces(namespaceList []string, namespaceSelectors map[string]string) ([]string, error) {
-	if len(namespaceSelectors) == 0 {
-		return namespaceList, nil
-	}
-	uniqueNamespaces := make(map[string]bool)
-	for _, ns := range namespaceList {
-		uniqueNamespaces[ns] = true
-	}
-
-	for key, val := range namespaceSelectors {
-		namespaces, err := core.Instance().ListNamespaces(map[string]string{key: val})
-		if err != nil {
-			return nil, err
-		}
-		for _, namespace := range namespaces.Items {
-			uniqueNamespaces[namespace.GetName()] = true
-		}
-	}
-
-	migrationNamespaces := make([]string, 0, len(uniqueNamespaces))
-	for namespace := range uniqueNamespaces {
-		migrationNamespaces = append(migrationNamespaces, namespace)
-	}
-	return migrationNamespaces, nil
 }
 
 func validateTransformSpec(migrationNamespaces []string, transformSpec string) error {

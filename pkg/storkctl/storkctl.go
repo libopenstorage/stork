@@ -37,7 +37,7 @@ func NewCommand(cmdFactory Factory, in io.Reader, out io.Writer, errOut io.Write
 		newSuspendCommand(cmdFactory, ioStreams),
 		newResumeCommand(cmdFactory, ioStreams),
 		newVersionCommand(cmdFactory, ioStreams),
-		newTriggerCommand(cmdFactory, ioStreams),
+		newPerformCommand(cmdFactory, ioStreams),
 	)
 
 	cmds.PersistentFlags().AddGoFlagSet(flag.CommandLine)

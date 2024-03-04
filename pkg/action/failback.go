@@ -55,7 +55,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			return
 		}
 
-		if !utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.Namespaces) {
+		if isSubList, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.Namespaces); !isSubList {
 			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from migrationschedule %s", migrationSchedule.Name)
 			log.ActionLog(action).Infof(msg)
 			ac.recorder.Event(action,
