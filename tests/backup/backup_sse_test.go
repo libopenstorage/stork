@@ -515,16 +515,16 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		DestroyApps(scheduledAppContexts, opts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		// Delete backup schedule policy
-		log.Infof("Deleting backup schedule policy")
-		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 		// Delete restores
 		for _, restoreName := range restoreList {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
+		// Delete backup schedule
+		log.Infof("Deleting backup schedule")
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 		// Delete custom buckets
 		providers := GetBackupProviders()
 		for _, provider := range providers {
