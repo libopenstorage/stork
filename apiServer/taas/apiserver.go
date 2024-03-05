@@ -19,7 +19,7 @@ func main() {
 	router.GET("taas/storagenodes", utils.GetStorageNodes)
 	router.GET("taas/storagelessnodes", utils.GetStorageLessNodes)
 	router.POST("taas/collectsupport", utils.CollectSupport)
-	router.POST("taas/scheduleapps/:appName", utils.ScheduleAppsAndValidate)
+	router.POST("taas/scheduleapps/:appName/:namespace", utils.ScheduleAppsAndValidate)
 	router.POST("taas/deploypxagent", utils.ExecuteHelmCmd)
 	router.GET("taas/getclusterid/:namespace", utils.GetNamespaceID)
 	router.GET("taas/getclusternodestatus", utils.GetNodeStatus)

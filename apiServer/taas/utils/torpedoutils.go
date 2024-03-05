@@ -165,6 +165,8 @@ func CollectSupport(c *gin.Context) {
 // ScheduleAppsAndValidate : This API schedules multiple applications on the cluster and validates them
 // context is created as a global context to be accessed later in further tests
 func ScheduleAppsAndValidate(c *gin.Context) {
+	var errors []error
+	errChan := make(chan error, 100)
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Errorf("Error happened while doing InitInstance()"),
@@ -173,7 +175,7 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 	}
 	appToRun := c.Param("appName")
 	tests.Inst().AppList = []string{appToRun}
-	context = tests.ScheduleApplications(testName)
+	context = tests.ScheduleApplications(c.Param("namespace"))
 	for _, ctx := range context {
 		tests.ValidateContext(ctx, &errChan)
 	}
