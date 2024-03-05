@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,12 +23,12 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 		backupLocationNameMap         = make(map[int]string)
 		backupLocationUIDMap          = make(map[int]string)
 		backupLocationMap             = make(map[string]string)
+		restoreNsMapping              = make(map[string]map[string]string)
 		bkpNamespaces                 []string
 		cloudCredName                 string
 		cloudCredUID                  string
 		clusterUid                    string
 		labelSelectors                map[string]string
-		mutex                         sync.Mutex
 		wg                            sync.WaitGroup
 		userBackupMap                 = make(map[int]map[string]string)
 		restoreNames                  []string
@@ -130,28 +131,72 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			}
 			wg.Wait()
 		})
+
 		Step("Taking restore for each backups created from px-admin", func() {
-			log.InfoD("Taking restore for each backups created from px-admin")
+			log.InfoD(fmt.Sprintf("Taking restore for each backups created from px-admin"))
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "failed to fetch ctx for admin")
-			createRestore := func(backupName string, restoreName string, namespace string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				customNamespace := "custom-" + namespace + RandomString(4)
-				namespaceMapping := map[string]string{namespace: customNamespace}
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
-				restoreNames = SafeAppend(&mutex, restoreNames, restoreName).([]string)
-			}
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+			errors := make([]string, 0)
 			for index := 0; index < numberOfBackups; index++ {
 				for backupName, namespace := range userBackupMap[index] {
 					wg.Add(1)
-					restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
-					go createRestore(backupName, restoreName, namespace)
+					go func(backupName, namespace string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						mu.Lock()
+						restoreName := fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, backupName, RandomString(5))
+						customNamespace := "custom-" + namespace + RandomString(5)
+						namespaceMapping := map[string]string{namespace: customNamespace}
+						restoreNsMapping[restoreName] = namespaceMapping
+						mu.Unlock()
+						err := CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
+						if err != nil {
+							mu.Lock()
+							errors = append(errors, fmt.Sprintf("Failed while taking restore [%s]. Error - [%s]", restoreName, err.Error()))
+							mu.Unlock()
+						}
+					}(backupName, namespace)
 				}
 			}
 			wg.Wait()
+			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Creating restores : -\n%s", strings.Join(errors, "}\n{")))
+			log.InfoD("All  mapping list %v", restoreNsMapping)
+
+		})
+
+		Step("Validating all restores", func() {
+			log.InfoD("Validating all restores")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var mutex sync.Mutex
+			errors := make([]string, 0)
+			var wg sync.WaitGroup
+			for restoreName, namespaceMapping := range restoreNsMapping {
+				wg.Add(1)
+				go func(restoreName string, namespaceMapping map[string]string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					log.InfoD("Validating restore [%s] with namespace mapping", restoreName)
+					expectedRestoredAppContext, _ := CloneAppContextAndTransformWithMappings(scheduledAppContexts[0], namespaceMapping, make(map[string]string), true)
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", restoreName, err.Error()))
+						mutex.Unlock()
+						return
+					}
+					err = ValidateRestore(ctx, restoreName, BackupOrgID, []*scheduler.Context{expectedRestoredAppContext}, make([]string, 0))
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while validating restore [%s]. Error - [%s]", restoreName, err.Error()))
+						mutex.Unlock()
+					}
+				}(restoreName, namespaceMapping)
+			}
+			wg.Wait()
+			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Validating restores of individual backups -\n%s", strings.Join(errors, "}\n{")))
+
 		})
 		Step("Delete all Backup locations from px-admin", func() {
 			log.InfoD("Delete Backup locations from px-admin")
@@ -201,12 +246,29 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			}(restoreName)
 		}
 		wg.Wait()
+		backupNames, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all backups for admin"))
+		for _, backupName := range backupNames {
+			wg.Add(1)
+			go func(backupName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Delete the backup %s ", backupName))
+				err = DeleteBackupAndWait(backupName, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+			}(backupName)
+		}
+		wg.Wait()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting the px-backup objects")
+		backupLocationMap, err := GetAllBackupLocations(ctx)
+		log.FailOnError(err, "Fetching all backup locations")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
