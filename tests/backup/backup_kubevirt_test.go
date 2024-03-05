@@ -1,6 +1,7 @@
 package tests
 
 import (
+	context1 "context"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -50,7 +51,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states", nil, 93011, Mkoppal, Q3FY24)
+		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states", nil, 296416, Mkoppal, Q3FY24)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
@@ -485,7 +486,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 93013, Mkoppal, Q3FY24)
+		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 296418, Mkoppal, Q3FY24)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
@@ -709,7 +710,7 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 			}
 			for _, vm := range vms {
 				log.Infof("Running command for VM [%s]", vm.Name)
-				output, err := RunCmdInVM(vm, "uname -a", ctx)
+				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
 				log.InfoD("Output of command in step - [%s]", output)
 				log.FailOnError(err, "Failed to run command in VM")
 			}
@@ -1332,6 +1333,215 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", func() {
+	var (
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		providers            []string
+		labelSelectors       map[string]string
+		allVMs               []kubevirtv1.VirtualMachine
+		allVMNames           []string
+		backupName           string
+		backupNames          []string
+		freezeRuleName       string
+		unfreezeRuleName     string
+		freezeRuleUid        string
+		unfreezeRuleUid      string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtVMWithFreezeUnfreeze", "Verify VM backup with freeze rule and without unfreeze", nil, 296422, Mkoppal, Q1FY25)
+
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 296422, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify VM backup with freeze rule and without unfreeze", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%s", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location - %s", backupLocationName))
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusters := []string{SourceClusterName, DestinationClusterName}
+			for _, c := range clusters {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, c, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", c))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", c))
+
+			}
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Creating freeze and unfreeze rules", func() {
+			log.InfoD("Creating freeze and unfreeze rules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, appCtx := range scheduledAppContexts {
+				vms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Failed to get VMs in namespace - %s", appCtx.ScheduleOptions.Namespace)
+				allVMs = append(allVMs, vms...)
+			}
+			for _, v := range allVMs {
+				allVMNames = append(allVMNames, v.Name)
+			}
+			freezeRuleName = fmt.Sprintf("vm-freeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(freezeRuleName, allVMs, Freeze, ctx)
+			log.FailOnError(err, "Failed to create freeze rule %s for VMs - %v", freezeRuleName, allVMNames)
+			unfreezeRuleName = fmt.Sprintf("vm-unfreeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(unfreezeRuleName, allVMs, Unfreeze, ctx)
+			log.FailOnError(err, "Failed to create unfreeze rule %s for VMs - %v", unfreezeRuleName, allVMNames)
+		})
+
+		Step("SSH into the kubevirt VM to check pre-backup VM health", func() {
+			log.InfoD("SSH into the kubevirt VM to check pre-backup VM health")
+			for _, vm := range allVMs {
+				log.Infof("Running command for VM [%s]", vm.Name)
+				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
+				log.InfoD("Output of command in step - [%s]", output)
+				log.FailOnError(err, "Failed to run command in VM")
+			}
+		})
+
+		Step("Taking backup of kubevirt VM with freeze rule only and without unfreeze rule", func() {
+			log.InfoD("Taking backup of kubevirt VM with freeze rule only and without unfreeze rule")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName = fmt.Sprintf("%s-%s", "backup-freeze-without-unfreeze", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			var vmNames []string
+			for _, v := range allVMs {
+				vmNames = append(vmNames, v.Name)
+			}
+			log.Infof("VMs to be backed up - %v", vmNames)
+			freezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, freezeRuleName)
+			log.FailOnError(err, "Unable to fetch freeze rule uid - %s", freezeRuleName)
+			err = CreateVMBackupWithValidation(ctx, backupName, allVMs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				labelSelectors, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, "", "", true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
+		})
+
+		Step("SSH into the kubevirt VM to check VM health after freeze rule", func() {
+			log.InfoD("SSH into the kubevirt VM to check VM health after freeze rule")
+			for _, vm := range allVMs {
+				log.Infof("Running command for VM [%s]", vm.Name)
+				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
+				log.InfoD("Output of command in step - [%s]", output)
+				log.FailOnError(err, "Failed to run command in VM")
+			}
+		})
+
+		Step("Taking backup of kubevirt VM without freeze rule and with unfreeze rule", func() {
+			log.InfoD("Taking backup of kubevirt VM without freeze rule and with unfreeze rule")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName = fmt.Sprintf("%s-%s", "backup-unfreeze-without-freeze", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			var vmNames []string
+			for _, v := range allVMs {
+				vmNames = append(vmNames, v.Name)
+			}
+			log.Infof("VMs to be backed up - %v", vmNames)
+			unfreezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, unfreezeRuleName)
+			log.FailOnError(err, "Unable to fetch unfreeze rule uid - %s", unfreezeRuleName)
+			err = CreateVMBackupWithValidation(ctx, backupName, allVMs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				labelSelectors, BackupOrgID, sourceClusterUid, "", "", unfreezeRuleName, unfreezeRuleUid, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
+		})
+
+		Step("SSH into the kubevirt VM to check VM health after unfreeze rule", func() {
+			log.InfoD("SSH into the kubevirt VM to check VM health after unfreeze rule")
+			for _, vm := range allVMs {
+				log.Infof("Running command for VM [%s]", vm.Name)
+				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
+				log.InfoD("Output of command in step - [%s]", output)
+				log.FailOnError(err, "Failed to run command in VM")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+
+		RuleEnumerateReq := &api.RuleEnumerateRequest{
+			OrgId: BackupOrgID,
+		}
+		ruleList, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+		for _, r := range ruleList.GetRules() {
+			log.Infof("Deleting rule [%s]", r.Name)
+			_, err := Inst().Backup.DeleteRule(ctx, &api.RuleDeleteRequest{
+				OrgId: BackupOrgID,
+				Name:  r.Name,
+				Uid:   r.Uid,
+			})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting rule [%s]", r.Name))
+		}
+
+		log.Info("Destroying scheduled apps on source cluster")
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		DestroyApps(scheduledAppContexts, opts)
+
+		log.InfoD("switching to default context")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
