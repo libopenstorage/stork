@@ -163,7 +163,6 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 				}
 				var err error
 				err = os.Setenv("DASH_UID", fmt.Sprintf("%d", d.TestSetID))
-				fmt.Printf("Error in setting env variable %v", err)
 				curDir, err := os.Getwd()
 				d.VerifySafely(err, nil, "DASH_UID set in env variables. ")
 				buildPropertiesFile := fmt.Sprintf("%s/%s", curDir, BuildProperties)
@@ -546,7 +545,6 @@ func Get() *Dashboard {
 		lock.Lock()
 		defer lock.Unlock()
 		if dash == nil {
-			fmt.Println("Creating new Dashboard instance.")
 			dash = &Dashboard{}
 		}
 	}
