@@ -85,6 +85,7 @@ func BackupInitInstance() {
 		VolDriverName:      Inst().V.String(),
 		StorageProvisioner: Inst().Provisioner,
 		NodeDriverName:     Inst().N.String(),
+		CustomAppConfig:    Inst().CustomAppConfig,
 	})
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
 	err = Inst().N.Init(node.InitOptions{
