@@ -24,8 +24,8 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 
 	for _, ns := range namespaces {
 		// 1. ApplicationResources
-		for _, gvk := range getRelevantGVKs() {
-			resources, err := ListResourcesByGVK(ns, config, gvk)
+		for _, gvk := range GetGVKsRelevantForScaling() {
+			resources, err := ListResourcesByGVK(gvk, ns, config)
 			if err != nil {
 				return err
 			}
@@ -47,7 +47,10 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 			for _, applicationResource := range applicationRegistration.Resources {
 				gvk := applicationResource.GroupVersionKind
 				dynamicClient, err := GenerateDynamicClientForGVK(gvk, ns, config)
-				resources, err := ListResourcesByGVK(ns, config, gvk)
+				if err != nil {
+					return err
+				}
+				resources, err := ListResourcesByGVK(gvk, ns, config)
 				if err != nil {
 					return err
 				}
@@ -102,7 +105,12 @@ func scaleDownApplicationResource(object unstructured.Unstructured, dynamicClien
 	if err != nil {
 		return err
 	}
-	_, err = dynamicClient.Update(context.TODO(), &object, metav1.UpdateOptions{}, "")
+	opts := &metav1.UpdateOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       resourceType.Kind,
+			APIVersion: resourceType.Group + "/" + resourceType.Version},
+	}
+	_, err = dynamicClient.Update(context.TODO(), &object, *opts, "")
 	if err != nil {
 		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(resourceType.String()), object.GetNamespace(), object.GetName(), err)
 	}
@@ -166,6 +174,12 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 					}
 				}
 				val = currentValue
+			} else if suspend.Type == "bool" {
+				if val, err := strconv.ParseBool(suspend.Value); err != nil {
+					disableVersion = true
+				} else {
+					disableVersion = val
+				}
 			} else {
 				return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
 			}
@@ -182,7 +196,12 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 	if err != nil {
 		return err
 	}
-	_, err = dynamicClient.Update(context.TODO(), &object, metav1.UpdateOptions{}, "")
+	opts := &metav1.UpdateOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       applicationResource.Kind,
+			APIVersion: applicationResource.Group + "/" + applicationResource.Version},
+	}
+	_, err = dynamicClient.Update(context.TODO(), &object, *opts, "")
 	if err != nil {
 		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(applicationResource.GroupVersionKind.String()), object.GetNamespace(), object.GetName(), err)
 	}

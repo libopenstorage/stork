@@ -2,7 +2,7 @@ package resourceutils
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"strings"
 
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
@@ -16,45 +16,19 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var statefulSetGVK = metav1.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}
-var deploymentGVK = metav1.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}
-var replicaSetGVK = metav1.GroupVersionKind{Group: "apps", Version: "v1", Kind: "ReplicaSet"}
-var deploymentConfigGVK = metav1.GroupVersionKind{Group: "apps.openshift.io", Version: "v1", Kind: "DeploymentConfig"}
-var cronJobGVK = metav1.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}
-var virtualMachineGVK = metav1.GroupVersionKind{Group: "kubevirt.io", Version: "v1", Kind: "VirtualMachine"}
-var ibpPeerGVK = metav1.GroupVersionKind{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPPeer"}
-var ibpcaGVK = metav1.GroupVersionKind{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPCA"}
-var ibpConsoleGVK = metav1.GroupVersionKind{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPOrderer"}
-var ibpOrdererGVK = metav1.GroupVersionKind{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPConsole"}
-
-func getRelevantGVKs() []metav1.GroupVersionKind {
-	return []metav1.GroupVersionKind{statefulSetGVK, deploymentGVK, replicaSetGVK, deploymentConfigGVK, cronJobGVK, virtualMachineGVK, ibpPeerGVK, ibpcaGVK, ibpOrdererGVK, ibpConsoleGVK}
-}
-
-func ListResourcesByGVK(namespace string, config *rest.Config, resourceType metav1.GroupVersionKind) (*unstructured.UnstructuredList, error) {
-	//Setup dynamic client to get resources based on gvk
-	var client k8sdynamic.ResourceInterface
-	ruleset := resourcecollector.GetDefaultRuleSet()
-	configClient, err := k8sdynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
+func GetGVKsRelevantForScaling() []metav1.GroupVersionKind {
+	return []metav1.GroupVersionKind{
+		{Group: "apps", Version: "v1", Kind: "StatefulSet"},
+		{Group: "apps", Version: "v1", Kind: "Deployment"},
+		{Group: "apps", Version: "v1", Kind: "ReplicaSet"},
+		{Group: "apps.openshift.io", Version: "v1", Kind: "DeploymentConfig"},
+		{Group: "batch", Version: "v1", Kind: "CronJob"},
+		{Group: "kubevirt.io", Version: "v1", Kind: "VirtualMachine"},
+		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPPeer"},
+		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPCA"},
+		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPOrderer"},
+		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPConsole"},
 	}
-	opts := &metav1.ListOptions{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       resourceType.Kind,
-			APIVersion: resourceType.Group + "/" + resourceType.Version},
-	}
-	gvk := schema.FromAPIVersionAndKind(opts.APIVersion, opts.Kind)
-	resourceInterface := configClient.Resource(gvk.GroupVersion().WithResource(ruleset.Pluralize(strings.ToLower(gvk.Kind))))
-	client = resourceInterface.Namespace(namespace)
-	objects, err := client.List(context.TODO(), *opts)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	}
-	for _, obj := range objects.Items {
-		fmt.Println(obj.GetName())
-	}
-	return objects, nil
 }
 
 func GenerateDynamicClientForGVK(resourceType metav1.GroupVersionKind, namespace string, config *rest.Config) (k8sdynamic.ResourceInterface, error) {
@@ -64,20 +38,36 @@ func GenerateDynamicClientForGVK(resourceType metav1.GroupVersionKind, namespace
 	if err != nil {
 		return nil, err
 	}
-	opts := &metav1.UpdateOptions{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       resourceType.Kind,
-			APIVersion: resourceType.Group + "/" + resourceType.Version},
-	}
-	gvk := schema.FromAPIVersionAndKind(opts.APIVersion, opts.Kind)
+	gvk := schema.FromAPIVersionAndKind(resourceType.Group+"/"+resourceType.Version, resourceType.Kind)
 	resourceInterface := configClient.Resource(gvk.GroupVersion().WithResource(ruleset.Pluralize(strings.ToLower(gvk.Kind))))
 	client = resourceInterface.Namespace(namespace)
 	return client, nil
 }
 
+func ListResourcesByGVK(resourceType metav1.GroupVersionKind, namespace string, config *rest.Config) (*unstructured.UnstructuredList, error) {
+	//Setup dynamic client to get resources based on gvk
+	client, err := GenerateDynamicClientForGVK(resourceType, namespace, config)
+	if err != nil {
+		return nil, err
+	}
+	opts := &metav1.ListOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       resourceType.Kind,
+			APIVersion: resourceType.Group + "/" + resourceType.Version},
+	}
+	objects, err := client.List(context.TODO(), *opts)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+	return objects, nil
+}
+
 func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Config) (map[string]map[metav1.GroupVersionKind]map[string]string, error) {
-	//TODO: Set correct config for storkops
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	storkClient, err := storkops.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	crdList, err := storkClient.ListApplicationRegistrations()
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +77,10 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 		resourceReplicaMap[ns] = make(map[metav1.GroupVersionKind]map[string]string)
 
 		// 1. ApplicationResources
-		for _, gvk := range getRelevantGVKs() {
+		for _, gvk := range GetGVKsRelevantForScaling() {
 			//Initialise namespace/resourceKind -> resources/replicas maps
 			resourceReplicaMap[ns][gvk] = make(map[string]string)
-			resources, err := ListResourcesByGVK(ns, config, gvk)
+			resources, err := ListResourcesByGVK(gvk, ns, config)
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +106,7 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 				gvk := applicationResource.GroupVersionKind
 				//Initialise namespace/resourceKind -> resources/replicas maps
 				resourceReplicaMap[ns][gvk] = make(map[string]string)
-				resources, err := ListResourcesByGVK(ns, config, gvk)
+				resources, err := ListResourcesByGVK(gvk, ns, config)
 				if err != nil {
 					return nil, err
 				}
@@ -145,8 +135,18 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 								} else if val, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
 									resourceReplicaMap[ns][gvk][object.GetName()] = val
 								}
+							} else if suspend.Type == "bool" {
+								// bool type crd resources are always activated
+								val, present, err := unstructured.NestedBool(content, specPath...)
+								if err != nil {
+									return nil, err
+								}
+								if !present {
+									suspendVal, _ := strconv.ParseBool(suspend.Value)
+									val = !suspendVal
+								}
+								resourceReplicaMap[ns][gvk][object.GetName()] = strconv.FormatBool(val)
 							}
-							// for suspend.Type == "bool" we update irrespective of annotation presence
 						}
 					}
 				}
