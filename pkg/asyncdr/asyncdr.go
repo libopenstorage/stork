@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/sirupsen/logrus"
 	storageapi "k8s.io/api/storage/v1"
 
@@ -295,10 +296,11 @@ func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.Schedu
 }
 
 // WaitForNumOfMigration waits for a certain number of migrations to complete.
-func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, error) {
+func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, []map[string]string, error) {
 	migInterval := time.Minute * time.Duration(miginterval)
 	migTimeout := time.Minute * time.Duration(count*miginterval)
 	expectedMigrations := make(map[string]string)
+	var migschedulestats []map[string]string
 	checkNumOfMigrations := func() (interface{}, bool, error) {
 		migSchedule, err := storkops.Instance().GetMigrationSchedule(schedName, schedNamespace)
 		if err != nil {
@@ -315,6 +317,9 @@ func WaitForNumOfMigration(schedName string, schedNamespace string, count int, m
 				expectedMigrations[migration.Name] = fmt.Sprintf("Migration failed with error: %v", err)
 			}
 			expectedMigrations[migration.Name] = "Successful"
+			// Getting migration stats
+			migstats := stats.GetStorkMigrationStats(migration)
+			migschedulestats = append(migschedulestats, migstats)
 		}
 		log.InfoD("Waiting to complete %v migrations in %v time, %v completed as of now", count, migTimeout, expectedMigrations)
 		if len(expectedMigrations) == count {
@@ -323,7 +328,7 @@ func WaitForNumOfMigration(schedName string, schedNamespace string, count int, m
 		return "", true, fmt.Errorf("some migrations are still pending")
 	}
 	_, err := task.DoRetryWithTimeout(checkNumOfMigrations, migTimeout, migInterval)
-	return expectedMigrations, err
+	return expectedMigrations, migschedulestats, err
 }
 
 func DeleteAndWaitForMigrationSchedDeletion(name, namespace string) error {
