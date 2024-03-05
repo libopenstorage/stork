@@ -29,6 +29,10 @@ after_success:
       sudo docker tag "${DOCKER_HUB_REPO}/torpedo-backup:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/torpedo-backup:${TRAVIS_BRANCH}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-backup:${DOCKER_HUB_TAG}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-backup:${TRAVIS_BRANCH}";
+      make container-longevity;
+      sudo docker tag "${DOCKER_HUB_REPO}/torpedo-longevity:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/torpedo-longevity:${TRAVIS_BRANCH}";
+      sudo docker push "${DOCKER_HUB_REPO}/torpedo-longevity:${DOCKER_HUB_TAG}";
+      sudo docker push "${DOCKER_HUB_REPO}/torpedo-longevity:${TRAVIS_BRANCH}";
     fi
 notifications:
   email:

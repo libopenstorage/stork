@@ -251,6 +251,16 @@ done
 
 echo "checking if we need to override test suite: ${TEST_SUITE}"
 
+# TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
+case $FOCUS_TESTS in
+  Longevity|UpgradeLongevity|BackupLongevity)
+    TEST_SUITE="bin/longevity.test"
+    echo "Warning: Based on the FOCUS_TESTS ('$FOCUS_TESTS'), the TEST_SUITE ('$TEST_SUITE') is set to 'bin/longevity.test'"
+    ;;
+  *)
+    ;;
+esac
+
 if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi

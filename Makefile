@@ -10,6 +10,9 @@
 # make {build-backup|container-backup}:
 #	 create backup.test binary/container (<repo>/torpedo-backup:<tag>)
 #
+# make {build-longevity|container-longevity}:
+#	 create longevity.test binary/container (<repo>/torpedo-longevity:<tag>)
+#
 # make all:
 #	 verify that all test binaries build successfully
 #
