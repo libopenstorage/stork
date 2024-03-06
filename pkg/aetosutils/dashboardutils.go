@@ -161,8 +161,8 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 				} else {
 					d.TestLog.Errorf("TestSetId creation failed. Cause : %v", err)
 				}
-				var err error
-				err = os.Setenv("DASH_UID", fmt.Sprintf("%d", d.TestSetID))
+				err := os.Setenv("DASH_UID", fmt.Sprintf("%d", d.TestSetID))
+				d.VerifySafely(err, nil, "DASH_UID set in env variables. ")
 				curDir, err := os.Getwd()
 				d.VerifySafely(err, nil, "DASH_UID set in env variables. ")
 				buildPropertiesFile := fmt.Sprintf("%s/%s", curDir, BuildProperties)
