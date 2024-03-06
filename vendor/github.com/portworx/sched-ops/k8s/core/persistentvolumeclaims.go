@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/common"
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -136,16 +137,17 @@ func (c *Client) ValidatePersistentVolumeClaimSize(pvc *corev1.PersistentVolumeC
 
 		capacity, ok := result.Status.Capacity[corev1.ResourceName(corev1.ResourceStorage)]
 		if !ok {
-			return "", true, fmt.Errorf("failed to get storage size for pvc: %v", pvc.Name)
+			return "", true, fmt.Errorf("failed to get storage size for PVC [%s:%s]", pvc.Namespace, pvc.Name)
 		}
 
 		if capacity.Value() == expectedPVCSize {
+			logrus.Debugf("PVC [%s:%s] has been successfully resized, expected size: %v actual size: %v", pvc.Namespace, pvc.Name, expectedPVCSize, capacity.Value())
 			return "", false, nil
 		}
 
 		return "", true, &schederrors.ErrValidatePVCSize{
 			ID:    result.Name,
-			Cause: fmt.Sprintf("PVC expected size: %v actual size: %v", expectedPVCSize, capacity.Value()),
+			Cause: fmt.Sprintf("PVC [%s:%s] expected size: %v actual size: %v", pvc.Namespace, pvc.Name, expectedPVCSize, capacity.Value()),
 		}
 	}
 
