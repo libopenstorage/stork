@@ -859,7 +859,7 @@ var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", func() {
 			errorBackup := make([]string, 0)
 			errorRestore := make([]string, 0)
 
-			log.Infof("Triggering backup of Virtual Machine [%v] time")
+			log.Infof("Triggering backup of Virtual Machine [%v] time", time.Now().Unix())
 			backupName := fmt.Sprintf("%s-%v-%s", "vm-backup-with-restore", time.Now().Unix(), RandomString(5))
 			wg.Add(1)
 			go func(backupName string) {
@@ -1540,8 +1540,223 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", func() {
 		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
 		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
 
-		log.InfoD("switching to default context")
+var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", func() {
+	var (
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
+		restoreNames         []string
+		restoreName          string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		providers            []string
+		labelSelectors       map[string]string
+		allVMs               []kubevirtv1.VirtualMachine
+		allVMNames           []string
+		backupName           string
+		backupNames          []string
+		freezeRuleName       string
+		freezeRuleUid        string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtInPlaceRestoreWithReplaceAndRetain", "Verify in-place restore with retain and replace options when VM is in frozen state", nil, 296423, Mkoppal, Q1FY25)
+
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 296423, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify VM backup with freeze rule and without unfreeze", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%s", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location - %s", backupLocationName))
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusters := []string{SourceClusterName, DestinationClusterName}
+			for _, c := range clusters {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, c, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", c))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", c))
+
+			}
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Creating freeze rule", func() {
+			log.InfoD("Creating freeze rule")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, appCtx := range scheduledAppContexts {
+				vms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Failed to get VMs in namespace - %s", appCtx.ScheduleOptions.Namespace)
+				allVMs = append(allVMs, vms...)
+			}
+			for _, v := range allVMs {
+				allVMNames = append(allVMNames, v.Name)
+			}
+			freezeRuleName = fmt.Sprintf("vm-freeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(freezeRuleName, allVMs, Freeze, ctx)
+			log.FailOnError(err, "Failed to create freeze rule %s for VMs - %v", freezeRuleName, allVMNames)
+		})
+
+		Step("Taking backup of kubevirt VM with freeze rule only and without unfreeze rule", func() {
+			log.InfoD("Taking backup of kubevirt VM with freeze rule only and without unfreeze rule")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName = fmt.Sprintf("%s-%s", "backup-freeze-without-unfreeze", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			var vmNames []string
+			for _, v := range allVMs {
+				vmNames = append(vmNames, v.Name)
+			}
+			log.Infof("VMs to be backed up - %v", vmNames)
+			freezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, freezeRuleName)
+			log.FailOnError(err, "Unable to fetch freeze rule uid - %s", freezeRuleName)
+			err = CreateVMBackupWithValidation(ctx, backupName, allVMs, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				labelSelectors, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, "", "", true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
+		})
+
+		Step("Performing in-place restore with retain option", func() {
+			log.InfoD("Performing in-place restore with retain option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName = fmt.Sprintf("%s-%s", "in-place-restore-retain", RandomString(6))
+			restoreNames = append(restoreNames, restoreName)
+			log.InfoD("Restoring the [%s] backup", backupName)
+			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
+		})
+
+		Step("Validating in place restore with retain on frozen VM", func() {
+			log.InfoD("Validating in place restore with retain on frozen VM")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range scheduledAppContexts {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+			}
+			err = ValidateRestore(ctx, restoreName, BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore [%s] with retain", restoreName))
+		})
+
+		Step("Performing in-place restore with replace option", func() {
+			log.InfoD("Performing in-place restore with replace option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName = fmt.Sprintf("%s-%s", "in-place-restore-replace", RandomString(6))
+			restoreNames = append(restoreNames, restoreName)
+			log.InfoD("Restoring the [%s] backup", backupName)
+			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
+		})
+
+		Step("Validating in place restore with replace", func() {
+			log.InfoD("Validating in place restore with replace")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range scheduledAppContexts {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+			}
+			err = ValidateRestore(ctx, restoreName, BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore [%s] with replace", restoreName))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+
+		RuleEnumerateReq := &api.RuleEnumerateRequest{
+			OrgId: BackupOrgID,
+		}
+		ruleList, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+		for _, r := range ruleList.GetRules() {
+			log.Infof("Deleting rule [%s]", r.Name)
+			_, err := Inst().Backup.DeleteRule(ctx, &api.RuleDeleteRequest{
+				OrgId: BackupOrgID,
+				Name:  r.Name,
+				Uid:   r.Uid,
+			})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting rule [%s]", r.Name))
+		}
+
+		log.Info("Destroying scheduled apps on source cluster")
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
