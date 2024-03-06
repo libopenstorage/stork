@@ -19,6 +19,7 @@ var (
 // Ops is an interface to perform kubernetes related operations on the core resources.
 type Ops interface {
 	VirtualMachineOps
+	VirtualMachineInstanceOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
