@@ -1836,8 +1836,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 	} else {
 		options := CreateScheduleOptions("", errChan...)
-		//taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		taskName = fmt.Sprintf("%s", testname)
+		taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
 		// Need to check err != nil before calling processError
 		if err != nil {
