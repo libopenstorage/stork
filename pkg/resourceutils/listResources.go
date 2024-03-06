@@ -2,6 +2,7 @@ package resourceutils
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -22,8 +23,6 @@ func GetGVKsRelevantForScaling() []metav1.GroupVersionKind {
 		{Group: "apps", Version: "v1", Kind: "Deployment"},
 		{Group: "apps", Version: "v1", Kind: "ReplicaSet"},
 		{Group: "apps.openshift.io", Version: "v1", Kind: "DeploymentConfig"},
-		{Group: "batch", Version: "v1", Kind: "CronJob"},
-		{Group: "kubevirt.io", Version: "v1", Kind: "VirtualMachine"},
 		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPPeer"},
 		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPCA"},
 		{Group: "ibp.com", Version: "v1alpha1", Kind: "IBPOrderer"},
@@ -57,7 +56,7 @@ func ListResourcesByGVK(resourceType metav1.GroupVersionKind, namespace string, 
 	}
 	objects, err := client.List(context.TODO(), *opts)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
+		return nil, fmt.Errorf("error listing the resources of the type: %v in namespace: %v -> %v", strings.ToLower(resourceType.String()), namespace, err)
 	}
 	return objects, nil
 }
@@ -84,16 +83,30 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 			if err != nil {
 				return nil, err
 			}
+			if resources == nil {
+				continue
+			}
 			for _, object := range resources.Items {
 				content := object.UnstructuredContent()
+				replicaSetGVK := metav1.GroupVersionKind{Group: "apps", Version: "v1", Kind: "ReplicaSet"}
+				if gvk == replicaSetGVK {
+					ownerReferences, _, err := unstructured.NestedSlice(content, "metadata", "ownerReferences")
+					if err != nil {
+						return nil, fmt.Errorf("error getting the ownerReferences for the replicaSet: %v in namespace: %v -> %v", object.GetName(), object.GetNamespace(), err)
+					}
+					if ownerReferences != nil {
+						// only collect replicaSets without owners
+						continue
+					}
+				}
 				annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("error getting the annotations of the resource %v %v/%v: %v", strings.ToLower(gvk.Kind), object.GetNamespace(), object.GetName(), err)
 				}
 				if !found {
 					continue
 				}
-				//Only if replica annotation exists, we will be activating this resource
+				// only if replica annotation exists, we will be activating this resource
 				if val, present := annotations[migration.StorkMigrationReplicasAnnotation]; present {
 					resourceReplicaMap[ns][gvk][object.GetName()] = val
 				}
@@ -102,31 +115,34 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 
 		// 2. CRD Resources
 		for _, applicationRegistration := range crdList.Items {
-			for _, applicationResource := range applicationRegistration.Resources {
-				gvk := applicationResource.GroupVersionKind
-				//Initialise namespace/resourceKind -> resources/replicas maps
+			for _, crd := range applicationRegistration.Resources {
+				gvk := crd.GroupVersionKind
+				// Initialise namespace/resourceKind -> resources/replicas maps
 				resourceReplicaMap[ns][gvk] = make(map[string]string)
 				resources, err := ListResourcesByGVK(gvk, ns, config)
 				if err != nil {
 					return nil, err
 				}
+				if resources == nil {
+					continue
+				}
 				for _, object := range resources.Items {
 					content := object.UnstructuredContent()
 					annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
 					if err != nil {
-						return nil, err
+						return nil, fmt.Errorf("error getting the annotations of the resource %v %v/%v: %v", strings.ToLower(gvk.Kind), object.GetNamespace(), object.GetName(), err)
 					}
 					if !found {
 						continue
 					}
-					//Only if replica annotation exists, we will be activating this resource
-					if applicationResource.SuspendOptions.Path != "" {
-						applicationResource.NestedSuspendOptions = append(applicationResource.NestedSuspendOptions, applicationResource.SuspendOptions)
+					// only if replica annotation exists, we will be activating this resource
+					if crd.SuspendOptions.Path != "" {
+						crd.NestedSuspendOptions = append(crd.NestedSuspendOptions, crd.SuspendOptions)
 					}
-					if len(applicationResource.NestedSuspendOptions) == 0 {
+					if len(crd.NestedSuspendOptions) == 0 {
 						continue
 					}
-					for _, suspend := range applicationResource.NestedSuspendOptions {
+					for _, suspend := range crd.NestedSuspendOptions {
 						specPath := strings.Split(suspend.Path, ".")
 						if len(specPath) > 1 {
 							if suspend.Type == "int" || suspend.Type == "string" {
@@ -137,14 +153,8 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 								}
 							} else if suspend.Type == "bool" {
 								// bool type crd resources are always activated
-								val, present, err := unstructured.NestedBool(content, specPath...)
-								if err != nil {
-									return nil, err
-								}
-								if !present {
-									suspendVal, _ := strconv.ParseBool(suspend.Value)
-									val = !suspendVal
-								}
+								suspendVal, _ := strconv.ParseBool(suspend.Value)
+								val := !suspendVal
 								resourceReplicaMap[ns][gvk][object.GetName()] = strconv.FormatBool(val)
 							}
 						}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"strconv"
 	"strings"
 
@@ -16,8 +17,11 @@ import (
 )
 
 func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[metav1.GroupVersionKind]map[string]string, config *rest.Config) error {
-	//TODO: Set correct config for storkops
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	storkClient, err := storkops.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	crdList, err := storkClient.ListApplicationRegistrations()
 	if err != nil {
 		return err
 	}
@@ -33,6 +37,9 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 			if err != nil {
 				return err
 			}
+			if resources == nil {
+				continue
+			}
 			for _, object := range resources.Items {
 				if _, present := resourceMap[ns][gvk][object.GetName()]; present {
 					err := scaleDownApplicationResource(object, dynamicClient, gvk)
@@ -44,8 +51,8 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 		}
 		// 2. CRD Resources
 		for _, applicationRegistration := range crdList.Items {
-			for _, applicationResource := range applicationRegistration.Resources {
-				gvk := applicationResource.GroupVersionKind
+			for _, crd := range applicationRegistration.Resources {
+				gvk := crd.GroupVersionKind
 				dynamicClient, err := GenerateDynamicClientForGVK(gvk, ns, config)
 				if err != nil {
 					return err
@@ -54,9 +61,12 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 				if err != nil {
 					return err
 				}
+				if resources == nil {
+					continue
+				}
 				for _, object := range resources.Items {
 					if _, present := resourceMap[ns][gvk][object.GetName()]; present {
-						err := ScaleDownCRDResource(object, applicationResource, dynamicClient)
+						err := ScaleDownCRDResource(object, crd, dynamicClient, config)
 						if err != nil {
 							return err
 						}
@@ -112,12 +122,13 @@ func scaleDownApplicationResource(object unstructured.Unstructured, dynamicClien
 	}
 	_, err = dynamicClient.Update(context.TODO(), &object, *opts, "")
 	if err != nil {
-		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(resourceType.String()), object.GetNamespace(), object.GetName(), err)
+		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(resourceType.Kind), object.GetNamespace(), object.GetName(), err)
 	}
+	fmt.Printf("successfully updated resource %v %v/%v \n", strings.ToLower(resourceType.Kind), object.GetNamespace(), object.GetName())
 	return nil
 }
 
-func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource v1alpha1.ApplicationResource, dynamicClient k8sdynamic.ResourceInterface) error {
+func ScaleDownCRDResource(object unstructured.Unstructured, crd v1alpha1.ApplicationResource, dynamicClient k8sdynamic.ResourceInterface, config *rest.Config) error {
 	content := object.UnstructuredContent()
 	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
 	if err != nil {
@@ -126,13 +137,13 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 	if !found {
 		annotations = make(map[string]string)
 	}
-	if applicationResource.SuspendOptions.Path != "" {
-		applicationResource.NestedSuspendOptions = append(applicationResource.NestedSuspendOptions, applicationResource.SuspendOptions)
+	if crd.SuspendOptions.Path != "" {
+		crd.NestedSuspendOptions = append(crd.NestedSuspendOptions, crd.SuspendOptions)
 	}
-	if len(applicationResource.NestedSuspendOptions) == 0 {
+	if len(crd.NestedSuspendOptions) == 0 {
 		return nil
 	}
-	for _, suspend := range applicationResource.NestedSuspendOptions {
+	for _, suspend := range crd.NestedSuspendOptions {
 		specPath := strings.Split(suspend.Path, ".")
 		if len(specPath) > 1 {
 			var val string
@@ -145,16 +156,16 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 				}
 				disableVersion = int64(0)
 				if currentValue == 0 && suspendAnnotationIsPresent {
-					//suspendAnnotation has value set as {currVal + "," + suspend.Value}
-					//we need to extract only the currVal from it
+					// suspendAnnotation has value set as {currVal + "," + suspend.Value}
+					// we need to extract only the currVal from it
 					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
 					intValue, err := strconv.ParseInt(annotationValue, 10, 64)
 					if err != nil {
 						return err
 					}
 					if intValue > 0 {
-						//If the actual suspend path value is 0 and suspend annotation value is more than 0,
-						//then don't override the annotation.
+						// If the actual suspend path value is 0 and suspend annotation value is more than 0,
+						// then don't override the annotation.
 						currentValue = intValue
 					}
 				}
@@ -168,8 +179,8 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 				if currentValue == suspend.Value && suspendAnnotationIsPresent {
 					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
 					if annotationValue != "" {
-						//If the actual value is equal to suspend.Value and suspend path annotation value is not an empty string,
-						//then don't override the annotation
+						// If the actual value is equal to suspend.Value and suspend path annotation value is not an empty string,
+						// then don't override the annotation
 						currentValue = annotationValue
 					}
 				}
@@ -183,12 +194,10 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 			} else {
 				return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
 			}
-			//scale down the CRD resource by setting the suspendPath value to disableVersion
+			// scale down the CRD resource by setting the suspendPath value to disableVersion
 			if err := unstructured.SetNestedField(content, disableVersion, specPath...); err != nil {
 				return err
 			}
-
-			// path : activate/deactivate value
 			annotations[migration.StorkAnnotationPrefix+suspend.Path] = val + "," + suspend.Value
 		}
 	}
@@ -198,12 +207,36 @@ func ScaleDownCRDResource(object unstructured.Unstructured, applicationResource 
 	}
 	opts := &metav1.UpdateOptions{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       applicationResource.Kind,
-			APIVersion: applicationResource.Group + "/" + applicationResource.Version},
+			Kind:       crd.Kind,
+			APIVersion: crd.Group + "/" + crd.Version},
 	}
 	_, err = dynamicClient.Update(context.TODO(), &object, *opts, "")
 	if err != nil {
-		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(applicationResource.GroupVersionKind.String()), object.GetNamespace(), object.GetName(), err)
+		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName(), err)
+	}
+	fmt.Printf("successfully updated resource %v %v/%v \n", strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName())
+
+	// Delete pods corresponding to the CRD as well
+	if crd.PodsPath == "" {
+		return nil
+	}
+	podPath := strings.Split(crd.PodsPath, ".")
+	pods, found, err := unstructured.NestedStringSlice(object.Object, podPath...)
+	if err != nil {
+		return fmt.Errorf("error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName(), err)
+	}
+	if !found {
+		return nil
+	}
+	coreClient, err := core.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	for _, pod := range pods {
+		err = coreClient.DeletePod(object.GetNamespace(), pod, true)
+		if err != nil {
+			return fmt.Errorf("error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName(), err)
+		}
 	}
 	return nil
 }
