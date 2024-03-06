@@ -11023,3 +11023,49 @@ var _ = Describe("{CheckPoolOffline}", func() {
 	})
 
 })
+
+var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
+
+	/* This test is created to provide functional testing coverage for ticket PWX-35590
+	1. Create a cluster with FACD backend
+	2. Check if the IO Priority for the storagepools is HIGH
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FACDPoolIOPriorityCheck", "Verify the Priority of the pools with FACD is High", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "FACDPoolIOPriorityCheck"
+	It(itLog, func() {
+		provisions, err := GetClusterProvisionStatus()
+		log.FailOnError(err, "failed to get cluster provision status")
+		for _, provision := range provisions {
+			if isCloudDriveTypePureBlock(provision.NodeUUID, provision.PoolUUID) {
+				log.Infof("the iopriority is %v\n", provision.IoPriority)
+				dash.VerifyFatal(provision.IoPriority == "HIGH", true, fmt.Sprintf("Expected the IOPriority to be HIGH for pool with ID: %s on the node: %s but found to be %s", provision.PoolUUID, provision.NodeUUID, provision.IoPriority))
+			} else {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Expected the CloudDrive type to be pure-block, found something else."))
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func isCloudDriveTypePureBlock(nodeUUID, poolUUID string) bool {
+	n, err := GetNodeFromPoolUUID(poolUUID)
+	log.FailOnError(err, "Failed to get node with given pool ID")
+	cmd := fmt.Sprintf("pxctl clouddrive inspect --node %v | grep Type | uniq", nodeUUID)
+	out, err := Inst().N.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	log.FailOnError(err, "Unable to execute the clouddrive inspect command")
+	driveType := strings.TrimSpace(strings.Split(out, ":")[1])
+	return driveType == "pure-block"
+}
