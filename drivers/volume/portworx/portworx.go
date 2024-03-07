@@ -163,6 +163,7 @@ const (
 	driveAddSuccessStatus    = "Drive add done"
 	driveExitsStatus         = "Device already exists"
 	metadataAddSuccessStatus = "Successfully added metadata device"
+	journalAddSuccessStatus  = "Successfully added journal device"
 )
 
 // Provisioners types of supported provisioners
@@ -5774,7 +5775,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
 	}
 
-	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) {
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, journalAddSuccessStatus) {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}
