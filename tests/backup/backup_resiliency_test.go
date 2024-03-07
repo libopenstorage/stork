@@ -1102,8 +1102,6 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		newBackupNames           []string
 		listOfStorageDriverNodes []node.Node
 		ctx                      context.Context
-		controlChannel           chan string
-		errorGroup               *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "2"))
@@ -1213,8 +1211,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
 			log.InfoD("Check if backup is successful after one worker node on application cluster is rebooted")
 			for _, backupName := range backupNames {
-				err := BackupSuccessCheckWithValidation(ctx, backupName, appContextsToBackupMap[backupName], BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
+				err := BackupSuccessCheck(backupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s success state", backupName))
 			}
 		})
 		Step("Check if the rebooted node on application cluster is up now", func() {
@@ -1236,6 +1234,14 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 			log.InfoD("Validating the deployed applications on destination cluster after node reboot")
 			ValidateApplications(scheduledAppContexts)
 		})
+		Step("Validating backup after one worker node on application cluster is rebooted", func() {
+			log.InfoD("Validating backup after one worker node on application cluster is rebooted")
+			for _, backupName := range backupNames {
+				err := ValidateBackup(ctx, backupName, BackupOrgID, appContextsToBackupMap[backupName], []string{})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating backup %s", backupName))
+			}
+		})
+
 		Step("Taking new backup of applications", func() {
 			log.InfoD("Taking new backup of applications")
 			for _, namespace := range appNamespaces {
@@ -1274,8 +1280,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Check if backup is successful after two worker nodes are rebooted", func() {
 			log.InfoD("Check if backup is successful after two worker nodes are rebooted")
 			for _, backupName := range newBackupNames {
-				err := BackupSuccessCheckWithValidation(ctx, backupName, newAppContextsToBackupMap[backupName], BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
+				err := BackupSuccessCheck(backupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification backup [%s] success status", backupName))
 			}
 		})
 		Step("Check if the rebooted nodes on application cluster are up now", func() {
@@ -1298,6 +1304,13 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		Step("Validating the deployed applications after node reboot", func() {
 			log.InfoD("Validating the deployed applications on destination cluster after node reboot")
 			ValidateApplications(scheduledAppContexts)
+		})
+		Step("Validating backup after one worker node on application cluster is rebooted", func() {
+			log.InfoD("Validating backup after one worker node on application cluster is rebooted")
+			for _, backupName := range newBackupNames {
+				err := ValidateBackup(ctx, backupName, BackupOrgID, newAppContextsToBackupMap[backupName], []string{})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating backup %s", backupName))
+			}
 		})
 	})
 
@@ -1328,8 +1341,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.Infof("Deleting the deployed applications on application cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Switching cluster context back to source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster")
