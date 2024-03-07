@@ -509,6 +509,7 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 		}
 	}
 
+	log.Infof("Backup [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	// Insert data before backup which is expected to be present after restore
 	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
 	if err != nil {

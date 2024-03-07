@@ -172,7 +172,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 	  )`, tableName)
 	_, err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
-		allErrors = append(allErrors, err.Error())
+		allErrors = append(allErrors, fmt.Sprintf("Continuity Pipeline Error - [%s] at [%s]", err.Error(), time.Now().Format("2006-01-02 15:04:05")))
 	}
 	for {
 		select {
@@ -194,7 +194,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 			if status == DataStart {
 				commandPair, err := app.startInsertingData(tableName, ctx)
 				if err != nil {
-					allErrors = append(allErrors, err.Error())
+					allErrors = append(allErrors, fmt.Sprintf("Continuity Pipeline Error - [%s] at [%s]", err.Error(), time.Now().Format("2006-01-02 15:04:05")))
 				}
 				allSelectCommands = append(allSelectCommands, commandPair["select"]...)
 				time.Sleep(2 * time.Second)
