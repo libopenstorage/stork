@@ -2788,7 +2788,9 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 		log.Infof("getting the volumes bounded to the PVCs in the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		actualVolumeMap := make(map[string]*volume.Volume)
 		for _, appContext := range expectedRestoredAppContexts {
-			if appContext.App.NameSpace == expectedRestoredAppContextNamespace {
+			// Using appContext.ScheduleOptions to get the namespace of the appContext
+			// Do not use appContext.App.Namespace as it is not set
+			if appContext.ScheduleOptions.Namespace == expectedRestoredAppContextNamespace {
 				actualRestoredVolumes, err := Inst().S.GetVolumes(appContext)
 				if err != nil {
 					err := fmt.Errorf("error getting volumes for namespace (expectedRestoredAppContext) [%s], hence skipping volume validation. Error in Inst().S.GetVolumes: [%v]", expectedRestoredAppContextNamespace, err)
@@ -2906,6 +2908,9 @@ func CloneAppContextAndTransformWithMappings(appContext *scheduler.Context, name
 	log.Infof("TransformAppContextWithMappings of appContext [%s] with namespace mapping [%v] and storage Class Mapping [%v]", appContextNamespace, namespaceMapping, storageClassMapping)
 
 	restoreAppContext := *appContext
+	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
+		restoreAppContext.App.NameSpace = namespaceMapping[namespace]
+	}
 	var errors []error
 
 	// TODO: remove workaround in future.
