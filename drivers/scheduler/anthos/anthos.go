@@ -458,12 +458,28 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 func (anth *anthos) upgradeUserCluster(version string) error {
 	log.Infof("Upgrading user cluster to a newer version: %s", version)
 	logChan := make(chan bool)
+	enableControlplaneV2 := false
+	controlPlaneEnableReg := regexp.MustCompile(`enableControlplaneV2:\s+true`)
 	userClusterName, err := anth.getUserClusterName()
 	if err != nil {
 		return err
 	}
-	upgradeLogger := anth.startLogCollector(logChan, userClusterName)
-	var cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
+	// Describe user cluster command help to identify dataplanev2 cluster
+	cmd := fmt.Sprintf("%s --kubeconfig %s --cluster %s",
+		userClusterDescribeCmd, adminKubeconfPath, userClusterName)
+	log.Debugf("Executing command: %s", cmd)
+	out, err := anth.execOnAdminWSNode(cmd)
+	if err != nil {
+		return fmt.Errorf("describing user cluster is failing: [%s]. Err: (%v)", out, err)
+	}
+	matches := controlPlaneEnableReg.FindAllString(out, -1)
+	if len(matches) > 0 {
+		log.Infof("controlplanev2 is enabled in cluster: [%s]", matches[0])
+		enableControlplaneV2 = true
+	}
+
+	upgradeLogger := anth.startLogCollector(logChan, userClusterName, enableControlplaneV2)
+	cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
@@ -670,24 +686,31 @@ func (anth *anthos) updateFileOwnership(dirPath string) error {
 }
 
 // dumpUpgradeLogs collects upgrade logs
-func (anth *anthos) dumpUpgradeLogs(clusterName string) error {
+func (anth *anthos) dumpUpgradeLogs(clusterName string, enableControlplaneV2 bool) error {
 	adminKubeConfPath := path.Join(anth.confPath, kubeConfig)
 	adminInstance, err := core.NewInstanceFromConfigFile(adminKubeConfPath)
 	if err != nil {
 		return fmt.Errorf("creating admin cluster instance failing with error. Err: (%v)", err)
 	}
-	if err := anth.collectUpgradeLogsInNameSpace(adminInstance, kubeSystemNameSpace); err != nil {
+	if err := anth.collectUpgradeLogsInNameSpace(adminInstance, kubeSystemNameSpace, "admin"); err != nil {
 		return err
 	}
+	userNamespaceInstance := adminInstance
+	userLogNameSpace := clusterName
+	if enableControlplaneV2 {
+		log.Debugf("Collecting logs from usercluster kube-system namespace for dataplanev2: [%s]", enableControlplaneV2)
+		userNamespaceInstance = k8sCore
+		userLogNameSpace = kubeSystemNameSpace
+	}
 	// Collecting pods logs from usercluster namespace
-	if err := anth.collectUpgradeLogsInNameSpace(adminInstance, clusterName); err != nil {
+	if err := anth.collectUpgradeLogsInNameSpace(userNamespaceInstance, userLogNameSpace, "user"); err != nil {
 		return err
 	}
 	return nil
 }
 
 // collectUpgradeLogsInNameSpace collect upgrade logs for namespace provided
-func (anth *anthos) collectUpgradeLogsInNameSpace(k8sInstance k8s.Ops, namespace string) error {
+func (anth *anthos) collectUpgradeLogsInNameSpace(k8sInstance k8s.Ops, namespace string, clusterType string) error {
 	clusterApiLabel := make(map[string]string, 0)
 	clusterApiLabel[clusterApiKey] = clusterApiValue
 	podList, err := k8sInstance.GetPods(namespace, clusterApiLabel)
@@ -700,10 +723,10 @@ func (anth *anthos) collectUpgradeLogsInNameSpace(k8sInstance k8s.Ops, namespace
 
 	// Collecting pods logs from kube-system namespace
 	for _, pod := range podList.Items {
-		if err = anth.writeContainerLog(k8sInstance, pod.Name, clusterApiContainer, namespace); err != nil {
+		if err = anth.writeContainerLog(k8sInstance, pod.Name, clusterApiContainer, namespace, clusterType); err != nil {
 			return err
 		}
-		if err = anth.writeContainerLog(k8sInstance, pod.Name, vSphereCntrlManagerContainer, namespace); err != nil {
+		if err = anth.writeContainerLog(k8sInstance, pod.Name, vSphereCntrlManagerContainer, namespace, clusterType); err != nil {
 			return err
 		}
 	}
@@ -711,7 +734,7 @@ func (anth *anthos) collectUpgradeLogsInNameSpace(k8sInstance k8s.Ops, namespace
 }
 
 // writeContainerLog dump container logs into file
-func (anth *anthos) writeContainerLog(k8sInstance k8s.Ops, podName string, containerName string, nameSpace string) error {
+func (anth *anthos) writeContainerLog(k8sInstance k8s.Ops, podName string, containerName string, nameSpace string, clusterType string) error {
 	layout := "2006-01-02T15:04:05Z"
 	logOption := corev1.PodLogOptions{
 		Container: containerName,
@@ -720,7 +743,7 @@ func (anth *anthos) writeContainerLog(k8sInstance k8s.Ops, podName string, conta
 	if err != nil {
 		return fmt.Errorf("unable to retrieve [%s] container logs. Err: (%v)", containerName, err)
 	}
-	logFileName := fmt.Sprintf("%s-%s-%v.log", containerName, nameSpace, time.Now().Format(layout))
+	logFileName := fmt.Sprintf("%s-%s-%v-%s.log", containerName, nameSpace, time.Now().Format(layout), clusterType)
 	logPath := path.Join(anth.confPath, logFileName)
 	if err = ioutil.WriteFile(logPath, []byte(containerLog), 0744); err != nil {
 		return fmt.Errorf("unable to write log file for a container: [%s]. Err: (%v)", clusterApiContainer, err)
@@ -729,7 +752,7 @@ func (anth *anthos) writeContainerLog(k8sInstance k8s.Ops, podName string, conta
 }
 
 // startLogCollector start ticker for collecting upgrade logs
-func (anth *anthos) startLogCollector(logChan chan bool, clusterName string) *time.Ticker {
+func (anth *anthos) startLogCollector(logChan chan bool, clusterName string, enableControlplaneV2 bool) *time.Ticker {
 	logTicker := time.NewTicker(logCollectFrequencyDuration)
 	go func() {
 		for {
@@ -738,7 +761,7 @@ func (anth *anthos) startLogCollector(logChan chan bool, clusterName string) *ti
 				return
 			case tm := <-logTicker.C:
 				log.Debugf("Collecting upgrade logs at: %v", tm)
-				if err := anth.dumpUpgradeLogs(clusterName); err != nil {
+				if err := anth.dumpUpgradeLogs(clusterName, enableControlplaneV2); err != nil {
 					log.Fatalf("Log collection fails with error. Err: (%v)", err)
 				}
 			}
