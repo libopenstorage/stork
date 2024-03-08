@@ -775,6 +775,12 @@ spec:
       value: "${ENABLE_GRAFANA}"
     - name: USE_GLOBAL_RULES
       value: "${USE_GLOBAL_RULES}"
+    - name: EKS_CLUSTER_NAME
+      value: "${EKS_CLUSTER_NAME}"
+    - name: EKS_CLUSTER_REGION
+      value: "${EKS_CLUSTER_REGION}"
+    - name: EKS_PX_NODEGROUP_NAME
+      value: "${EKS_PX_NODEGROUP_NAME}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

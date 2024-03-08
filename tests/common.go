@@ -135,6 +135,9 @@ import (
 	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
