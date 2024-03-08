@@ -400,7 +400,9 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verify App %s deletion", ctx.App.Key))
 				})
 
-				DeleteVolumesAndWait(ctx, nil)
+				err = DeleteVolumesAndWait(ctx, nil)
+				dash.VerifySafely(err, nil, fmt.Sprintf("%s's volume deleted successfully?", ctx.App.Key))
+
 			}
 		})
 	})

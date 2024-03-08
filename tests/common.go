@@ -1681,7 +1681,8 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		})
 
 		if !ctx.SkipVolumeValidation {
-			ValidateVolumesDeleted(ctx.App.Key, vols)
+			err = ValidateVolumesDeleted(ctx.App.Key, vols)
+			log.FailOnError(err, "Failed to delete volumes for app %s", ctx.App.Key)
 		}
 
 		// Delete Cluster Scope objects
@@ -1719,23 +1720,32 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 }
 
 // ValidateVolumesDeleted checks it given volumes got deleted
-func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
+func ValidateVolumesDeleted(appName string, vols []*volume.Volume) error {
 	for _, vol := range vols {
+		var err error
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			log.InfoD("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
-			err := Inst().V.ValidateDeleteVolume(vol)
-			log.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("%s's volume %s deleted successfully?", appName, vol.Name))
+			err = Inst().V.ValidateDeleteVolume(vol)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
+				return
+			}
+
 		})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) error {
 	vols := DeleteVolumes(ctx, options)
-	ValidateVolumesDeleted(ctx.App.Key, vols)
+	err := ValidateVolumesDeleted(ctx.App.Key, vols)
+	return err
 }
 
 // GetAppNamespace returns namespace in which context is created

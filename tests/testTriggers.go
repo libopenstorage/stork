@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
+	"github.com/devans10/pugo/flasharray"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
 	"os"
@@ -561,7 +563,7 @@ const (
 
 	// ReallocateSharedMount reallocated shared mount volumes
 	ReallocateSharedMount = "reallocateSharedMount"
-	
+
 	// AddBackupCluster adds source and destination cluster
 	AddBackupCluster = "addBackupCluster"
 
@@ -2748,6 +2750,7 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 						UpdateOutcome(event, err)
 					}
+					params[k8s.SnapshotParent] = vol.Name
 					err = Inst().V.ValidateCreateVolume(clonedVolID, params)
 					UpdateOutcome(event, err)
 				})
@@ -3466,12 +3469,64 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 				UpdateOutcome(event, err)
 			})
 
-			ValidateVolumesDeleted(ctx.App.Key, vols)
+			err := ValidateVolumesDeleted(ctx.App.Key, vols)
+			UpdateOutcome(event, err)
+			checkLunsAfterVolumeDeletion(event, vols)
 		}
 		*contexts = nil
 		TriggerDeployNewApps(contexts, recordChan)
 		updateMetrics(*event)
 	})
+}
+
+func checkLunsAfterVolumeDeletion(event *EventRecord, vols []*volume.Volume) {
+	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	if err != nil {
+		log.Warnf("no pure secret found, assuming not a FA/FB  backend, err: %v", err)
+		return
+	}
+	cluster, err := Inst().V.InspectCurrentCluster()
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+	log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+	clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
+
+	pureClientMap := make(map[string]map[string]*flasharray.Client)
+	pureClientMap["FADA"], err = pureutils.GetFAClientMapFromPXPureSecret(pxPureSecret)
+	pureClientMap["FBDA"], err = pureutils.GetFBClientMapFromPXPureSecret(pxPureSecret)
+
+	timeout := 10 * time.Minute
+	t := func() (interface{}, bool, error) {
+		for volType, clientMap := range pureClientMap {
+			for mgmtEndPoint, client := range clientMap {
+				pureVolumes, err := client.Volumes.ListVolumes(nil)
+				if err != nil {
+					return nil, true, fmt.Errorf("failed to list [%s] volumes from endpoint [%s].Err: %v", volType, mgmtEndPoint, err)
+
+				}
+				pureVolumeNames := make(map[string]bool)
+				for _, pureVol := range pureVolumes {
+					pureVolumeNames[pureVol.Name] = true
+				}
+				for _, vol := range vols {
+					pureVolName := "px_" + clusterUIDPrefix + "-" + vol.Name
+					if pureVolumeNames[pureVolName] {
+						return nil, false, fmt.Errorf("pure volume [%s] still exists in pure client [%s]", pureVolName, mgmtEndPoint)
+					}
+				}
+			}
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, timeout, 1*time.Minute)
+	UpdateOutcome(event, err)
 }
 
 func createCloudCredential(req *api.CloudCredentialCreateRequest) error {
@@ -9046,7 +9101,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				}
 			}
 			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
-			for _ , dashStats := range migScheduleStats {
+			for _, dashStats := range migScheduleStats {
 				updateLongevityStats(AsyncDRMigrationSchedule, stats.AsyncDREventName, dashStats)
 			}
 		}
@@ -9206,7 +9261,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				}
 			}
 			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
-			for _ , dashStats := range migScheduleStats {
+			for _, dashStats := range migScheduleStats {
 				updateLongevityStats(MetroDRMigrationSchedule, stats.MetroDREventName, dashStats)
 			}
 		}
