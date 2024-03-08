@@ -73,25 +73,6 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	}
 
-	// Return if any migration is ongoing
-	for _, policyType := range storkv1.GetValidSchedulePolicyTypes() {
-		policyMigration, present := migrationSchedule.Status.Items[policyType]
-		if present {
-			for _, migration := range policyMigration {
-				if !isMigrationComplete(migration.Status) {
-					msg := fmt.Sprintf("Waiting for the completion of migration %s", migration.Name)
-					log.ActionLog(action).Infof(msg)
-					ac.recorder.Event(action,
-						v1.EventTypeWarning,
-						string(storkv1.ActionStatusScheduled),
-						msg)
-					ac.updateAction(action)
-					return
-				}
-			}
-		}
-	}
-
 	// check if it has any latest successful migration
 	schedulePolicyType, latestMigration := getLatestMigrationPolicyAndStatus(*migrationSchedule)
 	if latestMigration.Status == storkv1.MigrationStatusFailed {
@@ -102,6 +83,18 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		ac.recorder.Event(action,
 			v1.EventTypeWarning,
 			string(storkv1.ActionStatusFailed),
+			msg)
+		ac.updateAction(action)
+		return
+	}
+
+	// Return if any migration is ongoing
+	if !isMigrationComplete(latestMigration.Status) {
+		msg := fmt.Sprintf("Waiting for the completion of migration %s", latestMigration.Name)
+		log.ActionLog(action).Infof(msg)
+		ac.recorder.Event(action,
+			v1.EventTypeWarning,
+			string(storkv1.ActionStatusScheduled),
 			msg)
 		ac.updateAction(action)
 		return
@@ -161,7 +154,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	}
 }
 
-func (ac *ActionController) performDeactivateFailBackStageDestination(action *storkv1.Action) {
+func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.Action) {
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
 		action.Status.Stage = storkv1.ActionStageLastMileMigration
 		action.Status.Status = storkv1.ActionStatusInitial
@@ -331,7 +324,7 @@ func getLastMileMigrationSpec(ms *storkv1.MigrationSchedule, operation string, a
 func getLastMileMigrationName(migrationScheduleName string, operation string, inputUID string) string {
 	// +3 is for delimiters
 	suffixLengths := len(lastmileMigrationPrefix) + len(operation) + len(inputUID) + 3
-	// Not adding any datetime as salt to the name as the migration needs to be checked for it's status in each reconciler handler cycle.
+	// Not adding any datetime as salt to the name as the migration needs to be checked for its status in each reconciler handler cycle.
 	if len(migrationScheduleName)+suffixLengths > validation.DNS1123SubdomainMaxLength {
 		migrationScheduleName = migrationScheduleName[:validation.DNS1123SubdomainMaxLength-suffixLengths]
 	}
@@ -341,7 +334,7 @@ func getLastMileMigrationName(migrationScheduleName string, operation string, in
 		inputUID}, "-")
 }
 
-func (ac *ActionController) performActivateFailBackStageSource(action *storkv1.Action) {
+func (ac *ActionController) activateSourceDuringFailBack(action *storkv1.Action) {
 	// Move to Final stage if this stage succeeds or fails
 	if action.Status.Status == storkv1.ActionStatusSuccessful || action.Status.Status == storkv1.ActionStatusFailed {
 		action.Status.Stage = storkv1.ActionStageFinal
@@ -421,7 +414,7 @@ func (ac *ActionController) performActivateFailBackStageSource(action *storkv1.A
 
 // performActivateFailBackStageDestination will be used for rolling back
 // in case failback operation fails to activate apps in destination cluster
-func (ac *ActionController) performActivateFailBackStageDestination(action *storkv1.Action) {
+func (ac *ActionController) activateDestinationDuringFailBack(action *storkv1.Action) {
 
 	// If the status is Successful or Failed, mark the failback operation failed
 	if action.Status.Status == storkv1.ActionStatusSuccessful || action.Status.Status == storkv1.ActionStatusFailed {

@@ -127,13 +127,13 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		case storkv1.ActionStageInitial:
 			ac.verifyMigrationScheduleBeforeFailback(action)
 		case storkv1.ActionStageScaleDownDestination:
-			ac.performDeactivateFailBackStageDestination(action)
+			ac.deactivateDestinationDuringFailback(action)
 		case storkv1.ActionStageLastMileMigration:
 			ac.performLastMileMigration(action)
 		case storkv1.ActionStageScaleUpSource:
-			ac.performActivateFailBackStageSource(action)
+			ac.activateSourceDuringFailBack(action)
 		case storkv1.ActionStageScaleUpDestination:
-			ac.performActivateFailBackStageDestination(action)
+			ac.activateDestinationDuringFailBack(action)
 		case storkv1.ActionStageFinal:
 			return nil
 		}
