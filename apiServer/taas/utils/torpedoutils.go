@@ -2,13 +2,14 @@ package utils
 
 import (
 	"fmt"
+	"math/rand"
+	"net/http"
+	"regexp"
+
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/tests"
-	"math/rand"
-	"net/http"
-	"regexp"
 )
 
 var (

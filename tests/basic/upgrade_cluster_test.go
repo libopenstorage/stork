@@ -2,28 +2,22 @@ package tests
 
 import (
 	"fmt"
-	"github.com/Masterminds/semver/v3"
-	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"net/url"
-	"os/exec"
 	"strings"
 	"time"
 
-	ops_v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("{UpgradeCluster}", func() {
@@ -62,11 +56,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}*/
 
 		for _, version := range versions {
-			if Inst().S.String() == openshift.SchedName && hasOCPPrereq(version) {
-				err = ocpPrometheusPrereq()
-				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-			}
-			Step(fmt.Sprintf("start [%s] scheduler upgrade", Inst().S.String()), func() {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				err := Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
@@ -144,20 +134,6 @@ var _ = Describe("{UpgradeCluster}", func() {
 	})
 })
 
-func hasOCPPrereq(ocpVer string) bool {
-
-	if strings.Contains(ocpVer, "stable-") {
-		ocpVer = strings.Split(ocpVer, "-")[1]
-	}
-	parsedVersion, err := semver.NewVersion(ocpVer)
-	log.FailOnError(err, fmt.Sprintf("error parsion ocp version [%s]", ocpVer))
-	compareVersion, _ := semver.NewVersion("4.12") //giving compare version as 4.11 will make below condition true for 4.11.X
-	if parsedVersion.Equal(compareVersion) || parsedVersion.GreaterThan(compareVersion) {
-		return true
-	}
-	return false
-}
-
 func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	stNodes := node.GetStorageNodes()
 
@@ -232,25 +208,6 @@ func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	}
 }
 
-func ocpPrometheusPrereq() error {
-	stc, err := Inst().V.GetDriver()
-	if err != nil {
-		return err
-	}
-
-	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
-	if stc.Spec.Autopilot.Enabled {
-		if err = createClusterMonitoringConfig(); err != nil {
-			return err
-		}
-
-		if err = updatePrometheusAndAutopilot(stc); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // printK8sClusterInfo prints info about K8s cluster nodes
 func printK8sCluterInfo() {
 	log.Info("Get cluster info..")
@@ -278,57 +235,4 @@ func printK8sCluterInfo() {
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
-}
-
-func createClusterMonitoringConfig() error {
-	// Create configmap
-	ocpConfigmap := &v1.ConfigMap{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "cluster-monitoring-config",
-			Namespace: "openshift-monitoring",
-		},
-		Data: map[string]string{
-			"config.yaml": "enableUserWorkload: true",
-		},
-	}
-
-	_, err = core.Instance().CreateConfigMap(ocpConfigmap)
-	return err
-}
-
-func updatePrometheusAndAutopilot(stc *ops_v1.StorageCluster) error {
-	thanosQuerierHostCmd := `kubectl get route thanos-querier -n openshift-monitoring -o json | jq -r '.spec.host'`
-	var output []byte
-
-	output, err = exec.Command("sh", "-c", thanosQuerierHostCmd).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to get thanos querier host , Err: %v", err)
-	}
-	thanosQuerierHost := strings.TrimSpace(string(output))
-	log.Infof("Thanos Querier Host:%s", thanosQuerierHost)
-	thanosQuerierHostUrl := fmt.Sprintf("https://%s", thanosQuerierHost)
-
-	if stc.Spec.Monitoring.Prometheus.Enabled {
-		stc.Spec.Monitoring.Prometheus.Enabled = false
-	}
-
-	dataProviders := stc.Spec.Autopilot.Providers
-
-	for _, dataProvider := range dataProviders {
-		if dataProvider.Type == "prometheus" {
-			isUrlUpdated := false
-			if val, ok := dataProvider.Params["url"]; ok {
-				if val == thanosQuerierHostUrl {
-					isUrlUpdated = true
-				}
-			}
-			if !isUrlUpdated {
-				dataProvider.Params["url"] = thanosQuerierHostUrl
-			}
-		}
-
-	}
-	pxOperator := operator.Instance()
-	_, err = pxOperator.UpdateStorageCluster(stc)
-	return err
 }
