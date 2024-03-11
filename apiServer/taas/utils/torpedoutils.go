@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 )
 
@@ -34,6 +35,16 @@ func checkTorpedoInit(c *gin.Context) bool {
 // InitializeDrivers : This API Call will init all Torpedo Drivers. This needs to be run as ginkgo test
 // as multiple ginkgo and gomega dependencies are being called in InitInstance()
 func InitializeDrivers(c *gin.Context) {
+	// TODO: Remove the Ginkgo dependency from functions outside the tests package.
+	// Redefining tests.Step to avoid Ginkgo's "spec structure" error with `go run`, ensuring compatibility.
+	tests.Step = func(text string, callback ...func()) {
+		log.Infof("Step: [%s]", text)
+		if len(callback) == 1 {
+			callback[0]()
+		} else if len(callback) > 1 {
+			panic(fmt.Sprintf("Step: [%s] has more than one callback", text))
+		}
+	}
 	tests.ParseFlags()
 	tests.InitInstance()
 	IsTorpedoInitDone = true
