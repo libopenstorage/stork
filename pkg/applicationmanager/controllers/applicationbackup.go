@@ -234,9 +234,13 @@ func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.
 	if err != nil {
 		return fmt.Errorf("error updating with all namespaces for wildcard: %v", err)
 	}
-	pxNs, _ := utils.GetPortworxNamespace()
-	// add portworx ns to Ignored NS map
-	utils.IgnoreNamespaces[pxNs] = true
+	pxNs, err := utils.GetPortworxNamespace()
+	if err == nil {
+		// add portworx ns to Ignored NS map
+		for _, ns := range pxNs {
+			utils.IgnoreNamespaces[ns] = true
+		}
+	}
 	namespacesToBackup := make([]string, 0)
 	for _, ns := range namespaces.Items {
 		if _, found := utils.IgnoreNamespaces[ns.Name]; !found {
@@ -360,7 +364,6 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	}
 
 	if labelSelector := backup.Spec.NamespaceSelector; len(labelSelector) != 0 {
-		var pxNs string
 		namespaces, err := core.Instance().ListNamespacesV2(labelSelector)
 		if err != nil {
 			errMsg := fmt.Sprintf("error listing namespaces with label selectors: %v, error: %v", labelSelector, err)
@@ -373,10 +376,14 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 		var selectedNamespaces []string
 		if len(backup.Spec.Namespaces) == 0 {
-			pxNs, _ = utils.GetPortworxNamespace()
+			pxNs, err := utils.GetPortworxNamespace()
+			if err == nil {
+				// add portworx ns to Ignored NS map
+				for _, ns := range pxNs {
+					utils.IgnoreNamespaces[ns] = true
+				}
+			}
 		}
-		// add portworx ns to Ignored NS map
-		utils.IgnoreNamespaces[pxNs] = true
 		for _, namespace := range namespaces.Items {
 			if _, found := utils.IgnoreNamespaces[namespace.Name]; !found {
 				selectedNamespaces = append(selectedNamespaces, namespace.Name)
