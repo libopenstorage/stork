@@ -29,11 +29,7 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 	for _, ns := range namespaces {
 		// 1. ApplicationResources
 		for _, gvk := range GetGVKsRelevantForScaling() {
-			resources, err := ListResourcesByGVK(gvk, ns, config)
-			if err != nil {
-				return err
-			}
-			dynamicClient, err := GenerateDynamicClientForGVK(gvk, ns, config)
+			resources, dynamicClient, err := ListResourcesByGVK(gvk, ns, config)
 			if err != nil {
 				return err
 			}
@@ -42,22 +38,35 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 			}
 			for _, object := range resources.Items {
 				if _, present := resourceMap[ns][gvk][object.GetName()]; present {
-					err := scaleDownApplicationResource(object, dynamicClient, gvk)
+					err := scaleDownApplicationResource(dynamicClient, object, gvk)
 					if err != nil {
 						return err
 					}
 				}
 			}
 		}
-		// 2. CRD Resources
+
+		// 2. CronJobs
+		resources, dynamicClient, err := ListResourcesByGVK(cronJobGVK, ns, config)
+		if err != nil {
+			return err
+		}
+		if resources != nil {
+			for _, object := range resources.Items {
+				if _, present := resourceMap[ns][cronJobGVK][object.GetName()]; present {
+					err := scaleDownCronJob(dynamicClient, object)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		// 3. CRD Resources
 		for _, applicationRegistration := range crdList.Items {
 			for _, crd := range applicationRegistration.Resources {
 				gvk := crd.GroupVersionKind
-				dynamicClient, err := GenerateDynamicClientForGVK(gvk, ns, config)
-				if err != nil {
-					return err
-				}
-				resources, err := ListResourcesByGVK(gvk, ns, config)
+				resources, dynamicClient, err := ListResourcesByGVK(gvk, ns, config)
 				if err != nil {
 					return err
 				}
@@ -66,7 +75,7 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 				}
 				for _, object := range resources.Items {
 					if _, present := resourceMap[ns][gvk][object.GetName()]; present {
-						err := ScaleDownCRDResource(object, crd, dynamicClient, config)
+						err := scaleDownCRDResource(dynamicClient, object, crd, config)
 						if err != nil {
 							return err
 						}
@@ -78,7 +87,7 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 	return nil
 }
 
-func scaleDownApplicationResource(object unstructured.Unstructured, dynamicClient k8sdynamic.ResourceInterface, resourceType metav1.GroupVersionKind) error {
+func scaleDownApplicationResource(dynamicClient k8sdynamic.ResourceInterface, object unstructured.Unstructured, resourceType metav1.GroupVersionKind) error {
 	content := object.UnstructuredContent()
 	currentReplicas, found, err := unstructured.NestedInt64(content, "spec", "replicas")
 	if err != nil {
@@ -128,7 +137,26 @@ func scaleDownApplicationResource(object unstructured.Unstructured, dynamicClien
 	return nil
 }
 
-func ScaleDownCRDResource(object unstructured.Unstructured, crd v1alpha1.ApplicationResource, dynamicClient k8sdynamic.ResourceInterface, config *rest.Config) error {
+func scaleDownCronJob(dynamicClient k8sdynamic.ResourceInterface, object unstructured.Unstructured) error {
+	content := object.UnstructuredContent()
+	err := unstructured.SetNestedField(content, true, "spec", "suspend")
+	if err != nil {
+		return err
+	}
+	opts := &metav1.UpdateOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       cronJobGVK.Kind,
+			APIVersion: cronJobGVK.Group + "/" + cronJobGVK.Version},
+	}
+	_, err = dynamicClient.Update(context.TODO(), &object, *opts, "")
+	if err != nil {
+		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(cronJobGVK.Kind), object.GetNamespace(), object.GetName(), err)
+	}
+	fmt.Printf("successfully updated resource %v %v/%v \n", strings.ToLower(cronJobGVK.Kind), object.GetNamespace(), object.GetName())
+	return nil
+}
+
+func scaleDownCRDResource(dynamicClient k8sdynamic.ResourceInterface, object unstructured.Unstructured, crd v1alpha1.ApplicationResource, config *rest.Config) error {
 	content := object.UnstructuredContent()
 	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
 	if err != nil {
@@ -164,7 +192,7 @@ func ScaleDownCRDResource(object unstructured.Unstructured, crd v1alpha1.Applica
 						return err
 					}
 					if intValue > 0 {
-						// If the actual suspend path value is 0 and suspend annotation value is more than 0,
+						// If the actual value is 0 and suspend annotation value is more than 0,
 						// then don't override the annotation.
 						currentValue = intValue
 					}
@@ -179,7 +207,7 @@ func ScaleDownCRDResource(object unstructured.Unstructured, crd v1alpha1.Applica
 				if currentValue == suspend.Value && suspendAnnotationIsPresent {
 					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
 					if annotationValue != "" {
-						// If the actual value is equal to suspend.Value and suspend path annotation value is not an empty string,
+						// If the actual value is equal to suspend.Value (i.e. 0 value) and suspend path annotation value is not an empty string,
 						// then don't override the annotation
 						currentValue = annotationValue
 					}

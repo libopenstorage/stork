@@ -30,6 +30,8 @@ func GetGVKsRelevantForScaling() []metav1.GroupVersionKind {
 	}
 }
 
+var cronJobGVK = metav1.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}
+
 func GenerateDynamicClientForGVK(resourceType metav1.GroupVersionKind, namespace string, config *rest.Config) (k8sdynamic.ResourceInterface, error) {
 	var client k8sdynamic.ResourceInterface
 	ruleset := resourcecollector.GetDefaultRuleSet()
@@ -43,11 +45,11 @@ func GenerateDynamicClientForGVK(resourceType metav1.GroupVersionKind, namespace
 	return client, nil
 }
 
-func ListResourcesByGVK(resourceType metav1.GroupVersionKind, namespace string, config *rest.Config) (*unstructured.UnstructuredList, error) {
+func ListResourcesByGVK(resourceType metav1.GroupVersionKind, namespace string, config *rest.Config) (*unstructured.UnstructuredList, k8sdynamic.ResourceInterface, error) {
 	//Setup dynamic client to get resources based on gvk
 	client, err := GenerateDynamicClientForGVK(resourceType, namespace, config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts := &metav1.ListOptions{
 		TypeMeta: metav1.TypeMeta{
@@ -56,9 +58,9 @@ func ListResourcesByGVK(resourceType metav1.GroupVersionKind, namespace string, 
 	}
 	objects, err := client.List(context.TODO(), *opts)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("error listing the resources of the type: %v in namespace: %v -> %v", strings.ToLower(resourceType.String()), namespace, err)
+		return nil, nil, fmt.Errorf("error listing the resources of the type: %v in namespace: %v -> %v", strings.ToLower(resourceType.String()), namespace, err)
 	}
-	return objects, nil
+	return objects, client, nil
 }
 
 func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Config) (map[string]map[metav1.GroupVersionKind]map[string]string, error) {
@@ -79,7 +81,7 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 		for _, gvk := range GetGVKsRelevantForScaling() {
 			//Initialise namespace/resourceKind -> resources/replicas maps
 			resourceReplicaMap[ns][gvk] = make(map[string]string)
-			resources, err := ListResourcesByGVK(gvk, ns, config)
+			resources, _, err := ListResourcesByGVK(gvk, ns, config)
 			if err != nil {
 				return nil, err
 			}
@@ -92,7 +94,7 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 				if gvk == replicaSetGVK {
 					ownerReferences, _, err := unstructured.NestedSlice(content, "metadata", "ownerReferences")
 					if err != nil {
-						return nil, fmt.Errorf("error getting the ownerReferences for the replicaSet: %v in namespace: %v -> %v", object.GetName(), object.GetNamespace(), err)
+						return nil, fmt.Errorf("error getting the ownerReferences for the replicaSet: %v/%v -> %v", object.GetNamespace(), object.GetName(), err)
 					}
 					if ownerReferences != nil {
 						// only collect replicaSets without owners
@@ -113,13 +115,36 @@ func GetResourcesBeingActivated(activationNamespaces []string, config *rest.Conf
 			}
 		}
 
-		// 2. CRD Resources
+		// 2. CronJobs
+		resourceReplicaMap[ns][cronJobGVK] = make(map[string]string)
+		resources, _, err := ListResourcesByGVK(cronJobGVK, ns, config)
+		if err != nil {
+			return nil, err
+		}
+		if resources != nil {
+			for _, object := range resources.Items {
+				content := object.UnstructuredContent()
+				annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+				if err != nil {
+					return nil, fmt.Errorf("error getting the annotations of the resource %v %v/%v: %v", strings.ToLower(cronJobGVK.Kind), object.GetNamespace(), object.GetName(), err)
+				}
+				if !found {
+					continue
+				}
+				// pick only if stork-migrated annotation exists in the resource
+				if val, present := annotations[migration.StorkMigrationAnnotation]; present {
+					resourceReplicaMap[ns][cronJobGVK][object.GetName()] = val
+				}
+			}
+		}
+
+		// 3. CRD Resources
 		for _, applicationRegistration := range crdList.Items {
 			for _, crd := range applicationRegistration.Resources {
 				gvk := crd.GroupVersionKind
 				// Initialise namespace/resourceKind -> resources/replicas maps
 				resourceReplicaMap[ns][gvk] = make(map[string]string)
-				resources, err := ListResourcesByGVK(gvk, ns, config)
+				resources, _, err := ListResourcesByGVK(gvk, ns, config)
 				if err != nil {
 					return nil, err
 				}
