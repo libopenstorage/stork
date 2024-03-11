@@ -534,7 +534,7 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 			}
 			return restore, nil
 		}
-		logrus.Infof("Updating restore  %s/%s in stage/stagus: %s/%s to volume stage", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status)
+		logrus.Infof("Updating restore  %s/%s in stage/status: %s/%s to volume stage", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status)
 		if namespacemapping != nil {
 			restore.Spec.NamespaceMapping = namespacemapping
 		}

@@ -277,19 +277,29 @@ func GetStashedConfigMapName(objKind string, group string, objName string) strin
 	return cmName
 }
 
-func GetPortworxNamespace() (string, error) {
+// Returns namespaces in which Portworx is deployed.
+func GetPortworxNamespace() ([]string, error) {
+	// https://docs.portworx.com/portworx-enterprise/reference/crd/storage-cluster#storagecluster-annotations
+	// If you run Portworx in a namespace other than kube-system and not using the default 9001 start port
+	// You can end up having multiple Portworx services in the cluster
+	var namespaces []string
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("error in getting list of all services")
-		return "", fmt.Errorf("failed to get list of services. Err: %v", err)
+		return nil, fmt.Errorf("failed to get list of services. Err: %v", err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == PXServiceName {
-			return svc.Namespace, nil
+			namespaces = append(namespaces, svc.Namespace)
 		}
 	}
-	logrus.Warnf("unable to find [%s] service in cluster", PXServiceName)
-	return "", fmt.Errorf("can't find [%s] Portworx service from list of services", PXServiceName)
+	if len(namespaces) == 0 {
+		logrus.Warnf("Unable to find [%s] service in the cluster", PXServiceName)
+		return nil, fmt.Errorf("cannot find [%s] Portworx service from the list of services", PXServiceName)
+	} else {
+		logrus.Infof("Found [%s] service in the following namespaces: %v", PXServiceName, namespaces)
+		return namespaces, nil
+	}
 }
 
 // CreateVolumeSnapshotSchedulePatch will return the patch between two volumesnapshot schedule objects
