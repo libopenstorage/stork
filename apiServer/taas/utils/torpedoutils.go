@@ -187,7 +187,7 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 	}
 	appToRun := c.Param("appName")
 	tests.Inst().AppList = []string{appToRun}
-	context = tests.ScheduleApplications(c.Param("namespace"))
+	context = tests.ScheduleApplications(c.Param("namespacePrefix"))
 	for _, ctx := range context {
 		tests.ValidateContext(ctx, &errChan)
 	}
@@ -200,13 +200,19 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 			errStrings = append(errStrings, err.Error())
 		}
 	}
+	namespacesList := make([]string, 0)
+	for _, ctx := range context {
+		namespace := tests.GetAppNamespace(ctx, c.Param("namespacePrefix"))
+		namespacesList = append(namespacesList, namespace)
+	}
 	if len(errStrings) > 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": errStrings,
 		})
 	} else {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Apps Created and Validated successfully",
+			"message":   "App is created and validated successfully",
+			"namespace": namespacesList,
 		})
 	}
 }
