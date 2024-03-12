@@ -2,15 +2,15 @@ package utils
 
 import (
 	"fmt"
-	"math/rand"
-	"net/http"
-	"regexp"
-
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	"math/rand"
+	"net/http"
+	"regexp"
 )
 
 var (
@@ -325,4 +325,98 @@ func GetPxctlStatusOutput(c *gin.Context) {
 			"output": status,
 		})
 	}
+}
+
+// GetVMsInNamespaces gets the list of Virtual Machines in the given namespaces
+func GetVMsInNamespaces(c *gin.Context) {
+	var requestBody struct {
+		Namespaces []string `json:"namespaces"`
+	}
+	var vms []kubevirtv1.VirtualMachine
+	type VM struct {
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+		Status    string `json:"status"`
+	}
+	var vmResponse []VM
+
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(requestBody.Namespaces) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespaces cannot be empty"})
+		return
+	}
+
+	for _, ns := range requestBody.Namespaces {
+		vmList, err := tests.GetAllVMsInNamespace(ns)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		vms = append(vms, vmList...)
+	}
+
+	for _, v := range vms {
+		vmResponse = append(vmResponse, VM{
+			Name:      v.Name,
+			Namespace: v.Namespace,
+			Status:    string(v.Status.PrintableStatus),
+		})
+	}
+
+	// Return the list of VMs
+	c.JSON(http.StatusOK, vmResponse)
+}
+
+// GetVMsWithNamespaceLabels gets the list of Virtual Machines in the namespaces with the given labels
+func GetVMsWithNamespaceLabels(c *gin.Context) {
+	var requestBody struct {
+		NamespaceLabels map[string]string `json:"namespaceLabels"`
+	}
+	var vms []kubevirtv1.VirtualMachine
+	type VM struct {
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+		Status    string `json:"status"`
+	}
+	var vmResponse []VM
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(requestBody.NamespaceLabels) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace labels cannot be empty"})
+		return
+	}
+	vms, err := tests.GetAllVMsInNamespacesWithLabel(requestBody.NamespaceLabels)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	for _, v := range vms {
+		vmResponse = append(vmResponse, VM{
+			Name:      v.Name,
+			Namespace: v.Namespace,
+			Status:    string(v.Status.PrintableStatus),
+		})
+	}
+
+	// Return the list of VMs
+	c.JSON(http.StatusOK, vmResponse)
+
 }

@@ -6339,6 +6339,24 @@ func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error)
 
 }
 
+// GetAllVMsInNamespacesWithLabel returns all the Kubevirt VMs in the namespaces filtered by the namespace label provided
+func GetAllVMsInNamespacesWithLabel(namespaceLabel map[string]string) ([]kubevirtv1.VirtualMachine, error) {
+	var vms []kubevirtv1.VirtualMachine
+	nsList, err := k8sCore.ListNamespaces(namespaceLabel)
+	if err != nil {
+		return nil, err
+	}
+	for _, ns := range nsList.Items {
+		vmList, err := GetAllVMsInNamespace(ns.Name)
+		if err != nil {
+			return nil, err
+		}
+		vms = append(vms, vmList...)
+	}
+	return vms, nil
+
+}
+
 // RunCmdInVM runs a command in the VM by SSHing into it
 func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) (string, error) {
 	var username string

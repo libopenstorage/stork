@@ -27,5 +27,7 @@ func main() {
 	router.GET("taas/pxversion", utils.GetPxVersion)
 	router.GET("taas/ispxinstalled", utils.IsPxInstalled)
 	router.GET("taas/getpxctloutput", utils.GetPxctlStatusOutput)
+	router.GET("taas/getkubevirtvmsbyns", utils.GetVMsInNamespaces)
+	router.GET("taas/getkubevirtvmsbynslabels", utils.GetVMsWithNamespaceLabels)
 	log.Fatal(router.Run(":8080"))
 }
