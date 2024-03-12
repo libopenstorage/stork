@@ -92,6 +92,9 @@ const (
 	PxbackupObjectUIDKey = PxbackupAnnotationPrefix + "backup-uid"
 	// PxbackupObjectNameKey - annotation key name for backup object name with px-backup prefix
 	PxbackupObjectNameKey = PxbackupAnnotationPrefix + "backup-name"
+	// PxbackupAnnotationSkipdriverKey - annotation key name to skip backup for this specific driver
+	PxbackupAnnotationSkipdriverKey = PxbackupAnnotationPrefix + "skip-driver"
+
 	// SkipResourceAnnotation - annotation value to skip resource during resource collector
 	SkipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
 	// StorkAPIVersion API version

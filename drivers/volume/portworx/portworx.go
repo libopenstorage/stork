@@ -3342,10 +3342,7 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		})
 		if err != nil || cloudBackupCreateErr != nil {
 			if isCloudBackupServerBusyError(cloudBackupCreateErr) {
-				volumeInfo.Status = storkapi.ApplicationBackupStatusFailed
-				volumeInfo.Reason = cloudBackupCreateErr.Error()
-				volumeInfos = append(volumeInfos, volumeInfo)
-				continue
+				return volumeInfos, &storkvolume.ErrStorageProviderBusy{Reason: cloudBackupCreateErr.Error()}
 			}
 			if _, ok := cloudBackupCreateErr.(*ost_errors.ErrExists); !ok {
 				volumeInfo.Status = storkapi.ApplicationBackupStatusFailed
@@ -3374,7 +3371,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.PortworxDriverName {
-			volumeInfos = append(volumeInfos, vInfo)
+			// volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		// Skip for volumes which are in failed state as there is no need to proceed
