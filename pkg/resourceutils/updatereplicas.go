@@ -109,7 +109,7 @@ func updateStatefulSets(namespace string, activate bool, storeOriginalReplicaCou
 	for _, statefulSet := range statefulSets.Items {
 		if replicas, update := getUpdatedReplicaCount(statefulSet.Annotations, activate, printFunc); update {
 			if storeOriginalReplicaCount {
-				statefulSet.Spec.Template.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*statefulSet.Spec.Replicas))
+				statefulSet.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*statefulSet.Spec.Replicas))
 			}
 			statefulSet.Spec.Replicas = &replicas
 			_, err := apps.Instance().UpdateStatefulSet(&statefulSet)
@@ -137,7 +137,7 @@ func updateDeployments(namespace string, activate bool, storeOriginalReplicaCoun
 	for _, deployment := range deployments.Items {
 		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, printFunc); update {
 			if storeOriginalReplicaCount {
-				deployment.Spec.Template.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*deployment.Spec.Replicas))
+				deployment.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*deployment.Spec.Replicas))
 			}
 			deployment.Spec.Replicas = &replicas
 			_, err := apps.Instance().UpdateDeployment(&deployment)
@@ -167,7 +167,7 @@ func updateReplicaSets(namespace string, activate bool, storeOriginalReplicaCoun
 		}
 		if replicas, update := getUpdatedReplicaCount(replicaset.Annotations, activate, printFunc); update {
 			if storeOriginalReplicaCount {
-				replicaset.Spec.Template.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*replicaset.Spec.Replicas))
+				replicaset.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*replicaset.Spec.Replicas))
 			}
 			replicaset.Spec.Replicas = &replicas
 			_, err := apps.Instance().UpdateReplicaSet(&replicaset)
@@ -190,13 +190,14 @@ func updateDeploymentConfigs(namespace string, activate bool, storeOriginalRepli
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			util.CheckErr(err)
+			return err
 		}
-		return err
+		return nil
 	}
 	for _, deployment := range deployments.Items {
 		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, printFunc); update {
 			if storeOriginalReplicaCount {
-				deployment.Spec.Template.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(deployment.Spec.Replicas))
+				deployment.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(deployment.Spec.Replicas))
 			}
 			deployment.Spec.Replicas = replicas
 			_, err := openshift.Instance().UpdateDeploymentConfig(&deployment)
@@ -354,8 +355,9 @@ func updateIBPObjects(kind string, namespace string, activate bool, storeOrigina
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			util.CheckErr(err)
+			return err
 		}
-		return err
+		return nil
 	}
 	for _, o := range objects.Items {
 		if replicas, update := getUpdatedReplicaCount(o.GetAnnotations(), activate, printFunc); update {
@@ -417,8 +419,9 @@ func updateVMObjects(kind string, namespace string, activate bool, printFunc fun
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			util.CheckErr(err)
+			return err
 		}
-		return err
+		return nil
 	}
 	for _, o := range objects.Items {
 		path := []string{"spec", "running"}
