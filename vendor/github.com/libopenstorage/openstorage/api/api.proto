@@ -114,6 +114,8 @@ enum IoProfile {
   IO_PROFILE_SYNC_SHARED = 5;
   IO_PROFILE_AUTO = 6;
   IO_PROFILE_NONE = 7;
+  IO_PROFILE_JOURNAL = 8;
+  IO_PROFILE_AUTO_JOURNAL = 9;
 }
 
 // VolumeState represents the state of a volume.
@@ -232,6 +234,10 @@ message StorageResource {
   bool cache = 14;
   // True if the resource is used as thin pool metadata disk
   bool pool_metadata_dev = 15;
+  // Cloud drive type
+  string cloud_drive_type = 16;
+  // volume spec that created this drive
+  string volume_spec = 17;
 }
 
 // StoragePool groups different storage devices based on their CosType
@@ -556,6 +562,8 @@ message FastpathConfig {
   string coord_uuid = 6;
   // fastpath force failover, disable auto promote to fastpath
   bool force_failover = 7;
+  // Verbose contains detailed info on fastpath status
+  string verbose = 8;
 }
 
 // ScanPolicy defines when a filesystem check is triggered and what action to take
@@ -708,6 +716,10 @@ message VolumeSpec {
   bool near_sync = 51;
   // NearSyncReplicationStrategy is replication strategy for near sync volumes
   NearSyncReplicationStrategy near_sync_replication_strategy = 52;
+  // clone created to trigger checksum verification
+  string checksum_clone_id = 53;
+  // Checksummed indicates if volumed data is checksummed to provide data integrity
+  bool checksummed = 54;
 }
 
 // VolumeSpecUpdate provides a method to set any of the VolumeSpec of an existing volume
@@ -783,6 +795,8 @@ message VolumeSpecUpdate {
   oneof winshare_opt { bool winshare = 42; }
   // NearSyncReplicationStrategy is replication strategy for near sync volumes
   oneof near_sync_replication_strategy_opt { NearSyncReplicationStrategy near_sync_replication_strategy = 43;}
+  // Checksummed indicates if volumed data is checksummed to provide data integrity
+  oneof checksummed_opt { bool checksummed = 44; }
 }
 
 // VolumeSpecPolicy provides a method to set volume storage policy
@@ -1583,6 +1597,8 @@ message StorageNode {
   string id = 1;
   // Cpu usage of the node
   double cpu = 2;
+  // Number of Cpu Cores
+  int64 cpu_cores = 21;
   // Total memory of the node
   uint64 mem_total = 3;
   // Used memory of the node
@@ -1614,6 +1630,13 @@ message StorageNode {
   SecurityStatus security_status = 19;
   // Topology information of the node in scheduler context
   SchedulerTopology scheduler_topology = 20;
+  // Flag indicating whether the node is a quorum member or not. Using inverse value
+  // to handle intialization and upgrades. Node will always be counted as a quorum member
+  // when initializing until it reaches a point where we can definitely determine whether
+  // it is a quorum member or not.
+  bool non_quorum_member = 22;
+  // Name of the cluster domain where the node belongs.
+  string cluster_domain = 23;
 }
 
 // StorageCluster represents the state and information about the cluster
@@ -1819,6 +1842,15 @@ service OpenStorageFilesystemTrim {
   //    `OpenStorageFilesystemCheckClient.Start(Mode='fix_safe')`
   //    Status of this operation can be polled in the way mentioned in step 3
   //    This operation can be stopped a Stop request as mentioned in step 6
+  // 8. To list all snapshots in the filesystem that are created by fsck, issue a
+  //	grpc call to
+  //	`OpenStorageFilesystemCheckClient.ListSnapshots()`
+  // 9. To delete all snapshots in the filesystem that are created by fsck, issue a
+  //	grpc call to
+  //	`OpenStorageFilesystemCheckClient.DeleteSnapshots()`
+  // 10. To list all volumes in the filesystem that need fsck check/fix, issue a
+  //	grpc call to
+  //	`OpenStorageFilesystemCheckClient.ListVolumes()`
 
 service OpenStorageFilesystemCheck {
 
@@ -1848,7 +1880,32 @@ service OpenStorageFilesystemCheck {
         body: "*"
       };
     }
-  }
+
+  // List all fsck created snapshots on volume
+  rpc ListSnapshots(SdkFilesystemCheckListSnapshotsRequest)
+    returns (SdkFilesystemCheckListSnapshotsResponse){
+      option(google.api.http) = {
+        get: "/v1/filesystem-check/list-snapshots"
+      };
+    }
+
+  // Delete all fsck created snapshots on volume
+  rpc DeleteSnapshots(SdkFilesystemCheckDeleteSnapshotsRequest)
+    returns (SdkFilesystemCheckDeleteSnapshotsResponse){
+      option(google.api.http) = {
+        post: "/v1/filesystem-check/delete-snapshots"
+        body: "*"
+      };
+    }
+
+  // List of all volumes which require fsck check/fix to be run
+  rpc ListVolumes(SdkFilesystemCheckListVolumesRequest)
+    returns (SdkFilesystemCheckListVolumesResponse){
+      option(google.api.http) = {
+        get: "/v1/filesystem-check/list-volumes"
+      };
+    }
+}
 
 // OpenStorageIdentity service provides methods to obtain information
 // about the cluster
@@ -2038,6 +2095,27 @@ service OpenStoragePool {
   rpc EnumerateRebalanceJobs (SdkEnumerateRebalanceJobsRequest) returns (SdkEnumerateRebalanceJobsResponse) {
     option (google.api.http) = {
         get: "/v1/storagepools/rebalance/job"
+      };
+  }
+
+  // CreateRebalanceSchedule creates a scheudle for the input rebalance requests
+  rpc CreateRebalanceSchedule (SdkCreateRebalanceScheduleRequest) returns (SdkCreateRebalanceScheduleResponse) {
+    option (google.api.http) = {
+        post: "/v1/storagepools/rebalance/schedule"
+      };
+  }
+
+  // GetRebalanceSchedule returns the information of rebalance schedule
+  rpc GetRebalanceSchedule (SdkGetRebalanceScheduleRequest) returns (SdkGetRebalanceScheduleResponse) {
+    option (google.api.http) = {
+        get: "/v1/storagepools/rebalance/schedule"
+      };
+  }
+
+  // DeleteRebalanceSchedule deletes the rebalance schedule
+  rpc DeleteRebalanceSchedule (SdkDeleteRebalanceScheduleRequest) returns (SdkDeleteRebalanceScheduleResponse) {
+    option (google.api.http) = {
+        delete: "/v1/storagepools/rebalance/schedule"
       };
   }
 }
@@ -2511,6 +2589,25 @@ service OpenStorageVolume {
           body: "*"
         };
     }
+
+
+}
+
+
+// OpenStorageWatcher is a service that provides APIs for watching on resources and receive them as a stream of events.
+service OpenStorageWatch{
+
+    // Watch on resources managed by the driver and receive them as a stream of events.
+    //
+    // Requires access AccessType.Read
+    rpc Watch(SdkWatchRequest)
+    returns (stream SdkWatchResponse) {
+        option(google.api.http) = {
+          post: "/v1/watch"
+          body: "*"
+        };
+    }
+
 }
 
 // OpenStorageMountAttach is a service used to manage node access to a volume.
@@ -3278,6 +3375,8 @@ message SdkAwsCredentialRequest {
   bool disable_ssl = 5;
   // (optional) Disable path-style access
   bool disable_path_style = 6;
+  // (optional) server side encryption
+  string server_side_encryption = 7;
 }
 
 // Defines credentials for Azure
@@ -3322,6 +3421,8 @@ message SdkAwsCredentialResponse {
   bool disable_path_style = 6;
   // (optional) Storage class for s3 puts
   string s3_storage_class = 7;
+  // (optional) server side encryption
+  string server_side_encryption = 8;
 }
 
 // Defines the response for Azure credentials
@@ -3762,6 +3863,40 @@ message SdkVolumeSnapshotScheduleUpdateRequest {
 message SdkVolumeSnapshotScheduleUpdateResponse {
 }
 
+// Defines the request to watch an openstorage event. An event can be a volume, a node, a disk, etc
+message SdkWatchRequest {
+  // event_type is an option to indicate the type of openStorage event to watch on.
+  // examples of options are volume, node, disk, etc
+  oneof event_type {
+    // watch request for volume event
+    SdkVolumeWatchRequest volume_event = 1;
+  }
+}
+
+// Defines the response to watch an openstorage event. An event can be a volume, a node, a disk, etc
+message SdkWatchResponse {
+  // event_type is an option to indicate the type of openStorage event to watch on.
+  // examples of options are volume, node, disk, etc
+  oneof event_type {
+    SdkVolumeWatchResponse volume_event = 1;
+  }
+}
+
+// Defines the request to watch an openstorage volume event for the given label
+// if the label is empty, it returns all the volume events
+message SdkVolumeWatchRequest {
+  // labels to filter out the volumes to watch on
+  map<string, string> labels = 1;
+}
+
+// Defines the response containing an volume with a state changed
+message SdkVolumeWatchResponse {
+  // Information about the volume
+  Volume volume = 1;
+  // Name of volume
+  string name = 2;
+}
+
 
 // Defines request to retrieve all volumes/snapshots capacity usage details
 // for a given node
@@ -3866,6 +4001,8 @@ message Job {
         CLOUD_DRIVE_TRANSFER = 3;
         // Job for collecting diags from the cluster nodes
         COLLECT_DIAGS = 4;
+        // Job for storage defragmentation on cluster nodes
+        DEFRAG = 5;
     }
     // State is an enum for state of a node drain operation
     enum State {
@@ -3901,12 +4038,36 @@ message Job {
         CloudDriveTransferJob clouddrive_transfer = 401;
         // CollectDiagsJob if selected describes the task to collect diagnostics for the cluster
         CollectDiagsJob collect_diags = 402;
-
+        // DefragJob if selected describes the task to run storage defragmentation on cluster nodes
+        DefragJob defrag = 403;
     }
     // CreateTime is the time the job was created
     google.protobuf.Timestamp create_time = 5;
     // LastUpdateTime is the time the job was updated
     google.protobuf.Timestamp last_update_time = 6;
+}
+
+// Schedule is a generic schedule object that can encapsulate different  
+// types of scheduled jobs which follow the schedule framework of APIs
+message Schedule {
+  // ID of the schedule
+  string id = 1;
+  // StartTime is the scheduled time to start a run
+  // Valid formats: 
+  //   daily=HH:mm  e.g. daily=19:15
+  //   weekly=weekday@HH:mm  e.g. weekly=Sunday@19:15
+  //   monthly=dd@HH:mm  e.g. monthly=22@19:15
+  string start_time = 2;
+  // MaxDurationHours defines the time limit of one run in hours
+  double max_duration_hours = 3;
+  // Type is the schedule type (type of scheduled tasks)
+  Job.Type type = 4;
+  // Tasks is the tasks to be run in this schedule (must be of same job type)
+  repeated Job tasks = 5;
+  // CreateTime is the time the schedule was created
+  google.protobuf.Timestamp create_time = 6;
+  // LastUpdateTime is the time the schedule was updated
+  google.protobuf.Timestamp last_update_time = 7;
 }
 
 // Defines a response for an SDK request that spins up a new job
@@ -3973,6 +4134,65 @@ message CollectDiagsJob {
   SdkDiagsCollectRequest request = 1;
   // Statuses is a list of statuses for diags collection for each node that is part of the request
   repeated DiagsCollectionStatus statuses = 2;
+}
+
+// DefragJob describes a job to run defragmentation on cluster nodes
+message DefragJob {
+  // MaxDurationHours defines the time limit in hours
+  double max_duration_hours = 1;
+  // MaxNodesInParallel defines the maximum number of nodes running the defrag job in parallel
+  uint32 max_nodes_in_parallel = 2;
+  // IncludeNodes is a list of node UUID: if provided, will only run the job on these nodes;
+  // if not provided, will run on all nodes
+  // cannot coexist with ExcludeNodes and NodeSelector
+  repeated string include_nodes = 3;
+  // ExcludeNodes is a list of node UUID: if provided, the job will skip these nodes;
+  // if not provided, will run on all nodes
+  // cannot coexist with IncludeNodes
+  repeated string exclude_nodes = 4;
+  // NodeSelector is a list of node label `key=value` pairs separated by comma,
+  // which selects the nodes to be run on for the job
+  // can coexist with ExcludeNodes but cannot coexist with IncludeNodes
+  repeated string node_selector = 5;
+  // CurrentRunningNodes stores the nodes on which the job is currently running
+  repeated string current_running_nodes = 6;
+  // ScheduleId is the ID of the schedule which started this job
+  string schedule_id = 7;
+  // ScheduleOneIterationOnly is true when the defragJob is run by a one-iteration-only schedule
+  bool schedule_one_iteration_only = 8;
+}
+
+// DefragNodeStatus describes the defragmentation status of a node
+message DefragNodeStatus {
+  // PoolStatus is a map of <pool_uuid, DefragPoolStatus> pairs
+  map<string, DefragPoolStatus> pool_status = 1;
+  // RunningSchedule is the defrag schedule being run on the node
+  string running_schedule = 2;
+  // LastUpdateTime is the time when DefragNodeStatus or any DefragPoolStatus was last updated on this node
+	google.protobuf.Timestamp last_update_time = 3;
+}
+
+// DefragNodeStatus describes the defragmentation status of a pool
+message DefragPoolStatus {
+  // NumIterations counts the number of times the pool gets defraged
+  uint32 num_iterations = 1;
+  // Running indicates whether the pool is being defraged
+  bool running = 2;
+  // LastSuccess indicates whether the last run of defrag on this pool was successful
+  bool last_success = 3;
+  // LastStartTime is the start time of the latest run (current or last run) on this pool
+  google.protobuf.Timestamp last_start_time = 4;
+  // LastCompleteTime is the completion time of the last run on this pool
+  google.protobuf.Timestamp last_complete_time = 5;
+  // LastVolumeId is the volume on which defrag has started but not yet finished
+  // if provided, volume is currently being defraged or was interrupted in the last run of defrag
+  string last_volume_id = 6;
+  // LastOffset is the offset of the last defrag command executed on the pending volume
+  // -1 means no volume is in a pending state (either not started or fully finished)
+  int64 last_offset = 7;
+  // ProgressPercentage describes the progress of the lastest defrag job (current or last run) on this pool
+  // percentage = bytes completed / sum of file sizes
+  int32 progress_percentage = 8;
 }
 
 message DiagsCollectionStatus {
@@ -4225,6 +4445,18 @@ message SdkStorageRebalanceRequest {
   uint64 max_duration_minutes = 5;
   // RemoveRepl1Snapshots if true will instruct rebalance job to remove repl-1 snapshots
   bool remove_repl_1_snapshots = 6;
+  // Mode specifies the mode of the volume reorg job
+  Mode mode = 7;
+
+  // Mode is an enum that defines the mode of the volume reorg job
+  enum Mode {
+    // StorageRebalance mode: rebalance pools based on provisioned/used space (the default mode)
+    STORAGE_REBALANCE = 0;
+    // VolumePlacementFix mode: scan all volumes for incorrect placement and fix them
+    VOLUME_PLACEMENT_FIX = 1;
+    // PoolDrain mode: drain all volumes & snapshots on the source pools (optionally to target pools)
+    POOL_DRAIN = 2;
+  }
 }
 
 // SdkStorageRebalanceResponse is the response to a storage rebalance request
@@ -4359,6 +4591,34 @@ message SdkEnumerateRebalanceJobsRequest  {
 message SdkEnumerateRebalanceJobsResponse {
   // Jobs is the list of rebalance jobs in the response
   repeated StorageRebalanceJob jobs = 1;
+}
+
+message RebalanceScheduleInfo {
+  string schedule = 1;
+  repeated SdkStorageRebalanceRequest rebalance_requests = 2;
+  google.protobuf.Timestamp create_time = 3;
+}
+
+message SdkCreateRebalanceScheduleRequest {
+  string schedule = 1;
+  repeated SdkStorageRebalanceRequest rebalance_requests = 2;
+}
+
+message SdkCreateRebalanceScheduleResponse {
+  RebalanceScheduleInfo scheduleInfo = 1;
+}
+
+message SdkGetRebalanceScheduleRequest {
+}
+
+message SdkGetRebalanceScheduleResponse {
+  RebalanceScheduleInfo scheduleInfo = 1;
+}
+
+message SdkDeleteRebalanceScheduleRequest {
+}
+
+message SdkDeleteRebalanceScheduleResponse {
 }
 
 message SdkStoragePool {
@@ -5214,7 +5474,7 @@ message SdkAutoFSTrimPopResponse {
 }
 
 message FilesystemCheck {
-  // FilesystemChecktatus represents the status codes returned from
+  // FilesystemCheckStatus represents the status codes returned from
   // OpenStorageFilesystemCheck service APIs()
   enum FilesystemCheckStatus {
     // Filesystem Check operation is an unknown state
@@ -5232,8 +5492,26 @@ message FilesystemCheck {
     // FilesystemCheck operation failed due to internal error
     FS_CHECK_FAILED = 6;
   }
-
 }
+
+// FilesystemCheckSnapInfo contains the volume snapshot info for
+// filesystem check list snapshots operation
+message FilesystemCheckSnapInfo {
+  // Name of the snapshot
+  string volume_snapshot_name = 1;
+}
+
+// FilesystemCheckVolInfo contains the volume info for
+// filesystem check list volumes operation
+message FilesystemCheckVolInfo {
+	// Name of the volume
+	string volume_name = 1;
+	// Health status of volume
+	FilesystemHealthStatus health_status = 2;
+	// FS status detailed message
+	string fs_status_msg = 3;
+}
+
 // SdkFilesystemCheckStartRequest defines a request to start a background
 // filesystem consistency check operation
 message SdkFilesystemCheckStartRequest {
@@ -5282,6 +5560,50 @@ message SdkFilesystemCheckStopRequest {
 
 // Empty response
 message SdkFilesystemCheckStopResponse{
+}
+
+// SdkFilesystemCheckListSnapshotsRequest defines a request to list
+// snapshots created by fsck for a volume
+message SdkFilesystemCheckListSnapshotsRequest{
+  // Id of the volume
+  string volume_id = 1;
+  // Node Id of the volume
+  string node_id = 2;
+}
+
+// SdkFilesystemCheckListSnapshotsResponse defines a response to list
+// snapshots created by fsck for a volume
+message SdkFilesystemCheckListSnapshotsResponse{
+  // Map of volume snapshot ids and snapshot info
+  map<string, FilesystemCheckSnapInfo> snapshots = 1;
+}
+
+// SdkFilesystemCheckDeleteSnapshotsRequest defines a request to delete
+// snapshots created by fsck for a volume
+message SdkFilesystemCheckDeleteSnapshotsRequest{
+  // Id of the volume
+  string volume_id = 1;
+  // Node Id filter
+  string node_id = 2;
+}
+
+// SdkFilesystemCheckDeleteSnapshotsResponse defines a respone to delete
+// snapshots created by fsck for a volume
+message SdkFilesystemCheckDeleteSnapshotsResponse{
+}
+
+// SdkFilesystemCheckListVolumesRequest defines a request to list
+// all volumes needing fsck check/fix
+message SdkFilesystemCheckListVolumesRequest{
+  // Node Id filter
+  string node_id = 1;
+}
+
+// SdkFilesystemCheckListVolumesResponse defines a response to list
+// all volumes needing fsck check/fix
+message SdkFilesystemCheckListVolumesResponse{
+  // Map of volume ids and volume info
+  map<string, FilesystemCheckVolInfo> volumes = 1;
 }
 
 // Empty request
@@ -5370,7 +5692,7 @@ message SdkVersion {
     // SDK version major value of this specification
     Major = 0;
     // SDK version minor value of this specification
-    Minor = 159;
+    Minor = 179;
     // SDK version patch value of this specification
     Patch = 0;
   }
@@ -5977,4 +6299,112 @@ message SdkVolumeCatalogRequest {
 message SdkVolumeCatalogResponse {
   // Catalog
   CatalogResponse catalog = 1;
+}
+
+// ## OpenStorageVerifyChecksum
+// This service provides methods to manage verify checksum operations on a
+// volume.
+//
+// This operation is run in the background on a clone of the volume.
+//
+// A typical workflow involving checksum validation would be as follows
+// 1. To trigger checksum validation on a volume issue a grpc call to
+//    `OpenStorageVerifyChecksum.Start()`
+// 2. Status of the checksum validation can be retrieved by polling for the status using
+//    `OpenStorageVerifyChecksum.Status()`
+// 3. Checksum validation runs in the background, to stop the
+//    operation issue a call to
+//    `OpenStorageVerifyChecksum.Stop()`
+
+service OpenStorageVerifyChecksum {
+
+  // Start a verify checksum background operation on a volume.
+  rpc Start(SdkVerifyChecksumStartRequest)
+    returns (SdkVerifyChecksumStartResponse){
+      option(google.api.http) = {
+        post: "/v1/verify-checksum/start"
+        body: "*"
+      };
+    }
+
+  // Get Status of a verify checksum background operation on a volume
+  rpc Status(SdkVerifyChecksumStatusRequest)
+    returns (SdkVerifyChecksumStatusResponse){
+      option(google.api.http) = {
+        get: "/v1/verify-checksum/status"
+      };
+    }
+
+  // Stop a verify checksum background operation on a volume
+  rpc Stop(SdkVerifyChecksumStopRequest)
+    returns (SdkVerifyChecksumStopResponse){
+      option(google.api.http) = {
+        post : "/v1/verify-checksum/stop"
+        body: "*"
+      };
+    }
+  }
+
+message VerifyChecksum {
+  // VerifyChecksumStatus represents the status codes returned from
+  // OpenStorageVerifyChecksum service APIs()
+  enum VerifyChecksumStatus {
+    // VerifyChecksum operation is an unknown state
+    VERIFY_CHECKSUM_UNKNOWN = 0;
+    // VerifyChecksum operation is not running for the specified volume
+    VERIFY_CHECKSUM_NOT_RUNNING = 1;
+    // VerifyChecksum operation started for the specified volume
+    VERIFY_CHECKSUM_STARTED = 2;
+    // VerifyChecksum operation was stopped by the user for the specified volume
+    VERIFY_CHECKSUM_STOPPED = 3;
+    // VerifyChecksum operation completed successfully for the specified volume
+    VERIFY_CHECKSUM_COMPLETED = 4;
+    // VerifyChecksum operation failed
+    VERIFY_CHECKSUM_FAILED = 5;
+  }
+}
+
+// SdkVerifyChecksumStartRequest defines a request to start a background verify checksum operation
+message SdkVerifyChecksumStartRequest {
+  // Id of the volume
+  string volume_id = 1;
+}
+
+// SdkVerifyChecksumStartResponse defines the response for a
+// SdkVerifyChecksumStartRequest.
+message SdkVerifyChecksumStartResponse {
+  // Status code representing the state of the verify checksum operation
+  VerifyChecksum.VerifyChecksumStatus status = 1;
+  // Text blob containing ASCII text providing details of the operation
+  string message = 2;
+}
+
+// SdkVerifyChecksumStatusRequest defines a request to get status of a
+// background VerifyChecksum operation
+message SdkVerifyChecksumStatusRequest {
+  // Id of the volume
+  string volume_id = 1;
+}
+
+// SdkVerifyChecksumStatusResponse defines the response for a
+// SdkVerifyChecksumStatusRequest.
+message SdkVerifyChecksumStatusResponse {
+  // Status code representing the state of the verify checksum operation
+  VerifyChecksum.VerifyChecksumStatus status = 1;
+  // Text blob containing ASCII text providing details of the operation
+  string message = 2;
+}
+
+// SdkVerifyChecksumStopRequest defines a request to stop a background
+// filesystem check operation
+message SdkVerifyChecksumStopRequest {
+  // Id of the volume
+  string volume_id = 1;
+}
+
+// SdkVerifyChecksumStopResponse defines the response for a
+// SdkVerifyChecksumStopRequest.
+message SdkVerifyChecksumStopResponse {
+  // Text blob containing ASCII text providing details of the operation
+  string message = 1;
 }

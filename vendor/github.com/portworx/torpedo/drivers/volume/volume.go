@@ -7,11 +7,11 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -87,6 +87,9 @@ type Driver interface {
 	// CreateVolume creates a volume with the default setting
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
+
+	// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+	CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error
 
 	// ResizeVolume resizes Volume to specific size provided
 	ResizeVolume(volName string, size uint64) error
@@ -322,7 +325,7 @@ type Driver interface {
 	CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error
 
 	// ValidateDiagsOnS3 validates the Diags or diags file collected on S3
-	ValidateDiagsOnS3(n node.Node, diagsFile string) error
+	ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error
 
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error

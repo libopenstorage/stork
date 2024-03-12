@@ -27,6 +27,7 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
@@ -37,6 +38,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedok8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -47,7 +49,6 @@ import (
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -100,11 +101,13 @@ const (
 	pxVersionsConfigmapName                   = "px-versions"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
-	clusterUUIDFile                           = "/etc/pwx/cluster_uuid"
+	clusterUUIDFile                           = "cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
+	PxLabelNameKey                            = "name"
+	PxLabelValue                              = "portworx"
 )
 
 const (
@@ -115,7 +118,7 @@ const (
 	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
-	validateDeleteVolumeTimeout       = 6 * time.Minute
+	validateDeleteVolumeTimeout       = 15 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
@@ -160,6 +163,7 @@ const (
 	driveAddSuccessStatus    = "Drive add done"
 	driveExitsStatus         = "Device already exists"
 	metadataAddSuccessStatus = "Successfully added metadata device"
+	journalAddSuccessStatus  = "Successfully added journal device"
 )
 
 // Provisioners types of supported provisioners
@@ -380,6 +384,8 @@ func (d *portworx) GetVolumeDriverNamespace() (string, error) {
 func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
 	log.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
+	pxLabel := make(map[string]string)
+	pxLabel[PxLabelNameKey] = PxLabelValue
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
 		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
@@ -449,6 +455,28 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		}
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
+	}
+
+	// Update node PxPodRestartCount during init
+	schedDriver, err := scheduler.Get(sched)
+	if err != nil {
+		return fmt.Errorf("scheduler with name: [%s] not found. Error: [%v]", sched, err)
+	}
+
+	pxPodRestartCountMap, err := schedDriver.GetPodsRestartCount(namespace, pxLabel)
+	if err != nil {
+		return fmt.Errorf("unable to get portworx pods restart count. Error: [%v]", err)
+	}
+
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		if err != nil {
+			return err
+		}
+		n.PxPodRestartCount = value
+		if err = node.UpdateNode(n); err != nil {
+			return fmt.Errorf("updating the restart count fails for a node: [%s]. Error: [%v]", n.Name, err)
+		}
 	}
 	return nil
 }
@@ -722,6 +750,10 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 					}
 					n.IsMetadataNode = isMetadataNode
 
+					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
+						log.Infof("Updating node [%s] as storage node", n.Name)
+					}
+
 					if n.StoragePools == nil {
 						for _, pxNodePool := range pxNode.Pools {
 							storagePool := node.StoragePool{
@@ -803,6 +835,24 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 
 	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
 	return resp.VolumeId, nil
+}
+
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *portworx) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	log.InfoD("Initiate Volume create with Volume Name %s", volName)
+	cmd := fmt.Sprintf("pxctl volume create %s --size %v --repl %v", volName, size, haLevel)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return err
+	}
+	log.Infof("Create Volume with Name [%v] to Size [%v] Successful. response: [%v]", volName, size, out)
+	return nil
 }
 
 // ResizeVolume resizes Volume to specific size provided
@@ -1254,7 +1304,7 @@ func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
 			poolId = strings.Trim(poolId, " ")
 		}
 		if poolId != "" && poolUUID != "" {
- 			if _, ok := poolsData[poolUUID]; !ok {
+			if _, ok := poolsData[poolUUID]; !ok {
 				poolsData[poolUUID] = poolId
 			}
 			poolUUID = ""
@@ -1307,7 +1357,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		// TODO: remove this retry once PWX-27773 is fixed
 		// It is noted that the DevicePath is intermittently empty.
 		// This check ensures the device path is not empty for attached volumes
-		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.DevicePath == "" {
+		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.AttachedState == api.AttachState_ATTACH_STATE_EXTERNAL && vol.DevicePath == "" {
 			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
 		}
 
@@ -4439,7 +4489,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
 	log.Infof("Validating diags got uploaded to the s3 bucket for node [%s]", n.Name)
 
 	// Diag file to look for
@@ -4456,7 +4506,7 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	}
 
 	// Get cluster UUID to determine the S3 folder to look for
-	clusterUUID, err := d.GetClusterUUID(n, opts)
+	clusterUUID, err := d.GetClusterUUID(n, opts, pxDir)
 	if err != nil {
 		return fmt.Errorf("Failed to get cluster UUID, Err: %v", err)
 	}
@@ -4499,8 +4549,9 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	}
 }
 
-func (d *portworx) GetClusterUUID(n node.Node, opts node.ConnectionOpts) (string, error) {
-	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterUUIDFile), opts)
+// GetClusterUUID Gets Portworx cluster UUID from cluster_uuid file and returns it
+func (d *portworx) GetClusterUUID(n node.Node, opts node.ConnectionOpts, pxDir string) (string, error) {
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", path.Join(pxDir, clusterUUIDFile)), opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status, Err: %v", err)
 	}
@@ -4547,7 +4598,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	} else { // Collecting diags via API
 		diagsPort := 9014
 		// Need to get the diags server port based on the px mgmnt port for OCP its not the standard 9001
-		out, err := d.nodeDriver.RunCommand(n, "cat /etc/pwx/px_env", opts)
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", path.Join(diagOps.PxDir, "px_env")), opts)
 		if err == nil {
 			envVars := map[string]string{}
 			for _, line := range strings.Split(out, "\n") {
@@ -5638,25 +5689,41 @@ func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error)
 
 // GetPoolDrives returns the map of poolID and drive name
 func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         startDriverTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-	poolDrives := make(map[string][]string, 0)
-	log.Infof("Getting available block drives on node [%s]", n.Name)
-	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
+	poolDrives := make(map[string][]string, 0)
+
+	connectionOps := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	output, err := d.nodeDriver.RunCommand(*n, "pxctl status", connectionOps)
 	if err != nil {
 		return poolDrives, err
 	}
-	for _, v := range blockDrives {
-		labelsMap := v.Labels
-		if pm, ok := labelsMap["pxpool"]; ok {
-			poolDrives[pm] = append(poolDrives[pm], v.Path)
+	log.Infof("got output: %s", output)
+	re := regexp.MustCompile(`\b\d+:\d+\b.*`)
+	matches := re.FindAllString(output, -1)
+
+	for _, match := range matches {
+		log.Debugf("Extracting pool details from [%s]", match)
+		pVals := make([]string, 0)
+		tempVals := strings.Fields(match)
+		for _, tv := range tempVals {
+			if strings.Contains(tv, ":") || strings.Contains(tv, "/") {
+				pVals = append(pVals, tv)
+			}
 		}
+
+		if len(pVals) >= 2 {
+			tempPoolId := pVals[0]
+			poolId := strings.Split(tempPoolId, ":")[0]
+			drvPath := pVals[1]
+
+			poolDrives[poolId] = append(poolDrives[poolId], drvPath)
+		}
+
 	}
 	return poolDrives, nil
 }
@@ -5708,7 +5775,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
 	}
 
-	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) {
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, journalAddSuccessStatus) {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}

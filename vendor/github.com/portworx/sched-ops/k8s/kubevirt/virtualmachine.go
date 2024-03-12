@@ -40,6 +40,8 @@ type VirtualMachineOps interface {
 	GetVMConfigMaps(*kubevirtv1.VirtualMachine) []string
 	//IsVirtualMachineRunning returns true if virtualMachine is in running state
 	IsVirtualMachineRunning(*kubevirtv1.VirtualMachine) bool
+	// UpdateVirtualMachine updates existing Kubevirt VirtualMachine
+	UpdateVirtualMachine(*kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -249,4 +251,13 @@ func (c *Client) GetVMConfigMaps(vm *kubevirtv1.VirtualMachine) []string {
 
 	}
 	return configMaps
+}
+
+// UpdateVirtualMachine updates existing Kubevirt VirtualMachine
+func (c *Client) UpdateVirtualMachine(vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Update(vm)
 }

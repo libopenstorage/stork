@@ -91,7 +91,7 @@ func IsMasterNode(n Node) bool {
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
 	for _, n := range nodeRegistry {
-		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
+		if n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
 		}
 	}

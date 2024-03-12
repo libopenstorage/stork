@@ -44,8 +44,6 @@ type CSIConfiguration struct {
 	DriverName string
 	// DriverRegistrationBasePath is the base path for CSI driver registration path
 	DriverRegistrationBasePath string
-	// UseDeployment decides whether to use a StatefulSet or Deployment for the CSI side cars.
-	UseDeployment bool
 	// IncludeAttacher dictates whether we include the csi-attacher sidecar or not.
 	IncludeAttacher bool
 	// IncludeResizer dicates whether or not to include the resizer sidecar.
@@ -126,7 +124,7 @@ func (g *CSIGenerator) GetBasicCSIConfiguration() *CSIConfiguration {
 func (g *CSIGenerator) GetCSIConfiguration() *CSIConfiguration {
 	var cv *CSIConfiguration
 	if g.kubeVersion.GreaterThanOrEqual(k8sVer1_13) {
-		cv = g.getDefaultConfigV1_0()
+		cv = &CSIConfiguration{}
 	} else {
 		cv = g.getDefaultConfigV0_4()
 	}
@@ -243,17 +241,8 @@ func (g *CSIGenerator) driverName() string {
 	return CSIDriverName
 }
 
-func (g *CSIGenerator) getDefaultConfigV1_0() *CSIConfiguration {
-	return &CSIConfiguration{
-		UseDeployment: true,
-	}
-}
-
 func (g *CSIGenerator) getDefaultConfigV0_4() *CSIConfiguration {
-	c := &CSIConfiguration{
-		UseDeployment: false,
-	}
-
+	c := &CSIConfiguration{}
 	// Force CSI 0.3 for Portworx version 2.1
 	if g.pxVersion.GreaterThanOrEqual(pxVer2_1) {
 		c.Version = "0.3"

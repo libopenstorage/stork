@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -18,27 +19,29 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/hashicorp/go-version"
-	"github.com/libopenstorage/cloudops"
+	ocpconfig "github.com/openshift/api/config/v1"
+	routev1 "github.com/openshift/api/route/v1"
+	kvdb_api "github.com/portworx/kvdb/api/bootstrap"
+	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/libopenstorage/openstorage/pkg/auth"
-	"github.com/libopenstorage/openstorage/pkg/grpcserver"
-	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	"github.com/libopenstorage/operator/pkg/constants"
-	"github.com/libopenstorage/operator/pkg/preflight"
-	"github.com/libopenstorage/operator/pkg/util"
-	k8sutil "github.com/libopenstorage/operator/pkg/util/k8s"
-	coreops "github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/libopenstorage/cloudops"
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/pkg/auth"
+	"github.com/libopenstorage/openstorage/pkg/grpcserver"
+	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	"github.com/libopenstorage/operator/pkg/constants"
+	"github.com/libopenstorage/operator/pkg/util"
+	k8sutil "github.com/libopenstorage/operator/pkg/util/k8s"
 )
 
 const (
@@ -129,6 +132,9 @@ const (
 	AnnotationRunOnMaster = pxAnnotationPrefix + "/run-on-master"
 	// AnnotationPodDisruptionBudget annotation indicating whether to create pod disruption budgets
 	AnnotationPodDisruptionBudget = pxAnnotationPrefix + "/pod-disruption-budget"
+	// AnnotationStoragePodDisruptionBudget annotation to specify the min available value of the px-storage
+	// pod disruption budget
+	AnnotationStoragePodDisruptionBudget = pxAnnotationPrefix + "/storage-pdb-min-available"
 	// AnnotationPodSecurityPolicy annotation indicating whether to enable creation
 	// of pod security policies
 	AnnotationPodSecurityPolicy = pxAnnotationPrefix + "/pod-security-policy"
@@ -243,6 +249,30 @@ const (
 	InternalEtcdConfigMapPrefix = "px-bootstrap-"
 	// CloudDriveConfigMapPrefix is prefix of the cloud drive configmap.
 	CloudDriveConfigMapPrefix = "px-cloud-drive-"
+
+	// VsphereInstallModeLocal env value for Vsphere 'local' install
+	VsphereInstallModeLocal = "local"
+
+	// NdoeLabelPortworxVersion is the label key in the node labels that has the
+	// Portworx version of that node.
+	NodeLabelPortworxVersion = "PX Version"
+
+	ClusterOperatorVersion              = "config.openshift.io/v1"
+	ClusterOperatorKind                 = "ClusterOperator"
+	OpenshiftAPIServer                  = "openshift-apiserver"
+	OpenshiftPrometheusSupportedVersion = "4.12"
+	Openshift_4_15_Version              = "4.15"
+	// OpenshiftMonitoringRouteName name of OCP user-workload route
+	OpenshiftMonitoringRouteName = "thanos-querier"
+	// OpenshiftMonitoringRouteName namespace of OCP user-workload route
+	OpenshiftMonitoringNamespace = "openshift-monitoring"
+)
+const (
+	// pxEntriesKey is key which holds all the bootstrap entries
+	PxEntriesKey = "px-entries"
+)
+const (
+	BootstrapCloudDriveNamespace = "kube-system"
 )
 
 // TLS related constants
@@ -290,6 +320,13 @@ var (
 	MinimumPxVersionMetricsCollector, _ = version.NewVersion("2.9.1")
 	// MinimumPxVersionAutoTLS is a minimal PX version that supports "auto-TLS" setup
 	MinimumPxVersionAutoTLS, _ = version.NewVersion("4.0.0")
+	// MinimumPxVersionCO minimum PX version to use 'container orchestrator'
+	MinimumPxVersionCO, _ = version.NewVersion("3.2")
+	// MinimumCcmGoVersionCO minimum ccm-go version to use 'container orchestrator'
+	MinimumCcmGoVersionCO, _ = version.NewVersion("1.2.3")
+	// MinimumPxVersionQuorumFlag is a minimal PX version that introduces the quorum member
+	// flag in the node object of the PX SDK response.
+	MinimumPxVersionQuorumFlag, _ = version.NewVersion("3.1.0")
 
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
@@ -363,22 +400,30 @@ func IsOpenshift(cluster *corev1.StorageCluster) bool {
 	return err == nil && enabled
 }
 
+// GetClusterEnvValue helper routine to get the env value from cluster spec.
+func GetClusterEnvValue(cluster *corev1.StorageCluster, envName string) (string, bool) {
+	for _, env := range cluster.Spec.Env {
+		if env.Name == envName {
+			return env.Value, true
+		}
+	}
+	return "", false
+}
+
 // IsVsphere returns true if VSPHERE_VCENTER is present in the spec
 func IsVsphere(cluster *corev1.StorageCluster) bool {
-	for _, env := range cluster.Spec.Env {
-		if env.Name == "VSPHERE_VCENTER" && len(env.Value) > 0 {
-			return true
-		}
+	envValue, exists := GetClusterEnvValue(cluster, "VSPHERE_VCENTER")
+	if exists && len(envValue) > 0 {
+		return true
 	}
 	return false
 }
 
 // IsPure true if PURE_FLASHARRAY_SAN_TYPE is present in the spec
 func IsPure(cluster *corev1.StorageCluster) bool {
-	for _, env := range cluster.Spec.Env {
-		if env.Name == "PURE_FLASHARRAY_SAN_TYPE" && len(env.Value) > 0 {
-			return true
-		}
+	envValue, exists := GetClusterEnvValue(cluster, "PURE_FLASHARRAY_SAN_TYPE")
+	if exists && len(envValue) > 0 {
+		return true
 	}
 	return false
 }
@@ -397,10 +442,6 @@ func GetCloudProvider(cluster *corev1.StorageCluster) string {
 
 	if IsPure(cluster) {
 		return cloudops.Pure
-	}
-
-	if len(preflight.Instance().ProviderName()) > 0 {
-		return preflight.Instance().ProviderName()
 	}
 
 	// TODO: implement conditions for other providers
@@ -774,6 +815,34 @@ func ParsePxProxyURL(proxy string) (string, string, string, error) {
 func getSpecsBaseDir() string {
 	return PortworxSpecsDir
 }
+func GetStorageNodes(
+	cluster *corev1.StorageCluster, k8sClient client.Client, sdkConn *grpc.ClientConn) (*grpc.ClientConn, []*api.StorageNode, error) {
+
+	sdkConn, err := GetPortworxConn(sdkConn, k8sClient, cluster.Namespace)
+	if err != nil {
+		if IsFreshInstall(cluster) && strings.HasPrefix(err.Error(), ErrMsgGrpcConnection) {
+			// Don't return grpc connection error during initialization,
+			// as SDK server won't be up anyway
+			logrus.Warn(err)
+			return nil, []*api.StorageNode{}, nil
+		}
+		return sdkConn, nil, err
+	}
+
+	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
+	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient)
+	if err != nil {
+		return sdkConn, nil, err
+	}
+	nodeEnumerateResponse, err := nodeClient.EnumerateWithFilters(
+		ctx,
+		&api.SdkNodeEnumerateWithFiltersRequest{},
+	)
+	if err != nil {
+		return sdkConn, nil, err
+	}
+	return sdkConn, nodeEnumerateResponse.Nodes, nil
+}
 
 // GetPortworxConn returns a new Portworx SDK client
 func GetPortworxConn(sdkConn *grpc.ClientConn, k8sClient client.Client, namespace string) (*grpc.ClientConn, error) {
@@ -797,7 +866,7 @@ func GetPortworxConn(sdkConn *grpc.ClientConn, k8sClient client.Client, namespac
 	}
 
 	// note, using symbolic name for the `endpoint`, as SSL certificates won't have K8s service IP
-	endpoint := PortworxServiceName + "." + namespace + ".svc.cluster.local"
+	endpoint := PortworxServiceName + "." + namespace
 	sdkPort := defaultSDKPort
 
 	// Get the ports from service
@@ -1161,6 +1230,45 @@ func IsCCMGoSupported(pxVersion *version.Version) bool {
 	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCCMGO)
 }
 
+// IsCOSupported returns true if px version is >= than MinimumPxVersionCO & ccm-go >= MinimumCcmGoVersionCO
+func IsCOSupported(cluster *corev1.StorageCluster) bool {
+	pxVersion := GetPortworxVersion(cluster)
+
+	if !IsCCMGoSupported(pxVersion) {
+		return false
+	}
+
+	ccmGoImage := strings.TrimSpace(cluster.Spec.Monitoring.Telemetry.Image)
+	if cluster.Spec.Monitoring.Telemetry.Image == "" {
+		if cluster.Status.DesiredImages == nil {
+			return false
+		}
+		ccmGoImage = cluster.Status.DesiredImages.Telemetry
+	}
+	ccmGoImage = util.GetImageURN(cluster, ccmGoImage)
+
+	logrus.Infof("ccmGoImage: %s", ccmGoImage)
+
+	if !strings.Contains(ccmGoImage, "ccm-go") {
+		return false
+	}
+
+	parts := strings.Split(ccmGoImage, ":")
+	if len(parts) < 2 {
+		logrus.Warnf("Failed to parse ccm-go image name:  %s.  Unable to determine tag.", ccmGoImage)
+		return false
+	}
+
+	ccmGoVersionStr := parts[len(parts)-1]
+	ccmGoVersion, err := version.NewVersion(ccmGoVersionStr)
+	if err != nil {
+		logrus.Warnf("Failed to extract ccm-go version from image tag [%s]: %s", ccmGoVersionStr, ccmGoImage)
+		return false
+	}
+	logrus.Infof("Using ccm-go version: %s", ccmGoVersionStr)
+	return pxVersion.GreaterThanOrEqual(MinimumPxVersionCO) && ccmGoVersion.GreaterThanOrEqual(MinimumCcmGoVersionCO)
+}
+
 // IsPxRepoEnabled returns true is pxRepo is enabled
 func IsPxRepoEnabled(spec corev1.StorageClusterSpec) bool {
 	return spec.PxRepo != nil &&
@@ -1193,6 +1301,19 @@ func ApplyStorageClusterSettingsToPodSpec(cluster *corev1.StorageCluster, podSpe
 			container.Image = util.GetImageURN(cluster, container.Image)
 		}
 		container.ImagePullPolicy = ImagePullPolicy(cluster)
+
+		// Check PX version to update the env for registration pod to use the "container orchestrator"
+		if container.Name == "registration" && IsCOSupported(cluster) {
+			refreshTokenEnv := "REFRESH_TOKEN"
+			_, exists := GetClusterEnvValue(cluster, refreshTokenEnv)
+			if !exists {
+				container.Env = append(container.Env,
+					v1.EnvVar{
+						Name:  refreshTokenEnv,
+						Value: "",
+					})
+			}
+		}
 	}
 
 	if cluster.Spec.ImagePullSecret != nil && *cluster.Spec.ImagePullSecret != "" {
@@ -1248,6 +1369,13 @@ func GetClusterID(cluster *corev1.StorageCluster) string {
 	return cluster.Name
 }
 
+func MinAvailableForStoragePDB(cluster *corev1.StorageCluster) (int, error) {
+	if cluster.Annotations[AnnotationStoragePodDisruptionBudget] != "" {
+		return strconv.Atoi(cluster.Annotations[AnnotationStoragePodDisruptionBudget])
+	}
+	return -1, nil
+}
+
 // CountStorageNodes counts how many px storage node are there on given k8s cluster,
 // use this to count number of storage pods as well
 func CountStorageNodes(
@@ -1261,6 +1389,12 @@ func CountStorageNodes(
 		return -1, err
 	}
 
+	// To check if metro DR setup or not
+	isDRSetup := false
+	clusterDomainClient := api.NewOpenStorageClusterDomainsClient(sdkConn)
+	clusterDomains, err := clusterDomainClient.Enumerate(ctx, &api.SdkClusterDomainsEnumerateRequest{})
+	isDRSetup = err == nil && len(clusterDomains.ClusterDomainNames) > 1
+
 	nodeEnumerateResponse, err := nodeClient.EnumerateWithFilters(
 		ctx,
 		&api.SdkNodeEnumerateWithFiltersRequest{},
@@ -1269,47 +1403,70 @@ func CountStorageNodes(
 		return -1, fmt.Errorf("failed to enumerate nodes: %v", err)
 	}
 
-	k8sNodeList := &v1.NodeList{}
-	err = k8sClient.List(context.TODO(), k8sNodeList)
-	if err != nil {
-		return -1, err
-	}
-	k8sNodesStoragePodCouldRun := make(map[string]bool)
-	for _, node := range k8sNodeList.Items {
-		shouldRun, shouldContinueRunning, err := k8sutil.CheckPredicatesForStoragePod(&node, cluster, nil)
+	// Use the quorum member flag from the node enumerate response if all the nodes are upgraded to the
+	// newer version. The Enumerate response could be coming from any node and we want to make sure that
+	// we are not talking to an old node when enumerating.
+	useQuorumFlag := true
+	for _, node := range nodeEnumerateResponse.Nodes {
+
+		v := node.NodeLabels[NodeLabelPortworxVersion]
+		nodeVersion, err := version.NewVersion(v)
 		if err != nil {
-			return -1, err
+			logrus.Warnf("Failed to parse node version %s for node %s: %v", v, node.Id, err)
+			useQuorumFlag = false
+			break
 		}
-		if shouldRun || shouldContinueRunning {
-			k8sNodesStoragePodCouldRun[node.Name] = true
+		if nodeVersion.LessThan(MinimumPxVersionQuorumFlag) {
+			logrus.Tracef("Node %s is older than %s. Not using quorum member flag", node.Id, MinimumPxVersionQuorumFlag.String())
+			useQuorumFlag = false
+			break
 		}
 	}
+
+	// get cluster domain of current node to fetch storage nodes count for current k8s node
+	// for Metro DR cluster, we need to calculate PDB for current k8s cluster and not Portworx cluster
+	inspectCurrentResponse, err := nodeClient.InspectCurrent(ctx, &api.SdkNodeInspectCurrentRequest{})
+	if err != nil {
+		logrus.Errorf("error while inspecting current node.")
+	}
+	currentClusterDomain := inspectCurrentResponse.Node.ClusterDomain
 
 	storageNodesCount := 0
 	for _, node := range nodeEnumerateResponse.Nodes {
-		if node.SchedulerNodeName == "" {
-			k8sNode, err := coreops.Instance().SearchNodeByAddresses(
-				[]string{node.DataIp, node.MgmtIp, node.Hostname},
-			)
-			if err != nil {
-				// In Metro-DR setup, this could be expected.
-				logrus.Infof("Unable to find kubernetes node name for nodeID %v: %v", node.Id, err)
-				continue
-			}
-			node.SchedulerNodeName = k8sNode.Name
+		// skip decomissioned node to be calculated as part of storage node
+		if node.Status == api.Status_STATUS_DECOMMISSION {
+			continue
 		}
-		if len(node.Pools) > 0 && node.Pools[0] != nil {
-			if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
+
+		var isQuorumMember bool
+		if useQuorumFlag {
+			isQuorumMember = !node.NonQuorumMember
+		} else {
+			// Older version of Portworx doesn't not have the quorum flag in the node response.
+			// So we rely on the pools to determine whether the node contributes to quorum. All
+			// storage nodes contribute to quorum of the cluster.
+			isQuorumMember = len(node.Pools) > 0 && node.Pools[0] != nil
+		}
+
+		// In case of non metro-DR setup, all portworx nodes that contain backend storage in the enumerate response are storage nodes
+		// In the case of metro DR setup, temporarily using existing logic to determine storage nodes count
+		// TODO: Need to update this logic in metro DR setup to use portworx nodes in the current domain
+		if isQuorumMember {
+			if !isDRSetup {
 				storageNodesCount++
 			} else {
-				logrus.Debugf("node %s should not run portworx", node.SchedulerNodeName)
+				if node.ClusterDomain == currentClusterDomain {
+					storageNodesCount++
+				} else {
+					logrus.Debugf("node %s is not part of cluster domain %s ", node.SchedulerNodeName, currentClusterDomain)
+				}
 			}
 		} else {
-			logrus.Debugf("node pools is empty, node: %+v", node)
+			logrus.Debugf("node %s is not a quorum member, node: %+v", node.Id, node)
 		}
 	}
 
-	logrus.Debugf("storageNodesCount: %d, k8sNodesStoragePodCouldRun: %d", storageNodesCount, len(k8sNodesStoragePodCouldRun))
+	logrus.Debugf("storageNodesCount: %d", storageNodesCount)
 	return storageNodesCount, nil
 }
 
@@ -1530,4 +1687,171 @@ func GetTLSCipherSuites(cluster *corev1.StorageCluster) (string, error) {
 		}
 	}
 	return strings.Join(outList, ","), nil
+}
+
+func GetKvdbMap(k8sClient client.Client,
+	cluster *corev1.StorageCluster,
+) map[string]*kvdb_api.BootstrapEntry {
+	// If cluster is running internal kvdb, get current bootstrap nodes
+	kvdbNodeMap := make(map[string]*kvdb_api.BootstrapEntry)
+	if cluster.Spec.Kvdb != nil && cluster.Spec.Kvdb.Internal {
+		clusterID := GetClusterID(cluster)
+		strippedClusterName := strings.ToLower(ConfigMapNameRegex.ReplaceAllString(clusterID, ""))
+		cmName := fmt.Sprintf("%s%s", InternalEtcdConfigMapPrefix, strippedClusterName)
+
+		cm := &v1.ConfigMap{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{
+			Name:      cmName,
+			Namespace: BootstrapCloudDriveNamespace,
+		}, cm)
+		if err != nil {
+			logrus.Warnf("failed to get internal kvdb bootstrap config map: %v", err)
+		}
+
+		// Get the bootstrap entries
+		entriesBlob, ok := cm.Data[PxEntriesKey]
+		if ok {
+			kvdbNodeMap, err = blobToBootstrapEntries([]byte(entriesBlob))
+			if err != nil {
+				logrus.Warnf("failed to get internal kvdb bootstrap config map: %v", err)
+			}
+		}
+	}
+	return kvdbNodeMap
+}
+
+func blobToBootstrapEntries(
+	entriesBlob []byte,
+) (map[string]*kvdb_api.BootstrapEntry, error) {
+
+	var bEntries []*kvdb_api.BootstrapEntry
+	if err := json.Unmarshal(entriesBlob, &bEntries); err != nil {
+		return nil, err
+	}
+
+	// return as a map by ID to facilitate callers
+	retMap := make(map[string]*kvdb_api.BootstrapEntry)
+	for _, e := range bEntries {
+		retMap[e.ID] = e
+	}
+	return retMap, nil
+}
+
+// AppendUserVolumeMounts appends "user" vol specs to the pod spec
+//   - note, the user volume specs will override container mounts, if the mount
+//     destination directory is the same
+//   - caveat: caller needs to ensure that the volume specs NAMES are unique
+func AppendUserVolumeMounts(
+	podSpec *v1.PodSpec,
+	userVolSpecList []corev1.VolumeSpec,
+) {
+	if podSpec == nil {
+		return
+	} else if len(userVolSpecList) == 0 {
+		return
+	}
+
+	// make map of user-volumes, also append vols to pod spec
+	usrSpecMap := make(map[string]corev1.VolumeSpec)
+	for _, v := range userVolSpecList {
+		usrSpecMap[v.MountPath] = v
+		podSpec.Volumes = append(podSpec.Volumes, v1.Volume{
+			Name:         UserVolumeName(v.Name),
+			VolumeSource: v.VolumeSource,
+		})
+	}
+
+	// update container volumes, when destination-dir matches
+	for idx1, cntr := range podSpec.Containers {
+		for idx2, cv := range cntr.VolumeMounts {
+			if uv, has := usrSpecMap[cv.MountPath]; has {
+				logrus.Debugf("Replacing container %s:%s mount '%s' with user-mount '%s'",
+					cntr.Name, cv.MountPath, cv.Name, uv.Name)
+
+				podSpec.Containers[idx1].VolumeMounts[idx2] = v1.VolumeMount{
+					Name:             UserVolumeName(uv.Name),
+					MountPath:        uv.MountPath,
+					ReadOnly:         uv.ReadOnly,
+					MountPropagation: uv.MountPropagation,
+				}
+			}
+		}
+	}
+}
+
+func IsSupportedOCPVersion(k8sClient client.Client, targetVersion string) (bool, error) {
+	gvk := schema.GroupVersionKind{
+		Kind:    ClusterOperatorKind,
+		Version: ClusterOperatorVersion,
+	}
+
+	exists, err := coreops.Instance().ResourceExists(gvk)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
+		operator := &ocpconfig.ClusterOperator{}
+		err := k8sClient.Get(
+			context.TODO(),
+			types.NamespacedName{
+				Name: OpenshiftAPIServer,
+			},
+			operator,
+		)
+
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		for _, v := range operator.Status.Versions {
+			if v.Name == OpenshiftAPIServer && isVersionSupported(v.Version, targetVersion) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+func GetOCPPrometheusHost(k8sClient client.Client) (string, error) {
+
+	route := &routev1.Route{}
+	err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{
+			Name:      OpenshiftMonitoringRouteName,
+			Namespace: OpenshiftMonitoringNamespace,
+		},
+		route,
+	)
+	if err != nil {
+		return "", fmt.Errorf("error fetching route %s", err.Error())
+	}
+
+	if route.Spec.Host == "" {
+		return "", fmt.Errorf("host is empty")
+	}
+
+	return "https://" + route.Spec.Host, nil
+
+}
+
+func isVersionSupported(current, target string) bool {
+	targetVersion, err := version.NewVersion(target)
+	if err != nil {
+		logrus.Errorf("Error during parsing version : %s ", err)
+		return false
+	}
+
+	currentVersion, err := version.NewVersion(current)
+	if err != nil {
+		logrus.Errorf("Error during parsing version : %s ", err)
+		return false
+	}
+
+	return currentVersion.Core().GreaterThanOrEqual(targetVersion)
 }

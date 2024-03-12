@@ -76,6 +76,8 @@ type ClusterPluginInterface interface {
 	DeleteStorage(*corev1.StorageCluster) (*corev1.ClusterCondition, error)
 	// GetStorageNodes returns the current storage node list.
 	GetStorageNodes(cluster *corev1.StorageCluster) ([]*storageapi.StorageNode, error)
+	// GetKVDBMembers returns a map of Nodes with kvdb and if its healthy or not
+	GetKVDBMembers(cluster *corev1.StorageCluster) (map[string]bool, error)
 }
 
 var (

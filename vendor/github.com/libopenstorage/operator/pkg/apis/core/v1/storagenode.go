@@ -100,6 +100,8 @@ type CheckResult struct {
 	Reason string `json:"reason,omitempty"`
 	// Success indicates if the check was successful or failed
 	Success bool `json:"success,omitempty"`
+	// Result of the success or failure
+	Result string `json:"result,omitempty"`
 }
 
 // NetworkStatus network status of the storage node
