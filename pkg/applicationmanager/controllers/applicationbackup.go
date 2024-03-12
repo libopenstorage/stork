@@ -34,6 +34,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
@@ -49,6 +50,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
+	k8shelper "k8s.io/component-helpers/storage/volume"
+
 	coreapi "k8s.io/kubernetes/pkg/apis/core"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -567,7 +570,11 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	var err error
 	// Start backup of the volumes if we don't have any status stored
 	pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
-
+	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return err
+	}
+	skipDriver := backupLocation.Annotations[utils.PxbackupAnnotationSkipdriverKey]
 	backupStatusVolMap := make(map[string]string)
 	for _, statusVolume := range backup.Status.Volumes {
 		backupStatusVolMap[statusVolume.Namespace+"-"+statusVolume.PersistentVolumeClaim] = ""
@@ -589,6 +596,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		}
 
 		var pvcCount int
+		skipVolInfo := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+
 		for _, namespace := range backup.Spec.Namespaces {
 			pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
 			if err != nil {
@@ -642,8 +651,25 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 					return err
 				}
-
 				if driverName != "" {
+					// Check if any  PVC needs to be skipped based on "skip-driver" annotation
+					if driverName == skipDriver {
+						volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+						if err != nil {
+							return fmt.Errorf("Error getting volume for PVC %v: %v", pvc.Name, err)
+						}
+						volumeInfo := &stork_api.ApplicationBackupVolumeInfo{}
+						volumeInfo.PersistentVolumeClaim = pvc.Name
+						volumeInfo.PersistentVolumeClaimUID = string(pvc.UID)
+						volumeInfo.Namespace = pvc.Namespace
+						volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
+						volumeInfo.DriverName = driverName
+						volumeInfo.Volume = volume
+						volumeInfo.Reason = "volume skipped from backup"
+						volumeInfo.Status = stork_api.ApplicationBackupStatusSkip
+						skipVolInfo = append(skipVolInfo, volumeInfo)
+						continue
+					}
 					// This PVC needs to be backed up
 					pvcCount++
 					if pvcMappings[driverName] == nil {
@@ -659,7 +685,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 			}
 		}
-
 		namespacedName.Namespace = backup.Namespace
 		namespacedName.Name = backup.Name
 		if len(backup.Status.Volumes) != pvcCount {
@@ -765,14 +790,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 				}
 			}
-			// Valid only for PX case or we retain original volInfo from startBackup()
-			if len(volumeInfosAll) > 0 {
-				backup.Status.Volumes = volumeInfosAll
-				err = a.client.Update(context.TODO(), backup)
-				if err != nil {
-					return err
-				}
-			}
 
 			// NOTE: After this point don't initialize "backup.Status.Volumes" as this contains
 			// the first iterated list of PVC's which failed to be backed up and we are in
@@ -824,6 +841,11 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if err != nil {
 					return err
 				}
+				// skip fetching status for skipped vols
+				if skipDriver == driverName {
+					logrus.Tracef("skipping driver %v for status check", driverName)
+					continue
+				}
 				status, err := driver.GetBackupStatus(backup)
 				if err != nil {
 					// This will have status of failed volinfo whose status could not be got
@@ -834,7 +856,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 				volumeInfos = append(volumeInfos, status...)
 			}
-
+			// append skipped volumes
+			volumeInfos = append(volumeInfos, skipVolInfo...)
 			backup.Status.Volumes = volumeInfos
 			// As part of partial success volumeInfos is already available, just update the same to backup CR
 			err = a.client.Update(context.TODO(), backup)
@@ -1712,7 +1735,8 @@ func (a *ApplicationBackupController) backupResources(
 	processPartialObjects := make([]runtime.Unstructured, 0)
 	failedVolInfoMap := make(map[string]stork_api.ApplicationBackupStatusType)
 	for _, vol := range backup.Status.Volumes {
-		if vol.Status == stork_api.ApplicationBackupStatusFailed {
+		if vol.Status == stork_api.ApplicationBackupStatusFailed ||
+			vol.Status == stork_api.ApplicationBackupStatusSkip {
 			failedVolInfoMap[vol.Volume] = vol.Status
 		}
 	}
@@ -1739,13 +1763,11 @@ func (a *ApplicationBackupController) backupResources(
 			if _, ok := failedVolInfoMap[pv.Name]; ok {
 				continue
 			}
-		} else {
-			processPartialObjects = append(processPartialObjects, obj)
 		}
+		processPartialObjects = append(processPartialObjects, obj)
 	}
 
 	allObjects = processPartialObjects
-
 	if backup.Status.Resources == nil {
 		// Save the collected resources infos in the status
 		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
