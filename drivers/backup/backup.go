@@ -80,6 +80,10 @@ type Driver interface {
 	ActivityTimeLine
 	//Metrics interface
 	Metrics
+	//Receiver interface
+	Receiver
+	//Recipient interface
+	Recipient
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -478,6 +482,45 @@ type ActivityTimeLine interface {
 type Metrics interface {
 	// InspectMetrics inspects metricsData
 	InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error)
+}
+
+// Receiver object interface
+type Receiver interface {
+	// CreateReceiver creates receiver object
+	CreateReceiver(ctx context.Context, req *api.ReceiverCreateRequest) (*api.ReceiverCreateResponse, error)
+
+	// InspectReceiver inspects a receiver object
+	InspectReceiver(ctx context.Context, req *api.ReceiverInspectRequest) (*api.ReceiverInspectResponse, error)
+
+	// EnumerateReceiver enumerates all receiver object
+	EnumerateReceiver(ctx context.Context, req *api.ReceiverEnumerateRequest) (*api.ReceiverEnumerateResponse, error)
+
+	// DeleteReceiver deletes a receiver object
+	DeleteReceiver(ctx context.Context, req *api.ReceiverDeleteRequest) (*api.ReceiverDeleteResponse, error)
+
+	// UpdateReceiver updates a receiver object
+	UpdateReceiver(ctx context.Context, req *api.ReceiverUpdateRequest) (*api.ReceiverUpdateResponse, error)
+
+	// ValidateReceiver validates a receiver object
+	ValidateReceiver(ctx context.Context, req *api.ReceiverValidateSMTPRequest) (*api.ReceiverValidateSMTPResponse, error)
+}
+
+// Recipient object interface
+type Recipient interface {
+	// CreateRecipient creates Recipient object
+	CreateRecipient(ctx context.Context, req *api.RecipientCreateRequest) (*api.RecipientCreateResponse, error)
+
+	// InspectRecipient inspects a Recipient object
+	InspectRecipient(ctx context.Context, req *api.RecipientInspectRequest) (*api.RecipientInspectResponse, error)
+
+	// EnumerateRecipient enumerates all Recipient object
+	EnumerateRecipient(ctx context.Context, req *api.RecipientEnumerateRequest) (*api.RecipientEnumerateResponse, error)
+
+	// DeleteRecipient deletes a Recipient object
+	DeleteRecipient(ctx context.Context, req *api.RecipientDeleteRequest) (*api.RecipientDeleteResponse, error)
+
+	// UpdateRecipient updates a Recipient object
+	UpdateRecipient(ctx context.Context, req *api.RecipientUpdateRequest) (*api.RecipientUpdateResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
