@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	// TODO: This package has been deprecated. A replacement package is available [github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute]. We should migrate
+	//lint:ignore SA1019 Ignore this import during staticcheck
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 	azure_rest "github.com/Azure/go-autorest/autorest/azure"
