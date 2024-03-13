@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 
@@ -133,7 +134,7 @@ func scaleDownApplicationResource(dynamicClient k8sdynamic.ResourceInterface, ob
 	if err != nil {
 		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(resourceType.Kind), object.GetNamespace(), object.GetName(), err)
 	}
-	fmt.Printf("successfully updated resource %v %v/%v \n", strings.ToLower(resourceType.Kind), object.GetNamespace(), object.GetName())
+	log.Infof("successfully updated resource %v %v/%v \n", strings.ToLower(resourceType.Kind), object.GetNamespace(), object.GetName())
 	return nil
 }
 
@@ -152,7 +153,7 @@ func scaleDownCronJob(dynamicClient k8sdynamic.ResourceInterface, object unstruc
 	if err != nil {
 		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(cronJobGVK.Kind), object.GetNamespace(), object.GetName(), err)
 	}
-	fmt.Printf("successfully updated resource %v %v/%v \n", strings.ToLower(cronJobGVK.Kind), object.GetNamespace(), object.GetName())
+	log.Infof("successfully updated resource %v %v/%v \n", strings.ToLower(cronJobGVK.Kind), object.GetNamespace(), object.GetName())
 	return nil
 }
 
@@ -217,6 +218,7 @@ func scaleDownCRDResource(dynamicClient k8sdynamic.ResourceInterface, object uns
 				if val, err := strconv.ParseBool(suspend.Value); err != nil {
 					disableVersion = true
 				} else {
+					log.Warnf("failed to parse suspend.Value %v. going ahead with default bool disable value of true", suspend.Value)
 					disableVersion = val
 				}
 			} else {
@@ -242,7 +244,7 @@ func scaleDownCRDResource(dynamicClient k8sdynamic.ResourceInterface, object uns
 	if err != nil {
 		return fmt.Errorf("unable to update resource %v %v/%v: %v", strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName(), err)
 	}
-	fmt.Printf("successfully updated resource %v %v/%v \n", strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName())
+	log.Infof("successfully updated resource %v %v/%v \n", strings.ToLower(crd.Kind), object.GetNamespace(), object.GetName())
 
 	// Delete pods corresponding to the CRD as well
 	if crd.PodsPath == "" {
