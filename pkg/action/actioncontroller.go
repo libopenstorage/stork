@@ -26,10 +26,9 @@ import (
 )
 
 const (
-	validateCRDInterval          time.Duration = 5 * time.Second
-	validateCRDTimeout           time.Duration = 1 * time.Minute
-	actionExpiryTime             time.Duration = 24 * time.Hour
-	latestMigrationThresholdTime time.Duration = 1 * time.Hour
+	validateCRDInterval time.Duration = 5 * time.Second
+	validateCRDTimeout  time.Duration = 1 * time.Minute
+	actionExpiryTime    time.Duration = 24 * time.Hour
 
 	nameTimeSuffixFormat    string = "2006-01-02-150405"
 	lastmileMigrationPrefix string = "lastmile"
@@ -76,10 +75,10 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	if action.Status.Stage == storkv1.ActionStageFinal {
-		// Will not requeue once action is in final stage
-		return reconcile.Result{}, nil
-	}
+	// if action.Status.Stage == storkv1.ActionStageFinal {
+	// 	// Will not requeue once action is in final stage
+	// 	return reconcile.Result{}, nil
+	// }
 
 	if !controllers.ContainsFinalizer(action, controllers.FinalizerCleanup) {
 		controllers.SetFinalizer(action, controllers.FinalizerCleanup)
@@ -110,6 +109,9 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 
 	switch action.Spec.ActionType {
 	case storkv1.ActionTypeNearSyncFailover:
+		if action.Status.Stage == storkv1.ActionStageFinal {
+			return nil
+		}
 		ac.updateStatus(action, storkv1.ActionStatusInProgress)
 		if action.Status.Status == storkv1.ActionStatusScheduled {
 			log.ActionLog(action).Info("started failover")
@@ -120,6 +122,22 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			}
 			resourceutils.ScaleReplicas(action.Namespace, true, ac.printFunc(action, "ScaleReplicas"), ac.config)
 			ac.updateStatus(action, storkv1.ActionStatusSuccessful)
+		}
+	case storkv1.ActionTypeFailover:
+		log.ActionLog(action).Infof("in stage %s", action.Status.Stage)
+		switch action.Status.Stage {
+		case storkv1.ActionStageInitial:
+			ac.validationsBeforeFailover(action)
+		case storkv1.ActionStageScaleDownSource:
+			ac.deactivateClusterStage(action)
+		case storkv1.ActionStageLastMileMigration:
+			ac.performLastMileMigration(action)
+		case storkv1.ActionStageScaleUpDestination:
+			ac.activateDuringFailover(action, false)
+		case storkv1.ActionStageScaleUpSource:
+			ac.activateDuringFailover(action, true)
+		case storkv1.ActionStageFinal:
+			return nil
 		}
 	case storkv1.ActionTypeFailback:
 		log.ActionLog(action).Infof("in stage %s", action.Status.Stage)
@@ -203,7 +221,7 @@ func (ac *ActionController) createCRD() error {
 	return k8sutils.CreateCRD(resource, validateCRDInterval, validateCRDTimeout)
 }
 
-// getLatestMigrationStatus returns the a migrationschedule's latest migration's policy type and status
+// getLatestMigrationStatus returns the migrationschedule's latest migration's policy type and status
 func getLatestMigrationPolicyAndStatus(migrationSchedule storkv1.MigrationSchedule) (storkv1.SchedulePolicyType, *storkv1.ScheduledMigrationStatus) {
 	var lastMigrationStatus *storkv1.ScheduledMigrationStatus
 	var schedulePolicyType storkv1.SchedulePolicyType

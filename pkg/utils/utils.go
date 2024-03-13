@@ -373,9 +373,12 @@ func GetMergedNamespacesWithLabelSelector(namespaceList []string, namespaceSelec
 }
 
 // IsSubList returns true if the first slice is sublist of the second slice.
-// If false it also returns the list of non subset strings.
-func IsSubList(listA []string, listB []string) (bool, []string) {
+// It also returns the list of subset strings and non subset strings.
+func IsSubList(listA []string, listB []string) (bool, []string, []string) {
+	// subsetStrings -> strings found in both A and B
+	// nonSubsetStrings -> strings found in A, but not in B
 	nonSubsetStrings := make([]string, 0)
+	subsetStrings := make([]string, 0)
 	superset := make(map[string]bool)
 	for _, str := range listB {
 		superset[str] = true
@@ -383,9 +386,11 @@ func IsSubList(listA []string, listB []string) (bool, []string) {
 	for _, str := range listA {
 		if !superset[str] {
 			nonSubsetStrings = append(nonSubsetStrings, str)
+		} else {
+			subsetStrings = append(subsetStrings, str)
 		}
 	}
-	return len(nonSubsetStrings) == 0, nonSubsetStrings
+	return len(nonSubsetStrings) == 0, subsetStrings, nonSubsetStrings
 }
 
 // ExcludeListAFromListB takes 2 slices of strings as input and returns subset of B which is disjoint from A

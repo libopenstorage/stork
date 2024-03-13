@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// TODO: source cluster-domain activation in sync-dr case
 func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv1.Action) {
 
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
@@ -60,7 +61,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			return
 		}
 
-		if isSubList, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
+		if isSubList, _, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
 			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from migrationschedule %s", migrationSchedule.Name)
 			log.ActionLog(action).Infof(msg)
 			ac.recorder.Event(action,
@@ -75,6 +76,19 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// check if it has any latest successful migration
 	schedulePolicyType, latestMigration := getLatestMigrationPolicyAndStatus(*migrationSchedule)
+
+	// if no migration found, abort the failback process
+	if latestMigration == nil {
+		msg := fmt.Sprintf("No migration found for migrationschedule %s, hence aborting failback", migrationSchedule.Name)
+		log.ActionLog(action).Errorf(msg)
+		ac.recorder.Event(action,
+			v1.EventTypeWarning,
+			string(storkv1.ActionStatusFailed),
+			msg)
+		ac.updateAction(action)
+		return
+	}
+
 	if latestMigration.Status == storkv1.MigrationStatusFailed {
 		msg := fmt.Sprintf("The latest migration %s is in %s state, hence aborting failback", latestMigration.Name, storkv1.MigrationStatusFailed)
 		log.ActionLog(action).Errorf(msg)
@@ -217,20 +231,37 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 
 func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
-		action.Status.Stage = storkv1.ActionStageScaleUpSource
+		if action.Spec.ActionType == storkv1.ActionTypeFailover {
+			action.Status.Stage = storkv1.ActionStageScaleUpDestination
+		} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+			action.Status.Stage = storkv1.ActionStageScaleUpSource
+		}
 		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
 	} else if action.Status.Status == storkv1.ActionStatusFailed {
-		action.Status.Stage = storkv1.ActionStageScaleUpDestination
+		// move to reactivate stage
+		if action.Spec.ActionType == storkv1.ActionTypeFailover {
+			action.Status.Stage = storkv1.ActionStageScaleUpSource
+		} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+			action.Status.Stage = storkv1.ActionStageScaleUpDestination
+		}
 		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
 	}
 
-	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
+	var migrationScheduleReference string
+	var config *restclient.Config
+	if action.Spec.ActionType == storkv1.ActionTypeFailover {
+		migrationScheduleReference = action.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference
+	} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+		migrationScheduleReference = action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference
+	}
+
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleReference, action.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("error fetching migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
 		log.ActionLog(action).Errorf(msg)
@@ -244,13 +275,48 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 		return
 	}
 
-	migrationName := getLastMileMigrationName(migrationSchedule.Name, string(storkv1.ActionTypeFailback), utils.GetShortUID(string(action.UID)))
-	migrationObject, err := storkops.Instance().GetMigration(migrationName, migrationSchedule.Namespace)
+	// In failover last-mile-migration is created in source->destination direction. so config used will change for failover and failback
+	// get sourceConfig from clusterPair in destination cluster
+	if action.Spec.ActionType == storkv1.ActionTypeFailover {
+		config, err = getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("error getting clusterpair %s/%s", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair)
+			log.ActionLog(action).Errorf(msg)
+			action.Status.Status = storkv1.ActionStatusFailed
+			action.Status.Reason = msg
+			ac.recorder.Event(action,
+				v1.EventTypeWarning,
+				string(storkv1.ActionStatusFailed),
+				msg)
+			ac.updateAction(action)
+			return
+		}
+	} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+		// get destination i.e. current cluster's config
+		config = ac.config
+	}
+
+	storkClient, err := storkops.NewForConfig(config)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
+		log.ActionLog(action).Errorf(msg)
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.recorder.Event(action,
+			v1.EventTypeWarning,
+			string(storkv1.ActionStatusFailed),
+			msg)
+		ac.updateAction(action)
+		return
+	}
+
+	migrationName := getLastMileMigrationName(migrationSchedule.Name, string(action.Spec.ActionType), utils.GetShortUID(string(action.UID)))
+	migrationObject, err := storkClient.GetMigration(migrationName, migrationSchedule.Namespace)
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
 			// If last mile migration CR does not exist, create one
-			migration := getLastMileMigrationSpec(migrationSchedule, string(storkv1.ActionTypeFailback), utils.GetShortUID(string(action.UID)))
-			_, err := storkops.Instance().CreateMigration(migration)
+			migration := getLastMileMigrationSpec(migrationSchedule, string(action.Spec.ActionType), utils.GetShortUID(string(action.UID)))
+			_, err := storkClient.CreateMigration(migration)
 			if err != nil {
 				msg := fmt.Sprintf("Creating last mile migration from migrationschedule %s failed: %v", migrationSchedule.GetName(), err)
 				ac.recorder.Event(action,
@@ -279,7 +345,7 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 		if migrationObject.Status.Status == storkv1.MigrationStatusSuccessful || migrationObject.Status.Status == storkv1.MigrationStatusPartialSuccess {
 			action.Status.Status = storkv1.ActionStatusSuccessful
 		} else {
-			msg := fmt.Sprintf("Failing failback operation as the last mile migration %s failed: status %s", migrationObject.Name, migrationObject.Status.Status)
+			msg := fmt.Sprintf("Failing %s operation as the last mile migration %s failed: status %s", action.Spec.ActionType, migrationObject.Name, migrationObject.Status.Status)
 			log.ActionLog(action).Errorf(msg)
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg
