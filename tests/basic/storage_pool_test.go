@@ -11258,3 +11258,94 @@ func getJournalDevicePath(n node.Node) string {
 	log.InfoD("Metadata device path: %v", path)
 	return path
 }
+
+var _ = Describe("{driveAddPxRestart}", func() {
+
+	/* https://portworx.atlassian.net/browse/PTX-15682
+	1. Initiate online drive add
+	2. Restart PX
+	3. Check if drive has been added succesfully
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("driveAddPxRestart", "Add drive on a node and restart portworx", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var selectedNode node.Node
+
+	itLog := "driveAddPxRestart"
+	It(itLog, func() {
+		stepLog := "selecte a node, label the node"
+
+		storageNodes := node.GetStorageNodes()
+		selectedNode = storageNodes[rand.Intn(len(storageNodes))]
+		appList := Inst().AppList
+
+		var secondReplNode node.Node
+		for _, stNode := range storageNodes {
+			if stNode.Name != selectedNode.Name {
+				secondReplNode = stNode
+			}
+		}
+		defer func() {
+			Inst().AppList = appList
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}()
+
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		log.InfoD("Added Label on node: %v", selectedNode.Name)
+
+		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
+		log.InfoD("Added second Label on node: %v", secondReplNode.Name)
+
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+
+			Inst().AppList = []string{"fio-fastpath"}
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagefull-check-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		var wg sync.WaitGroup
+
+		stepLog = "Add cloud drive in the selected node and restart portworx"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				err = AddCloudDrive(selectedNode, -1)
+				log.FailOnError(err, "Failed to add cloud drive")
+			}()
+			time.Sleep(30 * time.Second)
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+				StopVolDriverAndWait([]node.Node{selectedNode})
+				log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+				StartVolDriverAndWait([]node.Node{selectedNode})
+			}()
+			wg.Wait()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
