@@ -68,7 +68,7 @@ func (e *EKS) GetCurrentVersion() (string, error) {
 
 // UpgradeControlPlane upgrades the EKS control plane to the specified version
 func (e *EKS) UpgradeControlPlane(version string) error {
-	log.Infof("Upgrading EKS cluster control plane to version [%s]", version)
+	log.Infof("Upgrading EKS cluster [%s] control plane to version [%s]", e.clusterName, version)
 	_, err := e.eksClient.UpdateClusterVersion(
 		context.TODO(),
 		&eks.UpdateClusterVersionInput{
@@ -185,17 +185,43 @@ func (e *EKS) UpgradeScheduler(version string) error {
 			}
 		}
 	}
+	torpedoNodeGroupName := ""
+	nodeGroupLabel := "eks.amazonaws.com/nodegroup"
 	nodes, err := core.Instance().GetNodes()
 	if err != nil {
 		log.Errorf("failed to get nodes. Err: [%v]", err)
+	}
+	if nodes != nil {
+		for _, node := range nodes.Items {
+			if node.Name == torpedoNodeName {
+				torpedoNodeGroupName = node.Labels[nodeGroupLabel]
+				break
+			}
+		}
+	}
+	e.pxNodeGroupName = os.Getenv("EKS_PX_NODEGROUP_NAME")
+	if e.pxNodeGroupName == "" {
+		log.Warnf("env EKS_PX_NODEGROUP_NAME not set. Using node label [%s] to determine Portworx node group", nodeGroupLabel)
+		if torpedoNodeGroupName != "" && nodes != nil {
+			for _, node := range nodes.Items {
+				if node.Labels[nodeGroupLabel] != torpedoNodeGroupName {
+					e.pxNodeGroupName = node.Labels[nodeGroupLabel]
+					log.Infof("Used node label [%s] to determine Portworx node group [%s]", nodeGroupLabel, e.pxNodeGroupName)
+					break
+				}
+			}
+		}
+		if e.pxNodeGroupName == "" {
+			return fmt.Errorf("env EKS_PX_NODEGROUP_NAME or node label [%s] not set", nodeGroupLabel)
+		}
 	}
 	e.region = os.Getenv("EKS_CLUSTER_REGION")
 	if e.region == "" {
 		nodeRegionLabel := "topology.kubernetes.io/region"
 		log.Warnf("env EKS_CLUSTER_REGION not set. Using node label [%s] to determine region", nodeRegionLabel)
-		if torpedoNodeName != "" && nodes != nil  {
+		if torpedoNodeGroupName != "" && nodes != nil {
 			for _, node := range nodes.Items {
-				if node.Name != torpedoNodeName {
+				if node.Labels[nodeGroupLabel] != torpedoNodeGroupName {
 					e.region = node.Labels[nodeRegionLabel]
 					log.Infof("Used node label [%s] to determine region [%s]", nodeRegionLabel, e.region)
 					break
@@ -206,22 +232,9 @@ func (e *EKS) UpgradeScheduler(version string) error {
 			return fmt.Errorf("env EKS_CLUSTER_REGION or node label [%s] not set", nodeRegionLabel)
 		}
 	}
-	e.pxNodeGroupName = os.Getenv("EKS_PX_NODEGROUP_NAME")
-	if e.pxNodeGroupName == "" {
-		nodeGroupLabel := "eks.amazonaws.com/nodegroup"
-		log.Warnf("env EKS_PX_NODEGROUP_NAME not set. Using node label [%s] to determine Portworx node group", nodeGroupLabel)
-		if torpedoNodeName != "" && nodes != nil  {
-			for _, node := range nodes.Items {
-				if node.Name != torpedoNodeName {
-					e.pxNodeGroupName = node.Labels[nodeGroupLabel]
-					log.Infof("Used node label [%s] to determine Portworx node group [%s]", nodeGroupLabel, e.pxNodeGroupName)
-					break
-				}
-			}
-		}
-		if e.pxNodeGroupName == "" {
-			return fmt.Errorf("env EKS_PX_NODEGROUP_NAME or node label [%s] not set", nodeGroupLabel)
-		}
+	e.config, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(e.region))
+	if err != nil {
+		return fmt.Errorf("unable to load config for region [%s]. Err: [%v]", e.region, err)
 	}
 	e.clusterName = os.Getenv("EKS_CLUSTER_NAME")
 	if e.clusterName == "" {
@@ -234,10 +247,6 @@ func (e *EKS) UpgradeScheduler(version string) error {
 				return fmt.Errorf("unexpected format of provider ID [%s]", providerID)
 			}
 			instanceID := splitID[4]
-			e.config, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(e.region))
-			if err != nil {
-				return fmt.Errorf("unable to load config for region [%s]. Err: [%v]", e.region, err)
-			}
 			ec2Client := ec2.NewFromConfig(e.config)
 			result, err := ec2Client.DescribeInstances(
 				context.TODO(),
@@ -251,8 +260,8 @@ func (e *EKS) UpgradeScheduler(version string) error {
 			for _, reservation := range result.Reservations {
 				for _, instance := range reservation.Instances {
 					for _, tag := range instance.Tags {
-						if strings.HasPrefix(*tag.Key, ec2InstanceLabel) {
-							e.clusterName = strings.TrimPrefix(*tag.Key, ec2InstanceLabel)
+						if strings.HasPrefix(aws.ToString(tag.Key), ec2InstanceLabel) {
+							e.clusterName = strings.TrimPrefix(aws.ToString(tag.Key), ec2InstanceLabel)
 							log.Infof("Instance [%s] is part of EKS cluster [%s] in region [%s]", instanceID, e.clusterName, e.region)
 							break
 						}
