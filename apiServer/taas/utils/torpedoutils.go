@@ -426,3 +426,51 @@ func GetVMsWithNamespaceLabels(c *gin.Context) {
 	c.JSON(http.StatusOK, vmResponse)
 
 }
+
+// AddNSLabel adds the label to the namespaces with the given label
+func AddNSLabel(c *gin.Context) {
+	log.Infof("Adding label to NS ")
+	type LabelUpdateResponse struct {
+		Success map[string]string `json:"success"`
+		Failed  map[string]string `json:"failed"`
+	}
+
+	var NamespaceLabelRequest struct {
+		Namespaces []string          `json:"namespaces" binding:"required"`
+		Label      map[string]string `json:"ns_label" binding:"required"`
+	}
+	success := make(map[string]string)
+	failed := make(map[string]string)
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	if err := c.BindJSON(&NamespaceLabelRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(NamespaceLabelRequest.Label) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace labels cannot be empty"})
+		return
+	}
+	log.Infof("NamespaceLabelRequest", NamespaceLabelRequest)
+	for _, namespace := range NamespaceLabelRequest.Namespaces {
+		err := tests.Inst().S.AddNamespaceLabel(namespace, NamespaceLabelRequest.Label)
+		if err != nil {
+			failed[namespace] = err.Error()
+		} else {
+			success[namespace] = "Label added successfully"
+		}
+	}
+
+	response := LabelUpdateResponse{
+		Success: success,
+		Failed:  failed,
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": response,
+	})
+
+}
