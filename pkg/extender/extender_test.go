@@ -17,12 +17,16 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	"github.com/libopenstorage/stork/pkg/client/clientset/versioned/scheme"
 
-	kubemock "github.com/libopenstorage/stork/pkg/mock"
+	kvmock "github.com/libopenstorage/stork/pkg/mock/kubevirt"
+	kvdmock "github.com/libopenstorage/stork/pkg/mock/kubevirtdynamic"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s/core"
+	kv "github.com/portworx/sched-ops/k8s/kubevirt"
 	kvd "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
+
 	"github.com/portworx/sched-ops/k8s/openshift"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -31,11 +35,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kube-scheduler/extender/v1"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -47,6 +50,7 @@ var driver *mock.Driver
 var extender *Extender
 var fakeStorkClient *fakeclient.Clientset
 var fakeOCPClient *fakeocpclient.Clientset
+var fakeKubeClient *kubernetes.Clientset
 var fakeRestClient *fake.RESTClient
 
 func setup(t *testing.T) {
@@ -65,11 +69,11 @@ func setup(t *testing.T) {
 		t.Fatalf("Error initializing mock volume driver: %v", err)
 	}
 
-	fakeKubeClient := kubernetes.NewSimpleClientset()
-	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
+	fakeKubeClient = kubernetes.NewSimpleClientset()
 
-	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
+	scheme.AddToScheme(scheme.Scheme)
+
+	recorder := record.NewFakeRecorder(100)
 
 	// setup fake k8s instances
 	fakeStorkClient = fakeclient.NewSimpleClientset()
@@ -365,6 +369,7 @@ func TestExtender(t *testing.T) {
 	t.Run("invalidNodePrioritizeTest", invalidNodePrioritizeTest)
 	t.Run("kubevirtPodScheduling", kubevirtPodScheduling)
 	t.Run("kubevirtPodSchedulingAttachedOnMismatch", kubevirtPodSchedulingAttachedOnMismatch)
+	t.Run("kubevirtPodSchedulingNonHyperconvergence", kubevirtPodSchedulingNonHyperconvergence)
 	t.Run("teardown", teardown)
 }
 
@@ -372,6 +377,10 @@ func TestExtender(t *testing.T) {
 // filter response should return all the input nodes
 // prioritize response should return all nodes with defaultScore
 func pxCSIExtPodNoDriverTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	pod := newPod("px-csi-ext-foo", defaultNamespace, nil)
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
@@ -392,12 +401,19 @@ func pxCSIExtPodNoDriverTest(t *testing.T) {
 		nodes,
 		[]float64{defaultScore, defaultScore, defaultScore},
 		prioritizeResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Send scheduler request for px-csi-ext pod with PX online on all nodes
 // filter response should return all the input nodes
 // prioritize response should return all nodes with nodePriorityScore
 func pxCSIExtPodDriverTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
@@ -432,12 +448,18 @@ func pxCSIExtPodDriverTest(t *testing.T) {
 		nodes,
 		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore, nodePriorityScore, nodePriorityScore},
 		prioritizeResponse)
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Send scheduler request for px-csi-ext pod with a node in StorageDown state
 // filter response should return all the input nodes
 // prioritize response should return all nodes giving lower score to StorageDown node
 func pxCSIExtPodStorageDownNodesTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
@@ -469,12 +491,18 @@ func pxCSIExtPodStorageDownNodesTest(t *testing.T) {
 		nodes,
 		[]float64{nodePriorityScore, nodePriorityScore, nodePriorityScore * (storageDownNodeScorePenaltyPercentage / 100), nodePriorityScore, nodePriorityScore},
 		prioritizeResponse)
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Send scheduler request for px-csi-ext pod with PX offline on one node
 // filter response should return all the input nodes except node with PX offline
 // prioritize response should give 0 score to offline PX node
 func pxCSIExtPodOfflinePxNodesTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
@@ -506,6 +534,8 @@ func pxCSIExtPodOfflinePxNodesTest(t *testing.T) {
 		nodes,
 		[]float64{nodePriorityScore, nodePriorityScore, 0, nodePriorityScore, nodePriorityScore},
 		prioritizeResponse)
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Send requests for a pod that doesn't have any PVCs.
@@ -584,6 +614,10 @@ func noDriverVolumeTest(t *testing.T) {
 // The filter response should return all the input nodes
 // The prioritize response should return all nodes with equal priority
 func WFFCVolumeTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	pod := newPod("WFFCVolumeTest", defaultNamespace, nil)
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
@@ -628,6 +662,9 @@ func WFFCVolumeTest(t *testing.T) {
 		nodes,
 		[]float64{defaultScore, defaultScore, defaultScore},
 		prioritizeResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Create a pod with a PVC which uses the mocked WaitForFirstConusmer storage class
@@ -635,6 +672,10 @@ func WFFCVolumeTest(t *testing.T) {
 // The filter response should return all the input nodes
 // The prioritize response should prefer the node with the normal PVC on it
 func WFFCMultiVolumeTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	pod := newPod("WFFCMultiVolumeTest", defaultNamespace, nil)
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
@@ -700,6 +741,9 @@ func WFFCMultiVolumeTest(t *testing.T) {
 		nodes,
 		[]float64{rackPriorityScore, nodePriorityScore, rackPriorityScore},
 		prioritizeResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Create a pod with a PVC using the mock storage class.
@@ -708,6 +752,10 @@ func WFFCMultiVolumeTest(t *testing.T) {
 // The prioritize response should return n3 with highest priority because of
 // rack locality
 func noVolumeNodeTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	requestNodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
@@ -741,6 +789,14 @@ func noVolumeNodeTest(t *testing.T) {
 		requestNodes,
 		[]float64{rackPriorityScore, defaultScore, defaultScore},
 		prioritizeResponse)
+	// Check if event was raised
+	require.Len(t, recorder.Events, 1)
+	newEvent := <-recorder.Events
+	require.Contains(t, newEvent,
+		fmt.Sprintf("%v %v Unable to schedule pod using volumes %v in a hyperconverged fashion.",
+			v1.EventTypeWarning, nonOptimumSchedulingEventReason, []string{"noVolumeNode"}))
+	require.Contains(t, newEvent,
+		fmt.Sprintf("enough CPU and memory resources available on these nodes: %v", []string{"node1", "node2"}))
 }
 
 // Create a pod with a PVC using the mock storage class.
@@ -780,6 +836,10 @@ func noDriverNodeTest(t *testing.T) {
 // The prioritize response should assign higher values to n1 and n2, followed by
 // n3 and n4 for rack locality and then n5
 func singleVolumeTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1.domain", "node1.domain", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
@@ -816,6 +876,8 @@ func singleVolumeTest(t *testing.T) {
 			rackPriorityScore,
 			defaultScore},
 		prioritizeResponse)
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Create a pod with 2 PVCs using the mock storage class.
@@ -826,6 +888,10 @@ func singleVolumeTest(t *testing.T) {
 // The prioritize response should assign priorities in the following order
 // n2 (both volumes local) >> n1 and n3 (one volume local each) >> n5 (both volumes on same rack) >> n4 (one volume on same rack)
 func multipleVolumeTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
@@ -867,6 +933,9 @@ func multipleVolumeTest(t *testing.T) {
 			rackPriorityScore,
 			2 * rackPriorityScore},
 		prioritizeResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Create a pod with 2 PVCs using the mock storage class.
@@ -878,6 +947,10 @@ func multipleVolumeTest(t *testing.T) {
 // The prioritize response should assign priorities in the following order
 // n1 & n2 highest priority. n3 should have no priority
 func multipleVolumeSkipTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
@@ -919,6 +992,9 @@ func multipleVolumeSkipTest(t *testing.T) {
 			rackPriorityScore,
 			rackPriorityScore},
 		prioritizeResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
 }
 
 // Create a pod with 2 PVCs using the mock storage class.
@@ -2357,7 +2433,7 @@ func kubevirtPodScheduling(t *testing.T) {
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	mockKubevirtOps := kubemock.NewMockOps(mockCtrl)
+	mockKubevirtOps := kvdmock.NewMockOps(mockCtrl)
 	kvd.SetInstance(mockKubevirtOps)
 
 	// New Pod
@@ -2510,7 +2586,7 @@ func kubevirtPodSchedulingAttachedOnMismatch(t *testing.T) {
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	mockKubevirtOps := kubemock.NewMockOps(mockCtrl)
+	mockKubevirtOps := kvdmock.NewMockOps(mockCtrl)
 	kvd.SetInstance(mockKubevirtOps)
 
 	podJSON, err := json.Marshal(pod)
@@ -2589,6 +2665,89 @@ func kubevirtPodSchedulingAttachedOnMismatch(t *testing.T) {
 			nodePriorityScore,
 			nodePriorityScore},
 		prioritizeResponse)
+}
+
+// Kubevirt volume has replicas on nodes n1, n2, n3
+// The prioritize request receives nodes n4, n5, n6
+// The kubevirt pod is anti-hyperconverged and stork should raise an event.
+func kubevirtPodSchedulingNonHyperconvergence(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	if err := driver.CreateCluster(6, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newKubevirtPod("kubevirtPodNonHyperConvergence", "KubeVirtNS3", map[string]bool{"KubevirtVolumeNonHyperconvergence": true})
+
+	provNodes := []int{0, 1, 2}
+	if err := driver.ProvisionVolume("KubevirtVolumeNonHyperconvergence", provNodes, 3, map[string]string{"kubevirtPodNonHyperConvergence": "true"}, false, false, "192.168.0.1"); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockKvdOps := kvdmock.NewMockOps(mockCtrl)
+	kvd.SetInstance(mockKvdOps)
+	mockKvOps := kvmock.NewMockOps(mockCtrl)
+	kv.SetInstance(mockKvOps)
+
+	// New Pod
+	mockKvdOps.EXPECT().
+		GetVirtualMachineInstance(gomock.Any(), "KubeVirtNS3", "testVMI").
+		Return(&kvd.VirtualMachineInstance{
+			RootDisk:       "testDisk",
+			RootDiskPVC:    "KubevirtVolumeNonHyperconvergence",
+			LiveMigratable: true}, nil)
+
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4, 5}, filterResponse)
+
+	filteredNodes := &v1.NodeList{}
+	filteredNodes.Items = append(filteredNodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "zone1"))
+	filteredNodes.Items = append(filteredNodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "a", "zone1"))
+	filteredNodes.Items = append(filteredNodes.Items, *newNode("node6", "node6", "192.168.0.6", "rack1", "a", "zone1"))
+
+	// Return a mock VM object to raise an event
+	mockKvOps.EXPECT().
+		GetVirtualMachine("testVMI", "KubeVirtNS3").
+		Return(&kubevirtv1.VirtualMachine{}, nil)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, filteredNodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+
+	// Hyperconvergence with preference to local attachment
+	verifyPrioritizeResponse(
+		t,
+		filteredNodes,
+		[]float64{
+			defaultScore,
+			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+
+	// Check if event was raised
+	require.Len(t, recorder.Events, 1)
+	newEvent := <-recorder.Events
+	require.Contains(t, newEvent,
+		fmt.Sprintf("%v %v Unable to schedule VM on a node in a hyperconverged fashion.",
+			v1.EventTypeWarning, nonOptimumSchedulingEventReason))
+	require.Contains(t, newEvent,
+		fmt.Sprintf("enough CPU and memory resources available on these nodes: %v", []string{"node1", "node2", "node3"}))
 }
 
 func newKubevirtPod(podName string, namespace string, volumes map[string]bool) *v1.Pod {
