@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rest "k8s.io/client-go/rest"
 	v10 "kubevirt.io/api/core/v1"
+	kubecli "kubevirt.io/client-go/kubecli"
 )
 
 // MockOps is a mock of Ops interface.
@@ -80,6 +81,20 @@ func (m *MockOps) DeleteVirtualMachine(arg0, arg1 string) error {
 func (mr *MockOpsMockRecorder) DeleteVirtualMachine(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVirtualMachine", reflect.TypeOf((*MockOps)(nil).DeleteVirtualMachine), arg0, arg1)
+}
+
+// GetKubevirtClient mocks base method.
+func (m *MockOps) GetKubevirtClient() kubecli.KubevirtClient {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetKubevirtClient")
+	ret0, _ := ret[0].(kubecli.KubevirtClient)
+	return ret0
+}
+
+// GetKubevirtClient indicates an expected call of GetKubevirtClient.
+func (mr *MockOpsMockRecorder) GetKubevirtClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKubevirtClient", reflect.TypeOf((*MockOps)(nil).GetKubevirtClient))
 }
 
 // GetVMConfigMaps mocks base method.
@@ -264,6 +279,21 @@ func (m *MockOps) StopVirtualMachine(arg0 *v10.VirtualMachine) error {
 func (mr *MockOpsMockRecorder) StopVirtualMachine(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopVirtualMachine", reflect.TypeOf((*MockOps)(nil).StopVirtualMachine), arg0)
+}
+
+// UpdateVirtualMachine mocks base method.
+func (m *MockOps) UpdateVirtualMachine(arg0 *v10.VirtualMachine) (*v10.VirtualMachine, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateVirtualMachine", arg0)
+	ret0, _ := ret[0].(*v10.VirtualMachine)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateVirtualMachine indicates an expected call of UpdateVirtualMachine.
+func (mr *MockOpsMockRecorder) UpdateVirtualMachine(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateVirtualMachine", reflect.TypeOf((*MockOps)(nil).UpdateVirtualMachine), arg0)
 }
 
 // ValidateVirtualMachineRunning mocks base method.

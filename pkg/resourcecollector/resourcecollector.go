@@ -3,7 +3,6 @@ package resourcecollector
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -241,7 +240,7 @@ func (r *ResourceCollector) GetResourceTypes(
 	var crdResources []metav1.GroupVersionKind
 	var crdList *stork_api.ApplicationRegistrationList
 	storkcache.Instance()
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	if storkcache.Instance() != nil {
 		crdList, err = storkcache.Instance().ListApplicationRegistrations()
 	} else {
 		crdList, err = r.storkOps.ListApplicationRegistrations()
@@ -359,7 +358,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		return nil, nil, err
 	}
 	var crdList *stork_api.ApplicationRegistrationList
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	if storkcache.Instance() != nil {
 		crdList, err = storkcache.Instance().ListApplicationRegistrations()
 	} else {
 		crdList, err = r.storkOps.ListApplicationRegistrations()
@@ -407,7 +406,7 @@ func (r *ResourceCollector) GetResourcesExcludingTypes(
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
 	var crdList *stork_api.ApplicationRegistrationList
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	if storkcache.Instance() != nil {
 		crdList, err = storkcache.Instance().ListApplicationRegistrations()
 	} else {
 		crdList, err = r.storkOps.ListApplicationRegistrations()
@@ -508,7 +507,7 @@ func (r *ResourceCollector) GetResources(
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
 	var crdList *stork_api.ApplicationRegistrationList
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	if storkcache.Instance() != nil {
 		crdList, err = storkcache.Instance().ListApplicationRegistrations()
 	} else {
 		crdList, err = r.storkOps.ListApplicationRegistrations()
