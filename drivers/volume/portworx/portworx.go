@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -252,15 +251,16 @@ var restoreStateCallBackoff = wait.Backoff{
 }
 
 type portworx struct {
-	store           cache.Store
-	stopChannel     chan struct{}
-	sdkConn         *portworxGrpcConnection
-	id              string
-	endpoint        string
-	tlsConfig       *tls.Config
-	jwtSharedSecret string
-	jwtIssuer       string
-	initDone        bool
+	store             cache.Store
+	stopChannel       chan struct{}
+	sdkConn           *portworxGrpcConnection
+	id                string
+	endpoint          string
+	tlsConfig         *tls.Config
+	jwtSharedSecret   string
+	jwtIssuer         string
+	initDone          bool
+	getAdminVolDriver func() (volume.VolumeDriver, error)
 }
 
 type portworxGrpcConnection struct {
@@ -506,35 +506,76 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 			Type: "Volume",
 		}
 	}
+	return p.constructStorkVolume(vols[0]), nil
+}
 
+func (p *portworx) constructStorkVolume(vol *api.Volume) *storkvolume.Info {
 	info := &storkvolume.Info{}
-	info.VolumeID = vols[0].Id
+	info.VolumeID = vol.Id
 
-	info.VolumeName = vols[0].Locator.Name
-	for _, rset := range vols[0].ReplicaSets {
+	info.VolumeName = vol.Locator.Name
+	for _, rset := range vol.ReplicaSets {
 		info.DataNodes = append(info.DataNodes, rset.Nodes...)
 	}
-	if vols[0].Source != nil {
-		info.ParentID = vols[0].Source.Parent
+	if vol.Source != nil {
+		info.ParentID = vol.Source.Parent
 	}
 
 	info.Labels = make(map[string]string)
-	for k, v := range vols[0].Spec.GetVolumeLabels() {
+	for k, v := range vol.Spec.GetVolumeLabels() {
 		info.Labels[k] = v
 	}
 
-	for k, v := range vols[0].Locator.GetVolumeLabels() {
+	for k, v := range vol.Locator.GetVolumeLabels() {
 		info.Labels[k] = v
 	}
-	info.NeedsAntiHyperconvergence = vols[0].Spec.Sharedv4 && vols[0].Spec.Sharedv4ServiceSpec != nil
+	info.NeedsAntiHyperconvergence = vol.Spec.Sharedv4 && vol.Spec.Sharedv4ServiceSpec != nil
 
 	info.WindowsVolume = p.volumePrefersWindowsNodes(info)
 
-	info.VolumeSourceRef = vols[0]
+	info.VolumeSourceRef = vol
 
-	info.AttachedOn = vols[0].AttachedOn
+	info.AttachedOn = vol.AttachedOn
 
-	return info, nil
+	return info
+
+}
+
+func (p *portworx) enumerateVolumes(volumeNameList []string) (map[string]*storkvolume.Info, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return nil, err
+	}
+	volMap := make(map[string]*storkvolume.Info)
+	vols, err := volDriver.Enumerate(
+		&api.VolumeLocator{
+			VolumeIds: volumeNameList,
+		},
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	for _, volName := range volumeNameList {
+		storkVol := &storkvolume.Info{
+			VolumeID: volName,
+		}
+		for _, vol := range vols {
+			if vol.Locator.Name == volName || vol.Id == volName {
+				storkVol = p.constructStorkVolume(vol)
+				break
+			}
+		}
+		volMap[volName] = storkVol
+	}
+
+	return volMap, nil
 }
 
 // volumePrefersWindowsNodes checks if "winshare" label is applied to the volume
@@ -745,7 +786,7 @@ func (p *portworx) IsSupportedPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClai
 	if storageClassName != "" {
 		var storageClass *storagev1.StorageClass
 		var err error
-		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		if storkcache.Instance() != nil {
 			storageClass, err = storkcache.Instance().GetStorageClass(storageClassName)
 		} else {
 			storageClass, err = storage.Instance().GetStorageClass(storageClassName)
@@ -813,6 +854,8 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 	// includePendingWFFC - Includes pending volumes in the second return value if they are using WaitForFirstConsumer binding mode
 	var volumes []*storkvolume.Info
 	var pendingWFFCVolumes []*storkvolume.Info
+	pvcMap := make(map[string]*v1.PersistentVolumeClaim)
+	var volumeNameList []string
 	for _, volume := range podSpec.Volumes {
 		volumeName := ""
 		isPendingWFFC := false
@@ -835,6 +878,18 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 			if pvc.Status.Phase == v1.ClaimPending {
 				// Only include pending volume if requested and storage class has WFFC
 				if includePendingWFFC && isWaitingForFirstConsumer(pvc) {
+					// For pending volumes we won't query Portworx.
+					// Populate at lease something about these volumes
+					wffcVol := &storkvolume.Info{
+						// this would be empty for pending volumes, but the callers are simply
+						// checking for the existence of such a volume and not its contents
+						VolumeName: pvc.Spec.VolumeName,
+					}
+					wffcVol.Labels = make(map[string]string)
+					for k, v := range pvc.ObjectMeta.Annotations {
+						wffcVol.Labels[k] = v
+					}
+					pendingWFFCVolumes = append(pendingWFFCVolumes, wffcVol)
 					isPendingWFFC = true
 				} else {
 					return nil, nil, &storkvolume.ErrPVCPending{
@@ -843,37 +898,49 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 				}
 			}
 			volumeName = pvc.Spec.VolumeName
+			pvcMap[volumeName] = pvc
 		} else if volume.PortworxVolume != nil {
 			volumeName = volume.PortworxVolume.VolumeID
 		}
-
-		if volumeName != "" {
-			volumeInfo, err := p.InspectVolume(volumeName)
-			if err != nil {
-				logrus.Warnf("Failed to inspect volume %v: %v", volumeName, err)
-				// If the inspect volume fails return with atleast some info
-				volumeInfo = &storkvolume.Info{
+		// If a volume is pending and WFFC, it doesn't exist in Portworx.
+		// No need of querying it.
+		if !isPendingWFFC {
+			volumeNameList = append(volumeNameList, volumeName)
+		}
+	}
+	var (
+		volInfos map[string]*storkvolume.Info
+		err      error
+	)
+	if len(volumeNameList) > 0 {
+		// Lets get all the volumes in one shot
+		volInfos, err = p.enumerateVolumes(volumeNameList)
+		if err != nil {
+			logrus.Warnf("Failed to enumerate volumes %v: %v", volumeNameList, err)
+			volInfos = make(map[string]*storkvolume.Info)
+			for _, volumeName := range volumeNameList {
+				// Populate at lease something about the volumes
+				volInfos[volumeName] = &storkvolume.Info{
 					VolumeName: volumeName,
 				}
 			}
-			// Add the annotations as volume labels
-			if len(volumeInfo.Labels) == 0 {
-				volumeInfo.Labels = make(map[string]string)
-			}
-
-			if pvc != nil {
-				for k, v := range pvc.ObjectMeta.Annotations {
-					volumeInfo.Labels[k] = v
-				}
-			}
-
-			if isPendingWFFC {
-				pendingWFFCVolumes = append(pendingWFFCVolumes, volumeInfo)
-			} else {
-				volumes = append(volumes, volumeInfo)
-			}
 		}
 	}
+
+	for volumeName, volumeInfo := range volInfos {
+		// Add the annotations as volume labels
+		if len(volumeInfo.Labels) == 0 {
+			volumeInfo.Labels = make(map[string]string)
+		}
+		pvc, ok := pvcMap[volumeName]
+		if ok && pvc != nil {
+			for k, v := range pvc.ObjectMeta.Annotations {
+				volumeInfo.Labels[k] = v
+			}
+		}
+		volumes = append(volumes, volumeInfo)
+	}
+
 	return volumes, pendingWFFCVolumes, nil
 }
 
@@ -1063,7 +1130,7 @@ func (p *portworx) getUserVolDriver(annotations map[string]string, namespace str
 	return volDriver, err
 }
 
-func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
+func (p *portworx) adminVolDriver() (volume.VolumeDriver, error) {
 	if len(p.jwtSharedSecret) != 0 {
 		claims := &auth.Claims{
 			Issuer: p.jwtIssuer,
@@ -2762,7 +2829,7 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	if len(pv.Spec.StorageClassName) != 0 {
 		var sc *storagev1.StorageClass
 		var err error
-		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		if storkcache.Instance() != nil {
 			sc, err = storkcache.Instance().GetStorageClass(pv.Spec.StorageClassName)
 		} else {
 			sc, err = storage.Instance().GetStorageClass(pv.Spec.StorageClassName)
@@ -3718,7 +3785,7 @@ func (p *portworx) getCloudBackupRestoreSpec(
 	var sc *storagev1.StorageClass
 	var err error
 	if len(destStorageClass) != 0 {
-		if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		if storkcache.Instance() != nil {
 			sc, err = storkcache.Instance().GetStorageClass(destStorageClass)
 		} else {
 			sc, err = storage.Instance().GetStorageClass(destStorageClass)
@@ -4404,6 +4471,8 @@ func (p *portworx) statfsConfigMapNeedsUpdate(existing *v1.ConfigMap, expectedSu
 
 func init() {
 	p := &portworx{}
+	// Defining this override helps in UTs
+	p.getAdminVolDriver = p.adminVolDriver
 	err := p.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing portworx driver: %v", err)
