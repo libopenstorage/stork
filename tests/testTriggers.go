@@ -1214,6 +1214,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ctx.SkipVolumeValidation = true
 				log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
+				ctx.SkipVolumeValidation = false
 				log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
 					if err != nil {
@@ -1531,6 +1532,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				log.InfoD("Context Validation after reducing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
 				log.InfoD("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
+				ctx.SkipVolumeValidation = false
 				for err := range errorChan {
 					UpdateOutcome(event, err)
 					log.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
@@ -1585,6 +1587,7 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
+			ctx.SkipVolumeValidation = false
 			for err := range errorChan {
 				UpdateOutcome(event, err)
 			}
@@ -3241,7 +3244,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
-						retain := 2
+						retain := 10
 						interval := getCloudSnapInterval(CloudSnapShot)
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
@@ -3392,35 +3395,76 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	setMetrics(*event)
 
 	stepLog := "Verify cloud snap restore"
+
 	Step(stepLog, func() {
-		for ns, volSnap := range cloudsnapMap {
-			for vol, snap := range volSnap {
-				dashStats := make(map[string]string)
-				dashStats["source-name"] = snap.Name
-				dashStats["source-namespace"] = ns
-				dashStats["destination-name"] = vol.Name
-				dashStats["destination-namespace"] = vol.Namespace
-				updateLongevityStats(CloudSnapShotRestore, stats.CloudsnapRestorEventName, dashStats)
-				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
-					Name:      vol.Name,
-					Namespace: vol.Namespace,
-				}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
-				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+		for _, ctx := range *contexts {
+			if strings.Contains(ctx.App.Key, "cloudsnap") {
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				snapSchedList, err := storkops.Instance().ListSnapshotSchedules(appNamespace)
 				if err != nil {
 					UpdateOutcome(event, err)
 					return
 				}
-				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
-				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
-				if err == nil {
-					err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
-					UpdateOutcome(event, err)
+				vols, err := Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+
+				for _, vol := range vols {
+					var snapshotScheduleName string
+					for _, snap := range snapSchedList.Items {
+						snapshotScheduleName = snap.Name
+						if strings.Contains(snapshotScheduleName, vol.Name) {
+							break
+						}
+					}
+					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
+					var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+				outer:
+					for _, snapshotStatuses := range resp.Status.Items {
+						for _, vsStatus := range snapshotStatuses {
+							if vsStatus.Status == snapv1.VolumeSnapshotConditionReady {
+								volumeSnapshotStatus = vsStatus
+								break outer
+							}
+						}
+					}
+					if volumeSnapshotStatus != nil {
+						dashStats := make(map[string]string)
+						dashStats["source-name"] = volumeSnapshotStatus.Name
+						dashStats["source-namespace"] = appNamespace
+						dashStats["destination-name"] = vol.Name
+						dashStats["destination-namespace"] = vol.Namespace
+						updateLongevityStats(CloudSnapShotRestore, stats.CloudsnapRestorEventName, dashStats)
+						restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+							Name:      vol.Name,
+							Namespace: vol.Namespace,
+						}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
+						restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+						err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+						dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+						if err == nil {
+							err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
+							if err != nil {
+								UpdateOutcome(event, err)
+								return
+							}
+						}
+					} else {
+						UpdateOutcome(event, fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace))
+					}
+
 				}
+
 			}
 		}
-		for k := range cloudsnapMap {
-			delete(cloudsnapMap, k)
-		}
+
 	})
 	err := ValidateDataIntegrity(contexts)
 	UpdateOutcome(event, err)
@@ -5236,7 +5280,7 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 			return nil, false, fmt.Errorf("expanded pool value is nil")
 		}
 		if expandedPool.LastOperation != nil {
-			log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+			log.Infof("Pool [%s] Resize Status : %v, Message : %s", expandedPool.Uuid, expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("pool %s expansion has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
 			}
@@ -5275,7 +5319,7 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 		return nil, true, fmt.Errorf("pool has not been resized. Waiting...Current size is %d", newPoolSize)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, 120*time.Minute, 2*time.Minute)
+	_, err := task.DoRetryWithTimeout(f, 300*time.Minute, 2*time.Minute)
 	return err
 }
 
@@ -5289,9 +5333,12 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 			return nil, err
 		}
 		if len(poolsToExpand) <= expectedCapacity {
+			log.Debugf("validating node [%s] for pool expansion", stNode.Id)
 			if eligibility[stNode.Id] {
 				for _, p := range stNode.Pools {
+					log.Debugf("validating pool [%s] in node [%s] for pool expansion", p.Uuid, stNode.Id)
 					if eligibility[p.Uuid] {
+						log.Debugf("Marking pool [%s] for expansion", p.Uuid)
 						poolsToExpand = append(poolsToExpand, p)
 					}
 				}
@@ -5403,7 +5450,13 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					dashStats["node"] = storageNode.Name
 
 					updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
-					err = RebootNodeAndWait(*storageNode)
+					if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+						//this is required as for Dmthin add-disk . pool will be in maintenance mode after node reboot
+						err = RebootNodeAndWaitForPxDown(*storageNode)
+					} else {
+						err = RebootNodeAndWaitForPxUp(*storageNode)
+					}
+					err = RebootNodeAndWaitForPxUp(*storageNode)
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
@@ -6533,6 +6586,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
+			ctx.SkipVolumeValidation = false
 			for err := range errorChan {
 				UpdateOutcome(event, err)
 				if strings.Contains(ctx.App.Key, fastpathAppName) {
@@ -6660,6 +6714,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
+			ctx.SkipVolumeValidation = false
 			for err := range errorChan {
 				UpdateOutcome(event, err)
 			}
@@ -7158,6 +7213,7 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx, &errorChan)
+					ctx.SkipClusterScopedObject = false
 				})
 			}
 		}
@@ -7290,6 +7346,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx, &errorChan)
+					ctx.SkipVolumeValidation = false
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}

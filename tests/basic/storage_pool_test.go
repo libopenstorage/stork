@@ -333,7 +333,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
-			err = RebootNodeAndWait(*storageNode)
+			err = RebootNodeAndWaitForPxUp(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
@@ -442,7 +442,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
-			err = RebootNodeAndWait(*storageNode)
+			err = RebootNodeAndWaitForPxUp(*storageNode)
 			if err != nil {
 				if !strings.Contains(err.Error(), "Actual: STATUS_POOLMAINTENANCE") {
 					log.FailOnError(err, "Failed to reboot node and wait till it is up")
@@ -2583,7 +2583,7 @@ var _ = Describe("{AddDriveWithNodeReboot}", func() {
 			err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
 			time.Sleep(3 * time.Second)
-			err = RebootNodeAndWait(stNode)
+			err = RebootNodeAndWaitForPxUp(stNode)
 			log.FailOnError(err, fmt.Sprintf("error rebooting node %s", stNode.Name))
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidateDriveRebalance(stNode)
@@ -7100,7 +7100,7 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 
 		storageNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
 		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolToBeResized.Uuid))
-		err = RebootNodeAndWait(*storageNode)
+		err = RebootNodeAndWaitForPxUp(*storageNode)
 		log.FailOnError(err, "Failed to reboot node [%v] and wait till it is up", storageNode.Name)
 
 		log.FailOnError(Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut), fmt.Sprintf("Driver is down on node [%s]", storageNode.Name))
@@ -9064,7 +9064,7 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
 			if eachType == "kill" {
 				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill kvdb master node")
 			} else {
-				err = RebootNodeAndWait(*masterNode)
+				err = RebootNodeAndWaitForPxUp(*masterNode)
 				log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			}
 			masterNodeAfterKill, err := GetKvdbMasterNode()
@@ -9973,6 +9973,12 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 })
 
 func isMaintenanceModeRequiredForAddDisk() bool {
+	isDmthin, err := IsDMthin()
+	log.FailOnError(err, "error validating for dmthin check")
+	if isDmthin {
+		return true
+	}
+
 	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
 		cmd := "uname -r"
 
@@ -10001,6 +10007,7 @@ func isMaintenanceModeRequiredForAddDisk() bool {
 		}
 
 	}
+
 	return false
 }
 
@@ -10594,7 +10601,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 		stepLog = "3. Verify reboot"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err = RebootNodeAndWait(*testNode)
+			err = RebootNodeAndWaitForPxUp(*testNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			log.Info("Verify reboot succeed")
 		})

@@ -4205,20 +4205,24 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	labels := pvc.Labels
 
 	if pvc.Spec.VolumeName != "" {
+		log.Debugf("pvc spec volume name [%s]", pvc.Spec.VolumeName)
 		// If this is a Pure volume, run some extra checks to get more information.
 		// Store them as labels as they are not applicable to all volume types.
 		driver, err := volume.Get(k.VolDriverName)
 		if err != nil {
+			log.Errorf("error getting volume driver name")
 			return nil, err
 		}
 
 		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
 		if err != nil {
+			log.Warnf("error inspecting volume [%s],err: %v", pvc.Spec.VolumeName, err)
 			if _, ok := err.(*errors.ErrNotSupported); !ok {
 				return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
 			}
 			// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
 		} else {
+			log.Debugf("inspected volume [%s] to add labels", inspectedVol.Id)
 			// If this is a Pure volume, run some extra checks to get more information.
 			// Store them as labels as they are not applicable to all volume types.
 			if labels == nil {
@@ -4251,6 +4255,7 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		Size:        uint64(pvcSize),
 		Raw:         isRaw,
 	}
+	log.Debugf("Adding vol [%s/%s] to volume list", vol.ID, vol.Name)
 	return append(vols, vol), nil
 }
 
@@ -4260,7 +4265,9 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			log.Debugf("Getting PVC [%s], namespace: [%s] for depolyment [%s]", obj.Name, obj.Namespace, ctx.App.Key)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			log.Debugf("got pvc object [%s]", pvcObj.Name)
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
@@ -4298,6 +4305,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
+
+			log.Debugf("Getting PVCs from namespace: [%s] for statefulset [%s]", obj.Namespace, obj.Name)
 
 			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {

@@ -308,7 +308,7 @@ var _ = Describe("{PoolExpandWithReboot}", func() {
 		Step("Wait for expansion to start and reboot node", func() {
 			err := WaitForExpansionToStart(poolIDToResize)
 			log.FailOnError(err, "Timed out waiting for expansion to start")
-			err = RebootNodeAndWait(*storageNode)
+			err = RebootNodeAndWaitForPxUp(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 		})
 

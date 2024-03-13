@@ -29,7 +29,7 @@ const (
 	totalTimeInHours              = 24
 	errorPersistTimeInMinutes     = 60 * time.Minute
 	snapshotScheduleRetryInterval = 10 * time.Second
-	snapshotScheduleRetryTimeout  = 5 * time.Minute
+	snapshotScheduleRetryTimeout  = 15 * time.Minute
 	waitTimeForPXAfterError       = 20 * time.Minute
 )
 

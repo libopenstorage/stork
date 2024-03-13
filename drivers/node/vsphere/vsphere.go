@@ -96,12 +96,22 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 	var err error
 	log.Infof("Testing vsphere driver connection by checking state of the VMs in the vsphere")
 	//Reestablishing the connection where we saw session getting NotAuthenticated issue in Longevity
-	err = v.connect()
-	if err != nil {
+	if err = v.connect(); err != nil {
 		return err
 	}
+	// If n.Name is not in vmMap after the first attempt, wait and try to connect again.
 	if _, ok := vmMap[n.Name]; !ok {
-		return fmt.Errorf("Failed to get VM: %s", n.Name)
+		time.Sleep(2 * time.Minute) // Wait for 2 minutes before retrying.
+
+		// Attempt to reconnect.
+		if err = v.connect(); err != nil {
+			return err
+		}
+
+		// Check if n.Name is in vmMap after reconnecting.
+		if _, ok = vmMap[n.Name]; !ok {
+			return fmt.Errorf("Failed to get VM: %s", n.Name)
+		}
 	}
 	vm := vmMap[n.Name]
 	cmd := "hostname"

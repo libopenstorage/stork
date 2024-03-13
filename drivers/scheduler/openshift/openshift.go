@@ -856,6 +856,27 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 	return nil
 }
 
+// getMachinesCount deletes the OCP node using kubectl command
+func (k *openshift) getMachinesCount() (int, error) {
+	var output []byte
+	var err error
+	// Get number of ocp machines using kubectl command
+	log.Infof("Getting machine count")
+	cmd := "kubectl get machines -n openshift-machine-api | awk 'NR > 1 {count++} END {print count}'"
+	output, err = exec.Command("sh", "-c", cmd).CombinedOutput()
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to run command [%s], Err: %v", cmd, err)
+	}
+	result := strings.TrimSpace(string(output))
+	machineCount, err := strconv.Atoi(result)
+	if err != nil {
+		return 0, fmt.Errorf("error converting [%s] to int, Err: %v", result, err)
+	}
+
+	return machineCount, nil
+}
+
 // Method to recycling OCP node
 func (k *openshift) RecycleNode(n node.Node) error {
 	// Check if node is valid before proceeding for delete a node
@@ -1086,6 +1107,9 @@ func getMachineSetName() (string, error) {
 
 // ScaleCluster scale the cluster to the given replicas
 func (k *openshift) ScaleCluster(replicas int) error {
+
+	initialMachineCount, err := k.getMachinesCount()
+
 	machineSetName, err := getMachineSetName()
 	if err != nil {
 		return err
@@ -1101,6 +1125,22 @@ func (k *openshift) ScaleCluster(replicas int) error {
 
 	if !strings.Contains(string(output), fmt.Sprintf("%s scaled", machineSetName)) {
 		return fmt.Errorf("failed to scale [%s], output: %s", machineSetName, string(output))
+	}
+
+	log.Infof("waiting for new machine to be created")
+
+	t := func() (interface{}, bool, error) {
+		newMachineCount, err := k.getMachinesCount()
+		if err != nil {
+			return "", true, fmt.Errorf("error getting machine count, Err: %v", err)
+		}
+		if newMachineCount <= initialMachineCount {
+			return "", true, fmt.Errorf("waiting for new machine to provision initial count : [%d], current count: [%d]", initialMachineCount, newMachineCount)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		return err
 	}
 
 	if _, err := k.checkAndGetNewNode(); err != nil {

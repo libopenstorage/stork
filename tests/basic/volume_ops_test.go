@@ -973,7 +973,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		retain := 8
-		interval := 3
+		interval := 2
 
 		n := node.GetStorageDriverNodes()[0]
 		uuidCmd := "pxctl cred list -j | grep uuid"
@@ -1155,16 +1155,56 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 
 		stepLog = "Verify cloud snap restore"
 		Step(stepLog, func() {
-			for ns, volSnap := range volSnapMap {
-				for vol, snap := range volSnap {
-					restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
-						Name:      vol.Name,
-						Namespace: vol.Namespace,
-					}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
-					restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
-					log.FailOnError(err, fmt.Sprintf("error creating volume snapshot restore for %s", snap.Name))
-					err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+			for _, ctx := range contexts {
+
+				if strings.Contains(ctx.App.Key, "cloudsnap") {
+
+					appNamespace := ctx.App.Key + "-" + ctx.UID
+					snapSchedList, err := storkops.Instance().ListSnapshotSchedules(appNamespace)
+					log.FailOnError(err, "error getting snapshot list")
+
+					vols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes")
+
+					for _, vol := range vols {
+						var snapshotScheduleName string
+						for _, snap := range snapSchedList.Items {
+							snapshotScheduleName = snap.Name
+							if strings.Contains(snapshotScheduleName, vol.Name) {
+								break
+							}
+						}
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						log.FailOnError(err, "error getting snapshot schedule for [%s] in namespace [%s]", snapshotScheduleName, appNamespace)
+						var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+					outer:
+						for _, snapshotStatuses := range resp.Status.Items {
+							for _, vsStatus := range snapshotStatuses {
+								if vsStatus.Status == snapv1.VolumeSnapshotConditionReady {
+									volumeSnapshotStatus = vsStatus
+									break outer
+								}
+							}
+						}
+						if volumeSnapshotStatus != nil {
+							restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+								Name:      vol.Name,
+								Namespace: vol.Namespace,
+							}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
+							restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+							log.FailOnError(err, "error CreateVolumeSnapshotRestore")
+							err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+							dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+							if err == nil {
+								err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
+								log.FailOnError(err, "error deleting volume snapshot restore object")
+							}
+						} else {
+							log.FailOnError(fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace), "error getting volume snapshot")
+						}
+
+					}
+
 				}
 			}
 
