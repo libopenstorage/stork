@@ -14,6 +14,7 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
+	kv "github.com/portworx/sched-ops/k8s/kubevirt"
 	kvd "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -50,6 +51,7 @@ const (
 	// will take a hit if the node's status is StorageDown
 	storageDownNodeScorePenaltyPercentage float64 = 50
 	schedulingFailureEventReason                  = "FailedScheduling"
+	nonOptimumSchedulingEventReason               = "NonOptimumScheduling"
 	// Pod annotation to check if only local nodes should be used to schedule a pod
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 	// StorageClass parameter to check if only remote nodes should be used to schedule a pod
@@ -484,7 +486,7 @@ func (e *Extender) getNodeScore(
 	zoneInfo *localityInfo,
 	regionInfo *localityInfo,
 	storageNode *volume.NodeInfo,
-) float64 {
+) (float64, bool) {
 	for _, address := range node.Status.Addresses {
 		if address.Type != v1.NodeHostName {
 			continue
@@ -507,37 +509,37 @@ func (e *Extender) getNodeScore(
 											// from hyperconvergence on this node. So we will not use
 											// the nodePriorityScore but instead rackPriorityScore and
 											// penalize based on that.
-											return rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
+											return rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100), true // we found a replica node
 										}
-										return nodePriorityScore
+										return nodePriorityScore, true // we found a replica node
 									}
 								}
 								if nodeRack != "" {
 									if storageNode.Status == volume.NodeStorageDown {
-										return rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
+										return rackPriorityScore * (storageDownNodeScorePenaltyPercentage / 100), false
 									}
-									return rackPriorityScore
+									return rackPriorityScore, false
 								}
 							}
 						}
 						if nodeZone != "" {
 							if storageNode.Status == volume.NodeStorageDown {
-								return zonePriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
+								return zonePriorityScore * (storageDownNodeScorePenaltyPercentage / 100), false
 							}
-							return zonePriorityScore
+							return zonePriorityScore, false
 						}
 					}
 				}
 				if nodeRegion != "" {
 					if storageNode.Status == volume.NodeStorageDown {
-						return regionPriorityScore * (storageDownNodeScorePenaltyPercentage / 100)
+						return regionPriorityScore * (storageDownNodeScorePenaltyPercentage / 100), false
 					}
-					return regionPriorityScore
+					return regionPriorityScore, false
 				}
 			}
 		}
 	}
-	return 0
+	return 0, false
 }
 
 type localityInfo struct {
@@ -681,6 +683,8 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			storklog.PodLog(pod).Debugf("rackMap: %v", rackInfo.HostnameMap)
 			storklog.PodLog(pod).Debugf("zoneMap: %v", zoneInfo.HostnameMap)
 			storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
+			eventVolumeNameList := []string{}
+			eventReplicaNodeMap := make(map[string]string)
 			for _, volume := range driverVolumes {
 				skipVolumeScoring := false
 				if value, exists := volume.Labels[skipScoringLabel]; exists {
@@ -722,15 +726,46 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				storklog.PodLog(pod).Debugf("Volume %v allocated in zones: %v", volume.VolumeName, zoneInfo.PreferredLocality)
 				storklog.PodLog(pod).Debugf("Volume %v allocated in regions: %v", volume.VolumeName, regionInfo.PreferredLocality)
 
+				foundReplicaNodeInInput := false
+
 				for k8sNodeIndex, node := range args.Nodes.Items {
 					if storageNode, keyExists := k8sNodeIndexStorageNodeMap[k8sNodeIndex]; keyExists {
-						priorityMap[node.Name] += int(e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, storageNode))
+						priorityScore, isReplicaNode := e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, storageNode)
+						if isReplicaNode {
+							foundReplicaNodeInInput = true
+						}
+						priorityMap[node.Name] += int(priorityScore)
 					} else {
 						// the k8sNodeIndex's corresponding node isn't available to the driver,
 						// so we shouldn't schedule pods on this node
 						// we will assign a negative score here and set it to 0 when encoding the response
 						priorityMap[node.Name] = -1
 					}
+				}
+				if !foundReplicaNodeInInput {
+					// No replica nodes were found in the input for this volume
+					eventVolumeNameList = append(eventVolumeNameList, volume.VolumeName)
+					// Add those replica nodes into a map so that we can raise an event later
+					for _, node := range volume.DataNodes {
+						eventReplicaNodeMap[idMap[node].SchedulerID] = ""
+					}
+				}
+			}
+
+			if !isAntihyperconvergenceRequired {
+				// The pod is expected to be hyperconverged. If we didn't find a replica node in the input nodes,
+				// lets raise an event. This event will be raised for all the volumes which are not hyperconverged for a pod
+				// if kubernetes does not send us those replicas as part of the input.
+				if len(eventVolumeNameList) > 0 {
+					// Create a list of replica nodes
+					replicaNodeList := []string{}
+					for replicaNode := range eventReplicaNodeMap {
+						replicaNodeList = append(replicaNodeList, replicaNode)
+					}
+					msg := fmt.Sprintf("Unable to schedule pod using volumes %v in a hyperconverged fashion.  Make sure you have "+
+						"enough CPU and memory resources available on these nodes: %v", eventVolumeNameList, replicaNodeList)
+					storklog.PodLog(pod).Warnf(msg)
+					e.Recorder.Event(pod, v1.EventTypeWarning, nonOptimumSchedulingEventReason, msg)
 				}
 			}
 
@@ -986,7 +1021,9 @@ func (e *Extender) processVirtLauncherPodPrioritizeRequest(
 	e.updateVirtLauncherPodPrioritizeScores(encoder,
 		args,
 		volInfo,
-		podBeingLiveMigrated)
+		podBeingLiveMigrated,
+		vmiName, pod.Namespace,
+	)
 	return nil
 }
 
@@ -994,11 +1031,18 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 	encoder *json.Encoder,
 	args schedulerapi.ExtenderArgs,
 	volInfo *volume.Info,
-	podBeingLiveMigrated *v1.Pod) {
+	podBeingLiveMigrated *v1.Pod,
+	vmName string,
+	vmNamespace string,
+) {
 	pod := args.Pod
 	// Default behavior is hyperconvergence
 	replicaNodeScore := int64(nodePriorityScore)
 	remoteNodeScore := int64(defaultScore)
+	usingHyperconvergence := true
+	foundReplicaNodeInInput := false
+	eventReplicaNodeMap := make(map[string]string)
+	replicaSchedulerNameList := []string{}
 
 	// If this is a pod being live migrated then we prefer antihyperconvergence
 	// We give lower score to replica nodes so that if a pod is unable to schedule on the node
@@ -1007,8 +1051,12 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 	if podBeingLiveMigrated != nil {
 		remoteNodeScore = int64(nodePriorityScore)
 		replicaNodeScore = int64(defaultScore)
+		usingHyperconvergence = false
 	}
 
+	for _, dataNode := range volInfo.DataNodes {
+		eventReplicaNodeMap[dataNode] = ""
+	}
 	respList := schedulerapi.HostPriorityList{}
 	driverNodes, err := e.Driver.GetNodes()
 	if err != nil || len(driverNodes) == 0 || volInfo == nil {
@@ -1020,15 +1068,20 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 	} else {
 		driverNodes = volume.RemoveDuplicateOfflineNodes(driverNodes)
 		for _, dnode := range driverNodes {
+			if _, exists := eventReplicaNodeMap[dnode.StorageID]; exists {
+				replicaSchedulerNameList = append(replicaSchedulerNameList, dnode.SchedulerID)
+			}
 			for _, knode := range args.Nodes.Items {
-				// Initialize with score to with score for remote node
+				// Initialize score with a remoteNodeScore.
 				// It would be updated if the node being score is a replica node
 				score := remoteNodeScore
 				if volume.IsNodeMatch(&knode, dnode) {
 					// Score replica nodes
 					for _, dataNode := range volInfo.DataNodes {
+						eventReplicaNodeMap[dnode.SchedulerID] = ""
 						if dataNode == dnode.StorageID {
 							// Current node has the volume replica
+							foundReplicaNodeInInput = true
 							score = replicaNodeScore
 							if e.nodeHasAttachedVolume(dnode, volInfo) {
 								score = int64(2 * nodePriorityScore)
@@ -1048,9 +1101,24 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 		}
 	}
 
-	storklog.PodLog(pod).Debugf("Nodes in prioritize response:")
+	storklog.PodLog(pod).Debugf("Nodes in prioritize response: ")
 	for _, node := range respList {
 		storklog.PodLog(pod).Debugf("%+v", node)
+	}
+	if usingHyperconvergence {
+		if !foundReplicaNodeInInput {
+			vm, err := kv.Instance().GetVirtualMachine(vmName, vmNamespace)
+			if err == nil {
+				// Replica nodes are not found in the input. This means that the VM is not going
+				// to be scheduled on replica nodes. Report an event.
+				msg := fmt.Sprintf("Unable to schedule VM on a node in a hyperconverged fashion. Make sure you have "+
+					"enough CPU and memory resources available on these nodes: %v", replicaSchedulerNameList)
+				e.Recorder.Event(vm, v1.EventTypeWarning, nonOptimumSchedulingEventReason, msg)
+				storklog.PodLog(pod).Warnf(msg)
+			} else {
+				storklog.PodLog(pod).Debugf("Failed to get VM object %v/%v while reporting an event: %v", vmName, vmNamespace, err)
+			}
+		}
 	}
 
 	if err := encoder.Encode(respList); err != nil {
