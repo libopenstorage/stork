@@ -2,7 +2,6 @@ package volume
 
 import (
 	"context"
-
 	"github.com/libopenstorage/openstorage/api"
 )
 
@@ -36,6 +35,9 @@ var (
 	// FilesystemCheckNotSupported implements FilesystemCheckDriver by returning
 	// Not supported error
 	FilesystemCheckNotSupported = &filesystemCheckNotSupported{}
+	// VerifyChecksumNotSupported implements VerifyChecksumDriver by returning
+	// Not supported error
+	VerifyChecksumNotSupported = &verifyChecksumNotSupported{}
 )
 
 type blockNotSupported struct{}
@@ -50,7 +52,7 @@ func (b *blockNotSupported) Detach(ctx context.Context, volumeID string, options
 
 type snapshotNotSupported struct{}
 
-func (s *snapshotNotSupported) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
+func (s *snapshotNotSupported) Snapshot(ctx context.Context, volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
 	return "", ErrNotSupported
 }
 
@@ -79,10 +81,7 @@ func (i *ioNotSupported) Flush(volumeID string) error {
 type statsNotSupported struct{}
 
 // Stats returns stats
-func (s *statsNotSupported) Stats(
-	volumeID string,
-	cumulative bool,
-) (*api.Stats, error) {
+func (s *statsNotSupported) Stats(ctx context.Context, volumeID string, cumulative bool) (*api.Stats, error) {
 	return nil, ErrNotSupported
 }
 
@@ -106,13 +105,11 @@ func (s *statsNotSupported) CapacityUsage(
 
 // VolumeUsageByNode returns capacity usage of all volumes/snaps belonging to
 // a node
-func (s *statsNotSupported) VolumeUsageByNode(
-	nodeID string,
-) (*api.VolumeUsageByNode, error) {
+func (s *statsNotSupported) VolumeUsageByNode(ctx context.Context, nodeID string) (*api.VolumeUsageByNode, error) {
 	return nil, ErrNotSupported
 }
 
-func (s *statsNotSupported)	VolumeBytesUsedByNode(nodeID string,
+func (s *statsNotSupported) VolumeBytesUsedByNode(nodeID string,
 	ids []uint64,
 ) (*api.VolumeBytesUsedByNode, error) {
 	return nil, ErrNotSupported
@@ -323,5 +320,26 @@ func (cl *filesystemCheckNotSupported) FilesystemCheckStatus(request *api.SdkFil
 	return nil, ErrNotSupported
 }
 func (cl *filesystemCheckNotSupported) FilesystemCheckStop(request *api.SdkFilesystemCheckStopRequest) (*api.SdkFilesystemCheckStopResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemCheckNotSupported) FilesystemCheckListSnapshots(request *api.SdkFilesystemCheckListSnapshotsRequest) (*api.SdkFilesystemCheckListSnapshotsResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemCheckNotSupported) FilesystemCheckDeleteSnapshots(request *api.SdkFilesystemCheckDeleteSnapshotsRequest) (*api.SdkFilesystemCheckDeleteSnapshotsResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *filesystemCheckNotSupported) FilesystemCheckListVolumes(request *api.SdkFilesystemCheckListVolumesRequest) (*api.SdkFilesystemCheckListVolumesResponse, error) {
+	return nil, ErrNotSupported
+}
+
+type verifyChecksumNotSupported struct{}
+
+func (cl *verifyChecksumNotSupported) VerifyChecksumStart(request *api.SdkVerifyChecksumStartRequest) (*api.SdkVerifyChecksumStartResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *verifyChecksumNotSupported) VerifyChecksumStatus(request *api.SdkVerifyChecksumStatusRequest) (*api.SdkVerifyChecksumStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+func (cl *verifyChecksumNotSupported) VerifyChecksumStop(request *api.SdkVerifyChecksumStopRequest) (*api.SdkVerifyChecksumStopResponse, error) {
 	return nil, ErrNotSupported
 }

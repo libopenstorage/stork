@@ -492,7 +492,7 @@ func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 }
 
 func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string) (*storkvolume.Info, error) {
-	vols, err := volDriver.Inspect([]string{volumeID})
+	vols, err := volDriver.Inspect(context.TODO(), []string{volumeID})
 	if err != nil {
 		return nil, &ErrFailedToInspectVolume{
 			ID:    volumeID,
@@ -1296,7 +1296,7 @@ func (p *portworx) SnapshotCreate(
 				namespaceLabel:     (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNamespaceTag],
 			},
 		}
-		snapshotID, err = volDriver.Snapshot(volumeID, true, locator, true)
+		snapshotID, err = volDriver.Snapshot(context.TODO(), volumeID, true, locator, true)
 		if err != nil {
 			// Check already exists error and return existing snapshot if found
 			if isAlreadyExistsError(err) {
@@ -1529,7 +1529,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *storkapi.VolumeSnapsh
 
 			// Get Volume Info
 			uid := getUidforRestore(volID, string(snapRestore.GetUID()))
-			vols, err := volDriver.Inspect([]string{volID})
+			vols, err := volDriver.Inspect(context.TODO(), []string{volID})
 			if err != nil {
 				return &ErrFailedToInspectVolume{
 					ID:    volID,
@@ -1639,7 +1639,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 		return false, err
 	}
 	// Get Volume Info
-	parentVols, err := volDriver.Inspect([]string{volID})
+	parentVols, err := volDriver.Inspect(context.TODO(), []string{volID})
 	if err != nil {
 		return false, &ErrFailedToInspectVolume{
 			ID:    volID,
@@ -1651,7 +1651,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 			Cause: fmt.Sprintf("Volume not found err: %v", err),
 		}
 	}
-	restoreVols, err := volDriver.Inspect([]string{restoreNamePrefix + uid})
+	restoreVols, err := volDriver.Inspect(context.TODO(), []string{restoreNamePrefix + uid})
 	if err != nil {
 		return false, &ErrFailedToInspectVolume{
 			ID:    volID,
@@ -1708,7 +1708,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 			HaLevel:    restoreVol.GetSpec().GetHaLevel() + 1,
 			ReplicaSet: &api.ReplicaSet{Nodes: []string{replPool}},
 		}
-		if err := volDriver.Set(restoreVol.GetId(), restoreVol.GetLocator(), spec); err != nil {
+		if err := volDriver.Set(context.TODO(), restoreVol.GetId(), restoreVol.GetLocator(), spec); err != nil {
 			return false, fmt.Errorf("failed to perform ha-update: %v", err)
 		}
 		// check for vol is sync
@@ -1792,7 +1792,7 @@ func (p *portworx) pxSnapshotRestore(snapRestore *storkapi.VolumeSnapshotRestore
 		stateErr := wait.ExponentialBackoff(restoreStateCallBackoff, func() (bool, error) {
 			log.VolumeSnapshotRestoreLog(snapRestore).Infof("checking volume state for restore status %v", vol.Volume)
 			// Get Volume Info
-			orgVol, err := volDriver.Inspect([]string{vol.Volume})
+			orgVol, err := volDriver.Inspect(context.TODO(), []string{vol.Volume})
 			if err != nil {
 				log.VolumeSnapshotRestoreLog(snapRestore).Warnf("volume inspect failed %v:%v", vol.Volume, err)
 				return false, nil
@@ -1904,7 +1904,7 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		restoreVolumeID, err = volDriver.Snapshot(snapID, false, locator, true)
+		restoreVolumeID, err = volDriver.Snapshot(context.TODO(), snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1932,7 +1932,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// create PV from restored volume
-	vols, err := volDriver.Inspect([]string{restoreVolumeID})
+	vols, err := volDriver.Inspect(context.TODO(), []string{restoreVolumeID})
 	if err != nil {
 		return nil, nil, &ErrFailedToInspectVolume{
 			ID:    restoreVolumeID,
@@ -2535,7 +2535,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 			return err
 		}
 
-		volumes, err := volDriver.Inspect([]string{pvName})
+		volumes, err := volDriver.Inspect(context.TODO(), []string{pvName})
 		if err != nil {
 			return err
 		}
@@ -2552,7 +2552,7 @@ func (p *portworx) Failover(action *storkapi.Action) error {
 			volLocator.VolumeLabels = make(map[string]string)
 		}
 		volLocator.VolumeLabels["promote"] = "true"
-		if err := volDriver.Set(vol.GetId(), volLocator, nil); err != nil {
+		if err := volDriver.Set(context.TODO(), vol.GetId(), volLocator, nil); err != nil {
 			return fmt.Errorf("failed to promote volume %v with error %v", vol.GetId(), err)
 		}
 		countPromotedVolumes += 1
@@ -3853,7 +3853,7 @@ func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
 				namespaceLabel: clone.Spec.DestinationNamespace,
 			},
 		}
-		_, err := volDriver.Snapshot(vInfo.Volume, false, locator, true)
+		_, err := volDriver.Snapshot(context.TODO(), vInfo.Volume, false, locator, true)
 		if err != nil {
 			// Mark this clone for deletion too if it already existed, so that
 			// all clones can be recreated on the next try

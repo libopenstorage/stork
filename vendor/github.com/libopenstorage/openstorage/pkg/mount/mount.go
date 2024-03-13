@@ -4,12 +4,14 @@
 package mount
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -18,12 +20,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/mount"
 	"github.com/libopenstorage/openstorage/pkg/chattr"
 	"github.com/libopenstorage/openstorage/pkg/keylock"
 	"github.com/libopenstorage/openstorage/pkg/options"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/moby/sys/mountinfo"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -102,6 +104,7 @@ const (
 	mountPathRemoveDelay = 30 * time.Second
 	testDeviceEnv        = "Test_Device_Mounter"
 	bindMountPrefix      = "readonly"
+	statTimeout          = 30 * time.Second
 )
 
 var (
@@ -134,10 +137,13 @@ type PathInfo struct {
 // Info per device
 type Info struct {
 	sync.Mutex
-	Device     string
-	Minor      int
+	Device string
+	Minor  int
+	// Guarded using the above lock.
 	Mountpoint []*PathInfo
 	Fs         string
+	// Guarded using Mounter.Lock()
+	MountsInProgress int
 }
 
 // Mounter implements Ops and keeps track of active mounts for volume drivers.
@@ -151,7 +157,7 @@ type Mounter struct {
 	trashLocation string
 }
 
-type findMountPoint func(source *mount.Info, destination *regexp.Regexp, mountInfo []*mount.Info) (bool, string, string)
+type findMountPoint func(source *mountinfo.Info, destination *regexp.Regexp, mountInfo []*mountinfo.Info) (bool, string, string)
 
 // DefaultMounter defaults to syscall implementation.
 type DefaultMounter struct {
@@ -323,8 +329,8 @@ func (m *Mounter) maybeRemoveDevice(device string) {
 	m.Lock()
 	defer m.Unlock()
 	if info, ok := m.mounts[device]; ok {
-		// If the device has no more mountpoints, remove it from the map
-		if len(info.Mountpoint) == 0 {
+		// If the device has no more mountpoints and no mounts in progress, remove it from the map
+		if len(info.Mountpoint) == 0 && info.MountsInProgress == 0 {
 			delete(m.mounts, device)
 		}
 	}
@@ -398,7 +404,7 @@ func (m *Mounter) load(prefixes []*regexp.Regexp, fmp findMountPoint) error {
 			if !ok {
 				mount = &Info{
 					Device:     deviceSourcePath,
-					Fs:         v.Fstype,
+					Fs:         v.FSType,
 					Minor:      v.Minor,
 					Mountpoint: make([]*PathInfo, 0),
 				}
@@ -478,10 +484,18 @@ func (m *Mounter) Mount(
 			Fs:         fs,
 		}
 	}
+	// This variable in Info Structure is guarded using m.Lock()
+	info.MountsInProgress++
 	m.mounts[device] = info
 	m.Unlock()
 	info.Lock()
-	defer info.Unlock()
+	defer func() {
+		info.Unlock()
+		m.Lock()
+		// Info is not destroyed, even when we don't hold the lock.
+		info.MountsInProgress--
+		m.Unlock()
+	}()
 
 	// Validate input params
 	// FS check is not needed if it is a bind mount
@@ -697,7 +711,11 @@ func (m *Mounter) removeMountPath(path string) error {
 
 // RemoveMountPath makes the path writeable and removes it after a fixed delay
 func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) error {
-	if _, err := os.Stat(mountPath); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), statTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "stat", mountPath)
+	_, err := cmd.CombinedOutput()
+	if err == nil {
 		if options.IsBoolOptionSet(opts, options.OptionsWaitBeforeDelete) {
 			hasher := md5.New()
 			hasher.Write([]byte(mountPath))
@@ -833,7 +851,7 @@ func New(
 
 // GetMounts is a wrapper over mount.GetMounts(). It is mainly used to add a switch
 // to enable device mounter tests.
-func GetMounts() ([]*mount.Info, error) {
+func GetMounts() ([]*mountinfo.Info, error) {
 	if os.Getenv(testDeviceEnv) != "" {
 		return testGetMounts()
 	}
@@ -842,12 +860,12 @@ func GetMounts() ([]*mount.Info, error) {
 
 var (
 	// testMounts is a global test list of mount table entries
-	testMounts []*mount.Info
+	testMounts []*mountinfo.Info
 )
 
 // testGetMounts is only used in tests to get the test list of mount table
 // entries
-func testGetMounts() ([]*mount.Info, error) {
+func testGetMounts() ([]*mountinfo.Info, error) {
 	var err error
 	if len(testMounts) == 0 {
 		testMounts, err = parseMountTable()

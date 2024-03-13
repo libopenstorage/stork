@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/cluster"
 	clustermanager "github.com/libopenstorage/openstorage/cluster/manager"
+	"github.com/libopenstorage/openstorage/pkg/correlation"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers/common"
 	"github.com/pborman/uuid"
@@ -56,8 +58,10 @@ type driver struct {
 	volume.CloudMigrateDriver
 	volume.FilesystemTrimDriver
 	volume.FilesystemCheckDriver
-	kv          kvdb.Kvdb
-	thisCluster cluster.Cluster
+	volume.VerifyChecksumDriver
+	kv            kvdb.Kvdb
+	thisCluster   cluster.Cluster
+	volumeChannel chan *api.Volume
 }
 
 type fakeCred struct {
@@ -97,7 +101,9 @@ func newFakeDriver(params map[string]string) (*driver, error) {
 		CloudMigrateDriver:    volume.CloudMigrateNotSupported,
 		FilesystemTrimDriver:  volume.FilesystemTrimNotSupported,
 		FilesystemCheckDriver: volume.FilesystemCheckNotSupported,
+		VerifyChecksumDriver:  volume.VerifyChecksumNotSupported,
 		kv:                    kv,
+		volumeChannel:         make(chan *api.Volume, 2),
 	}
 
 	inst.thisCluster, err = clustermanager.Inst()
@@ -117,6 +123,42 @@ func newFakeDriver(params map[string]string) (*driver, error) {
 
 	logrus.Println("Fake driver initialized")
 	return inst, nil
+}
+
+// volumeGenerator periocally
+func volumeGenerator(d *driver) {
+	iter := 0
+	for {
+		sleepRand := rand.Intn(10)
+		time.Sleep(time.Duration(sleepRand+1) * time.Second)
+		result := rand.Int31()
+		logrus.Infof("sending result %v with iteration %v", result, iter)
+		response := api.Volume{
+			Id: fmt.Sprintf("%v-%v", result, iter),
+			Locator: &api.VolumeLocator{
+				Name:         uuid.New(),
+				VolumeLabels: make(map[string]string),
+			},
+		}
+		d.volumeChannel <- &response
+		iter += 1
+	}
+}
+
+func (d *driver) StartVolumeWatcher() {
+	return
+}
+
+func (d *driver) GetVolumeWatcher(locator *api.VolumeLocator, labels map[string]string) (chan *api.Volume, error) {
+	go volumeGenerator(d)
+	if d.volumeChannel == nil {
+		d.volumeChannel = make(chan *api.Volume, 2)
+	}
+	return d.volumeChannel, nil
+}
+
+func (d *driver) StopVolumeWatcher() {
+	return
 }
 
 func (d *driver) Name() string {
@@ -142,8 +184,8 @@ func (d *driver) Status() [][2]string {
 	return [][2]string{}
 }
 
-func (d *driver) Inspect(volumeIDs []string) ([]*api.Volume, error) {
-	volumes, err := d.StoreEnumerator.Inspect(volumeIDs)
+func (d *driver) Inspect(ctx context.Context, volumeIDs []string) ([]*api.Volume, error) {
+	volumes, err := d.StoreEnumerator.Inspect(nil, volumeIDs)
 	if err != nil {
 		return nil, err
 	} else if err == nil && len(volumes) == 0 {
@@ -235,14 +277,14 @@ func (d *driver) Unmount(ctx context.Context, volumeID string, mountpath string,
 	return d.UpdateVol(v)
 }
 
-func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
+func (d *driver) Snapshot(ctx context.Context, volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
 
 	if len(locator.GetName()) == 0 {
 		return "", fmt.Errorf("Name for snapshot must be provided")
 	}
 
 	volIDs := []string{volumeID}
-	vols, err := d.Inspect(volIDs)
+	vols, err := d.Inspect(nil, volIDs)
 	if err != nil {
 		return "", nil
 	}
@@ -257,7 +299,7 @@ func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLoc
 }
 
 func (d *driver) Restore(volumeID string, snapID string) error {
-	if _, err := d.Inspect([]string{volumeID, snapID}); err != nil {
+	if _, err := d.Inspect(correlation.TODO(), []string{volumeID, snapID}); err != nil {
 		return err
 	}
 
@@ -294,7 +336,7 @@ func (d *driver) CloudMigrateStatus(request *api.CloudMigrateStatusRequest) (*ap
 	}, nil
 }
 
-func (d *driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error {
+func (d *driver) Set(ctx context.Context, volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
 		return err
@@ -353,7 +395,7 @@ func (d *driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.Volu
 func (d *driver) Shutdown() {}
 
 func (d *driver) UsedSize(volumeID string) (uint64, error) {
-	vols, err := d.Inspect([]string{volumeID})
+	vols, err := d.Inspect(correlation.TODO(), []string{volumeID})
 	if err == kvdb.ErrNotFound {
 		return 0, fmt.Errorf("Volume not found")
 	} else if err != nil {
@@ -371,14 +413,12 @@ func (d *driver) VolumeBytesUsedByNode(nodeMID string, volumes []uint64) (*api.V
 		volusage = append(volusage, &api.VolumeBytesUsed{VolumeId: strconv.FormatUint(id, 10), TotalBytes: 12345})
 	}
 	return &api.VolumeBytesUsedByNode{
-		NodeId:  nodeMID,
+		NodeId:   nodeMID,
 		VolUsage: volusage,
 	}, nil
 }
-
-func (d *driver) Stats(volumeID string, cumulative bool) (*api.Stats, error) {
-
-	vols, err := d.Inspect([]string{volumeID})
+func (d *driver) Stats(ctx context.Context, volumeID string, cumulative bool) (*api.Stats, error) {
+	vols, err := d.Inspect(correlation.TODO(), []string{volumeID})
 	if err == kvdb.ErrNotFound {
 		return nil, fmt.Errorf("Volume not found")
 	} else if err != nil {
@@ -404,7 +444,7 @@ func (d *driver) Stats(volumeID string, cumulative bool) (*api.Stats, error) {
 func (d *driver) CapacityUsage(
 	volumeID string,
 ) (*api.CapacityUsageResponse, error) {
-	vols, err := d.Inspect([]string{volumeID})
+	vols, err := d.Inspect(correlation.TODO(), []string{volumeID})
 	if err == kvdb.ErrNotFound {
 		return nil, fmt.Errorf("Volume not found")
 	} else if err != nil {
@@ -499,7 +539,7 @@ func (d *driver) cloudBackupCreate(input *api.CloudBackupCreateRequest) (string,
 	}
 
 	// Get volume info
-	vols, err := d.Inspect([]string{input.VolumeID})
+	vols, err := d.Inspect(correlation.TODO(), []string{input.VolumeID})
 	if err != nil {
 		return "", "", fmt.Errorf("Volume id not found")
 	}
@@ -595,7 +635,7 @@ func (d *driver) CloudBackupRestore(
 	if err != nil {
 		return nil, err
 	}
-	vols, err := d.Inspect([]string{volid})
+	vols, err := d.Inspect(correlation.TODO(), []string{volid})
 	if err != nil {
 		return nil, fmt.Errorf("Volume id not found")
 	}
@@ -699,7 +739,7 @@ func (d *driver) CloudBackupDeleteAll(input *api.CloudBackupDeleteAllRequest) er
 
 	// Get volume info
 	if len(input.SrcVolumeID) != 0 {
-		vols, err := d.Inspect([]string{input.SrcVolumeID})
+		vols, err := d.Inspect(correlation.TODO(), []string{input.SrcVolumeID})
 		if err != nil {
 			return fmt.Errorf("Volume id not found")
 		}
@@ -899,7 +939,7 @@ func (d *driver) CloudBackupSchedCreate(
 	}
 
 	// Check volume
-	vols, err := d.Inspect([]string{input.SrcVolumeID})
+	vols, err := d.Inspect(correlation.TODO(), []string{input.SrcVolumeID})
 	if err != nil {
 		return nil, fmt.Errorf("Volume id not found")
 	}

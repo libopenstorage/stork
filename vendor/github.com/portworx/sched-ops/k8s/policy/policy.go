@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/portworx/sched-ops/k8s/common"
-	policyv1beta1client "k8s.io/client-go/kubernetes/typed/policy/v1beta1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -20,6 +20,7 @@ var (
 type Ops interface {
 	PodSecurityPolicyOps
 	PodDisruptionBudgetOps
+	PodDisruptionBudgetV1Beta1Ops
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
@@ -41,21 +42,21 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new policy client.
-func New(client policyv1beta1client.PolicyV1beta1Interface) *Client {
+func New(client kubernetes.Interface) *Client {
 	return &Client{
-		policy: client,
+		client: client,
 	}
 }
 
 // NewForConfig builds a new policy client for the given config.
 func NewForConfig(c *rest.Config) (*Client, error) {
-	policy, err := policyv1beta1client.NewForConfig(c)
+	client, err := kubernetes.NewForConfig(c)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		policy: policy,
+		client: client,
 	}, nil
 }
 
@@ -73,18 +74,18 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 // Client is a wrapper for the kubernetes policy client.
 type Client struct {
 	config *rest.Config
-	policy policyv1beta1client.PolicyV1beta1Interface
+	client kubernetes.Interface
 }
 
 // SetConfig sets the config and resets the client
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
-	c.policy = nil
+	c.client = nil
 }
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.policy != nil {
+	if c.client != nil {
 		return nil
 	}
 
@@ -141,7 +142,7 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
-	c.policy, err = policyv1beta1client.NewForConfig(c.config)
+	c.client, err = kubernetes.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}
