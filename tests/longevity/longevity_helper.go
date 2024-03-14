@@ -1588,7 +1588,7 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 	if baseInterval, ok := ChaosMap[BaseInterval]; ok {
 		return GetWaitTime(chaosLevel, time.Duration(baseInterval)*time.Minute), true
 	} else {
-		return GetWaitTime(chaosLevel, defaultBaseInterval), true
+		return GetWaitTime(chaosLevel, triggerInterval[triggerType][maximumChaosLevel]), true
 	}
 }
 
