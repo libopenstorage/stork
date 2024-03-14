@@ -321,7 +321,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 			}
 			if _, ok := a.vmIncludeResource[string(backup.UID)]; ok {
 				delete(a.vmIncludeResource, string(backup.UID))
-				log.ApplicationBackupLog(backup).Infof("cleaning up vmIncludeResources for VM backupObjectType %v", a.vmIncludeResource)
+				log.ApplicationBackupLog(backup).Infof("cleaning up vmIncludeResources for VM backupObjectType")
 			}
 			if _, ok := a.vmIncludeResourceMap[string(backup.UID)]; ok {
 				delete(a.vmIncludeResourceMap, string(backup.UID))
@@ -435,6 +435,24 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 
 	switch backup.Status.Stage {
 	case stork_api.ApplicationBackupStageInitial:
+		// Validate parameters
+		if err = a.validateApplicationBackupParameters(backup); err != nil {
+			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+			backup.Status.Reason = fmt.Sprintf("Error validating parameters: %v", err)
+			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+			backup.Status.FinishTimestamp = metav1.Now()
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			log.ApplicationBackupLog(backup).Errorf("Error validating parameters: %v", err)
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				err.Error())
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error updating: %v", err)
+			}
+			return nil
+		}
 		// Make sure the namespaces exist
 		for _, ns := range backup.Spec.Namespaces {
 			if ns == allNamespacesSpecifier {
@@ -2475,4 +2493,25 @@ func (a *ApplicationBackupController) isNsPresentForVmBackup(backup *stork_api.A
 	nsMap := a.vmNsListMap[string(backup.UID)]
 	return nsMap[ns]
 
+}
+
+func (a *ApplicationBackupController) validateApplicationBackupParameters(backup *stork_api.ApplicationBackup) error {
+
+	if IsBackupObjectTypeVirtualMachine(backup) {
+		//Check resourceTypes is not specified
+		if len(backup.Spec.ResourceTypes) != 0 {
+			return fmt.Errorf("resourceType should be nil for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
+		}
+		//check skipAutoExecRules is true for custom rules.
+		if backup.Spec.PreExecRule != "" || backup.Spec.PostExecRule != "" {
+			if !backup.Spec.SkipAutoExecRules {
+				return fmt.Errorf("exec Rules are specified but skipAutoExecRules is not set to true for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
+			}
+		}
+	} else {
+		if backup.Spec.BackupObjectType != "" && backup.Spec.BackupObjectType != "All" {
+			return fmt.Errorf("backup Object Type value is invalid. Allowed value is either All or %v", resourcecollector.PxBackupObjectType_virtualMachine)
+		}
+	}
+	return nil
 }
