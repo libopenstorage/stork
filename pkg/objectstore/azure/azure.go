@@ -4,14 +4,20 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	az_autorest "github.com/Azure/go-autorest/autorest/azure"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/objectstore/common"
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/azureblob"
+)
+
+const (
+	azureEnv = "AZURE_ENVIRONMENT"
 )
 
 func getPipeline(backupLocation *stork_api.BackupLocation) (pipeline.Pipeline, error) {
@@ -31,7 +37,26 @@ func GetBucket(backupLocation *stork_api.BackupLocation) (*blob.Bucket, error) {
 	if err != nil {
 		return nil, err
 	}
-	return azureblob.OpenBucket(context.Background(), pipeline, accountName, backupLocation.Location.Path, nil)
+	urlSuffix := fmt.Sprintf("blob.%s", getAzureURLSuffix())
+
+	opts := azureblob.Options{
+		StorageDomain: azureblob.StorageDomain(urlSuffix),
+	}
+	return azureblob.OpenBucket(context.Background(), pipeline, accountName, backupLocation.Location.Path, &opts)
+}
+
+func getAzureURLSuffix() string {
+	azureEnv := os.Getenv(azureEnv)
+	if azureEnv == "" {
+		return az_autorest.PublicCloud.StorageEndpointSuffix
+	}
+	azureClEnv, err := az_autorest.EnvironmentFromName(azureEnv)
+	if err != nil {
+		logrus.Errorf("Failed to get azure cl env for:%v, err:%v", azureEnv, err)
+		return az_autorest.PublicCloud.StorageEndpointSuffix
+	}
+	// Endpoint suffux based on current cloud type
+	return azureClEnv.StorageEndpointSuffix
 }
 
 // CreateBucket creates a bucket for the bucket location
@@ -41,7 +66,9 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 	if err != nil {
 		return err
 	}
-	url, err := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", accountName))
+	urlSuffix := getAzureURLSuffix()
+	url, err := url.Parse(fmt.Sprintf("https://%s.blob.%s", accountName, urlSuffix))
+	logrus.Infof("azure - CreateBucket ---------->  url %v -- err %v", url, err)
 	if err != nil {
 		return err
 	}
