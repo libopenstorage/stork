@@ -474,3 +474,29 @@ func AddNSLabel(c *gin.Context) {
 	})
 
 }
+
+// UpgradeStork upgrades the stork to given version
+func UpgradeStork(c *gin.Context) {
+	var requestBody struct {
+		Version string `json:"version"`
+	}
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	log.Infof("%s", requestBody.Version)
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	err := tests.UpgradeStorkVersion(requestBody.Version)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "Stork upgraded successfully",
+	})
+}
