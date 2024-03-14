@@ -89,6 +89,7 @@ import (
 	"gocloud.dev/internal/escape"
 	"gocloud.dev/internal/gcerr"
 	"gocloud.dev/internal/useragent"
+	"github.com/sirupsen/logrus"
 )
 
 // Options sets options for constructing a *blob.Bucket backed by Azure Block Blob.
@@ -330,6 +331,7 @@ func openBucket(ctx context.Context, pipeline pipeline.Pipeline, accountName Acc
 		opts.StorageDomain = "blob.core.windows.net"
 	}
 	blobURL, err := url.Parse(fmt.Sprintf("https://%s.%s", accountName, opts.StorageDomain))
+	logrus.Infof("openBucket -- blobURL %v - err %v", blobURL, err)
 	if err != nil {
 		return nil, err
 	}
