@@ -262,7 +262,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(backup.UID)))
 		labels[pvcNameKey] = utils.GetValidLabel(pvc.Name)
 		labels[pvcUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(pvc.UID)))
-		labels[kdmpStorageClassKey] = volumeInfo.StorageClass
+		labels[kdmpStorageClassKey] = utils.GetValidLabel(volumeInfo.StorageClass)
 		// If backup from px-backup, update the backup object details in the label
 		if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
 			if val == utils.PxbackupAnnotationCreateByValue {
@@ -283,6 +283,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		dataExport.Annotations[utils.SkipResourceAnnotation] = "true"
 		dataExport.Annotations[utils.BackupObjectUIDKey] = string(backup.Annotations[utils.PxbackupObjectUIDKey])
 		dataExport.Annotations[pvcUIDKey] = string(pvc.UID)
+		dataExport.Annotations[kdmpStorageClassKey] = volumeInfo.StorageClass
 		dataExport.Name = getGenericCRName(utils.PrefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
