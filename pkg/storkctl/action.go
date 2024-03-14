@@ -94,7 +94,7 @@ func newFailbackCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 	var excludeNamespaceList []string
 	performFailbackCommand := &cobra.Command{
 		Use:   failbackCommand,
-		Short: "Initiate failover of the given migration schedule",
+		Short: "Initiate failback of the given migration schedule",
 		Run: func(c *cobra.Command, args []string) {
 			// namespace of the MigrationSchedule is provided by the user using the -n / --namespace global flag
 			migrationScheduleNs := cmdFactory.GetNamespace()
