@@ -332,24 +332,35 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	return nil, "", *eventData
 }
 
-func eventRestore(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
-	defer GinkgoRecover()
+func eventRestore(inputsForEventBuilder *PxBackupLongevity) (err error, restoreName string, eventData EventData) {
+	defer func() {
+		log.InfoD("switching to default context")
+		errSetContext := SetClusterContext("")
+		if errSetContext != nil {
+			if err == nil {
+				err = errSetContext
+			}
+			log.Error("failed to SetClusterContext to default cluster", errSetContext)
+		}
+	}()
 
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
+	ctx, errGetCtx := backup.GetAdminCtxFromSecret()
+	if errGetCtx != nil {
+		err := errGetCtx
+		log.Error("Fetching px-central-admin ctx", err)
+		return err, "", eventData
+	}
 
-	eventData := &EventData{}
-
-	restoreName := fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, RandomString(5))
+	restoreName = fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, RandomString(5))
 	appContextsExpectedInBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.BackupData.Namespaces)
 	err = CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
 	if err != nil {
-		return err, fmt.Sprintf("Restore failed for %s", restoreName), *eventData
+		return err, fmt.Sprintf("Restore failed for %s", restoreName), eventData
 	}
 
 	eventData.RestoreName = restoreName
 
-	return err, "", *eventData
+	return err, "", eventData
 }
 
 func RunBuilder(eventBuilderName string, inputsForEventBuilder *PxBackupLongevity, eventResponse *EventResponse) EventData {
@@ -439,7 +450,7 @@ func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *c
 func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(SetupBackupBucketAndCreds)
+	startLongevityTest(AddBackupCluster)
 
 	event := &EventRecord{
 		Event: Event{
@@ -476,7 +487,7 @@ func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *E
 func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(SetupBackupBucketAndCreds)
+	startLongevityTest(DeployBackupApps)
 
 	event := &EventRecord{
 		Event: Event{
@@ -556,7 +567,7 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(CreatePxBackup)
+	startLongevityTest(CreatePxBackupAndRestore)
 
 	event := &EventRecord{
 		Event: Event{
@@ -600,7 +611,7 @@ func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan
 
 	defer GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(CreatePxBackup)
+	startLongevityTest(CreateRandomRestore)
 
 	event := &EventRecord{
 		Event: Event{

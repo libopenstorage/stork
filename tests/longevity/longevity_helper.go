@@ -38,8 +38,9 @@ var (
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 
-	triggerFunctions     map[string]func(*[]*scheduler.Context, *chan *EventRecord)
-	emailTriggerFunction map[string]func()
+	triggerFunctions       map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	triggerBackupFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	emailTriggerFunction   map[string]func()
 
 	// Pure Topology is disabled by default
 	pureTopologyEnabled = false

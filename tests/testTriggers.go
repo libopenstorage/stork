@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
-	"github.com/devans10/pugo/flasharray"
-	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
 	"os"
@@ -18,6 +16,9 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/devans10/pugo/flasharray"
+	"github.com/portworx/torpedo/pkg/pureutils"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -565,22 +566,22 @@ const (
 	ReallocateSharedMount = "reallocateSharedMount"
 
 	// AddBackupCluster adds source and destination cluster
-	AddBackupCluster = "addBackupCluster"
+	AddBackupCluster = "pxbAddBackupCluster"
 
 	//SetupBackupBucketAndCreds add creds and adds bucket for backup
-	SetupBackupBucketAndCreds = "setupBackupBucketAndCreds"
+	SetupBackupBucketAndCreds = "pxbSetupBackupBucketAndCreds"
 
 	// DeployBackup Apps deploys backup application
-	DeployBackupApps = "deployBackupApps"
+	DeployBackupApps = "pxbDeployBackupApps"
 
 	// CreateBackup creates backup for longevity
-	CreatePxBackup = "createPxBackup"
+	CreatePxBackup = "pxbCreatePxBackup"
 
 	// CreateBackupAndRestore creates backup and Restores the backup
-	CreatePxBackupAndRestore = "createBackupAndRestore"
+	CreatePxBackupAndRestore = "pxbCreateBackupAndRestore"
 
 	// CreateBackupAndRestore creates backup and Restores the backup
-	CreateRandomRestore = "createRandomRestore"
+	CreateRandomRestore = "pxbCreateRandomRestore"
 )
 
 // TriggerCoreChecker checks if any cores got generated
