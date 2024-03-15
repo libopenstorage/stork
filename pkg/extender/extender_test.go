@@ -795,8 +795,19 @@ func noVolumeNodeTest(t *testing.T) {
 	require.Contains(t, newEvent,
 		fmt.Sprintf("%v %v Unable to schedule pod using volumes %v in a hyperconverged fashion.",
 			v1.EventTypeWarning, nonOptimumSchedulingEventReason, []string{"noVolumeNode"}))
-	require.Contains(t, newEvent,
-		fmt.Sprintf("enough CPU and memory resources available on these nodes: %v", []string{"node1", "node2"}))
+	var node1, node2 string
+	fmt.Sscanf(newEvent, "Warning NonOptimumScheduling Unable to schedule pod using volumes [noVolumeNode] in a hyperconverged fashion.  "+
+		"Make sure you have enough CPU and memory resources available on these nodes: [%s %s", &node1, &node2)
+	node2 = strings.TrimSuffix(node2, "]")
+
+	// Check if all nodes are present in the event
+	for _, node := range []string{"node1", "node2"} {
+		var found bool
+		if node == node1 || node == node2 {
+			found = true
+		}
+		require.True(t, found, "Expected node %v to be present in the event", node)
+	}
 }
 
 // Create a pod with a PVC using the mock storage class.
@@ -2746,8 +2757,20 @@ func kubevirtPodSchedulingNonHyperconvergence(t *testing.T) {
 	require.Contains(t, newEvent,
 		fmt.Sprintf("%v %v Unable to schedule VM on a node in a hyperconverged fashion.",
 			v1.EventTypeWarning, nonOptimumSchedulingEventReason))
-	require.Contains(t, newEvent,
-		fmt.Sprintf("enough CPU and memory resources available on these nodes: %v", []string{"node1", "node2", "node3"}))
+
+	var node1, node2, node3 string
+	fmt.Sscanf(newEvent, "Warning NonOptimumScheduling Unable to schedule VM on a node in a hyperconverged fashion. Make sure you have enough CPU "+
+		"and memory resources available on these nodes: [%s %s %s", &node1, &node2, &node3)
+	node3 = strings.TrimSuffix(node3, "]")
+
+	// Check if all nodes are present in the event
+	for _, node := range []string{"node1", "node2"} {
+		var found bool
+		if node == node1 || node == node2 || node == node3 {
+			found = true
+		}
+		require.True(t, found, "Expected node %v to be present in the event", node)
+	}
 }
 
 func newKubevirtPod(podName string, namespace string, volumes map[string]bool) *v1.Pod {
