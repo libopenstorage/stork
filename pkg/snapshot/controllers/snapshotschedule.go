@@ -298,7 +298,12 @@ func (s *SnapshotScheduleController) formatVolumeSnapshotName(snapshotSchedule *
 	return strings.Join([]string{scheduleName, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
 }
 
-func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) error {
+func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) error {
+	// Get the latest copy of snapshotschedule for updating
+	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(inputSnapshotSchedule.Name, inputSnapshotSchedule.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get volumesnapshot schedule %s", inputSnapshotSchedule.Name)
+	}
 	snapshotName := s.formatVolumeSnapshotName(snapshotSchedule, policyType)
 	if snapshotSchedule.Status.Items == nil {
 		snapshotSchedule.Status.Items = make(map[stork_api.SchedulePolicyType][]*stork_api.ScheduledVolumeSnapshotStatus)
@@ -312,7 +317,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 			CreationTimestamp: meta.NewTime(schedule.GetCurrentTime()),
 			Status:            snapv1.VolumeSnapshotConditionPending,
 		})
-	err := s.client.Update(context.TODO(), snapshotSchedule)
+	err = s.client.Update(context.TODO(), snapshotSchedule)
 	if err != nil {
 		return err
 	}
@@ -376,10 +381,11 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	if snapshotSchedule.Spec.ReclaimPolicy == stork_api.ReclaimPolicyDelete {
 		snapshot.Metadata.OwnerReferences = []meta.OwnerReference{
 			{
-				Name:       snapshotSchedule.Name,
-				UID:        snapshotSchedule.UID,
-				Kind:       snapshotSchedule.GetObjectKind().GroupVersionKind().Kind,
-				APIVersion: snapshotSchedule.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+				Name: snapshotSchedule.Name,
+				UID:  snapshotSchedule.UID,
+				// TODO: Kind of the fetched volumesnapshotschedule is empty, hence using the input one
+				Kind:       inputSnapshotSchedule.GetObjectKind().GroupVersionKind().Kind,
+				APIVersion: inputSnapshotSchedule.GetObjectKind().GroupVersionKind().GroupVersion().String(),
 			},
 		}
 	}
@@ -465,7 +471,13 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 		}
 	}
 	if snapshotScheduleUpdateRequired {
-		return s.client.Update(context.TODO(), snapshotSchedule)
+		// Get the latest copy of snapshotschedule for updating
+		currentSnapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(snapshotSchedule.Name, snapshotSchedule.Namespace)
+		if err != nil {
+			return fmt.Errorf("failed to get volumesnapshot schedule %s", snapshotSchedule.Name)
+		}
+		currentSnapshotSchedule.Status = snapshotSchedule.Status
+		return s.client.Update(context.TODO(), currentSnapshotSchedule)
 	}
 	return nil
 }
