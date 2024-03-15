@@ -39,6 +39,14 @@ const (
 	pxAdminTokenSecret     = "px-admin-token"
 	secretNamespace        = "openstorage.io/auth-secret-namespace"
 	secretName             = "openstorage.io/auth-secret-name"
+
+	userInputCPModeAsync            = "async-dr"
+	userInputCPModeSync             = "sync-dr"
+	userInputCPModeMigration        = "migration"
+	userInputCPModeOnetimeMigration = "onetime-migration"
+
+	clusterPairDRModeDisasterRecovery = "DisasterRecovery"
+	clusterPairDRModeOnetimeMigration = "OneTimeMigration"
 )
 
 var (
@@ -283,7 +291,12 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
-			if mode == "sync-dr" {
+			if mode != userInputCPModeAsync && mode != userInputCPModeSync && mode != userInputCPModeMigration && mode != userInputCPModeOnetimeMigration {
+				util.CheckErr(fmt.Errorf("invalid mode %s, mode value should either be %s, %s, %s or %s", mode, userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration, userInputCPModeOnetimeMigration))
+				return
+			}
+
+			if mode == userInputCPModeSync {
 				syncDR = true
 			}
 
@@ -313,7 +326,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			}
 			// Handling the syncDR cases here
 			if syncDR {
-				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, true)
+				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, mode, true)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -344,7 +357,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				if unidirectional {
 					return
 				}
-				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, true)
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, mode, true)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -374,7 +387,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
-			//Handling the asyncDR cases here onwards
+			//Handling the asyncDR and migration cases here onwards
 			// Bail out if portworx-api service type is not loadbalancer type and the endpoints are not provided.
 			if !unidirectional && len(sEP) == 0 {
 				srcPXEndpoint, err := getPXEndPointDetails(sFile)
@@ -601,7 +614,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 			}
 
 			printMsg("Creating a cluster pair. Direction: Source -> Destination", ioStreams.Out)
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, false)
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, mode, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -640,7 +653,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					}
 					srcToken = token
 				}
-				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, false)
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, mode, false)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -675,7 +688,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
-	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", "async-dr", "Mode of DR. [async-dr, sync-dr]")
+	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", userInputCPModeAsync, fmt.Sprintf("Mode of DR. [%s, %s, %s, %s]", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration, userInputCPModeOnetimeMigration))
 	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
 	createClusterPairCommand.Flags().StringVarP(&backupLocationName, "use-existing-objectstorelocation", "", "", "(Optional) Objectstorelocation with the provided name should be present in both source and destination cluster")
 	// New parameters for creating backuplocation secret
@@ -699,13 +712,29 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	return createClusterPairCommand
 }
 
-func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, authSecretNamespace string, reverse bool, ignoreStorageOptions bool) (*storkv1.ClusterPair, error) {
+func generateClusterPair(
+	name string,
+	ns string,
+	ip string,
+	port string,
+	token string,
+	configFile string,
+	projectIDMappings string,
+	authSecretNamespace string,
+	reverse bool,
+	mode string,
+	ignoreStorageOptions bool) (*storkv1.ClusterPair, error) {
 	opts := make(map[string]string)
 	if !ignoreStorageOptions {
 		opts["ip"] = ip
 		opts["port"] = port
 		// extract token from px-endpoint command
 		opts["token"] = token
+	}
+	if mode == userInputCPModeAsync {
+		opts["mode"] = clusterPairDRModeDisasterRecovery
+	} else if mode == userInputCPModeOnetimeMigration {
+		opts["mode"] = clusterPairDRModeOnetimeMigration
 	}
 	config, err := getConfig(configFile).RawConfig()
 	if err != nil {
