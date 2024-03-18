@@ -1,0 +1,52 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-cirros-containerdisk
+  annotations:
+    startDataSupported: "true"
+    username: "cirros"
+    appType: "kubevirt"
+spec:
+  running: true
+  template:
+    metadata:
+      name: vmi-ephemeral
+      labels:
+        special: key
+        username: cirros
+    spec:
+      domain:
+        devices:
+          disks:
+            - disk:
+                bus: virtio
+              name: containerdisk
+            {{ if .ClaimsCount }}
+            {{- range $val := Iterate .ClaimsCount }}
+            - name: datavolume{{ $val }}
+              disk:
+                bus: virtio
+            {{- end }}
+            {{ else }}
+            - name: datavolume
+              disk:
+                bus: virtio
+            {{- end }}
+        resources:
+          requests:
+            memory: 2048M
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: kubevirt/cirros-registry-disk-demo:latest
+        {{ if .ClaimsCount }}
+        {{- range $val := Iterate .ClaimsCount }}
+        - name: datavolume{{ $val }}
+          dataVolume:
+            name: pvc-data-volume-{{ $val }}
+        {{- end }}
+        {{ else }}
+        - name: datavolume
+          dataVolume:
+            name: pvc-data-volume
+        {{- end }}

@@ -4,6 +4,7 @@ import (
 	context1 "context"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -1348,6 +1349,47 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	}
 	log.Infof("Restore [%s] created successfully", restoreName)
 	return nil
+}
+
+// CreateRestoreWithReplacePolicyWithValidation Creates in-place restore and waits for it to complete and then validates the restore
+func CreateRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType, scheduledAppContexts []*scheduler.Context) (err error) {
+	err = CreateRestoreWithReplacePolicy(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping, replacePolicy)
+	if err != nil {
+		return
+	}
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err = SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			err = fmt.Errorf("failed switching cluster context back to cluster path [%s]. Err: [%v]", originalClusterConfigPath, err)
+		}
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+	if err != nil {
+		return
+	}
+	return
 }
 
 // CreateRestoreWithUID creates restore with UID
@@ -6357,6 +6399,88 @@ func GetAllVMsInNamespacesWithLabel(namespaceLabel map[string]string) ([]kubevir
 
 }
 
+// GetAllVMsFromScheduledContexts returns all the Kubevirt VMs in the scheduled contexts
+func GetAllVMsFromScheduledContexts(scheduledContexts []*scheduler.Context) ([]kubevirtv1.VirtualMachine, error) {
+	var vms []kubevirtv1.VirtualMachine
+
+	// Get only unique namespaces
+	uniqueNamespaces := make(map[string]bool)
+	for _, scheduledContext := range scheduledContexts {
+		uniqueNamespaces[scheduledContext.ScheduleOptions.Namespace] = true
+	}
+	namespaces := make([]string, 0, len(uniqueNamespaces))
+	for namespace := range uniqueNamespaces {
+		namespaces = append(namespaces, namespace)
+	}
+
+	// Get VMs from the unique namespaces
+	for _, n := range namespaces {
+		vmList, err := GetAllVMsInNamespace(n)
+		if err != nil {
+			return nil, err
+		}
+		vms = append(vms, vmList...)
+	}
+	return vms, nil
+}
+
+// GetVirtLauncherPodName returns the name of the virt-launcher pod in the given namespace
+func GetVirtLauncherPodName(vm kubevirtv1.VirtualMachine) (string, error) {
+	k8sCore := core.Instance()
+	pods, err := k8sCore.GetPods(vm.Namespace, make(map[string]string))
+	if err != nil {
+		return "", err
+	}
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, fmt.Sprintf("%s-%s", "virt-launcher", vm.Name)) {
+			log.InfoD("virt-launcher pod found for vm [%s] is [%s]", vm.Name, pod.Name)
+			return pod.Name, nil
+		}
+	}
+	return "", fmt.Errorf("virt-launcher pod not found")
+}
+
+// GetNumberOfDisksInVM returns the number of disks in the VM
+func GetNumberOfDisksInVM(vm kubevirtv1.VirtualMachine) (int, error) {
+	cmdForDiskCount := "lsblk -d | grep disk | wc -l"
+	diskCountOutput, err := RunCmdInVM(vm, cmdForDiskCount, context1.TODO())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get disk count in VM: %v", err)
+	}
+	// trim diskCountOutput and convert to int
+	diskCount, err := strconv.Atoi(strings.TrimSpace(diskCountOutput))
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert disk count to int: %v", err)
+	}
+	return diskCount, nil
+}
+
+// GetVMsInBackup returns the list of VMs in the backup
+func GetVMsInBackup(ctx context1.Context, backupName string) ([]string, error) {
+	backupDriver := Inst().Backup
+	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch backup UID")
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: BackupOrgID,
+	}
+	backupResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch backup inspect object")
+	}
+	var vmNames []string
+	for _, r := range backupResponse.GetBackup().IncludeResources {
+		if r.Kind == "VirtualMachine" && r.Group == "kubevirt.io" {
+			vmNames = append(vmNames, r.Name)
+		}
+		vmNames = append(vmNames, r.Name)
+	}
+	return vmNames, nil
+}
+
 // RunCmdInVM runs a command in the VM by SSHing into it
 func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) (string, error) {
 	var username string
@@ -6365,12 +6489,25 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	k8sKubevirt := kubevirt.Instance()
 
 	// Getting IP of the VM
+	t := func() (interface{}, bool, error) {
+		vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
+		if err != nil {
+			return "", false, err
+		}
+		if len(vmInstance.Status.Interfaces) == 0 {
+			return "", true, fmt.Errorf("no interfaces found in the VM [%s] in namespace [%s]", vm.Name, vm.Namespace)
+		}
+		return "", false, nil
+
+	}
+	// Need to retry because in case of restarts that is a window where the Interface is not available
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
 	vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
 	if err != nil {
 		return "", err
 	}
-	log.Infof("VM Name - %s", vm.Name)
 	ipAddress := vmInstance.Status.Interfaces[0].IP
+	log.Infof("VM Name - %s", vm.Name)
 	log.Infof("IP Address - %s", ipAddress)
 
 	// Getting username of the VM
@@ -7630,6 +7767,76 @@ func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[stri
 	log.Infof("Node selector for [%s] is updated successfully to [%v]", vmUpdate.Name, vmUpdate.Spec.Template.Spec.NodeSelector)
 
 	return nil
+}
+
+// AddPVCsToVirtualMachine adds PVCs to virtual machine
+func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.PersistentVolumeClaim) error {
+	k8sKubevirt := kubevirt.Instance()
+	var volumes []kubevirtv1.Volume
+	var disks []kubevirtv1.Disk
+	for i, pvc := range pvcs {
+		log.Infof("Adding PVC [%s] to VM [%s]", pvc.Name, vm.Name)
+		volumes = append(volumes, kubevirtv1.Volume{
+			Name: fmt.Sprintf("%s-%d", "datavolume-additional", i),
+			VolumeSource: kubevirtv1.VolumeSource{
+				PersistentVolumeClaim: &kubevirtv1.PersistentVolumeClaimVolumeSource{
+					PersistentVolumeClaimVolumeSource: corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvc.Name,
+					},
+					Hotpluggable: false,
+				},
+			},
+		})
+		disks = append(disks, kubevirtv1.Disk{
+			Name:       fmt.Sprintf("%s-%d", "datavolume-additional", i),
+			DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}},
+		})
+
+	}
+	vm.Spec.Template.Spec.Volumes = append(vm.Spec.Template.Spec.Volumes, volumes...)
+
+	vm.Spec.Template.Spec.Domain.Devices.Disks = append(vm.Spec.Template.Spec.Domain.Devices.Disks, disks...)
+
+	vmUpdate, err := k8sKubevirt.UpdateVirtualMachine(&vm)
+	if err != nil {
+		return err
+	}
+	log.Infof("[%d] volumes added to VM [%s]", len(pvcs), vmUpdate.Name)
+
+	return nil
+}
+
+// CreatePVCsForVM creates PVCs for the VM
+func CreatePVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string) ([]*corev1.PersistentVolumeClaim, error) {
+	pvcs := make([]*corev1.PersistentVolumeClaim, 0)
+	for i := 0; i < numberOfPVCs; i++ {
+		pvcName := fmt.Sprintf("%s-%s-%d", "pvc-new", vm.Name, i)
+		pvc, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+			TypeMeta: metav1.TypeMeta{
+				Kind: "PersistentVolumeClaim",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcName,
+				Namespace: vm.Namespace,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+				StorageClassName: &storageClassName,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(resourceStorage),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		// adding kind to pvc object
+		pvc.Kind = "PersistentVolumeClaim"
+		pvcs = append(pvcs, pvc)
+	}
+	return pvcs, nil
 }
 
 // CompareNodeAndStatusOfVMInNamespace compares the status and Nodes of the VMI from a particular namespace

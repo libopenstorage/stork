@@ -3,6 +3,7 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
@@ -1753,6 +1754,395 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting rule [%s]", r.Name))
 		}
 
+		log.Info("Destroying scheduled apps on source cluster")
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", func() {
+	var (
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
+		restoreNames            []string
+		restoreName             string
+		scheduledAppContexts    []*scheduler.Context
+		restoredAppContexts     []*scheduler.Context
+		sourceClusterUid        string
+		cloudCredName           string
+		cloudCredUID            string
+		backupLocationUID       string
+		backupLocationName      string
+		backupLocationMap       map[string]string
+		providers               []string
+		labelSelectors          map[string]string
+		backupName              string
+		backupNames             []string
+		numberOfVolumes         int
+		virtLauncherPodMap      map[string]map[string]string
+		numberOfAdditionalDisks int
+		diskCount               int
+		bootTime                time.Duration
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtVMRestoreWithAfterChangingVMConfig", "Verify the restore of VM backup on the destination cluster in a namespace where the same VM is already running with Replace/Retain option by changing the number of disks",
+			nil, 296421, Mkoppal, Q1FY25)
+
+		backupLocationMap = make(map[string]string)
+		virtLauncherPodMap = make(map[string]map[string]string)
+		providers = GetBackupProviders()
+		numberOfAdditionalDisks = 2
+		bootTime = 3 * time.Minute
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		appList := Inst().AppList
+		numberOfVolumes = 5
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-cirros-cd-with-pvc"}
+		Inst().CustomAppConfig["kubevirt-cirros-cd-with-pvc"] = scheduler.AppConfig{
+			ClaimsCount: numberOfVolumes,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		taskName := fmt.Sprintf("%d", 296421)
+		appContexts := ScheduleApplications(taskName)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Verify the restore of VM backup on the destination cluster in a namespace where the same VM is already running with Replace/Retain option by changing the number of disks", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%s", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location - %s", backupLocationName))
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusters := []string{SourceClusterName, DestinationClusterName}
+			for _, c := range clusters {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, c, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", c))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", c))
+
+			}
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Taking backup of kubevirt VM", func() {
+			log.InfoD("Taking backup of kubevirt VM")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName = fmt.Sprintf("%s-%s", "vm-backup", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			vms, err := GetAllVMsFromScheduledContexts(scheduledAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			var vmNames []string
+			for _, v := range vms {
+				vmNames = append(vmNames, v.Name)
+			}
+			log.Infof("VMs to be backed up - %v", vmNames)
+			err = CreateVMBackupWithValidation(ctx, backupName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
+		})
+
+		Step("Performing restore on destination cluster", func() {
+			log.InfoD("Performing restore on destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName = fmt.Sprintf("%s-%s", "vm-restore", RandomString(6))
+			restoreNames = append(restoreNames, restoreName)
+			log.InfoD("Restoring the [%s] backup", backupName)
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
+			log.Infof("Waiting for the VMs to boot for [%s]", bootTime)
+			time.Sleep(bootTime)
+		})
+
+		Step("Restoring the same backup with retain option and verify that VM does not restart", func() {
+			log.InfoD("Restoring the same backup with retain option and verify that VM does not restart")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "failed to switch context to source cluster")
+			}()
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+			for _, scheduledAppContext := range scheduledAppContexts {
+				c, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				restoredAppContexts = append(restoredAppContexts, c)
+			}
+			vms, err := GetAllVMsFromScheduledContexts(restoredAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			for _, v := range vms {
+				name, err := GetVirtLauncherPodName(v)
+				log.FailOnError(err, "Fetching virt launcher pod name for VM - [%s]", v.Name)
+				if virtLauncherPodMap[v.Namespace] == nil {
+					virtLauncherPodMap[v.Namespace] = make(map[string]string)
+				}
+				virtLauncherPodMap[v.Namespace][v.Name] = name
+			}
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "failed to switch context to source cluster")
+			restoreName = fmt.Sprintf("%s-%s", "vm-restore-retain", RandomString(6))
+			restoreNames = append(restoreNames, restoreName)
+			log.InfoD("Restoring the [%s] backup", backupName)
+			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain, scheduledAppContexts)
+			log.FailOnError(err, "Validating restore [%s] with retain", restoreName)
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+			for _, v := range vms {
+				name, err := GetVirtLauncherPodName(v)
+				log.FailOnError(err, "Fetching virt launcher pod name for VM - [%s]", v.Name)
+				log.InfoD("Virt launcher pod name for VM - [%s] in namespace [%s] is [%s]", v.Name, v.Namespace, name)
+				dash.VerifyFatal(name, virtLauncherPodMap[v.Namespace][v.Name], fmt.Sprintf("Verifying that VM [%s] in namespace [%s] did not restart", v.Name, v.Namespace))
+				virtLauncherPodMap[v.Namespace][v.Name] = name
+			}
+		})
+
+		Step("Collecting the number of disks in the VMs", func() {
+			log.InfoD("Collecting the number of disks in the VMs")
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "failed to switch context to source cluster")
+			}()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+			vms, err := GetAllVMsFromScheduledContexts(scheduledAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			for _, v := range vms {
+				t := func() (interface{}, bool, error) {
+					diskCountOutput, err := GetNumberOfDisksInVM(v)
+					if err != nil {
+						return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
+					}
+					// Total disks will be numberOfVolumes plus the container disk
+					if diskCountOutput != numberOfVolumes+1 {
+						return nil, true, fmt.Errorf("expected number of disks in VM [%s] in namespace [%s] is [%d] but got [%d]", v.Name, v.Namespace, numberOfVolumes+1, diskCountOutput)
+					}
+					return diskCountOutput, false, nil
+				}
+				d, err := task.DoRetryWithTimeout(t, bootTime, 30*time.Second)
+				log.FailOnError(err, "Failed to get number of disks in VM [%s] in namespace [%s] after retry", v.Name, v.Namespace)
+				diskCount = d.(int)
+				log.InfoD("Number of disks in VM [%s] in namespace [%s] is [%d]", v.Name, v.Namespace, diskCount)
+			}
+		})
+
+		Step("Restoring the same backup with replace option and verify that VM restarts", func() {
+			log.InfoD("Restoring the same backup with replace option and verify that VM restarts")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName = fmt.Sprintf("%s-%s", "vm-restore-replace", RandomString(6))
+			restoreNames = append(restoreNames, restoreName)
+			log.InfoD("Restoring the [%s] backup", backupName)
+			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete, scheduledAppContexts)
+			log.FailOnError(err, "Validating restore [%s] with retain", restoreName)
+			time.Sleep(bootTime)
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "failed to switch context to source cluster")
+			}()
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+			vms, err := GetAllVMsFromScheduledContexts(restoredAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			for _, v := range vms {
+				name, err := GetVirtLauncherPodName(v)
+				log.FailOnError(err, "Fetching virt launcher pod name for VM - [%s]", v.Name)
+				log.InfoD("Virt launcher pod name for VM - [%s] in namespace [%s] is [%s]", v.Name, v.Namespace, name)
+				dash.VerifyFatal(name != virtLauncherPodMap[v.Namespace][v.Name], true, fmt.Sprintf("Verifying that VM [%s] in namespace [%s] restarted", v.Name, v.Namespace))
+				virtLauncherPodMap[v.Namespace][v.Name] = name
+			}
+		})
+
+		Step("Adding additional disks to the VMs and restarting it", func() {
+			log.InfoD("Adding additional disks to the VMs and restarting it")
+			for _, appCtx := range scheduledAppContexts {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				for _, v := range vms {
+					pvcs, err := CreatePVCsForVM(v, numberOfAdditionalDisks, "kubevirt-sc-for-cirros-cd", "5Gi")
+					log.FailOnError(err, "Failed to create PVCs for VM [%s] in namespace [%s]", v.Name, v.Namespace)
+					specListInterfaces := make([]interface{}, len(pvcs))
+					for i, pvc := range pvcs {
+						// Converting each PVC to interface for appending to SpecList
+						specListInterfaces[i] = pvc
+					}
+					appCtx.App.SpecList = append(appCtx.App.SpecList, specListInterfaces...)
+
+					err = AddPVCsToVirtualMachine(v, pvcs)
+					log.FailOnError(err, "Failed to add PVCs to VM [%s] in namespace [%s]", v.Name, v.Namespace)
+
+					err = RestartKubevirtVM(v.Name, v.Namespace, true)
+					log.FailOnError(err, "Failed to restart VM [%s] in namespace [%s]", v.Name, v.Namespace)
+
+					// Perhaps moving it outside all loops is more efficient.
+					log.Infof("Waiting for VM [%s] in namespace [%s] to boot. Sleeping for %d minutes...", v.Name, v.Namespace, bootTime)
+					time.Sleep(bootTime)
+				}
+			}
+
+		})
+
+		Step("Collecting the number of disks in the VMs after adding disks", func() {
+			log.InfoD("Collecting the number of disks in the VMs after adding disks")
+			// Creating a new slice of VMs because the VM UID would have changed after restart
+			vms, err := GetAllVMsFromScheduledContexts(scheduledAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			for _, v := range vms {
+				t := func() (interface{}, bool, error) {
+					diskCountOutput, err := GetNumberOfDisksInVM(v)
+					if err != nil {
+						return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
+					}
+					// Total disks will be numberOfVolumes plus the container disk
+					if diskCountOutput != diskCount+numberOfAdditionalDisks {
+						return nil, true, fmt.Errorf("expected number of disks in VM [%s] in namespace [%s] is [%d] but got [%d]", v.Name, v.Namespace, diskCount+numberOfAdditionalDisks, diskCountOutput)
+					}
+					return diskCountOutput, false, nil
+				}
+				d, err := task.DoRetryWithTimeout(t, bootTime, 30*time.Second)
+				log.FailOnError(err, "Failed to get number of disks in VM [%s] in namespace [%s] after retry", v.Name, v.Namespace)
+				diskCountAfterAddingDisks := d.(int)
+				log.InfoD("Number of disks in VM [%s] in namespace [%s] is [%d] after adding [%d] disks", v.Name, v.Namespace, diskCountAfterAddingDisks, numberOfAdditionalDisks)
+			}
+		})
+
+		Step("Backup the VMs after disk addition", func() {
+			log.InfoD("Backup the VMs after disk addition")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			vms, err := GetAllVMsFromScheduledContexts(scheduledAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			backupName = fmt.Sprintf("%s-%s", "backup-after-disk-addition", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			err = CreateVMBackupWithValidation(ctx, backupName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
+
+		})
+
+		Step("Performing restore on destination cluster after disk addition", func() {
+			log.InfoD("Performing restore on destination cluster after disk addition")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName = fmt.Sprintf("%s-%s", "restore-with-additional-disks-replace", RandomString(6))
+			restoreNames = append(restoreNames, restoreName)
+			log.InfoD("Restoring the [%s] backup", backupName)
+			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete, scheduledAppContexts)
+			log.FailOnError(err, "Validating restore [%s] with replace", restoreName)
+			// Waiting for VMs to restart and complete boot process otherwise the disk count will be incorrect
+			log.Infof("Waiting for VM to boot. Sleeping for %d minutes...", bootTime)
+			time.Sleep(bootTime)
+		})
+
+		Step("Verifying the additional disks added to VM after restore", func() {
+			log.InfoD("Verifying the additional disks added to VM after restore")
+			// Creating newRestoredAppContexts since the scheduledAppContext has changed after adding additional PVCs to it
+			var newRestoredAppContexts []*scheduler.Context
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "failed to switch context to source cluster")
+			}()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+			for _, scheduledAppContext := range scheduledAppContexts {
+				c, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				newRestoredAppContexts = append(newRestoredAppContexts, c)
+			}
+			vms, err := GetAllVMsFromScheduledContexts(newRestoredAppContexts)
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			for _, v := range vms {
+				t := func() (interface{}, bool, error) {
+					diskCountOutput, err := GetNumberOfDisksInVM(v)
+					if err != nil {
+						return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
+					}
+					// Total disks will be numberOfVolumes plus the container disk
+					if diskCountOutput != diskCount+numberOfAdditionalDisks {
+						return nil, true, fmt.Errorf("expected number of disks in VM [%s] in namespace [%s] is [%d] but got [%d]", v.Name, v.Namespace, diskCount+numberOfAdditionalDisks, diskCountOutput)
+					}
+					return diskCountOutput, false, nil
+				}
+				d, err := task.DoRetryWithTimeout(t, bootTime, 30*time.Second)
+				log.FailOnError(err, "Failed to get number of disks in VM [%s] in namespace [%s] after retry", v.Name, v.Namespace)
+				diskCountAfterAddingDisks := d.(int)
+				log.InfoD("Number of disks in VM [%s] in namespace [%s] is [%d] after adding [%d] disks", v.Name, v.Namespace, diskCountAfterAddingDisks, numberOfAdditionalDisks)
+				dash.VerifyFatal(diskCountAfterAddingDisks, diskCount+numberOfAdditionalDisks, fmt.Sprintf("Verifying that VM [%s] in namespace [%s] has [%d] disks after restore", v.Name, v.Namespace, diskCount+numberOfAdditionalDisks))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("Test execution completed")
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		RuleEnumerateReq := &api.RuleEnumerateRequest{
+			OrgId: BackupOrgID,
+		}
+		ruleList, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+		for _, r := range ruleList.GetRules() {
+			log.Infof("Deleting rule [%s]", r.Name)
+			_, err := Inst().Backup.DeleteRule(ctx, &api.RuleDeleteRequest{
+				OrgId: BackupOrgID,
+				Name:  r.Name,
+				Uid:   r.Uid,
+			})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting rule [%s]", r.Name))
+		}
 		log.Info("Destroying scheduled apps on source cluster")
 		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
 		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)

@@ -1,0 +1,76 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-multi-disk
+  annotations:
+    username: "ubuntu"
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+        app: vm-multi-disk
+        username: "ubuntu"
+    spec:
+      domain:
+        cpu:
+          cores: 1
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            {{ if .ClaimsCount }}
+            {{- range $val := Iterate .ClaimsCount }}
+            - name: datavolume{{ $val }}
+              disk:
+                bus: virtio
+            {{- end }}
+            {{ else }}
+            - name: datavolume
+              disk:
+                bus: virtio
+            {{ end }}
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            memory: 1024M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: pvc-longevity-multi-disk
+        {{ if .ClaimsCount }}
+        {{- range $val := Iterate .ClaimsCount }}
+        - name: datavolume{{ $val }}
+          dataVolume:
+            name: pvc-data-volume-{{ $val }}
+        {{- end }}
+        {{ else }}
+        - name: datavolume
+          dataVolume:
+            name: pvc-data-volume
+        {{ end }}
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False
+              runcmd:
+                - while true; do
+                    sysbench cpu --cpu-max-prime=10000 run
+                    sleep 60
+                  done
