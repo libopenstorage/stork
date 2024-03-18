@@ -397,17 +397,15 @@ func getClientVersion() (string, error) {
 	return output.(string), nil
 }
 
+// getGenerationNumber gets and returns ObservedGeneration number as an int
 func getGenerationNumber() (int, error) {
-	clusterVersionArgs := []string{"get", "clusterversion", " -o jsonpath='{.items[*].status.observedGeneration}'"}
-	beforeGenNum, stdErr, err := osutils.ExecTorpedoShell("oc", clusterVersionArgs...)
+	log.Info("Get ObservedGeneration number from ClusterVersion object...")
+	clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
 	if err != nil {
-		return 0, fmt.Errorf("Failed to get generation number %s. cause: %v", stdErr, err)
+		return 0, fmt.Errorf("failed to get ClusterVersion object, Err: %v", err)
 	}
-	genNumInt, err := strconv.Atoi(beforeGenNum)
-	if err != nil {
-		return 0, fmt.Errorf("Failed to convert generator number from string to int, Err: %v", err)
-	}
-	return genNumInt, nil
+	log.Infof("ObservedGeneration number is [%d]", int(clusterVersion.Status.ObservedGeneration))
+	return int(clusterVersion.Status.ObservedGeneration), nil
 }
 
 func waitForNewGenertionNumber(currentGenNumber int) error {
@@ -430,18 +428,36 @@ func waitForNewGenertionNumber(currentGenNumber int) error {
 }
 
 func selectChannel(ocpVer string) error {
+	log.Infof("Selecting channel for OCP version [%s]...", ocpVer)
 	var output []byte
 	var err error
-	channel := ""
-	if channel, err = getChannel(ocpVer); err != nil {
-		return err
+
+	// Select channel
+	channel, err := getChannel(ocpVer)
+	if err != nil {
+		return fmt.Errorf("failed to select channel for OCP version [%s], Err: %v", ocpVer, err)
 	}
+
+	// Get curent channel
+	currentChannel, err := getCurrentChannel()
+	if err != nil {
+		return fmt.Errorf("failed to get current channel, Err: %v", err)
+	}
+
+	// Compare current and desired upgrade channel
+	if channel == currentChannel {
+		log.Infof("Current cluster channel [%s] and desired upgrade channel [%s] are same, setting channel is not required", currentChannel, channel)
+		return nil
+	}
+
+	// Get current ObservedGeneration number
 	beforeGenNumInt, err := getGenerationNumber()
 	if err != nil {
-		return fmt.Errorf("failed to convert generator number from string to int, Err: %v", err)
+		return fmt.Errorf("failed to get current ObservedGeneration number from ClusterVersion object, Err: %v", err)
 	}
-	log.Infof("Generation number before selecting channel [%d]", beforeGenNumInt)
-	log.Infof("Selecting channel [%s]..", channel)
+
+	log.Infof("Generation number before setting channel [%d]", beforeGenNumInt)
+	log.Infof("Set channel to [%s]..", channel)
 	patch := `
 spec:
   channel: %s
@@ -449,11 +465,11 @@ spec:
 	t := func() (interface{}, bool, error) {
 		args := []string{"patch", "clusterversion", "version", "--type=merge", "--patch", fmt.Sprintf(patch, channel)}
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-			return nil, true, fmt.Errorf("Failed to select channel [%s], Err: %v %v", channel, string(output), err)
+			return nil, true, fmt.Errorf("failed to select channel [%s], Err: %v %v", channel, string(output), err)
 		}
 		log.Info(output)
 		if err := waitForNewGenertionNumber(beforeGenNumInt); err != nil {
-			return nil, true, fmt.Errorf("Failed to select channel [%s], Err: %v", channel, err)
+			return nil, true, fmt.Errorf("failed to select channel [%s], Err: %v", channel, err)
 		}
 		return nil, false, nil
 	}
@@ -461,6 +477,18 @@ spec:
 		return err
 	}
 	return nil
+}
+
+// getCurrentChannel gets and return current channel
+func getCurrentChannel() (string, error) {
+	log.Info("Get current cluster channel...")
+	clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
+	if err != nil {
+		return "", fmt.Errorf("failed to get ClusterVersion object, Err: %v", err)
+	}
+
+	log.Infof("Current cluster channel is [%s]", clusterVersion.Spec.Channel)
+	return clusterVersion.Spec.Channel, nil
 }
 
 // getImageSha gets image sha which will be used to install/upgrade OCP
@@ -627,13 +655,15 @@ func waitNodesToBeReady() error {
 	return nil
 }
 
+// getChannel returns a channel string based on an OCP version format
 func getChannel(ocpVer string) (string, error) {
+	log.Infof("Get channel for OCP version [%s]...", ocpVer)
 	if versionReg.MatchString(ocpVer) {
 		return ocpVer, nil
 	}
 
 	versionSplit := strings.Split(ocpVer, "-")
-	channel := "stable"
+	channel := "stable" // Default channel is stable
 	var ocpVersion string
 	if len(versionSplit) > 1 {
 		channel = versionSplit[0]
@@ -651,7 +681,8 @@ func getChannel(ocpVer string) (string, error) {
 		"fast":      fmt.Sprintf("fast-%d.%d", ver.Segments()[0], ver.Segments()[1]),
 	}
 
-	return channels[channel], err
+	log.Infof("For OCP version [%s], selecting channel [%s]", ocpVer, channels[channel])
+	return channels[channel], nil
 }
 
 // downloadOCP4Client Constructs URL, dowloads and prepares OC CLI to be used based on OCP version given
@@ -1069,6 +1100,7 @@ func getParsedVersion(ocpVer string) (*version.Version, error) {
 	if versionReg.MatchString(ocpVer) {
 		cli := &http.Client{}
 		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", ocpVer)
+		log.Infof("OCP version [%s], will check [%s] for an actual full OCP version...", ocpVer, url)
 		resp, err := cli.Get(url)
 		if err != nil {
 			return nil, err
@@ -1090,6 +1122,7 @@ func getParsedVersion(ocpVer string) (*version.Version, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("OCP actual full version is [%s]", parsedVersion.String())
 	return parsedVersion, nil
 }
 
