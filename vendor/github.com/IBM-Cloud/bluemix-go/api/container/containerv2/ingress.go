@@ -126,6 +126,8 @@ type ingress struct {
 type Ingress interface {
 	CreateIngressSecret(req SecretCreateConfig) (response Secret, err error)
 	UpdateIngressSecret(req SecretUpdateConfig) (response Secret, err error)
+	AddIngressSecretField(req SecretUpdateConfig) (response Secret, err error)
+	RemoveIngressSecretField(req SecretUpdateConfig) (response Secret, err error)
 	DeleteIngressSecret(req SecretDeleteConfig) (err error)
 	GetIngressSecretList(clusterNameOrID string, showDeleted bool) (response Secrets, err error)
 	GetIngressSecret(clusterNameOrID, secretName, secretNamespace string) (response Secret, err error)
@@ -164,6 +166,18 @@ func (r *ingress) CreateIngressSecret(req SecretCreateConfig) (response Secret, 
 // UpdateIngressSecret updates an existing secret with new cert values
 func (r *ingress) UpdateIngressSecret(req SecretUpdateConfig) (response Secret, err error) {
 	_, err = r.client.Post("/ingress/v2/secret/updateSecret", req, &response)
+	return
+}
+
+// AddIngressSecretField adds secret fields to an existing secret
+func (r *ingress) AddIngressSecretField(req SecretUpdateConfig) (response Secret, err error) {
+	_, err = r.client.Post("/ingress/v2/secret/addField", req, &response)
+	return
+}
+
+// RemoveIngressSecretField removes secret fields from an existing secret
+func (r *ingress) RemoveIngressSecretField(req SecretUpdateConfig) (response Secret, err error) {
+	_, err = r.client.Post("/ingress/v2/secret/removeField", req, &response)
 	return
 }
 

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"net/url"
 	"strings"
 	"time"
@@ -86,6 +87,15 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(30 * time.Minute)
 				}
+
+				// Sleep needed for IKS cluster upgrades
+				if Inst().S.String() == iks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, IKS replaces all worker nodes. "+
+						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
 				printK8sCluterInfo()
 			})
 
@@ -113,6 +123,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 				// Refresh Driver Endpoints
 				err = Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "Refresh Driver Endpoints failed")
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
 			})
 
 			Step("validate all apps after upgrade", func() {

@@ -96,6 +96,6 @@ func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 }
 
 func init() {
-	log.Infof("Registering pso driver")
+	log.Infof("Registering IBM volume driver")
 	torpedovolume.Register(IbmDriverName, provisionersForIKS, &ibm{})
 }

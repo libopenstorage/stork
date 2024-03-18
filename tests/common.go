@@ -172,6 +172,9 @@ import (
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
+
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )

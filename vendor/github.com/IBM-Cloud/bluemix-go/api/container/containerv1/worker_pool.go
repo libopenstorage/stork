@@ -38,12 +38,13 @@ type WorkerPoolPatchRequest struct {
 // swagger:model
 type WorkerPoolResponse struct {
 	WorkerPoolConfig
-	ID              string                  `json:"id" binding:"required"`
-	Region          string                  `json:"region" binding:"required"`
-	State           string                  `json:"state"`
-	ReasonForDelete string                  `json:"reasonForDelete"`
-	IsBalanced      bool                    `json:"isBalanced"`
-	Zones           WorkerPoolZoneResponses `json:"zones"`
+	ID               string                  `json:"id" binding:"required"`
+	Region           string                  `json:"region" binding:"required"`
+	State            string                  `json:"state"`
+	ReasonForDelete  string                  `json:"reasonForDelete"`
+	IsBalanced       bool                    `json:"isBalanced"`
+	AutoscaleEnabled bool                    `json:"autoscaleEnabled,omitempty"`
+	Zones            WorkerPoolZoneResponses `json:"zones"`
 }
 
 // WorkerPoolResponses sorts WorkerPoolResponse by ID.

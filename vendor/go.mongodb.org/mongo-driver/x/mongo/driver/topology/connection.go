@@ -314,7 +314,7 @@ func transformNetworkError(ctx context.Context, originalError error, contextDead
 	}
 
 	// If there was an error and the context was cancelled, we assume it happened due to the cancellation.
-	if ctx.Err() == context.Canceled {
+	if errors.Is(ctx.Err(), context.Canceled) {
 		return context.Canceled
 	}
 
@@ -337,7 +337,10 @@ func (c *connection) cancellationListenerCallback() {
 func (c *connection) writeWireMessage(ctx context.Context, wm []byte) error {
 	var err error
 	if atomic.LoadInt64(&c.state) != connConnected {
-		return ConnectionError{ConnectionID: c.id, message: "connection is closed"}
+		return ConnectionError{
+			ConnectionID: c.id,
+			message:      "connection is closed",
+		}
 	}
 
 	var deadline time.Time
@@ -388,7 +391,10 @@ func (c *connection) write(ctx context.Context, wm []byte) (err error) {
 // readWireMessage reads a wiremessage from the connection. The dst parameter will be overwritten.
 func (c *connection) readWireMessage(ctx context.Context) ([]byte, error) {
 	if atomic.LoadInt64(&c.state) != connConnected {
-		return nil, ConnectionError{ConnectionID: c.id, message: "connection is closed"}
+		return nil, ConnectionError{
+			ConnectionID: c.id,
+			message:      "connection is closed",
+		}
 	}
 
 	var deadline time.Time
@@ -411,7 +417,7 @@ func (c *connection) readWireMessage(ctx context.Context) ([]byte, error) {
 		// We closeConnection the connection because we don't know if there are other bytes left to read.
 		c.close()
 		message := errMsg
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			message = "socket was unexpectedly closed"
 		}
 		return nil, ConnectionError{
@@ -858,7 +864,7 @@ func newCancellListener() *cancellListener {
 
 // Listen blocks until the provided context is cancelled or listening is aborted
 // via the StopListening function. If this detects that the context has been
-// cancelled (i.e. ctx.Err() == context.Canceled), the provided callback is
+// cancelled (i.e. errors.Is(ctx.Err(), context.Canceled), the provided callback is
 // called to abort in-progress work. Even if the context expires, this function
 // will block until StopListening is called.
 func (c *cancellListener) Listen(ctx context.Context, abortFn func()) {
@@ -866,7 +872,7 @@ func (c *cancellListener) Listen(ctx context.Context, abortFn func()) {
 
 	select {
 	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
+		if errors.Is(ctx.Err(), context.Canceled) {
 			c.aborted = true
 			abortFn()
 		}

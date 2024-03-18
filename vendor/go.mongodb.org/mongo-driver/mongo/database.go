@@ -185,18 +185,21 @@ func (db *Database) processRunCommand(ctx context.Context, cmd interface{},
 		op = operation.NewCommand(runCmdDoc)
 	}
 
-	// TODO(GODRIVER-2649): ReadConcern(db.readConcern) will not actually pass the database's
-	// read concern. Remove this note once readConcern is correctly passed to the operation
-	// level.
 	return op.Session(sess).CommandMonitor(db.client.monitor).
 		ServerSelector(readSelect).ClusterClock(db.client.clock).
-		Database(db.name).Deployment(db.client.deployment).ReadConcern(db.readConcern).
+		Database(db.name).Deployment(db.client.deployment).
 		Crypt(db.client.cryptFLE).ReadPreference(ro.ReadPreference).ServerAPI(db.client.serverAPI).
 		Timeout(db.client.timeout).Logger(db.client.logger), sess, nil
 }
 
-// RunCommand executes the given command against the database. This function does not obey the Database's read
-// preference. To specify a read preference, the RunCmdOptions.ReadPreference option must be used.
+// RunCommand executes the given command against the database.
+//
+// This function does not obey the Database's readPreference. To specify a read
+// preference, the RunCmdOptions.ReadPreference option must be used.
+//
+// This function does not obey the Database's readConcern or writeConcern. A
+// user must supply these values manually in the user-provided runCommand
+// parameter.
 //
 // The runCommand parameter must be a document for the command to be executed. It cannot be nil.
 // This must be an order-preserving type such as bson.D. Map types such as bson.M are not valid.
@@ -563,7 +566,7 @@ func (db *Database) getEncryptedFieldsFromServer(ctx context.Context, collection
 	}
 	collSpec := collSpecs[0]
 	rawValue, err := collSpec.Options.LookupErr("encryptedFields")
-	if err == bsoncore.ErrElementNotFound {
+	if errors.Is(err, bsoncore.ErrElementNotFound) {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
@@ -599,7 +602,7 @@ func (db *Database) getEncryptedFieldsFromMap(collectionName string) interface{}
 func (db *Database) createCollectionWithEncryptedFields(ctx context.Context, name string, ef interface{}, opts ...*options.CreateCollectionOptions) error {
 	efBSON, err := marshal(ef, db.bsonOpts, db.registry)
 	if err != nil {
-		return fmt.Errorf("error transforming document: %v", err)
+		return fmt.Errorf("error transforming document: %w", err)
 	}
 
 	// Check the wire version to ensure server is 7.0.0 or newer.
@@ -659,7 +662,7 @@ func (db *Database) createCollectionWithEncryptedFields(ctx context.Context, nam
 
 	// Create an index on the __safeContent__ field in the collection @collectionName.
 	if _, err := db.Collection(name).Indexes().CreateOne(ctx, IndexModel{Keys: bson.D{{"__safeContent__", 1}}}); err != nil {
-		return fmt.Errorf("error creating safeContent index: %v", err)
+		return fmt.Errorf("error creating safeContent index: %w", err)
 	}
 
 	return nil
