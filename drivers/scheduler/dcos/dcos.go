@@ -788,6 +788,23 @@ func (d *dcos) GetAutopilotNamespace() (string, error) {
 	}
 }
 
+func (d *dcos) IsAutopilotEnabled() (bool, error) {
+	// TODO implement this method
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutopilotNamespace()",
+	}
+}
+
+// GetPortworxNamespace returns portworx namespace
+func (d *dcos) GetPortworxNamespace() (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPortworxNamespace()",
+	}
+}
+
 // GetIOBandwidth returns the IO bandwidth for the given pod name and namespace
 func (d *dcos) GetIOBandwidth(string, string) (int, error) {
 	// TODO implement this method
