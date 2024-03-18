@@ -2194,8 +2194,13 @@ func (a *ApplicationBackupController) backupResources(
 				backup.Status.BackupPath = GetObjectPath(backup)
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
-				backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
-				backup.Status.Reason = "Volumes and resources were backed up successfully"
+				if backup.Status.FailedVolCount > 0 {
+					backup.Status.Status = stork_api.ApplicationBackupStatusPartialSuccess
+					backup.Status.Reason = "Volumes and resources were backed up partially"
+				} else {
+					backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
+					backup.Status.Reason = "Volumes and resources were backed up successfully"
+				}
 				// Only on success compute the total backup size
 				for _, vInfo := range backup.Status.Volumes {
 					backup.Status.TotalSize += vInfo.TotalSize
@@ -2242,7 +2247,11 @@ func (a *ApplicationBackupController) backupResources(
 	if len(backup.Spec.NamespaceSelector) != 0 && len(backup.Spec.Namespaces) == 0 {
 		backup.Status.Reason = fmt.Sprintf("Namespace label selector [%s] did not find any namespaces with selected labels for backup", backup.Spec.NamespaceSelector)
 	} else {
-		backup.Status.Reason = "Volumes and resources were backed up successfully"
+		if backup.Status.FailedVolCount > 0 {
+			backup.Status.Reason = "Volumes and resources were backed up partially"
+		} else {
+			backup.Status.Reason = "Volumes and resources were backed up successfully"
+		}
 	}
 	// Only on success compute the total backup size
 	for _, vInfo := range backup.Status.Volumes {
