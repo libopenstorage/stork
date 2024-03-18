@@ -11356,3 +11356,186 @@ var _ = Describe("{driveAddPxRestart}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", func() {
+
+	/*
+		https://portworx.atlassian.net/browse/PTX-15169
+		1. Add 2 disk of same size/type to create a new Pool
+		2. While disks are getting attached and after check status of metadata disk (metadata disk shouldn't be in rebalance)
+		3. After adding the disk, check the status of metadata disk (metadata disk shouldn't be in rebalance)
+		4. Add a disk of same size/type
+		5. While disk is getting attached and after check status of metadata disk (metadata disk shouldn't be in rebalance)
+
+	*/
+
+	itLog := "DriveAddMetaDataDiskStatusCheck"
+	JustBeforeEach(func() {
+		StartTorpedoTest(itLog, "Drive add and check metadata disk status", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	var selectedNode node.Node
+
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("drive-add-metadata-disk-%d", i))...)
+			}
+		})
+		defer DestroyApps(contexts, nil)
+		ValidateApplications(contexts)
+
+		stepLog = "Check which node has a metadata disk if not add one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Failed to get storage nodes")
+
+			isDedicatedMetadataDiskExist := false
+
+			//Check which node has metadata disk if not add one
+			for _, storageNode := range storageNodes {
+				path, err := getMetaDataDiskPath(storageNode)
+				log.FailOnError(err, "Failed to get metadata disk")
+				if path != "" {
+					log.InfoD("Metadata disk path: %v", path)
+					isDedicatedMetadataDiskExist = true
+					selectedNode = storageNode
+					break
+				}
+			}
+			if !isDedicatedMetadataDiskExist {
+				for _, storageNode := range storageNodes {
+					deviceSpec := fmt.Sprintf("size=100 --metadata")
+					log.InfoD("Initiate add cloud drive and validate")
+					// enter pool maintenance mode
+					err = Inst().V.EnterPoolMaintenance(storageNode)
+					log.FailOnError(err, "node: %v failed to transition to pool maintenance mode", storageNode.Name)
+
+					err := Inst().V.AddCloudDrive(&storageNode, deviceSpec, -1)
+					if err != nil {
+						if strings.Contains(err.Error(), "Cannot add metadata device when internal kvdb is running on this node") {
+							log.Infof("Cannot add metadata device when internal kvdb is running on this node")
+							err = nil
+							continue
+						}
+					}
+					log.FailOnError(err, "Failed to add metadata device on node : %s", selectedNode.Name)
+
+					// exit pool maintenance
+					err = Inst().V.ExitPoolMaintenance(storageNode)
+					log.FailOnError(err, "Node: %v Failed to exit out of maintenance mode", storageNode.Name)
+
+					selectedNode = storageNode
+					break
+				}
+			}
+			//check if selecteNode is empty or not
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("No node found with metadata disk or metadata disks cannot be added to any nodes"), "No node found with metadata disk ")
+			}
+		})
+		var wg sync.WaitGroup
+		var devicePath string
+		done := make(chan struct{})
+		devicePath, err = getMetaDataDiskPath(selectedNode)
+		log.FailOnError(err, "Failed to get metadata device path")
+
+		stepLog = "Add 2 disk of same size/type to create a new Pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				defer func() {
+					log.InfoD("Signalling metadatachecker to exit")
+					close(done)
+				}()
+				drivePath := "size=57"
+				for i := 0; i < 2; i++ {
+					err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+					log.FailOnError(err, "Failed to wait for driver to come up on node: %v", selectedNode.Name)
+
+					err := Inst().V.AddCloudDrive(&selectedNode, drivePath, -1)
+					log.FailOnError(err, "Failed to add a drive to the pool")
+					time.Sleep(60 * time.Second)
+				}
+			}()
+		})
+		stepLog = "Keep checking if metadata disk goes into rebalance"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				waitForMetadataRebalance(done, devicePath, selectedNode)
+			}()
+		})
+		wg.Wait()
+		stepLog = "Again add a drive to an existing pool and check the metadatadevice"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			done := make(chan struct{})
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				defer close(done)
+				err := AddCloudDrive(selectedNode, 0)
+				log.FailOnError(err, "Failed to add a drive to the pool")
+			}()
+			go waitForMetadataRebalance(done, devicePath, selectedNode)
+		})
+		wg.Wait()
+	})
+})
+
+// This function checks for metadata disk to be in rebalance state
+func waitForMetadataRebalance(done <-chan struct{}, devicePath string, selectedNode node.Node) {
+	defer GinkgoRecover()
+	for {
+		select {
+		case <-done:
+			// Received signal from the first goroutine
+			fmt.Println("Metadata rebalance status checker is exiting")
+			return
+		default:
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			log.FailOnError(err, "Failed to wait for driver to come up on node: %v", selectedNode.Name)
+
+			log.InfoD("Checking metadata disk status with device path: %v", devicePath)
+			cmd := fmt.Sprintf("-j service drive add -d %s -o status", devicePath)
+			// Simulated runPxctlCommand, replace with actual implementation
+			_, err := runPxctlCommand(cmd, selectedNode, nil)
+			log.InfoD("metadata status: %v", err.Error())
+
+			if strings.Contains(err.Error(), "rebalance") {
+				log.Warnf("Metadata device in rebalance")
+				log.FailOnError(err, "Metadata device in rebalance")
+				return
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func getMetaDataDiskPath(n node.Node) (string, error) {
+	output, err := runPxctlCommand("status | grep -A 1 'Metadata Device:' | tail -n 1", n, nil)
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Output of pxctl status: %v", output)
+	path := ""
+	if output != "" {
+		components := strings.Fields(output)
+		// Extract path and size
+		path = components[1]
+
+		log.InfoD("Metadata device path: %v", path)
+	}
+	return path, nil
+}
