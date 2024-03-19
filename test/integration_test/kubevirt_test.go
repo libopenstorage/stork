@@ -74,6 +74,7 @@ func TestKubevirt(t *testing.T) {
 	t.Run("kubeVirtHypercTwoLiveMigrations", kubeVirtHypercTwoLiveMigrations)
 	t.Run("kubeVirtHypercHotPlugDiskCollocation", kubeVirtHypercHotPlugDiskCollocation)
 	t.Run("kubeVirtHypercVPSFixJob", kubeVirtHypercVPSFixJob)
+	t.Run("kubeVirtSimulateOCPUpgrade", kubeVirtSimulateOCPUpgrade)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
@@ -221,7 +222,7 @@ func kubevirtVMScaledDeployAndValidate(t *testing.T, instanceID string, appKeys 
 	var allCtxs []*scheduler.Context
 	logrus.Infof("Deploying %d VMs and validating them.", len(appKeys)*scale)
 	for i := 1; i <= scale; i++ {
-		logrus.Infof("Deploying VM: %d", i)
+		logrus.Infof("Deploying VM set: %d", i)
 		// Before validating the VM create required clusterrolebindings for datavolume cloning in the VM namespace
 		var testNamespaces []string
 		for _, app := range appKeys {
