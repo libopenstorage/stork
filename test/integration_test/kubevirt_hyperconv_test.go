@@ -280,6 +280,68 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
+// This test simulates OCP upgrade by live-migrating all VMs from a node a NON-replica node and
+// then restarting PX on the node where volume is attached.
+// It expects that all the VMs from that node should end up with a bind-mount (hyperconvergence).
+// PX performs a single live migration for each VM on the node.
+// The above steps are repeated for all worker nodes in the cluster
+func kubeVirtSimulateOCPUpgrade(t *testing.T) {
+	var testrailID, testResult = 297265, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "ocp-upgrade"
+
+	ctxs := kubevirtVMScaledDeployAndValidate(
+		t,
+		instanceID,
+		[]string{
+			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
+		},
+		kubevirtScale,
+	)
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	nodeList := node.GetNodesByName()
+
+	for nodeName, currNode := range nodeList {
+		log.Infof("\nStart OCP upgrade simulation on node: %s", nodeName)
+		testStatesNode := getTestStatesForNode(t, ctxs, nodeName, allNodes)
+
+		for _, testState := range testStatesNode {
+			// start a live migration and wait for it to finish, to simulate node drain in OCP
+			// vmPod changes after the live migration
+			startAndWaitForVMIMigration(t, testState, false /* expectReplicaNode */)
+		}
+
+		log.Infof("Restarting volume driver on node %s", nodeName)
+		err := volumeDriver.RestartDriver(currNode, nil)
+		require.NoError(t, err)
+
+		for _, testState := range testStatesNode {
+			// verify all disks for each vm are attached on the same node
+			oldAttachedNode, firstDisk := verifyDisksAttachedOnSameNode(t, testState)
+
+			// wait volume attachments to move
+			waitForVolumeAttachmentsToMove(t, testState, oldAttachedNode, firstDisk)
+
+			// VM should use a bind-mount eventually
+			log.Infof("Waiting for the VM %s to return to the hyperconverged state again", testState.vmiName)
+			verifyBindMount(t, testState, false /*initialCheck*/)
+
+			// Verify that VM stayed up the whole time
+			verifyVMStayedUp(t, testState)
+		}
+		log.Infof("\nCompleted upgrade simulation on node: %s", nodeName)
+	}
+
+	log.Infof("Destroying apps")
+	destroyAndWait(t, ctxs)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
 func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 	appCtx := testState.appCtx
 
@@ -634,8 +696,17 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 }
 
 func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kubevirtTestState) {
-	var err error
-	var oldAttachedNode, newAttachedNode *node.Node
+	oldAttachedNode, firstDisk := verifyDisksAttachedOnSameNode(t, testState)
+
+	log.Infof("Restarting volume driver on node %s", oldAttachedNode.Name)
+	err := volumeDriver.RestartDriver(*oldAttachedNode, nil)
+	require.NoError(t, err)
+
+	waitForVolumeAttachmentsToMove(t, testState, oldAttachedNode, firstDisk)
+}
+
+func verifyDisksAttachedOnSameNode(t *testing.T, testState *kubevirtTestState) (*node.Node, *vmDisk) {
+	var oldAttachedNode *node.Node
 	var firstDisk *vmDisk
 
 	// we expect all volumes to be attached on the same node
@@ -648,42 +719,7 @@ func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kube
 				"vm disks [%s] and [%s] are attached on different nodes", firstDisk, vmDisk)
 		}
 	}
-
-	// restart px on the original node
-	log.Infof("Restarting volume driver on node %s", oldAttachedNode.Name)
-	err = volumeDriver.RestartDriver(*oldAttachedNode, nil)
-	require.NoError(t, err)
-
-	for _, vmDisk := range testState.vmDisks {
-		var attachedNode *node.Node
-
-		require.Eventuallyf(t, func() bool {
-			attachedNode, err = volumeDriver.GetNodeForVolume(vmDisk.volume, cmdTimeout, cmdRetry)
-			if err != nil {
-				log.Warnf("Failed to get the attached node for %s for context %s: %v",
-					vmDisk, testState.appCtx.App.Key, err)
-				return false
-			}
-			log.Infof("New attached node for %s is %s", vmDisk, attachedNode.Name)
-			return oldAttachedNode.Name != attachedNode.Name
-		}, 5*time.Minute, 30*time.Second, "Attached node did not change from %s for %s",
-			oldAttachedNode.Name, vmDisk)
-
-		log.Infof("%s: attachment changed from node %s to node %s after failover",
-			vmDisk, oldAttachedNode.Name, attachedNode.Name)
-
-		vmDisk.attachedNode = attachedNode
-
-		// Verify that all volume attachments move to the same replica node
-		if newAttachedNode == nil {
-			newAttachedNode = attachedNode
-		} else {
-			require.Equal(t, newAttachedNode.Name, attachedNode.Name,
-				"vm disks [%s] and [%s] attached on different nodes after sharedv4 failover", firstDisk, vmDisk)
-		}
-	}
-	// verify that vm stayed up
-	verifyVMStayedUp(t, testState)
+	return oldAttachedNode, firstDisk
 }
 
 func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bool) {
@@ -950,4 +986,60 @@ func getVMINameFromVMPod(vmPod *corev1.Pod) (string, error) {
 		return "", fmt.Errorf("did not find VMI ownerRef in pod %s/%s", vmPod.Namespace, vmPod.Name)
 	}
 	return vmiRef.Name, nil
+}
+
+// returns a list of kubevirtTestState objects for given node
+func getTestStatesForNode(t *testing.T, ctxs []*scheduler.Context, nodeName string, allNodes map[string]node.Node) []*kubevirtTestState {
+	testStatesForNode := make([]*kubevirtTestState, 0)
+	for _, appCtx := range ctxs {
+		testState := &kubevirtTestState{
+			appCtx:   appCtx,
+			allNodes: allNodes,
+		}
+		gatherInitialVMIInfo(t, testState)
+
+		// Add this testState to the list of testStates for this node
+		if nodeName == testState.vmPod.Spec.NodeName {
+			log.Infof("Found VM %s on node: %s", testState.vmPod.Name, nodeName)
+			verifyInitialVMI(t, testState)
+			testStatesForNode = append(testStatesForNode, testState)
+		}
+	}
+	return testStatesForNode
+}
+
+func waitForVolumeAttachmentsToMove(t *testing.T, testState *kubevirtTestState,
+	oldAttachedNode *node.Node, firstDisk *vmDisk) {
+	var newAttachedNode *node.Node
+	for _, vmDisk := range testState.vmDisks {
+		var attachedNode *node.Node
+		var err error
+
+		require.Eventuallyf(t, func() bool {
+			attachedNode, err = volumeDriver.GetNodeForVolume(vmDisk.volume, cmdTimeout, cmdRetry)
+			if err != nil {
+				log.Warnf("Failed to get the attached node for %s for context %s: %v",
+					vmDisk, testState.appCtx.App.Key, err)
+				return false
+			}
+			log.Infof("New attached node for %s is %s", vmDisk, attachedNode.Name)
+			return oldAttachedNode.Name != attachedNode.Name
+		}, 5*time.Minute, 30*time.Second, "Attached node did not change from %s for %s",
+			oldAttachedNode.Name, vmDisk)
+
+		log.Infof("%s: attachment changed from node %s to node %s after failover",
+			vmDisk, oldAttachedNode.Name, attachedNode.Name)
+
+		vmDisk.attachedNode = attachedNode
+
+		// Verify that all volume attachments move to the same replica node
+		if newAttachedNode == nil {
+			newAttachedNode = attachedNode
+		} else {
+			require.Equal(t, newAttachedNode.Name, attachedNode.Name,
+				"vm disks [%s] and [%s] attached on different nodes after sharedv4 failover", firstDisk, vmDisk)
+		}
+	}
+	// verify that vm stayed up
+	verifyVMStayedUp(t, testState)
 }
