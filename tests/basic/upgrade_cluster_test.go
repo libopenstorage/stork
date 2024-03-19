@@ -13,16 +13,12 @@ import (
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -115,7 +111,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					time.Sleep(30 * time.Minute)
 				}
 
-				printK8sCluterInfo()
+				PrintK8sCluterInfo()
 			})
 
 			Step("validate storage components", func() {
@@ -126,7 +122,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 				// Printing cluster node info after the upgrade
-				printK8sCluterInfo()
+				PrintK8sCluterInfo()
 			})
 
 			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
@@ -166,109 +162,6 @@ var _ = Describe("{UpgradeCluster}", func() {
 	})
 })
 
-func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
-	stNodes := node.GetStorageNodes()
-
-	nodeSchedulableStatus := make(map[string]string)
-	stNodeNames := make(map[string]bool)
-
-	for _, stNode := range stNodes {
-		stNodeNames[stNode.Name] = true
-	}
-
-	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
-	kvdbNodes, _ := GetAllKvdbNodes()
-	for _, kvdbNode := range kvdbNodes {
-		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
-		if err == nil {
-			stNodeNames[sNode.Name] = true
-		} else {
-			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
-		}
-	}
-
-	log.Infof("stnodes are %#v", stNodeNames)
-	itr := 1
-	for {
-		log.Infof("K8s node validation. iteration: #%d", itr)
-		select {
-		// if it gets any value from stopSignal channel, it will exit
-		case <-stopSignal:
-			log.Infof("Exiting node validations routine")
-			return
-		default:
-			nodeList, err := core.Instance().GetNodes()
-			if err != nil {
-				log.Errorf("Got error : %s", err.Error())
-				*mError = err
-				return
-			}
-
-			nodeNotReadyeCount := 0
-			for _, k8sNode := range nodeList.Items {
-				for _, status := range k8sNode.Status.Conditions {
-					if status.Type == v1.NodeReady {
-						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
-						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
-							nodeNotReadyeCount += 1
-						}
-						break
-					}
-				}
-
-			}
-			if nodeNotReadyeCount > 1 {
-				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
-					"node status:%#v", nodeSchedulableStatus)
-				log.Errorf("Got error : %s", err.Error())
-				log.Infof("Node Details: %#v", nodeList.Items)
-				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
-					IgnoreError:     false,
-					TimeBeforeRetry: defaultRetryInterval,
-					Timeout:         defaultTimeout,
-					Sudo:            true,
-				})
-				if err != nil {
-					log.Errorf("failed to get pxctl status, Err: %v", err)
-				}
-				log.Infof(output)
-				*mError = err
-				return
-			}
-		}
-		itr++
-		time.Sleep(30 * time.Second)
-	}
-}
-
-// printK8sClusterInfo prints info about K8s cluster nodes
-func printK8sCluterInfo() {
-	log.Info("Get cluster info..")
-	t := func() (interface{}, bool, error) {
-		nodeList, err := core.Instance().GetNodes()
-		if err != nil {
-			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
-		}
-		if len(nodeList.Items) > 0 {
-			for _, node := range nodeList.Items {
-				nodeType := "Worker"
-				if core.Instance().IsNodeMaster(node) {
-					nodeType = "Master"
-				}
-				log.Infof(
-					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
-					node.Name, nodeType,
-					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
-					node.Status.NodeInfo.ContainerRuntimeVersion)
-			}
-			return "", false, nil
-		}
-		return "", false, fmt.Errorf("no nodes were found in the cluster")
-	}
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
-		log.Warnf("failed to get k8s cluster info, Err: %v", err)
-	}
-}
 func doPDBValidation(stopSignal <-chan struct{}, mError *error) {
 	pdbValue, allowedDisruptions := GetPDBValue()
 	isClusterParallelyUpgraded := false
