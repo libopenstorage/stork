@@ -17,6 +17,7 @@ import (
 
 const (
 	failoverCommand                    = "failover"
+	failbackCommand                    = "failback"
 	nameTimeSuffixFormat string        = "2006-01-02-150405"
 	actionWaitTimeout    time.Duration = 10 * time.Minute
 	actionWaitInterval   time.Duration = 10 * time.Second
@@ -30,6 +31,7 @@ func newPerformCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams
 
 	performCommands.AddCommand(
 		newFailoverCommand(cmdFactory, ioStreams),
+		newFailbackCommand(cmdFactory, ioStreams),
 	)
 	return performCommands
 }
@@ -54,63 +56,17 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 	var skipDeactivateSource bool
 	var includeNamespaceList []string
 	var excludeNamespaceList []string
-	var namespaceList []string
 	performFailoverCommand := &cobra.Command{
 		Use:   failoverCommand,
 		Short: "Initiate failover of the given migration schedule",
 		Run: func(c *cobra.Command, args []string) {
-			if len(referenceMigrationSchedule) == 0 {
-				util.CheckErr(fmt.Errorf("reference MigrationSchedule name needs to be provided for failover"))
-				return
-			}
-			// namespace of the migrationSchedule is provided by user using the -n / --namespace global flag
+			// namespace of the MigrationSchedule is provided by the user using the -n / --namespace global flag
 			migrationScheduleNs := cmdFactory.GetNamespace()
-			migrSchedObj, err := storkops.Instance().GetMigrationSchedule(referenceMigrationSchedule, migrationScheduleNs)
+			namespaceList, err := validationsForPerformDRCommands(storkv1.ActionTypeFailover, migrationScheduleNs, referenceMigrationSchedule, includeNamespaceList, excludeNamespaceList)
 			if err != nil {
-				util.CheckErr(fmt.Errorf("unable to find the reference MigrationSchedule %v in the %v namespace", referenceMigrationSchedule, migrationScheduleNs))
+				util.CheckErr(err)
 				return
 			}
-			if !skipDeactivateSource {
-				clusterPair := migrSchedObj.Spec.Template.Spec.ClusterPair
-				_, err = storkops.Instance().GetClusterPair(clusterPair, migrationScheduleNs)
-				if err != nil {
-					util.CheckErr(fmt.Errorf("unable to find the cluster pair %v in the %v namespace", clusterPair, migrationScheduleNs))
-					return
-				}
-			}
-			migrationNamespaceList := migrSchedObj.Spec.Template.Spec.Namespaces
-			migrationNamespaceSelectors := migrSchedObj.Spec.Template.Spec.NamespaceSelectors
-			// update the migrationNamespaces list by fetching namespaces based on provided label selectors
-			migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationNamespaceList, migrationNamespaceSelectors)
-			if err != nil {
-				util.CheckErr(fmt.Errorf("unable to get the namespaces based on the --namespace-selectors in the provided MigrationSchedule: %v", err))
-				return
-			}
-			// at most one of exclude-namespaces or include-namespaces can be provided
-			if len(includeNamespaceList) != 0 && len(excludeNamespaceList) != 0 {
-				util.CheckErr(fmt.Errorf("can provide only one of --include-namespaces or --exclude-namespaces values at once"))
-				return
-			} else if len(includeNamespaceList) != 0 {
-				if isSubList, nonSubsetStrings := utils.IsSubList(includeNamespaceList, migrationNamespaces); isSubList {
-					// Branch 1: Only failover some of the namespaces being migrated by the given migrationSchedule
-					namespaceList = includeNamespaceList
-				} else {
-					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings))
-					return
-				}
-			} else if len(excludeNamespaceList) != 0 {
-				if isSubList, nonSubsetStrings := utils.IsSubList(excludeNamespaceList, migrationNamespaces); isSubList {
-					// Branch 2: Exclude some of the namespaces being migrated by the given migrationSchedule from failover
-					namespaceList = utils.ExcludeListAFromListB(excludeNamespaceList, migrationNamespaces)
-				} else {
-					util.CheckErr(fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings))
-					return
-				}
-			} else {
-				// Branch 3: Failover all the namespaces being migrated by the given migrationSchedule
-				namespaceList = migrationNamespaces
-			}
-			actionType := storkv1.ActionTypeFailover
 			actionParameters := storkv1.ActionParameter{
 				FailoverParameter: storkv1.FailoverParameter{
 					FailoverNamespaces:         namespaceList,
@@ -118,15 +74,11 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 					SkipDeactivateSource:       &skipDeactivateSource,
 				},
 			}
-			actionName := getActionName(actionType, referenceMigrationSchedule)
-			action, err := createActionCR(actionName, migrationScheduleNs, actionType, actionParameters)
-			migrationScheduleName := migrationScheduleNs + "/" + referenceMigrationSchedule
+			err = createActionCR(storkv1.ActionTypeFailover, migrationScheduleNs, referenceMigrationSchedule, actionParameters, ioStreams)
 			if err != nil {
-				util.CheckErr(fmt.Errorf("failed to start failover for MigrationSchedule %v : %v", migrationScheduleName, err))
+				util.CheckErr(err)
 				return
 			}
-			printMsg(fmt.Sprintf("Started failover for MigrationSchedule %v", migrationScheduleName), ioStreams.Out)
-			printMsg(getActionStatusMessage(action), ioStreams.Out)
 		},
 	}
 	performFailoverCommand.Flags().BoolVar(&skipDeactivateSource, "skip-deactivate-source", false, "If present, applications in the source cluster will not be scaled down as part of the failover.")
@@ -136,12 +88,96 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 	return performFailoverCommand
 }
 
-// given the name, namespace, actionType and actionParameters create an Action CR
-func createActionCR(actionName string, namespace string, actionType storkv1.ActionType, actionParameters storkv1.ActionParameter) (*storkv1.Action, error) {
-	action := storkv1.Action{
+func newFailbackCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var referenceMigrationSchedule string
+	var includeNamespaceList []string
+	var excludeNamespaceList []string
+	performFailbackCommand := &cobra.Command{
+		Use:   failbackCommand,
+		Short: "Initiate failback of the given migration schedule",
+		Run: func(c *cobra.Command, args []string) {
+			// namespace of the MigrationSchedule is provided by the user using the -n / --namespace global flag
+			migrationScheduleNs := cmdFactory.GetNamespace()
+			namespaceList, err := validationsForPerformDRCommands(storkv1.ActionTypeFailback, migrationScheduleNs, referenceMigrationSchedule, includeNamespaceList, excludeNamespaceList)
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+			actionParameters := storkv1.ActionParameter{
+				FailbackParameter: storkv1.FailbackParameter{
+					FailbackNamespaces:         namespaceList,
+					MigrationScheduleReference: referenceMigrationSchedule,
+				},
+			}
+			err = createActionCR(storkv1.ActionTypeFailback, migrationScheduleNs, referenceMigrationSchedule, actionParameters, ioStreams)
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+		},
+	}
+	performFailbackCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the MigrationSchedule to failback. Also specify the namespace of this MigrationSchedule using the -n flag")
+	performFailbackCommand.Flags().StringSliceVar(&includeNamespaceList, "include-namespaces", nil, "Specify the comma-separated list of subset namespaces to be failed back. By default, all namespaces part of the MigrationSchedule are failed back")
+	performFailbackCommand.Flags().StringSliceVar(&excludeNamespaceList, "exclude-namespaces", nil, "Specify the comma-separated list of subset namespaces to be skipped during the failback. By default, all namespaces part of the MigrationSchedule are failed back")
+	return performFailbackCommand
+}
+
+// validationsForPerformDRCommands checks the common validations for failover/failback and returns the resultant namespaceList
+func validationsForPerformDRCommands(actionType storkv1.ActionType, migrationScheduleNs string, referenceMigrationSchedule string, includeNamespaceList []string, excludeNamespaceList []string) ([]string, error) {
+	var namespaceList []string
+	if len(referenceMigrationSchedule) == 0 {
+		return nil, fmt.Errorf("reference MigrationSchedule name needs to be provided for %s", actionType)
+	}
+
+	migrSchedObj, err := storkops.Instance().GetMigrationSchedule(referenceMigrationSchedule, migrationScheduleNs)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find the reference MigrationSchedule %v in the %v namespace", referenceMigrationSchedule, migrationScheduleNs)
+	}
+
+	// clusterPair specified in the reference MigrationSchedule should exist in the destination cluster in both failover and failback
+	clusterPair := migrSchedObj.Spec.Template.Spec.ClusterPair
+	_, err = storkops.Instance().GetClusterPair(clusterPair, migrationScheduleNs)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find the ClusterPair %v in the %v namespace", clusterPair, migrationScheduleNs)
+	}
+
+	migrationNamespaceList := migrSchedObj.Spec.Template.Spec.Namespaces
+	migrationNamespaceSelectors := migrSchedObj.Spec.Template.Spec.NamespaceSelectors
+	// update the migrationNamespaces list by fetching namespaces based on provided label selectors
+	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationNamespaceList, migrationNamespaceSelectors)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the namespaces based on the --namespace-selectors in the provided MigrationSchedule: %v", err)
+	}
+	// at most one of exclude-namespaces or include-namespaces can be provided
+	if len(includeNamespaceList) != 0 && len(excludeNamespaceList) != 0 {
+		return nil, fmt.Errorf("can provide only one of --include-namespaces or --exclude-namespaces values at once")
+	} else if len(includeNamespaceList) != 0 {
+		if isSubList, nonSubsetStrings := utils.IsSubList(includeNamespaceList, migrationNamespaces); isSubList {
+			// Branch 1: Only failover/failback some of the namespaces being migrated by the given migrationSchedule
+			namespaceList = includeNamespaceList
+		} else {
+			return nil, fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings)
+		}
+	} else if len(excludeNamespaceList) != 0 {
+		if isSubList, nonSubsetStrings := utils.IsSubList(excludeNamespaceList, migrationNamespaces); isSubList {
+			// Branch 2: Exclude some of the namespaces being migrated by the given migrationSchedule from failover/failback
+			namespaceList = utils.ExcludeListAFromListB(excludeNamespaceList, migrationNamespaces)
+		} else {
+			return nil, fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings)
+		}
+	} else {
+		// Branch 3: Failover/Failback all the namespaces being migrated by the given migrationSchedule
+		namespaceList = migrationNamespaces
+	}
+	return namespaceList, nil
+}
+
+func createActionCR(actionType storkv1.ActionType, migrationScheduleNs string, referenceMigrationSchedule string, actionParameters storkv1.ActionParameter, ioStreams genericclioptions.IOStreams) error {
+	actionName := getActionName(actionType, referenceMigrationSchedule)
+	actionObj := storkv1.Action{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      actionName,
-			Namespace: namespace,
+			Namespace: migrationScheduleNs,
 		},
 		Spec: storkv1.ActionSpec{
 			ActionType:      actionType,
@@ -149,11 +185,14 @@ func createActionCR(actionName string, namespace string, actionType storkv1.Acti
 		},
 		Status: storkv1.ActionStatus{Status: storkv1.ActionStatusInitial},
 	}
-	actionObj, err := storkops.Instance().CreateAction(&action)
+	action, err := storkops.Instance().CreateAction(&actionObj)
+	migrationScheduleName := migrationScheduleNs + "/" + referenceMigrationSchedule
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to start %s for MigrationSchedule %v : %v", actionType, migrationScheduleName, err)
 	}
-	return actionObj, nil
+	printMsg(fmt.Sprintf("Started %s for MigrationSchedule %v", actionType, migrationScheduleName), ioStreams.Out)
+	printMsg(getActionStatusMessage(action), ioStreams.Out)
+	return nil
 }
 
 func getActionStatusMessage(action *storkv1.Action) string {
