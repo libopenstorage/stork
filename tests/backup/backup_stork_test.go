@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// This testcase verifies backup and restore with non existing and deleted custom stork admin namespaces
+// This testcase verifies backup and restore with non-existing and deleted custom stork admin namespaces
 var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies}", func() {
 
 	var (
@@ -334,6 +334,18 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Creating new admin namespace again for other tests - %v", newAdminNamespace)
+		nsSpec := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: newAdminNamespace,
+			},
+		}
+		_, err = core.Instance().GetNamespace(newAdminNamespace)
+		if err != nil {
+			ns, err := core.Instance().CreateNamespace(nsSpec)
+			log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
+			log.InfoD("Created Namespace - %v", ns.Name)
+		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.Infof("Deleting backup schedule policy")

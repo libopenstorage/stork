@@ -4,18 +4,23 @@ import (
 	context1 "context"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 
@@ -219,6 +224,30 @@ var BackupAccessKeyValue = map[BackupAccess]string{
 
 var StorkLabel = map[string]string{
 	"name": "stork",
+}
+
+// Type for customResourceObjects created by backup
+type customResourceObjectDetails struct {
+	Group         string
+	Version       string
+	Resource      string
+	SkipResources []string // If this list is populated that particular CR will not be considered for cleanup
+}
+
+// List of all the CRs to be considered for cleanup
+var crListMap = map[string]customResourceObjectDetails{
+	"applicationbackups": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationbackups",
+		SkipResources: []string{},
+	},
+	"applicationrestores": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationrestores",
+		SkipResources: []string{},
+	},
 }
 
 type BackupAccess int32
@@ -6953,6 +6982,8 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 	clusterObj := clusterResp.GetCluster()
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
+		allCRsCurrently := GetAllBackupCRObjects(clusterObj)
+		log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
 		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
@@ -6993,6 +7024,10 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 	clusterObj := clusterResp.GetCluster()
 
 	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
+
+		allCRsCurrently := GetAllBackupCRObjects(clusterObj)
+		log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
+
 		allRestoreCrs, err := GetRestoreCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
@@ -7481,7 +7516,6 @@ func validateCRCleanup(resourceInterface interface{},
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
-
 	validateCRCleanupInNamespace := func() (interface{}, bool, error) {
 		allCRs, err = getCRMethod(currentAdminNamespace, clusterObj)
 		if err != nil {
@@ -7903,4 +7937,53 @@ func DeleteAllVMsInNamespace(namespace string) error {
 	}
 
 	return nil
+}
+
+// GetCRObject queries and returns any CRD defined
+func getCRObject(clusterObj *api.ClusterObject, namespace string, customResourceObjectDetails customResourceObjectDetails) (*unstructured.UnstructuredList, error) {
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	config, err := portworx.GetKubernetesRestConfig(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicClient := dynamic.NewForConfigOrDie(config)
+
+	// Get the GVR of the CRD.
+	gvr := metav1.GroupVersionResource{
+		Group:    customResourceObjectDetails.Group,
+		Version:  customResourceObjectDetails.Version,
+		Resource: customResourceObjectDetails.Resource,
+	}
+	objects, err := dynamicClient.Resource(schema.GroupVersionResource(gvr)).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return objects, nil
+}
+
+// GetAllBackupCRObjects returns names of all backup CR object found in the cluster
+func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
+
+	var allBackupCrs = make([]string, 0)
+	for crName, definition := range crListMap {
+		allCurrentCrs, err := getCRObject(clusterObj, "", definition)
+		if err != nil {
+			log.Infof("Some error occurred while checking for [%s], Error - [%s]", crName, err.Error())
+		} else {
+			if len(allCurrentCrs.Items) > 0 {
+				log.Infof("Found [%s] object in the cluster", crName)
+				for _, item := range allCurrentCrs.Items {
+					// Skip the CR if present in SkipResources
+					if !slices.Contains(definition.SkipResources, item.GetName()) {
+						allBackupCrs = append(allBackupCrs, fmt.Sprintf("%s-%s", item.GetName(), item.GetNamespace()))
+					}
+				}
+			}
+		}
+	}
+
+	return allBackupCrs
 }
