@@ -20,8 +20,6 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	"github.com/libopenstorage/stork/pkg/aetosutils"
-	aetosLogger "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -68,7 +66,9 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/aetosutils"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	aetosLogger "github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/libopenstorage/stork/pkg/version"
@@ -834,7 +834,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 }
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
-func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string) error {
+func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, args map[string]string) error {
 	//var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
@@ -937,13 +937,23 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		cmdArgs = append(cmdArgs, projectMappings)
 	}
 
-	// Get external object store details and append to the command accordingily
-	objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
-	if err != nil {
-		return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+	if objectStoreType != "" {
+		// Get external object store details and append to the command accordingily
+		objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+		if err != nil {
+			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+		}
+		cmdArgs = append(cmdArgs, objectStoreArgs...)
 	}
 
-	cmdArgs = append(cmdArgs, objectStoreArgs...)
+	if args != nil {
+		// Get external object store details and append to the command accordingily
+		for k, v := range args {
+			cmdArgs = append(cmdArgs, fmt.Sprintf("--%v", k))
+			cmdArgs = append(cmdArgs, fmt.Sprintf("%v", v))
+		}
+	}
+
 	cmd.SetArgs(cmdArgs)
 	logrus.Infof("Following is the bidirectional command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
