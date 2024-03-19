@@ -47,7 +47,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		return
 	}
 
-	if len(action.Spec.ActionParameter.FailbackParameter.Namespaces) > 0 {
+	if len(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces) > 0 {
 		namespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to get list of namespaces from migrationschedule %s", migrationSchedule.Name)
@@ -60,7 +60,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			return
 		}
 
-		if isSubList, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.Namespaces); !isSubList {
+		if isSubList, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
 			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from migrationschedule %s", migrationSchedule.Name)
 			log.ActionLog(action).Infof(msg)
 			ac.recorder.Event(action,
