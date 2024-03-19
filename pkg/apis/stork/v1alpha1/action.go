@@ -65,7 +65,7 @@ type FailoverParameter struct {
 }
 
 type FailbackParameter struct {
-	Namespaces                 []string `json:"failbackNamespaces"`
+	FailbackNamespaces         []string `json:"failbackNamespaces"`
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
 }
 
