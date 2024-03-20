@@ -301,12 +301,8 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		if !snapshotClassNotRequired {
 			snapshotStorageClass := k.getSnapshotClassName(driverName, backup)
 			// In case of KDMP, if VolumeSnapshot is given and user want to use Default VolumeSnapshotClass then we need to
-			// get the default volumesnapshotclass name to populate in applicationBackup status VolumeInfo.VoluneSnapshot along with snapshot name
-
-			// Retaining "default" and "Default" because previous users who are using api based or CRD method to create Backup
-			// might be using those string, from newer version we will be using "Use-default-volumesnapshotclass" as identifier for using
-			// default volumesnapshotclass for creating volumeSnapshot
-			if snapshotStorageClass == "Default" || snapshotStorageClass == "default" || snapshotStorageClass == "Use-default-volumesnapshotclass" {
+			// get the default volumeSnapshotClass name to populate in applicationBackup status VolumeInfo.VolumeSnapshot along with snapshot name
+			if snapshotStorageClass == "Default" || snapshotStorageClass == "default" {
 				vscs, err := externalsnapshotter.Instance().ListSnapshotClasses()
 				if err != nil {
 					return nil, fmt.Errorf("unable to list volumesnapshotclasses : %+v", err.Error())
@@ -318,6 +314,11 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 							dataExport.Spec.SnapshotStorageClass = vsc.GetName()
 						}
 					}
+				}
+
+				// if no default volumeSnapshotClass found for that Provisioner we should fail backup for KDMP + LocalSnapshot Driver
+				if dataExport.Spec.SnapshotStorageClass == "" {
+					return nil, fmt.Errorf("no default volumesnapshotclass found for driver : %s", pv.Spec.CSI.Driver)
 				}
 			} else {
 				dataExport.Spec.SnapshotStorageClass = snapshotStorageClass
