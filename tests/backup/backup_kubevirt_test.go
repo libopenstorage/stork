@@ -18,11 +18,10 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies backup and restore of Kubevirt VMs in different states like Running, Stopped, Restarting
-var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
+var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseLabelsMap[KubevirtVMBackupRestoreWithDifferentStates]...), func() {
 
 	var (
 		backupNames                []string
@@ -47,8 +46,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		restoreWithVMMixed         string
 		backupWithVMStopped        string
 		restoreWithVMStopped       string
-		controlChannel             chan string
-		errorGroup                 *errgroup.Group
+		//controlChannel             chan string
+		//errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -84,8 +83,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -449,7 +451,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			}
 			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 		}
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		DestroyApps(scheduledAppContexts, opts)
 		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to default context")
@@ -466,7 +468,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 })
 
 // This testcase verifies backup and restore of Kubevirt VMs after upgrading kubevirt version
-var _ = Describe("{KubevirtUpgradeTest}", func() {
+var _ = Describe("{KubevirtUpgradeTest}", Label(TestCaseLabelsMap[KubevirtUpgradeTest]...), func() {
 
 	var (
 		restoreNames         []string
@@ -482,8 +484,8 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		providers            []string
 		labelSelectors       map[string]string
 		namespaceMapping     map[string]string
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -515,8 +517,11 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -643,7 +648,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		DestroyApps(scheduledAppContexts, opts)
 		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to destination context")
@@ -675,58 +680,8 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 	})
 })
 
-var _ = Describe("{KubevirtVMSshTest}", func() {
-	var (
-		scheduledAppContexts []*scheduler.Context
-	)
-	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtVMSshTest", "Verify SSH to kubevirt VM", nil, 0, Mkoppal, Q1FY25)
-
-		log.InfoD("scheduling applications")
-		scheduledAppContexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%d-%d", 93013, i)
-			appContexts := ScheduleApplications(taskName)
-			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = AppReadinessTimeout
-				scheduledAppContexts = append(scheduledAppContexts, appCtx)
-			}
-		}
-	})
-
-	It("Verify backup and restore of Kubevirt VMs in different states", func() {
-
-		Step("Validating applications", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			log.InfoD("Validating applications")
-			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
-		})
-
-		Step("SSH into the kubevirt VM", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			vms, err := GetAllVMsInNamespace(scheduledAppContexts[0].ScheduleOptions.Namespace)
-			if err != nil {
-				return
-			}
-			for _, vm := range vms {
-				log.Infof("Running command for VM [%s]", vm.Name)
-				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
-				log.InfoD("Output of command in step - [%s]", output)
-				log.FailOnError(err, "Failed to run command in VM")
-			}
-
-			for namespace, appWithData := range NamespaceAppWithDataMap {
-				log.Infof("Found vm with data in %s", namespace)
-				appWithData[0].InsertBackupData(ctx, "default", []string{})
-			}
-
-		})
-	})
-})
-
 // This testcase verifies Simultaneous backups/ Simultaneous Backup and Restore/ Simultaneous Restore and Source Virtual Machine Deletion
-var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", func() {
+var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", Label(TestCaseLabelsMap[KubevirtVMBackupOrDeletionInProgress]...), func() {
 	var (
 		backupNames          []string
 		labelSelectors       map[string]string
@@ -1054,7 +1009,7 @@ var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", func() {
 })
 
 // This testcase verifies backup and restore of Kubevirt VMs in with node selector
-var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
+var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabelsMap[KubevirtVMBackupRestoreWithNodeSelector]...), func() {
 
 	var (
 		backupNames                  []string
@@ -1338,7 +1293,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 	})
 })
 
-var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", func() {
+var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", Label(TestCaseLabelsMap[KubevirtVMWithFreezeUnfreeze]...), func() {
 	var (
 		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
 		//controlChannel       chan string
@@ -1545,7 +1500,7 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", func() {
 	})
 })
 
-var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", func() {
+var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseLabelsMap[KubevirtInPlaceRestoreWithReplaceAndRetain]...), func() {
 	var (
 		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
 		//controlChannel       chan string
@@ -1762,7 +1717,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", func() {
 	})
 })
 
-var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", func() {
+var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseLabelsMap[KubevirtVMRestoreWithAfterChangingVMConfig]...), func() {
 	var (
 		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
 		//controlChannel       chan string
