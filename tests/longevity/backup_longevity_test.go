@@ -25,6 +25,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		CreatePxBackupAndRestore: TriggerCreateBackupAndRestore,
 		CreateRandomRestore:      TriggerCreateRandomRestore,
 		DeployBackupApps:         TriggerDeployBackupApps,
+		CreatePxLockedBackup:     TriggerCreateLockedBackup,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -57,6 +58,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		TriggerDeployBackupApps(&contexts, &triggerEventsChan)
 		TriggerAddBackupCluster(&contexts, &triggerEventsChan)
 		TriggerAddBackupCredAndBucket(&contexts, &triggerEventsChan)
+		TriggerAddLockedBackupCredAndBucket(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {

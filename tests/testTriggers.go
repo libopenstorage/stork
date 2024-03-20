@@ -571,11 +571,17 @@ const (
 	//SetupBackupBucketAndCreds add creds and adds bucket for backup
 	SetupBackupBucketAndCreds = "pxbSetupBackupBucketAndCreds"
 
+	//SetupBackupLockedBucketAndCreds add creds and adds locked bucket for backup
+	SetupBackupLockedBucketAndCreds = "pxbSetupBackupLockedBucketAndCreds"
+
 	// DeployBackup Apps deploys backup application
 	DeployBackupApps = "pxbDeployBackupApps"
 
 	// CreateBackup creates backup for longevity
 	CreatePxBackup = "pxbCreatePxBackup"
+
+	// CreateBackup creates locked backup for longevity
+	CreatePxLockedBackup = "pxbCreatePxLockedBackup"
 
 	// CreateBackupAndRestore creates backup and Restores the backup
 	CreatePxBackupAndRestore = "pxbCreateBackupAndRestore"

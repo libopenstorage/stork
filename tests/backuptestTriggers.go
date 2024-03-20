@@ -3,6 +3,7 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"strings"
 
 	"math/rand"
 	"time"
@@ -22,12 +23,14 @@ import (
 
 // Global variables to be used by all flows
 var (
-	LongevityBackupLocationName   string
-	LongevityBackupLocationUID    string
-	LongevityAllNamespaces        []string
-	LongevityClusterUID           string
-	LongevityScheduledAppContexts []*scheduler.Context
-	LongevityAllBackupNames       []string
+	LongevityBackupLocationName      string
+	LongevityBackupLocationUID       string
+	LongevityLockedBackupLocationMap map[string]string
+	LongevityAllNamespaces           []string
+	LongevityClusterUID              string
+	LongevityScheduledAppContexts    []*scheduler.Context
+	LongevityAllBackupNames          []string
+	LongevityAllLockedBackupNames    []string
 )
 
 type PxBackupLongevity struct {
@@ -43,11 +46,12 @@ type CustomData struct {
 }
 
 type BackupData struct {
-	Namespaces         []string
-	BackupLocationName string
-	BackupLocationUID  string
-	ClusterUid         string
-	BackupName         string
+	Namespaces              []string
+	BackupLocationName      string
+	BackupLocationUID       string
+	LockedBackupLocationMap map[string]string
+	ClusterUid              string
+	BackupName              string
 }
 
 type RestoreData struct {
@@ -60,14 +64,16 @@ type ApplicationData struct {
 }
 
 type EventData struct {
-	SchedulerContext   []*scheduler.Context
-	AppContext         context1.Context
-	BackupNamespaces   []string
-	BackupLocationName string
-	BackupLocationUID  string
-	ClusterUid         string
-	BackupNames        []string
-	RestoreName        string
+	SchedulerContext        []*scheduler.Context
+	AppContext              context1.Context
+	BackupNamespaces        []string
+	BackupLocationName      string
+	BackupLocationUID       string
+	LockedBackupLocationMap map[string]string
+	ClusterUid              string
+	BackupNames             []string
+	LockedBackupNames       []string
+	RestoreName             string
 }
 
 type EventBuilderResponse struct {
@@ -88,21 +94,25 @@ type EventResponse struct {
 }
 
 const (
-	EventScheduleApps                   = "EventScheduleApps"
-	EventValidateScheduleApplication    = "EventValidateScheduleApplication"
-	EventAddCredentialandBackupLocation = "EventAddCredentialandBackupLocation"
-	EventAddSourceAndDestinationCluster = "EventAddSourceAndDestinationCluster"
-	EventCreateBackup                   = "EventCreateBackup"
-	EventRestore                        = "EventRestore"
+	EventScheduleApps                               = "EventScheduleApps"
+	EventValidateScheduleApplication                = "EventValidateScheduleApplication"
+	EventAddCredentialandBackupLocation             = "EventAddCredentialandBackupLocation"
+	EventAddSourceAndDestinationCluster             = "EventAddSourceAndDestinationCluster"
+	EventAddLockedBucketCredentialandBackupLocation = "EventAddLockedBucketCredentialandBackupLocation"
+	EventCreateBackup                               = "EventCreateBackup"
+	EventCreateLockedBackup                         = "EventCreateLockedBackup"
+	EventRestore                                    = "EventRestore"
 )
 
 var AllBuilders = map[string]PxBackupEventBuilder{
-	EventScheduleApps:                   eventScheduleApps,
-	EventValidateScheduleApplication:    eventValidateScheduleApplication,
-	EventAddCredentialandBackupLocation: eventAddCredentialandBackupLocation,
-	EventAddSourceAndDestinationCluster: eventAddSourceAndDestinationCluster,
-	EventCreateBackup:                   eventCreateBackup,
-	EventRestore:                        eventRestore,
+	EventScheduleApps:                               eventScheduleApps,
+	EventValidateScheduleApplication:                eventValidateScheduleApplication,
+	EventAddCredentialandBackupLocation:             eventAddCredentialandBackupLocation,
+	EventAddSourceAndDestinationCluster:             eventAddSourceAndDestinationCluster,
+	EventAddLockedBucketCredentialandBackupLocation: eventAddLockedBucketCredentialandBackupLocation,
+	EventCreateBackup:                               eventCreateBackup,
+	EventCreateLockedBackup:                         eventCreateLockedBackup,
+	EventRestore:                                    eventRestore,
 }
 
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
@@ -267,6 +277,48 @@ func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevit
 	return nil, "", *eventData
 }
 
+// Event for backup location and cred add
+func eventAddLockedBucketCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	eventData := &EventData{}
+	eventData.LockedBackupLocationMap = make(map[string]string)
+	var providers = GetBackupProviders()
+	var backupLocationUID string
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err, "", *eventData
+	}
+	modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
+	log.InfoD("Creating cloud credentials and backup location")
+	for _, provider := range providers {
+		for _, mode := range modes {
+			cloudCredUID := uuid.New()
+			credName := fmt.Sprintf("autogenerated-locked-cred-%v", time.Now().Unix())
+			err := CreateCloudCredential(provider, credName, cloudCredUID, BackupOrgID, ctx)
+			if err != nil {
+				return err, "", *eventData
+			}
+			bucketName := fmt.Sprintf("%s-%s-%v", "longevity-locked", strings.ToLower(mode), time.Now().Unix())
+			err = CreateS3Bucket(bucketName, true, 3, mode)
+			if err != nil {
+				return err, "", *eventData
+			}
+			log.Infof("Bucket created with name - %s", bucketName)
+			backupLocationUID = uuid.New()
+			customBackupLocationName := fmt.Sprintf("%s-%s-lock-%v", "autogenerated", strings.ToLower(mode), time.Now().Unix())
+			err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, bucketName, BackupOrgID, "", true)
+			if err != nil {
+				return err, "", *eventData
+			}
+			eventData.LockedBackupLocationMap[customBackupLocationName] = backupLocationUID
+			log.InfoD("Created Locked Backup Location with name - %s", customBackupLocationName)
+		}
+	}
+
+	return nil, "", *eventData
+}
+
 // Event for Source and Dest Cluster add
 func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
@@ -328,6 +380,46 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 
 	eventData.BackupNames = backupNames
 	LongevityAllBackupNames = append(LongevityAllBackupNames, backupNames...)
+
+	return nil, "", *eventData
+}
+
+// Event for Backup Creation
+func eventCreateLockedBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+
+	eventData := &EventData{}
+	var backupNames []string
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err, "", *eventData
+	}
+
+	log.Infof("Creating a manual locked backup")
+	for _, namespace := range inputsForEventBuilder.BackupData.Namespaces {
+		for lockedBackupLocationName, lockedBackupLocationUid := range inputsForEventBuilder.BackupData.LockedBackupLocationMap {
+			backupName := fmt.Sprintf("%s-%v-%s", BackupNamePrefix, time.Now().Unix(), RandomString(10))
+			labelSelectors := make(map[string]string)
+			appContextsToBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, []string{namespace})
+			err := CreateBackupWithValidation(
+				ctx,
+				backupName,
+				SourceClusterName,
+				lockedBackupLocationName,
+				lockedBackupLocationUid,
+				appContextsToBackup,
+				labelSelectors,
+				BackupOrgID,
+				inputsForEventBuilder.BackupData.ClusterUid, "", "", "", "")
+			if err != nil {
+				return err, "Error occurred while taking backup", *eventData
+			}
+			backupNames = append(backupNames, backupName)
+		}
+	}
+
+	eventData.BackupNames = backupNames
+	LongevityAllLockedBackupNames = append(LongevityAllLockedBackupNames, backupNames...)
 
 	return nil, "", *eventData
 }
@@ -404,6 +496,15 @@ func getGlobalBucketName(provider string) string {
 	return bucketName
 }
 
+func getGlobalLockedBucketName(provider string) string {
+	if provider == drivers.ProviderAws {
+		return GlobalAWSLockedBucketName
+	} else {
+		log.Errorf("environment variable [%s] not provided with valid values", "PROVIDERS")
+		return ""
+	}
+}
+
 // All Longevity Triggers
 
 // Trigger to create cred and bucket for backup
@@ -435,6 +536,45 @@ func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *c
 	// Setting global variables for backup
 	LongevityBackupLocationName = eventData.BackupLocationName
 	LongevityBackupLocationUID = eventData.BackupLocationUID
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+
+}
+
+// Trigger to create cred and bucket for backup
+func TriggerAddLockedBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetupBackupLockedBucketAndCreds)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetupBackupLockedBucketAndCreds,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Add global cloud location for locked backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	eventData := RunBuilder(EventAddLockedBucketCredentialandBackupLocation, &inputForBuilder, &result)
+
+	// Setting global variables for backup
+	LongevityLockedBackupLocationMap = eventData.LockedBackupLocationMap
 
 	UpdateEventResponse(&result)
 
@@ -554,6 +694,46 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
 
 	_ = RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+}
+
+// Trigger to create backup and validate
+func TriggerCreateLockedBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxLockedBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxLockedBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Create Locked Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Backup")
+	inputForBuilder.BackupData.LockedBackupLocationMap = LongevityLockedBackupLocationMap
+	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+
+	_ = RunBuilder(EventCreateLockedBackup, &inputForBuilder, &result)
 
 	UpdateEventResponse(&result)
 

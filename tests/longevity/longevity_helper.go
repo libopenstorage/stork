@@ -96,6 +96,7 @@ func populateBackupDisruptiveTriggers() {
 func populateBackupIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[CreatePxBackup] = map[int]time.Duration{}
+	triggerInterval[CreatePxLockedBackup] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[CreatePxBackupAndRestore] = map[int]time.Duration{}
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
@@ -113,6 +114,17 @@ func populateBackupIntervals() {
 	triggerInterval[CreatePxBackup][3] = 48 * baseInterval
 	triggerInterval[CreatePxBackup][2] = 54 * baseInterval
 	triggerInterval[CreatePxBackup][1] = 60 * baseInterval
+
+	triggerInterval[CreatePxLockedBackup][10] = 6 * baseInterval
+	triggerInterval[CreatePxLockedBackup][9] = 12 * baseInterval
+	triggerInterval[CreatePxLockedBackup][8] = 18 * baseInterval
+	triggerInterval[CreatePxLockedBackup][7] = 24 * baseInterval
+	triggerInterval[CreatePxLockedBackup][6] = 30 * baseInterval
+	triggerInterval[CreatePxLockedBackup][5] = 36 * baseInterval
+	triggerInterval[CreatePxLockedBackup][4] = 42 * baseInterval
+	triggerInterval[CreatePxLockedBackup][3] = 48 * baseInterval
+	triggerInterval[CreatePxLockedBackup][2] = 54 * baseInterval
+	triggerInterval[CreatePxLockedBackup][1] = 60 * baseInterval
 
 	triggerInterval[CreatePxBackupAndRestore][10] = 6 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][9] = 12 * baseInterval
