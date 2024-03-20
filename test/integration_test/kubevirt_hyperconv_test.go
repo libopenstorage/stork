@@ -289,6 +289,8 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 	vols, err := schedulerDriver.GetVolumes(appCtx)
 	require.NoError(t, err, "failed to get volumes for context %s", appCtx.App.Key)
 
+	logrus.Infof("RK=> Number of volumes for test state %s: %d", testState.vmiName, len(vols))
+
 	for _, vol := range vols {
 		vmDisk := &vmDisk{volume: vol}
 		testState.vmDisks = append(testState.vmDisks, vmDisk)
