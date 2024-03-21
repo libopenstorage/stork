@@ -7,9 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/multierr"
-
-	"github.com/hashicorp/go-version"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -21,9 +18,6 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-var (
-	OpVer24_1_0, _ = version.NewVersion("24.1.0-")
-)
 var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
@@ -65,11 +59,13 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
-				if err == nil && opver.GreaterThanOrEqual(OpVer24_1_0) {
-					go doPDBValidation(stopSignal, &mError)
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
 					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
 				}
 
 				err = Inst().S.UpgradeScheduler(version)
@@ -161,40 +157,3 @@ var _ = Describe("{UpgradeCluster}", func() {
 		AfterEachTest(contexts)
 	})
 })
-
-func doPDBValidation(stopSignal <-chan struct{}, mError *error) {
-	pdbValue, allowedDisruptions := GetPDBValue()
-	isClusterParallelyUpgraded := false
-	nodes, err := Inst().V.GetDriverNodes()
-	if err != nil {
-		*mError = multierr.Append(*mError, err)
-		return
-	}
-	totalNodes := len(nodes)
-	itr := 1
-	for {
-		log.Infof("PDB validation iteration: #%d", itr)
-		select {
-		case <-stopSignal:
-			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
-				err := fmt.Errorf("Cluster is not parallely upgraded")
-				*mError = multierr.Append(*mError, err)
-				log.Warnf("Cluster not parallely upgraded as expected")
-			}
-			log.Infof("Exiting PDB validation routine")
-			return
-		default:
-			errorChan := make(chan error, 50)
-			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
-			for err := range errorChan {
-				*mError = multierr.Append(*mError, err)
-			}
-			if *mError != nil {
-				return
-			}
-			itr++
-			time.Sleep(10 * time.Second)
-		}
-	}
-
-}

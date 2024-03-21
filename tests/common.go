@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/hashicorp/go-version"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -201,6 +202,11 @@ var (
 var (
 	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
 	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
+)
+
+var (
+	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
+	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
 )
 
 type OwnershipAccessType int32
@@ -784,7 +790,6 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
 			processError(err, errChan...)
 		}
-
 	})
 	Step("Validate number of disruptions ", func() {
 		nodes, err := Inst().V.GetDriverNodes()
@@ -798,14 +803,11 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 		}
 		if initialNumNodes-currentNumNodes > 1 {
 			*isClusterParallelyUpgraded = true
-			
 		}
 	})
-
 }
 
 func GetPDBValue() (int, int) {
-	// if Inst().V.GetDriverNodes()
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return -1, -1
@@ -10898,7 +10900,7 @@ func PrintK8sCluterInfo() {
 	}
 }
 
-//ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
+// ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
 func ExportSourceKubeConfig() error {
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 	if err != nil {
@@ -10911,7 +10913,7 @@ func ExportSourceKubeConfig() error {
 	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
 }
 
-//ExportDestinationKubeConfig changes the KUBECONFIG environment variable to the destination cluster config path
+// ExportDestinationKubeConfig changes the KUBECONFIG environment variable to the destination cluster config path
 func ExportDestinationKubeConfig() error {
 	DestinationClusterConfigPath, err := GetDestinationClusterConfigPath()
 	if err != nil {
@@ -10925,7 +10927,7 @@ func ExportDestinationKubeConfig() error {
 	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
 }
 
-//SwitchBothKubeConfigANDContext switches both KUBECONFIG and context to the given cluster
+// SwitchBothKubeConfigANDContext switches both KUBECONFIG and context to the given cluster
 func SwitchBothKubeConfigANDContext(cluster string) error {
 	if cluster == "source" {
 		err := ExportSourceKubeConfig()
@@ -10947,4 +10949,42 @@ func SwitchBothKubeConfigANDContext(cluster string) error {
 		}
 	}
 	return nil
+}
+
+// DoPDBValidation continuously validates the Pod Disruption Budget against
+// cluster upgrades, appending errors to mError, until a stop signal is received.
+func DoPDBValidation(stopSignal <-chan struct{}, mError *error) {
+	pdbValue, allowedDisruptions := GetPDBValue()
+	isClusterParallelyUpgraded := false
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	totalNodes := len(nodes)
+	itr := 1
+	for {
+		log.Infof("PDB validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
+				err := fmt.Errorf("cluster is not parallely upgraded")
+				*mError = multierr.Append(*mError, err)
+				log.Warnf("Cluster not parallely upgraded as expected")
+			}
+			log.Infof("Exiting PDB validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
+			for err := range errorChan {
+				*mError = multierr.Append(*mError, err)
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
 }
