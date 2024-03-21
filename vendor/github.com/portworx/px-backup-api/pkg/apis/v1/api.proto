@@ -351,6 +351,8 @@ message BackupScheduleInfo {
     bool skip_vm_auto_exec_rules = 27;
     // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
     map<string, string> volume_snapshot_class_mapping = 28;
+    // option to take backup as direct kdmp 
+    bool direct_kdmp = 29;
 
 
     message BackupType {
@@ -534,6 +536,8 @@ message BackupInfo {
     bool skip_vm_auto_exec_rules = 36;
     // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
     map<string, string> volume_snapshot_class_mapping = 37;
+    // option to take backup as direct kdmp 
+    bool direct_kdmp = 38;
 
     message BackupType {
         Type type = 1;
@@ -1004,6 +1008,9 @@ message BackupScheduleCreateRequest {
     bool skip_vm_auto_exec_rules = 21;
     // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
     map<string, string> volume_snapshot_class_mapping = 22;
+    // option to take backup as direct kdmp 
+    bool direct_kdmp = 23;
+
 
     enum BackupType {
         Invalid = 0;
@@ -1912,6 +1919,8 @@ message BackupCreateRequest {
     bool skip_vm_auto_exec_rules = 18;
     // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
     map<string, string> volume_snapshot_class_mapping = 19;
+    // option to take backup as direct kdmp 
+    bool direct_kdmp = 20;
 
     enum BackupType {
         Invalid = 0;

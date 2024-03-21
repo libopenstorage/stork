@@ -1920,11 +1920,13 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if volume.GetStorageProvisioner() != PortworxStrict {
-			if app.IsCSI {
-				obj.Provisioner = CsiProvisioner
-			} else {
-				obj.Provisioner = volume.GetStorageProvisioner()
+		if options.StorageProvisioner == "" {
+			if volume.GetStorageProvisioner() != PortworxStrict {
+				if app.IsCSI {
+					obj.Provisioner = CsiProvisioner
+				} else {
+					obj.Provisioner = volume.GetStorageProvisioner()
+				}
 			}
 		}
 		log.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)

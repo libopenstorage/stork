@@ -3027,6 +3027,11 @@
             "type": "string"
           },
           "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
+        },
+        "direct_kdmp": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "option to take backup as direct kdmp"
         }
       },
       "title": "Request message structure for backup create"
@@ -3242,6 +3247,11 @@
             "type": "string"
           },
           "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
+        },
+        "direct_kdmp": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "option to take backup as direct kdmp"
         }
       }
     },
@@ -3692,6 +3702,11 @@
             "type": "string"
           },
           "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
+        },
+        "direct_kdmp": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "option to take backup as direct kdmp"
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
@@ -3866,6 +3881,11 @@
             "type": "string"
           },
           "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
+        },
+        "direct_kdmp": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "option to take backup as direct kdmp"
         }
       }
     },
