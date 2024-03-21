@@ -155,7 +155,7 @@ func TestCreateUniDirectionalClusterPairMissingParameters(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfigDuplicate.Name(), "-u", "--mode", "xyz"}
-	expected = fmt.Sprintf("error: invalid mode %s, mode value should either be %s, %s, %s or %s", "xyz", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration, userInputCPModeOnetimeMigration)
+	expected = fmt.Sprintf("error: invalid mode %s, mode value should either be %s, %s or %s", "xyz", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration)
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -280,14 +280,6 @@ func TestGenerateClusterPairForDifferentModes(t *testing.T) {
 	require.Equal(t, 0, len(clusterPair.Spec.Options), "ClusterPair mode mismatch")
 
 	mode = userInputCPModeMigration
-	ignoreStorageOptions = false
-	clusterPair, err = generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings, authSecretNamespace, reverse, mode, ignoreStorageOptions)
-	require.NoError(t, err, "Error generating ClusterPair")
-
-	// Verify the generated ClusterPair object
-	require.Equal(t, "", clusterPair.Spec.Options["mode"], "ClusterPair mode mismatch")
-
-	mode = userInputCPModeOnetimeMigration
 	ignoreStorageOptions = false
 	clusterPair, err = generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings, authSecretNamespace, reverse, mode, ignoreStorageOptions)
 	require.NoError(t, err, "Error generating ClusterPair")

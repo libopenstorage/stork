@@ -40,10 +40,9 @@ const (
 	secretNamespace        = "openstorage.io/auth-secret-namespace"
 	secretName             = "openstorage.io/auth-secret-name"
 
-	userInputCPModeAsync            = "async-dr"
-	userInputCPModeSync             = "sync-dr"
-	userInputCPModeMigration        = "migration"
-	userInputCPModeOnetimeMigration = "onetime-migration"
+	userInputCPModeAsync     = "async-dr"
+	userInputCPModeSync      = "sync-dr"
+	userInputCPModeMigration = "migration"
 
 	clusterPairDRModeDisasterRecovery = "DisasterRecovery"
 	clusterPairDRModeOnetimeMigration = "OneTimeMigration"
@@ -291,8 +290,8 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				return
 			}
 
-			if mode != userInputCPModeAsync && mode != userInputCPModeSync && mode != userInputCPModeMigration && mode != userInputCPModeOnetimeMigration {
-				util.CheckErr(fmt.Errorf("invalid mode %s, mode value should either be %s, %s, %s or %s", mode, userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration, userInputCPModeOnetimeMigration))
+			if mode != userInputCPModeAsync && mode != userInputCPModeSync && mode != userInputCPModeMigration {
+				util.CheckErr(fmt.Errorf("invalid mode %s, mode value should either be %s, %s or %s", mode, userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration))
 				return
 			}
 
@@ -688,7 +687,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
-	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", userInputCPModeAsync, fmt.Sprintf("Mode of DR. [%s, %s, %s, %s]", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration, userInputCPModeOnetimeMigration))
+	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", userInputCPModeAsync, fmt.Sprintf("Mode of DR. [%s, %s, %s]", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration))
 	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
 	createClusterPairCommand.Flags().StringVarP(&backupLocationName, "use-existing-objectstorelocation", "", "", "(Optional) Objectstorelocation with the provided name should be present in both source and destination cluster")
 	// New parameters for creating backuplocation secret
@@ -733,7 +732,7 @@ func generateClusterPair(
 	}
 	if mode == userInputCPModeAsync {
 		opts["mode"] = clusterPairDRModeDisasterRecovery
-	} else if mode == userInputCPModeOnetimeMigration {
+	} else if mode == userInputCPModeMigration {
 		opts["mode"] = clusterPairDRModeOnetimeMigration
 	}
 	config, err := getConfig(configFile).RawConfig()
