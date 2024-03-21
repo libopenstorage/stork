@@ -11539,3 +11539,112 @@ func getMetaDataDiskPath(n node.Node) (string, error) {
 	}
 	return path, nil
 }
+
+var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
+	/*
+	   https://portworx.atlassian.net/browse/PTX-15473
+	   1. Deploy apps
+	   2. Trigger pool expand using add drive/ resize
+	   3. Introduce network delay with the cloud provider while pool expand is in progress
+	   4. Check if the pool expand is successful
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("NetworkDelayWhilePoolExpand", "Network delay while pool expand", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var selectedNode node.Node
+
+	itLog := "NetworkDelayWhilePoolExpand"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//pick a random storage node
+			storageNodes := node.GetStorageNodes()
+			selectedNode = storageNodes[rand.Intn(len(storageNodes))]
+
+			AppList := Inst().AppList
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+
+			var err error
+			defer func() {
+				Inst().AppList = AppList
+				err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			}()
+			err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("network-delay-pool-expand-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		done := make(chan bool)
+
+		stepLog = "Trigger pool expand using add drive/ resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			go func() {
+				defer GinkgoRecover()
+				defer func() {
+					done <- true
+				}()
+				selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode, contexts)
+				log.FailOnError(err, "Failed to get pool with IOs in given node")
+				log.InfoD("Selected pool for pool expand: %v", selectedPool.Uuid)
+
+				isJournalEnabled, _ = IsJournalEnabled()
+
+				expectedSize := selectedPool.TotalSize/units.GiB + 100
+
+				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to expand pool with add disk")
+
+				err = waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+
+				poolToResize = getStoragePool(selectedPool.Uuid)
+				expectedSize = selectedPool.TotalSize/units.GiB + 150
+
+				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to expand pool with add disk")
+				err = waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+
+			}()
+
+		})
+
+		stepLog = "Introduce network delay with the cloud provider while pool expand is in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Introduce network delay
+			Delay := 10
+			defer func() {
+				log.Infof(fmt.Sprintf("Deleting the delay of %dms from the node: %v", Delay, selectedNode.Name))
+				err := Inst().N.InjectNetworkErrorWithRebootFallback([]node.Node{selectedNode}, "delay", "del", 0, Delay)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", Delay))
+			}()
+
+			log.Infof(fmt.Sprintf("Adding a delay of %dms to a node: %v ", Delay, selectedNode.Name))
+			err := Inst().N.InjectNetworkErrorWithRebootFallback([]node.Node{selectedNode}, "delay", "add", 0, Delay)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", Delay))
+
+			//Wait for pool expand to complete
+			<-done
+			log.InfoD("Successfully expanded the pool and removing network delay for the node: %v", selectedNode.Name)
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
