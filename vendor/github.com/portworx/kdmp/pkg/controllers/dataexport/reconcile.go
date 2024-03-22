@@ -267,7 +267,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		var compressionType string
 		var podDataPath string
 		var excludeFileList string
-		pvcStorageClass := dataExport.Annotations[kdmpStorageClassKey]
+		pvcStorageClass := dataExport.Labels[kdmpStorageClassKey]
 		var backupLocation *storkapi.BackupLocation
 		var data updateDataExportDetail
 		if driverName != drivers.Rsync {
@@ -1862,6 +1862,7 @@ func startTransferJob(
 		return drv.StartJob(
 			drivers.WithSourcePVC(srcPVCName),
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithDataExportUID(string(dataExport.UID)),
 			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
 			drivers.WithLabels(dataExport.Labels),
 		)
