@@ -148,10 +148,7 @@ func (c *csiDriver) CreateSnapshot(opts ...Option) (string, string, string, erro
 			"multiple provisioner", pvc.GetName(), pv.Spec.CSI.Driver)
 	}
 
-	// Retaining "default" and "Default" because previous users who are using api based or CRD method to create Backup
-	// might be using those string, from newer version we will be using "Use-default-volumesnapshotclass" as identifier for using
-	// default volumesnapshotclass for creating volumeSnapshot
-	if o.SnapshotClassName == "default" || o.SnapshotClassName == "Default" || o.SnapshotClassName == "Use-default-volumesnapshotclass" {
+	if o.SnapshotClassName == "default" || o.SnapshotClassName == "Default" {
 		// Let kubernetes choose the default snapshot class to use
 		// for this snapshot. If none is set then the volume snapshot will fail
 		o.SnapshotClassName = ""
