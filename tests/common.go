@@ -5636,28 +5636,26 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
-// HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
+// HaIncreaseErrorInjectionTargetNode repl increase and reboot target node
+func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) error {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
 	var replicaSets []*opsapi.ReplicaSet
+	var err error
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(v)
+			var currRep int64
+			currRep, err = Inst().V.GetReplicationFactor(v)
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				log.Warn(err)
-				UpdateOutcome(event, err)
 				return
 			}
 
@@ -5681,28 +5679,30 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					if !nExist {
 						newReplID = nID
 						newReplNode = node
-						poolsUsedSize, err := Inst().V.GetPoolsUsedSize(&newReplNode)
+						var poolsUsedSize map[string]string
+						var pools map[string]*opsapi.StoragePool
+						poolsUsedSize, err = Inst().V.GetPoolsUsedSize(&newReplNode)
 						if err != nil {
-							UpdateOutcome(event, err)
 							return
 						}
 
-						pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+						pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 						if err != nil {
-							UpdateOutcome(event, err)
+
 							return
 						}
 						for p, u := range poolsUsedSize {
 							listPool := pools[p]
-							usedSize, err := strconv.ParseUint(u, 10, 64)
+							var usedSize uint64
+							var vol *opsapi.Volume
+							usedSize, err = strconv.ParseUint(u, 10, 64)
 							if err != nil {
-								UpdateOutcome(event, err)
+
 								return
 							}
 							freeSize := listPool.TotalSize - usedSize
-							vol, err := Inst().V.InspectVolume(v.ID)
+							vol, err = Inst().V.InspectVolume(v.ID)
 							if err != nil {
-								UpdateOutcome(event, err)
 								return
 							}
 							if freeSize >= vol.Usage {
@@ -5712,9 +5712,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					}
 				}
 				if newReplID != "" {
-					nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
+					var nodeContexts []*scheduler.Context
+					nodeContexts, err = GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
 					if err != nil {
-						UpdateOutcome(event, err)
+						return
 					}
 
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
@@ -5728,15 +5729,18 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
-							dashStats := make(map[string]string)
-							dashStats["volume-name"] = v.Name
-							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
-							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							if event != nil {
+								dashStats := make(map[string]string)
+								dashStats["volume-name"] = v.Name
+								dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+								dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+								updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							}
+
 							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
+								err = fmt.Errorf("There is an error increasing repl [%v]", err.Error())
+								return
 							}
 						})
 
@@ -5758,24 +5762,26 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
 								if errInj == PX_RESTART {
-									updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
-									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
-									if testError != nil {
-										log.Error(testError)
-										UpdateOutcome(event, err)
+
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+									}
+									err = Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
+									if err != nil {
 										return
 									}
 									log.Infof("waiting for 15 mins before starting volume driver")
 									time.Sleep(15 * time.Minute)
-									testError = Inst().V.StartDriver(newReplNode)
-									if testError != nil {
-										log.Error(testError)
-										UpdateOutcome(event, err)
+									err = Inst().V.StartDriver(newReplNode)
+									if err != nil {
 										return
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
 								} else if errInj == REBOOT {
-									updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+									}
+
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5784,73 +5790,83 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 										},
 									})
 									if err != nil {
-										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-										UpdateOutcome(event, err)
+										err = fmt.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+
 									}
 								} else if errInj == CRASH {
-									updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+									}
+
 									errorChan := make(chan error, errorChannelSize)
 									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
-									for err := range errorChan {
-										UpdateOutcome(event, err)
+									var errorMsgs []string
+									for chanError := range errorChan {
+										errorMsgs = append(errorMsgs, chanError.Error())
 									}
+									if len(errorMsgs) > 0 {
+										err = fmt.Errorf("%s", strings.Join(errorMsgs, ","))
+									}
+
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
-									log.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+									return
 								}
+								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
-									dashStats = make(map[string]string)
-									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-									dashStats["fastpath"] = "true"
-									dashStats["volume-name"] = v.Name
-									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									if event != nil {
+										dashStats = make(map[string]string)
+										dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+										dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+										dashStats["fastpath"] = "true"
+										dashStats["volume-name"] = v.Name
+										updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									}
+									err = ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									dash.VerifySafely(err, nil, "fastpath volume successfully validated")
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+									if err != nil {
+										return
+									}
 								}
 							})
 
 						err = ValidateDataIntegrity(&nodeContexts)
-						UpdateOutcome(event, err)
-
+						if err != nil {
+							return
+						}
 					}
 				} else {
-					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
+					err = fmt.Errorf("no node identified to repl increase for vol: %s", v.Name)
 				}
 			} else {
-				log.Error(err)
-				UpdateOutcome(event, err)
-
+				return
 			}
 		})
+	return err
 }
 
-// HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
+// HaIncreaseErrorInjectSourceNode repl increase and reboot source node
+func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) error {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
+	var err error
+	var currRep int64
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(v)
+			currRep, err = Inst().V.GetReplicationFactor(v)
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
+
 			}
 
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				log.Warn(err)
-				UpdateOutcome(event, err)
 				return
 			}
 
@@ -5867,55 +5883,60 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
-						replicaSets, err := Inst().V.GetReplicaSets(v)
+						var replicaSets []*opsapi.ReplicaSet
+						replicaSets, err = Inst().V.GetReplicaSets(v)
 						if err == nil {
-
 							replicaNodes := replicaSets[0].Nodes
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
-								newFastPathNode, err := AddFastPathLabel(ctx)
+								var newFastPathNode *node.Node
+								newFastPathNode, err = AddFastPathLabel(ctx)
 								if err == nil {
 									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
 								}
-								UpdateOutcome(event, err)
 							}
-							dashStats := make(map[string]string)
-							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
-							dashStats["volume-name"] = v.Name
-							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+
+							if event != nil {
+								dashStats := make(map[string]string)
+								dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+								dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+								dashStats["volume-name"] = v.Name
+								updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							}
+
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
+								return
 							} else {
 								log.Infof("Waiting for 60 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(60 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
-									dashStats = make(map[string]string)
+									dashStats := make(map[string]string)
 									dashStats["node"] = replNodeToReboot.Name
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
 									if errInj == PX_RESTART {
-										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
-										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
-										if testError != nil {
-											log.Error(testError)
-											UpdateOutcome(event, err)
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+										}
+
+										err = Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
+										if err != nil {
 											return
 										}
 										log.Infof("waiting for 15 mins before starting volume driver")
 										time.Sleep(15 * time.Minute)
-										testError = Inst().V.StartDriver(replNodeToReboot)
-										if testError != nil {
-											log.Error(testError)
-											UpdateOutcome(event, err)
+										err = Inst().V.StartDriver(replNodeToReboot)
+										if err != nil {
 											return
 										}
 										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
 
 									} else if errInj == REBOOT {
-										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+										}
+
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5924,65 +5945,73 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 											},
 										})
 										if err != nil {
-											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
-											UpdateOutcome(event, err)
+											err = fmt.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
 										}
 									} else if errInj == CRASH {
-										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+										}
+
 										errorChan := make(chan error, errorChannelSize)
 										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
-										for err := range errorChan {
-											UpdateOutcome(event, err)
+										var errorMsgs []string
+										for chanError := range errorChan {
+											errorMsgs = append(errorMsgs, chanError.Error())
+										}
+										if len(errorMsgs) > 0 {
+											err = fmt.Errorf("%s", strings.Join(errorMsgs, ","))
 										}
 									}
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
-									log.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+									return
 								}
+								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
-									dashStats = make(map[string]string)
-									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-									dashStats["fastpath"] = "true"
-									dashStats["volume-name"] = v.Name
-									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									if event != nil {
+										dashStats := make(map[string]string)
+										dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+										dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+										dashStats["fastpath"] = "true"
+										dashStats["volume-name"] = v.Name
+										updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									}
+									err = ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+
+									dash.VerifySafely(err, nil, "fastpath volume successfully validated")
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+									if err != nil {
+										return
+									}
 								}
 
 								for _, nID := range replicaNodes {
+									var nodeContexts []*scheduler.Context
 									replNodeToReboot := storageNodeMap[nID]
-									nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
+									nodeContexts, err = GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
 									if err != nil {
-										UpdateOutcome(event, err)
-										break
+										return
 									}
 									err = ValidateDataIntegrity(&nodeContexts)
-									UpdateOutcome(event, err)
+									if err != nil {
+										return
+									}
 								}
-
 							}
 
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
-							log.Error(err)
-							UpdateOutcome(event, err)
 						}
 
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 			}
 
 		})
+	return err
 }
 
 func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
@@ -7727,14 +7756,23 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
+	var poolUuids []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
 	}
-	volumeInUse := pvlist.Items[0]
-	volumeID := volumeInUse.GetName()
 
-	return GetPoolIDsFromVolName(volumeID)
+	for _, pv := range pvlist.Items {
+		volumeID := pv.GetName()
+		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		//Needed this logic as a workaround for PWX-35637
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			continue
+		}
+		break
+	}
+
+	return poolUuids, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
@@ -10987,4 +11025,206 @@ func DoPDBValidation(stopSignal <-chan struct{}, mError *error) {
 			time.Sleep(10 * time.Second)
 		}
 	}
+}
+
+// GetVolumesOnNode returns the volume IDs which have repl on a give node
+func GetVolumesOnNode(nodeId string) ([]string, error) {
+	var volumes []string
+
+	pvs, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vol := range pvs.Items {
+		volDetails, err := Inst().V.InspectVolume(vol.GetName())
+		if err != nil {
+			return volumes, err
+		}
+		replSets := volDetails.GetReplicaSets()
+		var replNodes []string
+		for _, replSet := range replSets {
+			replNodes = append(replNodes, replSet.GetNodes()...)
+		}
+		if Contains(replNodes, nodeId) {
+			volumes = append(volumes, vol.GetName())
+		}
+	}
+
+	return volumes, nil
+}
+
+// IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
+func IsCloudsnapBackupActiveOnVolume(volName string) (bool, error) {
+	params := make(map[string]string)
+	csBksps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil {
+		return false, err
+	}
+
+	for _, csBksp := range csBksps {
+		if csBksp.GetSrcVolumeName() == volName && csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive {
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetVolumeSnapShotScheduleOfVol returns VolumeSnapshotSchedule for the given volume
+func GetVolumeSnapShotScheduleOfVol(volName string) (*storkapi.VolumeSnapshotSchedule, error) {
+
+	params := make(map[string]string)
+	csBksps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil {
+		return nil, err
+	}
+	volDetails, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+
+	pvcName, ok := volDetails.Spec.VolumeLabels["pvc"]
+	if ok {
+
+		for _, csBksp := range csBksps {
+			if csBksp.GetSrcVolumeName() == volName {
+				ns := csBksp.GetNamespace()
+				snapshotSchedules, err := storkops.Instance().ListSnapshotSchedules(ns)
+				if err != nil {
+					return nil, err
+				}
+
+				for _, snapshotSched := range snapshotSchedules.Items {
+					if strings.Contains(snapshotSched.GetName(), pvcName) {
+						return &snapshotSched, nil
+					}
+				}
+			}
+
+		}
+
+	}
+
+	return nil, fmt.Errorf("snapshot schedule for volume [%s] not found", volName)
+}
+
+// MoveReplica moves the replica of a volume from one node to another
+func MoveReplica(volName, fromNode, toNode string) error {
+	appVol, err := Inst().V.InspectVolume(volName)
+	log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, volName)
+	if err != nil {
+		return err
+	}
+	replNodes := appVol.GetReplicaSets()[0].GetNodes()
+	tpVol := &volume.Volume{ID: volName, Name: volName}
+	if len(replNodes) == 1 {
+
+		err = Inst().V.SetReplicationFactor(tpVol, 2, []string{toNode}, nil, true)
+		if err != nil {
+			return err
+		}
+		err = Inst().V.SetReplicationFactor(tpVol, 1, []string{fromNode}, nil, true)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), []string{fromNode}, nil, true)
+		if err != nil {
+			return err
+		}
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), []string{toNode}, nil, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GetNodeIdToMoveReplica(volName string) (string, error) {
+
+	appVol, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return "", err
+	}
+	replNodes := appVol.GetReplicaSets()[0].GetNodes()
+	stNodes := node.GetStorageNodes()
+	log.Infof("replNodes %v", replNodes)
+
+	ShuffleSlice(stNodes)
+
+	for _, stNode := range stNodes {
+		log.Infof("checking for node [%s]", stNode.VolDriverNodeID)
+		if !Contains(replNodes, stNode.VolDriverNodeID) {
+			return stNode.VolDriverNodeID, nil
+		}
+	}
+
+	return "", err
+}
+
+// ShuffleSlice shuffles the elements of a slice in place.
+func ShuffleSlice[T any](slice []T) {
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source) // Initialize the random number generator
+
+	for i := range slice {
+		j := rng.Intn(i + 1)                    // Generate a random index from 0 to i.
+		slice[i], slice[j] = slice[j], slice[i] // Swap the elements at indices i and j.
+	}
+}
+
+func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storkapi.VolumeSnapshotSchedule) error {
+	nodeVols, err := GetVolumesOnNode(nodeToDecommission.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", nodeToDecommission.Name, err)
+	}
+
+	credCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutput(nodeToDecommission, credCmd)
+	if err == nil && len(output) > 0 {
+		log.InfoD("Cloudsnap is enabled. Checking if backup is active on volumes")
+		for _, vol := range nodeVols {
+			isBackupActive, err := IsCloudsnapBackupActiveOnVolume(vol)
+			if err != nil {
+				return fmt.Errorf("error checking backup status  for volume  [%s],Err: %v ", vol, err)
+			}
+			log.Infof("Backup status for vol [%s]: %v", vol, isBackupActive)
+
+			if isBackupActive {
+				scheduleOfVol, err := GetVolumeSnapShotScheduleOfVol(vol)
+				if err != nil {
+					return fmt.Errorf("error getting volumes snapshot schedule for volume [%s],Err: %v ", vol, err)
+				}
+
+				if !*scheduleOfVol.Spec.Suspend {
+					log.Infof("Snapshot schedule is not suspended. Suspending it")
+					makeSuspend := true
+					scheduleOfVol.Spec.Suspend = &makeSuspend
+					_, err := storkops.Instance().UpdateSnapshotSchedule(scheduleOfVol)
+					if err != nil {
+						return fmt.Errorf("error suspending volumes snapshot schedule for volume  [%s],Err: %v ", vol, err)
+					}
+					suspendedScheds = append(suspendedScheds, scheduleOfVol)
+				}
+			}
+
+		}
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		log.Infof("newReplicaNode %s", newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		}
+
+		err = MoveReplica(vol, nodeToDecommission.VolDriverNodeID, newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", nodeToDecommission.VolDriverNodeID, newReplicaNode, err)
+		}
+	}
+	return nil
 }

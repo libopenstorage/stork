@@ -168,9 +168,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				fioJobName := "upg_vol"
 				log.Infof(upgradeHop)
 
-				n := storageNodes[rand.Intn(numOfNodes)]
-
 				if Inst().N.IsUsingSSH() {
+					n := storageNodes[rand.Intn(len(storageNodes))]
 
 					volName = fmt.Sprintf("vol-%s", time.Now().Format("01-02-15h04m05s"))
 					volId, err := Inst().V.CreateVolume(volName, 53687091200, 3)

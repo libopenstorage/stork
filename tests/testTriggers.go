@@ -591,19 +591,19 @@ const (
 	//SetupBackupLockedBucketAndCreds add creds and adds locked bucket for backup
 	SetupBackupLockedBucketAndCreds = "pxbSetupBackupLockedBucketAndCreds"
 
-	// DeployBackup Apps deploys backup application
+	//DeployBackupApps deploys backup application
 	DeployBackupApps = "pxbDeployBackupApps"
 
-	// CreateBackup creates backup for longevity
+	//CreatePxBackup creates backup for longevity
 	CreatePxBackup = "pxbCreatePxBackup"
 
-	// CreateBackup creates locked backup for longevity
+	//CreatePxLockedBackup creates locked backup for longevity
 	CreatePxLockedBackup = "pxbCreatePxLockedBackup"
 
-	// CreateBackupAndRestore creates backup and Restores the backup
+	//CreatePxBackupAndRestore creates backup and Restores the backup
 	CreatePxBackupAndRestore = "pxbCreateBackupAndRestore"
 
-	// CreateBackupAndRestore creates backup and Restores the backup
+	//CreateRandomRestore creates backup and Restores the backup
 	CreateRandomRestore = "pxbCreateRandomRestore"
 
 	// CreateAndRunFioOnVcluster creates and runs fio on vcluster
@@ -1095,8 +1095,12 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 
 				if err == nil {
-					HaIncreaseRebootTargetNode(event, selctx, v, storageNodeMap, errorInj)
-					HaIncreaseRebootSourceNode(event, selctx, v, storageNodeMap, errorInj)
+					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
+					log.Error(err)
+					UpdateOutcome(event, err)
+					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
+					log.Error(err)
+					UpdateOutcome(event, err)
 				}
 			}
 
@@ -1957,8 +1961,6 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				time.Sleep(15 * time.Minute)
-				validateContexts(event, contexts)
-
 			})
 			stepLog = fmt.Sprintf("exit pool maintenance on node %s", appNode.Name)
 			Step(stepLog,
@@ -6568,6 +6570,22 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodeContexts, err := GetContextsOnNode(contexts, &nodeToDecomm)
+			var suspendedScheds []*storkapi.VolumeSnapshotSchedule
+			defer func() {
+				if len(suspendedScheds) > 0 {
+					for _, sched := range suspendedScheds {
+						makeSuspend := false
+						sched.Spec.Suspend = &makeSuspend
+						_, err := storkops.Instance().UpdateSnapshotSchedule(sched)
+						log.FailOnError(err, "error resuming volumes snapshot schedule for volume [%s] ", sched.Name)
+					}
+				}
+			}()
+			err = PrereqForNodeDecomm(nodeToDecomm, suspendedScheds)
+			if err != nil {
+				UpdateOutcome(event, err)
+				return
+			}
 			err = Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -6580,7 +6598,6 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			if err != nil {
 				log.InfoD("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
 				UpdateOutcome(event, err)
-				return
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -6588,7 +6605,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 				if err != nil {
 					return false, true, fmt.Errorf("error getting node %v status", nodeToDecomm.Name)
 				}
-				if *status == opsapi.Status_STATUS_NONE {
+				if *status == opsapi.Status_STATUS_NONE || *status == opsapi.Status_STATUS_OFFLINE {
 					return true, false, nil
 				}
 				return false, true, fmt.Errorf("node %s not decomissioned yet,Current Status: %v", nodeToDecomm.Name, *status)
@@ -6780,8 +6797,6 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 	setMetrics(*event)
 
-	err = fmt.Errorf("Testing failure alerts")
-	UpdateOutcome(event, err)
 	// Keeping retainSnapCount
 	retainSnapCount := DefaultSnapshotRetainCount
 	stepLog := "Create and Validate snapshots for FA DA volumes"

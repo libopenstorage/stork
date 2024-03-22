@@ -3930,6 +3930,7 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBSer
 }
 
 func (d *portworx) DecommissionNode(n *node.Node) error {
+
 	if err := k8sCore.AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
@@ -4013,7 +4014,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
-	if err = node.UpdateNode(*n); err != nil {
+	if err := node.UpdateNode(*n); err != nil {
 		return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 	}
 
@@ -4047,7 +4048,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	_, err = task.DoRetryWithTimeout(t, 25*time.Minute, 3*time.Minute)
 
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
@@ -4056,7 +4057,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	log.Infof("Successfully removed node [%s]", nodeResp.Node.Id)
+	log.Infof("Successfully removed node [%s/%s]", n.Name, n.VolDriverNodeID)
 	return nil
 }
 
@@ -5294,7 +5295,7 @@ func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, 
 		out, err = d.nodeDriver.RunCommandWithNoRetry(n, cmd, opts)
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+		return "", fmt.Errorf("failed to get pxctl command output. cause: %v", err)
 	}
 
 	// Delete context
