@@ -12,6 +12,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // Driver is a rsync implementation of the data export interface.
@@ -37,7 +38,7 @@ func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
 		return "", err
 	}
 
-	rsyncJob, err := jobFor(o.SourcePVCName, o.DestinationPVCName, o.Namespace, o.Labels)
+	rsyncJob, err := jobFor(o.SourcePVCName, o.DestinationPVCName, o.DataExportUID, o.Namespace, o.Labels)
 	if err != nil {
 		return "", err
 	}
@@ -112,7 +113,7 @@ func (d Driver) validate(o drivers.JobOpts) error {
 	return nil
 }
 
-func jobFor(srcVol, dstVol, namespace string, labels map[string]string) (*batchv1.Job, error) {
+func jobFor(srcVol, dstVol, dataexportUID, namespace string, labels map[string]string) (*batchv1.Job, error) {
 	labels = addJobLabels(labels)
 
 	rsyncFlags := "-avz"
@@ -126,7 +127,7 @@ func jobFor(srcVol, dstVol, namespace string, labels map[string]string) (*batchv
 		return nil, err
 	}
 
-	jobName := toJobName(srcVol)
+	jobName := toJobName(srcVol, dataexportUID)
 	if err := utils.SetupServiceAccount(jobName, namespace, roleFor(utils.RsyncOpenshiftSCC())); err != nil {
 		return nil, err
 	}
@@ -189,8 +190,15 @@ func jobFor(srcVol, dstVol, namespace string, labels map[string]string) (*batchv
 	}, nil
 }
 
-func toJobName(id string) string {
-	return fmt.Sprintf("import-rsync-%s", id)
+func toJobName(id string, uid string) string {
+	shortUID := utils.GetShortUID(uid)
+	jobName := fmt.Sprintf("import-rsync-%s", id)
+	if len(jobName) > validation.DNS1035LabelMaxLength-len(shortUID)-1 {
+		jobName = fmt.Sprintf("%s-%s", jobName[:validation.DNS1035LabelMaxLength-len(shortUID)-1], shortUID)
+	} else {
+		jobName = fmt.Sprintf("%s-%s", jobName, shortUID)
+	}
+	return jobName
 }
 
 func addJobLabels(labels map[string]string) map[string]string {
