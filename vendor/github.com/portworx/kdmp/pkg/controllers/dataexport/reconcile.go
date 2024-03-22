@@ -267,7 +267,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		var compressionType string
 		var podDataPath string
 		var excludeFileList string
-		pvcStorageClass := dataExport.Annotations[kdmpStorageClassKey]
+		pvcStorageClass := dataExport.Labels[kdmpStorageClassKey]
 		var backupLocation *storkapi.BackupLocation
 		var data updateDataExportDetail
 		if driverName != drivers.Rsync {
