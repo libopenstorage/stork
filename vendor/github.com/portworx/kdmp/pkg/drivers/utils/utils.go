@@ -957,3 +957,10 @@ func SetDisableIstioLabel(labels map[string]string, jobOpts drivers.JobOpts) map
 	}
 	return labels
 }
+
+func GetShortUID(uid string) string {
+	if len(uid) < 8 {
+		return uid
+	}
+	return uid[:8]
+}

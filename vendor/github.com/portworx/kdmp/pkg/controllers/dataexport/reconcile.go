@@ -1531,6 +1531,11 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 			logrus.Errorf(errMsg)
 			return fmt.Errorf(errMsg)
 		}
+		if err := core.Instance().DeleteSecret(utils.GetImageSecretName(jobName), namespace); err != nil && !k8sErrors.IsNotFound(err) {
+			errMsg := fmt.Sprintf("deletion of image secret %s failed: %v", jobName, err)
+			logrus.Errorf(errMsg)
+			return fmt.Errorf(errMsg)
+		}
 	}
 
 	if err := core.Instance().DeleteSecret(utils.GetCredSecretName(de.Name), namespace); err != nil && !k8sErrors.IsNotFound(err) {
@@ -1857,6 +1862,7 @@ func startTransferJob(
 		return drv.StartJob(
 			drivers.WithSourcePVC(srcPVCName),
 			drivers.WithNamespace(dataExport.Spec.Destination.Namespace),
+			drivers.WithDataExportUID(string(dataExport.UID)),
 			drivers.WithDestinationPVC(dataExport.Spec.Destination.Name),
 			drivers.WithLabels(dataExport.Labels),
 		)

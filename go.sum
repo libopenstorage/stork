@@ -3510,7 +3510,7 @@ github.com/libopenstorage/operator v0.0.0-20240311222049-36e102b2df5e/go.mod h1:
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9 h1:pZQ5uaWky7KerHX2saBO971ti+IBDJRorHwcHwc+0aM=
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
 github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066/go.mod h1:Yst+fnOYjWk6SA5pXZBKm19wtiinjxQ/vgYTXI3k80Q=
-github.com/libopenstorage/stork v1.4.1-0.20240109104912-636d43cc74ca/go.mod h1:TbWc6ZiUycPSXVFm4T2O9DUbsYsljpId33UEGNroKRU=
+github.com/libopenstorage/stork v1.4.1-0.20240220121828-15cc00444a69/go.mod h1:f9CWPOsq3gxg/6bEDT+sVyafyBDouKpwd+UZZW6awk0=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 h1:5vqfYYWm4b+lbkMtvvWtWBiqLbmLN6dNvWaa7wVsz/Q=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1/go.mod h1:xwNGC7xiz/BQ/wbMkvHujL8Gjgseg+x41xMek7sKRRQ=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de h1:9TO3cAIGXtEhnIaL+V+BEER86oLrvS+kWobKpbJuye0=
@@ -4052,14 +4052,13 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/polyfloyd/go-errorlint v1.0.5/go.mod h1:APVvOesVSAnne5SClsPxPdfvZTVDojXh1/G3qb5wjGI=
 github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611/go.mod h1:4hklRW/4DQpLqkcXcjtNprbH2tz/sJaNtqinfPWl/LA=
-github.com/portworx/kdmp v0.4.1-0.20240219181755-4ce81929fd25 h1:wpcR/s4cLzx1ctRAf2Vjl+L7EHgmzQFO5h85WsK2suA=
-github.com/portworx/kdmp v0.4.1-0.20240219181755-4ce81929fd25/go.mod h1:0ad65uubQO5nwlvbbSCcchtMXpDgumTHa82VDa9gKPs=
+github.com/portworx/kdmp v0.4.1-0.20240322102930-94bc7049f75f h1:WyOTl9ki0spdVgXmR30GHRQQrkJg9fDhoyEX7bro4W4=
+github.com/portworx/kdmp v0.4.1-0.20240322102930-94bc7049f75f/go.mod h1:lWsj58SHTus8KaSrir+4/8LprQSE8c6jvPWACtvv470=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b h1:nP+m9tYQv2cWbN9wAwjlhJU9FZRs7GaYszhLJBLAg/I=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae h1:/aJSqtgpIPa9os7yOoXQzvqYdRdMoS8X+TaKC/KRPY8=
 github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/px-backup-api v1.2.2-0.20240223100835-84b57faae78f/go.mod h1:G1pn/FceOq8W6DKaYuV8LJuKowzp4/Hdgliojl9akIU=
