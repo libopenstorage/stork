@@ -106,7 +106,7 @@ func ExecuteVClusterCommand(args ...string) (string, error) {
 
 // TerminateVCluster Terminates Vcluster and runs it in its own context
 func (v *VCluster) TerminateVCluster() error {
-	_, err := ExecuteVClusterCommand("delete", v.Name)
+	_, err := ExecuteVClusterCommand("delete", v.Name, "--namespace", v.Namespace)
 	return err
 }
 
@@ -374,12 +374,12 @@ func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string
 func int32Ptr(i int32) *int32 { return &i }
 
 // CreateFIODeployment creates a FIO Batch Job on single PVC
-func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string) error {
-	return v.CreateFIOMultiPvcDeployment([]string{pvcName}, appNS, fioOpts, jobName)
+func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string, timeOut time.Duration) error {
+	return v.CreateFIOMultiPvcDeployment([]string{pvcName}, appNS, fioOpts, jobName, timeOut)
 }
 
 // CreateFIOMultiPvcDeployment runs FIO Job on multiple PVCs
-func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, fioOpts FIOOptions, jobName string) error {
+func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, fioOpts FIOOptions, jobName string, timeOut time.Duration) error {
 	fioCmd := []string{
 		"fio",
 		"--name=" + fioOpts.Name,
@@ -457,7 +457,8 @@ func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, 
 	if _, err := v.Clientset.BatchV1().Jobs(appNS).Create(context.TODO(), fioJob, metav1.CreateOptions{}); err != nil {
 		return err
 	}
-	if err := v.WaitForFIOCompletion(appNS, jobName); err != nil {
+	timeOut = timeOut + 5*time.Minute
+	if err := v.WaitForFIOCompletion(appNS, jobName, timeOut); err != nil {
 		return err
 	}
 	// Hard sleep to let fio pod finish up
@@ -505,7 +506,7 @@ func DeleteStorageclassFromHost(sc string) error {
 }
 
 // WaitForFIOCompletion checks for FIO pod completion in vcluster context
-func (v *VCluster) WaitForFIOCompletion(namespace, jobName string) error {
+func (v *VCluster) WaitForFIOCompletion(namespace, jobName string, vclusterAppTimeout time.Duration) error {
 	f := func() (interface{}, bool, error) {
 		log.Infof("Entering to see if FIO Job has completed")
 		job, err := v.Clientset.BatchV1().Jobs(namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
@@ -520,7 +521,7 @@ func (v *VCluster) WaitForFIOCompletion(namespace, jobName string) error {
 		}
 		return nil, true, fmt.Errorf("Still not completed. Looks like we have to wait for 30 seconds")
 	}
-	_, err := task.DoRetryWithTimeout(f, VclusterAppTimeout, VClusterAppRetryInterval)
+	_, err := task.DoRetryWithTimeout(f, vclusterAppTimeout, VClusterAppRetryInterval)
 	if err != nil {
 		return err
 	}
