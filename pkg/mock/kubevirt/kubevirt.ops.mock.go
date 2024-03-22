@@ -5,7 +5,6 @@
 package kubevirt
 
 import (
-	context "context"
 	reflect "reflect"
 	time "time"
 
@@ -166,21 +165,6 @@ func (m *MockOps) GetVirtualMachine(arg0, arg1 string) (*v10.VirtualMachine, err
 func (mr *MockOpsMockRecorder) GetVirtualMachine(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachine", reflect.TypeOf((*MockOps)(nil).GetVirtualMachine), arg0, arg1)
-}
-
-// GetVirtualMachineInstance mocks base method.
-func (m *MockOps) GetVirtualMachineInstance(arg0 context.Context, arg1, arg2 string) (*v10.VirtualMachineInstance, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVirtualMachineInstance", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*v10.VirtualMachineInstance)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetVirtualMachineInstance indicates an expected call of GetVirtualMachineInstance.
-func (mr *MockOpsMockRecorder) GetVirtualMachineInstance(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineInstance", reflect.TypeOf((*MockOps)(nil).GetVirtualMachineInstance), arg0, arg1, arg2)
 }
 
 // IsVirtualMachineRunning mocks base method.
