@@ -1517,19 +1517,11 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				sem <- struct{}{}
 				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 				restoreNames = append(restoreNames, restoreName)
-				wg.Add(1)
-				go func(backupName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					defer func() { <-sem }()
-					_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, DestinationClusterName, BackupOrgID, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
-				}(backupName)
+				_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, DestinationClusterName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 			}
-			wg.Wait()
 			log.InfoD("The list of restores are: %v", restoreNames)
 		})
 		Step("Scaling px-backup deployment replica to 0 and back to original replica while restore is in progress", func() {
