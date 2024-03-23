@@ -154,6 +154,9 @@ func TestCreateUniDirectionalClusterPairMissingParameters(t *testing.T) {
 	expected = "error: source kubeconfig and destination kubeconfig file should be different"
 	testCommon(t, cmdArgs, nil, expected, true)
 
+	cmdArgs = []string{"create", "clusterpair", "uni-pair1", "-n", "test", "--src-kube-file", srcConfig.Name(), "--dest-kube-file", srcConfigDuplicate.Name(), "-u", "--mode", "xyz"}
+	expected = fmt.Sprintf("error: invalid mode %s, mode value should either be %s, %s or %s", "xyz", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration)
+	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestGetHostPortFromEndPoint(t *testing.T) {
@@ -222,4 +225,65 @@ func createTempFile(t *testing.T, fileName string, fileContent string) *os.File 
 		require.NoError(t, err, "Error closing the file %s", fileName)
 	}
 	return f
+}
+
+func TestGenerateClusterPairForDifferentModes(t *testing.T) {
+	// a fake k8sconfig content
+	text := `
+    clusters:
+    - cluster:
+      certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN5RENDQWJDZ0F3SUJBZ0lCQURBTkJna3Foa2lHOXcwQkFRc0ZBREFWTVJNd0VRWURWUVFERXdwcmRXSmwKY201bGRHVnpNQjRYRFRJd01EUXhNekV4TkRBeU1Wb1hEVE13TURReE56RXhOREF5TVZvd0ZURVRNQkVHQTFVRQpBeE1LYTNWaVpYSnVaWFJsY3pDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTmt0ClZWWGdXZ1E0eHJyNjJzUzV0N2dRM2Q4aXY4TmF3V2JHck8yTmZPeDRxMjNrd0RiMjVxK2NCVnJoN2txR1FsR2UKV2t2S1hZWDBoZz09LS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+      server: https://1.2.3.4
+    name: fake-cluster
+    contexts:
+    - context:
+      cluster: fake-cluster
+      user: fake-user
+    name: fake-context
+    current-context: fake-context
+    kind: Config
+    preferences: {}
+    users:
+    - name: fake-user
+    user:
+      client-certificate-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN5RENDQWJDZ0F3SUJBZ0lCQURBTkJna3Foa2lHOXcwQkFRc0ZBREFWTVJNd0VRWURWUVFERXdwcmRXSmwKY201bGRHVnpNQjRYRFRJd01EUXhNekV4TkRBeU1Wb1hEVE13TURReE56RXhOREF5TVZvd0ZURVRNQkVHQTFVRQpBeE1LYTNWaVpYSnVaWFJsY3pDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTmt0ClZWWGdXZ1E0eHJyNjJzUzV0N2dRM2Q4aXY4TmF3V2JHck8yTmZPeDRxMjNrd0RiMjVxK2NCVnJoN2txR1FsR2UKV2t2S1hZWDBoZz09LS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+      client-key-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FUR
+    `
+	// create a temp file with k8s config content
+	srcConfig := createTempFile(t, "src.config", text)
+	defer os.Remove(srcConfig.Name())
+
+	name := "testClusterPair"
+	ns := "testNamespace"
+	ip := "127.0.0.1"
+	port := "8080"
+	token := "abcd1234"
+	configFile := srcConfig.Name()
+	projectIDMappings := ""
+	authSecretNamespace := "authNamespace"
+	reverse := true
+	ignoreStorageOptions := false
+
+	mode := userInputCPModeAsync
+	clusterPair, err := generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings, authSecretNamespace, reverse, mode, ignoreStorageOptions)
+	require.NoError(t, err, "Error generating ClusterPair")
+
+	// Verify the generated ClusterPair object
+	require.Equal(t, clusterPairDRModeDisasterRecovery, clusterPair.Spec.Options["mode"], "ClusterPair mode mismatch")
+
+	mode = userInputCPModeSync
+	ignoreStorageOptions = true
+	clusterPair, err = generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings, authSecretNamespace, reverse, mode, ignoreStorageOptions)
+	require.NoError(t, err, "Error generating ClusterPair")
+
+	// Verify the generated ClusterPair object
+	require.Equal(t, 0, len(clusterPair.Spec.Options), "ClusterPair mode mismatch")
+
+	mode = userInputCPModeMigration
+	ignoreStorageOptions = false
+	clusterPair, err = generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings, authSecretNamespace, reverse, mode, ignoreStorageOptions)
+	require.NoError(t, err, "Error generating ClusterPair")
+
+	// Verify the generated ClusterPair object
+	require.Equal(t, clusterPairDRModeOnetimeMigration, clusterPair.Spec.Options["mode"], "ClusterPair mode mismatch")
 }
