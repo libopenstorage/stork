@@ -75,11 +75,6 @@ func (ac *ActionController) Reconcile(ctx context.Context, request reconcile.Req
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	// if action.Status.Stage == storkv1.ActionStageFinal {
-	// 	// Will not requeue once action is in final stage
-	// 	return reconcile.Result{}, nil
-	// }
-
 	if !controllers.ContainsFinalizer(action, controllers.FinalizerCleanup) {
 		controllers.SetFinalizer(action, controllers.FinalizerCleanup)
 		return reconcile.Result{Requeue: true}, ac.client.Update(context.TODO(), action)
@@ -127,15 +122,15 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		log.ActionLog(action).Infof("in stage %s", action.Status.Stage)
 		switch action.Status.Stage {
 		case storkv1.ActionStageInitial:
-			ac.validationsBeforeFailover(action)
+			ac.validateBeforeFailover(action)
 		case storkv1.ActionStageScaleDownSource:
-			ac.deactivateClusterStage(action)
+			ac.deactivateSourceDuringFailover(action)
 		case storkv1.ActionStageLastMileMigration:
 			ac.performLastMileMigration(action)
 		case storkv1.ActionStageScaleUpDestination:
-			ac.activateDuringFailover(action, false)
+			ac.activateClusterDuringFailover(action, false)
 		case storkv1.ActionStageScaleUpSource:
-			ac.activateDuringFailover(action, true)
+			ac.activateClusterDuringFailover(action, true)
 		case storkv1.ActionStageFinal:
 			return nil
 		}
@@ -149,9 +144,9 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		case storkv1.ActionStageLastMileMigration:
 			ac.performLastMileMigration(action)
 		case storkv1.ActionStageScaleUpSource:
-			ac.activateSourceDuringFailBack(action)
+			ac.activateClusterDuringFailback(action, false)
 		case storkv1.ActionStageScaleUpDestination:
-			ac.activateDestinationDuringFailBack(action)
+			ac.activateClusterDuringFailback(action, true)
 		case storkv1.ActionStageFinal:
 			return nil
 		}

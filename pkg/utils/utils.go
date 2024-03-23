@@ -373,7 +373,10 @@ func GetMergedNamespacesWithLabelSelector(namespaceList []string, namespaceSelec
 }
 
 // IsSubList returns true if the first slice is sublist of the second slice.
-// It also returns the list of subset strings and non subset strings.
+// Returns ->
+// bool isSubList : list A is a subset of list B
+// []string subsetStrings : strings common in both list A and list B
+// []string nonSubsetStrings : strings present only in list A and not in list B
 func IsSubList(listA []string, listB []string) (bool, []string, []string) {
 	// subsetStrings -> strings found in both A and B
 	// nonSubsetStrings -> strings found in A, but not in B
