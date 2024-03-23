@@ -35,19 +35,24 @@ RUN asdf global kubelogin latest
 #Install Google Cloud SDK
 ARG GCLOUD_SDK=google-cloud-cli-455.0.0-linux-x86_64.tar.gz
 ARG GCLOUD_INSTALL_DIR="/usr/lib"
+ENV PATH "${PATH}:$GCLOUD_INSTALL_DIR/google-cloud-sdk/bin"
+# Download GCLOUD_SDK tar bundle, untar it , install gke-gcloud-auth-plugin 
+# and remove the tar bundle and all directory contents except bin directory  
 RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
     tar xf $GCLOUD_SDK -C $GCLOUD_INSTALL_DIR && rm -rf $GCLOUD_SDK && \
     rm -rf $GCLOUD_INSTALL_DIR/google-cloud-sdk/platform/gsutil \
-    $GCLOUD_INSTALL_DIR/google-cloud-sdk/RELEASE_NOTES
-ENV PATH "${PATH}:$GCLOUD_INSTALL_DIR/google-cloud-sdk/bin"
-#Install gke-gcloud-auth-plugin
-RUN gcloud components install gke-gcloud-auth-plugin
+    $GCLOUD_INSTALL_DIR/google-cloud-sdk/RELEASE_NOTES && \
+    gcloud components install gke-gcloud-auth-plugin && \
+    mv /usr/lib/google-cloud-sdk/bin google-cloud-sdk/ && \
+    rm -rf /usr/lib/google-cloud-sdk && \
+    mkdir /usr/lib/google-cloud-sdk && \
+    mv google-cloud-sdk /usr/lib/google-cloud-sdk/bin
+
 #Create symlink /google-cloud-sdk/bin -> /usr/lib/google-cloud-sdk/bin for legacy cluster pair with gcp auth plugin
 RUN mkdir google-cloud-sdk
 RUN ln -s /usr/lib/google-cloud-sdk/bin /google-cloud-sdk/bin
 
 WORKDIR /
-
 COPY ./bin/linux/storkctl /storkctl/linux/
 COPY ./bin/darwin/storkctl /storkctl/darwin/
 COPY ./bin/windows/storkctl.exe /storkctl/windows/
