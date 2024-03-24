@@ -9171,21 +9171,11 @@ func GetPoolUuidsWithStorageFull() ([]string, error) {
 
 // GetVolumeConsumedSize returns size of the volume
 func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
-	// Get Random Storage Node
-	cmd := fmt.Sprintf("pxctl v i %v -j | jq '.[].usage'", vol.ID)
-	output, err := runCmdGetOutput(cmd, node.GetStorageNodes()[0])
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
 	if err != nil {
 		return 0, err
 	}
-	output = strings.ReplaceAll(output, "\"", "")
-	output = strings.TrimSpace(output)
-
-	num, err := strconv.ParseUint(output, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	return num, nil
+	return apiVol.Usage, nil
 }
 
 // GetAllVolumesWithIO Returns list of volumes with IO
