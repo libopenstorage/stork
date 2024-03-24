@@ -752,7 +752,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	partialSuccess := false
 	skipVolInfo := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
 
-	if IsVolsToBeBackedUp(backup) {
+	if a.IsVolsToBeBackedUp(backup) {
 		isResourceTypePVC := IsResourceTypePVC(backup)
 		var objectMap map[stork_api.ObjectInfo]bool
 		if IsBackupObjectTypeVirtualMachine(backup) {
@@ -931,35 +931,35 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 			}
 		}
-
-		// In case Portworx if the snapshot ID is populated for every volume then the snapshot
-		// process is considered to be completed successfully.
-		// This ensures we don't execute the post-exec before all volume's snapshot is completed
-		volumeInfosAll := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
-		for driverName := range pvcMappings {
-			var driver volume.Driver
-			driver, err = volume.Get(driverName)
+	}
+	// In case Portworx if the snapshot ID is populated for every volume then the snapshot
+	// process is considered to be completed successfully.
+	// This ensures we don't execute the post-exec before all volume's snapshot is completed
+	volumeInfosAll := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+	for driverName := range pvcMappings {
+		var driver volume.Driver
+		driver, err = volume.Get(driverName)
+		if err != nil {
+			return fmt.Errorf("error getting backup status: %v", err)
+		}
+		if driverName == volume.PortworxDriverName {
+			volumeInfos, err := driver.GetBackupStatus(backup)
+			volumeInfosAll = append(volumeInfosAll, volumeInfos...)
 			if err != nil {
-				return fmt.Errorf("error getting backup status: %v", err)
+				logrus.Errorf("error getting backup status: %v", err)
+				continue
 			}
-			if driverName == volume.PortworxDriverName {
-				volumeInfos, err := driver.GetBackupStatus(backup)
-				volumeInfosAll = append(volumeInfosAll, volumeInfos...)
-				if err != nil {
-					logrus.Errorf("error getting backup status: %v", err)
-					continue
-				}
-				for _, volInfo := range volumeInfos {
-					if volInfo.BackupID == "" {
-						log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim)
-						// Some portworx volume snapshot is not completed yet
-						// hence we will retry checking the status in the next reconciler iteration
-						// *stork_api.ApplicationBackupVolumeInfo.Status is not being checked here
-						// since backpID confirms if the snapshot is done or not already
-						return nil
-					}
+			for _, volInfo := range volumeInfos {
+				if volInfo.BackupID == "" {
+					log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim)
+					// Some portworx volume snapshot is not completed yet
+					// hence we will retry checking the status in the next reconciler iteration
+					// *stork_api.ApplicationBackupVolumeInfo.Status is not being checked here
+					// since backpID confirms if the snapshot is done or not already
+					return nil
 				}
 			}
+		}
 
 		// Run any post exec rules once all volume backup is triggered
 		driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
