@@ -356,6 +356,7 @@ func jobFor(
 		jobV1 := &batchv1.CronJob{
 			ObjectMeta: jobObjectMeta,
 			Spec: batchv1.CronJobSpec{
+				ConcurrencyPolicy:          batchv1.ForbidConcurrent,
 				Schedule:                   scheduleInterval,
 				SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
 				FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
@@ -388,6 +389,7 @@ func jobFor(
 	jobV1Beta1 := &batchv1beta1.CronJob{
 		ObjectMeta: jobObjectMeta,
 		Spec: batchv1beta1.CronJobSpec{
+			ConcurrencyPolicy:          batchv1beta1.ForbidConcurrent,
 			Schedule:                   scheduleInterval,
 			SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
 			FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
