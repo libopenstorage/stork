@@ -152,14 +152,14 @@ func validationsForPerformDRCommands(actionType storkv1.ActionType, migrationSch
 	if len(includeNamespaceList) != 0 && len(excludeNamespaceList) != 0 {
 		return nil, fmt.Errorf("can provide only one of --include-namespaces or --exclude-namespaces values at once")
 	} else if len(includeNamespaceList) != 0 {
-		if isSubList, nonSubsetStrings := utils.IsSubList(includeNamespaceList, migrationNamespaces); isSubList {
+		if isSubList, _, nonSubsetStrings := utils.IsSubList(includeNamespaceList, migrationNamespaces); isSubList {
 			// Branch 1: Only failover/failback some of the namespaces being migrated by the given migrationSchedule
 			namespaceList = includeNamespaceList
 		} else {
 			return nil, fmt.Errorf("provided namespaces %v are not a subset of the namespaces being migrated by the given MigrationSchedule", nonSubsetStrings)
 		}
 	} else if len(excludeNamespaceList) != 0 {
-		if isSubList, nonSubsetStrings := utils.IsSubList(excludeNamespaceList, migrationNamespaces); isSubList {
+		if isSubList, _, nonSubsetStrings := utils.IsSubList(excludeNamespaceList, migrationNamespaces); isSubList {
 			// Branch 2: Exclude some of the namespaces being migrated by the given migrationSchedule from failover/failback
 			namespaceList = utils.ExcludeListAFromListB(excludeNamespaceList, migrationNamespaces)
 		} else {
