@@ -343,6 +343,9 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	if backup.Annotations == nil {
 		backup.Annotations = make(map[string]string)
 	}
+	if skipDriver, ok := backupSchedule.Annotations[utils.PxbackupAnnotationSkipdriverKey]; ok {
+		backup.Annotations[utils.PxbackupAnnotationSkipdriverKey] = skipDriver
+	}
 	backup.Annotations[ApplicationBackupScheduleNameAnnotation] = backupSchedule.Name
 	backup.Annotations[ApplicationBackupSchedulePolicyTypeAnnotation] = string(policyType)
 	if val, ok := backupSchedule.Annotations[backupTypeKey]; ok {
