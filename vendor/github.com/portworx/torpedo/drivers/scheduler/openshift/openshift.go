@@ -41,7 +41,7 @@ const (
 	// SchedName is the name of the kubernetes scheduler driver implementation
 	SchedName = "openshift"
 	// SystemdSchedServiceName is the name of the system service responsible for scheduling
-	SystemdSchedServiceName = "atomic-openshift-node"
+	SystemdSchedServiceName = "kubelet"
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
 	releaseFileName             = "release.txt"
