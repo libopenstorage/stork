@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
     - name: ml-workload
-      image: portworx/ml-workload:rent-prediction
+      image: portworx/ml-workload:rent-prediction-2
       command: ["/bin/bash", "-c"]
       args: ["python preprocess.py && python first_training.py && sleep 6000"]
       volumeMounts:

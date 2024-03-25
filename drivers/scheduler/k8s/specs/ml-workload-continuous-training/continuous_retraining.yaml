@@ -14,9 +14,9 @@ spec:
     spec:
       containers:
         - name: ml-workload
-          image: portworx/ml-workload:rent-prediction
+          image: portworx/ml-workload:rent-prediction-2
           command: ["/bin/bash", "-c"]
-          args: ["while true; do python retrain.py; sleep 300; done"]
+          args: ["while true; do python retrain.py; sleep 20; done"]
           volumeMounts:
             - name: ml-shared-data
               mountPath: "/mnt/data"

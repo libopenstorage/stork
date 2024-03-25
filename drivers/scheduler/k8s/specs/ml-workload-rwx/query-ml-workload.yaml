@@ -8,9 +8,9 @@ spec:
     spec:
       containers:
       - name: ml-workload
-        image: portworx/ml-workload:rent-prediction
+        image: portworx/ml-workload:rent-prediction-2
         command: ["/bin/bash", "-c"]
-        args: ["python query.py && sleep 300"]
+        args: ["python query.py && sleep 60"]
         env:
         - name: OUTPUT_FILE
           value: query_output_1.csv
