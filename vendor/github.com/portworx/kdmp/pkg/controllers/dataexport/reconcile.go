@@ -267,7 +267,7 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 		var compressionType string
 		var podDataPath string
 		var excludeFileList string
-		pvcStorageClass := dataExport.Labels[kdmpStorageClassKey]
+		pvcStorageClass := dataExport.Annotations[kdmpStorageClassKey]
 		var backupLocation *storkapi.BackupLocation
 		var data updateDataExportDetail
 		if driverName != drivers.Rsync {
@@ -769,7 +769,7 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 	annotations[backupObjectUIDKey] = backupUID
 	annotations[pvcUIDKey] = pvcUID
 	labels := make(map[string]string)
-	labels[pvcNameKey] = dataExport.Spec.Source.Name
+	labels[pvcNameKey] = utils.GetValidLabel(dataExport.Spec.Source.Name)
 	name, namespace, _, err := snapshotDriver.CreateSnapshot(
 		snapshotter.Name(snapName),
 		snapshotter.PVCName(dataExport.Spec.Source.Name),
