@@ -290,12 +290,15 @@ func (s *SnapshotScheduleController) shouldStartVolumeSnapshot(snapshotSchedule 
 }
 
 func (s *SnapshotScheduleController) formatVolumeSnapshotName(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) string {
-	snapSuffix := strings.Join([]string{strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
+	// get a random 4 character suffix from the snapshotschedule's UID
+	randSuffix := string(snapshotSchedule.UID)[len(snapshotSchedule.UID)-4:]
+
+	snapSuffix := strings.Join([]string{strings.ToLower(string(policyType)), randSuffix, time.Now().Format(nameTimeSuffixFormat)}, "-")
 	scheduleName := snapshotSchedule.Name
 	if len(scheduleName) >= validation.LabelValueMaxLength-len(snapSuffix) {
 		scheduleName = scheduleName[:validation.LabelValueMaxLength-len(snapSuffix)-1]
 	}
-	return strings.Join([]string{scheduleName, strings.ToLower(string(policyType)), time.Now().Format(nameTimeSuffixFormat)}, "-")
+	return strings.Join([]string{scheduleName, snapSuffix}, "-")
 }
 
 func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) error {
