@@ -21,6 +21,7 @@ type JobOpts struct {
 	VolumeBackupDeleteName      string
 	VolumeBackupDeleteNamespace string
 	DataExportName              string
+	DataExportUID               string
 	SnapshotID                  string
 	CredSecretName              string
 	CredSecretNamespace         string
@@ -418,9 +419,20 @@ func WithLabels(l map[string]string) JobOption {
 func WithDataExportName(name string) JobOption {
 	return func(opts *JobOpts) error {
 		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("dataexport namespace should be set")
+			return fmt.Errorf("dataexport name should be set")
 		}
 		opts.DataExportName = name
+		return nil
+	}
+}
+
+// WithDataExportUID is job parameter
+func WithDataExportUID(uid string) JobOption {
+	return func(opts *JobOpts) error {
+		if strings.TrimSpace(uid) == "" {
+			return fmt.Errorf("dataexport UID should be set")
+		}
+		opts.DataExportUID = uid
 		return nil
 	}
 }
