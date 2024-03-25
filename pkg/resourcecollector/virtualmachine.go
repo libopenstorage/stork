@@ -564,3 +564,17 @@ func GetVMIncludeResourceInfoList(vmList []kubevirtv1.VirtualMachine, objectMap 
 	return vmResourceInfoList, objectMap, freezeRulesItems, unFreezeRulesItems
 
 }
+
+// ISVmPresentInNS returns true if a given name space at least has one VM in it
+func IsVmPresentInNS(ns string) bool {
+	kv := kubevirtops.Instance()
+
+	listOptions := &metav1.ListOptions{
+		Limit: 1,
+	}
+	blist, err := kv.BatchListVirtualMachines(ns, listOptions)
+	if err == nil && len(blist.Items) > 0 {
+		return true
+	}
+	return false
+}
