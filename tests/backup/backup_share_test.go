@@ -2269,6 +2269,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		scheduleName               string
 		backupClusterName          string
 		scheduleNames              []string
+		firstScheduleBackupName    string
 	)
 
 	JustBeforeEach(func() {
@@ -2358,6 +2359,9 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, backupClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
+			log.InfoD("Getting the first schedule backup from admin")
+			firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 		})
 		Step("Validate the Access toggle", func() {
 			log.InfoD("Validating the access toggle")
@@ -2381,8 +2385,10 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				userBackups, err := DoRetryWithTimeoutWithGinkgoRecover(clusterShareCheck, 2*time.Minute, 10*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backups from shared cluster named [%s] for user [%s]", backupClusterName, username))
 				log.InfoD("User backups - %v", userBackups.([]string))
+				result := IsPresent(userBackups, firstScheduleBackupName)
+				dash.VerifyFatal(result, true, fmt.Sprintf("Verifying if the first schedule backup %v created from admin is present in the user backup list: %v", firstScheduleBackupName, userBackups))
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				ValidateSharedBackupWithUsers(username, accessLevel, userBackups.([]string)[len(userBackups.([]string))-1], restoreName)
+				ValidateSharedBackupWithUsers(username, accessLevel, firstScheduleBackupName, restoreName)
 				if accessLevel != ViewOnlyAccess {
 					restoreNames = append(restoreNames, restoreName)
 				}
@@ -2393,14 +2399,16 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				}
 				log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 				time.Sleep(15 * time.Minute)
+				latestScheduleBkpName, err := GetLatestScheduleBackupName(ctx, scheduleName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the last schedule backup [%s] created from admin", latestScheduleBkpName))
 				fetchedUserBackups, err := GetAllBackupsForUser(username, CommonPassword)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backups for user [%s]", username))
 				dash.VerifyFatal(len(fetchedUserBackups), len(userBackups.([]string))+1, "Verifying if new schedule backup is up or not")
-				log.InfoD("All the backups for user [%s] - %v", username, fetchedUserBackups)
-				recentBackupName := fetchedUserBackups[len(fetchedUserBackups)-1]
-				log.InfoD("Recent backup name [%s] ", recentBackupName)
-				err = BackupSuccessCheckWithValidation(ctx, recentBackupName, scheduledAppContexts, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of recent backup [%s]", recentBackupName))
+				log.InfoD("All the backups for user [%s]  after waiting for 15 minutes - %v", username, fetchedUserBackups)
+				result = IsPresent(fetchedUserBackups, latestScheduleBkpName)
+				dash.VerifyFatal(result, true, fmt.Sprintf("Verifying if the latest schedule backup %v created from admin is present in the user backup list: %v", latestScheduleBkpName, fetchedUserBackups))
+				err = BackupSuccessCheckWithValidation(ctx, latestScheduleBkpName, scheduledAppContexts, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of latest schedule backup [%s]", latestScheduleBkpName))
 			}
 		})
 	})
