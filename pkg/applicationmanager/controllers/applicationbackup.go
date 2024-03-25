@@ -243,9 +243,15 @@ func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.
 	}
 	namespacesToBackup := make([]string, 0)
 	for _, ns := range namespaces.Items {
-		if _, found := utils.IgnoreNamespaces[ns.Name]; !found {
-			namespacesToBackup = append(namespacesToBackup, ns.Name)
+		if _, found := utils.IgnoreNamespaces[ns.Name]; found {
+			continue
 		}
+		//For VM backup include only if there exist atleast 1 VM in the NS
+		if IsBackupObjectTypeVirtualMachine(backup) && !resourcecollector.IsVmPresentInNS(ns.Name) {
+			continue
+		}
+		namespacesToBackup = append(namespacesToBackup, ns.Name)
+
 	}
 	backup.Spec.Namespaces = namespacesToBackup
 	err = a.client.Update(context.TODO(), backup)
