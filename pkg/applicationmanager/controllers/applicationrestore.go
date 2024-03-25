@@ -280,6 +280,7 @@ func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request re
 
 	// Fetch the ApplicationBackup instance
 	restore := &storkapi.ApplicationRestore{}
+	logrus.Infof("kartik restore from reconcile method: %v", restore)
 	err := a.client.Get(context.TODO(), request.NamespacedName, restore)
 	if err != nil {
 		if k8s_errors.IsNotFound(err) {
@@ -339,6 +340,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	}
 
 	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	logrus.Infof("applicationbackup kartik during restore is: %v", backup)
 	if err != nil {
 		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
 		return err
@@ -406,6 +408,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 	}
 	switch restore.Status.Stage {
 	case storkapi.ApplicationRestoreStageInitial:
+		logrus.Infof("kartik restore.Status.Stage:%v", restore.Status.Stage)
 		// Make sure the namespaces exist
 		fallthrough
 	case storkapi.ApplicationRestoreStageIncludeResources:
@@ -435,6 +438,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		}
 		fallthrough
 	case storkapi.ApplicationRestoreStageVolumes:
+		logrus.Infof("kartik restore.Status.Stage for volumes:%v", restore.Status.Stage)
 		err := a.restoreVolumes(restore, updateCr)
 		if err != nil {
 			message := fmt.Sprintf("Error restoring volumes: %v", err)
@@ -449,6 +453,7 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 			return nil
 		}
 	case storkapi.ApplicationRestoreStageApplications:
+		logrus.Infof("kartik restore.Status.Stage for applications:%v", restore.Status.Stage)
 		err := a.restoreResources(restore, updateCr)
 		if err != nil {
 			message := fmt.Sprintf("Error restoring resources: %v", err)
@@ -583,6 +588,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		return err
 	}
 	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	logrus.Infof("kartik applicationbackup in restoreVolumes stage: %v", backup)
 	if err != nil {
 		return fmt.Errorf("error getting backup spec for restore: %v", err)
 	}
@@ -602,8 +608,13 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		if _, ok := restore.Spec.NamespaceMapping[namespace]; !ok {
 			continue
 		}
+		logrus.Infof("kartik volumes present in the backup status volumes are: %v", backup.Status.Volumes)
 		for _, volumeBackup := range backup.Status.Volumes {
+			logrus.Infof("volume being kartik resotred currently from backup.Status.Volumes: %v", volumeBackup)
+			// this can already be a solution?
 			if volumeBackup.Namespace != namespace || volumeBackup.Status == storkapi.ApplicationBackupStatusFailed || volumeBackup.Status == storkapi.ApplicationBackupStatusSkip {
+				// lets log if volumes are being skipped.
+				logrus.Infof("volumes being kartik skipped with continue path are: %v with status: %v", volumeBackup, volumeBackup.Status)
 				continue
 			}
 			// If a list of resources was specified during restore check if
@@ -647,6 +658,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		return err
 	}
 	if len(restore.Status.Volumes) != pvcCount {
+		logrus.Infof("restore status kartik volumes: %v and pvcCount are: %v", restore.Status.Volumes, pvcCount)
 		// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
 		// gets called once per driver
 		if !nfs {
@@ -676,6 +688,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
+				// we can add here as well if any PVC needs to skipped, best is to get the restore object and check that as well
+				logrus.Infof("the restore object kartik created is: %v", restore)
 				var storageClassesBytes []byte
 				if driverName == "csi" {
 					storageClassesBytes, err = a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
@@ -840,6 +854,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 			crName := getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace)
 			resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
+			logrus.Infof("resourceExport kartik is: %v", resourceExport)
 			if err != nil {
 				if k8s_errors.IsNotFound(err) {
 					// create resource export CR
@@ -904,6 +919,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				logrus.Infof("%s: resource-export cr [%v] status: %v", funct, crName, resourceExport.Status.Status)
 				switch resourceExport.Status.Status {
 				case kdmpapi.ResourceExportStatusFailed:
+					logrus.Infof("kartik resourceExport status is for failed: %v", resourceExport.Status.Status)
 					message = fmt.Sprintf("%s Error creating CR %v for pvc creation: %v", funct, crName, resourceExport.Status.Reason)
 					restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
 					restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
@@ -926,13 +942,21 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				case kdmpapi.ResourceExportStatusInProgress:
 					return nil
 				case kdmpapi.ResourceExportStatusSuccessful:
+					// this is happening twice somehow, check in kdmp now
+					// because this is where we keep adding onto the restoreCompleteList, with which we updated the restore CR.
+					logrus.Infof("kartik resourceExport status is for successful: %v", resourceExport.Status.Status)
+					logrus.Infof("kartik restoreCompleteList before: %v and resourceExport.ResotreCompleteList:%v", restoreCompleteList, resourceExport.RestoreCompleteList)
+					// from logs it was dicovered that the restoreCompleteList from RE has gotten 2 volumes in it
 					restoreCompleteList = append(restoreCompleteList, resourceExport.RestoreCompleteList...)
+					logrus.Infof("kartik restoreCompleteList after addition of resourceExport.RestoreCompleteList... is: %v", restoreCompleteList)
 				default:
 					logrus.Infof("%s still valid re CR[%v]stage not available", funct, crName)
 					return nil
 				}
 			}
 		}
+		logrus.Infof("kartik resore beofore update: %v", restore)
+		// this can be in loop where the CR keeps getting updated
 		restore, err = a.updateRestoreCRInVolumeStage(
 			namespacedName,
 			storkapi.ApplicationRestoreStatusInProgress,
@@ -944,10 +968,12 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		if err != nil {
 			return err
 		}
+		logrus.Infof("kartik resore after update, this is where we suspect that updation might be happening in loop: %v", restore)
 	}
 
 	inProgress := false
 	// Skip checking status if no volumes are being restored
+	// this will add to the restore CR
 	if len(restore.Status.Volumes) != 0 {
 		drivers := a.getDriversForRestore(restore)
 		volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
@@ -965,7 +991,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 			volumeInfos = append(volumeInfos, status...)
 		}
-
+		// this is where the new volumes keep getting added to the restore CR
 		restore.Status.Volumes = volumeInfos
 		restore.Status.LastUpdateTimestamp = metav1.Now()
 		// Store the new status
