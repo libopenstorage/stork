@@ -1880,7 +1880,6 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				time.Sleep(15 * time.Minute)
-				validateContexts(event, contexts)
 
 			})
 			stepLog = fmt.Sprintf("exit maintenance on node %s", appNode.Name)

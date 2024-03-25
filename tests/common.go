@@ -8064,16 +8064,24 @@ func ExitNodesFromMaintenanceMode() error {
 }
 
 // GetPoolsDetailsOnNode returns all pools present in the Nodes
-func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
+func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
-	// Refreshing Node Registry to make sure all changes done to the nodes are refreshed
-	err := Inst().S.RefreshNodeRegistry()
+	// Refreshing Node Driver to make sure all changes done to the nodes are refreshed
+	err := Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return nil, err
 	}
+	//updating the node info after refresh
+	stDriverNodes := node.GetStorageDriverNodes()
+	for _, stDriverNode := range stDriverNodes {
+		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
+			n = &stDriverNode
+			break
+		}
+	}
 
-	if node.IsStorageNode(n) == false {
+	if node.IsStorageNode(*n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
 
@@ -8141,7 +8149,7 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 func MakeStoragetoStoragelessNode(n node.Node) error {
 	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
 	// Get total list of pools present on the node
-	poolList, err := GetPoolsDetailsOnNode(n)
+	poolList, err := GetPoolsDetailsOnNode(&n)
 	if err != nil {
 		return err
 	}
@@ -8295,7 +8303,7 @@ func WaitForPoolOffline(n node.Node) error {
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
-		poolsPresent, err := GetPoolsDetailsOnNode(each)
+		poolsPresent, err := GetPoolsDetailsOnNode(&each)
 		if err != nil {
 			return -1, err
 		}
@@ -9369,7 +9377,11 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	if err != nil {
 		return fmt.Errorf("pool re-balance failed, err: %v", err)
 	}
-	err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+	n1, err := node.GetNodeByName(stNode.Name)
+	if err != nil {
+		return fmt.Errorf("error getting node by name %s, err: %v", stNode.Name, err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(n1, addDriveUpTimeOut)
 	if err != nil {
 		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
 	}
@@ -9392,7 +9404,8 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	}
 	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
 	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-	return nil
+	err = Inst().V.RefreshDriverEndpoints()
+	return err
 }
 
 func IsJournalEnabled() (bool, error) {
