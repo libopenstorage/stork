@@ -390,13 +390,13 @@ func (ac *ActionController) isClusterAccessible(action *storkv1.Action, config *
 }
 
 func (ac *ActionController) createSummary(action *storkv1.Action, ns string, status storkv1.ActionStatusType, msg string) (*storkv1.FailoverSummary, *storkv1.FailbackSummary) {
-    var failoverSummary *storkv1.FailoverSummary
-    var failbackSummary *storkv1.FailbackSummary
-    switch action.Spec.ActionType {
-    case storkv1.ActionTypeFailover:
-        failoverSummary = &storkv1.FailoverSummary{Namespace: ns, Status: status, Reason: msg}
-    case storkv1.ActionTypeFailback:
-        failbackSummary = &storkv1.FailbackSummary{Namespace: ns, Status: status, Reason: msg}
-    }
-    return failoverSummary, failbackSummary
+	var failoverSummary *storkv1.FailoverSummary
+	var failbackSummary *storkv1.FailbackSummary
+	switch action.Spec.ActionType {
+	case storkv1.ActionTypeFailover:
+		failoverSummary = &storkv1.FailoverSummary{Namespace: ns, Status: status, Reason: msg}
+	case storkv1.ActionTypeFailback:
+		failbackSummary = &storkv1.FailbackSummary{Namespace: ns, Status: status, Reason: msg}
+	}
+	return failoverSummary, failbackSummary
 }
