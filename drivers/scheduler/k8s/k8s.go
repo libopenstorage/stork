@@ -4328,8 +4328,41 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				// check if the pvc has our VM as the owner
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
-					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
-						want = true
+					if ownerRef.Kind == vm.Kind {
+						if ownerRef.Name == vm.Name {
+							want = true
+						}
+					}
+					// If volume is still not found, try the datavolume for the virtual machine
+					if !want && ownerRef.Kind == "DataVolume" {
+						kvClient := k8sKubevirt.GetKubevirtClient()
+						dataVol, err := kvClient.CdiClient().CdiV1beta1().DataVolumes(vm.Namespace).Get(context.TODO(), ownerRef.Name, metav1.GetOptions{})
+						if err != nil && !k8serrors.IsNotFound(err) {
+							return nil, fmt.Errorf("error getting datavolume for vm: %s in namespace: %s. error: %v", vm.Name, vm.Namespace, err)
+						} else {
+							if dataVol != nil {
+								for _, ownerRef := range dataVol.OwnerReferences {
+									if ownerRef.Name == vm.Name {
+										want = true
+									}
+								}
+							}
+						}
+					}
+				}
+				// If volume is still not found, try the virt-launcher pod as well
+				if !want {
+					virtLauncherPodsList, err := k8sCore.GetPods(vm.Namespace, nil)
+					if err != nil {
+						return nil, fmt.Errorf("failed to get pods in namespace: %s: %w", vm.Namespace, err)
+					}
+					for _, virtLauncher := range virtLauncherPodsList.Items {
+						for _, ownerRef := range virtLauncher.OwnerReferences {
+							if ownerRef.Kind == "VirtualMachineInstance" && ownerRef.Name == vm.Name {
+								// since VMI name is same as VM name
+								want = true
+							}
+						}
 					}
 				}
 				if !want {
