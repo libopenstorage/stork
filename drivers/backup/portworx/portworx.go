@@ -2457,7 +2457,7 @@ func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string
 			return ruleUid, nil
 		}
 	}
-	return "", nil
+	return "", fmt.Errorf("unable to find uid for rule [%s]", ruleName)
 }
 
 func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
