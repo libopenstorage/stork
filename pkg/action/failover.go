@@ -7,6 +7,7 @@ import (
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/libopenstorage/stork/pkg/utils"
 	coreops "github.com/portworx/sched-ops/k8s/core"
@@ -50,6 +51,18 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 		ac.updateAction(action)
 		return
 	}
+
+	//ensure that the provided migrationSchedule is a static copy
+	if migrationSchedule.GetAnnotations() == nil || migrationSchedule.GetAnnotations()[migration.StorkMigrationScheduleCopied] != "true" {
+		msg := fmt.Sprintf("The provided MigrationSchedule %s/%s is not created by Stork. Please ensure that the failover is initiated in the cluster you want to failover to", migrationSchedule.Namespace, migrationSchedule.Name)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
 	// get sourceConfig from clusterPair in the destination cluster
 	sourceConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 	if err != nil {
@@ -89,14 +102,11 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 	}
 	srcMigrSched, err := remoteOps.GetMigrationSchedule(action.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s for Failover in the %s cluster. Skipping MigrationSchedule suspension : %v", sourceConfig.Host, migrationSchedule.Namespace, migrationSchedule.Name, err)
-		log.ActionLog(action).Warnf(msg)
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusSuccessful),
-			msg)
-		action.Status.Status = storkv1.ActionStatusSuccessful
-		action.Status.Reason = ""
+		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s for Failover in the remote cluster : %v", migrationSchedule.Namespace, migrationSchedule.Name, err)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -132,6 +133,13 @@ func validationsForPerformDRCommands(actionType storkv1.ActionType, migrationSch
 	migrSchedObj, err := storkops.Instance().GetMigrationSchedule(referenceMigrationSchedule, migrationScheduleNs)
 	if err != nil {
 		return nil, fmt.Errorf("unable to find the reference MigrationSchedule %v in the %v namespace", referenceMigrationSchedule, migrationScheduleNs)
+	}
+
+	if actionType == storkv1.ActionTypeFailover {
+		// MigrationSchedule provided to failover must be a static copy
+		if migrSchedObj.GetAnnotations() == nil || migrSchedObj.GetAnnotations()[migration.StorkMigrationScheduleCopied] != "true" {
+			return nil, fmt.Errorf("ensure that `storkctl perform failover` is run in the cluster you want to failover to")
+		}
 	}
 
 	// clusterPair specified in the reference MigrationSchedule should exist in the destination cluster in both failover and failback
