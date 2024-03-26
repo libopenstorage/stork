@@ -672,6 +672,7 @@ func startLongevityTest(testName string) {
 	longevityLogger = CreateLogger(fmt.Sprintf("%s-%s.log", testName, time.Now().Format(time.RFC3339)))
 	log.SetTorpedoFileOutput(longevityLogger)
 	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
+	PrintPxctlStatus()
 }
 func endLongevityTest() {
 	PrintPxctlStatus()
@@ -1046,6 +1047,10 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 			})
 
+			initialRepls := make(map[*volume.Volume]int64)
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
 			for _, v := range appVolumes {
 				currRep, err := Inst().V.GetReplicationFactor(v)
 				UpdateOutcome(event, err)
@@ -1058,16 +1063,14 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				if replStatus != "Up" {
 					continue
 				}
+				initialRepls[v] = currRep
 
 				if currRep != 0 {
 					for {
-
 						//Changing replication factor to 1
 						if currRep > 1 {
 							log.Infof("Current replication is > 1, reducing it before proceeding")
-							opts := volume.Options{
-								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-							}
+
 							dashStats := make(map[string]string)
 							dashStats["volume-name"] = v.Name
 							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
@@ -1104,6 +1107,25 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 			}
 
+			//Reverting back the initial replication factor
+			for v, actualRep := range initialRepls {
+				currRep, err := Inst().V.GetReplicationFactor(v)
+				UpdateOutcome(event, err)
+				for {
+					if currRep > actualRep {
+						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+						if err != nil {
+							log.Errorf("There is an error decreasing repl [%v]", err.Error())
+							UpdateOutcome(event, err)
+							break
+						}
+						currRep, err = Inst().V.GetReplicationFactor(v)
+						UpdateOutcome(event, err)
+					} else {
+						break
+					}
+				}
+			}
 		}
 		updateMetrics(*event)
 
@@ -2496,21 +2518,21 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
-		selectedNodes := make([]string, len(nodesToReboot))
+		selectedNodes := make([]node.Node, len(nodesToReboot))
 		for _, n := range nodesToReboot {
 			err := isNodeHealthy(n, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
 			}
-			selectedNodes = append(selectedNodes, n.Name)
+			selectedNodes = append(selectedNodes, n)
 		}
 		// Reboot node and check driver status
-		stepLog = fmt.Sprintf("reboot the node(s): %v", selectedNodes)
+		stepLog = fmt.Sprintf("rebooting [%d] node(s)", len(selectedNodes))
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
-			for _, n := range nodesToReboot {
+			for _, n := range selectedNodes {
 				dashStats := make(map[string]string)
 				dashStats["node"] = n.Name
 				updateLongevityStats(RebootManyNodes, stats.NodeRebootEventName, dashStats)
@@ -2547,7 +2569,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Wait()
 			})
 
-			for _, n := range nodesToReboot {
+			for _, n := range selectedNodes {
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
