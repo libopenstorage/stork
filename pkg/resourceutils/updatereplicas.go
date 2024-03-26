@@ -31,200 +31,113 @@ const (
 )
 
 func ScaleReplicas(namespace string, activate bool, printFunc func(string, string), config *rest.Config) {
-	updateStatefulSets(namespace, activate, false, false, printFunc)
-	updateDeployments(namespace, activate, false, false, printFunc)
-	updateReplicaSets(namespace, activate, false, false, printFunc)
-	updateDeploymentConfigs(namespace, activate, false, false, printFunc)
-	updateIBPObjects("IBPPeer", namespace, activate, false, false, printFunc)
-	updateIBPObjects("IBPCA", namespace, activate, false, false, printFunc)
-	updateIBPObjects("IBPOrderer", namespace, activate, false, false, printFunc)
-	updateIBPObjects("IBPConsole", namespace, activate, false, false, printFunc)
+	updateStatefulSets(namespace, activate, printFunc)
+	updateDeployments(namespace, activate, printFunc)
+	updateReplicaSets(namespace, activate, printFunc)
+	updateDeploymentConfigs(namespace, activate, printFunc)
+	updateIBPObjects("IBPPeer", namespace, activate, printFunc)
+	updateIBPObjects("IBPCA", namespace, activate, printFunc)
+	updateIBPObjects("IBPOrderer", namespace, activate, printFunc)
+	updateIBPObjects("IBPConsole", namespace, activate, printFunc)
 	updateVMObjects("VirtualMachine", namespace, true, printFunc)
-	updateCRDObjects(namespace, activate, false, printFunc, config)
-	updateCronJobObjects(namespace, activate, false, printFunc)
+	updateCRDObjects(namespace, activate, printFunc, config)
+	updateCronJobObjects(namespace, activate, printFunc)
 	// This is unique for migration cases to support stash stratgery for CRs managed by clusterwide operators
-	updateStashedCMObjects(namespace, activate, false, printFunc, config)
+	updateStashedCMObjects(namespace, activate, printFunc, config)
 }
 
-func ScaleReplicasReturningError(namespace string, activate bool, storeOriginalReplicaCount bool, printFunc func(string, string), config *rest.Config) error {
-	err := updateStatefulSets(namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateDeployments(namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateReplicaSets(namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateDeploymentConfigs(namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateIBPObjects("IBPPeer", namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateIBPObjects("IBPCA", namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateIBPObjects("IBPOrderer", namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateIBPObjects("IBPConsole", namespace, activate, storeOriginalReplicaCount, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateVMObjects("VirtualMachine", namespace, true, printFunc)
-	if err != nil {
-		return err
-	}
-	err = updateCRDObjects(namespace, activate, false, printFunc, config)
-	if err != nil {
-		return err
-	}
-	err = updateCronJobObjects(namespace, activate, true, printFunc)
-	if err != nil {
-		return err
-	}
-
-	// This is unique for migration cases to support stash stratgery for CRs managed by clusterwide operators
-	err = updateStashedCMObjects(namespace, activate, true, printFunc, config)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func updateStatefulSets(namespace string, activate bool, storeOriginalReplicaCount bool, returnOnError bool, printFunc func(string, string)) error {
+func updateStatefulSets(namespace string, activate bool, printFunc func(string, string)) {
 	statefulSets, err := apps.Instance().ListStatefulSets(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 	for _, statefulSet := range statefulSets.Items {
 		if replicas, update := getUpdatedReplicaCount(statefulSet.Annotations, activate, printFunc); update {
-			if storeOriginalReplicaCount {
-				statefulSet.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*statefulSet.Spec.Replicas))
-			}
 			statefulSet.Spec.Replicas = &replicas
 			_, err := apps.Instance().UpdateStatefulSet(&statefulSet)
 			if err != nil {
-				msg := fmt.Sprintf("Error updating replicas for statefulset %v/%v : %v", statefulSet.Namespace, statefulSet.Name, err)
-				printFunc(msg, "err")
-				if returnOnError {
-					return fmt.Errorf(msg)
-				}
+				printFunc(fmt.Sprintf("Error updating replicas for statefulset %v/%v : %v", statefulSet.Namespace, statefulSet.Name, err), "err")
 				continue
 			}
 			printFunc(fmt.Sprintf("Updated replicas for statefulset %v/%v to %v", statefulSet.Namespace, statefulSet.Name, replicas), "out")
 		}
 
 	}
-	return nil
 }
 
-func updateDeployments(namespace string, activate bool, storeOriginalReplicaCount bool, returnOnError bool, printFunc func(string, string)) error {
+func updateDeployments(namespace string, activate bool, printFunc func(string, string)) {
 	deployments, err := apps.Instance().ListDeployments(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 	for _, deployment := range deployments.Items {
 		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, printFunc); update {
-			if storeOriginalReplicaCount {
-				deployment.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*deployment.Spec.Replicas))
-			}
 			deployment.Spec.Replicas = &replicas
 			_, err := apps.Instance().UpdateDeployment(&deployment)
 			if err != nil {
-				msg := fmt.Sprintf("Error updating replicas for deployment %v/%v : %v", deployment.Namespace, deployment.Name, err)
-				printFunc(msg, "err")
-				if returnOnError {
-					return fmt.Errorf(msg)
-				}
+				printFunc(fmt.Sprintf("Error updating replicas for deployment %v/%v : %v", deployment.Namespace, deployment.Name, err), "err")
 				continue
 			}
 			printFunc(fmt.Sprintf("Updated replicas for deployment %v/%v to %v", deployment.Namespace, deployment.Name, replicas), "out")
 		}
 	}
-	return nil
 }
 
-func updateReplicaSets(namespace string, activate bool, storeOriginalReplicaCount bool, returnOnError bool, printFunc func(string, string)) error {
+func updateReplicaSets(namespace string, activate bool, printFunc func(string, string)) {
 	replicasets, err := apps.Instance().ListReplicaSets(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 	for _, replicaset := range replicasets {
 		if replicaset.OwnerReferences != nil {
 			continue
 		}
 		if replicas, update := getUpdatedReplicaCount(replicaset.Annotations, activate, printFunc); update {
-			if storeOriginalReplicaCount {
-				replicaset.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(*replicaset.Spec.Replicas))
-			}
 			replicaset.Spec.Replicas = &replicas
 			_, err := apps.Instance().UpdateReplicaSet(&replicaset)
 			if err != nil {
-				msg := fmt.Sprintf("Error updating replicas for replicaset %v/%v : %v", replicaset.Namespace, replicaset.Name, err)
-				printFunc(msg, "err")
-				if returnOnError {
-					return fmt.Errorf(msg)
-				}
+				printFunc(fmt.Sprintf("Error updating replicas for replicaset %v/%v : %v", replicaset.Namespace, replicaset.Name, err), "err")
 				continue
 			}
 			printFunc(fmt.Sprintf("Updated replicas for replicaset %v/%v to %v", replicaset.Namespace, replicaset.Name, replicas), "out")
 		}
 	}
-	return nil
 }
 
-func updateDeploymentConfigs(namespace string, activate bool, storeOriginalReplicaCount bool, returnOnError bool, printFunc func(string, string)) error {
+func updateDeploymentConfigs(namespace string, activate bool, printFunc func(string, string)) {
 	deployments, err := openshift.Instance().ListDeploymentConfigs(namespace)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			util.CheckErr(err)
-			return err
 		}
-		return nil
+		return
 	}
 	for _, deployment := range deployments.Items {
 		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, printFunc); update {
-			if storeOriginalReplicaCount {
-				deployment.Annotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(deployment.Spec.Replicas))
-			}
 			deployment.Spec.Replicas = replicas
 			_, err := openshift.Instance().UpdateDeploymentConfig(&deployment)
 			if err != nil {
-				msg := fmt.Sprintf("Error updating replicas for deploymentconfig %v/%v : %v", deployment.Namespace, deployment.Name, err)
-				printFunc(msg, "err")
-				if returnOnError {
-					return fmt.Errorf(msg)
-				}
+				printFunc(fmt.Sprintf("Error updating replicas for deploymentconfig %v/%v : %v", deployment.Namespace, deployment.Name, err), "err")
 				continue
 			}
 			printFunc(fmt.Sprintf("Updated replicas for deploymentconfig %v/%v to %v", deployment.Namespace, deployment.Name, replicas), "out")
 		}
 	}
-	return nil
 }
 
-func updateCRDObjects(ns string, activate bool, returnOnError bool, printFunc func(string, string), config *rest.Config) error {
+func updateCRDObjects(ns string, activate bool, printFunc func(string, string), config *rest.Config) {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 	configClient, err := k8sdynamic.NewForConfig(config)
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 
 	ruleset := resourcecollector.GetDefaultRuleSet()
@@ -246,7 +159,7 @@ func updateCRDObjects(ns string, activate bool, returnOnError bool, printFunc fu
 					continue
 				}
 				util.CheckErr(err)
-				return err
+				return
 			}
 			for _, o := range objects.Items {
 				annotations := o.GetAnnotations()
@@ -280,31 +193,23 @@ func updateCRDObjects(ns string, activate bool, returnOnError bool, printFunc fu
 							suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, suspend.Path, printFunc)
 							if err != nil {
 								util.CheckErr(err)
-								return err
+								return
 							}
 							disableVersion = suspend
 						} else {
 							util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
-							return err
+							return
 						}
 						err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
 						if err != nil {
-							msg := fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", suspend.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err)
-							printFunc(msg, "err")
-							if returnOnError {
-								return fmt.Errorf(msg)
-							}
+							printFunc(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", suspend.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), disableVersion, err), "err")
 							continue
 						}
 					}
 				}
 				_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
 				if err != nil {
-					msg := fmt.Sprintf("Error updating CR %v %v/%v: %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err)
-					printFunc(msg, "err")
-					if returnOnError {
-						return fmt.Errorf(msg)
-					}
+					printFunc(fmt.Sprintf("Error updating CR %v %v/%v: %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), "err")
 					continue
 				}
 				printFunc(fmt.Sprintf("Updated CR for %v %v/%v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName()), "out")
@@ -315,11 +220,7 @@ func updateCRDObjects(ns string, activate bool, returnOnError bool, printFunc fu
 					podpath := strings.Split(crd.PodsPath, ".")
 					pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
 					if err != nil {
-						msg := fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err)
-						printFunc(msg, "err")
-						if returnOnError {
-							return fmt.Errorf(msg)
-						}
+						printFunc(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), "err")
 						continue
 					}
 					if !found {
@@ -327,13 +228,7 @@ func updateCRDObjects(ns string, activate bool, returnOnError bool, printFunc fu
 					}
 					for _, pod := range pods {
 						err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
-						if err != nil {
-							msg := fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err)
-							printFunc(msg, "err")
-							if returnOnError {
-								return fmt.Errorf(msg)
-							}
-						}
+						printFunc(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), "err")
 						continue
 					}
 				}
@@ -341,10 +236,9 @@ func updateCRDObjects(ns string, activate bool, returnOnError bool, printFunc fu
 
 		}
 	}
-	return nil
 }
 
-func updateIBPObjects(kind string, namespace string, activate bool, storeOriginalReplicaCount bool, returnOnError bool, printFunc func(string, string)) error {
+func updateIBPObjects(kind string, namespace string, activate bool, printFunc func(string, string)) {
 	objects, err := dynamic.Instance().ListObjects(
 		&metav1.ListOptions{
 			TypeMeta: metav1.TypeMeta{
@@ -355,60 +249,27 @@ func updateIBPObjects(kind string, namespace string, activate bool, storeOrigina
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			util.CheckErr(err)
-			return err
 		}
-		return nil
+		return
 	}
 	for _, o := range objects.Items {
 		if replicas, update := getUpdatedReplicaCount(o.GetAnnotations(), activate, printFunc); update {
-			if storeOriginalReplicaCount {
-				curReplicas, found, err := unstructured.NestedInt64(o.Object, "spec", "replicas")
-				if err != nil {
-					msg := fmt.Sprintf("Error getting replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err)
-					printFunc(msg, "err")
-					if returnOnError {
-						return fmt.Errorf(msg)
-					}
-					continue
-				}
-				if !found {
-					msg := fmt.Sprintf("Could not get replicas for %v %v/%v", strings.ToLower(kind), o.GetNamespace(), o.GetName())
-					printFunc(msg, "err")
-					if returnOnError {
-						return fmt.Errorf(msg)
-					}
-					continue
-				}
-				curAnnotations := o.GetAnnotations()
-				curAnnotations[migration.StorkMigrationReplicasAnnotation] = strconv.Itoa(int(curReplicas))
-				o.SetAnnotations(curAnnotations)
-			}
 			err := unstructured.SetNestedField(o.Object, int64(replicas), "spec", "replicas")
 			if err != nil {
-				msg := fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err)
-				printFunc(msg, "err")
-				if returnOnError {
-					return fmt.Errorf(msg)
-				}
+				printFunc(fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), "err")
 				continue
 			}
-
 			_, err = dynamic.Instance().UpdateObject(&o)
 			if err != nil {
-				msg := fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err)
-				printFunc(msg, "err")
-				if returnOnError {
-					return fmt.Errorf(msg)
-				}
+				printFunc(fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), "err")
 				continue
 			}
 			printFunc(fmt.Sprintf("Updated replicas for %v %v/%v to %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), replicas), "out")
 		}
 	}
-	return nil
 }
 
-func updateVMObjects(kind string, namespace string, activate bool, printFunc func(string, string)) error {
+func updateVMObjects(kind string, namespace string, activate bool, printFunc func(string, string)) {
 	objects, err := dynamic.Instance().ListObjects(
 		&metav1.ListOptions{
 			TypeMeta: metav1.TypeMeta{
@@ -419,41 +280,34 @@ func updateVMObjects(kind string, namespace string, activate bool, printFunc fun
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			util.CheckErr(err)
-			return err
 		}
-		return nil
+		return
 	}
 	for _, o := range objects.Items {
 		path := []string{"spec", "running"}
 		unstructured.RemoveNestedField(o.Object, path...)
 		printFunc(fmt.Sprintf("Removed field for %v %v/%v", strings.ToLower(kind), o.GetNamespace(), o.GetName()), "out")
 	}
-	return nil
 }
 
-func updateCronJobObjects(namespace string, activate bool, returnOnError bool, printFunc func(string, string)) error {
+func updateCronJobObjects(namespace string, activate bool, printFunc func(string, string)) {
 	cronJobs, err := batch.Instance().ListCronJobs(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 
 	for _, cronJob := range cronJobs.Items {
 		*cronJob.Spec.Suspend = !activate
 		_, err = batch.Instance().UpdateCronJob(&cronJob)
 		if err != nil {
-			msg := fmt.Sprintf("Error updating suspend option for cronJob %v/%v : %v", cronJob.Namespace, cronJob.Name, err)
-			printFunc(msg, "err")
-			if returnOnError {
-				return fmt.Errorf(msg)
-			}
+			printFunc(fmt.Sprintf("Error updating suspend option for cronJob %v/%v : %v", cronJob.Namespace, cronJob.Name, err), "err")
 			continue
 		}
 		printFunc(fmt.Sprintf("Updated suspend option for cronjob %v/%v to %v", cronJob.Namespace, cronJob.Name, !activate), "out")
 	}
-	return nil
-}
 
+}
 func getSuspendStringOpts(annotations map[string]string, activate bool, path string, printFunc func(string, string)) (string, error) {
 	if val, present := annotations[migration.StorkAnnotationPrefix+path]; present {
 		suspend := strings.Split(val, ",")
@@ -520,16 +374,16 @@ func getUpdatedReplicaCount(annotations map[string]string, activate bool, printF
 	return 0, false
 }
 
-func updateStashedCMObjects(namespace string, activate bool, returnOnError bool, printFunc func(string, string), config *rest.Config) error {
+func updateStashedCMObjects(namespace string, activate bool, printFunc func(string, string), config *rest.Config) {
 	if !activate {
-		return nil
+		return
 	}
 	pvcToPVCOwnerMapping := make(map[string][]metav1.OwnerReference)
 	// List the configmaps with label "stash-cr" enabled
 	configMaps, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{LabelSelector: StashCRLabel})
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 	ruleset := resourcecollector.GetDefaultRuleSet()
 	// Create the CRs in the same namespace if those don't exist
@@ -538,19 +392,12 @@ func updateStashedCMObjects(namespace string, activate bool, returnOnError bool,
 		unstructuredObj := &unstructured.Unstructured{}
 		err := unstructuredObj.UnmarshalJSON(objBytes)
 		if err != nil {
-			msg := fmt.Sprintf("Error converting string to Unstructured object: %s\n", err.Error())
-			printFunc(msg, "err")
-			if returnOnError {
-				return fmt.Errorf(msg)
-			}
+			printFunc(fmt.Sprintf("Error converting string to Unstructured object: %s\n", err.Error()), "err")
 			continue
 		}
 		configClient, err := k8sdynamic.NewForConfig(config)
 		if err != nil {
 			util.CheckErr(err)
-			if returnOnError {
-				return err
-			}
 			continue
 		}
 		resource := &metav1.APIResource{
@@ -575,9 +422,6 @@ func updateStashedCMObjects(namespace string, activate bool, returnOnError bool,
 			} else {
 				printFunc(fmt.Sprintf("Error creating resource %s/%s from stashed configmap : %v\n", unstructuredObj.GetKind(), unstructuredObj.GetName(), err), "err")
 				util.CheckErr(err)
-				if returnOnError {
-					return err
-				}
 				continue
 			}
 		}
@@ -586,9 +430,6 @@ func updateStashedCMObjects(namespace string, activate bool, returnOnError bool,
 		newResourceUnstructured, err := resourceClient.Get(context.TODO(), unstructuredObj.GetName(), metav1.GetOptions{})
 		if err != nil {
 			util.CheckErr(err)
-			if returnOnError {
-				return err
-			}
 			continue
 		}
 
@@ -598,9 +439,6 @@ func updateStashedCMObjects(namespace string, activate bool, returnOnError bool,
 		err = json.Unmarshal([]byte(ownedPVCs), &nestedMap)
 		if err != nil {
 			util.CheckErr(err)
-			if returnOnError {
-				return err
-			}
 			continue
 		}
 
@@ -615,7 +453,7 @@ func updateStashedCMObjects(namespace string, activate bool, returnOnError bool,
 	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 	if err != nil {
 		util.CheckErr(err)
-		return err
+		return
 	}
 
 	for _, pvc := range pvcList.Items {
@@ -626,12 +464,8 @@ func updateStashedCMObjects(namespace string, activate bool, returnOnError bool,
 			_, err = core.Instance().UpdatePersistentVolumeClaim(&pvc)
 			if err != nil {
 				util.CheckErr(err)
-				if returnOnError {
-					return err
-				}
 				continue
 			}
 		}
 	}
-	return nil
 }

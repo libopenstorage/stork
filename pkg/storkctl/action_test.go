@@ -32,9 +32,19 @@ func TestPerformFailoverFailbackInvalidMigrationSchedule(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
+func TestPerformFailoverIncorrectCluster(t *testing.T) {
+	defer resetTest()
+	// when ms doesn't have static copy annotation
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
+	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "-n", "kube-system"}
+	expected := "error: ensure that `storkctl perform failover` is run in the cluster you want to failover to"
+	testCommon(t, cmdArgs, nil, expected, true)
+}
+
 func TestPerformFailoverFailbackWithInvalidNamespaces(t *testing.T) {
 	defer resetTest()
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--exclude-namespaces", "ns2", "--skip-deactivate-source", "-n", "kube-system"}
 	expected := "error: can provide only one of --include-namespaces or --exclude-namespaces values at once"
@@ -47,7 +57,7 @@ func TestPerformFailoverFailbackWithInvalidNamespaces(t *testing.T) {
 func TestPerformFailoverFailbackWithInvalidIncludeNamespaceList(t *testing.T) {
 	defer resetTest()
 	createClusterPair(t, "clusterPair1", "ns1", "async-dr")
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1"}, "ns1", false, t)
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1"}, "ns1", true, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "namespace1", "-n", "ns1"}
 	expected := "error: provided namespaces [namespace1] are not a subset of the namespaces being migrated by the given MigrationSchedule"
 	testCommon(t, cmdArgs, nil, expected, true)
@@ -59,7 +69,7 @@ func TestPerformFailoverFailbackWithInvalidIncludeNamespaceList(t *testing.T) {
 func TestPerformFailoverFailbackWithInvalidExcludeNamespaceList(t *testing.T) {
 	defer resetTest()
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--exclude-namespaces", "ns3", "-n", "kube-system"}
 	expected := "error: provided namespaces [ns3] are not a subset of the namespaces being migrated by the given MigrationSchedule"
 	testCommon(t, cmdArgs, nil, expected, true)
@@ -71,7 +81,7 @@ func TestPerformFailoverFailbackWithInvalidExcludeNamespaceList(t *testing.T) {
 func TestPerformFailoverFailbackMissingClusterPair(t *testing.T) {
 	defer resetTest()
 	mockTheTime()
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "-n", "kube-system"}
 	expected := "error: unable to find the ClusterPair clusterPair1 in the kube-system namespace"
 	testCommon(t, cmdArgs, nil, expected, true)
@@ -105,7 +115,7 @@ func TestPerformFailoverFailbackMissingClusterPair(t *testing.T) {
 func TestPerformFailoverFailbackWithIncludeNamespaceList(t *testing.T) {
 	defer resetTest()
 	mockTheTime()
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
@@ -132,7 +142,7 @@ func TestPerformFailoverFailbackWithExcludeNamespaceList(t *testing.T) {
 	defer resetTest()
 	mockTheTime()
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--exclude-namespaces", "ns1", "-n", "kube-system"}
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
@@ -158,7 +168,7 @@ func TestFailoverFailbackActionNameTruncation(t *testing.T) {
 	mockTheTime()
 	strWithLen253 := "utttaxvjedvxmjexmnapepwctfmjgydmidpcaantcarptudqufcpvideuttwbzgqxtexuceqnwnecxabuwaqzqypjxcvyubkwtpapziwkpdxzqfyjkyxnikfiauqvpktpkdurfzjrmyjzmhqhuqnpfjdnavfbkrrjqamtmjiphpdggcafmqugrmvqzwfchkukdeudbpxdzqqzeayjgcnphprurepjrqcwxbxrpnyhbdzkqveiukyzeghenfvp"
 	truncatedStr := strWithLen253[:validation.DNS1123SubdomainMaxLength-len("failover")-len("2024-01-01-000000")-2]
-	createTestMigrationSchedule(strWithLen253, "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", false, t)
+	createTestMigrationSchedule(strWithLen253, "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
 	cmdArgs := []string{"perform", "failover", "-m", strWithLen253, "--exclude-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
 	failoverActionName := fmt.Sprintf("failover-%v-2024-01-01-000000", truncatedStr)
