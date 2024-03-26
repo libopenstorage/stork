@@ -7989,7 +7989,7 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 }
 
 // AddNodeToVirtualMachine applies node selector to the virtual machine
-func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[string]string, ctx context1.Context) error {
+func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[string]string) error {
 	k8sKubevirt := kubevirt.Instance()
 
 	vm.Spec.Template.Spec.NodeSelector = nodeSelector

@@ -1030,11 +1030,12 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 		nodeSelectorNotPresent       map[string]string
 		nodeToBeUsed                 node.Node
 		namespaces                   []string
+		ctx                          context1.Context
+		err                          error
 	)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithNodeSelector", "Verify backup and restore of Kubevirt VMs with node selector specified", nil, 296426, ATrivedi, Q1FY25)
-
 		backupLocationMap = make(map[string]string)
 		providers = GetBackupProviders()
 		nodeSelectorPresent = make(map[string]string)
@@ -1062,6 +1063,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 		nodeSelectorPresent[fmt.Sprintf("node_selector_%s", RandomString(4))] = fmt.Sprintf("value_%s", RandomString(6))
 		// Generate random labels to be added to node and VM as node selector
 		nodeSelectorNotPresent[fmt.Sprintf("node_selector_%s", RandomString(4))] = fmt.Sprintf("value_%s", RandomString(6))
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 	})
 
 	It("Verify backup and restore of Kubevirt VMs with node selector specified", func() {
@@ -1079,8 +1082,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(6))
 				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
@@ -1096,9 +1097,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
@@ -1115,6 +1113,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 		})
 
 		Step("Getting the number of worker nodes in destination cluster and applying label to one of the worker nodes", func() {
+			log.InfoD("Getting the total number of worker nodes in destination cluster and applying label to one of the worker nodes")
 			defer func() {
 				log.InfoD("switching to source context")
 				err := SetSourceKubeConfig()
@@ -1137,8 +1136,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 		})
 
 		Step("Adding correct node selector to few virtual machine instances", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Adding correct node selector to few virtual machine instances")
 			// Adding node selector which is already added as label on destination to few virtual machines
 			for _, namespace := range namespacewithcorrectlabels {
 				vms, err := GetAllVMsInNamespace(namespace)
@@ -1146,15 +1144,14 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 					return
 				}
 				for _, vm := range vms {
-					err = AddNodeToVirtualMachine(vm, nodeSelectorPresent, ctx)
+					err = AddNodeToVirtualMachine(vm, nodeSelectorPresent)
 					log.FailOnError(err, "Unable to apply node selector to VM")
 				}
 			}
 		})
 
 		Step("Adding incorrect node selector to few virtual machine instances", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Adding incorrect node selector to few virtual machine instances")
 			// Adding node selector which is NOT added as label on destination to few virtual machines
 			for _, namespace := range namespacewithincorrectlabels {
 				vms, err := GetAllVMsInNamespace(namespace)
@@ -1162,7 +1159,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 					return
 				}
 				for _, vm := range vms {
-					err = AddNodeToVirtualMachine(vm, nodeSelectorNotPresent, ctx)
+					err = AddNodeToVirtualMachine(vm, nodeSelectorNotPresent)
 					log.FailOnError(err, "Unable to apply node selector to VM")
 				}
 			}
@@ -1170,8 +1167,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 
 		Step("Take backup of all namespaces with VMs having correct and incorrect labels", func() {
 			log.InfoD("Take backup of all namespaces with VMs having correct and incorrect labels")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
 			}
@@ -1185,8 +1180,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 
 		Step("Restoring backup with namespaces having virtual machines with correct and incorrect labels", func() {
 			log.InfoD("Restoring backup taken when VMs were in Running and Stopped state")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreAll := fmt.Sprintf("%s-%s", "auto-restore-all", RandomString(6))
 			restoreNames = append(restoreNames, restoreAll)
 			log.InfoD("Restoring the [%s] backup", backupNames[0])
@@ -1196,9 +1189,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 		})
 
 		Step("Validating restore for all Virtual Machine Instances expected to be running", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-
+			log.InfoD("Validating restore for all Virtual Machine Instances expected to be running")
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "failed to switch to context to destination cluster")
 
@@ -1212,7 +1203,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 			}
 			err = ValidateRestore(ctx, restoreNames[0], BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Restore Validation Failed for [%s]", restoreNames[0]))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Restore Validation for [%s]", restoreNames[0]))
 		})
 
 		Step("Verifying state and nodes for all restored Virtual Machine Instances", func() {
@@ -1221,9 +1212,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 				err := SetClusterContext("")
 				log.FailOnError(err, "failed to SetClusterContext to default cluster")
 			}()
-
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			log.Infof("Verifying nodes with correct labels")
 			for _, namespace := range namespacewithcorrectlabels {
@@ -1249,8 +1237,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
 		backupUid, err := Inst().Backup.GetBackupUID(ctx, backupNames[0], BackupOrgID)
 		log.FailOnError(err, "Unable to fetch backup UID")
 		// Delete backup to confirm that the user cannot delete the backup
