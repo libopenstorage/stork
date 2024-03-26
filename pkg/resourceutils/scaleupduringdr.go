@@ -276,7 +276,7 @@ func scaleUpStashCMResources(namespace string, config *rest.Config) error {
 		return err
 	}
 	configMaps, err := coreClient.ListConfigMap(namespace, metav1.ListOptions{LabelSelector: StashCRLabel})
-	if err!=nil{
+	if err != nil {
 		return err
 	}
 	ruleset := resourcecollector.GetDefaultRuleSet()
