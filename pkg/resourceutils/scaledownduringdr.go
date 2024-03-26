@@ -3,14 +3,14 @@ package resourceutils
 import (
 	"context"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/core"
-	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sdynamic "k8s.io/client-go/dynamic"
@@ -55,7 +55,7 @@ func ScaleDownGivenResources(namespaces []string, resourceMap map[string]map[met
 		if resources != nil {
 			for _, object := range resources.Items {
 				if _, present := resourceMap[ns][cronJobGVK][object.GetName()]; present {
-					err := scaleDownCronJob(dynamicClient, object)
+					err := scaleCronJob(dynamicClient, object, true)
 					if err != nil {
 						return err
 					}
@@ -138,9 +138,9 @@ func scaleDownApplicationResource(dynamicClient k8sdynamic.ResourceInterface, ob
 	return nil
 }
 
-func scaleDownCronJob(dynamicClient k8sdynamic.ResourceInterface, object unstructured.Unstructured) error {
+func scaleCronJob(dynamicClient k8sdynamic.ResourceInterface, object unstructured.Unstructured, suspendValue bool) error {
 	content := object.UnstructuredContent()
-	err := unstructured.SetNestedField(content, true, "spec", "suspend")
+	err := unstructured.SetNestedField(content, suspendValue, "spec", "suspend")
 	if err != nil {
 		return err
 	}
