@@ -209,8 +209,8 @@ type LogglyEvent struct {
 }
 
 func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
-	query := fmt.Sprintf("q=%s&from=%s&until=now", clusterUUID, fromTime)
-
+	// adds to the meteringData tag instead of http
+	query := fmt.Sprintf("q=tag:meteringData%%20json.cluster_uuid:%s&from=%s&until=now", clusterUUID, fromTime)
 	logglyToken, ok := os.LookupEnv(envLogglyAPIToken)
 	if !ok {
 		return nil, 0, fmt.Errorf("failed to fetch loggly api token")
@@ -218,6 +218,7 @@ func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 
 	headers := make(map[string]string)
 	headers["Authorization"] = fmt.Sprintf("Bearer %v", logglyToken)
+	log.InfoD("querying to  %v", fmt.Sprintf("%v?%v", logglyIterateUrl, query))
 	return rest.GET(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
 }
 
