@@ -77,7 +77,6 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -143,7 +142,10 @@ const (
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
-	PxLabelValue = "portworx"
+	PxLabelValue          = "portworx"
+	AutopilotLabelNameKey = "name"
+	AutopilotLabelValue   = "autopilot"
+	PortworxNotDeployed   = "portworx not deployed"
 )
 
 const (
@@ -1745,7 +1747,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 			return nil, err
 		}
 		return obj, nil
-	} else if specObj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+	} else if specObj, ok := spec.(*policyv1.PodDisruptionBudget); ok {
 		obj, err := k8sPolicy.GetPodDisruptionBudget(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
@@ -1918,11 +1920,13 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if volume.GetStorageProvisioner() != PortworxStrict {
-			if app.IsCSI {
-				obj.Provisioner = CsiProvisioner
-			} else {
-				obj.Provisioner = volume.GetStorageProvisioner()
+		if options.StorageProvisioner == "" {
+			if volume.GetStorageProvisioner() != PortworxStrict {
+				if app.IsCSI {
+					obj.Provisioner = CsiProvisioner
+				} else {
+					obj.Provisioner = volume.GetStorageProvisioner()
+				}
 			}
 		}
 		log.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
@@ -3841,27 +3845,20 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 
 			log.Infof("[%v] Validated PVC: %v, Namespace: %v", ctx.App.Key, obj.Name, obj.Namespace)
 
-			autopilotEnabled := false
+			autopilotEnabledOnPvc := false
 			if pvcAnnotationValue, ok := obj.Annotations[autopilotEnabledAnnotationKey]; ok {
-				autopilotEnabled, err = strconv.ParseBool(pvcAnnotationValue)
+				autopilotEnabledOnPvc, err = strconv.ParseBool(pvcAnnotationValue)
 				if err != nil {
 					return err
 				}
 			}
-			autopilotLabels := make(map[string]string)
-			autopilotLabels["name"] = "autopilot"
-			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
-			if err != nil {
-				return err
-			}
-			prometheusLabels := make(map[string]string)
-			prometheusLabels["app.kubernetes.io/name"] = "prometheus"
-			prometheusPods, err := k8sCore.GetPods(autopilotDefaultNamespace, prometheusLabels)
-			if err != nil {
-				return err
-			}
-			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
-			if autopilotEnabled {
+			if autopilotEnabledOnPvc {
+				isAutopilotPodAvailable, err := k.IsAutopilotEnabled()
+				if err != nil {
+					return err
+				} else if !isAutopilotPodAvailable {
+					return fmt.Errorf("Autopilot is not enabled")
+				}
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
 					return err
@@ -3878,7 +3875,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			} else {
-				log.Infof("[%v] Autopilot is not enabled, skipping PVC: %v size validation", ctx.App.Key, obj.Name)
+				log.Warnf("[%v] Autopilot is not enabled, PVC: %v size validation is not possible", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -4205,20 +4202,24 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	labels := pvc.Labels
 
 	if pvc.Spec.VolumeName != "" {
+		log.Debugf("pvc spec volume name [%s]", pvc.Spec.VolumeName)
 		// If this is a Pure volume, run some extra checks to get more information.
 		// Store them as labels as they are not applicable to all volume types.
 		driver, err := volume.Get(k.VolDriverName)
 		if err != nil {
+			log.Errorf("error getting volume driver name")
 			return nil, err
 		}
 
 		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
 		if err != nil {
+			log.Warnf("error inspecting volume [%s],err: %v", pvc.Spec.VolumeName, err)
 			if _, ok := err.(*errors.ErrNotSupported); !ok {
 				return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
 			}
 			// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
 		} else {
+			log.Debugf("inspected volume [%s] to add labels", inspectedVol.Id)
 			// If this is a Pure volume, run some extra checks to get more information.
 			// Store them as labels as they are not applicable to all volume types.
 			if labels == nil {
@@ -4251,6 +4252,7 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		Size:        uint64(pvcSize),
 		Raw:         isRaw,
 	}
+	log.Debugf("Adding vol [%s/%s] to volume list", vol.ID, vol.Name)
 	return append(vols, vol), nil
 }
 
@@ -4260,7 +4262,9 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			log.Debugf("Getting PVC [%s], namespace: [%s] for depolyment [%s]", obj.Name, obj.Namespace, ctx.App.Key)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			log.Debugf("got pvc object [%s]", pvcObj.Name)
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
@@ -4299,6 +4303,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				}
 			}
 
+			log.Debugf("Getting PVCs from namespace: [%s] for statefulset [%s]", obj.Namespace, obj.Name)
+
 			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToGetStorage{
@@ -4322,8 +4328,41 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				// check if the pvc has our VM as the owner
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
-					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
-						want = true
+					if ownerRef.Kind == vm.Kind {
+						if ownerRef.Name == vm.Name {
+							want = true
+						}
+					}
+					// If volume is still not found, try the datavolume for the virtual machine
+					if !want && ownerRef.Kind == "DataVolume" {
+						kvClient := k8sKubevirt.GetKubevirtClient()
+						dataVol, err := kvClient.CdiClient().CdiV1beta1().DataVolumes(vm.Namespace).Get(context.TODO(), ownerRef.Name, metav1.GetOptions{})
+						if err != nil && !k8serrors.IsNotFound(err) {
+							return nil, fmt.Errorf("error getting datavolume for vm: %s in namespace: %s. error: %v", vm.Name, vm.Namespace, err)
+						} else {
+							if dataVol != nil {
+								for _, ownerRef := range dataVol.OwnerReferences {
+									if ownerRef.Name == vm.Name {
+										want = true
+									}
+								}
+							}
+						}
+					}
+				}
+				// If volume is still not found, try the virt-launcher pod as well
+				if !want {
+					virtLauncherPodsList, err := k8sCore.GetPods(vm.Namespace, nil)
+					if err != nil {
+						return nil, fmt.Errorf("failed to get pods in namespace: %s: %w", vm.Namespace, err)
+					}
+					for _, virtLauncher := range virtLauncherPodsList.Items {
+						for _, ownerRef := range virtLauncher.OwnerReferences {
+							if ownerRef.Kind == "VirtualMachineInstance" && ownerRef.Name == vm.Name {
+								// since VMI name is same as VM name
+								want = true
+							}
+						}
 					}
 				}
 				if !want {
@@ -6274,7 +6313,7 @@ func (k *K8s) destroyPodDisruptionBudgetObjects(
 	spec interface{},
 	app *spec.AppSpec,
 ) error {
-	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+	if obj, ok := spec.(*policyv1.PodDisruptionBudget); ok {
 		err := k8sPolicy.DeletePodDisruptionBudget(obj.Name, obj.Namespace)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
@@ -6667,16 +6706,88 @@ func (k *K8s) addAnnotationsToPVC(pvc *corev1.PersistentVolumeClaim, annotations
 
 // GetAutopilotNamespace returns the autopilot namespace
 func (k *K8s) GetAutopilotNamespace() (string, error) {
+	var pods *corev1.PodList
+	var err error
+	var ns string
+	ns, err = k.GetPortworxNamespace()
+	if err != nil {
+		if strings.Contains(err.Error(), PortworxNotDeployed) {
+			//Return default AutopilotNamespace
+			return autopilotDefaultNamespace, nil
+		}
+		return "", fmt.Errorf("Failed to find portworx namespace %v", err)
+	}
+	log.Infof("Portworx installed on namespace %s", ns)
+	//Find out autopilot pod deployed namespace by label
+	pods, err = k8sCore.ListPods(map[string]string{
+		AutopilotLabelNameKey: AutopilotLabelValue,
+	})
+	if err != nil {
+		return ns, err
+	}
+	ns = ""
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
+	}
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("Failed to find autopilot namespace using pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
+	}
+	return ns, nil
+}
+
+// IsAutopilotEnabled returns the autopilot enabled or not
+func (k *K8s) IsAutopilotEnabled() (bool, error) {
+	var pods *corev1.PodList
+	var err error
+	//Find out autopilot pod deployed or not
+	pods, err = k8sCore.ListPods(map[string]string{
+		AutopilotLabelNameKey: AutopilotLabelValue,
+	})
+	if err != nil {
+		return false, err
+	}
+	if len(pods.Items) == 0 {
+		return false, fmt.Errorf("Failed to find autopilot pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
+	}
+	return true, nil
+}
+
+// GetPortworxNamespace returns namespace where Portworx is deployed based on the portworx-service location
+func (k *K8s) GetPortworxNamespace() (string, error) {
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
+
+	var namespaces []string
 	for _, svc := range allServices.Items {
 		if svc.Name == portworxServiceName {
-			return svc.Namespace, nil
+			namespaces = append(namespaces, svc.Namespace)
 		}
 	}
-	return autopilotDefaultNamespace, nil
+	if len(namespaces) > 0 {
+		// If portworx-service is deployed in 2 namespaces, return the none kube-system namespace
+		if len(namespaces) == 2 {
+			log.Debugf("Found [%s] service in 2 different namespaces %s", portworxServiceName, namespaces)
+			for _, namespace := range namespaces {
+				if namespace != "kube-system" {
+					log.Debugf("When Portworx deployed outside of [kube-system] namespace, it also creates [%s] service in the [kube-system] namespace as well as in the namespace it is deployed in", portworxServiceName)
+					log.Debugf("Will assume Portworx is deployed in [%s] namespace", namespace)
+					return namespace, nil
+				}
+			}
+		}
+
+		// If portworx-service is deployed in more than 2 namespaces, something is wrong here
+		if len(namespaces) > 2 {
+			return "", fmt.Errorf("Portworx service [%s] is deployed in too many namespaces %s, something is wrong here", portworxServiceName, namespaces)
+		}
+
+		// portworx-service is deployed in kube-system if only 1 namesapce is found
+		return namespaces[0], nil
+	}
+
+	return "", fmt.Errorf("%s on this K8S cluster", PortworxNotDeployed)
 }
 
 // CreateAutopilotRule creates the AutopilotRule object
