@@ -347,7 +347,8 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240304221553-5aaf2148a210
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
-	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240322120152-8440bba18190
+	//github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240322120152-8440bba18190
+	github.com/portworx/kdmp => ../kdmp
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240309000217-717ff5468196
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240326191238-71d38500911c
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
