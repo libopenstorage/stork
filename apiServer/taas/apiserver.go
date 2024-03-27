@@ -19,7 +19,7 @@ func main() {
 	router.GET("taas/storagenodes", utils.GetStorageNodes)
 	router.GET("taas/storagelessnodes", utils.GetStorageLessNodes)
 	router.POST("taas/collectsupport", utils.CollectSupport)
-	router.POST("taas/scheduleapps/:appName/:namespacePrefix", utils.ScheduleAppsAndValidate)
+	router.POST("taas/scheduleapps", utils.ScheduleAppsAndValidate)
 	router.POST("taas/deploypxagent", utils.ExecuteHelmCmd)
 	router.GET("taas/getclusterid/:namespace", utils.GetNamespaceID)
 	router.GET("taas/getclusternodestatus", utils.GetNodeStatus)
@@ -31,5 +31,7 @@ func main() {
 	router.GET("taas/getkubevirtvmsbynslabels", utils.GetVMsWithNamespaceLabels)
 	router.POST("taas/namespaces/addLabel", utils.AddNSLabel)
 	router.POST("taas/stork/upgrade", utils.UpgradeStork)
+	router.DELETE("taas/deletepod", utils.DeletePod)
+	router.GET("taas/getpxbackupnamespace", utils.GetPxBackupNamespace)
 	log.Fatal(router.Run(":8080"))
 }
