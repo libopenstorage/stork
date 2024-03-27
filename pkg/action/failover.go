@@ -155,7 +155,7 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 
 func (ac *ActionController) deactivateSourceDuringFailover(action *storkv1.Action) {
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
-		action.Status.Stage = storkv1.ActionStageLastMileMigration
+		action.Status.Stage = storkv1.ActionStageWaitAfterScaleDown
 		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
