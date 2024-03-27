@@ -2601,19 +2601,19 @@ func (d *portworx) GetDriveSet(n *node.Node) (*torpedovolume.DriveSet, error) {
 
 // WaitDriverUpOnNode waits for PX to be up on a given node
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
-	log.Debugf("Waiting for PX node to be up [%s]", n.Name)
+	log.Debugf("Waiting for PX node to be up [%s/%s]", n.Name, n.VolDriverNodeID)
 	t := func() (interface{}, bool, error) {
-		log.Debugf("Getting node info for node [%s]", n.Name)
+		log.Debugf("Getting node info for node [%s/%s]", n.Name, n.VolDriverNodeID)
 		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("failed to get node info [%s], Err: %v", n.Name, err),
+				Cause: fmt.Sprintf("failed to get node info [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err),
 			}
 		}
 
-		log.Debugf("Checking PX status on node [%s]", n.Name)
+		log.Debugf("Checking PX status on node [%s/%s]", n.Name, n.VolDriverNodeID)
 		pxNode := nodeInspectResponse.Node
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
@@ -2622,15 +2622,15 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
-					Cause: fmt.Sprintf("failed to get pxctl status on node [%s], Err: %v", n.Name, err),
+					Cause: fmt.Sprintf("failed to get pxctl status on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err),
 				}
 			}
 
 			if pxStatus != api.Status_STATUS_OK.String() {
 				return "", true, &ErrFailedToWaitForPx{
 					Node: n,
-					Cause: fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
-						n.Name, api.Status_STATUS_OK, pxStatus),
+					Cause: fmt.Sprintf("node [%s/%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+						n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxStatus),
 				}
 			}
 
@@ -2641,42 +2641,42 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			}
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
-					n.Name, api.Status_STATUS_OK, pxNode.Status),
+				Cause: fmt.Sprintf("node [%s/%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+					n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("PX cluster is usable but node [%s] status is not ok. Expected: %v Actual: %v",
-					n.Name, api.Status_STATUS_OK, pxNode.Status),
+				Cause: fmt.Sprintf("PX cluster is usable but node [%s/%s] status is not ok. Expected: %v Actual: %v",
+					n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
-		log.Infof("PX on node [%s] is now up. status: %v", n.Name, pxNode.Status)
+		log.Infof("PX on node [%s/%s] is now up. status: %v", n.Name, n.VolDriverNodeID, pxNode.Status)
 
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("PX failed to come up on node [%s], Err: %v", n.Name, err)
+		return fmt.Errorf("PX failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 
 	// Check if PX pod is up
-	log.Debugf("Checking if PX pod is up on node [%s]", n.Name)
+	log.Debugf("Checking if PX pod is up on node [%s/%s]", n.Name, n.VolDriverNodeID)
 	t = func() (interface{}, bool, error) {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("PX pod is not ready on node [%s] after %v", n.Name, timeout),
+				Cause: fmt.Sprintf("PX pod is not ready on node [%s/%s] after %v", n.Name, n.VolDriverNodeID, timeout),
 			}
 		}
 		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("PX pod failed to come up on node [%s], Err: %v", n.Name, err)
+		return fmt.Errorf("PX pod failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 
-	log.Debugf("PX is fully operational on node [%s]", n.Name)
+	log.Debugf("PX is fully operational on node [%s/%s]", n.Name, n.VolDriverNodeID)
 	return nil
 }
 
@@ -3930,6 +3930,7 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBSer
 }
 
 func (d *portworx) DecommissionNode(n *node.Node) error {
+
 	if err := k8sCore.AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
@@ -4013,7 +4014,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
-	if err = node.UpdateNode(*n); err != nil {
+	if err := node.UpdateNode(*n); err != nil {
 		return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 	}
 
@@ -4047,7 +4048,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	_, err = task.DoRetryWithTimeout(t, 25*time.Minute, 3*time.Minute)
 
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
@@ -4056,7 +4057,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	log.Infof("Successfully removed node [%s]", nodeResp.Node.Id)
+	log.Infof("Successfully removed node [%s/%s]", n.Name, n.VolDriverNodeID)
 	return nil
 }
 
@@ -5294,7 +5295,7 @@ func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, 
 		out, err = d.nodeDriver.RunCommandWithNoRetry(n, cmd, opts)
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+		return "", fmt.Errorf("failed to get pxctl command output. cause: %v", err)
 	}
 
 	// Delete context
