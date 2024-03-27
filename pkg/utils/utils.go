@@ -61,6 +61,8 @@ const (
 	PrefixRestore = "nfs-restore-resource"
 	// PrefixNFSRestorePVC prefix string that will be used for pvc creation during nfs vol restore
 	PrefixNFSRestorePVC = "nfs-restore-pvc"
+	// PrefixVMRestoreIncludeResourceMap prefix string that will be used for the kdmp restore job for VM includeresource map
+	PrefixVMRestoreIncludeResourceMap = "nfs-restore-vm-includeresource"
 
 	// KdmpAnnotationPrefix - KDMP annotation prefix
 	KdmpAnnotationPrefix = "kdmp.portworx.com/"
@@ -99,7 +101,8 @@ const (
 	// BackupLocationKind CR kind
 	BackupLocationKind = "BackupLocation"
 	// PXServiceName is the name of the portworx service in kubernetes
-	PXServiceName = "portworx-service"
+	PXServiceName                         = "portworx-service"
+	VMRestoreIncludeResourceMapAnnotation = "stork.libopenstorage.org/vm-includeresource"
 )
 
 // Map of ignored namespace to be backed up for faster lookout
