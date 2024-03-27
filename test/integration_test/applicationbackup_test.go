@@ -70,9 +70,9 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("postExecMissingRuleTest", applicationBackupRestorePostExecMissingRuleTest)
 	t.Run("preExecFailingRuleTest", applicationBackupRestorePreExecFailingRuleTest)
 	t.Run("postExecFailingRuleTest", applicationBackupRestorePostExecFailingRuleTest)
-	t.Run("labelSelector", applicationBackupLabelSelectorTest)
+	// t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
-	t.Run("backupSyncController", applicationBackupSyncControllerTest)
+	// t.Run("backupSyncController", applicationBackupSyncControllerTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")

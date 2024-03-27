@@ -37,7 +37,7 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       containers:
         - name: sv4test
-          image: portworx/sharedv4-test:torpedo
+          image: pure-artifactory.dev.purestorage.com/px-docker-dev-virtual/gejain/sharedv4-test:torpedo
           imagePullPolicy: Always
           command: ["python", "/app/fileio.py"]
           args: ["--lock", "--interval=0.25", "$(SHARED_FILE)", "$(LOCAL_FILE)"]
@@ -56,7 +56,7 @@ spec:
             - name: local-vol
               mountPath: /local-vol
         - name: sv4test-reader
-          image: portworx/sharedv4-test:torpedo
+          image: pure-artifactory.dev.purestorage.com/px-docker-dev-virtual/gejain/sharedv4-test:torpedo
           imagePullPolicy: Always
           command: ["python", "/app/reader.py"]
           # sleeping for 9 seconds from 3 * number of pods * seconds
