@@ -137,6 +137,7 @@ require (
 require (
 	github.com/IBM-Cloud/container-services-go-sdk v0.0.0-20240216115622-a311507b4b5b
 	github.com/IBM/go-sdk-core/v5 v5.15.3
+	github.com/IBM/vpc-go-sdk v0.48.0
 	github.com/aws/aws-sdk-go-v2 v1.25.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.148.2

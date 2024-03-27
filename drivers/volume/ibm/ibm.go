@@ -2,6 +2,8 @@ package ibm
 
 import (
 	"fmt"
+	ibmcore "github.com/IBM/go-sdk-core/v5/core"
+	"github.com/IBM/vpc-go-sdk/vpcv1"
 	"github.com/libopenstorage/openstorage/api"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
@@ -14,6 +16,7 @@ const (
 	IbmDriverName = "ibm"
 	// IbmServiceName is the name of the ibm storage driver implementation
 	IbmServiceName = "ibm-csi-controller"
+	serviceURL     = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 // Provisioners types of supported provisioners
@@ -93,6 +96,61 @@ func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 		Type:      "Function",
 		Operation: "InspectVolume()",
 	}
+}
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in ibm cloud
+func (i *ibm) DeleteSnapshotsForVolumes(volumeNames []string, apiKey string) error {
+
+	// Initialize the IBM Cloud VPC service client
+	authenticator := &ibmcore.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+
+	options := &vpcv1.VpcV1Options{
+		URL:           serviceURL,
+		Authenticator: authenticator,
+	}
+	vpcService, err := vpcv1.NewVpcV1(options)
+	if err != nil {
+		return fmt.Errorf("error creating VPC service client: %s", err)
+	}
+
+	// Iterate over each volume name
+	for _, volumeName := range volumeNames {
+		// Find the volume by name
+		findVolumeOptions := vpcService.NewListVolumesOptions()
+		findVolumeOptions.SetName(volumeName)
+		volumes, _, err := vpcService.ListVolumes(findVolumeOptions)
+		log.Infof("volumes from the vpc service %s", volumes)
+		if err != nil {
+			return fmt.Errorf("error finding volume '%s': %s", volumeName, err)
+		}
+		if len(volumes.Volumes) == 0 {
+			continue
+		}
+		volumeID := *volumes.Volumes[0].ID
+
+		// List all snapshots
+		snapshots, _, err := vpcService.ListSnapshots(vpcService.NewListSnapshotsOptions())
+		if err != nil {
+			return fmt.Errorf("error listing snapshots: %s", err)
+		}
+		log.Infof("volumes from the vpc service %s", snapshots)
+		// Delete snapshots associated with the volume
+		for _, snapshot := range snapshots.Snapshots {
+			if *snapshot.SourceVolume.ID == volumeID {
+				// Snapshot belongs to the specified volume, delete it
+				snapshotID := *snapshot.ID
+				snapshotName := *snapshot.Name
+				log.Infof("Deleting snapshot %s associated with volume %s", snapshotName, volumeName)
+				_, err = vpcService.DeleteSnapshot(vpcService.NewDeleteSnapshotOptions(snapshotID))
+				if err != nil {
+					return fmt.Errorf("error deleting snapshot '%s': %s", snapshotName, err)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func init() {

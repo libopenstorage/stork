@@ -4396,6 +4396,12 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snapv
 	return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
 }
 
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes
+func (d *pure) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func (d *portworx) getTokenForVolume(name string, params map[string]string) string {
 	token := d.token
 	var volSecret string
@@ -5973,6 +5979,12 @@ func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[strin
 	}
 	return nil
 
+}
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in google cloud
+func (d *portworx) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
+	return nil
 }
 
 // GetPoolLabelValue returns values of labels

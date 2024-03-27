@@ -353,6 +353,116 @@ var (
 	dataAfterBackupSuffix = "-after-backup"
 )
 
+// CloudProviderProvisionerSnapshotMap maps cloud provider names to their corresponding sub-maps containing provisioner-snapshot class mappings
+// TODO: Need to update the map for gke,aks and aws
+var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
+	snapshotClasses []string // List of snapshot classes for the provisioner
+	defaultSnapshot string   // Default snapshot class for the provisioner
+	appList         []string
+}{
+	"gke": {
+		"pd.csi.storage.gke.io": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "gke-snapshot-class-1",
+			appList:         []string{"postgres-gke-csi"},
+		},
+	},
+	"ibm": {
+		"vpc.block.csi.ibm.io": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "ibmc-vpcblock-snapshot",
+			appList:         []string{"postgres-csi"},
+		},
+	},
+	"aws": {
+		"aws-provisioner": {
+			snapshotClasses: []string{"aws-snapshot-class", "aws-snapshot-class-2"},
+			defaultSnapshot: "aws-snapshot-class",
+			appList:         []string{},
+		},
+	},
+	"aks": {
+		"aks-provisioner": {
+			snapshotClasses: []string{"aks-snapshot-class", "aks-snapshot-class-2"},
+			defaultSnapshot: "aks-snapshot-class",
+			appList:         []string{},
+		},
+	},
+	"openshift": {
+		"cephfs-csi": {
+			snapshotClasses: []string{"ocs-storagecluster-cephfsplugin-snapclass"},
+			defaultSnapshot: "ocs-storagecluster-cephfsplugin-snapclass",
+			appList:         []string{"postgres-cephfs-csi"},
+		}, "rbd-csi": {
+			snapshotClasses: []string{"ocs-storagecluster-rbdplugin-snapclass"},
+			defaultSnapshot: "ocs-storagecluster-rbdplugin-snapclass",
+			appList:         []string{"postgres-rbd-csi"},
+		},
+	},
+}
+
+// GetProvisionerDefaultSnapshotMap returns a map with provisioner to default volumeSnapshotClass mappings for the specified cloud provider
+func GetProvisionerDefaultSnapshotMap(cloudProvider string) map[string]string {
+	provisionerSnapshotMap := make(map[string]string)
+	provisionerMap, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
+	if !ok {
+		return provisionerSnapshotMap
+	}
+
+	for provisioner, info := range provisionerMap {
+		if info.defaultSnapshot != "" {
+			provisionerSnapshotMap[provisioner] = info.defaultSnapshot
+		}
+	}
+
+	return provisionerSnapshotMap
+}
+
+// GetProvisionerSnapshotClassesMap returns a map of provisioners with their corresponding list of SnapshotClasses for the specified provider
+func GetProvisionerSnapshotClassesMap(cloudProvider string) map[string]string {
+	provisionerSnapshotClasses := make(map[string]string)
+
+	// Check if the provider exists in the provisioner map
+	providerProvisioners, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
+	if !ok {
+		return provisionerSnapshotClasses
+	}
+
+	// Iterate over the provisioners for the specified provider
+	for provisioner, info := range providerProvisioners {
+		if len(info.snapshotClasses) > 0 {
+			// Get a random index
+			randomIndex := rand.Intn(len(info.snapshotClasses))
+			provisionerSnapshotClasses[provisioner] = info.snapshotClasses[randomIndex]
+		}
+	}
+
+	return provisionerSnapshotClasses
+}
+
+// GetApplicationSpecForProvisioner returns application specification for the specified provisioner
+func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string) ([]string, error) {
+	//var speclist []string
+
+	provisionerInfo, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
+	if !ok {
+		return []string{}, fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
+	}
+
+	info, ok := provisionerInfo[provisionerName]
+	if !ok {
+		return []string{}, fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
+	}
+
+	/*	for _, appName := range info.appList {
+		if strings.Contains(appName, applicationName) {
+			speclist = append(speclist, appName)
+		}
+	}*/
+
+	return info.appList, nil
+}
+
 // Set default provider as aws
 func GetBackupProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")

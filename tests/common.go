@@ -366,6 +366,7 @@ const (
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
+	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 const (
@@ -1950,6 +1951,33 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
+// ScheduleApplicationsWithScheduleOptions schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		AppKeys:            []string{appSpec},
+		StorageProvisioner: provisioner,
+	}
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
 // ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
 // the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
@@ -3356,7 +3384,7 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	provider := getClusterProvider()
+	provider := GetClusterProvider()
 	if clusterConfigPath != "" {
 		switch provider {
 		case drivers.ProviderGke:
@@ -10279,7 +10307,7 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 }
 
 // Set default provider as aws
-func getClusterProvider() string {
+func GetClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
 	return clusterProvider
 }
