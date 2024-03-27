@@ -97,10 +97,7 @@ func (c *Client) SetConfig(cfg *rest.Config) {
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient(namespace string) error {
-	if c.V1PipelineClient != nil || c.V1TaskClient != nil || c.V1TaskRunClient != nil || c.V1PipelineRunClient != nil {
-		return nil
-	}
-
+	// As the client needs to be intialized for each namespace created and passed
 	return c.setClient(namespace)
 }
 
@@ -132,6 +129,7 @@ func (c *Client) loadClientFromServiceAccount(namespace string) error {
 	return c.loadClient(namespace)
 }
 
+// loadClientFromKubeconfig loads a k8s client from a kubeconfig file
 func (c *Client) loadClientFromKubeconfig(kubeconfig string, namespace string) error {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -142,6 +140,7 @@ func (c *Client) loadClientFromKubeconfig(kubeconfig string, namespace string) e
 	return c.loadClient(namespace)
 }
 
+// loadClient loads the k8s client
 func (c *Client) loadClient(namespace string) error {
 	if c.config == nil {
 		return fmt.Errorf("rest config is not provided")

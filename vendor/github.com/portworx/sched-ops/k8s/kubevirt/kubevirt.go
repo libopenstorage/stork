@@ -138,6 +138,7 @@ func (c *Client) loadClientFromServiceAccount() error {
 	return c.loadClient()
 }
 
+// loadClientFromKubeconfig loads a k8s client from a kubeconfig file
 func (c *Client) loadClientFromKubeconfig(kubeconfig string) error {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -148,6 +149,7 @@ func (c *Client) loadClientFromKubeconfig(kubeconfig string) error {
 	return c.loadClient()
 }
 
+// loadClient loads the k8s client
 func (c *Client) loadClient() error {
 	if c.config == nil {
 		return fmt.Errorf("rest config is not provided")
@@ -166,6 +168,7 @@ func (c *Client) loadClient() error {
 	return nil
 }
 
+// GetKubevirtClient get kubevirt client
 func (c *Client) GetKubevirtClient() kubecli.KubevirtClient {
 	if err := c.initClient(); err != nil {
 		return nil
