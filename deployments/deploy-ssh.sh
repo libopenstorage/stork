@@ -404,24 +404,6 @@ fi
 
 echo '' > torpedo.yaml
 
-# If these are passed, we will create a docker config secret to use to pull images
-if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
-  echo "Adding Docker registry secret ..."
-  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
-  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"auth\":\"$auth\"}}}" | base64 -w 0)
-  cat >> torpedo.yaml <<EOF
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: torpedo
-type: kubernetes.io/dockerconfigjson
-data:
-  .dockerconfigjson: $secret
-
-EOF
-  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
-fi
 
 cat >> torpedo.yaml <<EOF
 ---
@@ -794,6 +776,25 @@ spec:
 
 
 EOF
+
+# If these are passed, we will create a docker config secret to use to pull images
+if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
+  echo "Adding Docker registry secret ..."
+  auth=$(echo -n "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
+  secret=$(echo -n "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"auth\":\"$auth\"}}}" | base64 -w 0)
+  cat >> torpedo.yaml <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: torpedo
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: $secret
+
+EOF
+  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
+fi
 
 cat torpedo.yaml
 

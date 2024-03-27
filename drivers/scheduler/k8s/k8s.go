@@ -8144,9 +8144,7 @@ func (k *K8s) createDockerRegistrySecret(secretName, secretNamespace string) (*v
 	if dockerServer != "" && dockerUsername != "" && dockerPassword != "" {
 		auths.AuthConfigs = map[string]docker_types.AuthConfig{
 			dockerServer: {
-				Username: dockerUsername,
-				Password: dockerPassword,
-				Auth:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
+				Auth: base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
 			},
 		}
 		authConfigsEnc, _ := json.Marshal(auths)
@@ -8156,18 +8154,18 @@ func (k *K8s) createDockerRegistrySecret(secretName, secretNamespace string) (*v
 				Name:      secretName,
 				Namespace: secretNamespace,
 			},
-			Type: "docker-registry",
+			Type: v1.SecretTypeDockerConfigJson,
 			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
 		}
 		secret, err := k8sCore.CreateSecret(secretObj)
 		if k8serrors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
-				log.Infof("Using existing Docker regisrty secret: %v", secret.Name)
+				log.Infof("Using existing Docker registry secret: %v", secret.Name)
 				return secret, nil
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Docker registry secret: %s. Err: %v", secretName, err)
+			return nil, fmt.Errorf("failed to create Docker registry secret: %s in namespace: %s . Err: %v", secretName, secretNamespace, err)
 		}
 		log.Infof("Created Docker registry secret: %s", secret.Name)
 		return secret, nil
