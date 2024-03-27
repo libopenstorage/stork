@@ -730,14 +730,36 @@ func (c *Controller) stageSnapshotScheduled(ctx context.Context, dataExport *kdm
 		return true, c.updateStatus(dataExport, data)
 	}
 
+	if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
+		// set to the next stage
+		data := updateDataExportDetail{
+			stage:  kdmpapi.DataExportStageCleanup,
+			status: dataExport.Status.Status,
+			reason: dataExport.Status.Reason,
+		}
+		return false, c.updateStatus(dataExport, data)
+	}
+
 	snapshotDriverName, err := c.getSnapshotDriverName(dataExport)
 	if err != nil {
-		return false, fmt.Errorf("failed to get snapshot driver name: %v", err)
+		msg := fmt.Sprintf("failed to get snapshot driver name: %v", err)
+		logrus.Errorf("%v for DE: %v", msg, dataExport.Name)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 
 	snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
 	if err != nil {
-		return false, fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+		msg := fmt.Sprintf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
+		logrus.Errorf("%v for DE: %v", msg, dataExport.Name)
+		data := updateDataExportDetail{
+			status: kdmpapi.DataExportStatusFailed,
+			reason: msg,
+		}
+		return false, c.updateStatus(dataExport, data)
 	}
 	// This will create a unique secret per PVC being backed up
 	// Create secret in source ns because in case of multi ns backup
@@ -832,7 +854,7 @@ func (c *Controller) getSnapshotDriverName(dataExport *kdmpapi.DataExport) (stri
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return "", nil
 	}
-	return "", fmt.Errorf("did not find any supported snapshot driver for snapshot storage class %s", dataExport.Spec.SnapshotStorageClass)
+	return "", err
 }
 
 func (c *Controller) stageSnapshotInProgress(ctx context.Context, dataExport *kdmpapi.DataExport) (bool, error) {
@@ -1441,40 +1463,40 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		}
 	} else if hasSnapshotStage(de) {
 		snapshotDriverName, err := c.getSnapshotDriverName(de)
-		if err != nil {
+		if err != nil && !k8sErrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get snapshot driver name: %v", err)
-		}
-
-		snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
-		if err != nil {
-			return fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
-		}
-		if de.Status.SnapshotPVCName != "" && de.Status.SnapshotPVCNamespace != "" {
-			if err := cleanupJobBoundResources(de.Status.SnapshotPVCName, de.Status.SnapshotPVCNamespace); err != nil {
-				return fmt.Errorf("cleaning up of bound job resources failed: %v", err)
+		} else if err == nil {
+			snapshotDriver, err := c.snapshotter.Driver(snapshotDriverName)
+			if err != nil {
+				return fmt.Errorf("failed to get snapshot driver for %v: %v", snapshotDriverName, err)
 			}
-			if err := core.Instance().DeletePersistentVolumeClaim(de.Status.SnapshotPVCName, de.Status.SnapshotPVCNamespace); err != nil && !k8sErrors.IsNotFound(err) {
-				return fmt.Errorf("delete %s/%s pvc: %s", de.Status.SnapshotPVCNamespace, de.Status.SnapshotPVCName, err)
+			if de.Status.SnapshotPVCName != "" && de.Status.SnapshotPVCNamespace != "" {
+				if err := cleanupJobBoundResources(de.Status.SnapshotPVCName, de.Status.SnapshotPVCNamespace); err != nil {
+					return fmt.Errorf("cleaning up of bound job resources failed: %v", err)
+				}
+				if err := core.Instance().DeletePersistentVolumeClaim(de.Status.SnapshotPVCName, de.Status.SnapshotPVCNamespace); err != nil && !k8sErrors.IsNotFound(err) {
+					return fmt.Errorf("delete %s/%s pvc: %s", de.Status.SnapshotPVCNamespace, de.Status.SnapshotPVCName, err)
+				}
 			}
-		}
-		bl, err := checkBackupLocation(de.Spec.Destination)
-		if err != nil {
-			msg := fmt.Sprintf("backuplocation fetch error for %s: %v", de.Spec.Destination.Name, err)
-			logrus.Errorf(msg)
-		} else {
-			// In the case of NFS backuplocation, we will not delete vs and vsc after volumestage as
-			// we will need to upload the snapshot.json  during the resource stage and then we will delete it.
-			// But if the failure happens in the volume stage, we will not go to the resource stage.
-			// So in the case of failure, we will cleanup the vs and vsc in the case of NFS backuplocation in volume cleanupstage itself.
-			if bl.Location.Type == storkapi.BackupLocationNFS && de.Status.Status == kdmpapi.DataExportStatusSuccessful {
-				// In the case of success, we will delete the vs and vsc during resource stage.
-				logrus.Infof("not deleting the vs and vsc in volume stage")
+			bl, err := checkBackupLocation(de.Spec.Destination)
+			if err != nil {
+				msg := fmt.Sprintf("backuplocation fetch error for %s: %v", de.Spec.Destination.Name, err)
+				logrus.Errorf(msg)
 			} else {
-				err = snapshotDriver.DeleteSnapshot(de.Status.VolumeSnapshot, de.Status.SnapshotNamespace, true)
-				msg := fmt.Sprintf("failed in removing local volume snapshot CRs for %s/%s: %v", de.Status.VolumeSnapshot, de.Status.SnapshotNamespace, err)
-				if err != nil {
-					logrus.Errorf(msg)
-					return fmt.Errorf(msg)
+				// In the case of NFS backuplocation, we will not delete vs and vsc after volumestage as
+				// we will need to upload the snapshot.json  during the resource stage and then we will delete it.
+				// But if the failure happens in the volume stage, we will not go to the resource stage.
+				// So in the case of failure, we will cleanup the vs and vsc in the case of NFS backuplocation in volume cleanupstage itself.
+				if bl.Location.Type == storkapi.BackupLocationNFS && de.Status.Status == kdmpapi.DataExportStatusSuccessful {
+					// In the case of success, we will delete the vs and vsc during resource stage.
+					logrus.Infof("not deleting the vs and vsc in volume stage")
+				} else {
+					err = snapshotDriver.DeleteSnapshot(de.Status.VolumeSnapshot, de.Status.SnapshotNamespace, true)
+					msg := fmt.Sprintf("failed in removing local volume snapshot CRs for %s/%s: %v", de.Status.VolumeSnapshot, de.Status.SnapshotNamespace, err)
+					if err != nil {
+						logrus.Errorf(msg)
+						return fmt.Errorf(msg)
+					}
 				}
 			}
 		}
