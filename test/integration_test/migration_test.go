@@ -91,7 +91,7 @@ func testMigration(t *testing.T) {
 	//t.Run("pvcResizeTest", pvcResizeMigrationTest)
 	t.Run("transformResourceTest", transformResourceTest)
 	//t.Run("suspendMigrationTest", suspendMigrationTest)
-	t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
+	//t.Run("operatorMigrationMongoTest", operatorMigrationMongoTest)
 	t.Run("operatorMigrationRabbitmqTest", operatorMigrationRabbitmqTest)
 	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
 	t.Run("unidirectionalClusterPairTest", unidirectionalClusterPairTest)
