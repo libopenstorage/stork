@@ -3,13 +3,14 @@ package tests
 import (
 	context1 "context"
 	"fmt"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
@@ -2551,6 +2552,284 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			err := DeleteRule(ruleName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
 		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase verifies scheduled backup status when Kubevirt VMs are deleted and recreated from namespace in between schedules.
+var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[KubevirtScheduledVMDelete]...), func() {
+	var (
+		backupPreUpgrade               string
+		scheduledAppContexts           []*scheduler.Context
+		bkpNamespaces                  = make([]string, 0)
+		sourceClusterUid               string
+		cloudCredName                  string
+		cloudCredUID                   string
+		backupLocationUID              string
+		backupLocationName             string
+		scheduleNames                  []string
+		nonLabelScheduleName           string
+		labelScheduleName              string
+		backupLocationMap              = make(map[string]string)
+		providers                      []string
+		labelSelectors                 = make(map[string]string)
+		nsLabelsMap                    = make(map[string]string)
+		nsLabelString                  string
+		periodicSchedulePolicyName     string
+		periodicSchedulePolicyUid      string
+		periodicSchedulePolicyInterval int64
+		labelSchNamespaceMap           = make(map[string]string)
+		nonLabelSchNamespaceMap        = make(map[string]string)
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtScheduledVMDelete", "verifies scheduled backup status when Kubevirt VMs are deleted and recreated from namespace in between schedules", nil, 296428, Ak, Q1FY25)
+
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = GetBackupProviders()
+		log.InfoD("scheduling applications")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("src-%s-%d", TaskNamePrefix, i)
+			namespace := fmt.Sprintf("test-vm-namespace-%s", taskName)
+			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			for index, appCtx := range appContexts {
+				appName := Inst().AppList[index]
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				log.InfoD("Scheduled VM [%s] in source cluster in namespace [%s]", appName, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("verifies scheduled backup status when Kubevirt VMs are deleted and recreated in a namespace.", func() {
+
+		Step("Validating applications", func() {
+			// TODO: Add Data validation for this test case
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Adding labels to namespaces", func() {
+			log.InfoD("Adding labels to namespaces")
+			nsLabelsMap = GenerateRandomLabels(20)
+			err := AddLabelsToMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
+		})
+		Step("Generating namespace label string from label map for namespaces", func() {
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelString = MapToKeyValueString(nsLabelsMap)
+			log.Infof("label string for namespaces %s", nsLabelString)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%s", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location - %s", backupLocationName))
+			}
+		})
+
+		Step("Create schedule policy for backup schedules", func() {
+			log.InfoD("Create schedule policy for backup schedules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
+			periodicSchedulePolicyUid = uuid.New()
+			periodicSchedulePolicyInterval = int64(15)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
+
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusters := []string{SourceClusterName, DestinationClusterName}
+			for _, c := range clusters {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, c, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", c))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", c))
+			}
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+		})
+
+		Step("Taking first schedule backup of kubevirt VMs without namespace label", func() {
+			log.InfoD("Taking first schedule backup of kubevirt VMs without namespace label")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				vms, err := GetAllVMsInNamespace(namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching VMs from namespace[%s]", namespace))
+				nonLabelScheduleName = fmt.Sprintf("%s-non-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				_, err = CreateVMScheduledBackupWithValidation(nonLabelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+					labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", backupPreUpgrade))
+				nonLabelSchNamespaceMap[namespace] = nonLabelScheduleName
+				scheduleNames = append(scheduleNames, nonLabelScheduleName)
+			}
+		})
+
+		Step("Taking first schedule backup of kubevirt VMs with namespace label", func() {
+			log.InfoD("Taking first schedule backup of kubevirt VMs with namespace label")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range bkpNamespaces {
+				vms, err := GetAllVMsInNamespace(namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching VMs from namespace[%s]", namespace))
+				labelScheduleName = fmt.Sprintf("%s-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				_, err = CreateVMScheduleBackupWithNamespaceLabelWithValidation(ctx, labelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+					labelSelectors, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] with namespace label", labelScheduleName))
+				labelSchNamespaceMap[namespace] = labelScheduleName
+				scheduleNames = append(scheduleNames, labelScheduleName)
+			}
+		})
+
+		Step("Deleting the kubevirt VMs from the namespace", func() {
+			log.InfoD("Deleting the kubevirt VMs from the namespace")
+			for _, namespace := range bkpNamespaces {
+				err := DeleteAllVMsInNamespace(namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of kubevirt VMs from the namespace [%s]", namespace))
+			}
+			log.InfoD("Deleting remaining kubevirt VM related specs from the namespace")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+		})
+
+		Step("Verify next namespace labelled and non labelled scheduled backup is success state after VM deletion", func() {
+			log.InfoD("Verify next namespace labelled and non labelled scheduled backup is success state after VM deletion")
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			wg.Add(2)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for _, namespace := range bkpNamespaces {
+					schBackupAfterVMDeletion, err := GetNextScheduleBackupName(nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next non labelled schedule backup [%s] after VM deletion ", schBackupAfterVMDeletion))
+					bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(schBackupAfterVMDeletion, ctx, BackupOrgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] status  ", schBackupAfterVMDeletion))
+					if bkpStatus == api.BackupInfo_StatusInfo_Success {
+						log.Infof(fmt.Sprintf("The backup [%s] succeeded when the schedules VMs were deleted from namespace", schBackupAfterVMDeletion))
+					} else {
+						err := fmt.Errorf("The backup [%s] is in failed state when expected to success , Reason [%s]", schBackupAfterVMDeletion, bkpReason)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of non labelled scheduled backup [%s]", schBackupAfterVMDeletion))
+					}
+				}
+
+			}()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for _, namespace := range bkpNamespaces {
+					labelledSchBackupAfterVMDeletion, err := GetNextScheduleBackupName(labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next labelled schedule [%s] backup after VM deletion ", labelledSchBackupAfterVMDeletion))
+					bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(labelledSchBackupAfterVMDeletion, ctx, BackupOrgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] status  ", labelledSchBackupAfterVMDeletion))
+					if bkpStatus == api.BackupInfo_StatusInfo_Success {
+						log.Infof("The backup is success state for labelled scheduled backup [%s] after VM delete")
+					} else {
+						err := fmt.Errorf("The backup failed for labelled scheduled backup [%s] after VM delete : Reason [%s]", labelledSchBackupAfterVMDeletion, bkpReason)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of labelled scheduled backup [%s]", labelledSchBackupAfterVMDeletion))
+					}
+				}
+
+			}()
+			wg.Wait()
+		})
+
+		Step("Recreating the VM deleted with same name in same namespace", func() {
+			log.InfoD("Recreating the VM deleted with same name in same namespace")
+			log.InfoD("scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("src-%s-%d", TaskNamePrefix, i)
+				namespace := fmt.Sprintf("test-vm-namespace-%s", taskName)
+				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				for index, appCtx := range appContexts {
+					appName := Inst().AppList[index]
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+					log.InfoD("Scheduled VM [%s] in source cluster in namespace [%s]", appName, namespace)
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				}
+			}
+		})
+
+		Step("Validating applications", func() {
+			// TODO: Add Data validation for this test case
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+		Step("Verify the recreated VM is included in next namespace labelled and non labelled scheduled backup", func() {
+			log.InfoD("Verify the recreated VM is included in next namespace labelled nd non labelled scheduled backup")
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			wg.Add(2)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for _, namespace := range bkpNamespaces {
+					schBackupAfterVMcreation, err := GetNextScheduleBackupName(nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next schedule backup [%s] after VM creation ", schBackupAfterVMcreation))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = GetUpdatedKubeVirtVMSpecForBackup(appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of getting the updated kubevirt VM context"))
+					err = BackupSuccessCheckWithValidation(ctx, schBackupAfterVMcreation, appContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success of next VM schedule backup [%s] of schedule %s", schBackupAfterVMcreation, nonLabelSchNamespaceMap[namespace]))
+				}
+
+			}()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for _, namespace := range bkpNamespaces {
+					labelledSchBackupAfterVMcreation, err := GetNextScheduleBackupName(labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next labelled schedule [%s] backup after VM creation ", labelledSchBackupAfterVMcreation))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = GetUpdatedKubeVirtVMSpecForBackup(appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of getting the updated kubevirt VM context"))
+					err = BackupSuccessCheckWithValidation(ctx, labelledSchBackupAfterVMcreation, appContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success of next VM labelled schedule backup [%s] of schedule %s", labelledSchBackupAfterVMcreation, labelScheduleName))
+				}
+			}()
+			wg.Wait()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		for _, scheduleName := range scheduleNames {
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		log.Infof("Deleting backup schedule policy")
+		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{periodicSchedulePolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting schedule policy - %s", periodicSchedulePolicyName))
+		log.Info("Destroying scheduled apps on source cluster")
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
