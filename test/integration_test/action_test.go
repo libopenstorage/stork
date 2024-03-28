@@ -8,11 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAction(t *testing.T) {
@@ -74,9 +73,9 @@ func testFailoverWithoutMigration(t *testing.T) {
 
 	executeOnDestination(t, func() {
 		_, err := createActionCR(t, actionName, namespaces[0])
-		require.Error(t, err, "create action CR should have errored out")
+		log.FailOnNoError(t, err, "create action CR should have errored out")
 		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/4, defaultWaitInterval/4)
-		require.Error(t, err, "did not expect app to start")
+		log.FailOnNoError(t, err, "did not expect app to start")
 	})
 }
 
@@ -137,7 +136,7 @@ func deactivateClusterDomainAndTriggerFailover(
 	isFailoverSuccessful bool,
 ) {
 	clusterDomains, err := storkVolumeDriver.GetClusterDomains()
-	require.NoError(t, err)
+	log.FailOnError(t, err, "failed to get cluster domains")
 	updateClusterDomain(t, clusterDomains, false, true)
 	defer func() {
 		updateClusterDomain(t, clusterDomains, true, true)
@@ -170,28 +169,28 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 	validateMigrationOnSrc(t, migrationName, namespaces)
 
 	scaleFactor := scaleDownApps(t, ctxs)
-	logrus.Infof("scaleFactor: %v", scaleFactor)
+	log.InfoD("scaleFactor: %v", scaleFactor)
 
 	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespaces[0], map[string]string{})
-	require.NoError(t, err, "Error getting pvcList")
-	logrus.Infof("pvc: %v", pvcList.Items[0].Name)
+	log.FailOnError(t, err, "Error getting pvcList")
+	log.InfoD("pvc: %v", pvcList.Items[0].Name)
 
 	pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvcList.Items[0])
-	require.NoError(t, err, "Error getting volume for pvc")
-	logrus.Infof("pvName: %v", pvName)
+	log.FailOnError(t, err, "Error getting volume for pvc")
+	log.InfoD("pvName: %v", pvName)
 
 	volume, err := volumeDriver.InspectVolume(pvName)
-	require.NoError(t, err, "Error getting inspect volume for %v", pvName)
+	log.FailOnError(t, err, "Error getting inspect volume for %v", pvName)
 
 	nearSyncTargetMid, ok := volume.RuntimeState[0].RuntimeState["ReplicaSetNearSyncMid"]
-	require.Equal(t, true, ok)
-	logrus.Infof("nearSyncTargetMid: %v", nearSyncTargetMid)
+	Dash.VerifyFatal(t, true, ok, "ReplicaSetNearSyncMid found in volume runtime state")
+	log.InfoD("nearSyncTargetMid: %v", nearSyncTargetMid)
 
 	funcRestartNode := func() {
 		mapNodeIDToNode := node.GetNodesByVoDriverNodeID()
-		logrus.Infof("mapNodeIDToNode: %v", mapNodeIDToNode)
+		log.InfoD("mapNodeIDToNode: %v", mapNodeIDToNode)
 		nodeObj, _ := mapNodeIDToNode[nearSyncTargetMid]
-		logrus.Infof("node: %v", nodeObj)
+		log.InfoD("node: %v", nodeObj)
 
 		_, err = nodeDriver.RunCommand(
 			nodeObj,
@@ -201,17 +200,17 @@ func testFailoverForFailedPromoteVolume(t *testing.T) {
 				TimeBeforeRetry: 5 * time.Second,
 			},
 		)
-		logrus.Infof("run command on node: %v", nodeObj.Name)
-		require.NoError(t, err)
+		log.InfoD("run command on node: %v", nodeObj.Name)
+		log.FailOnError(t, err, "Error running command on node: %v", nodeObj.Name)
 
 		err = volumeDriver.StopDriver([]node.Node{nodeObj}, false, nil)
-		require.NoError(t, err)
+		log.FailOnError(t, err, "Error stopping volume driver on node: %v", nodeObj.Name)
 
 		startFailover(t, actionName, namespaces)
 		validateFailover(t, actionName, namespaces, preMigrationCtxs, false)
 
 		err = volumeDriver.StartDriver(nodeObj)
-		require.NoError(t, err)
+		log.FailOnError(t, err, "Error starting volume driver on node: %v", nodeObj.Name)
 	}
 	executeOnDestination(t, funcRestartNode)
 }
@@ -223,8 +222,8 @@ func startFailover(
 ) {
 	for _, namespace := range namespaces {
 		_, err := createActionCR(t, actionName, namespace)
-		require.NoError(t, err, "error creating Action CR")
-		logrus.Infof("Created Action CR")
+		log.FailOnError(t, err, "error creating Action CR")
+		log.InfoD("Created Action CR")
 	}
 }
 
@@ -238,10 +237,10 @@ func validateFailover(
 	for idx, ctx := range preMigrationCtxs {
 		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 		if isSuccessful {
-			require.NoError(t, err, "error waiting for app to get to running state")
+			log.FailOnError(t, err, "error waiting for app to get to running state")
 			validateActionCR(t, actionName, namespaces[idx], true)
 		} else {
-			require.Error(t, err, "did not expect app to get to running state")
+			log.FailOnNoError(t, err, "did not expect app to get to running state")
 			validateActionCR(t, actionName, namespaces[idx], false)
 		}
 	}

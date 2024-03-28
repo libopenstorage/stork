@@ -9,15 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	kubevirt "github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
-
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,20 +46,20 @@ const (
 func TestKubevirt(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
-	require.NoError(t, err, "Error resetting mock time")
+	log.FailOnError(t, err, "Error resetting mock time")
 	currentTestSuite = t.Name()
 
 	err = createImageTemplates(t)
-	require.NoError(t, err, "Error creating kubevirt templates")
+	log.FailOnError(t, err, "Error creating kubevirt templates")
 
 	err = createDatadiskTemplates(t)
-	require.NoError(t, err, "Error creating kubevirt templates")
+	log.FailOnError(t, err, "Error creating kubevirt templates")
 
 	err = createClusterroleDataVolume(dataVolumeClusterrole)
-	require.NoError(t, err, "Error creating cluste role for datavolume clone")
+	log.FailOnError(t, err, "Error creating cluste role for datavolume clone")
 
 	err = createClusterroleBindingDatavolume(dataVolumeClusterrole, kubevirtDatadiskNamespace)
-	require.NoError(t, err, "Error creating/updating data volume clusterrole binding %s with namespace: %s",
+	log.FailOnError(t, err, "Error creating/updating data volume clusterrole binding %s with namespace: %s",
 		dataVolumeClusterroleBinding, kubevirtDatadiskNamespace)
 
 	t.Run("kubevirtDeployFedoraVMWithClonePVC", kubevirtDeployFedoraVMWithClonePVC)
@@ -79,7 +76,7 @@ func TestKubevirt(t *testing.T) {
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -87,17 +84,17 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -105,17 +102,17 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -123,17 +120,17 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -141,17 +138,17 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -159,12 +156,12 @@ func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, allCtxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func createImageTemplates(t *testing.T) error {
@@ -173,13 +170,13 @@ func createImageTemplates(t *testing.T) error {
 			AppKeys:   []string{kubevirtTemplates},
 			Namespace: kubevirtTemplateNamespace,
 		})
-	require.NoErrorf(t, err, "error deploying kubevirt templates")
+	log.FailOnError(t, err, "error deploying kubevirt templates")
 
 	// if new templates are deployed, this function will wait for them to get imported else it will exit
 	waitForCompletedAnnotations := func() (interface{}, bool, error) {
 		// Loop through all PVCs and check for annotations that signify existing downloaded templates
 		pvcTemplates, err := core.Instance().GetPersistentVolumeClaims(kubevirtTemplateNamespace, nil)
-		require.NoErrorf(t, err, "error getting PVCs in %s namespace", kubevirtTemplateNamespace)
+		log.FailOnError(t, err, "error getting PVCs in %s namespace", kubevirtTemplateNamespace)
 		for _, pvc := range pvcTemplates.Items {
 			if pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation] != "Completed" {
 				return nil, true, fmt.Errorf("storage condition is not completed on pvc %s. Status: %s. Retrying.",
@@ -190,7 +187,7 @@ func createImageTemplates(t *testing.T) error {
 					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation])
 			}
 		}
-		log.Infof("All templates are downloaded.")
+		log.InfoD("All templates are downloaded.")
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)
@@ -220,36 +217,36 @@ func createDatadiskTemplates(t *testing.T) error {
 
 func kubevirtVMScaledDeployAndValidate(t *testing.T, instanceID string, appKeys []string, scale int) []*scheduler.Context {
 	var allCtxs []*scheduler.Context
-	logrus.Infof("Deploying %d VMs and validating them.", len(appKeys)*scale)
+	log.InfoD("Deploying %d VMs and validating them.", len(appKeys)*scale)
 	for i := 1; i <= scale; i++ {
-		logrus.Infof("Deploying VM set: %d", i)
+		log.InfoD("Deploying VM set: %d", i)
 		// Before validating the VM create required clusterrolebindings for datavolume cloning in the VM namespace
 		var testNamespaces []string
 		for _, app := range appKeys {
 			testNamespace := app + "-" + instanceID + "-" + strconv.Itoa(i)
 			testNamespaces = append(testNamespaces, testNamespace)
 			err := createClusterroleBindingDatavolume(dataVolumeClusterrole, testNamespace)
-			require.NoError(t, err, "Error creating/updating data volumeclusterrole binding %s with namespace: %s",
+			log.FailOnError(t, err, "Error creating/updating data volumeclusterrole binding %s with namespace: %s",
 				dataVolumeClusterroleBinding, testNamespace)
 		}
 		ctxs, err := schedulerDriver.Schedule(instanceID+"-"+strconv.Itoa(i),
 			scheduler.ScheduleOptions{
 				AppKeys: appKeys,
 			})
-		require.NoError(t, err, "Error scheduling tasks")
-		require.Equal(t, len(appKeys), len(ctxs), "wrong number of tasks started")
+		log.FailOnError(t, err, "Error scheduling tasks")
+		Dash.VerifyFatal(t, len(appKeys), len(ctxs), "wrong number of tasks started")
 
 		for _, ctx := range ctxs {
 			err = schedulerDriver.WaitForRunning(ctx, 30*time.Minute, defaultWaitInterval)
-			require.NoError(t, err, "Error waiting for app %s to get to running state", ctx.App.Key)
+			log.FailOnError(t, err, "Error waiting for app %s to get to running state", ctx.App.Key)
 
 			vms, err := kubevirt.Instance().ListVirtualMachines(ctx.App.NameSpace)
-			require.NoError(t, err, "Error listing virtual machines")
+			log.FailOnError(t, err, "Error listing virtual machines")
 			for _, vm := range vms.Items {
-				require.Equal(t, vm.Status.Created, true, "VM %s not created yet", vm.Name)
-				require.Equal(t, vm.Status.Ready, true, "VM %s not ready yet", vm.Name)
-				logrus.Infof("VM %s in namespace %s, has %d disks", vm.Name, vm.Namespace, len(vm.Spec.Template.Spec.Volumes))
-				logrus.Infof("Validated VM in iteration: %d, name: %s, namespace: %s", i, vm.Name, vm.Namespace)
+				Dash.VerifyFatal(t, vm.Status.Created, true, fmt.Sprintf("VM %s created yet", vm.Name))
+				Dash.VerifyFatal(t, vm.Status.Ready, true, fmt.Sprintf("VM %s not ready yet", vm.Name))
+				log.InfoD("VM %s in namespace %s, has %d disks", vm.Name, vm.Namespace, len(vm.Spec.Template.Spec.Volumes))
+				log.InfoD("Validated VM in iteration: %d, name: %s, namespace: %s", i, vm.Name, vm.Namespace)
 			}
 
 		}

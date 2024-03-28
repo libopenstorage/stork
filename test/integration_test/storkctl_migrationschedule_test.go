@@ -12,12 +12,11 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +34,7 @@ const (
 
 func TestStorkCtlMigrationSchedule(t *testing.T) {
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	currentTestSuite = t.Name()
 	createPrerequisiteResources(t)
 	defer cleanUpPrerequisiteResources(t)
@@ -44,7 +43,7 @@ func TestStorkCtlMigrationSchedule(t *testing.T) {
 	t.Run("createDefaultSyncMigrationScheduleTest", createDefaultSyncMigrationScheduleTest)
 	t.Run("createCustomSyncMigrationScheduleTest", createCustomSyncMigrationScheduleTest)
 	err = setRemoteConfig("")
-	require.NoError(t, err, "setting kubeconfig to default failed")
+	log.FailOnError(t, err, "setting kubeconfig to default failed")
 }
 
 func createDefaultAsyncMigrationScheduleTest(t *testing.T) {
@@ -109,7 +108,7 @@ func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]s
 	specFileName string, migrationScheduleNs string, inputSchedulePolicyInterval string) {
 	migrationScheduleName := "automation-test-migration-schedule"
 	var testResult = testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer migrationScheduleCleanup(t, migrationScheduleName, migrationScheduleNs)
 	defer updateDashStats(t.Name(), &testResult)
@@ -127,25 +126,25 @@ func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]s
 	}
 	cmd.SetArgs(cmdArgs)
 	// execute the command
-	logrus.Infof("The storkctl command being executed is %v", cmdArgs)
+	log.InfoD("The storkctl command being executed is %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Storkctl execution failed: %v", err)
+		log.Error("Storkctl execution failed: %v", err)
 		return
 	}
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
-	logrus.Infof("Actual output is: %s", actualOutput)
+	log.InfoD("Actual output is: %s", actualOutput)
 	expectedOutput := fmt.Sprintf("MigrationSchedule %v created successfully\n", migrationScheduleName)
-	require.Equal(t, expectedOutput, actualOutput)
+	Dash.VerifyFatal(t, expectedOutput, actualOutput, "Output mismatch")
 
 	// Validate the created resource
 	specFile := "specs/storkctl-specs/migrationschedule/" + specFileName
 	err := ValidateMigrationScheduleFromFile(t, specFile, migrationScheduleName, migrationScheduleNs, inputSchedulePolicyInterval)
-	require.NoError(t, err, "Error validating the created resource")
+	log.FailOnError(t, err, "Error validating the created resource")
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func ValidateMigrationScheduleFromFile(t *testing.T, specFilePath string,
@@ -169,36 +168,36 @@ func ValidateMigrationSchedule(t *testing.T, migrationSchedule *storkv1.Migratio
 	migrationScheduleName string, migrationScheduleNs string, inputSchedulePolicyInterval string) error {
 	// We want to validate if the created schedule policy resource matches our expectations
 	actualMigrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, migrationScheduleNs)
-	require.NoError(t, err, "Unable to get the created migration schedule")
-	logrus.Info("Trying to validate the migration schedule")
+	log.FailOnError(t, err, "Unable to get the created migration schedule")
+	log.Info("Trying to validate the migration schedule")
 	if migrationSchedule.Annotations != nil {
-		require.NotNil(t, actualMigrationSchedule.Annotations, "Expected actualMigrationSchedule not to be nil")
-		require.Equal(t, migrationSchedule.Annotations, actualMigrationSchedule.Annotations, "MigrationSchedule Annotations mismatch")
+		Dash.VerifyFatal(t, actualMigrationSchedule.Annotations != nil, true, "Expected actualMigrationSchedule not to be nil")
+		Dash.VerifyFatal(t, migrationSchedule.Annotations, actualMigrationSchedule.Annotations, "MigrationSchedule Annotations mismatch")
 	} else {
-		require.Nil(t, actualMigrationSchedule.Annotations, "Expected actualMigrationSchedule to be nil")
+		Dash.VerifyFatal(t, actualMigrationSchedule.Annotations == nil, true, "Expected actualMigrationSchedule to be nil")
 	}
-	require.Equal(t, migrationSchedule.Spec.SchedulePolicyName, actualMigrationSchedule.Spec.SchedulePolicyName, "MigrationSchedule Schedule Policy mismatch")
-	require.Equal(t, migrationSchedule.Spec.AutoSuspend, actualMigrationSchedule.Spec.AutoSuspend, "MigrationSchedule AutoSuspend mismatch")
-	require.Equal(t, migrationSchedule.Spec.Suspend, actualMigrationSchedule.Spec.Suspend, "MigrationSchedule Suspend mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.IncludeVolumes, actualMigrationSchedule.Spec.Template.Spec.IncludeVolumes, "MigrationSchedule IncludeVolumes mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.StartApplications, actualMigrationSchedule.Spec.Template.Spec.StartApplications, "MigrationSchedule StartApplications mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.IncludeResources, actualMigrationSchedule.Spec.Template.Spec.IncludeResources, "MigrationSchedule IncludeResources mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.ClusterPair, actualMigrationSchedule.Spec.Template.Spec.ClusterPair, "MigrationSchedule ClusterPair mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.AdminClusterPair, actualMigrationSchedule.Spec.Template.Spec.AdminClusterPair, "MigrationSchedule AdminClusterPair mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.Namespaces, actualMigrationSchedule.Spec.Template.Spec.Namespaces, "MigrationSchedule Namespaces mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.NamespaceSelectors, actualMigrationSchedule.Spec.Template.Spec.NamespaceSelectors, "MigrationSchedule NamespaceSelectors mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.Selectors, actualMigrationSchedule.Spec.Template.Spec.Selectors, "MigrationSchedule Selectors mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.ExcludeSelectors, actualMigrationSchedule.Spec.Template.Spec.ExcludeSelectors, "MigrationSchedule ExcludeSelectors mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.IgnoreOwnerReferencesCheck, actualMigrationSchedule.Spec.Template.Spec.IgnoreOwnerReferencesCheck, "MigrationSchedule IgnoreOwnerReferencesCheck mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.IncludeOptionalResourceTypes, actualMigrationSchedule.Spec.Template.Spec.IncludeOptionalResourceTypes, "MigrationSchedule IncludeOptionalResourceTypes mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.PostExecRule, actualMigrationSchedule.Spec.Template.Spec.PostExecRule, "MigrationSchedule PostExecRule mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.PreExecRule, actualMigrationSchedule.Spec.Template.Spec.PreExecRule, "MigrationSchedule PreExecRule mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.PurgeDeletedResources, actualMigrationSchedule.Spec.Template.Spec.PurgeDeletedResources, "MigrationSchedule PurgeDeletedResources mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.SkipDeletedNamespaces, actualMigrationSchedule.Spec.Template.Spec.SkipDeletedNamespaces, "MigrationSchedule SkipDeletedNamespaces mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.SkipServiceUpdate, actualMigrationSchedule.Spec.Template.Spec.SkipServiceUpdate, "MigrationSchedule SkipServiceUpdate mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.StartApplications, actualMigrationSchedule.Spec.Template.Spec.StartApplications, "MigrationSchedule StartApplications mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.TransformSpecs, actualMigrationSchedule.Spec.Template.Spec.TransformSpecs, "MigrationSchedule TransformSpecs mismatch")
-	require.Equal(t, migrationSchedule.Spec.Template.Spec.IncludeNetworkPolicyWithCIDR, actualMigrationSchedule.Spec.Template.Spec.IncludeNetworkPolicyWithCIDR, "MigrationSchedule IncludeNetworkPolicyWithCIDR mismatch")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.SchedulePolicyName, actualMigrationSchedule.Spec.SchedulePolicyName, "MigrationSchedule Schedule Policy")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.AutoSuspend, actualMigrationSchedule.Spec.AutoSuspend, "MigrationSchedule AutoSuspend")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Suspend, actualMigrationSchedule.Spec.Suspend, "MigrationSchedule Suspend")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.IncludeVolumes, actualMigrationSchedule.Spec.Template.Spec.IncludeVolumes, "MigrationSchedule IncludeVolumes")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.StartApplications, actualMigrationSchedule.Spec.Template.Spec.StartApplications, "MigrationSchedule StartApplications")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.IncludeResources, actualMigrationSchedule.Spec.Template.Spec.IncludeResources, "MigrationSchedule IncludeResources")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.ClusterPair, actualMigrationSchedule.Spec.Template.Spec.ClusterPair, "MigrationSchedule ClusterPair")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.AdminClusterPair, actualMigrationSchedule.Spec.Template.Spec.AdminClusterPair, "MigrationSchedule AdminClusterPair")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.Namespaces, actualMigrationSchedule.Spec.Template.Spec.Namespaces, "MigrationSchedule Namespaces")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.NamespaceSelectors, actualMigrationSchedule.Spec.Template.Spec.NamespaceSelectors, "MigrationSchedule NamespaceSelectors")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.Selectors, actualMigrationSchedule.Spec.Template.Spec.Selectors, "MigrationSchedule Selectors")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.ExcludeSelectors, actualMigrationSchedule.Spec.Template.Spec.ExcludeSelectors, "MigrationSchedule ExcludeSelectors")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.IgnoreOwnerReferencesCheck, actualMigrationSchedule.Spec.Template.Spec.IgnoreOwnerReferencesCheck, "MigrationSchedule IgnoreOwnerReferencesCheck")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.IncludeOptionalResourceTypes, actualMigrationSchedule.Spec.Template.Spec.IncludeOptionalResourceTypes, "MigrationSchedule IncludeOptionalResourceTypes")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.PostExecRule, actualMigrationSchedule.Spec.Template.Spec.PostExecRule, "MigrationSchedule PostExecRule")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.PreExecRule, actualMigrationSchedule.Spec.Template.Spec.PreExecRule, "MigrationSchedule PreExecRule")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.PurgeDeletedResources, actualMigrationSchedule.Spec.Template.Spec.PurgeDeletedResources, "MigrationSchedule PurgeDeletedResources")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.SkipDeletedNamespaces, actualMigrationSchedule.Spec.Template.Spec.SkipDeletedNamespaces, "MigrationSchedule SkipDeletedNamespaces")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.SkipServiceUpdate, actualMigrationSchedule.Spec.Template.Spec.SkipServiceUpdate, "MigrationSchedule SkipServiceUpdate")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.StartApplications, actualMigrationSchedule.Spec.Template.Spec.StartApplications, "MigrationSchedule StartApplications")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.TransformSpecs, actualMigrationSchedule.Spec.Template.Spec.TransformSpecs, "MigrationSchedule TransformSpecs")
+	Dash.VerifyFatal(t, migrationSchedule.Spec.Template.Spec.IncludeNetworkPolicyWithCIDR, actualMigrationSchedule.Spec.Template.Spec.IncludeNetworkPolicyWithCIDR, "MigrationSchedule IncludeNetworkPolicyWithCIDR")
 
 	if inputSchedulePolicyInterval != "" {
 		//we will validate the created schedule policy has correct interval minutes value as well
@@ -207,14 +206,14 @@ func ValidateMigrationSchedule(t *testing.T, migrationSchedule *storkv1.Migratio
 			return err
 		}
 		actualSchedulePolicy, err := storkops.Instance().GetSchedulePolicy(migrationScheduleName)
-		require.NoError(t, err, "Unable to get the created schedule policy")
-		require.Equal(t, expectedInterval, actualSchedulePolicy.Policy.Interval.IntervalMinutes, "MigrationSchedule SchedulePolicy interval-minutes mismatch")
+		log.FailOnError(t, err, "Unable to get the created schedule policy")
+		Dash.VerifyFatal(t, expectedInterval, actualSchedulePolicy.Policy.Interval.IntervalMinutes, "MigrationSchedule SchedulePolicy interval-minutes")
 	}
 	return nil
 }
 
 func migrationScheduleCleanup(t *testing.T, migrationScheduleName string, migrationScheduleNs string) {
-	logrus.Info("Cleaning up created resources")
+	log.Info("Cleaning up created resources")
 	// We need to delete migration schedule and also schedule policy if created.
 	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, migrationScheduleNs)
 	DeleteAndWaitForSchedulePolicyDeletion(t, migrationScheduleName)
@@ -223,24 +222,24 @@ func migrationScheduleCleanup(t *testing.T, migrationScheduleName string, migrat
 func DeleteAndWaitForMigrationScheduleDeletion(t *testing.T, name string, namespace string) {
 	err := storkops.Instance().DeleteMigrationSchedule(name, namespace)
 	if err != nil {
-		logrus.Errorf("Unable to delete migration schedule %s/%s", namespace, name)
+		log.Error("Unable to delete migration schedule %s/%s", namespace, name)
 	}
 	f := func() (interface{}, bool, error) {
-		logrus.Infof("Checking if migration schedule resource is successfully deleted")
+		log.InfoD("Checking if migration schedule resource is successfully deleted")
 		_, err := storkops.Instance().GetMigrationSchedule(name, namespace)
 		if err == nil {
 			return "", true, fmt.Errorf("get migration schedule : %s/%s should have failed", namespace, name)
 		}
 		if !errors.IsNotFound(err) {
-			logrus.Infof("unexpected err: %v when checking deleted migration schedule: %s/%s", err, namespace, name)
+			log.InfoD("unexpected err: %v when checking deleted migration schedule: %s/%s", err, namespace, name)
 			return "", true, err
 		}
 		//deletion done
-		logrus.Infof("Migration Schedule %s/%s successfully deleted", namespace, name)
+		log.InfoD("Migration Schedule %s/%s successfully deleted", namespace, name)
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, 2*time.Second)
-	require.NoError(t, err, "Unable to delete migration schedule %s/%s", namespace, name)
+	log.FailOnError(t, err, "Unable to delete migration schedule %s/%s", namespace, name)
 }
 
 func createPrerequisiteResources(t *testing.T) {
@@ -257,17 +256,17 @@ func createClusterPairs(t *testing.T) {
 	syncClusterPairObject := generateClusterPairObject(syncDrClusterPair, defaultNs, options)
 	syncAdminClusterPairObject := generateClusterPairObject(syncDrAdminClusterPair, adminNs, options)
 	_, err := storkops.Instance().CreateClusterPair(syncClusterPairObject)
-	require.NoError(t, err, "Error creating sync-dr cluster pair")
+	log.FailOnError(t, err, "Error creating sync-dr cluster pair")
 	_, err = storkops.Instance().CreateClusterPair(syncAdminClusterPairObject)
-	require.NoError(t, err, "Error creating sync-dr admin cluster pair")
+	log.FailOnError(t, err, "Error creating sync-dr admin cluster pair")
 	options["option1"] = "value1"
 	options["option2"] = "value2"
 	asyncClusterPairObject := generateClusterPairObject(asyncDrClusterPair, defaultNs, options)
 	asyncAdminClusterPairObject := generateClusterPairObject(asyncDrAdminClusterPair, adminNs, options)
 	_, err = storkops.Instance().CreateClusterPair(asyncClusterPairObject)
-	require.NoError(t, err, "Error creating async-dr cluster pair")
+	log.FailOnError(t, err, "Error creating async-dr cluster pair")
 	_, err = storkops.Instance().CreateClusterPair(asyncAdminClusterPairObject)
-	require.NoError(t, err, "Error creating async-dr admincluster pair")
+	log.FailOnError(t, err, "Error creating async-dr admincluster pair")
 }
 
 func generateClusterPairObject(name string, namespace string, options map[string]string) *storkv1.ClusterPair {
@@ -284,21 +283,21 @@ func generateClusterPairObject(name string, namespace string, options map[string
 }
 
 func cleanUpPrerequisiteResources(t *testing.T) {
-	logrus.Info("Cleanup prerequisite resources was called")
+	log.Info("Cleanup prerequisite resources was called")
 	err := storkops.Instance().DeleteClusterPair(syncDrClusterPair, defaultNs)
-	require.NoError(t, err, "Error deleting sync-dr cluster pair")
+	log.FailOnError(t, err, "Error deleting sync-dr cluster pair")
 	err = storkops.Instance().DeleteClusterPair(asyncDrClusterPair, defaultNs)
-	require.NoError(t, err, "Error deleting async-dr cluster pair")
+	log.FailOnError(t, err, "Error deleting async-dr cluster pair")
 	err = storkops.Instance().DeleteClusterPair(asyncDrAdminClusterPair, adminNs)
-	require.NoError(t, err, "Error deleting async-dr admin cluster pair")
+	log.FailOnError(t, err, "Error deleting async-dr admin cluster pair")
 	err = storkops.Instance().DeleteClusterPair(syncDrAdminClusterPair, adminNs)
-	require.NoError(t, err, "Error deleting sync-dr admin cluster pair")
+	log.FailOnError(t, err, "Error deleting sync-dr admin cluster pair")
 	err = storkops.Instance().DeleteResourceTransformation("test-rt", defaultNs)
-	require.NoError(t, err, "Error deleting resource transformation test-rt")
+	log.FailOnError(t, err, "Error deleting resource transformation test-rt")
 	err = storkops.Instance().DeleteResourceTransformation("test-rt", "test-ns")
-	require.NoError(t, err, "Error deleting resource transformation test-rt")
+	log.FailOnError(t, err, "Error deleting resource transformation test-rt")
 	err = core.Instance().DeleteNamespace("test-ns")
-	require.NoError(t, err, "Error deleting namespace test-ns")
+	log.FailOnError(t, err, "Error deleting namespace test-ns")
 }
 
 func createResourceTransformation(t *testing.T, namespace string) {
@@ -322,7 +321,7 @@ func createResourceTransformation(t *testing.T, namespace string) {
 				}},
 		},
 	})
-	require.NoError(t, err, "Error creating Resource Transformation")
+	log.FailOnError(t, err, "Error creating Resource Transformation")
 }
 
 func createNamespace(t *testing.T) {
@@ -333,5 +332,5 @@ func createNamespace(t *testing.T) {
 			Labels: map[string]string{"nsKey": "value"},
 		},
 	})
-	require.NoError(t, err, "Error creating Namespace")
+	log.FailOnError(t, err, "Error creating Namespace")
 }

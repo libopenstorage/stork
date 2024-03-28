@@ -9,12 +9,11 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -29,11 +28,11 @@ var storkLabel = map[string]string{"name": "stork"}
 func TestMigrationStorkFailures(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
-	require.NoError(t, err, "Error resetting mock time")
+	log.FailOnError(t, err, "Error resetting mock time")
 	currentTestSuite = t.Name()
 
-	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
-	logrus.Infof("Backup path being used: %s", backupLocationPath)
+	log.InfoD("Using stork volume driver: %s", volumeDriverName)
+	log.InfoD("Backup path being used: %s", backupLocationPath)
 	setDefaultsForBackup(t)
 
 	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
@@ -42,7 +41,7 @@ func TestMigrationStorkFailures(t *testing.T) {
 
 func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {
 	var testrailID, testResult = 51458, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -50,12 +49,12 @@ func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deleteStorkPodsDestDuringMigrationTest(t *testing.T) {
 	var testrailID, testResult = 51459, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -63,7 +62,7 @@ func deleteStorkPodsDestDuringMigrationTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStorkDest bool) {
@@ -73,15 +72,15 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 	startApplicationsFlag := false
 
 	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	ctxs, err := schedulerDriver.Schedule(nsKey+"-"+clusterKey,
 		scheduler.ScheduleOptions{AppKeys: []string{migrationAppKey}})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, len(ctxs), 1, "Only one task should have started")
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for app to get to running state")
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
 
 	// Schedule bidirectional or regular cluster pair based on the flag
 	scheduleClusterPairGeneric(t, ctxs, migrationAppKey, nsKey+"-"+clusterKey, defaultClusterPairDir, "", false, true, false)
@@ -89,50 +88,50 @@ func deleteStorkPodsDuringMigrationTest(t *testing.T, clusterKey string, delStor
 	// apply migration specs
 	currMigNamespace := migrationAppKey + "-" + nsKey + "-" + clusterKey
 	currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &includeVolumesFlag, &startApplicationsFlag)
-	require.NoError(t, err, "failed to create migration %s in namespace: %s", currMig.Name, currMig.Namespace)
+	log.FailOnError(t, err, "failed to create migration %s in namespace: %s", currMig.Name, currMig.Namespace)
 
 	// Wait for migration to start
 	err = waitForMigrationToStart(currMig.Name, currMig.Namespace, migrationRetryTimeout)
-	require.NoError(t, err, "Migration %s failed to start in namespace: %s", currMig.Name, currMig.Namespace)
+	log.FailOnError(t, err, "Migration %s failed to start in namespace: %s", currMig.Name, currMig.Namespace)
 
 	if delStorkDest {
 		// Change kubeconfig to dest and delete stork pods
 		err = setDestinationKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to destination cluster for deleting stork pods.")
+		log.FailOnError(t, err, "failed to set kubeconfig to destination cluster for deleting stork pods.")
 	}
 
-	logrus.Infof("Migration is in progress. Deleting stork pods.")
+	log.InfoD("Migration is in progress. Deleting stork pods.")
 	storkPods, err := core.Instance().GetPods(storkNamespace, storkLabel)
-	require.NoError(t, err, "failed to get stork pods.")
+	log.FailOnError(t, err, "failed to get stork pods.")
 
 	err = core.Instance().DeletePods(storkPods.Items, false)
-	require.NoError(t, err, "failed to delete stork pods.")
+	log.FailOnError(t, err, "failed to delete stork pods.")
 
 	// Change kubeconfig back to source. Ensure migration is successful, this redundant when
 	// we have not switched context to destination cluster
 	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster to check for migration.")
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster to check for migration.")
 
 	//err = waitForMigrationToComplete(currMig.Name, currMig.Namespace, migrationRetryTimeout)
 	err = storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Migration %s failed to start in namespace: %s", currMig.Name, currMig.Namespace)
+	log.FailOnError(t, err, "Migration %s failed to start in namespace: %s", currMig.Name, currMig.Namespace)
 
 	// Change kubeconfig to destination. Check stork pods are running, for sanity
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster for checking stork pods.")
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster for checking stork pods.")
 	_, err = core.Instance().GetPods(storkNamespace, storkLabel)
-	require.NoError(t, err, "failed to get stork pods after migration.")
+	log.FailOnError(t, err, "failed to get stork pods after migration.")
 	err = core.Instance().DeleteNamespace(currMigNamespace)
-	require.NoError(t, err, "failed to delete namespace %s on destination cluster", currMigNamespace)
+	log.FailOnError(t, err, "failed to delete namespace %s on destination cluster", currMigNamespace)
 
 	// Change kubeconfig back to source. Clean up
 	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster before cleanup.")
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster before cleanup.")
 	destroyAndWait(t, ctxs)
 	err = deleteAndwaitForMigrationDeletion(currMig.Name, currMig.Namespace, migrationRetryTimeout)
-	require.NoError(t, err, "Migration %s failed to delete in namespace: %s", currMig.Name, currMig.Namespace)
+	log.FailOnError(t, err, "Migration %s failed to delete in namespace: %s", currMig.Name, currMig.Namespace)
 	err = core.Instance().DeleteNamespace(currMigNamespace)
-	require.NoError(t, err, "failed to delete namespace %s on source cluster", currMigNamespace)
+	log.FailOnError(t, err, "failed to delete namespace %s on source cluster", currMigNamespace)
 }
 
 func waitForMigrationToStart(name, namespace string, timeout time.Duration) error {
@@ -152,7 +151,7 @@ func waitForMigrationToStart(name, namespace string, timeout time.Duration) erro
 }
 
 func deleteAndwaitForMigrationDeletion(name, namespace string, timeout time.Duration) error {
-	logrus.Infof("Deleting migration: %s in namespace: %s", name, namespace)
+	log.InfoD("Deleting migration: %s in namespace: %s", name, namespace)
 	err := storkops.Instance().DeleteMigration(name, namespace)
 	if err != nil {
 		return fmt.Errorf("Failed to delete migration: %s in namespace: %s", name, namespace)

@@ -9,42 +9,41 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
-	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 )
 
 func TestCommandExecutor(t *testing.T) {
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	currentTestSuite = t.Name()
 
 	t.Run("cmdExecutorTest", cmdExecutorTest)
 
 	err = setRemoteConfig("")
-	require.NoError(t, err, "setting kubeconfig to default failed")
+	log.FailOnError(t, err, "setting kubeconfig to default failed")
 }
 
 func cmdExecutorTest(t *testing.T) {
 	var testrailID, testResult = 86261, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	id, err := uuid.New()
-	require.NoError(t, err, "failed to get uuid")
+	log.FailOnError(t, err, "failed to get uuid")
 
 	ctxs, err := schedulerDriver.Schedule(id.String(), scheduler.ScheduleOptions{AppKeys: []string{"mysql-no-persistence"}})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, len(ctxs), 1, "Only one task should have started")
 
 	passCommands := []string{
 		`uname -a && ${WAIT_CMD};`,
@@ -59,11 +58,11 @@ func cmdExecutorTest(t *testing.T) {
 
 	for _, ctx := range ctxs {
 		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for pod to get to running state")
+		log.FailOnError(t, err, "Error waiting for pod to get to running state")
 
 		pods, err := getContextPods(ctx)
-		require.NoError(t, err, "failed to get pods for context")
-		require.NotEmpty(t, pods, "got empty pods for context")
+		log.FailOnError(t, err, "failed to get pods for context")
+		Dash.VerifyFatal(t, pods != nil, true, "Empty pods for context")
 
 		// Positive test cases
 		for _, testCmd := range passCommands {
@@ -72,7 +71,7 @@ func cmdExecutorTest(t *testing.T) {
 			for _, executor := range executors {
 				err = executor.Wait(120 * time.Second)
 				ns, name := executor.GetPod()
-				require.NoError(t, err, fmt.Sprintf("failed to wait for command on pod: [%s] %s", ns, name))
+				log.FailOnError(t, err, fmt.Sprintf("failed to wait for command on pod: [%s] %s", ns, name))
 			}
 		}
 
@@ -81,7 +80,7 @@ func cmdExecutorTest(t *testing.T) {
 			executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", noWaitPlaceholderCmd, string(pod.GetUID()))
 			errChan := make(chan error)
 			err = executor.Start(errChan)
-			require.Error(t, err, "expected error from the start command API")
+			log.FailOnNoError(t, err, "expected error from the start command API")
 		}
 
 		for _, testCmd := range failCommands {
@@ -90,7 +89,7 @@ func cmdExecutorTest(t *testing.T) {
 			for _, executor := range executors {
 				err = executor.Wait(10 * time.Second)
 				ns, name := executor.GetPod()
-				require.Error(t, err, fmt.Sprintf("expected error since command: %s should fail on pod: [%s] %s",
+				log.FailOnNoError(t, err, fmt.Sprintf("expected error since command: %s should fail on pod: [%s] %s",
 					executor.GetCommand(), ns, name))
 			}
 		}
@@ -99,11 +98,11 @@ func cmdExecutorTest(t *testing.T) {
 	destroyAndWait(t, ctxs)
 
 	err = setRemoteConfig("")
-	require.NoError(t, err, "setting kubeconfig to default failed")
+	log.FailOnError(t, err, "setting kubeconfig to default failed")
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecutor.Executor {
@@ -112,7 +111,7 @@ func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecut
 		executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", command, string(pod.GetUID()))
 		errChan := make(chan error)
 		err := executor.Start(errChan)
-		require.NoError(t, err, "failed to start async command")
+		log.FailOnError(t, err, "failed to start async command")
 		executors = append(executors, executor)
 	}
 

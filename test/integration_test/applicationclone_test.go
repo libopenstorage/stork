@@ -6,14 +6,13 @@ package integrationtest
 import (
 	"testing"
 
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 )
 
 func TestApplicationClone(t *testing.T) {
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	currentTestSuite = t.Name()
 
 	t.Run("deploymentTest", deploymentApplicationCloneTest)
@@ -27,7 +26,7 @@ func TestApplicationClone(t *testing.T) {
 	t.Run("labelSelectorTest", applicationCloneLabelSelectorTest)
 
 	err = setRemoteConfig("")
-	require.NoError(t, err, "setting kubeconfig to default failed")
+	log.FailOnError(t, err, "setting kubeconfig to default failed")
 }
 
 func triggerApplicationCloneTest(
@@ -43,20 +42,20 @@ func triggerApplicationCloneTest(
 	var scaleMap map[string]int32
 	ctxs, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{AppKeys: []string{appKey}})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for app to get to running state")
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
 
 	cloneAppCtx := ctxs[0].DeepCopy()
 
 	if len(additionalAppKeys) > 0 {
 		err = schedulerDriver.AddTasks(ctxs[0],
 			scheduler.ScheduleOptions{AppKeys: additionalAppKeys})
-		require.NoError(t, err, "Error scheduling additional apps")
+		log.FailOnError(t, err, "Error scheduling additional apps")
 		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for additional apps to get to running state")
+		log.FailOnError(t, err, "Error waiting for additional apps to get to running state")
 	}
 
 	if cloneAllAppsExpected {
@@ -67,8 +66,8 @@ func triggerApplicationCloneTest(
 	// succeeds
 	cloneTaskCtx, err := schedulerDriver.Schedule("application-clone",
 		scheduler.ScheduleOptions{AppKeys: []string{cloneAppKey}})
-	require.NoError(t, err, "Error scheduling app clone task")
-	require.Equal(t, 1, len(cloneTaskCtx), "Only one task should have started")
+	log.FailOnError(t, err, "Error scheduling app clone task")
+	Dash.VerifyFatal(t, len(cloneTaskCtx), 1, "Only one task should have started")
 	timeout := defaultWaitTimeout
 	if !cloneSuccessExpected {
 		timeout = timeout / 4
@@ -76,51 +75,51 @@ func triggerApplicationCloneTest(
 
 	err = schedulerDriver.WaitForRunning(cloneTaskCtx[0], timeout, defaultWaitInterval)
 	if cloneSuccessExpected {
-		require.NoError(t, err, "Error waiting for app clone task to get to running state")
+		log.FailOnError(t, err, "Error waiting for app clone task to get to running state")
 		if scaleDownAppAfterClone {
 			// After app has been cloned scale it down to 0, else cloned apps may start running
 			scaleMap, err = schedulerDriver.GetScaleFactorMap(cloneAppCtx)
-			require.NoError(t, err, "Error getting scale map")
+			log.FailOnError(t, err, "Error getting scale map")
 			reducedScaleMap := make(map[string]int32, len(scaleMap))
 			for name := range scaleMap {
 				reducedScaleMap[name] = 0
 			}
 			err = schedulerDriver.ScaleApplication(cloneAppCtx, reducedScaleMap)
-			require.NoError(t, err, "Error getting scaling down app")
+			log.FailOnError(t, err, "Error getting scaling down app")
 		}
 
 		// Make sure the cloned app is running
 		err = schedulerDriver.UpdateTasksID(cloneAppCtx, appKey+"-"+instanceID+"-dest")
-		require.NoError(t, err, "Error updating task id for app clone context")
+		log.FailOnError(t, err, "Error updating task id for app clone context")
 		err = schedulerDriver.WaitForRunning(cloneAppCtx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for cloned app to get to running state")
+		log.FailOnError(t, err, "Error waiting for cloned app to get to running state")
 
 		// Scale up the original app
 		if scaleDownAppAfterClone {
 			err = schedulerDriver.ScaleApplication(cloneAppCtx, scaleMap)
-			require.NoError(t, err, "Error getting scaling up app %v", cloneAppCtx)
+			log.FailOnError(t, err, "Error getting scaling up app %v", cloneAppCtx)
 			err = schedulerDriver.WaitForRunning(cloneAppCtx, defaultWaitTimeout, defaultWaitInterval)
-			require.NoError(t, err, "Error waiting for app to get to running state")
+			log.FailOnError(t, err, "Error waiting for app to get to running state")
 		}
 
 		// Destroy the clone task and cloned app
-		require.NoError(t, err, "Error updating task id for app clone context")
+		log.FailOnError(t, err, "Error updating task id for app clone context")
 		destroyAndWait(t, []*scheduler.Context{cloneAppCtx, cloneTaskCtx[0]})
 	} else {
-		require.Error(t, err, "Expected app clone task to fail")
+		log.FailOnNoError(t, err, "Expected app clone task to fail")
 		// Destroy the clone task
 		destroyAndWait(t, cloneTaskCtx)
 	}
 
 	// Destroy the original app
 	err = schedulerDriver.UpdateTasksID(ctxs[0], ctxs[0].GetID())
-	require.NoError(t, err, "Error update task id for app context")
+	log.FailOnError(t, err, "Error update task id for app context")
 	destroyAndWait(t, ctxs)
 }
 
 func deploymentApplicationCloneTest(t *testing.T) {
 	var testrailID, testResult = 50840, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -137,12 +136,12 @@ func deploymentApplicationCloneTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetApplicationCloneTest(t *testing.T) {
 	var testrailID, testResult = 50841, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -159,12 +158,12 @@ func statefulsetApplicationCloneTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func statefulsetApplicationCloneRuleTest(t *testing.T) {
 	var testrailID, testResult = 50842, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -181,12 +180,12 @@ func statefulsetApplicationCloneRuleTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneRulePreExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50843, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -203,12 +202,12 @@ func applicationCloneRulePreExecMissingTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneRulePostExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50844, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -225,12 +224,12 @@ func applicationCloneRulePostExecMissingTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 	var testrailID, testResult = 50845, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -247,12 +246,12 @@ func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50846, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -269,12 +268,12 @@ func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50847, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -291,12 +290,12 @@ func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationCloneLabelSelectorTest(t *testing.T) {
 	var testrailID, testResult = 50848, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -313,5 +312,5 @@ func applicationCloneLabelSelectorTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
