@@ -27,7 +27,7 @@ type roundRobin struct {
 	cluster              cluster.Cluster
 	connMap              map[string]*TimedSDKConn
 	nextCreateNodeNumber int
-	mu                   sync.Mutex
+	mu                   sync.RWMutex
 	grpcServerPort       string
 }
 
@@ -64,50 +64,57 @@ func NewRoundRobinBalancer(
 	return rr, nil
 }
 
-func (rr *roundRobin) GetRemoteNodeConnection(ctx context.Context) (*grpc.ClientConn, bool, error) {
-	rr.mu.Lock()
-	defer rr.mu.Unlock()
-
+func (rr *roundRobin) GetRemoteNode() (string, bool, error) {
 	// Get all nodes and sort them
 	cluster, err := rr.cluster.Enumerate()
 	if err != nil {
-		return nil, false, err
+		return "", false, err
 	}
 	if len(cluster.Nodes) < 1 {
-		return nil, false, errors.New("cluster nodes for remote connection not found")
+		return "", false, errors.New("cluster nodes for remote connection not found")
 	}
-	sort.Slice(cluster.Nodes, func(i, j int) bool {
-		return cluster.Nodes[i].Id < cluster.Nodes[j].Id
-	})
+	// Get our node object
+	selfNode, err := rr.cluster.Inspect(cluster.NodeId)
+	if err != nil {
+		return "", false, err
+	}
+	var filteredNodes []*api.Node
 
-	// Clean up connections for missing nodes
-	rr.cleanupMissingNodeConnections(ctx, cluster.Nodes)
+	if selfNode.DomainID != "" {
+		// Filter out nodes from a different cluster domain.
+		for _, node := range cluster.Nodes {
+			if selfNode.DomainID == node.DomainID {
+				filteredNodes = append(filteredNodes, node)
+			}
+		}
+	} else {
+		filteredNodes = cluster.Nodes
+	}
+
+	sort.Slice(filteredNodes, func(i, j int) bool {
+		return filteredNodes[i].Id < filteredNodes[j].Id
+	})
 
 	// Get target node info and set next round robbin node.
 	// nextNode is always lastNode + 1 mod (numOfNodes), to loop back to zero
-	var (
-		targetNodeNumber int
-		isRemoteConn     bool
-	)
-	if rr.nextCreateNodeNumber != 0 {
-		targetNodeNumber = rr.nextCreateNodeNumber
+	targetNodeEndpoint, isRemoteConn := rr.getTargetAndIncrement(filteredNodes, selfNode.Id)
+	if targetNodeEndpoint == "" {
+		return "", false, errors.New("target node not found")
 	}
-	targetNode := cluster.Nodes[targetNodeNumber]
-	if targetNode.Id != cluster.NodeId {
-		// NodeID set on the cluster object is this node's ID.
-		// Target NodeID does not match with our NodeID, so this will be a remote connection.
-		isRemoteConn = true
-	}
-	targetNodeEndpoint := targetNode.MgmtIp
-	rr.nextCreateNodeNumber = (targetNodeNumber + 1) % len(cluster.Nodes)
 
-	// Get conn for this node, otherwise create new conn
-	if len(rr.connMap) == 0 {
-		rr.connMap = make(map[string]*TimedSDKConn)
+	return targetNodeEndpoint, isRemoteConn, nil
+}
+
+func (rr *roundRobin) GetRemoteNodeConnection(ctx context.Context) (*grpc.ClientConn, bool, error) {
+	targetNodeEndpoint, isRemoteConn, err := rr.GetRemoteNode()
+	if err != nil {
+		return nil, false, err
 	}
-	if rr.connMap[targetNodeEndpoint] == nil {
+	// Get conn for this node, otherwise create new conn
+	timedSDKConn, ok := rr.getNodeConnection(targetNodeEndpoint)
+	if !ok {
 		var err error
-		rrlogger.WithContext(ctx).Infof("Round-robin connecting to node %v - %s:%s", targetNodeNumber, targetNodeEndpoint, rr.grpcServerPort)
+		rrlogger.WithContext(ctx).Infof("Round-robin connecting to node %s:%s", targetNodeEndpoint, rr.grpcServerPort)
 		remoteConn, err := grpcserver.ConnectWithTimeout(
 			fmt.Sprintf("%s:%s", targetNodeEndpoint, rr.grpcServerPort),
 			[]grpc.DialOption{
@@ -117,20 +124,72 @@ func (rr *roundRobin) GetRemoteNodeConnection(ctx context.Context) (*grpc.Client
 		if err != nil {
 			return nil, isRemoteConn, err
 		}
-
-		rr.connMap[targetNodeEndpoint] = &TimedSDKConn{
+		timedSDKConn = &TimedSDKConn{
 			Conn: remoteConn,
 		}
+
+		rr.setNodeConnection(targetNodeEndpoint, timedSDKConn)
 	}
 
 	// Keep track of when this conn was last accessed
-	rrlogger.WithContext(ctx).Infof("Using remote connection to SDK node %v - %s:%s", targetNodeNumber, targetNodeEndpoint, rr.grpcServerPort)
-	rr.connMap[targetNodeEndpoint].LastUsage = time.Now()
-	return rr.connMap[targetNodeEndpoint].Conn, isRemoteConn, nil
+	rrlogger.WithContext(ctx).Infof("Using remote connection to SDK node %s:%s", targetNodeEndpoint, rr.grpcServerPort)
+	timedSDKConn.LastUsage = time.Now()
+	return timedSDKConn.Conn, isRemoteConn, nil
 
 }
 
-func (rr *roundRobin) cleanupMissingNodeConnections(ctx context.Context, nodes []*api.Node) {
+func (rr *roundRobin) getTargetAndIncrement(filteredNodes []*api.Node, selfNodeID string) (string, bool) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	var (
+		targetNodeNumber int
+		isRemoteConn     bool
+	)
+	if len(filteredNodes) == 0 {
+		return "", false
+	}
+	targetNodeNumber = rr.nextCreateNodeNumber % len(filteredNodes)
+	targetNode := filteredNodes[targetNodeNumber]
+	if targetNode.Id != selfNodeID {
+		// NodeID set on the cluster object is this node's ID.
+		// Target NodeID does not match with our NodeID, so this will be a remote connection.
+		isRemoteConn = true
+	}
+	targetNodeEndpoint := targetNode.MgmtIp
+	rr.nextCreateNodeNumber = (targetNodeNumber + 1) % len(filteredNodes)
+
+	return targetNodeEndpoint, isRemoteConn
+}
+
+func (rr *roundRobin) getNodeConnection(targetNodeEndpoint string) (*TimedSDKConn, bool) {
+	if len(rr.connMap) == 0 {
+		rr.mu.Lock()
+		rr.connMap = make(map[string]*TimedSDKConn)
+		rr.mu.Unlock()
+	}
+
+	rr.mu.RLock()
+	timedSDKConn, ok := rr.connMap[targetNodeEndpoint]
+	rr.mu.RUnlock()
+
+	return timedSDKConn, ok
+}
+
+func (rr *roundRobin) setNodeConnection(targetNodeEndpoint string, tsc *TimedSDKConn) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	if len(rr.connMap) == 0 {
+		rr.connMap = make(map[string]*TimedSDKConn)
+	}
+	rr.connMap[targetNodeEndpoint] = tsc
+}
+
+func (rr *roundRobin) cleanupMissingNodeConnections(ctx context.Context, nodes []*api.Node) int {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	numConnsClosed := 0
 	nodesMap := make(map[string]bool)
 	for _, node := range nodes {
 		nodesMap[node.MgmtIp] = true
@@ -142,19 +201,18 @@ func (rr *roundRobin) cleanupMissingNodeConnections(ctx context.Context, nodes [
 				rrlogger.WithContext(ctx).Errorf("failed to close conn to %s: %v", ip, err)
 			}
 			delete(rr.connMap, ip)
+			numConnsClosed++
 		}
 	}
+
+	return numConnsClosed
 }
 
-func (rr *roundRobin) cleanupConnections() {
-	ctx := correlation.WithCorrelationContext(context.Background(), correlation.ComponentRoundRobinBalancer)
+func (rr *roundRobin) cleanupExpiredConnections() int {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
-
-	rrlogger.Tracef("Cleaning up open gRPC connections created for round-robin balancing.")
-
-	// Clean all expired connections
 	numConnsClosed := 0
+
 	for ip, timedConn := range rr.connMap {
 		expiryTime := timedConn.LastUsage.Add(connIdleConnLength)
 
@@ -170,6 +228,19 @@ func (rr *roundRobin) cleanupConnections() {
 		}
 	}
 
+	return numConnsClosed
+}
+
+func (rr *roundRobin) cleanupConnections() {
+	ctx := correlation.WithCorrelationContext(context.Background(), correlation.ComponentRoundRobinBalancer)
+	rrlogger.Tracef("Cleaning up open gRPC connections created for round-robin balancing.")
+
+	// Clean all expired connections
+	expiredConnsClosed := rr.cleanupExpiredConnections()
+	if expiredConnsClosed > 0 {
+		rrlogger.Infof("Cleaned up %v expired node connections created for round-robin balancing. %v connections remaining", expiredConnsClosed, len(rr.connMap))
+	}
+
 	// Get all nodes and cleanup conns for missing/decommissioned nodes
 	nodesResp, err := rr.cluster.Enumerate()
 	if err != nil {
@@ -180,10 +251,9 @@ func (rr *roundRobin) cleanupConnections() {
 		rrlogger.Errorf("no nodes available to cleanup: %v", err)
 		return
 	}
-	rr.cleanupMissingNodeConnections(ctx, nodesResp.Nodes)
-
-	if numConnsClosed > 0 {
-		rrlogger.Infof("Cleaned up %v connections created for round-robin balancing. %v connections remaining", numConnsClosed, len(rr.connMap))
+	missingNodeConnsClosed := rr.cleanupMissingNodeConnections(ctx, nodesResp.Nodes)
+	if missingNodeConnsClosed > 0 {
+		rrlogger.Infof("Cleaned up %v connections for missing nodes created for round-robin balancing. %v connections remaining", missingNodeConnsClosed, len(rr.connMap))
 	}
 }
 

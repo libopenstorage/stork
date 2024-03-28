@@ -39,6 +39,7 @@ type driver struct {
 	volume.CloudMigrateDriver
 	volume.FilesystemTrimDriver
 	volume.FilesystemCheckDriver
+	volume.VerifyChecksumDriver
 }
 
 // Init Driver intialization.
@@ -54,7 +55,20 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		volume.CloudMigrateNotSupported,
 		volume.FilesystemTrimNotSupported,
 		volume.FilesystemCheckNotSupported,
+		volume.VerifyChecksumNotSupported,
 	}, nil
+}
+
+func (d *driver) StartVolumeWatcher() {
+	return
+}
+
+func (d *driver) GetVolumeWatcher(locator *api.VolumeLocator, labels map[string]string) (chan *api.Volume, error) {
+	return nil, nil
+}
+
+func (d *driver) StopVolumeWatcher() {
+	return
 }
 
 func (d *driver) Name() string {
@@ -157,7 +171,7 @@ func (d *driver) Unmount(ctx context.Context, volumeID string, mountpath string,
 	return d.UpdateVol(v)
 }
 
-func (d *driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error {
+func (d *driver) Set(ctx context.Context, volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error {
 	if spec != nil {
 		return volume.ErrNotSupported
 	}

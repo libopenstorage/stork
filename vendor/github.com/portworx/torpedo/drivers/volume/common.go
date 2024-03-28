@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"time"
 
-	pxapi "github.com/portworx/torpedo/porx/px/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -63,6 +63,12 @@ type DiagOps struct {
 	Async bool
 	// PxIsStopped
 	PxStopped bool
+
+	// PxDir is a directory where PX bits are installed
+	PxDir string
+
+	// PxDiagDir is a directory where PX diags are collected
+	PxDiagDir string
 }
 
 // MetadataNode TODO temporary solution until sdk supports metadataNode response
@@ -120,6 +126,14 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateVolume()",
+	}
+}
+
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *DefaultDriver) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeUsingPxctlCmd()",
 	}
 }
 
@@ -701,7 +715,7 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 }
 
 // ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
-func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateDiagsOnS3()",

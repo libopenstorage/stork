@@ -48,6 +48,12 @@ func (d *aws) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, er
 	return nil, nil
 }
 
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in aws cloud
+func (i *aws) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", i.String())
+	return nil
+}
+
 func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName

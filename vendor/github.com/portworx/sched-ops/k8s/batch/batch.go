@@ -92,7 +92,7 @@ func (c *Client) SetConfig(cfg *rest.Config) {
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.batch != nil && c.batchv1beta1 != nil {
+	if c.batch != nil || c.batchv1beta1 != nil {
 		return nil
 	}
 

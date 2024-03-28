@@ -3,39 +3,46 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
-	NodeRebootEventName          = "Node Reboot"
-	PXRestartEventName           = "PX Restart"
-	PXCrashEventName             = "PX-Storage Crash"
-	PXDaemonCrashEventName       = "PX-Daemon Crash"
-	HAIncreaseEventName          = "HA Increase"
-	HADecreaseEventName          = "HA Decrease"
-	AddDiskEventName             = "Add Disk"
-	ResizeDiskEventName          = "Resize Disk"
-	AddPoolEventName             = "New Pool Creation"
-	DeletePoolEventName          = "Pool Deletion"
-	CloudsnapEventName           = "Cloud Snapshot"
-	CloudsnapRestorEventName     = "Cloud Snapshot Restore"
-	LocalsnapEventName           = "Local Snapshot"
-	LocalsnapRestorEventName     = "Local Snapshot Restore"
-	DeployAppsEventName          = "Deploy Apps"
-	DeletePodsEventName          = "Delete Pods"
-	NodeCrashEventName           = "Node Crash"
-	VolumeResizeEventName        = "Volume Resize"
-	VolumeUpdateEventName        = "Volume Update"
-	NodeRecycleEventName         = "Node Recycle"
-	NodeScaleUpEventName         = "Node Scale Up"
-	NodeDecommEventName          = "Node Decommission"
-	NodeRejoinEventName          = "Node Rejoin"
-	UpgradeStorkEventName        = "Upgrade Stork"
-	UpgradeVolumeDriverEventName = "Upgrade Volume Driver"
-	NodeMaintenanceEventName     = "Node Maintenance Cycle"
-	PoolMaintenanceEventName     = "Pool Maintenance Cycle"
+	NodeRebootEventName             = "Node Reboot"
+	PXRestartEventName              = "PX Restart"
+	PXCrashEventName                = "PX-Storage Crash"
+	PXDaemonCrashEventName          = "PX-Daemon Crash"
+	HAIncreaseEventName             = "HA Increase"
+	HADecreaseEventName             = "HA Decrease"
+	AddDiskEventName                = "Add Disk"
+	ResizeDiskEventName             = "Resize Disk"
+	AddPoolEventName                = "New Pool Creation"
+	DeletePoolEventName             = "Pool Deletion"
+	CloudsnapEventName              = "Cloud Snapshot"
+	CloudsnapRestorEventName        = "Cloud Snapshot Restore"
+	LocalsnapEventName              = "Local Snapshot"
+	LocalsnapRestorEventName        = "Local Snapshot Restore"
+	DeployAppsEventName             = "Deploy Apps"
+	DeletePodsEventName             = "Delete Pods"
+	NodeCrashEventName              = "Node Crash"
+	VolumeResizeEventName           = "Volume Resize"
+	VolumeUpdateEventName           = "Volume Update"
+	NodeRecycleEventName            = "Node Recycle"
+	NodeScaleUpEventName            = "Node Scale Up"
+	NodeDecommEventName             = "Node Decommission"
+	NodeRejoinEventName             = "Node Rejoin"
+	UpgradeStorkEventName           = "Upgrade Stork"
+	UpgradeVolumeDriverEventName    = "Upgrade Volume Driver"
+	NodeMaintenanceEventName        = "Node Maintenance Cycle"
+	PoolMaintenanceEventName        = "Pool Maintenance Cycle"
+	AsyncDREventName                = "Async DR"
+	MetroDREventName                = "Metro DR"
+	StorkApplicationBackupEventName = "Stork App Backup"
 )
 
 // Add more fields here if required
@@ -64,6 +71,30 @@ func getRebootStats(rebootTime, nodeID, pxVersion string) (map[string]string, er
 	json.Unmarshal(data, &rebootExportable)
 	log.InfoD("Reboot Stats are: %v", rebootExportable)
 	return rebootExportable, nil
+}
+
+func GetStorkMigrationStats(mig *storkv1.Migration) map[string]string {
+	migStats := make(map[string]string)
+	migStats["MigrationName"] = mig.Name
+	migStats["MigrationNamespace"] = mig.Namespace
+	migStats["NumberOfResourcesMigrated"] = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedResources))
+	migStats["NumberOfVolumesMigrated"] = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedVolumes))
+	migStats["TimeElapsedVolumes"] = mig.Status.Summary.ElapsedTimeForVolumeMigration
+	migStats["TimeElapsedResources"] = mig.Status.Summary.ElapsedTimeForResourceMigration
+	return migStats
+}
+
+func GetStorkBackupStats(name, namespace string) (map[string]string, error) {
+	bkp, err := storkops.Instance().GetApplicationBackup(name, namespace)
+	if err != nil {
+		return nil, err
+	}
+	bkpStats := make(map[string]string)
+	bkpStats["BackupName"] = bkp.Name
+	bkpStats["BackupNamespace"] = bkp.Namespace
+	bkpStats["NumberOfResourcesBackup"] = strconv.Itoa(len(bkp.Status.Resources))
+	bkpStats["NumberOfVolumesBackup"] = strconv.Itoa(len(bkp.Status.Volumes))
+	return bkpStats, nil
 }
 
 func PushStats(dashUtils *aetosutil.Dashboard, eventType interface{}) error {
