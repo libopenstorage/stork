@@ -21,6 +21,7 @@ import (
 	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/stork/pkg/aetosutils"
+	"github.com/libopenstorage/stork/pkg/log"
 	aetosLogger "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -46,12 +47,10 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	aetosutil "github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/stats"
 	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
-	"github.com/stretchr/testify/require"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	storage_v1 "k8s.io/api/storage/v1"
@@ -204,20 +203,20 @@ func TestStorkCbt(t *testing.T) {
 func TestStorkCbtBackup(t *testing.T) {
 	setDefaultsForBackup(t)
 
-	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
-	logrus.Infof("Backup path being used: %s", backupLocationPath)
+	log.InfoD("Using stork volume driver: %s", volumeDriverName)
+	log.InfoD("Backup path being used: %s", backupLocationPath)
 
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 }
 
 func doDashboardSetup() {
 	aetosLog = aetosLogger.GetLogInstance()
-	logrus.Infof("Getting dashboard utils in dosetup")
 	Dash = aetosutils.Get()
 	tpDash = aetosutil.Get()
 	Dash.TestLog = aetosLog
+	log.InfoD("Getting dashboard utils in dosetup")
 	aetosLog.Out = io.MultiWriter(aetosLog.Out)
 	logLevel := os.Getenv("LOG_LEVEL")
 	aetosLogger.SetLoglevel(aetosLog, logLevel)
@@ -250,7 +249,7 @@ func doDashboardSetup() {
 		for _, tag := range tags {
 			var key, val string
 			if !strings.Contains(tag, ":") {
-				logrus.Infof("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+				log.InfoD("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
 			} else {
 				key = strings.SplitN(tag, ":", 2)[0]
 				val = strings.SplitN(tag, ":", 2)[1]
@@ -286,7 +285,7 @@ func setup() error {
 	log.Info("Setup test")
 	externalTest, err = strconv.ParseBool(os.Getenv(externalTestCluster))
 	if err == nil {
-		logrus.Infof("Three cluster config mode has been activated for test: %t", externalTest)
+		log.InfoD("Three cluster config mode has been activated for test: %t", externalTest)
 	}
 
 	err = setSourceKubeConfig()
@@ -294,7 +293,7 @@ func setup() error {
 		return fmt.Errorf("setting kubeconfig to source failed in setup: %v", err)
 	}
 
-	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
+	log.InfoD("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
 	backupLocationPath = addTimestampSuffix(os.Getenv(backupPathVar))
 
@@ -310,7 +309,7 @@ func setup() error {
 		return fmt.Errorf("Error getting node driver %v: %v", nodeDriverName, err)
 	}
 
-	logrus.Infof("Initializing node driver")
+	log.InfoD("Initializing node driver")
 	if err = nodeDriver.Init(node.InitOptions{}); err != nil {
 		return fmt.Errorf("Error initializing node driver %v: %v", nodeDriverName, err)
 	}
@@ -325,7 +324,7 @@ func setup() error {
 
 	cloudDeletionValidate, err = strconv.ParseBool(os.Getenv(cloudDeletionValidation))
 	if err == nil {
-		logrus.Infof("cloud deletion validation flag has been set to: %t", cloudDeletionValidate)
+		log.InfoD("cloud deletion validation flag has been set to: %t", cloudDeletionValidate)
 	}
 	if objectStoreDriver, err = objectstore.Get(); err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
@@ -336,10 +335,10 @@ func setup() error {
 		if authToken, err = schedulerDriver.GetTokenFromConfigMap(authTokenConfigMap); err != nil {
 			return fmt.Errorf("Failed to get config map for token when running on an auth-enabled cluster %v", err)
 		}
-		logrus.Infof("Auth token used for initializing scheduler/volume driver: %s ", authToken)
+		log.InfoD("Auth token used for initializing scheduler/volume driver: %s ", authToken)
 
 	}
-	logrus.Infof("Using provisioner: %s", provisioner)
+	log.InfoD("Using provisioner: %s", provisioner)
 	var customAppConfig map[string]scheduler.AppConfig
 	// For non-PX backups use default-scheduler in apps instead of stork
 	if provisioner != "pxd" {
@@ -376,11 +375,11 @@ func setup() error {
 
 	isInternalLBAws, err = strconv.ParseBool(os.Getenv(internalLBAws))
 	if err == nil {
-		logrus.Infof("Internal AWS Load Balancer is being used: %t", isInternalLBAws)
+		log.InfoD("Internal AWS Load Balancer is being used: %t", isInternalLBAws)
 	}
 	// On source cluster, change PX service to type LoadBalancer if it is an EKS/AKS/GKE cluster
 	pxNamespace = os.Getenv(portworxNamespace)
-	logrus.Infof("PX has been deployed in namespace: %s", pxNamespace)
+	log.InfoD("PX has been deployed in namespace: %s", pxNamespace)
 	if volumeDriverName == storkdriver.PortworxDriverName && IsCloud() {
 		if err = changePxServiceToLoadBalancer(isInternalLBAws); err != nil {
 			return fmt.Errorf("failed to change PX service to LoadBalancer on source cluster: %v", err)
@@ -414,26 +413,26 @@ func setup() error {
 
 func generateInstanceID(t *testing.T, testName string) string {
 	id, err := uuid.New()
-	require.NoError(t, err, "Error generating uuid for task")
+	log.FailOnError(t, err, "Error generating uuid for task")
 	return testName + "-" + id.String()
 }
 
 func destroyAndWait(t *testing.T, ctxs []*scheduler.Context) {
 	for _, ctx := range ctxs {
 		err := schedulerDriver.Destroy(ctx, nil)
-		require.NoError(t, err, "Error destroying ctx: %+v", ctx)
+		log.FailOnError(t, err, "Error destroying ctx: %+v", ctx)
 	}
 	for _, ctx := range ctxs {
 		err := schedulerDriver.WaitForDestroy(ctx, defaultWaitTimeout)
-		require.NoError(t, err, "Error waiting for destroy of ctx: %+v", ctx)
+		log.FailOnError(t, err, "Error waiting for destroy of ctx: %+v", ctx)
 		_, err = schedulerDriver.DeleteVolumes(ctx, nil)
-		require.NoError(t, err, "Error deleting volumes in ctx: %+v", ctx)
+		log.FailOnError(t, err, "Error deleting volumes in ctx: %+v", ctx)
 	}
 }
 
 func getVolumeNames(t *testing.T, ctx *scheduler.Context) []string {
 	volumeParams, err := schedulerDriver.GetVolumeParameters(ctx)
-	require.NoError(t, err, "Error getting volume Parameters")
+	log.FailOnError(t, err, "Error getting volume Parameters")
 
 	var volumes []string
 	for vol := range volumeParams {
@@ -452,7 +451,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	}
 
 	driverNodes, err := storkVolumeDriver.GetNodes()
-	require.NoError(t, err, "Error getting nodes from stork driver")
+	log.FailOnError(t, err, "Error getting nodes from stork driver")
 
 	found := false
 	for _, dNode := range driverNodes {
@@ -473,7 +472,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 			}
 		}
 	}
-	require.Equal(t, true, found, "Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode)
+	Dash.VerifyFatal(t, found, true, fmt.Sprintf("Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode))
 
 	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
 
@@ -484,8 +483,8 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 		}
 	}
 
-	logrus.Infof("Scores: %v", scores)
-	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+	log.InfoD("Scores: %v", scores)
+	Dash.VerifyFatal(t, highScore, scores[appNode.Name], "Scheduled node has the highest score")
 }
 
 // Helper function to get scoring of driverNodes based on hyper-convergence
@@ -514,7 +513,7 @@ func getScoringBasedOnHyperconvergence(t *testing.T, driverNodes []*storkdriver.
 	// Calculate scores for each node
 	for _, vol := range volumes {
 		volInfo, err := storkVolumeDriver.InspectVolume(vol)
-		require.NoError(t, err, "Error inspecting volume %v", vol)
+		log.FailOnError(t, err, "Error inspecting volume %v", vol)
 
 		for _, dataNode := range volInfo.DataNodes {
 			hostname := idMap[dataNode].Hostname
@@ -550,7 +549,7 @@ func getScoringBasedOnHyperconvergence(t *testing.T, driverNodes []*storkdriver.
 // This method assumes we have pod AntiAffinities set in the deployment to deploy each replica on a different node.
 func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, volumes []string) {
 	driverNodes, err := storkVolumeDriver.GetNodes()
-	require.NoError(t, err, "Error getting nodes from stork driver")
+	log.FailOnError(t, err, "Error getting nodes from stork driver")
 
 	//The scores are stored in a map where the keys are node names, and the values are the corresponding scores.
 	scores := getScoringBasedOnHyperconvergence(t, driverNodes, volumes)
@@ -562,7 +561,7 @@ func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, vo
 	// However, the scheduled nodes should have the same scores as the top n highest scores where n is number of replicas.
 	nodeScores := descendingSortBasedOnValue(scores)
 	expectedNodeScores := nodeScores[0:replicaCount]
-	logrus.Infof("Expected nodescores are %v", expectedNodeScores)
+	log.InfoD("Expected nodescores are %v", expectedNodeScores)
 
 	//appNodeScores is a map of nodeName:score, in which we store the calculated scores of the set of scheduled nodes.
 	appNodeScores := make(map[string]int)
@@ -573,7 +572,7 @@ func verifyScheduledNodesMultipleReplicas(t *testing.T, appNodes []node.Node, vo
 
 	//since we have sorted both the expectedNodeScores and actualNodeScores
 	//for scheduling to be correct these two arrays should be equal
-	require.Equal(t, expectedNodeScores, actualNodeScores, "Scheduled nodes do not have the highest scores")
+	Dash.VerifyFatal(t, len(expectedNodeScores) == len(actualNodeScores), true, "Scheduled nodes count does not match the number of replicas")
 }
 
 // helper function to sort a map of nodeScores in descending order of scores
@@ -593,7 +592,7 @@ func descendingSortBasedOnValue(scores map[string]int) []int {
 func dumpRemoteKubeConfig(configObject string) error {
 	cm, err := core.Instance().GetConfigMap(configObject, "kube-system")
 	if err != nil {
-		logrus.Errorf("Error reading config map: %v", err)
+		log.Error("Error reading config map: %v", err)
 		return err
 	}
 	config := cm.Data["kubeconfig"]
@@ -608,7 +607,7 @@ func dumpRemoteKubeConfig(configObject string) error {
 func dumpKubeConfigPath(configObject string, path string) error {
 	cm, err := core.Instance().GetConfigMap(configObject, "kube-system")
 	if err != nil {
-		logrus.Errorf("Error reading config map: %v", err)
+		log.Error("Error reading config map: %v", err)
 		return err
 	}
 	config := cm.Data["kubeconfig"]
@@ -694,7 +693,7 @@ func setKubeConfig(config string) error {
 		err = volumeDriver.RefreshDriverEndpoints()
 		if err != nil {
 			// return fmt.Errorf(
-			logrus.Errorf(
+			log.Error(
 				"unable to refresh driver endpoints after setting config to %v: %v", config, err)
 		}
 	}
@@ -702,31 +701,31 @@ func setKubeConfig(config string) error {
 }
 
 func setSourceKubeConfig() error {
-	logrus.Info("Set kubeConfig to Source")
+	log.Info("Set kubeConfig to Source")
 	return setKubeConfig(srcConfig)
 }
 
 func setDestinationKubeConfig() error {
-	logrus.Info("Set kubeConfig to Destination")
+	log.Info("Set kubeConfig to Destination")
 	return setKubeConfig(destConfig)
 }
 
 func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir, projectIDMappings string) error {
 	err := os.MkdirAll(path.Join(specDir, clusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+clusterPairDir, err)
+		log.Error("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+clusterPairDir, err)
 		return err
 	}
 	clusterPairFileName := path.Join(specDir, clusterPairDir, pairFileName)
 	pairFile, err := os.Create(clusterPairFileName)
 	if err != nil {
-		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
+		log.Error("Unable to create clusterPair.yaml: %v", err)
 		return err
 	}
 	defer func() {
 		err := pairFile.Close()
 		if err != nil {
-			logrus.Errorf("Error closing pair file: %v", err)
+			log.Error("Error closing pair file: %v", err)
 		}
 	}()
 
@@ -749,7 +748,7 @@ func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool
 		cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "--project-mappings", projectIDMappings})
 	}
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Execute storkctl failed: %v", err)
+		log.Error("Execute storkctl failed: %v", err)
 		return err
 	}
 
@@ -757,19 +756,19 @@ func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool
 		// storkctl generate command sets sched-ops to source cluster config
 		err = setSourceKubeConfig()
 		if err != nil {
-			logrus.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+			log.Error("during cluster pair setting kubeconfig to source failed %v", err)
 			return err
 		}
 	} else {
 		// Change kubeconfig to destination cluster config
 		err = setDestinationKubeConfig()
 		if err != nil {
-			logrus.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+			log.Error("during cluster pair setting kubeconfig to destination failed %v", err)
 			return err
 		}
 	}
 
-	logrus.Info("cluster-pair.yml created")
+	log.Info("cluster-pair.yml created")
 	return nil
 
 }
@@ -801,32 +800,32 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 
 	info, err := volumeDriver.GetClusterPairingInfo(remoteFilePath, token, IsCloud(), reverse)
 	if err != nil {
-		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
+		log.Error("Error writing to clusterpair.yml: %v", err)
 		return err
 	}
 
 	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir, projectIDMappings)
 	if err != nil {
-		logrus.Errorf("Error creating cluster Spec: %v", err)
+		log.Error("Error creating cluster Spec: %v", err)
 		return err
 	}
 
 	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
 	if err != nil {
-		logrus.Errorf("Unable to parse spec dir: %v", err)
+		log.Error("Unable to parse spec dir: %v", err)
 		return err
 	}
 
 	err = schedulerDriver.AddTasks(ctx,
 		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
 	if err != nil {
-		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
+		log.Error("Failed to schedule Cluster Pair Specs: %v", err)
 		return err
 	}
 
 	err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 	if err != nil {
-		logrus.Errorf("Error waiting to get cluster pair in ready state: %v", err)
+		log.Error("Error waiting to get cluster pair in ready state: %v", err)
 		return err
 	}
 
@@ -858,20 +857,20 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	// Create directory to store kubeconfig files
 	err = os.MkdirAll(path.Join(tempDir, bidirectionalClusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+bidirectionalClusterPairDir, err)
+		log.Error("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+bidirectionalClusterPairDir, err)
 		return err
 	}
 	srcKubeconfigPath := path.Join(tempDir, bidirectionalClusterPairDir, "src_kubeconfig")
 	srcKubeConfig, err := os.Create(srcKubeconfigPath)
 	if err != nil {
-		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		log.Error("Unable to write source kubeconfig file: %v", err)
 		return err
 	}
 
 	defer func() {
 		err := srcKubeConfig.Close()
 		if err != nil {
-			logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			log.Error("Error closing source kubeconfig file: %v", err)
 		}
 	}()
 
@@ -884,14 +883,14 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	destKubeconfigPath := path.Join(tempDir, bidirectionalClusterPairDir, "dest_kubeconfig")
 	destKubeConfig, err := os.Create(destKubeconfigPath)
 	if err != nil {
-		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		log.Error("Unable to write source kubeconfig file: %v", err)
 		return err
 	}
 
 	defer func() {
 		err := destKubeConfig.Close()
 		if err != nil {
-			logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			log.Error("Error closing destination kubeconfig file: %v", err)
 		}
 	}()
 
@@ -945,7 +944,7 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 
 	cmdArgs = append(cmdArgs, objectStoreArgs...)
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("Following is the bidirectional command: %v", cmdArgs)
+	log.InfoD("Following is the bidirectional command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
 	}
@@ -977,20 +976,20 @@ func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings stri
 	// Create directory to store kubeconfig files
 	err = os.MkdirAll(path.Join(tempDir, unidirectionalClusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+unidirectionalClusterPairDir, err)
+		log.Error("Unable to make directory (%v) for cluster pair spec: %v", tempDir+"/"+unidirectionalClusterPairDir, err)
 		return err
 	}
 	srcKubeconfigPath := path.Join(tempDir, unidirectionalClusterPairDir, "src_kubeconfig")
 	srcKubeConfig, err := os.Create(srcKubeconfigPath)
 	if err != nil {
-		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		log.Error("Unable to write source kubeconfig file: %v", err)
 		return err
 	}
 
 	defer func() {
 		err := srcKubeConfig.Close()
 		if err != nil {
-			logrus.Errorf("Error closing source kubeconfig file: %v", err)
+			log.Error("Error closing source kubeconfig file: %v", err)
 		}
 	}()
 
@@ -1003,14 +1002,14 @@ func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings stri
 	destKubeconfigPath := path.Join(tempDir, unidirectionalClusterPairDir, "dest_kubeconfig")
 	destKubeConfig, err := os.Create(destKubeconfigPath)
 	if err != nil {
-		logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+		log.Error("Unable to write destination kubeconfig file: %v", err)
 		return err
 	}
 
 	defer func() {
 		err := destKubeConfig.Close()
 		if err != nil {
-			logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+			log.Error("Error closing destination kubeconfig file: %v", err)
 		}
 	}()
 
@@ -1072,7 +1071,7 @@ func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings stri
 
 	cmdArgs = append(cmdArgs, objectStoreArgs...)
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("Following is the unidirectional command: %v", cmdArgs)
+	log.InfoD("Following is the unidirectional command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("Creation of unidirectional cluster pair using storkctl failed: %v", err)
 	}
@@ -1080,13 +1079,13 @@ func scheduleUnidirectionalClusterPair(cpName, cpNamespace, projectMappings stri
 	if resetConfig {
 		err = setSourceKubeConfig()
 		if err != nil {
-			logrus.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+			log.Error("during cluster pair setting kubeconfig to source failed %v", err)
 			return err
 		}
 	} else {
 		err = setDestinationKubeConfig()
 		if err != nil {
-			logrus.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+			log.Error("during cluster pair setting kubeconfig to destination failed %v", err)
 			return err
 		}
 	}
@@ -1106,14 +1105,14 @@ func activateAppUsingStorkctl(namespace string, runInSource bool) error {
 		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
 		srcKubeConfig, err := os.Create(srcKubeconfigPath)
 		if err != nil {
-			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			log.Error("Unable to write source kubeconfig file: %v", err)
 			return err
 		}
 
 		defer func() {
 			err := srcKubeConfig.Close()
 			if err != nil {
-				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+				log.Error("Error closing source kubeconfig file: %v", err)
 			}
 		}()
 		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
@@ -1125,14 +1124,14 @@ func activateAppUsingStorkctl(namespace string, runInSource bool) error {
 		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
 		destKubeConfig, err := os.Create(destKubeconfigPath)
 		if err != nil {
-			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			log.Error("Unable to write destination kubeconfig file: %v", err)
 			return err
 		}
 
 		defer func() {
 			err := destKubeConfig.Close()
 			if err != nil {
-				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+				log.Error("Error closing destination kubeconfig file: %v", err)
 			}
 		}()
 
@@ -1144,7 +1143,7 @@ func activateAppUsingStorkctl(namespace string, runInSource bool) error {
 	}
 
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("Activating apps in namespace with command: %v", cmdArgs)
+	log.InfoD("Activating apps in namespace with command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("activating apps using storkctl failed: %v", err)
 	}
@@ -1164,14 +1163,14 @@ func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
 		srcKubeconfigPath := path.Join(tempDir, "src_kubeconfig")
 		srcKubeConfig, err := os.Create(srcKubeconfigPath)
 		if err != nil {
-			logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+			log.Error("Unable to write source kubeconfig file: %v", err)
 			return err
 		}
 
 		defer func() {
 			err := srcKubeConfig.Close()
 			if err != nil {
-				logrus.Errorf("Error closing source kubeconfig file: %v", err)
+				log.Error("Error closing source kubeconfig file: %v", err)
 			}
 		}()
 		err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
@@ -1186,14 +1185,14 @@ func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
 		destKubeconfigPath := path.Join(tempDir, "dest_kubeconfig")
 		destKubeConfig, err := os.Create(destKubeconfigPath)
 		if err != nil {
-			logrus.Errorf("Unable to write destination kubeconfig file: %v", err)
+			log.Error("Unable to write destination kubeconfig file: %v", err)
 			return err
 		}
 
 		defer func() {
 			err := destKubeConfig.Close()
 			if err != nil {
-				logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+				log.Error("Error closing destination kubeconfig file: %v", err)
 			}
 		}()
 		err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
@@ -1204,7 +1203,7 @@ func deactivateAppUsingStorkctl(namespace string, runInSource bool) error {
 	}
 
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("Deactivating apps in namespace with command: %v", cmdArgs)
+	log.InfoD("Deactivating apps in namespace with command: %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("deactivating apps using storkctl failed: %v", err)
 	}
@@ -1300,18 +1299,18 @@ func createApp(t *testing.T, testID string) *scheduler.Context {
 
 	ctxs, err := schedulerDriver.Schedule(testID,
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}, Scheduler: schedulerName})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, len(ctxs), 1, "Only one task should have started")
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state")
+	log.FailOnError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
-	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+	log.FailOnError(t, err, "Error getting node for app")
+	Dash.VerifyFatal(t, len(scheduledNodes), 1, "App should be scheduled on one node")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
+	Dash.VerifyFatal(t, len(volumeNames), 1, "Should only have one volume")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 	return ctxs[0]
@@ -1327,10 +1326,10 @@ func addSecurityAnnotation(spec interface{}) error {
 	// Adds annotations required for auth enabled runs
 	configMap, err := core.Instance().GetConfigMap(authTokenConfigMap, "default")
 	if err != nil {
-		logrus.Errorf("Error reading config map: %v", err)
+		log.Error("Error reading config map: %v", err)
 		return err
 	}
-	logrus.Debugf("Config Map details: %v", configMap.Data)
+	log.Debugf("Config Map details: %v", configMap.Data)
 	if _, ok := configMap.Data[secretNameKey]; !ok {
 		return fmt.Errorf("failed to get secret name from config map")
 	}
@@ -1453,7 +1452,7 @@ func createSecret(t *testing.T, secret_name string, secret_map map[string]string
 	}
 	secretObj, err := core.Instance().CreateSecret(secret)
 	if !errors.IsAlreadyExists(err) {
-		require.NoError(t, err, "failed to create secret for volumes")
+		log.FailOnError(t, err, "failed to create secret for volumes")
 	}
 	return secretObj
 }
@@ -1462,12 +1461,12 @@ func cleanup(t *testing.T, namespace string, storageClass string) {
 	funcCleanup := func() {
 		err := core.Instance().DeleteNamespace(namespace)
 		if err != nil {
-			logrus.Infof("Error deleting namespace %s: %v\n", namespace, err)
+			log.InfoD("Error deleting namespace %s: %v\n", namespace, err)
 		}
 		if storageClass != "" {
 			err = storage.Instance().DeleteStorageClass(storageClass)
 			if err != nil {
-				logrus.Infof("Error deleting storage class %s: %v\n", namespace, err)
+				log.InfoD("Error deleting storage class %s: %v\n", namespace, err)
 			}
 		}
 
@@ -1480,11 +1479,11 @@ func cleanup(t *testing.T, namespace string, storageClass string) {
 
 func executeOnDestination(t *testing.T, funcToExecute func()) {
 	err := setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	defer func() {
 		err := setSourceKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	}()
 
 	funcToExecute()
@@ -1501,15 +1500,15 @@ func scheduleAppAndWait(t *testing.T, instanceIDs []string, appKey string) []*sc
 				AppKeys: []string{appKey},
 				Labels:  nil,
 			})
-		require.NoError(t, err, "Error scheduling task")
-		require.Equal(t, 1, len(newCtxs), "Only one task should have started")
+		log.FailOnError(t, err, "Error scheduling task")
+		Dash.VerifyFatal(t, len(newCtxs), 1, "Task started")
 		ctxs = append(ctxs, newCtxs[0])
 	}
 
 	// wait for all apps to get to running state
 	for _, ctx := range ctxs {
 		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for app to get to running state")
+		log.FailOnError(t, err, "Error waiting for app to get to running state")
 	}
 	return ctxs
 }
@@ -1520,10 +1519,10 @@ func addTasksAndWait(t *testing.T, ctx *scheduler.Context, appKeys []string) {
 		scheduler.ScheduleOptions{
 			AppKeys: appKeys,
 		})
-	require.NoError(t, err, "Error scheduling app")
+	log.FailOnError(t, err, "Error scheduling app")
 
 	err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for app to get to running state")
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
 }
 
 func triggerMigrationMultiple(
@@ -1544,13 +1543,13 @@ func triggerMigrationMultiple(
 		// create, apply and validate cluster pair specs
 		err := scheduleClusterPair(
 			ctx, true, true, defaultClusterPairDir, "", false)
-		require.NoError(t, err, "Error scheduling cluster pair")
+		log.FailOnError(t, err, "Error scheduling cluster pair")
 
 		// apply migration specs
 		migration, err := createMigration(
 			t, migrationName, namespaces[idx], "remoteclusterpair",
 			namespaces[idx], &includeResources, &includeVolumes, &startApplications)
-		require.NoError(t, err, "Error scheduling migration")
+		log.FailOnError(t, err, "Error scheduling migration")
 		migrations = append(migrations, migration)
 	}
 	return preMigrationCtxs, ctxs, migrations
@@ -1576,11 +1575,11 @@ func createActionCR(
 
 func validateActionCR(t *testing.T, actionName, namespace string, isSuccessful bool) {
 	action, err := storkops.Instance().GetAction(actionName, namespace)
-	require.NoError(t, err, "error fetching Action CR")
+	log.FailOnError(t, err, "error fetching Action CR")
 	if isSuccessful {
-		require.Equal(t, storkv1.ActionStatusSuccessful, action.Status)
+		Dash.VerifyFatal(t, action.Status, storkv1.ActionStatusSuccessful, "Action status Successful")
 	} else {
-		require.Equal(t, storkv1.ActionStatusFailed, action.Status)
+		Dash.VerifyFatal(t, action.Status, storkv1.ActionStatusFailed, "Action status Failed")
 	}
 }
 
@@ -1592,7 +1591,7 @@ func scaleDownApps(
 
 	for _, ctx := range ctxs {
 		scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctx)
-		require.NoError(t, err, "unexpected error on GetScaleFactorMap")
+		log.FailOnError(t, err, "unexpected error on GetScaleFactorMap")
 		scaleFactors = append(scaleFactors, scaleFactor)
 
 		zeroScaleFactor := make(map[string]int32) // scale down
@@ -1601,7 +1600,7 @@ func scaleDownApps(
 		}
 
 		err = schedulerDriver.ScaleApplication(ctx, zeroScaleFactor)
-		require.NoError(t, err, "unexpected error on ScaleApplication")
+		log.FailOnError(t, err, "unexpected error on ScaleApplication")
 
 		// check if the app is scaled down
 		_, err = task.DoRetryWithTimeout(
@@ -1619,7 +1618,7 @@ func scaleDownApps(
 			},
 			defaultWaitTimeout,
 			defaultWaitInterval)
-		require.NoError(t, err, "unexpected error on scaling down application.")
+		log.FailOnError(t, err, "unexpected error on scaling down application.")
 	}
 	return scaleFactors
 }
@@ -1631,8 +1630,8 @@ func validateMigrationOnSrc(
 ) {
 	for _, namespace := range namespaces {
 		err := storkops.Instance().ValidateMigration(migrationName, namespace, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error validating migration")
-		logrus.Infof("Validated migration on src: %v", migrationName)
+		log.FailOnError(t, err, "Error validating migration")
+		log.InfoD("Validated migration on src: %v", migrationName)
 	}
 }
 
@@ -1643,7 +1642,7 @@ func changePxServiceToLoadBalancer(internalLB bool) error {
 		return fmt.Errorf("failed to get portworx service before changing it to load balancer: %v", err)
 	}
 	if pxService.Spec.Type == v1.ServiceTypeLoadBalancer {
-		logrus.Infof("portworx service is already of type LoadBalancer")
+		log.InfoD("portworx service is already of type LoadBalancer")
 		return nil
 	}
 
@@ -1705,7 +1704,7 @@ func changePxServiceToLoadBalancer(internalLB bool) error {
 func addTestModeEnvironmentVar() error {
 	stc, err := operator.Instance().ListStorageClusters(pxNamespace)
 	if err != nil {
-		logrus.Infof("failed to list PX storage cluster: %v, won't add TEST_MODE environment variable to stork", err)
+		log.InfoD("failed to list PX storage cluster: %v, won't add TEST_MODE environment variable to stork", err)
 		return nil
 	}
 	if len(stc.Items) > 0 {
@@ -1723,7 +1722,7 @@ func addTestModeEnvironmentVar() error {
 		if err != nil {
 			return fmt.Errorf("failed to update PX service type to LoadBalancer on EKS: %v", err)
 		}
-		logrus.Infof("Successfully added TEST_MODE environment variable to stork spec in storage cluster")
+		log.InfoD("Successfully added TEST_MODE environment variable to stork spec in storage cluster")
 	}
 	return nil
 }
@@ -1731,16 +1730,16 @@ func addTestModeEnvironmentVar() error {
 func IsCloud() bool {
 	stc, err := operator.Instance().ListStorageClusters(defaultAdminNamespace)
 	if err == nil {
-		logrus.Infof("Storage cluster name: %s", stc.Items[0].Name)
+		log.InfoD("Storage cluster name: %s", stc.Items[0].Name)
 		if len(stc.Items) > 0 {
 			if oputils.IsEKS(&stc.Items[0]) {
-				logrus.Infof("EKS installation detected.")
+				log.InfoD("EKS installation detected.")
 				return true
 			} else if oputils.IsAKS(&stc.Items[0]) {
-				logrus.Infof("AKS installation detected.")
+				log.InfoD("AKS installation detected.")
 				return true
 			} else if oputils.IsGKE(&stc.Items[0]) {
-				logrus.Infof("GKE installation detected.")
+				log.InfoD("GKE installation detected.")
 				return true
 			}
 		}
@@ -1751,40 +1750,40 @@ func IsCloud() bool {
 // SetupTestRail checks if the required parameters for testrail are passed, verifies connectivity and creates milestone if it does not exist
 func SetupTestRail() {
 	if testrailutils.RunName = os.Getenv(testrailRunNameVar); testrailutils.RunName != "" {
-		logrus.Infof("Testrail Run name: %s", testrailutils.RunName)
+		log.InfoD("Testrail Run name: %s", testrailutils.RunName)
 	}
 	if testrailutils.JobRunID = os.Getenv(testrailRunIDVar); testrailutils.JobRunID != "" {
-		logrus.Infof("Testrail Run ID: %s", testrailutils.JobRunID)
+		log.InfoD("Testrail Run ID: %s", testrailutils.JobRunID)
 	}
 	if testrailutils.MilestoneName = os.Getenv(testrailMilestoneVar); testrailutils.MilestoneName != "" {
-		logrus.Infof("Testrail Milestone  %s", testrailutils.MilestoneName)
+		log.InfoD("Testrail Milestone  %s", testrailutils.MilestoneName)
 	}
 	if testrailutils.JenkinsBuildURL = os.Getenv(testrailJenkinsBuildURLVar); testrailutils.JenkinsBuildURL != "" {
-		logrus.Infof("Testrail Jenkins Build URL: %s", testrailutils.JenkinsBuildURL)
+		log.InfoD("Testrail Jenkins Build URL: %s", testrailutils.JenkinsBuildURL)
 	}
 	if testrailHostname = os.Getenv(testrailHostVar); testrailHostname != "" {
-		logrus.Infof("Testrail Host: %s", testrailHostname)
+		log.InfoD("Testrail Host: %s", testrailHostname)
 	}
 	if testrailUsername = os.Getenv(testrailUserNameVar); testrailUsername != "" {
-		logrus.Infof("Testrail Host: %s", testrailUsername)
+		log.InfoD("Testrail Host: %s", testrailUsername)
 	}
 	if testrailPassword = os.Getenv(testrailPasswordVar); testrailPassword != "" {
-		logrus.Infof("Testrail Password: %s", testrailPassword)
+		log.InfoD("Testrail Password: %s", testrailPassword)
 	}
 	if testrailHostname != "" && testrailUsername != "" && testrailPassword != "" {
 		err := testrailutils.Init(testrailHostname, testrailUsername, testrailPassword)
 		if err == nil {
 			if testrailutils.MilestoneName == "" || testrailutils.RunName == "" || testrailutils.JobRunID == "" {
-				err = fmt.Errorf("not all details provided to update testrail")
-				log.FailOnError(err, "Error occurred while testrail initialization")
+				log.Warn("not all details provided to update testrail")
+				return
 			}
 			testrailutils.CreateMilestone()
 			testrailSetupSuccessful = true
 		}
-		logrus.Infof("Testrail setup is successful, will log results to testrail automatically. Details:\nMilestone: %s, Testrun: %s",
+		log.InfoD("Testrail setup is successful, will log results to testrail automatically. Details:\nMilestone: %s, Testrun: %s",
 			testrailutils.MilestoneName, testrailutils.RunName)
 	} else {
-		logrus.Warn("Not all information to connect to testrail is provided, skipping updates to testrail")
+		log.Warn("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 }
 
@@ -1797,16 +1796,19 @@ func updateTestRail(testStatus *string, ids ...int) {
 			DriverVersion: storkVersion,
 		}
 		testrailutils.AddTestEntry(testrailObject)
-		log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testrailHostname, ids[1], testrailutils.PwxProjectID)
+		log.InfoD("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testrailHostname, ids[1], testrailutils.PwxProjectID)
 	} else {
-		logrus.Warnf("Skipping testrail update for this case, testID: %d, testrun: %d", ids[0], ids[1])
+		log.Warn("Skipping testrail update for this case, testID: %d, testrun: %d", ids[0], ids[1])
 	}
 }
 
-func testrailSetupForTest(testrailID int, testResult *string) int {
+func testrailSetupForTest(testrailID int, testResult *string, testName string) int {
+	tags := make(map[string]string)
+	tags["storkTest"] = "true"
+	Dash.TestCaseBegin(testName, fmt.Sprintf("Stork test - %s", testName), "", tags)
 	runID, err := addRunToMilestone(testrailID, testResult)
 	if err != nil {
-		logrus.Warnf("For current case: %d, not adding this run to testrail", testrailID)
+		log.Warn("For current case: %d, not adding this run to testrail", testrailID)
 		return 0
 	}
 	return runID
@@ -1925,7 +1927,7 @@ func TestMain(m *testing.M) {
 	})
 
 	if err := setup(); err != nil {
-		logrus.Errorf("Setup failed with error: %v", err)
+		log.Error("Setup failed with error: %v", err)
 		os.Exit(1)
 	}
 	exitCode := m.Run()
@@ -1944,20 +1946,20 @@ func updateClusterDomain(t *testing.T, clusterDomains *storkv1.ClusterDomains, a
 		destNode := node.GetStorageDriverNodes()[0]
 		out, err := volumeDriver.GetPxctlCmdOutput(
 			destNode, fmt.Sprintf("cluster domains %v --name %v", op, clusterDomains.LocalDomain))
-		require.NoError(t, err)
-		logrus.Infof(out)
+		log.FailOnError(t, err, "Failed to %v cluster domain %v", op, clusterDomains.LocalDomain)
+		log.InfoD(out)
 	})
 	if wait {
 		srcNodes := node.GetStorageDriverNodes()
 		if activate {
 			for _, srcNode := range srcNodes {
 				err = volumeDriver.WaitDriverUpOnNode(srcNode, defaultWaitTimeout)
-				require.NoError(t, err)
+				log.FailOnError(t, err, "Failed to wait for driver to come up on node %v", srcNode)
 			}
 		} else {
 			for _, srcNode := range srcNodes {
 				err = volumeDriver.WaitDriverDownOnNode(srcNode)
-				require.NoError(t, err)
+				log.FailOnError(t, err, "Failed to wait for driver to go down on node %v", srcNode)
 			}
 		}
 	}
@@ -1972,8 +1974,8 @@ func updatePXVolumeLabel(t *testing.T, volume string, labelsMap map[string]strin
 	pxNode := node.GetStorageDriverNodes()[0]
 	out, err := volumeDriver.GetPxctlCmdOutput(
 		pxNode, fmt.Sprintf("volume update %s --label %s", volume, labelString))
-	require.NoError(t, err)
-	logrus.Infof(out)
+	log.FailOnError(t, err, "Failed to update volume %v with labels %v", volume, labelsMap)
+	log.InfoD(out)
 }
 
 func getSupportedOperatorCRMapping() map[string][]meta_v1.APIResource {
@@ -2023,7 +2025,7 @@ func updateDashStats(testName string, testResult *string) {
 	var err error
 	tpDash.IsEnabled, err = strconv.ParseBool(os.Getenv(enableDashStats))
 	if tpDash.IsEnabled && err == nil {
-		logrus.Infof("Dash is not enabled, stork integration tests will NOT push stats from this run to Aetos.")
+		log.InfoD("Dash is not enabled, stork integration tests will NOT push stats from this run to Aetos.")
 	}
 	dashStats := make(map[string]string)
 	dashStats["test_suite"] = currentTestSuite
@@ -2037,7 +2039,7 @@ func updateDashStats(testName string, testResult *string) {
 	dashStats["scheduler_driver"] = schedulerDriver.String()
 	pxVersion, err := volumeDriver.GetDriverVersion()
 	if err != nil {
-		log.Errorf("error getting px version. err: %+v", err)
+		log.Error("error getting px version. err: %+v", err)
 	}
 	eventStat := &stats.EventStat{
 		EventName: "Automated Stork Integration Tests",
@@ -2047,4 +2049,5 @@ func updateDashStats(testName string, testResult *string) {
 	}
 
 	stats.PushStatsToAetos(tpDash, testName, dashProductName, dashStatsType, eventStat)
+	Dash.TestCaseEnd()
 }

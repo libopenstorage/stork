@@ -13,14 +13,13 @@ import (
 	"unsafe"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	kubevirt "github.com/portworx/sched-ops/k8s/kubevirt"
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -96,7 +95,7 @@ type kubevirtTestState struct {
 // a single live migration in this test.
 func kubeVirtHypercOneLiveMigration(t *testing.T) {
 	var testrailID, testResult = 93196, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "one-live-migr"
 
@@ -131,17 +130,17 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 		restartVolumeDriverAndWaitForAttachmentToMove(t, testState)
 
 		// VM should use a bind-mount eventually
-		log.Infof("Waiting for the VM to return to the hyperconverged state again")
+		log.InfoD("Waiting for the VM to return to the hyperconverged state again")
 		verifyBindMount(t, testState, false /*initialCheck*/)
 
 		// Verify that VM stayed up the whole time
 		verifyVMStayedUp(t, testState)
 	}
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // This test simulates OCP upgrade by live-migrating VM to a *replica* node and
@@ -150,7 +149,7 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 // back-to-back live migrations in this test.
 func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	var testrailID, testResult = 93197, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "two-live-migr"
 
@@ -193,7 +192,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		restartVolumeDriverAndWaitForAttachmentToMove(t, testState)
 
 		// VM should use a bind-mount eventually
-		log.Infof("Waiting for the VM to return to the hyperconverged state again")
+		log.InfoD("Waiting for the VM to return to the hyperconverged state again")
 		verifyBindMount(t, testState, false /*initialCheck*/)
 
 		// Verify that VM stayed up the whole time
@@ -202,17 +201,17 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		uncordonFunc()
 		cordonedNodes = nil
 	}
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // Add hotplug disks to a running VM and verify that they are collocated.
 func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	var testrailID, testResult = 257201, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "hotplug-colo"
 
@@ -236,18 +235,18 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 
 		addAndVerifyHotPlugDisks(t, testState)
 	}
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // Deploy VM with a special label on the PVCs to skip adding VPS during vol creation.
 // Then, wait for the VPS fix job to collocate the volumes.
 func kubeVirtHypercVPSFixJob(t *testing.T) {
 	var testrailID, testResult = 257177, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vps-fix-job"
 
@@ -273,11 +272,11 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 			return checkVMDisksCollocation(testState)
 		}, time.Hour, 5*time.Second, "vm disks were not collocated")
 	}
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // This test simulates OCP upgrade by live-migrating all VMs from a node a NON-replica node and
@@ -287,7 +286,7 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 // The above steps are repeated for all worker nodes in the cluster
 func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 	var testrailID, testResult = 297265, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "ocp-upgrade"
 
@@ -305,11 +304,11 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 	nodeList := node.GetNodesByName()
 
 	for nodeName, currNode := range nodeList {
-		log.Infof("\nStart OCP upgrade simulation on node: %s", nodeName)
+		log.InfoD("\nStart OCP upgrade simulation on node: %s", nodeName)
 		testStatesNode := getTestStatesForNode(t, ctxs, nodeName, allNodes)
 
 		if len(testStatesNode) == 0 {
-			log.Infof("No VMs are present on node: %s. Skipping this node", nodeName)
+			log.InfoD("No VMs are present on node: %s. Skipping this node", nodeName)
 			continue
 		}
 
@@ -320,60 +319,61 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 			startAndWaitForVMIMigration(t, testState, false /* expectReplicaNode */)
 		}
 
-		log.Infof("Restarting volume driver on node %s", nodeName)
+		log.InfoD("Restarting volume driver on node %s", nodeName)
 		restartVolumeDriverAndWaitForReady(t, &currNode)
 
 		for _, testState := range testStatesNode {
 			waitForVolumeAttachmentsToMove(t, testState, &currNode)
 
-			log.Infof("Waiting for the VM %s to return to the hyperconverged state again", testState.vmiName)
+			log.InfoD("Waiting for the VM %s to return to the hyperconverged state again", testState.vmiName)
 			verifyBindMount(t, testState, false /*initialCheck*/)
 
 			// Verify that VM stayed up the whole time
 			verifyVMStayedUp(t, testState)
 		}
-		log.Infof("\nCompleted upgrade simulation on node: %s", nodeName)
+		log.InfoD("\nCompleted upgrade simulation on node: %s", nodeName)
 	}
 
-	log.Infof("Destroying apps")
+	log.InfoD("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
 	testResult = testResultPass
-	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 	appCtx := testState.appCtx
 
 	err := schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for app %s to get to running state", appCtx.App.Key)
+	log.FailOnError(t, err, "Error waiting for app %s to get to running state", appCtx.App.Key)
 
 	vols, err := schedulerDriver.GetVolumes(appCtx)
-	require.NoError(t, err, "failed to get volumes for context %s", appCtx.App.Key)
+	log.FailOnError(t, err, "failed to get volumes for context %s", appCtx.App.Key)
 
 	for _, vol := range vols {
 		vmDisk := &vmDisk{volume: vol}
 		testState.vmDisks = append(testState.vmDisks, vmDisk)
 
 		vmDisk.apiVol, err = volumeDriver.InspectVolume(vol.ID)
-		require.NoError(t, err, "Failed to inspect PV %s", vol.ID)
+		log.FailOnError(t, err, "Failed to inspect PV %s", vol.ID)
 
 		vmDisk.attachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-		require.NoError(t, err)
+		log.FailOnError(t, err, fmt.Sprintf("Failed to get node for volume %s of context %s", vol.ID, appCtx.App.Key))
 
 		vmDisk.pvcName = vmDisk.apiVol.Locator.VolumeLabels["pvc"]
-		require.NotEmpty(t, vmDisk.pvcName)
+		Dash.VerifyFatal(t, vmDisk.pvcName != "", true, "PVC name found in volume labels")
 
 		pvc, err := core.Instance().GetPersistentVolumeClaim(vmDisk.pvcName, appCtx.App.NameSpace)
-		require.NoError(t, err, "Failed to get PVC %s/%s for volume %s of context %s",
+		log.FailOnError(t, err, "Failed to get PVC %s/%s for volume %s of context %s",
 			appCtx.App.NameSpace, vmDisk.pvcName, vol.ID, appCtx.App.Key)
 
-		require.NotNil(t, pvc.Spec.StorageClassName)
-		require.NotEmpty(t, *pvc.Spec.StorageClassName)
+		Dash.VerifyFatal(t, pvc.Spec.StorageClassName != nil, true, fmt.Sprintf("PVC %s/%s has no storageClassName", appCtx.App.NameSpace, vmDisk.pvcName))
+
+		Dash.VerifyFatal(t, pvc.Spec.VolumeName != "", true, fmt.Sprintf("PVC %s/%s has no volumeName", appCtx.App.NameSpace, vmDisk.pvcName))
 		vmDisk.storageClassName = *pvc.Spec.StorageClassName
 
 		sc, err := core.Instance().GetStorageClassForPVC(pvc)
-		require.NoError(t, err, "Failed to get storageClass for PVC %s/%s for volume %s of context %s",
+		log.FailOnError(t, err, "Failed to get storageClass for PVC %s/%s for volume %s of context %s",
 			appCtx.App.NameSpace, vmDisk.pvcName, vol.ID, appCtx.App.Key)
 
 		if sc.VolumeBindingMode != nil && *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer {
@@ -382,7 +382,7 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 
 		if testState.vmPod == nil {
 			testState.vmPod, err = getVMPod(appCtx, vol)
-			require.NoError(t, err)
+			log.FailOnError(t, err, "Failed to get pods for context %s", appCtx.App.Key)
 		}
 
 		// Get the volume name inside the pod yaml e.g.
@@ -396,25 +396,25 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 				break
 			}
 		}
-		require.NotEmpty(t, vmDisk.diskName)
-		log.Infof("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
+		Dash.VerifyFatal(t, vmDisk.diskName != "", true, fmt.Sprintf("Failed to find disk name for PVC %s", vmDisk.pvcName))
+		log.InfoD("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
 	}
 
 	testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
-	require.NoError(t, err)
+	log.FailOnError(t, err, "Failed to get pods for context %s", testState.appCtx.App.Key)
 
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
-	require.NoError(t, err)
+	log.FailOnError(t, err, "Failed to get VMI name for pod %s", testState.vmPod.Name)
 
 	testState.vmiUID, testState.vmiPhase, testState.vmiPhaseTransitionTime, testState.vmUID, err = getVMIDetails(
 		testState.vmPod.Namespace, testState.vmiName)
-	require.NoError(t, err)
-	require.Equal(t, "Running", testState.vmiPhase)
+	log.FailOnError(t, err, "Failed to get VMI details for pod %s", testState.vmPod.Name)
+	Dash.VerifyFatal(t, testState.vmiPhase, "Running", fmt.Sprintf("VMI %s is not in Running state", testState.vmiName))
 }
 
 func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 	// verify all volumes are using the same set of replica nodes
-	require.True(t, checkVMDisksCollocation(testState), "vm disks are not collocated")
+	Dash.VerifyFatal(t, checkVMDisksCollocation(testState), true, "vm disks are collocated")
 
 	verifyDisksAttachedOnSameNode(t, testState)
 
@@ -432,14 +432,14 @@ func checkVMDisksCollocation(testState *kubevirtTestState) bool {
 		// refresh the apiVol to get the current state of the replicas
 		vmDisk.apiVol, err = volumeDriver.InspectVolume(vmDisk.volume.ID)
 		if err != nil {
-			log.Warnf("Failed to inspect volume for %s: %v", vmDisk, err)
+			log.Warn("Failed to inspect volume for %s: %v", vmDisk, err)
 			return false
 		}
 
 		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
 		if prevReplicaNodeIDs != nil {
 			if !matchReplicaNodeIDs(prevReplicaNodeIDs, replicaNodeIDs) {
-				log.Warnf("%s and %s have replicas on different nodes", prevDisk, vmDisk)
+				log.Warn("%s and %s have replicas on different nodes", prevDisk, vmDisk)
 				return false
 			}
 		} else {
@@ -449,12 +449,12 @@ func checkVMDisksCollocation(testState *kubevirtTestState) bool {
 		// verify that our vps label is set
 		vpsLabelVal := vmDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
 		if vpsLabelVal == "" {
-			log.Warnf("PX volume for %s does not have %s label", vmDisk, vpsVolAffinityLabel)
+			log.Warn("PX volume for %s does not have %s label", vmDisk, vpsVolAffinityLabel)
 			return false
 		}
-		log.Infof("Found label %s=%s on %s", vpsVolAffinityLabel, vpsLabelVal, vmDisk)
+		log.InfoD("Found label %s=%s on %s", vpsVolAffinityLabel, vpsLabelVal, vmDisk)
 		if prevVPSLabelVal != "" && vpsLabelVal != prevVPSLabelVal {
-			log.Warnf("VPS label values (%s vs %s) don't match for %s and %s",
+			log.Warn("VPS label values (%s vs %s) don't match for %s and %s",
 				prevVPSLabelVal, vpsLabelVal, prevDisk, vmDisk)
 			return false
 		}
@@ -474,13 +474,12 @@ func getKubevirtClient(t *testing.T) kubecli.KubevirtClient {
 	kc := kubevirt.Instance().(*kubevirt.Client)
 	_, err := kc.GetVersion() // for initClient()
 	if err != nil {
-		log.Warnf("kubevirt GetVersion failed: %v", err)
+		log.Warn("kubevirt GetVersion failed: %v", err)
 		// continue
 	}
 
 	kvCli := *(*kubecli.KubevirtClient)(unsafe.Pointer(uintptr(unsafe.Pointer(kc)) + uintptr(ptrSize)))
-
-	require.NotNil(t, kvCli)
+	Dash.VerifyFatal(t, kvCli != nil, true, "Failed to get kubevirt client")
 	return kvCli
 }
 
@@ -561,9 +560,9 @@ func addHotPlugDisk(t *testing.T, testState *kubevirtTestState, dvName string, w
 			},
 		}
 	}
-	log.Infof("Creating a hotplug data volume %s/%s", ns, dvName)
+	log.InfoD("Creating a hotplug data volume %s/%s", ns, dvName)
 	_, err := kvCli.CdiClient().CdiV1beta1().DataVolumes(ns).Create(ctx, dv, metav1.CreateOptions{})
-	require.NoError(t, err)
+	log.FailOnError(t, err, "Failed to create hotplug data volume %s/%s", ns, dvName)
 
 	// add hotplug volume to the VMI
 	opts := &kubevirtv1.AddVolumeOptions{
@@ -579,25 +578,25 @@ func addHotPlugDisk(t *testing.T, testState *kubevirtTestState, dvName string, w
 			},
 		},
 	}
-	log.Infof("Adding hotplug data volume %s/%s to VMI %s", ns, dvName, testState.vmiName)
+	log.InfoD("Adding hotplug data volume %s/%s to VMI %s", ns, dvName, testState.vmiName)
 	err = kvCli.VirtualMachineInstance(ns).AddVolume(ctx, testState.vmiName, opts)
-	require.NoError(t, err)
+	log.FailOnError(t, err, "Failed to add hotplug data volume %s/%s to VMI %s", ns, dvName, testState.vmiName)
 
 	// wait until the PVC is bound
 	var pvc *corev1.PersistentVolumeClaim
 	require.Eventuallyf(t, func() bool {
 		pvc, err = core.Instance().GetPersistentVolumeClaim(dvName, ns)
 		if err != nil {
-			log.Warnf("Failed to get PVC for DataVolume %s/%s of context %s: %v",
+			log.Warn("Failed to get PVC for DataVolume %s/%s of context %s: %v",
 				ns, appCtx.App.NameSpace, appCtx.App.Key, err)
 			return false
 		}
 		if pvc.Status.Phase != corev1.ClaimBound {
-			log.Warnf("Waiting for PVC %s/%s phase to be %s; current value: %s",
+			log.Warn("Waiting for PVC %s/%s phase to be %s; current value: %s",
 				pvc.Namespace, pvc.Name, corev1.ClaimBound, pvc.Status.Phase)
 			return false
 		}
-		log.Infof("PVC %s/%s phase is %s", pvc.Namespace, pvc.Name, pvc.Status.Phase)
+		log.InfoD("PVC %s/%s phase is %s", pvc.Namespace, pvc.Name, pvc.Status.Phase)
 		return true
 	}, 3*time.Minute, 5*time.Second, "PVC %s/%s did not become bound", ns, dvName)
 
@@ -607,13 +606,13 @@ func addHotPlugDisk(t *testing.T, testState *kubevirtTestState, dvName string, w
 		storageClassName: *pvc.Spec.StorageClassName,
 	}
 	hpDisk.apiVol, err = volumeDriver.InspectVolume(hpDisk.pvName)
-	require.NoError(t, err, "Failed to inspect PV %s for %s", hpDisk.pvName, hpDisk)
+	log.FailOnError(t, err, "Failed to inspect PV %s for %s", hpDisk.pvName, hpDisk)
 	return hpDisk
 }
 
 func verifyHotPlugDisk(t *testing.T, testState *kubevirtTestState, hpDisk *hotPlugDisk, waitForVPSFixJob bool) {
 	if !waitForVPSFixJob {
-		require.True(t, isHotplugDiskCollocated(testState, hpDisk), "%s was not collocated", hpDisk)
+		Dash.VerifyFatal(t, isHotplugDiskCollocated(testState, hpDisk), true, fmt.Sprintf("%s was collocated", hpDisk))
 		return
 	}
 	// TODO: need to set the cluster option --fix-vps-frequency-in-minutes to reduce the wait time
@@ -632,26 +631,26 @@ func isHotplugDiskCollocated(testState *kubevirtTestState, hpDisk *hotPlugDisk) 
 	// refresh the apiVol to get the current state of the replicas
 	hpDisk.apiVol, err = volumeDriver.InspectVolume(hpDisk.pvName)
 	if err != nil {
-		log.Warnf("Failed to inspect PV %s for %s: %v", hpDisk.pvName, hpDisk, err)
+		log.Warn("Failed to inspect PV %s for %s: %v", hpDisk.pvName, hpDisk, err)
 		return false
 	}
 	hpDiskReplicas := getReplicaNodeIDs(hpDisk.apiVol)
 	if !matchReplicaNodeIDs(vmDiskReplicas, hpDiskReplicas) {
-		log.Warnf("%s and %s have replicas on different nodes", hpDisk, vmDisk)
+		log.Warn("%s and %s have replicas on different nodes", hpDisk, vmDisk)
 		return false
 	}
 	// verify that our vps label is set
 	hpDiskLabelVal := hpDisk.apiVol.Spec.VolumeLabels[vpsVolAffinityLabel]
 	if hpDiskLabelVal == "" {
-		log.Warnf("PX volume for %s does not have %s label", hpDisk, vpsVolAffinityLabel)
+		log.Warn("PX volume for %s does not have %s label", hpDisk, vpsVolAffinityLabel)
 		return false
 	}
 	if hpDiskLabelVal != vmDiskLabelVal {
-		log.Warnf("VPS label value %s for %s doesn't match with the label %s for %s",
+		log.Warn("VPS label value %s for %s doesn't match with the label %s for %s",
 			hpDiskLabelVal, hpDisk, vmDiskLabelVal, vmDisk)
 		return false
 	}
-	log.Infof("%s is collocated", hpDisk)
+	log.InfoD("%s is collocated", hpDisk)
 	return true
 }
 
@@ -662,34 +661,33 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 
 	// start migration
 	migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
-	require.NoError(t, err)
+	log.FailOnError(t, err, "Failed to create migration for VMI %s/%s", vmiNamespace, vmiName)
 
 	// wait for completion
 	var migr *kubevirtdy.VirtualMachineInstanceMigration
 	require.Eventuallyf(t, func() bool {
 		migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
 		if err != nil {
-			log.Warnf("Failed to get migration %s/%s: %v", vmiNamespace, migration.Name, err)
+			log.Warn("Failed to get migration %s/%s: %v", vmiNamespace, migration.Name, err)
 			return false
 		}
 		if !migr.Completed {
-			log.Warnf("VMI migration %s/%s is still not completed", vmiNamespace, migration.Name)
+			log.Warn("VMI migration %s/%s is still not completed", vmiNamespace, migration.Name)
 			return false
 		}
 		// wait until there is only one pod in the running state
 		testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
 		if err != nil {
-			log.Warnf("Failed to get VM pod while waiting for live migration to finish for VMI %s/%s: %v",
+			log.Warn("Failed to get VM pod while waiting for live migration to finish for VMI %s/%s: %v",
 				vmiNamespace, vmiName, err)
 			return false
 		}
-		log.Infof("VMI was live migrated to pod %s/%s", vmiNamespace, testState.vmPod.Name)
+		log.InfoD("VMI was live migrated to pod %s/%s", vmiNamespace, testState.vmPod.Name)
 		return true
 	}, 10*time.Minute, 10*time.Second, "migration for VMI %s/%s is stuck", vmiNamespace, migration.Name)
 
 	// verify that the migration was successful
-	require.Equal(t, "Succeeded", migr.Phase)
-	require.False(t, migr.Failed)
+	Dash.VerifyFatal(t, migr.Phase, "Succeeded", "Migration succeeded")
 
 	verifyVMProperties(t, testState,
 		false, /* expectAttachedNodeChanged (attached node should not change after live migration) */
@@ -700,7 +698,7 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kubevirtTestState) {
 	verifyDisksAttachedOnSameNode(t, testState)
 	attachedNode := testState.vmDisks[0].attachedNode
-	log.Infof("Restarting volume driver on node %s", attachedNode)
+	log.InfoD("Restarting volume driver on node %s", attachedNode)
 	restartVolumeDriverAndWaitForReady(t, attachedNode)
 	waitForVolumeAttachmentsToMove(t, testState, attachedNode)
 }
@@ -716,8 +714,7 @@ func verifyDisksAttachedOnSameNode(t *testing.T, testState *kubevirtTestState) {
 		if firstDisk == nil {
 			firstDisk = vmDisk
 		} else {
-			require.Equal(t, firstDisk.attachedNode.Name, vmDisk.attachedNode.Name,
-				"vm disks [%s] and [%s] are attached on different nodes", firstDisk, vmDisk)
+			Dash.VerifyFatal(t, firstDisk.attachedNode.Name, vmDisk.attachedNode.Name, "VM disks are attached on same nodes")
 		}
 	}
 }
@@ -730,18 +727,18 @@ func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bo
 			testState.vmPod, err = getVMPod(testState.appCtx, vmDisk.volume)
 			if err != nil {
 				// this is expected while the live migration is running since there will be 2 VM pods
-				log.Infof("Could not get VM pod for %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
+				log.InfoD("Could not get VM pod for %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
 				return false
 			}
-			logrus.Infof("Verifying bind mount for %s", vmDisk)
+			log.InfoD("Verifying bind mount for %s", vmDisk)
 			mountType, err := getVMDiskMountType(testState.vmPod, vmDisk)
 			if err != nil {
-				log.Warnf("Failed to get mount type of %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
+				log.Warn("Failed to get mount type of %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
 				return false
 			}
 			if mountType != mountTypeBind {
 				if !initialCheck {
-					log.Warnf("Waiting for %s for context %s to switch to bind-mount from %q",
+					log.Warn("Waiting for %s for context %s to switch to bind-mount from %q",
 						vmDisk, testState.appCtx.App.Key, mountType)
 				}
 				return false
@@ -751,7 +748,7 @@ func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bo
 
 		if initialCheck {
 			// This is the first time after VM was provisioned. It should be bind-mounted immediately. No need to retry.
-			require.True(t, isBindMounted(), "%s was not bind mounted", vmDisk)
+			Dash.VerifyFatal(t, isBindMounted(), true, fmt.Sprintf("Initial check for %s", vmDisk))
 			continue
 		}
 
@@ -768,9 +765,9 @@ func cordonNonReplicaNodes(t *testing.T, vol *api.Volume, allNodes map[string]no
 		if replicaNodeIDs[nodeID] {
 			continue
 		}
-		log.Infof("Cordoning non-replica node %s (%s)", node.Name, nodeID)
+		log.InfoD("Cordoning non-replica node %s (%s)", node.Name, nodeID)
 		err := core.Instance().CordonNode(node.Name, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Failed to cordon node %s (%s)", node.Name, nodeID)
+		log.FailOnError(t, err, "Failed to cordon node %s (%s)", node.Name, nodeID)
 		node := node
 		cordonedNodes = append(cordonedNodes, &node)
 	}
@@ -801,10 +798,10 @@ func matchReplicaNodeIDs(left, right map[string]bool) bool {
 
 func uncordonNodes(cordonedNodes []*node.Node) {
 	for _, cordonedNode := range cordonedNodes {
-		log.Infof("Uncordoning node %s", cordonedNode.Name)
+		log.InfoD("Uncordoning node %s", cordonedNode.Name)
 		err := core.Instance().UnCordonNode(cordonedNode.Name, defaultWaitTimeout, defaultWaitInterval)
 		if err != nil {
-			log.Errorf("Failed to uncordon node %s: %v", cordonedNode.Name, err)
+			log.Error("Failed to uncordon node %s: %v", cordonedNode.Name, err)
 		}
 	}
 }
@@ -847,46 +844,39 @@ func verifyVMProperties(
 			break
 		}
 	}
-	require.NotEmpty(t, podNodeID, "could not find nodeID for node %s where pod %s is running",
-		vmPod.Spec.NodeName, podNamespacedName)
+	Dash.VerifyFatal(t, podNodeID != "", true, fmt.Sprintf("find nodeID for node %s where pod %s is running", vmPod.Spec.NodeName, podNamespacedName))
 
 	for _, vmDisk := range testState.vmDisks {
-		logrus.Infof("Checking %s", vmDisk)
+		log.InfoD("Checking %s", vmDisk)
 		previousAttachedNode := vmDisk.attachedNode
 
 		// verify attached node
 		vmDisk.attachedNode, err = volumeDriver.GetNodeForVolume(vmDisk.volume, cmdTimeout, cmdRetry)
-		require.NoError(t, err)
+		log.FailOnError(t, err, "Failed to get attached node for %s", vmDisk)
 		if expectAttachedNodeChanged {
-			require.NotEqual(t, previousAttachedNode.Name, vmDisk.attachedNode.Name,
-				"attached node did not change for %s", vmDisk)
+			Dash.VerifyFatal(t, previousAttachedNode.Name != vmDisk.attachedNode.Name, true, fmt.Sprintf("attached node changed for %s", vmDisk))
 		} else {
-			require.Equal(t, previousAttachedNode.Name, vmDisk.attachedNode.Name,
-				"attached node changed for %s", vmDisk)
+			Dash.VerifyFatal(t, previousAttachedNode.Name, vmDisk.attachedNode.Name, fmt.Sprintf("attached node changed for %s", vmDisk))
 		}
 
 		// verify replica node
 		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
 		if expectReplicaNode {
-			require.True(t, replicaNodeIDs[podNodeID],
-				"pod is running on node %s (%s) which is not a replica node for %s",
-				vmPod.Spec.NodeName, podNodeID, vmDisk)
+			Dash.VerifyFatal(t, replicaNodeIDs[podNodeID], true, fmt.Sprintf("pod is running on node %s (%s) which is a replica node for %s", vmPod.Spec.NodeName, podNodeID, vmDisk))
 		} else {
-			require.False(t, replicaNodeIDs[podNodeID],
-				"pod is running on node %s (%s) which is a replica node for %s",
-				vmPod.Spec.NodeName, podNodeID, vmDisk)
+			Dash.VerifyFatal(t, replicaNodeIDs[podNodeID], false, fmt.Sprintf("pod is running on node %s (%s) which is a replica node for %s", vmPod.Spec.NodeName, podNodeID, vmDisk))
 		}
 
 		// verify mount type
 		mountType, err := getVMDiskMountType(vmPod, vmDisk)
-		require.NoError(t, err)
+		log.FailOnError(t, err, "Failed to get mount type for %s", vmDisk)
 
 		if expectBindMount {
-			require.Equal(t, mountTypeBind, mountType, "%s was not bind-mounted", vmDisk)
+			Dash.VerifyFatal(t, mountTypeBind, mountType, fmt.Sprintf("%s was bind-mounted", vmDisk))
 		} else {
-			require.Equal(t, mountTypeNFS, mountType, "%s was not nfs-mounted", vmDisk)
+			Dash.VerifyFatal(t, mountTypeNFS, mountType, fmt.Sprintf("%s was nfs-mounted", vmDisk))
 		}
-		log.Infof("Verified mount type %q for %s", mountType, vmDisk)
+		log.InfoD("Verified mount type %q for %s", mountType, vmDisk)
 	}
 }
 
@@ -913,7 +903,7 @@ func getVMIDetails(vmiNamespace, vmiName string) (string, string, time.Time, str
 // Get mount type (nfs or bind) of the VM disk
 func getVMDiskMountType(pod *corev1.Pod, vmDisk *vmDisk) (string, error) {
 	podNamespacedName := pod.Namespace + "/" + pod.Name
-	log.Infof("Checking the mount type of %s in pod %s", vmDisk, podNamespacedName)
+	log.InfoD("Checking the mount type of %s in pod %s", vmDisk, podNamespacedName)
 
 	// Sample output if the volume is bind-mounted: (vmDisk.diskName is "rootdisk" in this example)
 	// $ kubectl exec -it virt-launcher-fedora-communist-toucan-jfw7n -- mount
@@ -943,7 +933,7 @@ func getVMDiskMountType(pod *corev1.Pod, vmDisk *vmDisk) (string, error) {
 				return "", fmt.Errorf("multiple mounts found for %s: %s", vmDisk, output)
 			}
 			foundBindMount = true
-			log.Infof("Found %s bind mounted for VM pod %s: %s", vmDisk, podNamespacedName, line)
+			log.InfoD("Found %s bind mounted for VM pod %s: %s", vmDisk, podNamespacedName, line)
 		}
 
 		if nfsMountRE.MatchString(line) {
@@ -951,7 +941,7 @@ func getVMDiskMountType(pod *corev1.Pod, vmDisk *vmDisk) (string, error) {
 				return "", fmt.Errorf("multiple mounts found for %s: %s", vmDisk, output)
 			}
 			foundNFSMount = true
-			log.Infof("Found %s nfs mounted for VM pod %s: %s", vmDisk, podNamespacedName, line)
+			log.InfoD("Found %s nfs mounted for VM pod %s: %s", vmDisk, podNamespacedName, line)
 		}
 	}
 	if !foundBindMount && !foundNFSMount {
@@ -967,10 +957,10 @@ func verifyVMStayedUp(t *testing.T, testState *kubevirtTestState) {
 	// If a VM is stopped and started again, a new VMI object gets created with the same name (i.e. the UID will change).
 	// We are using that fact here to ensure that the VM did not stop during our test.
 	vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
-	require.NoError(t, err)
-	require.Equal(t, "Running", vmiPhaseAfter)
-	require.Equal(t, testState.vmiUID, vmiUIDAfter)
-	require.Equal(t, testState.vmiPhaseTransitionTime, transitionTimeAfter)
+	log.FailOnError(t, err, "failed to get VMI details after the test")
+	Dash.VerifyFatal(t, vmiPhaseAfter, "Running", "VMI phase running")
+	Dash.VerifyFatal(t, testState.vmiUID, vmiUIDAfter, "VMI UID")
+	Dash.VerifyFatal(t, testState.vmiPhaseTransitionTime, transitionTimeAfter, "transitionTimeAfter verified")
 }
 
 // get VMI name from ownerRef of the virt-launcher pod
@@ -1000,7 +990,7 @@ func getTestStatesForNode(t *testing.T, ctxs []*scheduler.Context, nodeName stri
 
 		// Add this testState to the list of testStates for this node
 		if nodeName == testState.vmPod.Spec.NodeName {
-			log.Infof("Found VM %s on node: %s", testState.vmPod.Name, nodeName)
+			log.InfoD("Found VM %s on node: %s", testState.vmPod.Name, nodeName)
 			verifyInitialVMI(t, testState)
 			// verifyInitialVMI has verified that all volumes are attached on the same node. We still need to
 			// verify that the volumes are attached on the node we are interested in.
@@ -1024,16 +1014,16 @@ func waitForVolumeAttachmentsToMove(t *testing.T, testState *kubevirtTestState, 
 		require.Eventuallyf(t, func() bool {
 			attachedNode, err = volumeDriver.GetNodeForVolume(vmDisk.volume, cmdTimeout, cmdRetry)
 			if err != nil {
-				log.Warnf("Failed to get the attached node for %s for context %s: %v",
+				log.Warn("Failed to get the attached node for %s for context %s: %v",
 					vmDisk, testState.appCtx.App.Key, err)
 				return false
 			}
-			log.Infof("New attached node for %s is %s", vmDisk, attachedNode.Name)
+			log.InfoD("New attached node for %s is %s", vmDisk, attachedNode.Name)
 			return oldAttachedNode.Name != attachedNode.Name
 		}, 5*time.Minute, 30*time.Second, "Attached node did not change from %s for %s",
 			oldAttachedNode.Name, vmDisk)
 
-		log.Infof("%s: attachment changed from node %s to node %s after failover",
+		log.InfoD("%s: attachment changed from node %s to node %s after failover",
 			vmDisk, oldAttachedNode.Name, attachedNode.Name)
 
 		vmDisk.attachedNode = attachedNode
@@ -1051,7 +1041,7 @@ func waitForVolumeAttachmentsToMove(t *testing.T, testState *kubevirtTestState, 
 }
 
 func restartVolumeDriverAndWaitForReady(t *testing.T, attachedNode *node.Node) {
-	log.Infof("Restarting volume driver on node %s", attachedNode.Name)
+	log.InfoD("Restarting volume driver on node %s", attachedNode.Name)
 	err := volumeDriver.StopDriver([]node.Node{*attachedNode}, false, nil)
 	require.NoError(t, err)
 
@@ -1064,5 +1054,5 @@ func restartVolumeDriverAndWaitForReady(t *testing.T, attachedNode *node.Node) {
 	err = volumeDriver.WaitDriverUpOnNode(*attachedNode, 10*time.Minute)
 	require.NoError(t, err)
 
-	log.Infof("Volume driver is up on node %s", attachedNode.Name)
+	log.InfoD("Volume driver is up on node %s", attachedNode.Name)
 }

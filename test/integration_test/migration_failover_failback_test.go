@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +32,7 @@ func testMigrationFailoverFailback(t *testing.T) {
 	// Since the secrets need to be created on the destination before migration
 	// is triggered using the API instead of spec factory in torpedo
 	err := setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	secret := &v1.Secret{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -46,15 +45,15 @@ func testMigrationFailoverFailback(t *testing.T) {
 	}
 	_, err = core.Instance().CreateSecret(secret)
 	if !errors.IsAlreadyExists(err) {
-		require.NoError(t, err, "failed to create secret for volumes")
+		log.FailOnError(t, err, "failed to create secret for volumes")
 	}
 
 	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	_, err = core.Instance().CreateSecret(secret)
 	if !errors.IsAlreadyExists(err) {
-		require.NoError(t, err, "failed to create secret for volumes")
+		log.FailOnError(t, err, "failed to create secret for volumes")
 	}
 
 	t.Run("vanillaFailoverAndFailbackMigrationTest", vanillaFailoverAndFailbackMigrationTest)
@@ -63,19 +62,19 @@ func testMigrationFailoverFailback(t *testing.T) {
 
 func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86259, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	failoverAndFailbackMigrationTest(t)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86260, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	// Migrate the resources
@@ -111,7 +110,7 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	}
 
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// 1 sts, 1 service, 1 pvc, 1 pv
 	expectedResources := uint64(4)
@@ -126,7 +125,7 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func failoverAndFailbackMigrationTest(t *testing.T) {
@@ -162,7 +161,7 @@ func failoverAndFailbackMigrationTest(t *testing.T) {
 	}
 
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// 1 sts, 1 service, 1 pvc, 1 pv
 	expectedResources := uint64(4)
@@ -188,7 +187,7 @@ func testMigrationFailover(
 	// Reduce the replicas on cluster 1
 
 	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
-	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
+	log.FailOnError(t, err, "Unexpected error on GetScaleFactorMap")
 
 	// Copy the old scale factor map
 	oldScaleFactor := make(map[string]int32)
@@ -201,7 +200,7 @@ func testMigrationFailover(
 	}
 
 	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
-	require.NoError(t, err, "Unexpected error on ScaleApplication")
+	log.FailOnError(t, err, "Unexpected error on ScaleApplication")
 
 	tk := func() (interface{}, bool, error) {
 		// check if the app is scaled down.
@@ -219,38 +218,38 @@ func testMigrationFailover(
 	}
 
 	_, err = task.DoRetryWithTimeout(tk, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Unexpected error on scaling down application.")
+	log.FailOnError(t, err, "Unexpected error on scaling down application.")
 
 	// start the app on cluster 2
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "Error setting remote config")
+	log.FailOnError(t, err, "Error setting remote config")
 
 	// Set scale factor to it's original values on cluster 2
 	err = schedulerDriver.ScaleApplication(preMigrationCtx, oldScaleFactor)
-	require.NoError(t, err, "Unexpected error on ScaleApplication")
+	log.FailOnError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+	log.FailOnError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
 
 	if len(projectIDMappings) > 0 {
 		namespace := appKey + "-" + instanceID
 		ns, err := core.Instance().GetNamespace(namespace)
-		require.NoError(t, err, "failed to get namespace")
+		log.FailOnError(t, err, "failed to get namespace")
 		projectValue, ok := ns.Labels[rancherLabelKey]
-		require.True(t, ok, "expected rancher label")
-		require.Equal(t, projectValue, "project-B")
+		Dash.VerifyFatal(t, ok, true, "expected rancher label")
+		Dash.VerifyFatal(t, projectValue, "project-B", "expected project label")
 
 		serviceList, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
-		require.NoError(t, err, "failed to get services")
-		require.GreaterOrEqual(t, len(serviceList.Items), 1, "unexpected number of services")
+		log.FailOnError(t, err, "failed to get services")
+		Dash.VerifyFatal(t, len(serviceList.Items) >= 1, true, "expected number of services")
 		for _, service := range serviceList.Items {
 			projectValue, ok := service.Labels[rancherLabelKey]
-			require.True(t, ok, "expected rancher label")
-			require.Equal(t, projectValue, "project-B")
+			Dash.VerifyFatal(t, ok, true, "expected rancher label")
+			Dash.VerifyFatal(t, projectValue, "project-B", "expected project label")
 
 			projectValue, ok = service.Annotations[rancherLabelKey]
-			require.True(t, ok, "expected rancher label")
-			require.Equal(t, projectValue, "project-B")
+			Dash.VerifyFatal(t, ok, true, "expected rancher label")
+			Dash.VerifyFatal(t, projectValue, "project-B", "expected project label")
 		}
 	}
 	return oldScaleFactor
@@ -269,11 +268,11 @@ func testMigrationFailback(
 
 	ctxsReverse, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{AppKeys: []string{appKey}})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxsReverse), "Only one task should have started")
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, 1, len(ctxsReverse), "Only one task should have started")
 
 	err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for app to get to running state")
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
 
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
@@ -283,28 +282,28 @@ func testMigrationFailback(
 	} else if unidirectionalClusterpair {
 		clusterPairNamespace := fmt.Sprintf("%s-%s", appKey, instanceID)
 		err = setSourceKubeConfig()
-		require.NoError(t, err, "Error setting remote config")
+		log.FailOnError(t, err, "Error setting remote config")
 		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
-		require.NoError(t, err, "Error deleting secret")
+		log.FailOnError(t, err, "Error deleting secret")
 		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
-		require.NoError(t, err, "Error deleting backuplocation")
+		log.FailOnError(t, err, "Error deleting backuplocation")
 		err = setDestinationKubeConfig()
-		require.NoError(t, err, "Error setting remote config")
+		log.FailOnError(t, err, "Error setting remote config")
 		err = core.Instance().DeleteSecret(remotePairName, clusterPairNamespace)
-		require.NoError(t, err, "Error deleting secret")
+		log.FailOnError(t, err, "Error deleting secret")
 		err = storkops.Instance().DeleteBackupLocation(remotePairName, clusterPairNamespace)
-		require.NoError(t, err, "Error deleting backuplocation")
+		log.FailOnError(t, err, "Error deleting backuplocation")
 		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, false, true)
 	}
-	require.NoError(t, err, "Error scheduling cluster pair")
+	log.FailOnError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
 	err = schedulerDriver.AddTasks(ctxsReverse[0],
 		scheduler.ScheduleOptions{AppKeys: []string{instanceID}})
-	require.NoError(t, err, "Error scheduling migration specs")
+	log.FailOnError(t, err, "Error scheduling migration specs")
 
 	err = schedulerDriver.WaitForRunning(ctxsReverse[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for migration to complete")
+	log.FailOnError(t, err, "Error waiting for migration to complete")
 
 	var migrationObj *v1alpha1.Migration
 	var ok bool
@@ -323,41 +322,41 @@ func testMigrationFailback(
 
 	// destroy the app on cluster 2
 	err = schedulerDriver.Destroy(preMigrationCtx, nil)
-	require.NoError(t, err, "Error destroying ctx: %+v", preMigrationCtx)
+	log.FailOnError(t, err, "Error destroying ctx: %+v", preMigrationCtx)
 	err = schedulerDriver.WaitForDestroy(preMigrationCtx, defaultWaitTimeout)
-	require.NoError(t, err, "Error waiting for destroy of ctx: %+v", preMigrationCtx)
+	log.FailOnError(t, err, "Error waiting for destroy of ctx: %+v", preMigrationCtx)
 
 	// ensure app starts on cluster 1
 	err = setSourceKubeConfig()
-	require.NoError(t, err, "Error resetting remote config")
+	log.FailOnError(t, err, "Error resetting remote config")
 
 	// Set scale factor to it's orignal values on cluster 2
 	err = schedulerDriver.ScaleApplication(postMigrationCtx, scaleFactor)
-	require.NoError(t, err, "Unexpected error on ScaleApplication")
+	log.FailOnError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(postMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state on source cluster after failback")
+	log.FailOnError(t, err, "Error waiting for pod to get to running state on source cluster after failback")
 
 	// Check the namespace labels are transformed
 	if len(projectIDMappings) > 0 {
 		namespace := appKey + "-" + instanceID
 		ns, err := core.Instance().GetNamespace(namespace)
-		require.NoError(t, err, "failed to get namespace")
+		log.FailOnError(t, err, "failed to get namespace")
 		projectValue, ok := ns.Labels[rancherLabelKey]
-		require.True(t, ok, "expected rancher label")
-		require.Equal(t, projectValue, "project-A")
+		Dash.VerifyFatal(t, ok, true, "expected rancher label")
+		Dash.VerifyFatal(t, projectValue, "project-A", "Project value verified")
 
 		serviceList, err := core.Instance().ListServices(namespace, meta_v1.ListOptions{})
-		require.NoError(t, err, "failed to get services")
-		require.GreaterOrEqual(t, len(serviceList.Items), 1, "unexpected number of services")
+		log.FailOnError(t, err, "failed to get services")
+		Dash.VerifyFatal(t, len(serviceList.Items) >= 1, true, "Expected number of services")
 		for _, service := range serviceList.Items {
 			projectValue, ok := service.Labels[rancherLabelKey]
-			require.True(t, ok, "expected rancher label")
-			require.Equal(t, projectValue, "project-A")
+			Dash.VerifyFatal(t, ok, true, "expected rancher label")
+			Dash.VerifyFatal(t, projectValue, "project-A", "Project value verified ProjectA")
 
 			projectValue, ok = service.Annotations[rancherLabelKey]
-			require.True(t, ok, "expected rancher label")
-			require.Equal(t, projectValue, "project-A")
+			Dash.VerifyFatal(t, ok, true, "expected rancher label")
+			Dash.VerifyFatal(t, projectValue, "project-A", "Project value verified ProjectA")
 		}
 	}
 
@@ -378,7 +377,7 @@ func validateFailbackAffinityNamespaceSelector(
 		if statefulSetSpec, ok := specObj.(*appsapi.StatefulSet); ok {
 			found = true
 			sts, err := apps.Instance().GetStatefulSet(statefulSetSpec.Name, statefulSetSpec.Namespace)
-			require.NoError(t, err, "failed to get stateful set on remote cluster")
+			log.FailOnError(t, err, "failed to get stateful set on remote cluster")
 			require.NotNil(t, sts.Spec.Template.Spec.Affinity, "affinity is nil")
 
 			// Pod Affinity
@@ -389,19 +388,19 @@ func validateFailbackAffinityNamespaceSelector(
 			require.NotEmpty(t, affinity.RequiredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector := affinity.RequiredDuringSchedulingIgnoredDuringExecution[0].NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok := selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectA", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectA", "incorrect namespace selector value")
 
 			// PreferredDuringSchedulingIgnoredDuringExecution
 			require.NotEmpty(t, affinity.PreferredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector = affinity.PreferredDuringSchedulingIgnoredDuringExecution[0].PodAffinityTerm.NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok = selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectA", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectA", "incorrect namespace selector value")
 
 			// Pod Anti Affinity
 			antiAffinity := sts.Spec.Template.Spec.Affinity.PodAntiAffinity
@@ -411,19 +410,19 @@ func validateFailbackAffinityNamespaceSelector(
 			require.NotEmpty(t, antiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector = antiAffinity.RequiredDuringSchedulingIgnoredDuringExecution[0].NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok = selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectC", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectC", "incorrect namespace selector value")
 
 			// PreferredDuringSchedulingIgnoredDuringExecution
 			require.NotEmpty(t, antiAffinity.PreferredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector = antiAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].PodAffinityTerm.NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok = selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectC", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectC", "incorrect namespace selector value")
 		}
 	}
 	require.True(t, found, "Expected StatefulSet to be found on remote cluster")
@@ -438,7 +437,7 @@ func validateFailoverAffinityNamespaceSelector(
 		if statefulSetSpec, ok := specObj.(*appsapi.StatefulSet); ok {
 			found = true
 			sts, err := apps.Instance().GetStatefulSet(statefulSetSpec.Name, statefulSetSpec.Namespace)
-			require.NoError(t, err, "failed to get stateful set on remote cluster")
+			log.FailOnError(t, err, "failed to get stateful set on remote cluster")
 			require.NotNil(t, sts.Spec.Template.Spec.Affinity, "affinity is nil")
 
 			// Pod Affinity
@@ -449,19 +448,19 @@ func validateFailoverAffinityNamespaceSelector(
 			require.NotEmpty(t, affinity.RequiredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector := affinity.RequiredDuringSchedulingIgnoredDuringExecution[0].NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok := selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectB", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectB", "incorrect namespace selector value")
 
 			// PreferredDuringSchedulingIgnoredDuringExecution
 			require.NotEmpty(t, affinity.PreferredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector = affinity.PreferredDuringSchedulingIgnoredDuringExecution[0].PodAffinityTerm.NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok = selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectB", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectB", "incorrect namespace selector value")
 
 			// Pod Anti Affinity
 			antiAffinity := sts.Spec.Template.Spec.Affinity.PodAntiAffinity
@@ -471,19 +470,19 @@ func validateFailoverAffinityNamespaceSelector(
 			require.NotEmpty(t, antiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector = antiAffinity.RequiredDuringSchedulingIgnoredDuringExecution[0].NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok = selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectD", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectD", "incorrect namespace selector value")
 
 			// PreferredDuringSchedulingIgnoredDuringExecution
 			require.NotEmpty(t, antiAffinity.PreferredDuringSchedulingIgnoredDuringExecution, "affinity is empty")
 			selector = antiAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].PodAffinityTerm.NamespaceSelector
 			require.NotNil(t, selector, "namespace selector is nil")
-			require.Equal(t, len(selector.MatchLabels), 1, "incorrect match labels")
+			Dash.VerifyFatal(t, len(selector.MatchLabels), 1, "incorrect match labels")
 			projectValue, ok = selector.MatchLabels[rancherLabelKey]
 			require.True(t, ok, "missing label key in namespace selector")
-			require.Equal(t, projectValue, "projectD", "incorrect namespace selector value")
+			Dash.VerifyFatal(t, projectValue, "projectD", "incorrect namespace selector value")
 		}
 	}
 	require.True(t, found, "Expected StatefulSet to be found on remote cluster")

@@ -14,8 +14,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	appsapi "k8s.io/api/apps/v1"
 )
 
@@ -27,7 +25,7 @@ const (
 
 func TestHealthMonitor(t *testing.T) {
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	currentTestSuite = t.Name()
 
 	t.Run("stopDriverTest", stopDriverTest)
@@ -37,16 +35,14 @@ func TestHealthMonitor(t *testing.T) {
 	t.Run("stopDriverCsiPodFailoverTest", stopDriverCsiPodFailoverTest)
 
 	err = setRemoteConfig("")
-	require.NoError(t, err, "setting kubeconfig to default failed")
+	log.FailOnError(t, err, "setting kubeconfig to default failed")
 }
 
 func stopDriverTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
+
 	log.InfoD("stop driver test")
 	var testrailID, testResult = 50790, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -84,8 +80,7 @@ func stopDriverTest(t *testing.T) {
 	scheduledNodes, err = schedulerDriver.GetNodesForApp(ctxs[0])
 	log.FailOnError(t, err, "Error getting node for app")
 	Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
-	require.NotEqual(t, stoppedNode.Name, scheduledNodes[0].Name,
-		"App scheduled on node with driver stopped")
+	Dash.VerifyFatal(t, stoppedNode.Name != scheduledNodes[0].Name, true, "App scheduled on node with driver stopped")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
@@ -103,12 +98,9 @@ func stopDriverTest(t *testing.T) {
 }
 
 func stopKubeletTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
 	log.InfoD("stop kubelet test")
 	var testrailID, testResult = 50791, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -167,11 +159,8 @@ func stopKubeletTest(t *testing.T) {
 }
 
 func poolMaintenanceHealthTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
 	var testrailID, testResult = 86081, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -218,11 +207,8 @@ func poolMaintenanceHealthTest(t *testing.T) {
 }
 
 func healthCheckFixTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
 	var testrailID, testResult = 85900, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -253,7 +239,7 @@ func healthCheckFixTest(t *testing.T) {
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	log.FailOnError(t, err, "Error getting node for app")
 	Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
-	logrus.Infof("Step: Completed scheduling app on node: %s", scheduledNodes[0].Name)
+	log.InfoD("Step: Completed scheduling app on node: %s", scheduledNodes[0].Name)
 
 	volumeNames := getVolumeNames(t, ctxs[0])
 	Dash.VerifyFatal(t, 1, len(volumeNames), "Should have one volume")
@@ -312,17 +298,17 @@ func healthCheckFixTest(t *testing.T) {
 
 func stopDriverCsiPodFailoverTest(t *testing.T) {
 	var testrailID, testResult = 85901, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
 	// Verify CSI pods are running on online nodes
-	logrus.Infof("Checking if CSI pods are initially scheduled on online PX nodes")
+	log.InfoD("Checking if CSI pods are initially scheduled on online PX nodes")
 	verifyCsiPodsRunningOnOnlineNode(t)
 
 	// Get all csi pod instances
 	csiPods, err := core.Instance().GetPods(storkNamespace, map[string]string{"app": "px-csi-driver"})
-	require.NoError(t, err, "Failed to get csi pods")
+	log.FailOnError(t, err, "Failed to get csi pods")
 
 	nodeNameMap := node.GetNodesByName()
 
@@ -335,7 +321,7 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 
 	Make sure to stop px on all the non csi nodes expect one
 	nonCsiNodeAlreadyFound := false
-	logrus.Infof("Stopping PX on all non CSI pods except one for failover verification")
+	log.InfoD("Stopping PX on all non CSI pods except one for failover verification")
 	for nodeName, schedNode := range nodeNameMap {
 		if _, ok := isCsiPodNode[nodeName]; !ok {
 			if schedNode.IsStorageDriverInstalled {
@@ -353,39 +339,39 @@ func stopDriverCsiPodFailoverTest(t *testing.T) {
 	nodeName := podToFailover.Spec.NodeName
 
 	// Stop px one of of the csi nodes
-	logrus.Infof("Stopping PX on node = %v where px pod %v is running", nodeName, podToFailover.Name)
+	log.InfoD("Stopping PX on node = %v where px pod %v is running", nodeName, podToFailover.Name)
 	err = volumeDriver.StopDriver([]node.Node{nodeNameMap[nodeName]}, false, nil)
-	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
+	log.FailOnError(t, err, "Error stopping driver on scheduled Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
 
 	time.Sleep(nodeOfflineTimeout)
 
 	// Verify CSI pods are running on online nodes after failover
-	logrus.Infof("Checking if all CSI pods are running on online PX nodes after failover")
+	log.InfoD("Checking if all CSI pods are running on online PX nodes after failover")
 	verifyCsiPodsRunningOnOnlineNode(t)
 
 	err = volumeDriver.StartDriver(nodeNameMap[nodeName])
-	require.NoError(t, err, "Error re-starting driver on Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
+	log.FailOnError(t, err, "Error re-starting driver on Node %+v", nodeNameMap[podToFailover.Spec.NodeName])
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func verifyCsiPodsRunningOnOnlineNode(t *testing.T) {
 	csiPods, err := core.Instance().GetPods(storkNamespace, map[string]string{"app": "px-csi-driver"})
-	require.NoError(t, err, "Failed to get csi pods after failover")
+	log.FailOnError(t, err, "Failed to get csi pods after failover")
 
 	driverNodes, err := storkVolumeDriver.GetNodes()
-	require.NoError(t, err, "Error getting nodes from stork driver")
+	log.FailOnError(t, err, "Error getting nodes from stork driver")
 
 	for _, csiPod := range csiPods.Items {
 		found := false
 		for _, dNode := range driverNodes {
 			if csiPod.Spec.NodeName == dNode.Hostname {
-				require.Equal(t, dNode.Status, storkdriver.NodeOnline, "CSI pod : %v scheduled on an offline node %v", csiPod.Name, dNode.Hostname)
+				Dash.VerifyFatal(t, dNode.Status, storkdriver.NodeOnline, fmt.Sprintf("CSI pod : %v scheduled on an offline node %v", csiPod.Name, dNode.Hostname))
 				found = true
 			}
 		}
-		require.Equal(t, true, found, "CSI node not found in driver node list : %v", driverNodes)
+		Dash.VerifyFatal(t, true, found, fmt.Sprintf("CSI node not found in driver node list : %v", driverNodes))
 	}
 }

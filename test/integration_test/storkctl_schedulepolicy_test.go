@@ -11,11 +11,10 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -23,7 +22,7 @@ import (
 
 func TestStorkCtlSchedulePolicy(t *testing.T) {
 	err := setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	currentTestSuite = t.Name()
 	t.Run("createDefaultIntervalSchedulePolicyTest", createDefaultIntervalSchedulePolicyTest)
 	t.Run("createDefaultDailySchedulePolicyTest", createDefaultDailySchedulePolicyTest)
@@ -35,13 +34,13 @@ func TestStorkCtlSchedulePolicy(t *testing.T) {
 	t.Run("createCustomMonthlySchedulePolicyTest", createCustomMonthlySchedulePolicyTest)
 	t.Run("deleteSchedulePolicyTest", deleteSchedulePolicyTest)
 	err = setRemoteConfig("")
-	require.NoError(t, err, "setting kubeconfig to default failed")
+	log.FailOnError(t, err, "setting kubeconfig to default failed")
 }
 
 func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]string, specFileName string, testrailID int) {
 	schedulePolicyName := "automation-test-policy"
 	var testResult = testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer SchedulePolicyCleanup(t, schedulePolicyName)
 	defer updateDashStats(t.Name(), &testResult)
@@ -57,30 +56,30 @@ func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]s
 	}
 	cmd.SetArgs(cmdArgs)
 	//execute the command
-	logrus.Infof("The storkctl command being executed is %v", cmdArgs)
+	log.InfoD("The storkctl command being executed is %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Storkctl execution failed: %v", err)
+		log.Error("Storkctl execution failed: %v", err)
 		return
 	}
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
-	logrus.Infof("Actual output is: %s\n", actualOutput)
+	log.InfoD("Actual output is: %s\n", actualOutput)
 	expectedOutput := fmt.Sprintf("Schedule policy %v created successfully\n", schedulePolicyName)
-	require.Equal(t, expectedOutput, actualOutput)
+	Dash.VerifyFatal(t, expectedOutput, actualOutput, "Error validating the output of the command")
 
 	//Validate the created resource
 	specFile := "specs/storkctl-specs/schedulepolicy/" + specFileName
 	err := ValidateSchedulePolicyFromFile(t, specFile, schedulePolicyName)
-	require.NoError(t, err, "Error validating the created resource")
+	log.FailOnError(t, err, "Error validating the created resource")
 
 	// If we are here then the test has passed
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deleteSchedulePolicyTest(t *testing.T) {
 	var testrailID, testResult = 93195, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	factory := storkctl.NewFactory()
@@ -98,30 +97,30 @@ func deleteSchedulePolicyTest(t *testing.T) {
 	}
 	_, err := storkops.Instance().CreateSchedulePolicy(schedulePolicy)
 	if err != nil {
-		logrus.Errorf("Unable to create schedule policy %v", schedulePolicyName)
+		log.Error("Unable to create schedule policy %v", schedulePolicyName)
 	}
 
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
 	cmdArgs := []string{"delete", "schedulepolicy", schedulePolicyName}
 	cmd.SetArgs(cmdArgs)
-	logrus.Infof("The command being executed is %v", cmdArgs)
+	log.InfoD("The command being executed is %v", cmdArgs)
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Storkctl execution failed: %v", err)
+		log.Error("Storkctl execution failed: %v", err)
 		return
 	}
 	actualOutput := outputBuffer.String()
-	logrus.Infof("Actual output is: %s", actualOutput)
+	log.InfoD("Actual output is: %s", actualOutput)
 	expectedOutput := fmt.Sprintf("Schedule policy %v deleted successfully\n", schedulePolicyName)
-	require.Equal(t, expectedOutput, actualOutput)
+	Dash.VerifyFatal(t, expectedOutput, actualOutput, "Error validating the output of the command")
 
 	//validate that the schedule policy is actually deleted
 	_, err = storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 	expectedErrorMsg := fmt.Sprintf("schedulepolicies.stork.libopenstorage.org \"%s\" not found", schedulePolicyName)
-	require.Equal(t, expectedErrorMsg, err.Error())
+	Dash.VerifyFatal(t, expectedErrorMsg, err.Error(), "Error validating the deletion of the schedule policy")
 
 	testResult = testResultPass
-	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func createDefaultIntervalSchedulePolicyTest(t *testing.T) {
@@ -204,40 +203,40 @@ func ValidateSchedulePolicy(t *testing.T, schedulePolicy *storkv1.SchedulePolicy
 	//We want to validate if the created schedule policy resource matches our expectations
 	actualPolicy, err := storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 	if err != nil {
-		logrus.Errorf("Unable to get the schedule policy")
+		log.Error("Unable to get the schedule policy")
 		return err
 	}
-	logrus.Info("Trying to validate the created policy")
+	log.Info("Trying to validate the created policy")
 	//Validating schedulePolicy.Policy because schedulePolicy.metadata cannot be validated
-	require.Equal(t, schedulePolicy.Policy, actualPolicy.Policy, "Created schedule policy doesn't match the expected specification")
+	Dash.VerifyFatal(t, schedulePolicy.Policy, actualPolicy.Policy, "Created schedule policy doesn't match the expected specification")
 	return nil
 }
 
 func SchedulePolicyCleanup(t *testing.T, policyName string) {
-	logrus.Info("Cleaning up created resources")
+	log.Info("Cleaning up created resources")
 	DeleteAndWaitForSchedulePolicyDeletion(t, policyName)
 }
 
 func DeleteAndWaitForSchedulePolicyDeletion(t *testing.T, name string) {
 	err := storkops.Instance().DeleteSchedulePolicy(name)
 	if err != nil {
-		logrus.Errorf("Unable to delete schedule policy %s", name)
+		log.Error("Unable to delete schedule policy %s", name)
 	}
 	//check if the schedulePolicy is successfully deleted
 	f := func() (interface{}, bool, error) {
-		logrus.Infof("Checking if schedule policy resource is successfully deleted")
+		log.InfoD("Checking if schedule policy resource is successfully deleted")
 		_, err := storkops.Instance().GetSchedulePolicy(name)
 		if err == nil {
 			return "", true, fmt.Errorf("get schedule policy: %s should have failed", name)
 		}
 		if !errors.IsNotFound(err) {
-			logrus.Infof("unexpected err: %v when checking deleted schedulePolicy: %s", err, name)
+			log.InfoD("unexpected err: %v when checking deleted schedulePolicy: %s", err, name)
 			return "", true, err
 		}
 		//deletion done
-		logrus.Infof("Schedule policy %s successfully deleted", name)
+		log.InfoD("Schedule policy %s successfully deleted", name)
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, 2*time.Second)
-	require.NoError(t, err, "Unable to delete schedule policy %s", name)
+	log.FailOnError(t, err, "Unable to delete schedule policy %s", name)
 }

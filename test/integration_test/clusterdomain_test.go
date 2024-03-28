@@ -10,12 +10,11 @@ import (
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/pborman/uuid"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -36,32 +35,32 @@ func TestClusterDomains(t *testing.T) {
 	defer updateDashStats(t.Name(), &testResult)
 	enabled, err := strconv.ParseBool(os.Getenv(enableClusterDomainTests))
 	if enabled && err == nil {
-		logrus.Info("Running cluster domain tests")
+		log.InfoD("Running cluster domain tests")
 		listCdsTask := func() (interface{}, bool, error) {
 			// Fetch the cluster domains
 			cdses, err := storkops.Instance().ListClusterDomainStatuses()
 			if err != nil || len(cdses.Items) == 0 {
-				logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+				log.InfoD("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
 				return "", true, fmt.Errorf("failed to list cluster domains statuses")
 			}
 
 			cds := cdses.Items[0]
 			cdsName = cds.Name
 			if len(cds.Status.ClusterDomainInfos) == 0 {
-				logrus.Infof("Found 0 cluster domain info objects in cluster domain status.")
+				log.InfoD("Found 0 cluster domain info objects in cluster domain status.")
 				return "", true, fmt.Errorf("failed to list cluster domains statuses")
 			}
 			return "", false, nil
 
 		}
 		_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "expected list cluster domains status to succeed")
+		log.FailOnError(t, err, "expected list cluster domains status to succeed")
 
 		t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
 	} else if err != nil {
-		logrus.Errorf("Failed to run cluster domain tests: %v", err)
+		log.Error("Failed to run cluster domain tests: %v", err)
 	} else if !enabled {
-		logrus.Info("Skipping cluster domain tests")
+		log.Info("Skipping cluster domain tests")
 	}
 }
 
@@ -74,11 +73,11 @@ func triggerClusterDomainUpdate(
 	// run the command on the remote cluster as currently
 	// we do not stop/deactivate the remote cluster
 	err := setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	defer func() {
 		err := setSourceKubeConfig()
-		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	}()
 
 	updateName := name + uuid.New()
@@ -91,16 +90,16 @@ func triggerClusterDomainUpdate(
 			Active:        active,
 		},
 	})
-	require.NoError(t, err, "Unexpected error on cluster domain update: %v", err)
+	log.FailOnError(t, err, "Unexpected error on cluster domain update: %v", err)
 
 	err = storkops.Instance().ValidateClusterDomainUpdate(updateName, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Failed to validate cluster domain update")
+	log.FailOnError(t, err, "Failed to validate cluster domain update")
 }
 
 func failoverAndFailbackClusterDomainTest(t *testing.T) {
 	// validate the cluster domains status
 	err := storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
+	log.FailOnError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// Migrate the resources
 	ctxs, preMigrationCtx := triggerMigration(
@@ -149,11 +148,11 @@ func testClusterDomainsFailover(
 	domainMap[domainList[0]] = false
 	// validate the cluster domains status
 	err := storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
+	log.FailOnError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// Reduce the replicas on cluster 1
 	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
-	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
+	log.FailOnError(t, err, "Unexpected error on GetScaleFactorMap")
 
 	// Copy the old scale factor map
 	oldScaleFactor := make(map[string]int32)
@@ -165,7 +164,7 @@ func testClusterDomainsFailover(
 		scaleFactor[k] = 0
 	}
 	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
-	require.NoError(t, err, "Unexpected error on ScaleApplication")
+	log.FailOnError(t, err, "Unexpected error on ScaleApplication")
 
 	tk := func() (interface{}, bool, error) {
 		// check if the app is scaled down.
@@ -182,18 +181,18 @@ func testClusterDomainsFailover(
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(tk, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Unexpected error on scaling down application.")
+	log.FailOnError(t, err, "Unexpected error on scaling down application.")
 
 	// start the app on cluster 2
 	err = setDestinationKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Set scale factor to it's orignal values on cluster 1
 	err = schedulerDriver.ScaleApplication(preMigrationCtx, oldScaleFactor)
-	require.NoError(t, err, "Unexpected error on ScaleApplication")
+	log.FailOnError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
+	log.FailOnError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
 }
 
 func testClusterDomainsFailback(
@@ -205,13 +204,13 @@ func testClusterDomainsFailback(
 
 	// Get scale factor on cluster 2
 	oldScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
-	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
+	log.FailOnError(t, err, "Unexpected error on GetScaleFactorMap")
 
 	// destroy the app on cluster 2
 	err = schedulerDriver.Destroy(preMigrationCtx, nil)
-	require.NoError(t, err, "Error destroying ctx: %+v", preMigrationCtx)
+	log.FailOnError(t, err, "Error destroying ctx: %+v", preMigrationCtx)
 	err = schedulerDriver.WaitForDestroy(preMigrationCtx, defaultWaitTimeout)
-	require.NoError(t, err, "Error waiting for destroy of ctx: %+v", preMigrationCtx)
+	log.FailOnError(t, err, "Error waiting for destroy of ctx: %+v", preMigrationCtx)
 
 	// Activate cluster domain
 	triggerClusterDomainUpdate(
@@ -226,16 +225,16 @@ func testClusterDomainsFailback(
 
 	// validate the cluster domains status
 	err = storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
+	log.FailOnError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// start the app on cluster 1
 	err = setSourceKubeConfig()
-	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	err = schedulerDriver.ScaleApplication(ctxs[0], oldScaleFactor)
-	require.NoError(t, err, "Unexpected error on ScaleApplication")
+	log.FailOnError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state on source cluster after failback")
+	log.FailOnError(t, err, "Error waiting for pod to get to running state on source cluster after failback")
 
 }

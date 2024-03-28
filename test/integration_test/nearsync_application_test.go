@@ -5,13 +5,12 @@ package integrationtest
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/log"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 )
 
 type configTestAppWithNearSync struct {
@@ -78,7 +77,7 @@ func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
 		nearsync:                      true,
 		nearsync_replication_strategy: config.nearsyncReplStrategy,
 	})
-	require.NoError(t, err, "unable to create storage class")
+	log.FailOnError(t, err, "unable to create storage class")
 
 	// start application
 	ctxs := scheduleAppAndWait(t, instanceIDs, config.appKey)
@@ -91,15 +90,15 @@ func helperTestAppWithNearSync(t *testing.T, config configTestAppWithNearSync) {
 
 	// start the stress tool
 	err = setSourceKubeConfig()
-	require.NoError(t, err)
+	log.FailOnError(t, err, "unable to set source kubeconfig")
 
 	err = schedulerDriver.AddTasks(
 		ctxs[0],
 		scheduler.ScheduleOptions{
 			AppKeys: []string{config.stressAppKey},
 		})
-	require.NoError(t, err, "error scheduling app")
-	logrus.Infof("wait for some data to load in db")
+	log.FailOnError(t, err, "error scheduling app")
+	log.Info("wait for some data to load in db")
 	time.Sleep(time.Minute * 5)
 
 	deactivateClusterDomainAndTriggerFailover(
