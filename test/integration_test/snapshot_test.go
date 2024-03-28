@@ -455,6 +455,7 @@ func snapshotScheduleTests(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
 	t.Run("intervalTest", intervalSnapshotScheduleTest)
+	t.Run("intervalSnapshotScheduleWithSimilarLongNamesTest", intervalSnapshotScheduleWithSimilarLongNamesTest)
 	t.Run("dailyTest", dailySnapshotScheduleTest)
 	t.Run("weeklyTest", weeklySnapshotScheduleTest)
 	t.Run("monthlyTest", monthlySnapshotScheduleTest)
@@ -573,6 +574,106 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 
 	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func intervalSnapshotScheduleWithSimilarLongNamesTest(t *testing.T) {
+	var testrailID, testResult = 297239, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "scheduletest"),
+		scheduler.ScheduleOptions{AppKeys: []string{"elasticsearch"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for elasticsearch statefulset to get to running state")
+
+	policyName := "intervalpolicy"
+	retain := 1
+	interval := 2
+	schedPolicy := &storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				Retain:          storkv1.Retain(retain),
+				IntervalMinutes: interval,
+			},
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	require.NoError(t, err, "Error creating interval schedule policy")
+	logrus.Infof("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
+
+	namespace := ctxs[0].GetID()
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	require.NoError(t, err, fmt.Sprintf("Error getting pvcs in namespace %s interval schedule policy", namespace))
+	logrus.Infof("Found %v pvcs in namespace %s", len(pvcList.Items), namespace)
+
+	sleepTime := time.Duration((retain+1)*interval) * time.Minute
+	scheduleNames := make([]string, 0)
+	for _, pvc := range pvcList.Items {
+		scheduleName := fmt.Sprintf("intervalscheduletest-%s", pvc.Name)
+		scheduleNames = append(scheduleNames, scheduleName)
+		snapSched := &storkv1.VolumeSnapshotSchedule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      scheduleName,
+				Namespace: namespace,
+			},
+			Spec: storkv1.VolumeSnapshotScheduleSpec{
+				Template: storkv1.VolumeSnapshotTemplateSpec{
+					Spec: crdv1.VolumeSnapshotSpec{
+						PersistentVolumeClaimName: pvc.Name},
+				},
+				SchedulePolicyName: policyName,
+			},
+		}
+
+		if authTokenConfigMap != "" {
+			err := addSecurityAnnotation(snapSched)
+			require.NoError(t, err, "Error adding annotations to interval schedule policy")
+		}
+
+		_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
+		require.NoError(t, err, "Error creating interval snapshot schedule")
+		sleepTime := time.Duration((retain+1)*interval) * time.Minute
+		logrus.Infof("Created snapshotschedule %v in namespace %v, sleeping for %v for schedule to trigger",
+			scheduleName, namespace, sleepTime)
+	}
+
+	time.Sleep(sleepTime)
+
+	for _, scheduleName := range scheduleNames {
+		snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(scheduleName,
+			namespace,
+			snapshotScheduleRetryTimeout,
+			snapshotScheduleRetryInterval)
+		require.NoError(t, err, "Error validating interval snapshot schedule")
+		require.Equal(t, 1, len(snapStatuses), "Should have snapshots for only one policy type")
+		require.Equal(t, retain, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
+		logrus.Infof("Validated snapshotschedule %v", scheduleName)
+	}
+
+	for _, scheduleName := range scheduleNames {
+		err = storkops.Instance().DeleteSnapshotSchedule(scheduleName, namespace)
+		require.NoError(t, err, fmt.Sprintf("Error deleting snapshot schedule %v from namespace %v", scheduleName, namespace))
+	}
+	err = storkops.Instance().DeleteSchedulePolicy(policyName)
+	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
+
+	destroyAndWait(t, ctxs)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
