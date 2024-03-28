@@ -171,6 +171,8 @@ func jobFor(
 	vb *v1alpha1.VolumeBackup,
 	jobName string,
 ) (*batchv1.Job, error) {
+	podUserId := int64(777)
+	notAllowed := false
 	labels := addJobLabels(jobOption)
 
 	resources, err := utils.KopiaResourceRequirements(jobOption.JobConfigMap, jobOption.JobConfigMapNs)
@@ -258,6 +260,19 @@ func jobFor(
 									Name:      "cred-secret",
 									MountPath: drivers.KopiaCredSecretMount,
 									ReadOnly:  true,
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser:                &podUserId,
+								RunAsGroup:               &podUserId,
+								AllowPrivilegeEscalation: &(notAllowed),
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: "RuntimeDefault",
+								},
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{
+										"ALL",
+									},
 								},
 							},
 						},
