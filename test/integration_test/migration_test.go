@@ -1509,7 +1509,7 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
 	for location, secret := range cmData {
 		logrus.Infof("Creating a bidirectional-pair using %s as objectstore.", location)
-		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret)
+		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret, nil)
 		require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
 
 		err = setSourceKubeConfig()
@@ -2692,7 +2692,7 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 		logrus.Infof("Namespace: %s", clusterPairNamespace)
 		logrus.Infof("Backuplocation: %s", defaultBackupLocation)
 		logrus.Infof("Secret name: %s", defaultSecretName)
-		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, nil)
 		require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
 		err = setSourceKubeConfig()
 		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
