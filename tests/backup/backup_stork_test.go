@@ -19,7 +19,7 @@ import (
 )
 
 // This testcase verifies backup and restore with non-existing and deleted custom stork admin namespaces
-var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies}", func() {
+var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies}", Label(TestCaseLabelsMap[BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies]...), func() {
 
 	var (
 		newAdminNamespace                     string // New admin namespace to be set as custom admin namespace

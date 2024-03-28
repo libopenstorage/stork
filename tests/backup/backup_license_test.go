@@ -16,7 +16,7 @@ import (
 )
 
 // NodeCountForLicensing applies label portworx.io/nobackup=true on any worker node of application cluster and verifies that this worker node is not counted for licensing
-var _ = Describe("{NodeCountForLicensing}", func() {
+var _ = Describe("{NodeCountForLicensing}", Label(TestCaseLabelsMap[NodeCountForLicensing]...), func() {
 	var (
 		sourceClusterWorkerNodes      []node.Node
 		destinationClusterWorkerNodes []node.Node
@@ -132,7 +132,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 })
 
 // LicensingCountWithNodeLabelledBeforeClusterAddition applies label portworx.io/nobackup=true before adding application cluster to backup and verifies the license count
-var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func() {
+var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", Label(TestCaseLabelsMap[LicensingCountWithNodeLabelledBeforeClusterAddition]...), func() {
 	var (
 		cloudCredName                 string
 		cloudCredUID                  string
@@ -321,7 +321,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 	})
 })
 
-var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
+var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", Label(TestCaseLabelsMap[LicensingCountBeforeAndAfterBackupPodRestart]...), func() {
 	var (
 		pxbNamespace                  string
 		sourceClusterWorkerNodes      []node.Node

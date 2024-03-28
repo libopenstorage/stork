@@ -27,7 +27,7 @@ import (
 )
 
 // This test case creates a backup location with encryption
-var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
+var _ = Describe("{BackupLocationWithEncryptionKey}", Label(TestCaseLabelsMap[BackupLocationWithEncryptionKey]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -143,7 +143,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 })
 
 // Change replica while restoring backup through StorageClass Mapping.
-var _ = Describe("{ReplicaChangeWhileRestore}", func() {
+var _ = Describe("{ReplicaChangeWhileRestore}", Label(TestCaseLabelsMap[ReplicaChangeWhileRestore]...), func() {
 	var (
 		controlChannel chan string
 		errorGroup     *errgroup.Group
@@ -307,7 +307,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 })
 
 // This testcase verifies resize after the volume is restored from a backup
-var _ = Describe("{ResizeOnRestoredVolume}", func() {
+var _ = Describe("{ResizeOnRestoredVolume}", Label(TestCaseLabelsMap[ResizeOnRestoredVolume]...), func() {
 	var (
 		appList              = Inst().AppList
 		scheduledAppContexts []*scheduler.Context
@@ -496,7 +496,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 })
 
 // Restore backup from encrypted and non-encrypted backups
-var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
+var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", Label(TestCaseLabelsMap[RestoreEncryptedAndNonEncryptedBackups]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appContextsToBackup  []*scheduler.Context
@@ -663,7 +663,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 })
 
 // This testcase verifies schedule backups are successful while volume resize is in progress
-var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
+var _ = Describe("{ResizeVolumeOnScheduleBackup}", Label(TestCaseLabelsMap[ResizeVolumeOnScheduleBackup]...), func() {
 	var (
 		appList                     = Inst().AppList
 		scheduledAppContexts        []*scheduler.Context

@@ -20,7 +20,7 @@ import (
 )
 
 // NamespaceLabelledBackupSharedWithDifferentAccessMode takes namespace labelled backup and share with users having different access mode
-var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func() {
+var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", Label(TestCaseLabelsMap[NamespaceLabelledBackupSharedWithDifferentAccessMode]...), func() {
 	var (
 		srcClusterUid            string
 		backupLocationUID        string
@@ -208,7 +208,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 })
 
 // BackupScheduleForOldAndNewNS Schedule backup using namespace label for old namespace and new namespace
-var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
+var _ = Describe("{BackupScheduleForOldAndNewNS}", Label(TestCaseLabelsMap[BackupScheduleForOldAndNewNS]...), func() {
 	var (
 		initialNSCount         int
 		newNSCount             int
@@ -440,7 +440,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 })
 
 // ManualAndScheduledBackupUsingNamespaceAndResourceLabel performs manual backup, schedule backup and restore, using namespace label and resource label
-var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", func() {
+var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", Label(TestCaseLabelsMap[ManualAndScheduledBackupUsingNamespaceAndResourceLabel]...), func() {
 	var (
 		err                     error
 		schPolicyInterval       int64
@@ -637,7 +637,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 })
 
 // ScheduleBackupWithAdditionAndRemovalOfNS perform schedule backup during which remove and add namespace and verify restoration of removed namespace
-var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
+var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", Label(TestCaseLabelsMap[ScheduleBackupWithAdditionAndRemovalOfNS]...), func() {
 	var (
 		err                      error
 		schPolicyInterval        int
@@ -871,7 +871,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 })
 
 // ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit Perform manual, schedule backup and restore of single, multiple and all namespaces with namespace labeled as max character limit
-var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func() {
+var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", Label(TestCaseLabelsMap[ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit]...), func() {
 	var (
 		err                            error
 		backupLocationUID              string
@@ -1238,7 +1238,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 })
 
 // NamespaceLabelledBackupOfEmptyNamespace takes namespace labelled backup of empty namespace and restores it
-var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
+var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", Label(TestCaseLabelsMap[NamespaceLabelledBackupOfEmptyNamespace]...), func() {
 	var (
 		backupLocationUID           string
 		cloudCredUID                string

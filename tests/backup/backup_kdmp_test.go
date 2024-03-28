@@ -21,7 +21,7 @@ import (
 )
 
 // This testcase verifies backup and restore of applications by excluding files and directories from mountPath.
-var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
+var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[ExcludeDirectoryFileBackup]...), func() {
 	var (
 		backupName                    string
 		scheduledAppContexts          []*scheduler.Context
@@ -749,7 +749,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 })
 
 // This testcase verifies backup and restore with mentioned valid directories or files from backed-up apps and restores them when invalid,non-existent storageclass and files are there in KDMP exclude list
-var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
+var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[ExcludeInvalidDirectoryFileBackup]...), func() {
 	var (
 		backupName                    string
 		scheduledAppContexts          []*scheduler.Context

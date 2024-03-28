@@ -14,7 +14,7 @@ import (
 )
 
 // This MultipleProvisionerCsiSnapshotDeleteBackupAndRestore testcase to test restore of namespaces with multiple provisioners using backup when snapshot is deleted
-var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func() {
+var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", Label(TestCaseLabelsMap[MultipleProvisionerCsiSnapshotDeleteBackupAndRestore]...), func() {
 
 	var (
 		restoreNames                              []string

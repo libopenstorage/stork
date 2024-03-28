@@ -20,7 +20,7 @@ import (
 )
 
 // This testcase verifies Px Backup upgrade
-var _ = Describe("{UpgradePxBackup}", func() {
+var _ = Describe("{UpgradePxBackup}", Label(TestCaseLabelsMap[UpgradePxBackup]...), func() {
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("UpgradePxBackup", "Upgrading backup", nil, 0, Mkoppal, Q1FY24)
@@ -40,7 +40,7 @@ var _ = Describe("{UpgradePxBackup}", func() {
 })
 
 // StorkUpgradeWithBackup validates backups with stork upgrade
-var _ = Describe("{StorkUpgradeWithBackup}", func() {
+var _ = Describe("{StorkUpgradeWithBackup}", Label(TestCaseLabelsMap[StorkUpgradeWithBackup]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		backupLocationName   string
@@ -221,7 +221,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 })
 
 // This testcase executes and validates end-to-end backup and restore operations with PX-Backup upgrade
-var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
+var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCaseLabelsMap[PXBackupEndToEndBackupAndRestoreWithUpgrade]...), func() {
 	var (
 		numDeployments                     int
 		srcClusterContexts                 []*scheduler.Context
@@ -761,7 +761,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	})
 })
 
-var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
+var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBackupClusterUpgradeTest]...), func() {
 	var (
 		numDeployments                     int
 		srcClusterContexts                 []*scheduler.Context

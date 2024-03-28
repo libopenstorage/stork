@@ -20,7 +20,7 @@ import (
 )
 
 // This testcase verifies backup and restore of applications when PX sync DR configured on application namespace.
-var _ = Describe("{BackupAndRestoreSyncDR}", func() {
+var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRestoreSyncDR]...), func() {
 	var (
 		backupName                 string
 		scheduledAppContexts       []*scheduler.Context

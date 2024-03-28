@@ -19,7 +19,7 @@ import (
 )
 
 // DeleteNfsExecutorPodWhileBackupAndRestoreInProgress deletes the nfs executor pod while backup and restore are in progress and validates their status
-var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func() {
+var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(TestCaseLabelsMap[DeleteNfsExecutorPodWhileBackupAndRestoreInProgress]...), func() {
 	var (
 		bkpLocationName          string
 		backupLocationUID        string
@@ -215,7 +215,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 })
 
 // RemoveJSONFilesFromNFSBackupLocation deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore
-var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
+var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", Label(TestCaseLabelsMap[RemoveJSONFilesFromNFSBackupLocation]...), func() {
 	var (
 		bkpLocationName          string
 		backupLocationUID        string
@@ -432,7 +432,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 })
 
 // CloudSnapshotMissingValidationForNFSLocation this TC validates the Cloud Snapshot missing status for backups after deleting the Cloud Snapshots on the NFS location
-var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
+var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", Label(TestCaseLabelsMap[CloudSnapshotMissingValidationForNFSLocation]...), func() {
 	var (
 		bkpLocationName            string
 		backupLocationUID          string

@@ -24,7 +24,7 @@ import (
 )
 
 // This test restarts volume driver (PX) while backup is in progress
-var _ = Describe("{BackupRestartPX}", func() {
+var _ = Describe("{BackupRestartPX}", Label(TestCaseLabelsMap[BackupRestartPX]...), func() {
 	var (
 		appList        = Inst().AppList
 		controlChannel chan string
@@ -193,7 +193,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup and restores.
-var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
+var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", Label(TestCaseLabelsMap[KillStorkWithBackupsAndRestoresInProgress]...), func() {
 	var (
 		appList        = Inst().AppList
 		controlChannel chan string
@@ -394,7 +394,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 })
 
 // This test does restart the px-backup pod, Mongo pods during backup sharing
-var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
+var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMap[RestartBackupPodDuringBackupSharing]...), func() {
 	var (
 		controlChannel chan string
 		errorGroup     *errgroup.Group
@@ -626,7 +626,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 })
 
 // CancelAllRunningBackupJobs cancels all the running backup jobs while backups are in progress
-var _ = Describe("{CancelAllRunningBackupJobs}", func() {
+var _ = Describe("{CancelAllRunningBackupJobs}", Label(TestCaseLabelsMap[CancelAllRunningBackupJobs]...), func() {
 	var (
 		cloudCredName     string
 		cloudCredUID      string
@@ -815,7 +815,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 })
 
 // ScaleMongoDBWhileBackupAndRestore scales down MongoDB to repl=0 and backup to original replica when backups and restores are in progress
-var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
+var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[ScaleMongoDBWhileBackupAndRestore]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string
@@ -1087,7 +1087,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 
 // RebootNodesWhenBackupsAreInProgress reboots worker nodes from application cluster when backup is in progress
 // source cluster is backup cluster and destination cluster is application cluster for this testcase
-var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
+var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMap[RebootNodesWhenBackupsAreInProgress]...), func() {
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		appNamespaces            []string
@@ -1352,7 +1352,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 })
 
 // ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress scales down px-backup deployment to 0 and backup to original replica when backups and restores are in progress
-var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func() {
+var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Label(TestCaseLabelsMap[ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string
@@ -1616,7 +1616,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 })
 
 // CancelAllRunningRestoreJobs cancels all the running restore jobs while restores are in progress
-var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
+var _ = Describe("{CancelAllRunningRestoreJobs}", Label(TestCaseLabelsMap[CancelAllRunningRestoreJobs]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string
@@ -1831,7 +1831,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 })
 
 // BackupNetworkErrorTest verifies backups and restore operation when network errors are injected.
-var _ = Describe("{BackupNetworkErrorTest}", func() {
+var _ = Describe("{BackupNetworkErrorTest}", Label(TestCaseLabelsMap[BackupNetworkErrorTest]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appNamespaces        []string

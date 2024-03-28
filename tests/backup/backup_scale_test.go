@@ -17,7 +17,7 @@ import (
 )
 
 // MultipleBackupLocationWithSameEndpoint Create Backup and Restore for Multiple backup location added using same endpoint.
-var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
+var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabelsMap[MultipleBackupLocationWithSameEndpoint]...), func() {
 	var (
 		scheduledAppContexts          []*scheduler.Context
 		backupLocationNameMap         = make(map[int]string)
@@ -274,7 +274,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 })
 
 // This TC takes backup of 50 volumes and performs restore
-var _ = Describe("{ValidateFiftyVolumeBackups}", func() {
+var _ = Describe("{ValidateFiftyVolumeBackups}", Label(TestCaseLabelsMap[ValidateFiftyVolumeBackups]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string

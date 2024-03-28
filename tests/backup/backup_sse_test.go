@@ -22,7 +22,7 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}", func() {
+var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}", Label(TestCaseLabelsMap[CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy]...), func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93014
 	var (
