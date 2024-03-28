@@ -6,6 +6,7 @@ package integrationtest
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -69,7 +70,7 @@ func cmdExecutorTest(t *testing.T) {
 			executors := startCommandInPods(t, testCmd, pods)
 
 			for _, executor := range executors {
-				err = executor.Wait(120)
+				err = executor.Wait(120 * time.Second)
 				ns, name := executor.GetPod()
 				require.NoError(t, err, fmt.Sprintf("failed to wait for command on pod: [%s] %s", ns, name))
 			}
@@ -87,7 +88,7 @@ func cmdExecutorTest(t *testing.T) {
 			executors := startCommandInPods(t, testCmd, pods)
 
 			for _, executor := range executors {
-				err = executor.Wait(10)
+				err = executor.Wait(10 * time.Second)
 				ns, name := executor.GetPod()
 				require.Error(t, err, fmt.Sprintf("expected error since command: %s should fail on pod: [%s] %s",
 					executor.GetCommand(), ns, name))
