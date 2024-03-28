@@ -99,6 +99,13 @@ func (d *gce) InspectVolume(name string) (*api.Volume, error) {
 		Operation: "InspectVolume()",
 	}
 }
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in google cloud
+func (d *gce) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &gce{})
 }

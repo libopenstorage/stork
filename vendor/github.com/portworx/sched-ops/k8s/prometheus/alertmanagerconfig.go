@@ -9,23 +9,23 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-// AlertManagerConfig adds receiver to alert manager which is responsible sending alerts
+// AlertManagerConfigOps adds receiver to alert manager which is responsible sending alerts
 type AlertManagerConfigOps interface {
-	// List of alertmanagerconfigs that match the namespace
+	// ListAlertManagerConfigs lists alertmanagerconfigs that match the namespace
 	ListAlertManagerConfigs(namespace string, labelSelectors map[string]string) (*monitoringv1alpha1.AlertmanagerConfigList, error)
-	// Get alertmanagerconfigs that matches the name
+	// GetAlertManagerConfig get alertmanagerconfigs that matches the name
 	GetAlertManagerConfig(name string, namespace string) (*monitoringv1alpha1.AlertmanagerConfig, error)
-	// Create a new alertmanagerconfig
+	// CreateAlertManagerConfig Create a new alertmanagerconfig
 	CreateAlertManagerConfig(*monitoringv1alpha1.AlertmanagerConfig) (*monitoringv1alpha1.AlertmanagerConfig, error)
-	// Update one alertmanagerconfig
+	//UpdateAlertManagerConfig  Update one alertmanagerconfig
 	UpdateAlertManagerConfig(*monitoringv1alpha1.AlertmanagerConfig) (*monitoringv1alpha1.AlertmanagerConfig, error)
-	// Delete one alertmanagerconfig
+	// DeleteAlertManagerConfig Delete one alertmanagerconfigs
 	DeleteAlertManagerConfig(name string, namespace string) error
-	// Delete a list of alertmanagerconfig based on the namespace
+	// DeleteCollectionAlertManagerConfig Delete a list of alertmanagerconfig based on the namespace
 	DeleteCollectionAlertManagerConfig(namespace string, labelSelectors map[string]string) error
 }
 
-// List of alert manager configs that match the namespace
+// ListAlertManagerConfigs  List of alert manager configs that match the namespace
 func (c *Client) ListAlertManagerConfigs(namespace string, labelSelectors map[string]string) (*monitoringv1alpha1.AlertmanagerConfigList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func (c *Client) ListAlertManagerConfigs(namespace string, labelSelectors map[st
 	return c.prometheus.MonitoringV1alpha1().AlertmanagerConfigs(namespace).List(context.TODO(), listOptions(labelSelectors))
 }
 
-// Get one alert manager config
+// GetAlertManagerConfig Get one alert manager config
 func (c *Client) GetAlertManagerConfig(name string, namespace string) (*monitoringv1alpha1.AlertmanagerConfig, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func (c *Client) GetAlertManagerConfig(name string, namespace string) (*monitori
 	return c.prometheus.MonitoringV1alpha1().AlertmanagerConfigs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
-// Creates a new AlertmanagerConfig in the given namespace, provided the secret is provided
+// CreateAlertManagerConfig Creates a new AlertmanagerConfig in the given namespace, provided the secret is provided
 func (c *Client) CreateAlertManagerConfig(amc *monitoringv1alpha1.AlertmanagerConfig) (*monitoringv1alpha1.AlertmanagerConfig, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (c *Client) CreateAlertManagerConfig(amc *monitoringv1alpha1.AlertmanagerCo
 	return c.prometheus.MonitoringV1alpha1().AlertmanagerConfigs(ns).Create(context.TODO(), amc, metav1.CreateOptions{})
 }
 
-// Updates one alert manager config
+// UpdateAlertManagerConfig  Updates one alert manager config
 func (c *Client) UpdateAlertManagerConfig(amc *monitoringv1alpha1.AlertmanagerConfig) (*monitoringv1alpha1.AlertmanagerConfig, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (c *Client) UpdateAlertManagerConfig(amc *monitoringv1alpha1.AlertmanagerCo
 	return c.prometheus.MonitoringV1alpha1().AlertmanagerConfigs(amc.Namespace).Update(context.TODO(), amc, metav1.UpdateOptions{})
 }
 
-// Deletes single alert manager config
+// DeleteAlertManagerConfig Deletes single alert manager config
 func (c *Client) DeleteAlertManagerConfig(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
@@ -74,6 +74,7 @@ func (c *Client) DeleteAlertManagerConfig(name string, namespace string) error {
 	})
 }
 
+// DeleteCollectionAlertManagerConfig Deletes a list of alert manager config based on the namespace
 func (c *Client) DeleteCollectionAlertManagerConfig(namespace string, labelSelectors map[string]string) error {
 	if err := c.initClient(); err != nil {
 		return err
@@ -85,6 +86,7 @@ func (c *Client) DeleteCollectionAlertManagerConfig(namespace string, labelSelec
 	return c.prometheus.MonitoringV1alpha1().AlertmanagerConfigs(namespace).DeleteCollection(context.TODO(), deleteOpts, listOptions(labelSelectors))
 }
 
+// listOptions returns a list options with label selectors
 func listOptions(labelSelectors map[string]string) metav1.ListOptions {
 	if labelSelectors != nil {
 		return metav1.ListOptions{

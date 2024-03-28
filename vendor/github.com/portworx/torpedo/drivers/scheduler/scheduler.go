@@ -304,6 +304,12 @@ type Driver interface {
 	// GetAutopilotNamespace gets the Autopilot namespace
 	GetAutopilotNamespace() (string, error)
 
+	// IsAutopilotEnabled gets the Autopilot enabled or not
+	IsAutopilotEnabled() (bool, error)
+
+	// GetPortworxNamespace gets the Portworx namespace
+	GetPortworxNamespace() (string, error)
+
 	// GetIOBandwidth gets container start and end time
 	GetIOBandwidth(string, string) (int, error)
 

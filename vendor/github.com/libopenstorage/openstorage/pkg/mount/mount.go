@@ -4,12 +4,14 @@
 package mount
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -18,12 +20,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/pkg/mount"
 	"github.com/libopenstorage/openstorage/pkg/chattr"
 	"github.com/libopenstorage/openstorage/pkg/keylock"
 	"github.com/libopenstorage/openstorage/pkg/options"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/moby/sys/mountinfo"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -102,6 +104,7 @@ const (
 	mountPathRemoveDelay = 30 * time.Second
 	testDeviceEnv        = "Test_Device_Mounter"
 	bindMountPrefix      = "readonly"
+	statTimeout          = 30 * time.Second
 )
 
 var (
@@ -134,10 +137,13 @@ type PathInfo struct {
 // Info per device
 type Info struct {
 	sync.Mutex
-	Device     string
-	Minor      int
+	Device string
+	Minor  int
+	// Guarded using the above lock.
 	Mountpoint []*PathInfo
 	Fs         string
+	// Guarded using Mounter.Lock()
+	MountsInProgress int
 }
 
 // Mounter implements Ops and keeps track of active mounts for volume drivers.
@@ -151,7 +157,7 @@ type Mounter struct {
 	trashLocation string
 }
 
-type findMountPoint func(source *mount.Info, destination *regexp.Regexp, mountInfo []*mount.Info) (bool, string, string)
+type findMountPoint func(source *mountinfo.Info, destination *regexp.Regexp, mountInfo []*mountinfo.Info) (bool, string, string)
 
 // DefaultMounter defaults to syscall implementation.
 type DefaultMounter struct {
@@ -323,8 +329,9 @@ func (m *Mounter) maybeRemoveDevice(device string) {
 	m.Lock()
 	defer m.Unlock()
 	if info, ok := m.mounts[device]; ok {
-		// If the device has no more mountpoints, remove it from the map
-		if len(info.Mountpoint) == 0 {
+		// If the device has no more mountpoints and no mounts in progress, remove it from the map
+		if len(info.Mountpoint) == 0 && info.MountsInProgress == 0 {
+			logrus.Infof("No more mount entries for device [%s]. Removing device from MountTable", device)
 			delete(m.mounts, device)
 		}
 	}
@@ -337,6 +344,7 @@ func (m *Mounter) reload(device string, newM *Info) error {
 
 	// New mountable has no mounts, delete old mounts.
 	if newM == nil {
+		logrus.Infof("Removing Entry for device [%v] from MountTable", device)
 		delete(m.mounts, device)
 		return nil
 	}
@@ -344,6 +352,7 @@ func (m *Mounter) reload(device string, newM *Info) error {
 	// Old mountable had no mounts, copy over new mounts.
 	oldM, ok := m.mounts[device]
 	if !ok {
+		logrus.Infof("Reload: Adding the tuple to device path[%v:%v]", device, newM.Fs)
 		m.mounts[device] = newM
 		return nil
 	}
@@ -359,6 +368,7 @@ func (m *Mounter) reload(device string, newM *Info) error {
 	}
 
 	// Purge old mounts.
+	logrus.Infof("Reload: Adding the device tuple [%v:%v] to mount table", device, newM.Fs)
 	m.mounts[device] = newM
 	return nil
 }
@@ -377,12 +387,15 @@ func (m *Mounter) load(prefixes []*regexp.Regexp, fmp findMountPoint) error {
 			foundPrefix, sourcePath, devicePath = fmp(v, devPrefix, info)
 			targetDevice = getTargetDevice(devPrefix.String())
 			if !foundPrefix && targetDevice != "" {
-				foundTarget, _, _ = fmp(v, regexp.MustCompile(regexp.QuoteMeta(targetDevice)), info)
-				// We could not find a mountpoint for devPrefix (/dev/mapper/vg-lvm1) but found
-				// one for its target device (/dev/dm-0). Change the sourcePath to devPrefix
-				// as fmp might have returned an incorrect or empty sourcePath
-				sourcePath = devPrefix.String()
-				devicePath = devPrefix.String()
+				// This should be an Exact Match and not a prefix match.
+				if strings.EqualFold(targetDevice, v.Source)  {
+					// We could not find a mountpoint for devPrefix (/dev/mapper/vg-lvm1) but found
+					// one for its target device (/dev/dm-0). Change the sourcePath to devPrefix
+					// as fmp might have returned an incorrect or empty sourcePath
+					sourcePath = devPrefix.String()
+					devicePath = devPrefix.String()
+					foundTarget = true
+				}
 			}
 
 			if foundPrefix || foundTarget {
@@ -398,11 +411,12 @@ func (m *Mounter) load(prefixes []*regexp.Regexp, fmp findMountPoint) error {
 			if !ok {
 				mount = &Info{
 					Device:     deviceSourcePath,
-					Fs:         v.Fstype,
+					Fs:         v.FSType,
 					Minor:      v.Minor,
 					Mountpoint: make([]*PathInfo, 0),
 				}
 				m.mounts[mountSourcePath] = mount
+				logrus.Infof("load: Adding the device[%v:%v] to mount table", deviceSourcePath, v.FSType)
 			}
 			// Allow Load to be called multiple times.
 			for _, p := range mount.Mountpoint {
@@ -417,6 +431,7 @@ func (m *Mounter) load(prefixes []*regexp.Regexp, fmp findMountPoint) error {
 				Path: normalizeMountPath(v.Mountpoint),
 			}
 			mount.Mountpoint = append(mount.Mountpoint, pi)
+			logrus.Infof("load: Adding path to [%v:%v] to MountTable Entry for device [%v:%v]", v.Root, v.Mountpoint, deviceSourcePath, v.FSType)
 			if updatePaths {
 				m.paths[v.Mountpoint] = mountSourcePath
 			}
@@ -444,6 +459,7 @@ func (m *Mounter) Mount(
 ) error {
 	// device gets overwritten if opts specifies fuse mount with
 	// options.OptionsDeviceFuseMount.
+	logrus.Infof("Attempting to Mount device[%v] onto path [%s]. FsType[%s]", devPath, path, fs)
 	device := devPath
 	if value, ok := opts[options.OptionsDeviceFuseMount]; ok {
 		// fuse mounts show-up with this key as device.
@@ -477,17 +493,27 @@ func (m *Mounter) Mount(
 			Minor:      minor,
 			Fs:         fs,
 		}
+		logrus.Infof("Mount: Adding device[%v:%v] to mountable", device, fs)
 	}
+	// This variable in Info Structure is guarded using m.Lock()
+	info.MountsInProgress++
 	m.mounts[device] = info
 	m.Unlock()
 	info.Lock()
-	defer info.Unlock()
+	defer func() {
+		info.Unlock()
+		m.Lock()
+		// Info is not destroyed, even when we don't hold the lock.
+		info.MountsInProgress--
+		m.Unlock()
+	}()
 
 	// Validate input params
 	// FS check is not needed if it is a bind mount
 	if !strings.HasPrefix(info.Fs, fs) && (flags&syscall.MS_BIND) != syscall.MS_BIND {
 		logrus.Warnf("%s Existing mountpoint has fs %q cannot change to %q",
 			device, info.Fs, fs)
+		m.printMountTable()
 		return ErrEinval
 	}
 
@@ -587,6 +613,20 @@ func (m *Mounter) cleanupBindMount(path, bindMountPath string, err error) error 
 	return nil
 }
 
+func (m * Mounter) printMountTable() {
+	logrus.Infof("Found %v mounts in mounter's cache: ", len(m.mounts))
+	logrus.Infof("Mounter has the following mountpoints: ")
+	for dev, info := range m.mounts {
+		logrus.Infof("For Device %v: Info: %v", dev, info)
+		if info == nil {
+			continue
+		}
+		for _, path := range info.Mountpoint {
+			logrus.Infof("\t Mountpath: %v Rootpath: %v", path.Path, path.Root)
+		}
+	}
+}
+
 // Unmount device at mountpoint and from the matrix.
 // ErrEnoent is returned if the device or mountpoint for the device is not found.
 func (m *Mounter) Unmount(
@@ -599,6 +639,7 @@ func (m *Mounter) Unmount(
 	m.Lock()
 	// device gets overwritten if opts specifies fuse mount with
 	// options.OptionsDeviceFuseMount.
+	logrus.Infof("Unmount devPath[%s] from path[%s]", devPath, path)
 	device := devPath
 	path = normalizeMountPath(path)
 	if value, ok := opts[options.OptionsDeviceFuseMount]; ok {
@@ -609,17 +650,7 @@ func (m *Mounter) Unmount(
 	if !ok {
 		logrus.Warnf("Unable to unmount device %q path %q: %v",
 			devPath, path, ErrEnoent.Error())
-		logrus.Infof("Found %v mounts in mounter's cache: ", len(m.mounts))
-		logrus.Infof("Mounter has the following mountpoints: ")
-		for dev, info := range m.mounts {
-			logrus.Infof("For Device %v: Info: %v", dev, info)
-			if info == nil {
-				continue
-			}
-			for _, path := range info.Mountpoint {
-				logrus.Infof("\t Mountpath: %v Rootpath: %v", path.Path, path.Root)
-			}
-		}
+		m.printMountTable()
 		m.Unlock()
 		return ErrEnoent
 	}
@@ -697,7 +728,11 @@ func (m *Mounter) removeMountPath(path string) error {
 
 // RemoveMountPath makes the path writeable and removes it after a fixed delay
 func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) error {
-	if _, err := os.Stat(mountPath); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), statTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "stat", mountPath)
+	_, err := cmd.CombinedOutput()
+	if err == nil {
 		if options.IsBoolOptionSet(opts, options.OptionsWaitBeforeDelete) {
 			hasher := md5.New()
 			hasher.Write([]byte(mountPath))
@@ -833,7 +868,7 @@ func New(
 
 // GetMounts is a wrapper over mount.GetMounts(). It is mainly used to add a switch
 // to enable device mounter tests.
-func GetMounts() ([]*mount.Info, error) {
+func GetMounts() ([]*mountinfo.Info, error) {
 	if os.Getenv(testDeviceEnv) != "" {
 		return testGetMounts()
 	}
@@ -842,12 +877,12 @@ func GetMounts() ([]*mount.Info, error) {
 
 var (
 	// testMounts is a global test list of mount table entries
-	testMounts []*mount.Info
+	testMounts []*mountinfo.Info
 )
 
 // testGetMounts is only used in tests to get the test list of mount table
 // entries
-func testGetMounts() ([]*mount.Info, error) {
+func testGetMounts() ([]*mountinfo.Info, error) {
 	var err error
 	if len(testMounts) == 0 {
 		testMounts, err = parseMountTable()

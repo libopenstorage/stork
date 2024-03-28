@@ -1,8 +1,12 @@
 package ssh
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	docker_types "github.com/docker/docker/api/types"
 	"io/ioutil"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"net"
 	"os"
 	"regexp"
@@ -227,6 +231,14 @@ func (s *SSH) initExecPod() error {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
 		dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Namespace = s.execPodNamespace
+		secret, err := createDockerRegistrySecret(execPodDaemonSetLabel, s.execPodNamespace)
+		if err != nil {
+			return fmt.Errorf("Error while creating docker registry secret [%s] in [%s] namespace. Err: %s", execPodDaemonSetLabel, s.execPodNamespace, err)
+		}
+		if secret != nil {
+			dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
+
+		}
 		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
@@ -237,6 +249,47 @@ func (s *SSH) initExecPod() error {
 		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
 	}
 	return nil
+}
+
+func createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret, error) {
+	var auths = struct {
+		AuthConfigs map[string]docker_types.AuthConfig `json:"auths"`
+	}{}
+
+	dockerServer := os.Getenv("IMAGE_PULL_SERVER")
+	dockerUsername := os.Getenv("IMAGE_PULL_USERNAME")
+	dockerPassword := os.Getenv("IMAGE_PULL_PASSWORD")
+
+	if dockerServer != "" && dockerUsername != "" && dockerPassword != "" {
+		auths.AuthConfigs = map[string]docker_types.AuthConfig{
+			dockerServer: {
+				Auth: base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
+			},
+		}
+		authConfigsEnc, _ := json.Marshal(auths)
+
+		secretObj := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: secretNamespace,
+			},
+			Type: v1.SecretTypeDockerConfigJson,
+			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
+		}
+		secret, err := k8sCore.CreateSecret(secretObj)
+		if k8serrors.IsAlreadyExists(err) {
+			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
+				log.Infof("Using existing Docker registry secret: %v", secret.Name)
+				return secret, nil
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Docker registry secret: %s. Err: %v", secretName, err)
+		}
+		log.Infof("Created Docker registry secret: %s", secret.Name)
+		return secret, nil
+	}
+	return nil, nil
 }
 
 func (s *SSH) initSSH() error {
@@ -321,13 +374,46 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		return out, true, err
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, options.ConnectionOpts.Timeout, options.ConnectionOpts.TimeBeforeRetry); err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
 	}
+	return nil
+}
 
+// RebootNodeAndWait reboots given node and wait for nodes to be ready.
+func (s *SSH) RebootNodeAndWait(n node.Node) error {
+	if &n == nil {
+		return fmt.Errorf("no Node is provided to reboot")
+	}
+	err := s.RebootNode(n, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         15 * time.Minute,
+			TimeBeforeRetry: 5 * time.Second,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	err = s.TestConnection(n, node.ConnectionOpts{
+		Timeout:         15 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	d, err := scheduler.Get(k8s_driver.SchedName)
+	if err != nil {
+		return err
+	}
+	err = d.IsNodeReady(n)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -344,33 +430,68 @@ func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, o
 	dropInPercentage := strconv.Itoa(dropPercentage) + "%"
 	delayInMillisescond := strconv.Itoa(delayInMilliseconds) + "ms"
 	if errorInjectionType == "delay" {
-		cmd = fmt.Sprintf("%s %s  %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem delay ",
-			delayInMillisescond, delayInMillisescond)
+		cmd = fmt.Sprintf("%s %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem delay",
+			delayInMillisescond)
 		log.Infof("Delay %v ", delayInMillisescond)
 	} else if errorInjectionType == "drop" {
-		cmd = fmt.Sprintf("%s %s  %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem loss",
+		cmd = fmt.Sprintf("%s %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem loss",
 			dropInPercentage)
 		log.Infof("DropPercentage %v ", dropInPercentage)
 	} else {
-		return fmt.Errorf("Invalid network error injection type %v", errorInjectionType)
+		return fmt.Errorf("invalid network error injection type %v", errorInjectionType)
 	}
 	log.Infof("Error injection type %v ", errorInjectionType)
 	log.Infof("Operation type %v ", operationType)
 	connectionOps := node.ConnectionOpts{
-		Timeout:         10 * time.Second,
+		Timeout:         10 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
 	}
 	for _, n := range nodes {
 		log.Infof("Error injection on Node name : %s of type : %s ", n.Name, errorInjectionType)
+		log.Infof("Error injection on Node name : %s injection cmd: %s ", n.Name, cmd)
+
 		t := func() (interface{}, bool, error) {
 			out, err := s.doCmd(n, connectionOps, cmd, true)
 			return out, true, err
 		}
-
-		if _, err := task.DoRetryWithTimeout(t, 10*time.Second, 10*time.Second); err != nil {
+		_, err := task.DoRetryWithTimeout(t, connectionOps.Timeout, connectionOps.TimeBeforeRetry)
+		if err != nil {
 			return &node.ErrFailedToSetNetworkErrorOnNode{
 				Node:  n,
 				Cause: err.Error(),
+			}
+		}
+	}
+	return nil
+}
+
+// InjectNetworkErrorWithRebootFallback by dropping packets or introdiucing delay in packet tramission and reboot nodes during fallback
+// nodes=> list of nodes where network injection should be done.
+// errorInjectionType => pass "delay" or "drop"
+// operationType => add/change/delete
+// dropPercentage => intger value from 1 to 100
+// delayInMilliseconds => 1 to 1000
+
+// sample usage:
+// Inst().N.InjectNetworkErrorWithRebootFallback(nodes, "delay", "del", 0, i)
+func (s *SSH) InjectNetworkErrorWithRebootFallback(nodes []node.Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error {
+	for _, n := range nodes {
+		err := s.InjectNetworkError([]node.Node{n}, errorInjectionType, operationType, dropPercentage, delayInMilliseconds)
+		if err != nil {
+			if strings.Contains(err.Error(), "no usable address found") {
+				log.Infof("Node %s [is] unreachable. Rebooting the node to recover", n.Name)
+				// recover the VM if it went unreachable by rebooting
+				rebootErr := s.RebootNodeAndWait(n)
+				if rebootErr != nil {
+					return fmt.Errorf("failed to reboot node %s: %v", n.Name, rebootErr)
+				}
+				log.Infof("Retrying network error injection on node [%s] after reboot", n.Name)
+				err = s.InjectNetworkError([]node.Node{n}, errorInjectionType, operationType, dropPercentage, delayInMilliseconds)
+				if err != nil {
+					return fmt.Errorf("failed to inject network error on node [%s] after reboot. Err: [%v]", n.Name, err)
+				}
+			} else {
+				return err
 			}
 		}
 	}

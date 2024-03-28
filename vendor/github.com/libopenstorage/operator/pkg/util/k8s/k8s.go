@@ -68,6 +68,8 @@ var (
 	K8sVer1_25, _ = version.NewVersion("1.25")
 	// K8sVer1_26 k8s 1.26
 	K8sVer1_26, _ = version.NewVersion("1.26")
+	// MinVersionForKubeSchedulerConfiguration k8s 1.23.0
+	MinVersionForKubeSchedulerConfiguration, _ = version.NewVersion("1.23.0")
 )
 
 // NewK8sClient returns a new controller runtime Kubernetes client
@@ -1670,7 +1672,11 @@ func CreateOrUpdatePodDisruptionBudget(
 
 	if modified || len(pdb.OwnerReferences) > len(existingPDB.OwnerReferences) {
 		pdb.ResourceVersion = existingPDB.ResourceVersion
-		logrus.Infof("Updating PodDisruptionBudget %s/%s", pdb.Namespace, pdb.Name)
+		if pdb.Spec.MinAvailable == nil {
+			logrus.Infof("Updating PodDisruptionBudget %s/%s", pdb.Namespace, pdb.Name)
+		} else {
+			logrus.Infof("Updating minAvailable for PodDisruptionBudget %s/%s to %d ", pdb.Namespace, pdb.Name, pdb.Spec.MinAvailable.IntValue())
+		}
 		return k8sClient.Update(context.TODO(), pdb)
 	}
 	return nil
@@ -2274,4 +2280,34 @@ func AddManagedByOperatorLabel(om metav1.ObjectMeta) metav1.ObjectMeta {
 	}
 	om.Labels[constants.OperatorLabelManagedByKey] = constants.OperatorLabelManagedByValue
 	return om
+}
+
+func GetDefaultKubeControllerManagerImage(k8sVersion *version.Version) string {
+	if k8sVersion == nil {
+		return ""
+	}
+	prefix := "gcr.io/google_containers"
+	if IsNewKubernetesRegistry(k8sVersion) {
+		prefix = DefaultK8SRegistryPath
+	}
+	return prefix + "/kube-controller-manager-amd64:v" + k8sVersion.String()
+}
+
+func GetDefaultKubeSchedulerImage(k8sVersion *version.Version) string {
+	if k8sVersion == nil {
+		return ""
+	}
+	minVersionForPinnedStorkScheduler, _ := version.NewVersion("1.22.0")
+	prefix := "gcr.io/google_containers"
+	if IsNewKubernetesRegistry(k8sVersion) {
+		prefix = DefaultK8SRegistryPath
+	}
+	prefix += "/kube-scheduler-amd64:v"
+
+	if k8sVersion.GreaterThanOrEqual(minVersionForPinnedStorkScheduler) &&
+		k8sVersion.LessThan(MinVersionForKubeSchedulerConfiguration) {
+		// Stork scheduler cannot run with kube-scheduler image > v1.22
+		return prefix + "1.21.4"
+	}
+	return prefix + k8sVersion.String()
 }
