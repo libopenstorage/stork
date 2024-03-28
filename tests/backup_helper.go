@@ -346,6 +346,62 @@ var (
 				},
 			},
 		},
+		"postgres-fada": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-fbda": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-azure-disk": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-gce-pd": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-pd-csi-storage-gke": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-rbd-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-rgw-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-cephfs-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
 	}
 )
 
