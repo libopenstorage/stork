@@ -11694,3 +11694,101 @@ var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolResizeWhenReplOneVolinPool}", func() {
+
+	/*
+			PTX:https://portworx.atlassian.net/browse/PTX-15464
+		    1. Create px volumes with repl factor 1.
+		    2. Resize pool with resize disk.
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolResizeWhenReplOneVolinPool", "Pool resize when repl factor is 1", nil, 0)
+	})
+
+	itLog := "PoolResizeWhenReplOneVolinPool"
+	It(itLog, func() {
+		// Create px volumes with repl factor 1
+		volName := "pool-resize-repl1"
+
+		var Wg sync.WaitGroup
+		stepLog := "Create px volumes with repl factor 1"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Create 100 volumes with repl 1
+			Wg.Add(1)
+			go func() {
+				defer Wg.Done()
+				defer GinkgoRecover()
+				for i := 0; i < 100; i++ {
+					name := fmt.Sprintf("%s-%d", volName, i)
+					vol, err := Inst().V.CreateVolume(name, 5, 1)
+					log.FailOnError(err, "Failed to create volume")
+					log.Infof("Volume created with ID: %s", vol)
+
+				}
+			}()
+			// Wait for 30s for some volumes to be created
+			time.Sleep(30 * time.Second)
+
+		})
+
+		stepLog = "Resize pool with resize disk"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Resize pool with resize disk
+			name := "pool-resize-repl1-0"
+			pool, err := GetPoolIDsFromVolName(name)
+			log.FailOnError(err, "Failed to get pool id's from volume name: %v", name)
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is Journal enabled")
+			//TODO Need to handle the case for multiple pools
+
+			poolID := pool[0]
+			poolToResize, err = GetStoragePoolByUUID(poolID)
+			log.FailOnError(err, "Failed to get pool using UUID %s", poolID)
+
+			// Resize pool with resize disk
+			expectedSize := (poolToResize.TotalSize / units.GiB) * 2
+			expectedSizeWithJournal := expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+
+			err = Inst().V.ExpandPool(poolID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
+
+		})
+		Wg.Wait()
+
+		//Delete all the volumes created
+		stepLog = "Delete all the volumes created"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < 100; i++ {
+				Wg.Add(1)
+				go func(i int) {
+					defer Wg.Done()
+					defer GinkgoRecover()
+					name := fmt.Sprintf("%s-%d", volName, i)
+					err := Inst().V.DeleteVolume(name)
+					log.FailOnError(err, "Failed to delete volume with name: %v", name)
+					log.InfoD("Successfully deleted volume with name: %v", name)
+				}(i)
+			}
+		})
+		Wg.Wait()
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
