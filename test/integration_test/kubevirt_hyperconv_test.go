@@ -128,7 +128,7 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 		startAndWaitForVMIMigration(t, testState, false /* expectReplicaNode */)
 
 		// restart px on the original node and make sure that the volume attachment has moved
-		restartVolumeDriverAndWaitForAttachmentToMove(t, testState)
+		restartVolumeDriverAndWaitForAttachmentToMove(t, true, testState)
 
 		// VM should use a bind-mount eventually
 		log.Infof("Waiting for the VM to return to the hyperconverged state again")
@@ -190,7 +190,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		startAndWaitForVMIMigration(t, testState, true /* expectReplicaNode */)
 
 		// restart px on the original node and make sure that the volume attachment has moved
-		restartVolumeDriverAndWaitForAttachmentToMove(t, testState)
+		restartVolumeDriverAndWaitForAttachmentToMove(t, true, testState)
 
 		// VM should use a bind-mount eventually
 		log.Infof("Waiting for the VM to return to the hyperconverged state again")
@@ -273,6 +273,82 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 			return checkVMDisksCollocation(testState)
 		}, time.Hour, 5*time.Second, "vm disks were not collocated")
 	}
+	log.Infof("Destroying apps")
+	destroyAndWait(t, ctxs)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.Infof("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// This test simulates OCP upgrade by live-migrating all VMs from a node a NON-replica node and
+// then restarting PX on the node where volume is attached.
+// It expects that all the VMs from that node should end up with a bind-mount (hyperconvergence).
+// PX performs a single live migration for each VM on the node.
+// The above steps are repeated for all worker nodes in the cluster
+func kubeVirtHypercPerNodeOneLiveMigration(t *testing.T) {
+	var testrailID, testResult = 93196, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult)
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "per-node"
+
+	ctxs := kubevirtVMScaledDeployAndValidate(
+		t,
+		instanceID,
+		[]string{
+			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
+		},
+		kubevirtScale,
+	)
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	nodeTestStateMap := getNodeVMTestStateMap(t, ctxs, allNodes)
+	for currNode, testStatesNode := range nodeTestStateMap {
+		log.Infof("\nProcessing Node: %s", currNode.Name)
+
+		for _, testState := range testStatesNode {
+			log.Infof("Start and wait for Live VM migration: %s on node: %s", testState.vmiName, currNode)
+			// Simulate OCP node upgrade by:
+			// 1. Live migrate the VM to another node
+
+			// start a live migration and wait for it to finish
+			// vmPod changes after the live migration
+			startAndWaitForVMIMigration(t, testState, false /* expectReplicaNode */)
+		}
+	}
+
+	// Refreshing the nodeTestStateMap
+	nodeTestStateMap = getNodeVMTestStateMap(t, ctxs, allNodes)
+
+	for currNode, testStatesNode := range nodeTestStateMap {
+		log.Infof("Restarting volume driver on node %s", currNode.Name)
+		err := volumeDriver.RestartDriver(*currNode, nil)
+		require.NoError(t, err)
+
+		for _, testState := range testStatesNode {
+			// without restarting px on the node again and make sure that the volume attachment has moved
+			restartVolumeDriverAndWaitForAttachmentToMove(t, false, testState)
+		}
+
+	}
+
+	// Refreshing the nodeTestStateMap
+	nodeTestStateMap = getNodeVMTestStateMap(t, ctxs, allNodes)
+
+	for currNode, testStatesNode := range nodeTestStateMap {
+		log.Infof("Validating hyper convergence on node: %s", currNode.Name)
+
+		for _, testState := range testStatesNode {
+			// VM should use a bind-mount eventually
+			log.Infof("Waiting for the VM %s to return to the hyperconverged state again", testState.vmiName)
+			verifyBindMount(t, testState, false /*initialCheck*/)
+
+			// Verify that VM stayed up the whole time
+			verifyVMStayedUp(t, testState)
+		}
+		log.Infof("\nCompleted Processing Node: %s:", currNode)
+	}
+
 	log.Infof("Destroying apps")
 	destroyAndWait(t, ctxs)
 	// If we are here then the test has passed
@@ -633,7 +709,7 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 		migrateToReplicaNode /* expectReplicaNode */)
 }
 
-func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kubevirtTestState) {
+func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, restartDriver bool, testState *kubevirtTestState) {
 	var err error
 	var oldAttachedNode, newAttachedNode *node.Node
 	var firstDisk *vmDisk
@@ -649,10 +725,12 @@ func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kube
 		}
 	}
 
-	// restart px on the original node
-	log.Infof("Restarting volume driver on node %s", oldAttachedNode.Name)
-	err = volumeDriver.RestartDriver(*oldAttachedNode, nil)
-	require.NoError(t, err)
+	if restartDriver {
+		// restart px on the original node
+		log.Infof("Restarting volume driver on node %s", oldAttachedNode.Name)
+		err = volumeDriver.RestartDriver(*oldAttachedNode, nil)
+		require.NoError(t, err)
+	}
 
 	for _, vmDisk := range testState.vmDisks {
 		var attachedNode *node.Node
@@ -950,4 +1028,22 @@ func getVMINameFromVMPod(vmPod *corev1.Pod) (string, error) {
 		return "", fmt.Errorf("did not find VMI ownerRef in pod %s/%s", vmPod.Namespace, vmPod.Name)
 	}
 	return vmiRef.Name, nil
+}
+
+func getNodeVMTestStateMap(t *testing.T, ctxs []*scheduler.Context, allNodes map[string]node.Node) map[*node.Node][]*kubevirtTestState {
+	nodeTestStateMap := make(map[*node.Node][]*kubevirtTestState)
+	for _, appCtx := range ctxs {
+		testState := &kubevirtTestState{
+			appCtx:   appCtx,
+			allNodes: allNodes,
+		}
+		gatherInitialVMIInfo(t, testState)
+		verifyInitialVMI(t, testState)
+
+		// Add this testState to the node to VM map
+		vmNode, err := node.GetNodeByName(testState.vmPod.Spec.NodeName)
+		require.NoError(t, err, "failed to get node for %s: %v", testState.vmPod.Spec.NodeName)
+		nodeTestStateMap[&vmNode] = append(nodeTestStateMap[&vmNode], testState)
+	}
+	return nodeTestStateMap
 }

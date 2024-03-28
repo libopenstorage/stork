@@ -74,6 +74,7 @@ func TestKubevirt(t *testing.T) {
 	t.Run("kubeVirtHypercTwoLiveMigrations", kubeVirtHypercTwoLiveMigrations)
 	t.Run("kubeVirtHypercHotPlugDiskCollocation", kubeVirtHypercHotPlugDiskCollocation)
 	t.Run("kubeVirtHypercVPSFixJob", kubeVirtHypercVPSFixJob)
+	t.Run("kubeVirtHypercPerNodeOneLiveMigration", kubeVirtHypercPerNodeOneLiveMigration)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
