@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -246,7 +245,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	}
 
 	var pods *v1.PodList
-	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+	if storkcache.Instance() != nil {
 		pods, err = storkcache.Instance().ListTransformedPods()
 	} else {
 		log.Warnf("shared informer cache has not been initialized.")
@@ -268,8 +267,11 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 		csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
 		if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
 			msg = fmt.Sprintf("Deleting csi pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
-
 		} else {
+			if len(pod.Spec.Volumes) == 0 {
+				// Pod does not have any volumes. So, no need to check further
+				continue
+			}
 			msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 			owns, err := m.doesDriverOwnPodVolumes(&pod)
 			if err != nil || !owns {

@@ -51,7 +51,7 @@ func stopDriverTest(t *testing.T) {
 	defer updateDashStats(t.Name(), &testResult)
 
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "stopdrivertest"),
-		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
 	log.FailOnError(t, err, "Error scheduling task")
 	Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
 
