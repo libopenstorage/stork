@@ -615,6 +615,10 @@ func PrintCommandOutput(cmnd string) {
 
 }
 
+func PrintSvPoolStatus(node node.Node) {
+	runCmdGetOutput("pxctl sv pool show", node)
+}
+
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
 	Step("validate cleanup of resources used by the test suite", func() {

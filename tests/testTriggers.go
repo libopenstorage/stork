@@ -1973,6 +1973,8 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					updateLongevityStats(PoolMaintenanceCycle, stats.PoolMaintenanceEventName, dashStats)
 					err = Inst().V.EnterPoolMaintenance(appNode)
 					if err != nil {
+						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after entering pool Maintenance", appNode.Name))
+						PrintSvPoolStatus(appNode)
 						UpdateOutcome(event, err)
 						return
 					}
@@ -1992,6 +1994,8 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					event.Event.Type += "<br>" + taskStep
 					err = Inst().V.ExitPoolMaintenance(appNode)
 					if err != nil {
+						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after pool Maintenance", appNode.Name))
+						PrintSvPoolStatus(appNode)
 						UpdateOutcome(event, err)
 						return
 					}
@@ -2103,6 +2107,12 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 
 						err = Inst().V.ExpandPool(selectedPool.Uuid, resizeOpType, expandedExpectedPoolSize, true)
 						if err != nil {
+							stNode, err := GetNodeFromPoolUUID(selectedPool.Uuid)
+							if err != nil {
+								log.Errorf(fmt.Sprintf("error getting the node for pool %s", selectedPool.Uuid))
+							}
+							log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize on Node:%s ", stNode.Name))
+							PrintSvPoolStatus(*stNode)
 							UpdateOutcome(event, err)
 							return
 						}
@@ -5477,6 +5487,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			}
 			err = EnterPoolMaintenance(*pNode)
 			if err != nil {
+				log.InfoD(fmt.Sprintf("Printing The storage pool status after failure of entering maintenance on Node:%s ", pNode.Name))
+				PrintSvPoolStatus(*pNode)
 				log.Error(err.Error())
 				UpdateOutcome(event, err)
 				return
@@ -5486,6 +5498,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		updateLongevityStats(event.Event.Type, statType, dashStats)
 		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
 		if err != nil {
+			log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize failure on Node:%s ", pNode.Name))
+			PrintSvPoolStatus(*pNode)
 			err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, expansionType, err.Error())
 			log.Error(err.Error())
 			UpdateOutcome(event, err)
@@ -5493,6 +5507,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			if doNodeReboot {
 				err = WaitForExpansionToStart(pool.Uuid)
 				if err != nil {
+					log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize failure on Node:%s ", pNode.Name))
+					PrintSvPoolStatus(*pNode)
 					log.Error(err.Error())
 					UpdateOutcome(event, err)
 				}
@@ -5523,6 +5539,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			}
 			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 			if err != nil {
+				log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s  after pool resize failure", pNode.Name))
+				PrintSvPoolStatus(*pNode)
 				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
 				UpdateOutcome(event, err)
 			}
@@ -5586,6 +5604,7 @@ func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *c
 		wg.Wait()
 
 	})
+
 	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
@@ -5642,6 +5661,8 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 
 			}
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
+			log.InfoD(fmt.Sprintf("Printing The storage pool status after resizing disks in the pool and reboot on the node:%s", storageNode.Name))
+			PrintSvPoolStatus(*storageNode)
 		}
 		err = ValidateDataIntegrity(&nodeContexts)
 		UpdateOutcome(event, err)
@@ -5694,6 +5715,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				wg.Add(1)
 
 			}
+
 		}
 		wg.Wait()
 
@@ -5752,8 +5774,8 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, err)
 		}
 	})
-	validateContexts(event, contexts)
 
+	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
 
@@ -5815,6 +5837,8 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 		Step("validate Px on the rebalanced node", func() {
 			log.InfoD("Validating PX on node : %s", autoPilotLabelNode.Name)
 			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
+			log.InfoD(fmt.Sprintf("Printing The storage pool status on reblanaced Node:%s ", autoPilotLabelNode.Name))
+			PrintSvPoolStatus(autoPilotLabelNode)
 			UpdateOutcome(event, err)
 			err = ValidateRebalanceJobs(autoPilotLabelNode)
 			UpdateOutcome(event, err)
