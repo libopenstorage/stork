@@ -96,7 +96,7 @@ type kubevirtTestState struct {
 // a single live migration in this test.
 func kubeVirtHypercOneLiveMigration(t *testing.T) {
 	var testrailID, testResult = 93196, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "one-live-migr"
 
@@ -150,7 +150,7 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 // back-to-back live migrations in this test.
 func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	var testrailID, testResult = 93197, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "two-live-migr"
 
@@ -212,7 +212,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 // Add hotplug disks to a running VM and verify that they are collocated.
 func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	var testrailID, testResult = 257201, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "hotplug-colo"
 
@@ -247,7 +247,7 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 // Then, wait for the VPS fix job to collocate the volumes.
 func kubeVirtHypercVPSFixJob(t *testing.T) {
 	var testrailID, testResult = 257177, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vps-fix-job"
 

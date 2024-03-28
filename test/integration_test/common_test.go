@@ -1803,7 +1803,10 @@ func updateTestRail(testStatus *string, ids ...int) {
 	}
 }
 
-func testrailSetupForTest(testrailID int, testResult *string) int {
+func testrailSetupForTest(testrailID int, testResult *string, testName string) int {
+	tags := make(map[string]string)
+	tags["storkTest"] = "true"
+	Dash.TestCaseBegin(testName, fmt.Sprintf("Stork test - %s", testName), "", tags)
 	runID, err := addRunToMilestone(testrailID, testResult)
 	if err != nil {
 		logrus.Warnf("For current case: %d, not adding this run to testrail", testrailID)
@@ -2047,4 +2050,5 @@ func updateDashStats(testName string, testResult *string) {
 	}
 
 	stats.PushStatsToAetos(tpDash, testName, dashProductName, dashStatsType, eventStat)
+	Dash.TestCaseEnd()
 }

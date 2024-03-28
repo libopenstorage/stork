@@ -63,7 +63,7 @@ func testMigrationFailoverFailback(t *testing.T) {
 
 func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86259, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	failoverAndFailbackMigrationTest(t)
@@ -75,7 +75,7 @@ func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
 
 func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86260, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	// Migrate the resources

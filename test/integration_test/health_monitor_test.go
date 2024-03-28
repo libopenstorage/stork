@@ -41,12 +41,10 @@ func TestHealthMonitor(t *testing.T) {
 }
 
 func stopDriverTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
+
 	log.InfoD("stop driver test")
 	var testrailID, testResult = 50790, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -103,12 +101,9 @@ func stopDriverTest(t *testing.T) {
 }
 
 func stopKubeletTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
 	log.InfoD("stop kubelet test")
 	var testrailID, testResult = 50791, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -167,11 +162,8 @@ func stopKubeletTest(t *testing.T) {
 }
 
 func poolMaintenanceHealthTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
 	var testrailID, testResult = 86081, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -218,11 +210,8 @@ func poolMaintenanceHealthTest(t *testing.T) {
 }
 
 func healthCheckFixTest(t *testing.T) {
-	tags := make(map[string]string)
-	defer Dash.TestCaseEnd()
-	Dash.TestCaseBegin(t.Name(), t.Name(), "", tags)
 	var testrailID, testResult = 85900, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -312,7 +301,7 @@ func healthCheckFixTest(t *testing.T) {
 
 func stopDriverCsiPodFailoverTest(t *testing.T) {
 	var testrailID, testResult = 85901, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 

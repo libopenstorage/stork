@@ -42,7 +42,7 @@ func TestMigrationStorkFailures(t *testing.T) {
 
 func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {
 	var testrailID, testResult = 51458, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -55,7 +55,7 @@ func deleteStorkPodsSourceDuringMigrationTest(t *testing.T) {
 
 func deleteStorkPodsDestDuringMigrationTest(t *testing.T) {
 	var testrailID, testResult = 51459, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 

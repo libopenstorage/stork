@@ -58,7 +58,7 @@ func testSnapshot(t *testing.T) {
 
 func simpleSnapshotTest(t *testing.T) {
 	var testrailID, testResult = 50792, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -73,7 +73,7 @@ func simpleSnapshotTest(t *testing.T) {
 
 func cloudSnapshotTest(t *testing.T) {
 	var testrailID, testResult = 50793, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -126,7 +126,7 @@ func cloudSnapshotTest(t *testing.T) {
 
 func groupSnapshotTest(t *testing.T) {
 	var testrailID, testResult = 50795, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -194,7 +194,7 @@ func groupSnapshotTest(t *testing.T) {
 
 func groupSnapshotScaleTest(t *testing.T) {
 	var testrailID, testResult = 50796, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -463,7 +463,7 @@ func snapshotScheduleTests(t *testing.T) {
 
 func cloudSnapshotScaleTest(t *testing.T) {
 	var testrailID, testResult = 86218, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -506,7 +506,7 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 
 func intervalSnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50797, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -581,7 +581,7 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 
 func dailySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86219, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -647,7 +647,7 @@ func dailySnapshotScheduleTest(t *testing.T) {
 
 func weeklySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86220, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -714,7 +714,7 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 
 func monthlySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 50786, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -836,7 +836,7 @@ func commonSnapshotScheduleTests(
 
 func invalidPolicySnapshotScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86222, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 

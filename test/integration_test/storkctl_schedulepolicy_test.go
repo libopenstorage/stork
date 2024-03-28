@@ -41,7 +41,7 @@ func TestStorkCtlSchedulePolicy(t *testing.T) {
 func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]string, specFileName string, testrailID int) {
 	schedulePolicyName := "automation-test-policy"
 	var testResult = testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer SchedulePolicyCleanup(t, schedulePolicyName)
 	defer updateDashStats(t.Name(), &testResult)
@@ -80,7 +80,7 @@ func createSchedulePolicyTest(t *testing.T, policyType string, args map[string]s
 
 func deleteSchedulePolicyTest(t *testing.T) {
 	var testrailID, testResult = 93195, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	factory := storkctl.NewFactory()

@@ -78,7 +78,7 @@ func TestKubevirt(t *testing.T) {
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -96,7 +96,7 @@ func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
 
 func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -114,7 +114,7 @@ func kubevirtDeployWindowsServerWithClonePVC(t *testing.T) {
 
 func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -132,7 +132,7 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 
 func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 	var testrailID, testResult = 50804, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
@@ -150,7 +150,7 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 
 func kubevirtDeployFedoraVMMultiVolume(t *testing.T) {
 	var testrailID, testResult = 50803, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"

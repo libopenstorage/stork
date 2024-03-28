@@ -44,7 +44,7 @@ func TestStashStrategyMigration(t *testing.T) {
 
 func testMigrationStashStrategyMongoDB(t *testing.T) {
 	var testrailID, testResult = 64408114, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -57,7 +57,7 @@ func testMigrationStashStrategyMongoDB(t *testing.T) {
 
 func testMigrationStashStrategyKafka(t *testing.T) {
 	var testrailID, testResult = 64408112, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -266,7 +266,7 @@ func getStashedCMUIDs(namespace string) (map[string]string, error) {
 
 func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	var testrailID, testResult = 64408118, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -364,7 +364,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	testrailIDList := []int{66266865, 64408115}
 	testResult := testResultFail
 	for _, testrailID := range testrailIDList {
-		runID := testrailSetupForTest(testrailID, &testResult)
+		runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 		defer updateTestRail(&testResult, testrailID, runID)
 		defer updateDashStats(t.Name(), &testResult)
 	}
@@ -505,7 +505,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 
 func testFailbackWithStashStrategy(t *testing.T) {
 	var testrailID, testResult = 64408117, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 

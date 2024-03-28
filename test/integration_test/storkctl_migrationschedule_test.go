@@ -109,7 +109,7 @@ func createMigrationScheduleTest(t *testing.T, testrailID int, args map[string]s
 	specFileName string, migrationScheduleNs string, inputSchedulePolicyInterval string) {
 	migrationScheduleName := "automation-test-migration-schedule"
 	var testResult = testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer migrationScheduleCleanup(t, migrationScheduleName, migrationScheduleNs)
 	defer updateDashStats(t.Name(), &testResult)

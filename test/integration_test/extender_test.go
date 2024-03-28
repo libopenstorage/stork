@@ -53,7 +53,7 @@ func TestExtender(t *testing.T) {
 
 func noPVCTest(t *testing.T) {
 	var testrailID, testResult = 50785, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -74,7 +74,7 @@ func noPVCTest(t *testing.T) {
 
 func singlePVCTest(t *testing.T) {
 	var testrailID, testResult = 50786, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -104,7 +104,7 @@ func singlePVCTest(t *testing.T) {
 
 func statefulsetTest(t *testing.T) {
 	var testrailID, testResult = 50787, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -142,7 +142,7 @@ func statefulsetTest(t *testing.T) {
 
 func multiplePVCTest(t *testing.T) {
 	var testrailID, testResult = 50788, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -171,7 +171,7 @@ func multiplePVCTest(t *testing.T) {
 
 func driverNodeErrorTest(t *testing.T) {
 	var testrailID, testResult = 50789, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -229,7 +229,7 @@ func driverNodeErrorTest(t *testing.T) {
 
 func poolMaintenanceTest(t *testing.T) {
 	var testrailID, testResult = 86080, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -286,7 +286,7 @@ func poolMaintenanceTest(t *testing.T) {
 
 func pvcOwnershipTest(t *testing.T) {
 	var testrailID, testResult = 50781, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -368,7 +368,7 @@ func pvcOwnershipTest(t *testing.T) {
 
 func antihyperconvergenceTest(t *testing.T) {
 	var testrailID, testResult = 85859, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -402,7 +402,7 @@ func antihyperconvergenceTest(t *testing.T) {
 
 func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 	var testrailID, testResult = 85860, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -467,7 +467,7 @@ func antihyperconvergenceTestPreferRemoteOnlyTest(t *testing.T) {
 // This test has been added as part of fix for PWX-35513
 func antihyperconvergenceAfterVolumeLabelUpdate(t *testing.T) {
 	var testrailID, testResult = 94378, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -533,7 +533,7 @@ func antihyperconvergenceAfterVolumeLabelUpdate(t *testing.T) {
 
 func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
 	var testrailID, testResult = 92964, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -617,7 +617,7 @@ func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []st
 
 func equalPodSpreadTest(t *testing.T) {
 	var testrailID, testResult = 84664, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 

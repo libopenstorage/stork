@@ -80,7 +80,7 @@ func TestApplicationBackup(t *testing.T) {
 
 func TestScaleApplicationBackup(t *testing.T) {
 	var testrailID, testResult = 50785, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	if !defaultsBackupSet {
@@ -495,7 +495,7 @@ func getBackupFromListWithAnnotations(backupList *storkv1.ApplicationBackupList,
 
 func applicationBackupRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50849, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -517,7 +517,7 @@ func applicationBackupRestoreTest(t *testing.T) {
 
 func applicationBackupRestoreWithoutNMTest(t *testing.T) {
 	var testrailID, testResult = 50849, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -539,7 +539,7 @@ func applicationBackupRestoreWithoutNMTest(t *testing.T) {
 
 func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50850, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -561,7 +561,7 @@ func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 
 func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50851, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -583,7 +583,7 @@ func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 
 func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 	var testrailID, testResult = 50852, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -605,7 +605,7 @@ func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 
 func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 	var testrailID, testResult = 50853, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -627,7 +627,7 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 
 func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 	var testrailID, testResult = 50854, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -649,7 +649,7 @@ func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 
 func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 	var testrailID, testResult = 50855, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -671,7 +671,7 @@ func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 
 func applicationBackupLabelSelectorTest(t *testing.T) {
 	var testrailID, testResult = 50856, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -693,7 +693,7 @@ func applicationBackupLabelSelectorTest(t *testing.T) {
 
 func scaleApplicationBackupRestore(t *testing.T) {
 	var testrailID, testResult = 50785, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -743,7 +743,7 @@ func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, po
 
 func intervalApplicationBackupScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86265, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -829,7 +829,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 func dailyApplicationBackupScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86266, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -904,7 +904,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 
 func weeklyApplicationBackupScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86267, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -980,7 +980,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 
 func monthlyApplicationBackupScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86268, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -1060,7 +1060,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 
 func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 	var testrailID, testResult = 86269, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -1181,7 +1181,7 @@ func commonApplicationBackupScheduleTests(
 
 func applicationBackupSyncControllerTest(t *testing.T) {
 	var testrailID, testResult = 50858, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -1361,7 +1361,7 @@ func waitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 
 func applicationBackupDelBackupLocation(t *testing.T) {
 	var testrailID, testResult = 86263, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -1395,7 +1395,7 @@ func applicationBackupDelBackupLocation(t *testing.T) {
 
 func applicationBackupMultiple(t *testing.T) {
 	var testrailID, testResult = 86264, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 

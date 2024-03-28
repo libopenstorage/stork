@@ -51,7 +51,7 @@ func verifyInPlaceSnapshotRestore(t *testing.T, ctx []*scheduler.Context, startT
 
 func simpleSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50799, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -76,7 +76,7 @@ func simpleSnapshotRestoreTest(t *testing.T) {
 
 func groupSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50800, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -106,7 +106,7 @@ func groupSnapshotRestoreTest(t *testing.T) {
 
 func cloudSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50801, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -136,7 +136,7 @@ func cloudSnapshotRestoreTest(t *testing.T) {
 
 func groupCloudSnapshotRestoreTest(t *testing.T) {
 	var testrailID, testResult = 50802, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -168,7 +168,7 @@ func groupCloudSnapshotRestoreTest(t *testing.T) {
 
 func inPlaceSnapshotRestoreDataTest(t *testing.T) {
 	var testrailID, testResult = 86223, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 
 	testnamespacePostfix := "snapvdbench"

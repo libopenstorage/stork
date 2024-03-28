@@ -120,7 +120,7 @@ func triggerApplicationCloneTest(
 
 func deploymentApplicationCloneTest(t *testing.T) {
 	var testrailID, testResult = 50840, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -142,7 +142,7 @@ func deploymentApplicationCloneTest(t *testing.T) {
 
 func statefulsetApplicationCloneTest(t *testing.T) {
 	var testrailID, testResult = 50841, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -164,7 +164,7 @@ func statefulsetApplicationCloneTest(t *testing.T) {
 
 func statefulsetApplicationCloneRuleTest(t *testing.T) {
 	var testrailID, testResult = 50842, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -186,7 +186,7 @@ func statefulsetApplicationCloneRuleTest(t *testing.T) {
 
 func applicationCloneRulePreExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50843, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -208,7 +208,7 @@ func applicationCloneRulePreExecMissingTest(t *testing.T) {
 
 func applicationCloneRulePostExecMissingTest(t *testing.T) {
 	var testrailID, testResult = 50844, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -230,7 +230,7 @@ func applicationCloneRulePostExecMissingTest(t *testing.T) {
 
 func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 	var testrailID, testResult = 50845, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -252,7 +252,7 @@ func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 
 func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50846, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -274,7 +274,7 @@ func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 
 func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 	var testrailID, testResult = 50847, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
@@ -296,7 +296,7 @@ func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 
 func applicationCloneLabelSelectorTest(t *testing.T) {
 	var testrailID, testResult = 50848, testResultFail
-	runID := testrailSetupForTest(testrailID, &testResult)
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 
