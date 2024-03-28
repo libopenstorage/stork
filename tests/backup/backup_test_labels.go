@@ -109,6 +109,7 @@ const (
 	VerifyRBACForAppUser                                             TestCaseName = "VerifyRBACForAppUser"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS                 TestCaseName = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
 	KubevirtScheduledVMDelete                                        TestCaseName = "KubevirtScheduledVMDelete"
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNS                  TestCaseName = "CustomBackupRestoreWithKubevirtAndNonKubevirtNS"
 )
 
 // Test case labels
@@ -217,6 +218,7 @@ const (
 	KubevirtVMRestoreWithAfterChangingVMConfigLabel                       TestCaseLabel = "KubevirtVMRestoreWithAfterChangingVMConfig"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel                 TestCaseLabel = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
 	KubevirtScheduledVMDeleteLabel                                        TestCaseLabel = "KubevirtScheduledVMDelete"
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel                  TestCaseLabel = "CustomBackupRestoreWithKubevirtAndNonKubevirtNS"
 )
 
 // Common Labels
@@ -414,4 +416,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	KubevirtVMRestoreWithAfterChangingVMConfig:                       {KubevirtVMRestoreWithAfterChangingVMConfigLabel, KubevirtAppLabel},
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                 {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
 	KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNS:                  {CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
 }
