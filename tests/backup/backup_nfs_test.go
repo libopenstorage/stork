@@ -379,7 +379,6 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
-				restoreNames = append(restoreNames, restoreName)
 			}
 		})
 
@@ -624,7 +623,6 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
-				restoreNames = append(restoreNames, restoreName)
 			}
 		})
 
