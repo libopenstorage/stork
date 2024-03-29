@@ -409,27 +409,40 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 		// Make sure the namespaces exist
 		fallthrough
 	case storkapi.ApplicationRestoreStageIncludeResources:
-		if restore.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine {
-			// The backuObjectType is VirtualMachine. We need to map resources such as PVC,
-			// configMap and secrets of VirtualMachines inlucded in restore and include only
+		if restore.Spec.BackupObjectType == resourcecollector.PxBackupObjectType_virtualMachine && len(restore.Spec.IncludeResources) != 0 {
+			// The backupObjectType is VirtualMachine. We need to map resources such as PVC,
+			// configMap and secrets of VirtualMachines included in restore and include only
 			// these resources for restore.
 			logrus.Infof("It is restore of  VirtualMachine  Backup Object type. Processing VirtualMachine resources for restore")
-			includeObjects, err := a.processVMResourcesForVMRestore(restore)
-			if err != nil {
-				message := fmt.Sprintf("error processing VirtualMachine restore : %v", err)
-				log.ApplicationRestoreLog(restore).Errorf(message)
-				a.recorder.Event(restore,
-					v1.EventTypeWarning,
-					string(storkapi.ApplicationRestoreStatusFailed),
-					message)
-				return nil
-			}
-			if len(includeObjects) != 0 {
-				restore.Spec.IncludeResources = append(restore.Spec.IncludeResources, includeObjects...)
-				restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
-				err = a.client.Update(context.TODO(), restore)
+			if nfs {
+				err = a.processVMResourcesForVMRestoreFromNFS(restore)
 				if err != nil {
-					return err
+					message := fmt.Sprintf("error processing VirturlMachine resources during VirtualMachine Restore : %v", err)
+					log.ApplicationRestoreLog(restore).Errorf(message)
+					a.recorder.Event(restore,
+						v1.EventTypeWarning,
+						string(storkapi.ApplicationRestoreStatusFailed),
+						message)
+				}
+				return err
+			} else {
+				includeObjects, err := a.processVMResourcesForVMRestore(restore)
+				if err != nil {
+					message := fmt.Sprintf("error processing VirtualMachine restore : %v", err)
+					log.ApplicationRestoreLog(restore).Errorf(message)
+					a.recorder.Event(restore,
+						v1.EventTypeWarning,
+						string(storkapi.ApplicationRestoreStatusFailed),
+						message)
+					return nil
+				}
+				if len(includeObjects) != 0 {
+					restore.Spec.IncludeResources = append(restore.Spec.IncludeResources, includeObjects...)
+					restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
+					err = a.client.Update(context.TODO(), restore)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -2112,6 +2125,7 @@ func (a *ApplicationRestoreController) cleanupRestore(restore *storkapi.Applicat
 	// For other backuplocation type, expecting Notfound
 	crNames = append(crNames, getResourceExportCRName(utils.PrefixRestore, string(restore.UID), restore.Namespace))
 	crNames = append(crNames, getResourceExportCRName(utils.PrefixNFSRestorePVC, string(restore.UID), restore.Namespace))
+	crNames = append(crNames, getResourceExportCRName(utils.PrefixVMRestoreIncludeResourceMap, string(restore.UID), restore.Namespace))
 	for _, crName := range crNames {
 		err := kdmpShedOps.Instance().DeleteResourceExport(crName, restore.Namespace)
 		if err != nil && !k8s_errors.IsNotFound(err) {
@@ -2199,4 +2213,148 @@ func (a *ApplicationRestoreController) processVMResourcesForVMRestore(restore *s
 		return nil, err
 	}
 	return includeResourceList, nil
+}
+
+// processVMResourcesForVMRestore maps VM resources such as  PVC, ConfigMap and Secrets with VirtualMachines in includeResource and populates
+// them to includeResource for VM Restore. Resources not associated to any VMs in includeResources will be skipped including them for restore.
+func (a *ApplicationRestoreController) processVMResourcesForVMRestoreFromNFS(restore *storkapi.ApplicationRestore) error {
+	fn := "processVMResourcesForVMRestoreFromNFS"
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
+		return err
+	}
+
+	// Check whether ResourceExport is present or not
+	crName := getResourceExportCRName(utils.PrefixVMRestoreIncludeResourceMap, string(restore.UID), restore.Namespace)
+	resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, restore.Namespace)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			// create resource export CR
+			resourceExport := &kdmpapi.ResourceExport{}
+			// Adding required label for debugging
+			labels := make(map[string]string)
+			labels[utils.ApplicationRestoreCRNameKey] = utils.GetValidLabel(restore.Name)
+			labels[utils.ApplicationRestoreCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(restore.UID)))
+			// If restore from px-backup, update the restore object details in the label
+			if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
+				if val == utils.PxbackupAnnotationCreateByValue {
+					labels[utils.RestoreObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
+					labels[utils.RestoreObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
+				}
+			}
+			resourceExport.Labels = labels
+			resourceExport.Annotations = make(map[string]string)
+			resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+			resourceExport.Annotations[utils.VMRestoreIncludeResourceMapAnnotation] = "true"
+			resourceExport.Name = crName
+			resourceExport.Namespace = restore.Namespace
+			resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
+			resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
+			storkPodNs, err := k8sutils.GetStorkPodNamespace()
+			if err != nil {
+				logrus.Errorf("error in getting stork pod namespace: %v", err)
+				return err
+			}
+			resourceExport.Spec.TriggeredFromNs = storkPodNs
+			source := &kdmpapi.ResourceExportObjectReference{
+				APIVersion: restore.APIVersion,
+				Kind:       restore.Kind,
+				Namespace:  restore.Namespace,
+				Name:       restore.Name,
+			}
+			backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+			if err != nil {
+				return fmt.Errorf("error getting backup location path %v: %v", backup.Spec.BackupLocation, err)
+			}
+			destination := &kdmpapi.ResourceExportObjectReference{
+				// TODO: .GetBackupLocation is not returning APIVersion and kind.
+				// Hardcoding for now.
+				// APIVersion: backupLocation.APIVersion,
+				// Kind:       backupLocation.Kind,
+				APIVersion: utils.StorkAPIVersion,
+				Kind:       utils.BackupLocationKind,
+				Namespace:  backupLocation.Namespace,
+				Name:       backupLocation.Name,
+			}
+			resourceExport.Spec.Source = *source
+			resourceExport.Spec.Destination = *destination
+			_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
+			if err != nil {
+				logrus.Errorf("failed to create ResourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
+				return err
+			}
+			// We will update the state of applicationRestoreCr so that includeResources are processed by resourceExport CR.
+			restore.Status.Stage = storkapi.ApplicationRestoreStageIncludeResources
+			restore.Status.LastUpdateTimestamp = metav1.Now()
+			err = a.client.Update(context.TODO(), restore)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		logrus.Errorf("failed to get restore resourceExport CR: %v", err)
+		// Will retry in the next cycle of reconciler.
+		return nil
+	} else {
+		namespacedName := types.NamespacedName{}
+		namespacedName.Namespace = restore.Namespace
+		namespacedName.Name = restore.Name
+		var message string
+		// Check the status of the resourceExport CR and update it to the application restore CR
+		logrus.Debugf("resource export: %s, status: %s", resourceExport.Name, resourceExport.Status.Status)
+		switch resourceExport.Status.Status {
+		case kdmpapi.ResourceExportStatusFailed:
+			message = fmt.Sprintf("Error applying resources: %v", err)
+			restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+			restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+			restore.Status.Reason = message
+			restore.Status.LastUpdateTimestamp = metav1.Now()
+			restore.Status.FinishTimestamp = metav1.Now()
+			err = a.client.Update(context.TODO(), restore)
+			if err != nil {
+				return err
+			}
+			a.recorder.Event(restore,
+				v1.EventTypeWarning,
+				string(storkapi.ApplicationRestoreStatusFailed),
+				message)
+			log.ApplicationRestoreLog(restore).Errorf(message)
+			return err
+		case kdmpapi.ResourceExportStatusSuccessful:
+			// Modify to have subresource level updating
+			includeResourceList := make([]storkapi.ObjectInfo, 0)
+			for _, resource := range resourceExport.Status.Resources {
+				info := storkapi.ObjectInfo{
+					Name:             resource.Name,
+					Namespace:        resource.Namespace,
+					GroupVersionKind: resource.GroupVersionKind,
+				}
+				includeResourceList = append(includeResourceList, info)
+			}
+			if len(includeResourceList) != 0 {
+				restore.Spec.IncludeResources = append(restore.Spec.IncludeResources, includeResourceList...)
+				log.ApplicationRestoreLog(restore).Tracef("%v: resource export CR successful with vm IncludeResourceMap",
+					fn)
+			}
+			//Progress to next stage so that we dont loop here.
+			restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
+		case kdmpapi.ResourceExportStatusInitial:
+			fallthrough
+		case kdmpapi.ResourceExportStatusPending:
+			fallthrough
+		case kdmpapi.ResourceExportStatusInProgress:
+			restore.Status.Stage = storkapi.ApplicationRestoreStageIncludeResources
+		default:
+			if len(resourceExport.Status.Status) != 0 {
+				log.ApplicationRestoreLog(restore).Errorf("%v: invalid status for resource export: %s, status: %s", fn, resourceExport.Name, resourceExport.Status.Status)
+			}
+		}
+		restore.Status.LastUpdateTimestamp = metav1.Now()
+		err = a.client.Update(context.TODO(), restore)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
