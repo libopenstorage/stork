@@ -1,0 +1,12 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: test-multi-disk-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "3"
+  sharedv4: "true"
+  sharedv4_mount_options: vers=3.0,nolock
+  io_profile: db_remote
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
