@@ -6,9 +6,11 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
+	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -506,4 +508,77 @@ func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.Persis
 	log.Infof("[%d] volumes added to VM [%s]", len(pvcs), vmUpdate.Name)
 
 	return nil
+}
+
+// startAndWaitForVMIMigration starts the VM migration and waits for the VM to be in running state in the new node
+func StartAndWaitForVMIMigration(virtualMachine *scheduler.Context, ctx context1.Context, schedDriver scheduler.Driver) (bool, error) {
+
+	vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachine})
+	vmiNamespace := vms[0].Namespace
+	vmiName := vms[0].Name
+
+	if err != nil {
+		return false, err
+	}
+
+	// Start the VM migration
+	migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
+	if err != nil {
+		log.Infof("Failed to create VM migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+		return true, err
+	}
+	log.Infof("VM migration created for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+	log.Infof("Migrating VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+	// wait for completion
+	var migr *kubevirtdy.VirtualMachineInstanceMigration
+
+	t := func() (interface{}, bool, error) {
+		migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
+		if err != nil {
+			return "", false, fmt.Errorf("Failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+		}
+		if !migr.Completed {
+			return "", true, fmt.Errorf("waiting for migration to complete for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+		}
+
+		// get volume from app context
+		volume, err := schedDriver.GetVolumes(virtualMachine)
+		if err != nil {
+			return "", false, fmt.Errorf("Failed to get volume for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+		}
+
+		// wait until there is only one pod in the running state
+		testPod, err := getVMPod(virtualMachine, volume[0])
+		if err != nil {
+			return "", false, err
+		}
+		log.InfoD("VM pod live migrated to pod: [%s] in namespace [%s] is in running state", testPod.Name, testPod.Namespace)
+		return "", false, nil
+
+	}
+	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	return true, nil
+}
+
+func getVMPod(appCtx *scheduler.Context, vol *volume.Volume) (*corev1.Pod, error) {
+	pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pods for volume %s of context %s: %w", vol.ID, appCtx.App.Key, err)
+	}
+
+	var found corev1.Pod
+	for _, pod := range pods {
+		if pod.Labels["kubevirt.io"] == "virt-launcher" && pod.Status.Phase == corev1.PodRunning {
+			if found.Name != "" {
+				// there should be only one VM pod in the running state (otherwise live migration is in progress)
+				return nil, fmt.Errorf("more than 1 KubeVirt pods (%s, %s) are in running state for volume %s",
+					found.Name, pod.Name, vol.ID)
+			}
+			found = pod
+		}
+	}
+	if found.Name == "" {
+		return nil, fmt.Errorf("failed to find a running pod for volume %s", vol.ID)
+	}
+	return &found, nil
 }
