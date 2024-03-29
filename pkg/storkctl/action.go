@@ -54,7 +54,7 @@ func GetCurrentTime() time.Time {
 
 func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var referenceMigrationSchedule string
-	var skipDeactivateSource bool
+	var skipSourceOperations bool
 	var includeNamespaceList []string
 	var excludeNamespaceList []string
 	performFailoverCommand := &cobra.Command{
@@ -63,7 +63,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 		Run: func(c *cobra.Command, args []string) {
 			// namespace of the MigrationSchedule is provided by the user using the -n / --namespace global flag
 			migrationScheduleNs := cmdFactory.GetNamespace()
-			namespaceList, err := validationsForPerformDRCommands(storkv1.ActionTypeFailover, migrationScheduleNs, referenceMigrationSchedule, includeNamespaceList, excludeNamespaceList)
+			namespaceList, err := validationsForPerformDRCommands(storkv1.ActionTypeFailover, migrationScheduleNs, referenceMigrationSchedule, includeNamespaceList, excludeNamespaceList, skipSourceOperations)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -72,7 +72,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 				FailoverParameter: storkv1.FailoverParameter{
 					FailoverNamespaces:         namespaceList,
 					MigrationScheduleReference: referenceMigrationSchedule,
-					SkipDeactivateSource:       &skipDeactivateSource,
+					SkipSourceOperations:       &skipSourceOperations,
 				},
 			}
 			err = createActionCR(storkv1.ActionTypeFailover, migrationScheduleNs, referenceMigrationSchedule, actionParameters, ioStreams)
@@ -82,7 +82,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 			}
 		},
 	}
-	performFailoverCommand.Flags().BoolVar(&skipDeactivateSource, "skip-deactivate-source", false, "If present, applications in the source cluster will not be scaled down as part of the failover.")
+	performFailoverCommand.Flags().BoolVar(&skipSourceOperations, "skip-source-operations", false, "If present, operations performed on the source cluster will be skipped, and applications on the current cluster will be scaled up")
 	performFailoverCommand.Flags().StringVarP(&referenceMigrationSchedule, "migration-reference", "m", "", "Specify the MigrationSchedule to failover. Also specify the namespace of this MigrationSchedule using the -n flag")
 	performFailoverCommand.Flags().StringSliceVar(&includeNamespaceList, "include-namespaces", nil, "Specify the comma-separated list of subset namespaces to be failed over. By default, all namespaces part of the MigrationSchedule are failed over")
 	performFailoverCommand.Flags().StringSliceVar(&excludeNamespaceList, "exclude-namespaces", nil, "Specify the comma-separated list of subset namespaces to be skipped during the failover. By default, all namespaces part of the MigrationSchedule are failed over")
@@ -99,7 +99,7 @@ func newFailbackCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 		Run: func(c *cobra.Command, args []string) {
 			// namespace of the MigrationSchedule is provided by the user using the -n / --namespace global flag
 			migrationScheduleNs := cmdFactory.GetNamespace()
-			namespaceList, err := validationsForPerformDRCommands(storkv1.ActionTypeFailback, migrationScheduleNs, referenceMigrationSchedule, includeNamespaceList, excludeNamespaceList)
+			namespaceList, err := validationsForPerformDRCommands(storkv1.ActionTypeFailback, migrationScheduleNs, referenceMigrationSchedule, includeNamespaceList, excludeNamespaceList, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -123,8 +123,8 @@ func newFailbackCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 	return performFailbackCommand
 }
 
-// validationsForPerformDRCommands checks the common validations for failover/failback and returns the resultant namespaceList
-func validationsForPerformDRCommands(actionType storkv1.ActionType, migrationScheduleNs string, referenceMigrationSchedule string, includeNamespaceList []string, excludeNamespaceList []string) ([]string, error) {
+// validationsForPerformDRCommands performs the validations for failover/failback and returns the resultant namespaceList
+func validationsForPerformDRCommands(actionType storkv1.ActionType, migrationScheduleNs string, referenceMigrationSchedule string, includeNamespaceList []string, excludeNamespaceList []string, skipSourceOperations bool) ([]string, error) {
 	var namespaceList []string
 	if len(referenceMigrationSchedule) == 0 {
 		return nil, fmt.Errorf("reference MigrationSchedule name needs to be provided for %s", actionType)
@@ -142,11 +142,14 @@ func validationsForPerformDRCommands(actionType storkv1.ActionType, migrationSch
 		}
 	}
 
-	// clusterPair specified in the reference MigrationSchedule should exist in the destination cluster in both failover and failback
-	clusterPair := migrSchedObj.Spec.Template.Spec.ClusterPair
-	_, err = storkops.Instance().GetClusterPair(clusterPair, migrationScheduleNs)
-	if err != nil {
-		return nil, fmt.Errorf("unable to find the ClusterPair %v in the %v namespace", clusterPair, migrationScheduleNs)
+	// clusterPair specified in the reference MigrationSchedule should always exist in the destination cluster in failback
+	// for failover only if skipSourceOperations flag is provided, cluster-pair presence is optional
+	if !(actionType == storkv1.ActionTypeFailover && skipSourceOperations) {
+		clusterPair := migrSchedObj.Spec.Template.Spec.ClusterPair
+		_, err = storkops.Instance().GetClusterPair(clusterPair, migrationScheduleNs)
+		if err != nil {
+			return nil, fmt.Errorf("unable to find the ClusterPair %v in the %v namespace", clusterPair, migrationScheduleNs)
+		}
 	}
 
 	migrationNamespaceList := migrSchedObj.Spec.Template.Spec.Namespaces
