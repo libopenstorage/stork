@@ -2269,6 +2269,7 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 // DestroyApps destroy applications with data validation
 func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
 
+	defer ginkgo.GinkgoRecover()
 	var allErrors string
 
 	log.InfoD("Validating apps data continuity")
