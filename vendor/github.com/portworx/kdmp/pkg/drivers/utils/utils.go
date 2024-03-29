@@ -65,6 +65,8 @@ const (
 	// PvcBoundFailedMsg pvc not bounded msg
 	PvcBoundFailedMsg = "pvc not bounded"
 	IstioInjectLabel  = "sidecar.istio.io/inject"
+	// ProcessVMResourceSuccessMsg - vm resources processed successfully
+	ProcessVMResourceSuccessMsg = "vm resources processed successfully"
 )
 
 var (
