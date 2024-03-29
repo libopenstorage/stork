@@ -47,6 +47,12 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 		restoreWithVMMixed         string
 		backupWithVMStopped        string
 		restoreWithVMStopped       string
+		allVMs                     []kubevirtv1.VirtualMachine
+		allVMNames                 []string
+		freezeRuleName             string
+		unfreezeRuleName           string
+		freezeRuleUid              string
+		unfreezeRuleUid            string
 		//controlChannel             chan string
 		//errorGroup                 *errgroup.Group
 	)
@@ -139,6 +145,30 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			}
 		})
 
+		Step("Creating freeze and unfreeze rules", func() {
+			log.InfoD("Creating freeze and unfreeze rules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, appCtx := range scheduledAppContexts {
+				vms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Failed to get VMs in namespace - %s", appCtx.ScheduleOptions.Namespace)
+				allVMs = append(allVMs, vms...)
+			}
+			for _, v := range allVMs {
+				allVMNames = append(allVMNames, v.Name)
+			}
+			freezeRuleName = fmt.Sprintf("vm-freeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(freezeRuleName, allVMs, Freeze, ctx)
+			log.FailOnError(err, "Failed to create freeze rule %s for VMs - %v", freezeRuleName, allVMNames)
+			freezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, freezeRuleName)
+			log.FailOnError(err, "Failed to get freeze rule uid for rule %s", freezeRuleName)
+			unfreezeRuleName = fmt.Sprintf("vm-unfreeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(unfreezeRuleName, allVMs, Unfreeze, ctx)
+			log.FailOnError(err, "Failed to create unfreeze rule %s for VMs - %v", unfreezeRuleName, allVMNames)
+			unfreezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, unfreezeRuleName)
+			log.FailOnError(err, "Failed to get unfreeze rule uid for rule %s", unfreezeRuleName)
+		})
+
 		Step("Taking individual backup of each namespace", func() {
 			log.InfoD("Taking individual backup of each namespace")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -154,18 +184,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 				go func(backupName string, appCtx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, []string{appCtx.ScheduleOptions.Namespace}, "pre", "default")
-					log.FailOnError(err, "Unable to create Pre Rule")
-					log.Infof("Pre rule Name - [%s]", preRuleName)
-					preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-					log.FailOnError(err, "Unable fetch pre rule uid")
-					_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, []string{appCtx.ScheduleOptions.Namespace}, "post", "default")
-					log.FailOnError(err, "Unable to create Post Rule")
-					log.Infof("Post rule Name - [%s]", postRuleName)
-					postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-					log.FailOnError(err, "Unable fetch post rule uid")
 					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, appCtx.ScheduleOptions.Namespace, backupLocationName)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 					if err != nil {
 						mutex.Lock()
 						errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
@@ -255,21 +275,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
 				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mixed"
 			}
-			_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "pre", "default")
-			log.FailOnError(err, "Unable to create Pre Rule")
-			log.Infof("Pre rule Name - [%s]", preRuleName)
-			preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-			log.FailOnError(err, "Unable fetch pre rule uid")
-			_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "post", "default")
-			log.FailOnError(err, "Unable to create Post Rule")
-			log.Infof("Post rule Name - [%s]", postRuleName)
-			postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-			log.FailOnError(err, "Unable fetch post rule uid")
 			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
 			backupNames = append(backupNames, backupWithVMMixed)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMMixed, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
 			err = CreateBackupWithValidation(ctx, backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				nil, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMMixed))
 		})
 
@@ -307,18 +317,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			}
 			backupWithVMRestart = fmt.Sprintf("%s-%s", "auto-backup-restart", RandomString(6))
 			backupNames = append(backupNames, backupWithVMRestart)
-			_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "pre", "default")
-			log.FailOnError(err, "Unable to create Pre Rule")
-			log.Infof("Pre rule Name - [%s]", preRuleName)
-			preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-			log.FailOnError(err, "Unable fetch pre rule uid")
-			_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "post", "default")
-			log.FailOnError(err, "Unable to create Post Rule")
-			log.Infof("Post rule Name - [%s]", postRuleName)
-			postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-			log.FailOnError(err, "Unable fetch post rule uid")
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMRestart, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
-			_, err = CreateBackupWithoutCheck(ctx, backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			_, err = CreateBackupWithoutCheck(ctx, backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMRestart))
 			for _, n := range namespaces {
 				wg.Add(1)
@@ -367,21 +367,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
 				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stopped"
 			}
-			_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "pre", "default")
-			log.FailOnError(err, "Unable to create Pre Rule")
-			log.Infof("Pre rule Name - [%s]", preRuleName)
-			preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-			log.FailOnError(err, "Unable fetch pre rule uid")
-			_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "post", "default")
-			log.FailOnError(err, "Unable to create Post Rule")
-			log.Infof("Post rule Name - [%s]", postRuleName)
-			postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-			log.FailOnError(err, "Unable fetch post rule uid")
 			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
 			backupNames = append(backupNames, backupWithVMStopped)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMStopped, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
 			err = CreateBackupWithValidation(ctx, backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				nil, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMStopped))
 		})
 
