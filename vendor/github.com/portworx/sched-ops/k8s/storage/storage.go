@@ -20,6 +20,7 @@ var (
 type Ops interface {
 	ScOps
 	VolumeAttachmentOps
+	CsiDriverOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
