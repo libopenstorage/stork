@@ -245,15 +245,20 @@ func ExecuteRule(
 		err = fmt.Errorf("failed to generate uuid for rule tasks due to: %v", err)
 		return nil, err
 	}
-
 	pods := make([]v1.Pod, 0)
 	for _, item := range rule.Rules {
 		p, err := core.Instance().GetPods(podNamespace, item.PodSelector)
 		if err != nil {
 			return nil, err
 		}
-
-		pods = append(pods, p.Items...)
+		for _, pod := range p.Items {
+			if core.Instance().IsPodCompleted(pod) {
+				logrus.Infof("Ignoring completed pod for running rule %v", pod.Name)
+				continue
+			}
+			logrus.Debugf("Including pod to run rule %v", pod.Name)
+			pods = append(pods, pod)
+		}
 	}
 
 	if len(pods) > 0 {
