@@ -1050,7 +1050,17 @@ func restartVolumeDriverAndWaitForReady(t *testing.T, attachedNode *node.Node) {
 	err := volumeDriver.RestartDriver(*attachedNode, nil)
 	require.NoError(t, err)
 
+	// RestartDriver function above just labels the k8s node. We need to wait till PX goes down.
+	log.Infof("Sleeping to let the volume driver go down on node %s", attachedNode.Name)
+	time.Sleep(1 * time.Minute)
+
 	require.Eventuallyf(t, func() bool {
-		return volumeDriver.IsPxReadyOnNode(*attachedNode)
+		ret := volumeDriver.IsPxReadyOnNode(*attachedNode)
+		if !ret {
+			log.Infof("Waiting for the volume driver to be Ready on node %s", attachedNode.Name)
+		}
+		return ret
 	}, 10*time.Minute, 10*time.Second, "PX did not become ready on node %s", attachedNode.Name)
+
+	log.Infof("Volume driver is Ready on node %s", attachedNode.Name)
 }
