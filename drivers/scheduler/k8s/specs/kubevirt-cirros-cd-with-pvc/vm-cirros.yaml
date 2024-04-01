@@ -32,15 +32,9 @@ spec:
               disk:
                 bus: virtio
             {{- end }}
-          interfaces:
-            - name: default
-              masquerade: { }
         resources:
           requests:
             memory: 2048M
-      networks:
-        - name: default
-          pod: {}
       volumes:
         - name: containerdisk
           containerDisk:
