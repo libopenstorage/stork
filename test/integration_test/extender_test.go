@@ -557,6 +557,10 @@ func preferRemoteNodeFalseHyperconvergenceTest(t *testing.T) {
 
 	logrus.Infof("Verifying Pods scheduling favors hyperconvergence")
 	verifyScheduledNodesMultipleReplicas(t, scheduledNodes, volumeNames)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	logrus.Infof("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func getNodesWithoutVolumeData(t *testing.T, volume string) []string {
