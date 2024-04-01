@@ -7692,6 +7692,10 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
@@ -7719,12 +7723,12 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
 
-	defer func() {
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
-	}()
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "failed to switch context to source cluster")
+
 	masterNodes := node.GetMasterNodes()
-	if len(masterNodes) > 0 {
+	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
+	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
