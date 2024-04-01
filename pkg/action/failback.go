@@ -38,7 +38,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("error fetching migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
+		msg := fmt.Sprintf("error fetching Migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -50,7 +50,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	if len(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces) > 0 {
 		namespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to get list of namespaces from migrationschedule %s", migrationSchedule.Name)
+			msg := fmt.Sprintf("Failed to get list of namespaces from Migrationschedule %s", migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -60,7 +60,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		}
 
 		if isSubList, _, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
-			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from migrationschedule %s", migrationSchedule.Name)
+			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from Migrationschedule %s", migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -76,7 +76,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for migrationschedule %s, hence aborting failback", migrationSchedule.Name)
+		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting failback", migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -98,7 +98,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	// Return if any migration is ongoing
 	if !isMigrationComplete(latestMigration.Status) {
 		msg := fmt.Sprintf("Waiting for the completion of migration %s", latestMigration.Name)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusScheduled))
 		logEvents(msg, "out")
 		action.Status.Status = storkv1.ActionStatusInProgress
 		action.Status.Reason = msg
@@ -306,7 +306,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for migrationschedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
+		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -316,7 +316,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 	}
 
 	if !isMigrationSuccessful(latestMigration.Status) {
-		msg := fmt.Sprintf("Latest migration for migrationschedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
+		msg := fmt.Sprintf("Latest migration for Migrationschedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -359,7 +359,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 		return
 	}
 
-	msg := fmt.Sprintf("Pods using PVCs got scaled down successfully in cluster : %s successful. Moving to the next stage", ac.config.Host)
+	msg := fmt.Sprintf("Pods using PVCs got scaled down successfully in cluster : %v successful. Moving to the next stage", config.Host)
 	logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
 	logEvents(msg, "out")
 	action.Status.Status = storkv1.ActionStatusSuccessful
@@ -650,7 +650,7 @@ func (ac *ActionController) waitForVolumesBecomeFree(action *storkv1.Action, mig
 				continue
 			}
 			if _, ok := nsToPVToPVCMap[volumeInfo.Namespace][volumeInfo.Volume]; !ok {
-				msg := fmt.Sprintf("No pvc was found in the namespace %s for pv %s", volumeInfo.Namespace, volumeInfo.Volume)
+				msg := fmt.Sprintf("No PVC was found in the namespace %s for pv %s", volumeInfo.Namespace, volumeInfo.Volume)
 				log.ActionLog(action).Errorf(msg)
 				continue
 			}
@@ -669,7 +669,7 @@ func (ac *ActionController) waitForVolumesBecomeFree(action *storkv1.Action, mig
 			}
 			nsToPVCToNumberOfPods[volumeInfo.Namespace][pvcName] = len(pods)
 		}
-		logrus.Infof("Initializing namespace to pvc to number of pods map: %v", nsToPVCToNumberOfPods)
+		logrus.Infof("Initializing namespace to PVC to number of pods map: %v", nsToPVCToNumberOfPods)
 
 		// Check if there are any pods using the volumes in a loop
 		terminationInprogressIncurrentIteration := false
