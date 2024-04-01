@@ -1047,20 +1047,17 @@ func waitForVolumeAttachmentsToMove(t *testing.T, testState *kubevirtTestState, 
 
 func restartVolumeDriverAndWaitForReady(t *testing.T, attachedNode *node.Node) {
 	log.Infof("Restarting volume driver on node %s", attachedNode.Name)
-	err := volumeDriver.RestartDriver(*attachedNode, nil)
+	err := volumeDriver.StopDriver([]node.Node{*attachedNode}, false, nil)
 	require.NoError(t, err)
 
-	// RestartDriver function above just labels the k8s node. We need to wait till PX goes down.
-	log.Infof("Sleeping to let the volume driver go down on node %s", attachedNode.Name)
-	time.Sleep(1 * time.Minute)
+	err = volumeDriver.WaitDriverDownOnNode(*attachedNode)
+	require.NoError(t, err)
 
-	require.Eventuallyf(t, func() bool {
-		ret := volumeDriver.IsPxReadyOnNode(*attachedNode)
-		if !ret {
-			log.Infof("Waiting for the volume driver to be Ready on node %s", attachedNode.Name)
-		}
-		return ret
-	}, 10*time.Minute, 10*time.Second, "PX did not become ready on node %s", attachedNode.Name)
+	err = volumeDriver.StartDriver(*attachedNode)
+	require.NoError(t, err)
 
-	log.Infof("Volume driver is Ready on node %s", attachedNode.Name)
+	err = volumeDriver.WaitDriverUpOnNode(*attachedNode, 10*time.Minute)
+	require.NoError(t, err)
+
+	log.Infof("Volume driver is up on node %s", attachedNode.Name)
 }
