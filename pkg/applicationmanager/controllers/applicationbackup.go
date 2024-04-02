@@ -310,7 +310,6 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 					a.execRulesCompleted[string(backup.UID)] = true
 				}
 			}
-
 			canDelete, err := a.deleteBackup(backup)
 			if err != nil {
 				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
@@ -1176,8 +1175,15 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}
 	// append skipped volumes
 	backup.Status.Volumes = append(backup.Status.Volumes, skipVolInfo...)
+	// add for fail and partial success
+	if len(backup.Status.Volumes) == len(skipVolInfo) {
+		// This case signifies that none of the volumes are successfully backed up
+		// hence marking it as failed
+		partialFailed = true
+	} else {
+		partialSuccess = true
+	}
 	if !partialSuccess && partialFailed {
-
 		// This case signifies that none of the volumes are successfully backed up
 		// hence marking it as failed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
@@ -1975,6 +1981,7 @@ func (a *ApplicationBackupController) backupResources(
 		}
 	}
 	backup.Status.FailedVolCount = len(failedVolInfoMap)
+	isPartialBackup := isPartialBackup(backup)
 	for _, obj := range allObjects {
 		objectType, err := meta.TypeAccessor(obj)
 		if err != nil {
@@ -2194,10 +2201,11 @@ func (a *ApplicationBackupController) backupResources(
 				backup.Status.BackupPath = GetObjectPath(backup)
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
-				if backup.Status.FailedVolCount > 0 {
-					backup.Status.Status = stork_api.ApplicationBackupStatusPartialSuccess
-					backup.Status.Reason = "Volumes and resources were backed up partially"
-				} else {
+				if isPartialBackup {
+					backup.Status.Status = stork_api.ApplicationBackupSatusPartialSuccess
+					backup.Status.Reason = "Some volumes were backed up"
+				}
+				if backup.Status.FailedVolCount == 0 {
 					backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
 					backup.Status.Reason = "Volumes and resources were backed up successfully"
 				}
@@ -2239,17 +2247,19 @@ func (a *ApplicationBackupController) backupResources(
 	backup.Status.BackupPath = GetObjectPath(backup)
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
-	if backup.Status.FailedVolCount > 0 {
+	if isPartialBackup {
 		backup.Status.Status = stork_api.ApplicationBackupStatusPartialSuccess
-	} else {
+	}
+	if backup.Status.FailedVolCount == 0 {
 		backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
 	}
 	if len(backup.Spec.NamespaceSelector) != 0 && len(backup.Spec.Namespaces) == 0 {
 		backup.Status.Reason = fmt.Sprintf("Namespace label selector [%s] did not find any namespaces with selected labels for backup", backup.Spec.NamespaceSelector)
 	} else {
-		if backup.Status.FailedVolCount > 0 {
-			backup.Status.Reason = "Volumes and resources were backed up partially"
-		} else {
+		if isPartialBackup {
+			backup.Status.Reason = "Some volumes were backed up"
+		}
+		if backup.Status.FailedVolCount == 0 {
 			backup.Status.Reason = "Volumes and resources were backed up successfully"
 		}
 	}
@@ -2670,4 +2680,8 @@ func (a *ApplicationBackupController) validateApplicationBackupParameters(backup
 		}
 	}
 	return nil
+}
+
+func isPartialBackup(backup *stork_api.ApplicationBackup) bool {
+	return backup.Status.FailedVolCount > 0 && backup.Status.FailedVolCount < len(backup.Status.Volumes)
 }
