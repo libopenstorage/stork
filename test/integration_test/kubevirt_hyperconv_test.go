@@ -308,6 +308,11 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 		log.Infof("\nStart OCP upgrade simulation on node: %s", nodeName)
 		testStatesNode := getTestStatesForNode(t, ctxs, nodeName, allNodes)
 
+		if len(testStatesNode) == 0 {
+			log.Infof("No VMs are present on node: %s. Skipping this node", nodeName)
+			continue
+		}
+
 		for _, testState := range testStatesNode {
 			// start a live migration and wait for it to finish, to simulate node drain in OCP.
 			// vmPod changes after the live migration. The function below also verifies that the attachedNode
