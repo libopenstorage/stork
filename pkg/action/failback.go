@@ -567,7 +567,7 @@ func (ac *ActionController) activateClusterDuringFailback(action *storkv1.Action
 			return
 		}
 	}
-	ac.activateClusterDuringDR(action, namespaces, migrationSchedule, config)
+	ac.activateClusterDuringDR(action, namespaces, migrationSchedule, config, rollback)
 }
 
 func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*rest.Config, error) {
