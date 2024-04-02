@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/hashicorp/go-version"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -11103,6 +11105,26 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	}
 
 	return volumes, nil
+}
+
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	if err != nil {
+		return false
+	}
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			version, err := k8sKubevirt.GetVersion()
+			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
