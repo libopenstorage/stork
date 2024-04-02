@@ -1096,13 +1096,16 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						}
 					}
 				}
-
 				if err == nil {
 					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectionTargetNode ", v.Name, v.ID, v.Namespace)
+					PrintInspectVolume(v.ID)
 					UpdateOutcome(event, err)
 					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectSourceNode ", v.Name, v.ID, v.Namespace)
+					PrintInspectVolume(v.ID)
 					UpdateOutcome(event, err)
 				}
 			}
@@ -1244,8 +1247,11 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HAIncrease, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
+
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
@@ -1288,6 +1294,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
+
 		}
 		updateMetrics(*event)
 	})
@@ -1347,6 +1354,8 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 
 				err = Inst().V.ResizeVolume(vol.ID, newSize)
 				if err != nil {
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					return err
 				}
 
@@ -1431,11 +1440,16 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 						}
 						err = Inst().V.SetReplicationFactor(v, currRep, nil, nil, false, opts)
 						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failing to set replication", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
 							log.Errorf("There is a error setting repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
-
 						err = volumeResize(v)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of a volume resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 
 					})
@@ -1559,6 +1573,8 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HADecrease, stats.HADecreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failed to  decrease repl", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
 							UpdateOutcome(event, err)
@@ -2810,6 +2826,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					log.InfoD(stepLog)
 					log.Infof("Calling CloneVolume()...")
 					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after cloning the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					UpdateOutcome(event, err)
 				})
 				stepLog = fmt.Sprintf("Validate successful clone %s", clonedVolID)
@@ -2913,7 +2931,13 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 							UpdateOutcome(event, err)
 						}
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						err := Inst().V.ValidateUpdateVolume(v, params)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 					}
 				})
@@ -6287,11 +6311,14 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					log.InfoD("COS after update %v", appVol.Spec.GetCos().SimpleString())
 					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						UpdateOutcome(event, err)
 					}
 					log.InfoD("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
 				}
 				log.InfoD("Completed update on %v", v.ID)
+
 			}
 		}
 		// setIoPriority if IO priority is set to High then next iteration will be run with low.
@@ -9576,6 +9603,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 
 			err = Inst().V.ResizeVolume(vol.ID, newSize)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", vol.Name, vol.ID, vol.Namespace)
+				PrintInspectVolume(vol.ID)
 				return err
 			}
 
@@ -9599,6 +9628,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.Infof("Resizing Volumes created [%v]", eachVol.Name)
 			err := volumeResize(eachVol)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", eachVol.Name, eachVol.ID, eachVol.Namespace)
+				PrintInspectVolume(eachVol.ID)
 				UpdateOutcome(event, fmt.Errorf("Resizing volume failed on the cluster err: [%v]", err))
 			}
 		}
@@ -9612,6 +9643,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.InfoD("Validating Volume Status of Volume [%v]", eachVol.ID)
 			status, err := IsVolumeStatusUP(eachVol)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", eachVol.Name, eachVol.ID, eachVol.Namespace)
+				PrintInspectVolume(eachVol.ID)
 				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")
