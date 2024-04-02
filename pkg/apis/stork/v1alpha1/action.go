@@ -101,6 +101,8 @@ const (
 	ActionStageScaleUpSource ActionStageType = "ScaleUpSource"
 	// ActionStageLastMileMigration for doing a last migration before failover/failback to ensure data integrity
 	ActionStageLastMileMigration ActionStageType = "LastMileMigration"
+	// ActionStageWaitAfterScaleDown for waiting after scaling down of apps
+	ActionStageWaitAfterScaleDown ActionStageType = "WaitAfterScaleDown"
 	// ActionStageFinal is the final stage for action
 	ActionStageFinal ActionStageType = "Final"
 )

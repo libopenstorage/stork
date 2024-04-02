@@ -2,14 +2,17 @@ package action
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/utils"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	v1 "k8s.io/api/core/v1"
+	"github.com/sirupsen/logrus"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -35,14 +38,11 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("error fetching migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
-		log.ActionLog(action).Errorf(msg)
+		msg := fmt.Sprintf("error fetching Migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
 		action.Status.Reason = msg
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusFailed),
-			msg)
 		ac.updateAction(action)
 		return
 	}
@@ -50,23 +50,21 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	if len(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces) > 0 {
 		namespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to get list of namespaces from migrationschedule %s", migrationSchedule.Name)
-			log.ActionLog(action).Infof(msg)
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusScheduled),
-				msg)
+			msg := fmt.Sprintf("Failed to get list of namespaces from Migrationschedule %s", migrationSchedule.Name)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
+			action.Status.Status = storkv1.ActionStatusFailed
+			action.Status.Reason = msg
 			ac.updateAction(action)
 			return
 		}
 
 		if isSubList, _, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
-			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from migrationschedule %s", migrationSchedule.Name)
-			log.ActionLog(action).Infof(msg)
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusScheduled),
-				msg)
+			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from Migrationschedule %s", migrationSchedule.Name)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
+			action.Status.Status = storkv1.ActionStatusFailed
+			action.Status.Reason = msg
 			ac.updateAction(action)
 			return
 		}
@@ -78,25 +76,21 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for migrationschedule %s, hence aborting failback", migrationSchedule.Name)
-		log.ActionLog(action).Errorf(msg)
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusFailed),
-			msg)
+		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting failback", migrationSchedule.Name)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
 	}
 
 	if latestMigration.Status == storkv1.MigrationStatusFailed {
 		msg := fmt.Sprintf("The latest migration %s is in %s state, hence aborting failback", latestMigration.Name, storkv1.MigrationStatusFailed)
-		log.ActionLog(action).Errorf(msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
 		action.Status.Reason = msg
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusFailed),
-			msg)
 		ac.updateAction(action)
 		return
 	}
@@ -104,11 +98,10 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	// Return if any migration is ongoing
 	if !isMigrationComplete(latestMigration.Status) {
 		msg := fmt.Sprintf("Waiting for the completion of migration %s", latestMigration.Name)
-		log.ActionLog(action).Infof(msg)
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusScheduled),
-			msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusScheduled))
+		logEvents(msg, "out")
+		action.Status.Status = storkv1.ActionStatusInProgress
+		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
 	}
@@ -124,13 +117,10 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		)
 		if err != nil {
 			msg := fmt.Sprintf("Error while checking if the latest migration %s has been successful: %v", latestMigration.Name, err)
-			log.ActionLog(action).Errorf(msg)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusFailed),
-				msg)
 			ac.updateAction(action)
 			return
 		}
@@ -155,13 +145,10 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			// And migrationschedule is in suspended state
 			log.ActionLog(action).Infof("The latest migration %s is not in threshold range", latestMigration.Name)
 			msg := fmt.Sprintf("Failing failback operation as the latest migration %s was not completed from the scheduled policy duration from now", latestMigration.Name)
-			log.ActionLog(action).Errorf(msg)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusFailed),
-				msg)
 			ac.updateAction(action)
 		}
 	}
@@ -169,7 +156,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.Action) {
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
-		action.Status.Stage = storkv1.ActionStageLastMileMigration
+		action.Status.Stage = storkv1.ActionStageWaitAfterScaleDown
 		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
@@ -186,13 +173,10 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, action.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleName)
-		log.ActionLog(action).Errorf(msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
 		action.Status.Reason = msg
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusFailed),
-			msg)
 		ac.updateAction(action)
 		return
 	}
@@ -200,11 +184,10 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
-		log.ActionLog(action).Infof(msg)
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusScheduled),
-			msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
 	}
@@ -227,6 +210,161 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 	// get destination i.e. current cluster's config
 	clusterConfig := ac.config
 	ac.deactivateClusterDuringDR(action, actualNamespaces, sourceConfig, clusterConfig)
+}
+
+func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
+	if action.Status.Status == storkv1.ActionStatusSuccessful {
+		if action.Spec.ActionType == storkv1.ActionTypeFailover || action.Spec.ActionType == storkv1.ActionTypeFailback {
+			action.Status.Stage = storkv1.ActionStageLastMileMigration
+		}
+		action.Status.Status = storkv1.ActionStatusInitial
+		action.Status.FinishTimestamp = metav1.Now()
+		ac.updateAction(action)
+		return
+	} else if action.Status.Status == storkv1.ActionStatusFailed {
+		// moving to reactivate/rollback stage if failed in waiting stage
+		if action.Spec.ActionType == storkv1.ActionTypeFailover {
+			action.Status.Stage = storkv1.ActionStageScaleUpSource
+		} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+			action.Status.Stage = storkv1.ActionStageScaleUpDestination
+		}
+		action.Status.Status = storkv1.ActionStatusInitial
+		action.Status.FinishTimestamp = metav1.Now()
+		ac.updateAction(action)
+		return
+	}
+
+	var migrationScheduleReference string
+	var config *rest.Config
+	var namespaces []string
+	if action.Spec.ActionType == storkv1.ActionTypeFailover {
+		migrationScheduleReference = action.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference
+		namespaces = action.Spec.ActionParameter.FailoverParameter.FailoverNamespaces
+	} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+		migrationScheduleReference = action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference
+		namespaces = action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces
+	}
+
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleReference, action.Namespace)
+	if err != nil {
+		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleReference)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	// In failover last-mile-migration is created in source->destination direction. so config used will change for failover and failback
+	// get sourceConfig from clusterPair in destination cluster
+	if action.Spec.ActionType == storkv1.ActionTypeFailover {
+		config, err = getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("Error fetching the ClusterPair %s/%s", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
+			action.Status.Status = storkv1.ActionStatusFailed
+			action.Status.Reason = msg
+			ac.updateAction(action)
+			return
+		}
+	} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+		// get destination i.e. current cluster's config
+		config = ac.config
+	}
+
+	storkClient, err := storkops.NewForConfig(config)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	// check if it has any latest successful migration
+	// For failover, get the remote migration schedule and then check for the latest migration
+	// For failback, get the current migration schedule and then check for the latest migration
+	referencedMigrationScheduleForLatestMigration := migrationSchedule
+	if action.Spec.ActionType == storkv1.ActionTypeFailover {
+		referencedMigrationScheduleForLatestMigration, err = storkClient.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
+			action.Status.Status = storkv1.ActionStatusFailed
+			action.Status.Reason = msg
+			ac.updateAction(action)
+			return
+		}
+	}
+
+	_, latestMigration := getLatestMigrationPolicyAndStatus(*referencedMigrationScheduleForLatestMigration)
+
+	// if no migration found, abort the failback process
+	if latestMigration == nil {
+		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	if !isMigrationSuccessful(latestMigration.Status) {
+		msg := fmt.Sprintf("Latest migration for Migrationschedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	migrationObject, err := storkClient.GetMigration(latestMigration.Name, migrationSchedule.Namespace)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to get the latest migration %s in migration schedule %s/%s: %v", latestMigration.Name, migrationSchedule.Namespace, migrationSchedule.Name, err)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+	_, actualNamespaces, _ := utils.IsSubList(namespaces, migrationNamespaces)
+
+	err = ac.waitForVolumesBecomeFree(action, migrationObject, actualNamespaces, config)
+	if err != nil {
+		msg := fmt.Sprintf("%v", err)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	msg := fmt.Sprintf("Pods using PVCs got scaled down successfully in cluster : %v successful. Moving to the next stage", config.Host)
+	logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
+	logEvents(msg, "out")
+	action.Status.Status = storkv1.ActionStatusSuccessful
+	action.Status.Reason = ""
+	ac.updateAction(action)
 }
 
 func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
@@ -264,13 +402,10 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleReference, action.Namespace)
 	if err != nil {
 		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleReference)
-		log.ActionLog(action).Errorf(msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
 		action.Status.Reason = msg
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusFailed),
-			msg)
 		ac.updateAction(action)
 		return
 	}
@@ -281,13 +416,10 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 		config, err = getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 		if err != nil {
 			msg := fmt.Sprintf("Error fetching the ClusterPair %s/%s", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair)
-			log.ActionLog(action).Errorf(msg)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusFailed),
-				msg)
 			ac.updateAction(action)
 			return
 		}
@@ -299,13 +431,10 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 	storkClient, err := storkops.NewForConfig(config)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
-		log.ActionLog(action).Errorf(msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
 		action.Status.Reason = msg
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusFailed),
-			msg)
 		ac.updateAction(action)
 		return
 	}
@@ -319,10 +448,10 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 			_, err := storkClient.CreateMigration(migration)
 			if err != nil {
 				msg := fmt.Sprintf("Creating last mile migration from the MigrationSchedule %s failed: %v", migrationSchedule.GetName(), err)
-				ac.recorder.Event(action,
-					v1.EventTypeWarning,
-					string(storkv1.ActionStatusFailed),
-					msg)
+				logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+				logEvents(msg, "err")
+				action.Status.Status = storkv1.ActionStatusFailed
+				action.Status.Reason = msg
 				ac.updateAction(action)
 				return
 			}
@@ -331,11 +460,10 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 			return
 		} else {
 			msg := fmt.Sprintf("Failed to get the last mile migration object %s: %v", migrationName, err)
-			log.ActionLog(action).Errorf(msg)
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusFailed),
-				msg)
+			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+			logEvents(msg, "err")
+			action.Status.Status = storkv1.ActionStatusFailed
+			action.Status.Reason = msg
 			ac.updateAction(action)
 			return
 		}
@@ -344,15 +472,11 @@ func (ac *ActionController) performLastMileMigration(action *storkv1.Action) {
 	if migrationObject.Status.Stage == storkv1.MigrationStageFinal {
 		if migrationObject.Status.Status == storkv1.MigrationStatusSuccessful || migrationObject.Status.Status == storkv1.MigrationStatusPartialSuccess {
 			action.Status.Status = storkv1.ActionStatusSuccessful
+			action.Status.Reason = ""
 		} else {
 			msg := fmt.Sprintf("Failing %s operation as the last mile migration %s failed: status %s", action.Spec.ActionType, migrationObject.Name, migrationObject.Status.Status)
-			log.ActionLog(action).Errorf(msg)
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg
-			ac.recorder.Event(action,
-				v1.EventTypeWarning,
-				string(storkv1.ActionStatusFailed),
-				msg)
 		}
 		ac.updateAction(action)
 		return
@@ -457,4 +581,145 @@ func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*r
 		&clientcmd.ConfigOverrides{},
 		clientcmd.NewDefaultClientConfigLoadingRules())
 	return remoteClientConfig.ClientConfig()
+}
+
+// checkForPodStatusUsingPVC returns terminated, terminationInProgress, error
+// terminated: true if all pods using PVC are terminated
+// terminationInProgress: true if any pod using PVC is not terminated
+// error: error if any error occurs
+func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, config *rest.Config) (bool, bool, error) {
+	coreClient, err := core.NewForConfig(config)
+	if err != nil {
+		return false, false, err
+	}
+
+	terminationInProgress := false
+	terminated := true
+	for ns, pvcToNumberOfPods := range nsToPVCToNumberOfPods {
+		for pvcName, numberOfPods := range pvcToNumberOfPods {
+			// If numberOfPods is already 0, then no need to check for pods
+			if numberOfPods > 0 {
+				pods, err := coreClient.GetPodsUsingPVC(pvcName, ns)
+				if err != nil {
+					return false, false, err
+				}
+				if len(pods) == 0 {
+					// All pods terminated for atlease one pvc
+					terminationInProgress = true
+				} else {
+					// Atleast one pvc has not been freed up
+					terminated = false
+				}
+				nsToPVCToNumberOfPods[ns][pvcName] = len(pods)
+			}
+		}
+	}
+
+	logrus.Infof("Current status of namespace to pvc to number of pods map: %v, terminated: %v, terminationInProgress: %v", nsToPVCToNumberOfPods, terminated, terminationInProgress)
+	return terminated, terminationInProgress, nil
+}
+
+// waitForVolumesBecomeFree waits for the volumes from the given namespaces from migration object to become free
+func (ac *ActionController) waitForVolumesBecomeFree(action *storkv1.Action, migration *storkv1.Migration, namespaces []string, config *rest.Config) error {
+	coreClient, err := core.NewForConfig(config)
+	if err != nil {
+		msg := fmt.Sprintf("Error creating core client while checking for pods using volumes: %v", err)
+		log.ActionLog(action).Errorf(msg)
+		return fmt.Errorf(msg)
+	}
+
+	nsToPVToPVCMap := make(map[string]map[string]string)
+	for _, namespace := range namespaces {
+		nsToPVToPVCMap[namespace] = GetPVtoPVCMap(coreClient, namespace)
+	}
+
+	// In a loop check if volumes are getting freed up
+	// If volumes are not getting freed up for maxIterationWithoutVolumesBecomingFree times, return false
+	numIterWithoutTermination := 0
+	maxOuterLoopCounter := 10
+	maxInnerLoopCounter := 5
+	// Waiting for maximum (maxOuterLoopCounter * maxInnerLoopCounter * podTerminationCheckInterval mins)
+	// Even then there is an early exit if for maxIterationWithoutVolumesBecomingFree times, volumes are not freed up
+	for outerloopCounter := 0; outerloopCounter < maxOuterLoopCounter; outerloopCounter++ {
+		// Initialize the map with the number of pods using the volumes
+		// Initializing here so that if any intermediate pod termination happens but it again gets created, we can track it
+		nsToPVCToNumberOfPods := make(map[string]map[string]int)
+		for _, volumeInfo := range migration.Status.Volumes {
+			// Check if the volume is from the namespaces provided
+			if !slices.Contains(namespaces, volumeInfo.Namespace) {
+				continue
+			}
+			if _, ok := nsToPVToPVCMap[volumeInfo.Namespace][volumeInfo.Volume]; !ok {
+				msg := fmt.Sprintf("No PVC was found in the namespace %s for pv %s", volumeInfo.Namespace, volumeInfo.Volume)
+				log.ActionLog(action).Errorf(msg)
+				continue
+			}
+
+			// Get the PVC name from the PV name from the map
+			pvcName := nsToPVToPVCMap[volumeInfo.Namespace][volumeInfo.Volume]
+
+			if _, ok := nsToPVCToNumberOfPods[volumeInfo.Namespace]; !ok {
+				nsToPVCToNumberOfPods[volumeInfo.Namespace] = make(map[string]int)
+			}
+			pods, err := coreClient.GetPodsUsingPVC(pvcName, volumeInfo.Namespace)
+			if err != nil {
+				msg := fmt.Sprintf("Error fetching pods using PVC %s/%s: %v", volumeInfo.Namespace, pvcName, err)
+				log.ActionLog(action).Errorf(msg)
+				return fmt.Errorf(msg)
+			}
+			nsToPVCToNumberOfPods[volumeInfo.Namespace][pvcName] = len(pods)
+		}
+		logrus.Infof("Initializing namespace to PVC to number of pods map: %v", nsToPVCToNumberOfPods)
+
+		// Check if there are any pods using the volumes in a loop
+		terminationInprogressIncurrentIteration := false
+		for iter := 0; iter < maxInnerLoopCounter; iter++ {
+			terminated, terminationInProgress, err := checkForPodStatusUsingPVC(nsToPVCToNumberOfPods, config)
+			if err != nil {
+				return err
+			}
+			log.ActionLog(action).Infof("Waiting for pod terminations iter: %d, PVCs to pod numbers map: %v", iter, nsToPVCToNumberOfPods)
+			if terminated {
+				return nil
+			}
+
+			// If terminationInProgress then enable the marker for this iteration
+			if terminationInProgress {
+				terminationInprogressIncurrentIteration = true
+			}
+			// If termination is in progress, then wait for podTerminationCheckInterval minutes before checking again
+			log.ActionLog(action).Infof("Pods using PVCs from migration are not terminated. Waiting for %v seconds before checking again", podTerminationCheckInterval)
+			time.Sleep(podTerminationCheckInterval)
+		}
+
+		// If termination is in progress in the current iteration, then reset the counter else increment the counter
+		if terminationInprogressIncurrentIteration {
+			numIterWithoutTermination = 0
+		} else {
+			numIterWithoutTermination++
+		}
+
+		// if number of iters without termination happening is gte MAX_ITER_WAIT_VOLUMES_FREE, then return error
+		if numIterWithoutTermination >= maxIterationWithoutVolumesBecomingFree {
+			log.ActionLog(action).Errorf("Volumes are not getting freed up for %d iterations, hence timing out", maxIterationWithoutVolumesBecomingFree)
+			return fmt.Errorf("pods using PVCs from migration are not getting terminated for last %v", time.Duration(maxIterationWithoutVolumesBecomingFree*maxInnerLoopCounter)*podTerminationCheckInterval)
+		}
+	}
+	return fmt.Errorf("pods are not getting terminated even after %v", time.Duration(maxOuterLoopCounter)*time.Duration(maxInnerLoopCounter)*podTerminationCheckInterval)
+}
+
+// GetPVtoPVCMap returns a map of PV to PVCs in a namespace
+func GetPVtoPVCMap(coreClient *core.Client, namespace string) map[string]string {
+	pvcList, err := coreClient.GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		return nil
+	}
+
+	pvToPVCMap := make(map[string]string)
+	for _, pvc := range pvcList.Items {
+		if pvc.Spec.VolumeName != "" {
+			pvToPVCMap[pvc.Spec.VolumeName] = pvc.Name
+		}
+	}
+	return pvToPVCMap
 }
