@@ -73,7 +73,7 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 		ac.updateActionToSkipSourceOperations(action, msg)
 		return
 	}
-	
+
 	// get sourceConfig from clusterPair in the destination cluster
 	sourceConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 	if err != nil {
