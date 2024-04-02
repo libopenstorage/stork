@@ -20,14 +20,7 @@ import (
 // validateBeforeFailover is called as part of the Initial stage of Failover
 func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
-		// Move to ScaleUpDestination stage directly in case skipSourceOperations is true
-		if *action.Spec.ActionParameter.FailoverParameter.SkipSourceOperations {
-			logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
-			logEvents("Skipping the deactivation of source cluster and moving to ScaleUpDestination stage since --skip-deactivate-source is provided", "out")
-			action.Status.Stage = storkv1.ActionStageScaleUpDestination
-		} else {
-			action.Status.Stage = storkv1.ActionStageScaleDownSource
-		}
+		action.Status.Stage = storkv1.ActionStageScaleDownSource
 		action.Status.Status = storkv1.ActionStatusInitial
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
@@ -62,18 +55,32 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 		return
 	}
 
+	drMode, err := ac.getDRMode(migrationSchedule.Spec.Template.Spec.ClusterPair, action.Namespace)
+	if err != nil {
+		msg := "Failed to determine if the DR plan's mode is async-dr or sync-dr"
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
+		ac.updateAction(action)
+		return
+	}
+
+	if drMode == asyncDR && *action.Spec.ActionParameter.FailoverParameter.SkipSourceOperations {
+		// we always honour skip-source-operations flag in async-dr mode irrespective of the clusterPair presence in the destination cluster
+		// while for sync-dr in case clusterpair is present in destination cluster, we will try to ScaleDownSource in case source cluster is accessible
+		msg := "Skipping source cluster operations and moving to the Failover ScaleUpDestinationStage since SkipSourceOperations is set to true"
+		ac.updateActionToSkipSourceOperations(action, msg)
+		return
+	}
+	
 	// get sourceConfig from clusterPair in the destination cluster
 	sourceConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 	if err != nil {
 		if *action.Spec.ActionParameter.FailoverParameter.SkipSourceOperations {
-			// if clusterPair is absent in destination cluster and skipSourceOperations is provided always move directly to ScaleUpDestination
+			// if clusterPair is absent in destination cluster and skipSourceOperations is provided always move to ScaleUpDestination
 			msg := "Skipping source cluster operations and moving to the Failover ScaleUpDestinationStage since SkipSourceOperations is set to true"
-			logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
-			logEvents(msg, "out")
-			action.Status.Stage = storkv1.ActionStageScaleUpDestination
-			action.Status.Status = storkv1.ActionStatusInitial
-			action.Status.FinishTimestamp = metav1.Now()
-			ac.updateAction(action)
+			ac.updateActionToSkipSourceOperations(action, msg)
 			return
 		}
 		msg := fmt.Sprintf("Error fetching the ClusterPair %s/%s for Failover", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair)
@@ -87,16 +94,7 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 	// check accessibility of the source cluster, get the migrationSchedule in the source cluster to check for any ongoing migrations and to suspend the migrationSchedule
 	if !ac.isClusterAccessible(action, sourceConfig) {
 		msg := "Unable to access the remote cluster. Directly moving to the Failover ScaleUpDestinationStage"
-		log.ActionLog(action).Warnf(msg)
-		// logging the Initial stage as successful and directly moving next stage to ScaleUpDestination
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusSuccessful),
-			msg)
-		action.Status.Stage = storkv1.ActionStageScaleUpDestination
-		action.Status.Status = storkv1.ActionStatusInitial
-		action.Status.FinishTimestamp = metav1.Now()
-		ac.updateAction(action)
+		ac.updateActionToSkipSourceOperations(action, msg)
 		return
 	}
 
@@ -157,28 +155,8 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 		}
 	}
 
-	// for sync-dr scenarios we do not want to respect skipSourceOperations flag
-	drMode, err := ac.getDRMode(migrationSchedule.Spec.Template.Spec.ClusterPair, action.Namespace)
-	if err != nil {
-		msg := "Failed to determine if the DR plan's mode is async-dr or sync-dr"
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-		logEvents(msg, "err")
-		action.Status.Status = storkv1.ActionStatusFailed
-		action.Status.Reason = msg
-		ac.updateAction(action)
-		return
-	}
-
 	msg := fmt.Sprintf("Failover ActionStageInitial status %s", string(storkv1.ActionStatusSuccessful))
 	log.ActionLog(action).Infof(msg)
-	if drMode == syncDR {
-		// if clusterPair is present in destination cluster and mode is sync-dr always move to ScaleDownSource irrespective of skipSourceOperations
-		action.Status.Stage = storkv1.ActionStageScaleDownSource
-		action.Status.Status = storkv1.ActionStatusInitial
-		ac.updateAction(action)
-		return
-	}
-
 	action.Status.Status = storkv1.ActionStatusSuccessful
 	action.Status.Reason = ""
 	ac.updateAction(action)
@@ -507,4 +485,14 @@ func (ac *ActionController) performLastMileMigrationDuringFailover(action *stork
 			}
 		}
 	}
+}
+
+// updateActionToSkipSourceOperations is used to update the action and log events when we directly move to ScaleUpDestinationStage
+func (ac *ActionController) updateActionToSkipSourceOperations(action *storkv1.Action, msg string) {
+	logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
+	logEvents(msg, "out")
+	action.Status.FinishTimestamp = metav1.Now()
+	action.Status.Stage = storkv1.ActionStageScaleUpDestination
+	action.Status.Status = storkv1.ActionStatusInitial
+	ac.updateAction(action)
 }
