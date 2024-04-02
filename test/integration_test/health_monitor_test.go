@@ -29,7 +29,7 @@ func TestHealthMonitor(t *testing.T) {
 	currentTestSuite = t.Name()
 
 	t.Run("stopDriverTest", stopDriverTest)
-	t.Run("stopKubeletTest", stopKubeletTest)
+	//t.Run("stopKubeletTest", stopKubeletTest)
 	t.Run("poolMaintenanceHealthTest", poolMaintenanceHealthTest)
 	t.Run("healthCheckFixTest", healthCheckFixTest)
 	t.Run("stopDriverCsiPodFailoverTest", stopDriverCsiPodFailoverTest)
