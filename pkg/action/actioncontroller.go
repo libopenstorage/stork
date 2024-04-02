@@ -26,15 +26,17 @@ import (
 )
 
 const (
-	validateCRDInterval time.Duration = 5 * time.Second
-	validateCRDTimeout  time.Duration = 1 * time.Minute
-	actionExpiryTime    time.Duration = 24 * time.Hour
+	validateCRDInterval         time.Duration = 5 * time.Second
+	validateCRDTimeout          time.Duration = 1 * time.Minute
+	actionExpiryTime            time.Duration = 24 * time.Hour
+	podTerminationCheckInterval time.Duration = 1 * time.Minute
 
 	nameTimeSuffixFormat    string = "2006-01-02-150405"
 	lastmileMigrationPrefix string = "lastmile"
 	// StorkLastMileMigrationScheduleName is the annotation to keep track of
 	// from which migrationschedule last mile migration spec was generated
-	StorkLastMileMigrationScheduleName = "stork.libopenstorage.org/lastmile-migration-schedule-name"
+	StorkLastMileMigrationScheduleName     = "stork.libopenstorage.org/lastmile-migration-schedule-name"
+	maxIterationWithoutVolumesBecomingFree = 3
 )
 
 func NewActionController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *ActionController {
@@ -125,6 +127,8 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			ac.validateBeforeFailover(action)
 		case storkv1.ActionStageScaleDownSource:
 			ac.deactivateSourceDuringFailover(action)
+		case storkv1.ActionStageWaitAfterScaleDown:
+			ac.waitAfterScaleDown(action)
 		case storkv1.ActionStageLastMileMigration:
 			ac.performLastMileMigration(action)
 		case storkv1.ActionStageScaleUpDestination:
@@ -141,6 +145,8 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			ac.verifyMigrationScheduleBeforeFailback(action)
 		case storkv1.ActionStageScaleDownDestination:
 			ac.deactivateDestinationDuringFailback(action)
+		case storkv1.ActionStageWaitAfterScaleDown:
+			ac.waitAfterScaleDown(action)
 		case storkv1.ActionStageLastMileMigration:
 			ac.performLastMileMigration(action)
 		case storkv1.ActionStageScaleUpSource:
@@ -233,4 +239,8 @@ func isMigrationComplete(status storkv1.MigrationStatusType) bool {
 	return !(status == storkv1.MigrationStatusInitial ||
 		status == storkv1.MigrationStatusPending ||
 		status == storkv1.MigrationStatusInProgress)
+}
+
+func isMigrationSuccessful(status storkv1.MigrationStatusType) bool {
+	return status == storkv1.MigrationStatusSuccessful || status == storkv1.MigrationStatusPartialSuccess
 }
