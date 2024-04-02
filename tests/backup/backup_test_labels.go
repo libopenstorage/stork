@@ -122,6 +122,7 @@ const (
 	BackupToLockedBucketWithSharedObjects                                              TestCaseName = "BackupToLockedBucketWithSharedObjects"
 	RemoveJSONFilesFromNFSBackupLocation                                               TestCaseName = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
+	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
 )
 
 // Test case labels
@@ -243,6 +244,7 @@ const (
 	BackupToLockedBucketWithSharedObjectsLabel                                              TestCaseLabel = "BackupToLockedBucketWithSharedObjects"
 	RemoveJSONFilesFromNFSBackupLocationLabel                                               TestCaseLabel = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocationLabel                                       TestCaseLabel = "CloudSnapshotMissingValidationForNFSLocation"
+	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
 )
 
 // Common Labels
@@ -491,4 +493,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupToLockedBucketWithSharedObjects:        {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
 	RemoveJSONFilesFromNFSBackupLocation:         {RemoveJSONFilesFromNFSBackupLocationLabel},
 	CloudSnapshotMissingValidationForNFSLocation: {CloudSnapshotMissingValidationForNFSLocationLabel},
+	MultipleProvisionerCsiKdmpBackupAndRestore:   {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
 }

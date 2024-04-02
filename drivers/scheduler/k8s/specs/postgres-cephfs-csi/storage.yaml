@@ -4,7 +4,7 @@ apiVersion: v1
 metadata:
   name: postgres-data
 spec:
-  storageClassName: postgres-sc
+  storageClassName: postgres-cephfs-sc
   accessModes:
     - ReadWriteOnce
   resources:

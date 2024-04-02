@@ -4,7 +4,7 @@ kind: StorageClass
 metadata:
   annotations:
     description: Provides RWO and RWX Filesystem volumes
-  name: postgres-sc
+  name: postgres-cephfs-sc
 parameters:
   clusterID: openshift-storage
   csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
