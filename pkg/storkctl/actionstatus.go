@@ -12,59 +12,73 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-var drActionColumns = []string{"NAME", "CREATED", "STAGE", "STATUS", "ADDITIONAL INFO"}
+var drActionColumns = []string{"NAME", "CREATED", "STAGE", "STATUS", "MORE INFO"}
 
 func newGetFailoverStatusCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	getFailoverCommand := &cobra.Command{
 		Use:   failoverCommand,
 		Short: "Get the status of failover actions",
 		Run: func(c *cobra.Command, args []string) {
-			var actions *storkv1.ActionList
-			var failoverActionList *storkv1.ActionList
-			var err error
-			// user has to provide the namespace from which they want to get list of actions using -n flag
-			namespace := cmdFactory.GetNamespace()
-			if len(args) > 0 {
-				// name of action has been specified
-				actions = new(storkv1.ActionList)
-				for _, actionName := range args {
-					action, err := storkops.Instance().GetAction(actionName, namespace)
-					if err != nil {
-						util.CheckErr(err)
-						return
-					}
-					actions.Items = append(actions.Items, *action)
-				}
-			} else {
-				// fetch all the actions in the given namespace
-				actions, err = storkops.Instance().ListActions(namespace)
-				if err != nil {
-					util.CheckErr(err)
-					return
-				}
-			}
+			getDRActionStatus(cmdFactory, ioStreams, storkv1.ActionTypeFailover, c, args)
+		},
+	}
+	return getFailoverCommand
+}
 
-			// filter it down to actions with actionType failover
-			failoverActionList = new(storkv1.ActionList)
-			for _, action := range actions.Items {
-				if action.Spec.ActionType == storkv1.ActionTypeFailover {
-					failoverActionList.Items = append(failoverActionList.Items, action)
-				}
-			}
+func newGetFailbackStatusCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	getFailbackCommand := &cobra.Command{
+		Use:   failbackCommand,
+		Short: "Get the status of failback actions",
+		Run: func(c *cobra.Command, args []string) {
+			getDRActionStatus(cmdFactory, ioStreams, storkv1.ActionTypeFailback, c, args)
+		},
+	}
+	return getFailbackCommand
+}
 
-			if len(failoverActionList.Items) == 0 {
-				handleEmptyList(ioStreams.Out)
-				return
-			}
-
-			if err := printObjects(c, failoverActionList, cmdFactory, drActionColumns, drActionPrinter, ioStreams.Out); err != nil {
+func getDRActionStatus(cmdFactory Factory, ioStreams genericclioptions.IOStreams, actionType storkv1.ActionType, c *cobra.Command, args []string) {
+	var actions *storkv1.ActionList
+	var filteredActionList *storkv1.ActionList
+	var err error
+	// user has to provide the namespace from which they want to get list of actions using -n flag
+	namespace := cmdFactory.GetNamespace()
+	if len(args) > 0 {
+		// name of action has been specified
+		actions = new(storkv1.ActionList)
+		for _, actionName := range args {
+			action, err := storkops.Instance().GetAction(actionName, namespace)
+			if err != nil {
 				util.CheckErr(err)
 				return
 			}
-		},
+			actions.Items = append(actions.Items, *action)
+		}
+	} else {
+		// fetch all the actions in the given namespace
+		actions, err = storkops.Instance().ListActions(namespace)
+		if err != nil {
+			util.CheckErr(err)
+			return
+		}
 	}
-	cmdFactory.BindGetFlags(getFailoverCommand.Flags())
-	return getFailoverCommand
+
+	// filter it down to actions with given actionType
+	filteredActionList = new(storkv1.ActionList)
+	for _, action := range actions.Items {
+		if action.Spec.ActionType == actionType {
+			filteredActionList.Items = append(filteredActionList.Items, action)
+		}
+	}
+
+	if len(filteredActionList.Items) == 0 {
+		handleEmptyList(ioStreams.Out)
+		return
+	}
+
+	if err := printObjects(c, filteredActionList, cmdFactory, drActionColumns, drActionPrinter, ioStreams.Out); err != nil {
+		util.CheckErr(err)
+		return
+	}
 }
 
 func drActionPrinter(actionList *storkv1.ActionList, options printers.GenerateOptions) ([]metav1beta1.TableRow, error) {
@@ -78,12 +92,12 @@ func drActionPrinter(actionList *storkv1.ActionList, options printers.GenerateOp
 		creationTime := toTimeString(action.CreationTimestamp.Time)
 		additionalInfo := action.Status.Reason
 		if action.Status.Summary != nil {
+			totalNamespaces := len(action.Status.Summary.FailoverSummaryItem) + len(action.Status.Summary.FailbackSummaryItem)
+			successfulNamespaces := 0
+			rollbackSuccessfulNamespaces := 0
+			rollbackFailedNamespaces := 0
 			if len(action.Status.Summary.FailoverSummaryItem) > 0 {
 				// find out number of successfully scaled up namespaces
-				totalNamespaces := len(action.Status.Summary.FailoverSummaryItem)
-				successfulNamespaces := 0
-				rollbackSuccessfulNamespaces := 0
-				rollbackFailedNamespaces := 0
 				for _, item := range action.Status.Summary.FailoverSummaryItem {
 					if item.Status == storkv1.ActionStatusSuccessful {
 						successfulNamespaces++
@@ -93,13 +107,26 @@ func drActionPrinter(actionList *storkv1.ActionList, options printers.GenerateOp
 						rollbackFailedNamespaces++
 					}
 				}
-				if rollbackSuccessfulNamespaces > 0 || rollbackFailedNamespaces > 0 {
-					additionalInfo = fmt.Sprintf("Rolled back Apps in : %d/%d namespaces", rollbackSuccessfulNamespaces, totalNamespaces)
-					// In case of rollback we have a failure reason as well
-					additionalInfo += " ; " + action.Status.Reason
-				} else {
-					additionalInfo = fmt.Sprintf("Scaled up Apps in : %d/%d namespaces", successfulNamespaces, totalNamespaces)
+			} else if len(action.Status.Summary.FailbackSummaryItem) > 0 {
+				// find out number of successfully scaled up namespaces
+				for _, item := range action.Status.Summary.FailbackSummaryItem {
+					if item.Status == storkv1.ActionStatusSuccessful {
+						successfulNamespaces++
+					} else if item.Status == storkv1.ActionStatusRollbackSuccessful {
+						rollbackSuccessfulNamespaces++
+					} else if item.Status == storkv1.ActionStatusRollbackFailed {
+						rollbackFailedNamespaces++
+					}
 				}
+			} else {
+				continue
+			}
+			if rollbackSuccessfulNamespaces > 0 || rollbackFailedNamespaces > 0 {
+				additionalInfo = fmt.Sprintf("Rolled back Apps in : %d/%d namespaces", rollbackSuccessfulNamespaces, totalNamespaces)
+				// In case of rollback we have a failure reason as well
+				additionalInfo += " ; " + action.Status.Reason
+			} else {
+				additionalInfo = fmt.Sprintf("Scaled up Apps in : %d/%d namespaces", successfulNamespaces, totalNamespaces)
 			}
 		}
 		row = getRow(&action,
@@ -125,9 +152,9 @@ func prettyDRStageNames(stage storkv1.ActionStageType, actionType storkv1.Action
 		return "Scale Down (on destination)"
 	case storkv1.ActionStageWaitAfterScaleDown:
 		if actionType == storkv1.ActionTypeFailover {
-			return "Scale Down (on source)"
+			return "Waiting for Apps to Scale Down (on source)"
 		} else if actionType == storkv1.ActionTypeFailback {
-			return "Scale Down (on destination)"
+			return "Waiting for Apps to Scale Down (on destination)"
 		}
 	case storkv1.ActionStageLastMileMigration:
 		if actionType == storkv1.ActionTypeFailover {

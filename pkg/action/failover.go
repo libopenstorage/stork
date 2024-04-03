@@ -311,14 +311,11 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 		return
 	}
 
-	var failureStatus storkv1.ActionStatusType
-	var successStatus storkv1.ActionStatusType
+	failureStatus := storkv1.ActionStatusFailed
+	successStatus := storkv1.ActionStatusSuccessful
 	if rollback {
 		failureStatus = storkv1.ActionStatusRollbackFailed
 		successStatus = storkv1.ActionStatusRollbackSuccessful
-	} else {
-		failureStatus = storkv1.ActionStatusFailed
-		successStatus = storkv1.ActionStatusSuccessful
 	}
 
 	for _, ns := range namespaces {

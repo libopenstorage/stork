@@ -36,6 +36,7 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 		newGetBackupLocationCommand(cmdFactory, ioStreams),
 		newGetapplicationRegistrationCommand(cmdFactory, ioStreams),
 		newGetFailoverStatusCommand(cmdFactory, ioStreams),
+		newGetFailbackStatusCommand(cmdFactory, ioStreams),
 	)
 
 	return getCommands
