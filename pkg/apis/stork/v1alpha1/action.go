@@ -83,6 +83,10 @@ const (
 	ActionStatusFailed ActionStatusType = "Failed"
 	// ActionStatusSuccessful means Action has completed successfully
 	ActionStatusSuccessful ActionStatusType = "Successful"
+	// ActionStatusRollbackSuccessful means Rollback has completed successfully
+	ActionStatusRollbackSuccessful ActionStatusType = "RollbackSuccessful"
+	// ActionStatusRollbackInProgress means Rollback failed
+	ActionStatusRollbackFailed ActionStatusType = "RollbackFailed"
 )
 
 // ActionStageType is the stage of the action
