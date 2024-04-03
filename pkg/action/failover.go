@@ -300,10 +300,10 @@ func (ac *ActionController) activateClusterDuringFailover(action *storkv1.Action
 	} else {
 		config = ac.config
 	}
-	ac.activateClusterDuringDR(action, namespaces, migrationSchedule, config)
+	ac.activateClusterDuringDR(action, namespaces, migrationSchedule, config, rollback)
 }
 
-func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, namespaces []string, migrationSchedule *storkv1.MigrationSchedule, config *rest.Config) {
+func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, namespaces []string, migrationSchedule *storkv1.MigrationSchedule, config *rest.Config, rollback bool) {
 	failoverSummaryList := make([]*storkv1.FailoverSummary, 0)
 	failbackSummaryList := make([]*storkv1.FailbackSummary, 0)
 	scaleUpStatus := true
@@ -321,6 +321,13 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 		return
 	}
 
+	failureStatus := storkv1.ActionStatusFailed
+	successStatus := storkv1.ActionStatusSuccessful
+	if rollback {
+		failureStatus = storkv1.ActionStatusRollbackFailed
+		successStatus = storkv1.ActionStatusRollbackSuccessful
+	}
+
 	for _, ns := range namespaces {
 		logEvents := ac.printFunc(action, "ScaleReplicas")
 		logEvents(fmt.Sprintf("Scaling up apps in cluster %s", config.Host), "out")
@@ -332,14 +339,14 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 				scaleUpStatus = false
 				msg := fmt.Sprintf("scaling up apps in namespace %s failed: %v", ns, err)
 				log.ActionLog(action).Errorf(msg)
-				failoverSummary, failbackSummary = ac.createSummary(action, ns, storkv1.ActionStatusFailed, msg)
+				failoverSummary, failbackSummary = ac.createSummary(action, ns, failureStatus, msg)
 			} else {
 				msg := fmt.Sprintf("scaling up apps in namespace %s successful", ns)
-				failoverSummary, failbackSummary = ac.createSummary(action, ns, storkv1.ActionStatusSuccessful, msg)
+				failoverSummary, failbackSummary = ac.createSummary(action, ns, successStatus, msg)
 			}
 		} else {
 			msg := fmt.Sprintf("Skipping scaling up apps in the namespace %s since it is not one of the namespaces being migrated by the MigrationSchedule %s/%s", ns, migrationSchedule.Namespace, migrationSchedule.Name)
-			failoverSummary, failbackSummary = ac.createSummary(action, ns, storkv1.ActionStatusSuccessful, msg)
+			failoverSummary, failbackSummary = ac.createSummary(action, ns, successStatus, msg)
 		}
 		if action.Spec.ActionType == storkv1.ActionTypeFailover {
 			failoverSummaryList = append(failoverSummaryList, failoverSummary)
@@ -357,12 +364,12 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 	}
 	if scaleUpStatus {
 		msg := fmt.Sprintf("Scaling up of applications in cluster : %s successful. Moving to the next stage", config.Host)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
+		logEvents := ac.printFunc(action, string(successStatus))
 		logEvents(msg, "out")
 		action.Status.Status = storkv1.ActionStatusSuccessful
 	} else {
 		msg := fmt.Sprintf("Scaling up of applications in cluster : %s failed.", config.Host)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents := ac.printFunc(action, string(failureStatus))
 		logEvents(msg, "out")
 		action.Status.Status = storkv1.ActionStatusFailed
 	}
