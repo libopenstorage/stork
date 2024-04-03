@@ -29,7 +29,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240327204940-8669c1f67a40
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240331082638-605dbf61e0be
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.15.1
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
@@ -348,7 +348,7 @@ replace (
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240326093213-a9ec635d1edb
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240329131009-9a1ed6642cfb
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240326040227-268b4afc2e7e
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240331082638-605dbf61e0be
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240328134113-e47b20ae56b8
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
