@@ -138,8 +138,8 @@ const (
 	BackupLocationDeleteRetryTime             = 30 * time.Second
 	RebootNodeTimeout                         = 1 * time.Minute
 	RebootNodeTimeBeforeRetry                 = 5 * time.Second
-	LatestPxBackupVersion                     = "2.6.0"
-	defaultPxBackupHelmBranch                 = "master"
+	LatestPxBackupVersion                     = "2.7.0"
+	defaultPxBackupHelmBranch                 = "2.7.0"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
@@ -3818,6 +3818,25 @@ func GetPxBackupBuildDate() (string, error) {
 	return backupVersion.GetBuildDate(), nil
 }
 
+// CompareCurrentPxBackupVersion compares the current PX Backup version against a specified target version using a comparison method provided as a parameter.
+func CompareCurrentPxBackupVersion(targetVersionStr string, comparisonMethod func(v1, v2 *version.Version) bool) (bool, error) {
+	currentVersionStr, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return false, err
+	}
+
+	currentVersion, err := version.NewVersion(currentVersionStr)
+	if err != nil {
+		return false, err
+	}
+
+	targetVersion, err := version.NewVersion(targetVersionStr)
+	if err != nil {
+		return false, err
+	}
+	return comparisonMethod(currentVersion, targetVersion), nil
+}
+
 // PxBackupUpgrade will perform the upgrade tasks for Px Backup to the version passed as string
 // Eg: versionToUpgrade := "2.4.0"
 func PxBackupUpgrade(versionToUpgrade string) error {
@@ -3885,7 +3904,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 
 	// Get the tarball required for helm upgrade
 	helmBranch, isPresent := os.LookupEnv("PX_BACKUP_HELM_REPO_BRANCH")
-	if !isPresent {
+	if !isPresent || helmBranch == "" {
 		helmBranch = defaultPxBackupHelmBranch
 	}
 	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", helmBranch, versionToUpgrade)

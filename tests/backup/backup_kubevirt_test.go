@@ -273,7 +273,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mixed"
+				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mxd"
 			}
 			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
 			backupNames = append(backupNames, backupWithVMMixed)
@@ -313,7 +313,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMappingRestart[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-restart"
+				namespaceMappingRestart[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-rst"
 			}
 			backupWithVMRestart = fmt.Sprintf("%s-%s", "auto-backup-restart", RandomString(6))
 			backupNames = append(backupNames, backupWithVMRestart)
@@ -365,7 +365,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stopped"
+				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stp"
 			}
 			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
 			backupNames = append(backupNames, backupWithVMStopped)

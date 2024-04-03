@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-version"
 	"net/url"
 	"os"
 	"strconv"
@@ -226,6 +227,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		numDeployments                     int
 		srcClusterContexts                 []*scheduler.Context
 		srcClusterAppNamespaces            map[string][]string
+		kubevirtScheduledAppContexts       []*scheduler.Context
 		destClusterContexts                []*scheduler.Context
 		destClusterAppNamespaces           map[string][]string
 		cloudAccountUid                    string
@@ -255,6 +257,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		mutex                              sync.Mutex
 		controlChannel                     chan string
 		errorGroup                         *errgroup.Group
+		vmBackupNames                      []string
 	)
 	updateBackupToContextMapping := func(backupName string, appContextsToBackup []*scheduler.Context) {
 		mutex.Lock()
@@ -269,7 +272,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			numDeployments = 2
 		}
 		destClusterContexts = make([]*scheduler.Context, 0)
-		destClusterAppNamespaces = make(map[string][]string, 0)
+		destClusterAppNamespaces = make(map[string][]string)
 		log.InfoD("Scheduling applications in destination cluster")
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
@@ -286,7 +289,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			}
 		}
 		srcClusterContexts = make([]*scheduler.Context, 0)
-		srcClusterAppNamespaces = make(map[string][]string, 0)
+		srcClusterAppNamespaces = make(map[string][]string)
 		log.InfoD("Scheduling applications in source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
@@ -317,10 +320,37 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			ctx, _ := backup.GetAdminCtxFromSecret()
 			controlChannel, errorGroup = ValidateApplicationsStartData(srcClusterContexts, ctx)
 		})
+		Step("Deploying Kubevirt Virtual Machines and validating", func() {
+			if IsKubevirtInstalled() {
+				log.InfoD("Deploying Kubevirt Virtual Machines and validating")
+				appList := Inst().AppList
+				numberOfVolumes := 2
+				defer func() {
+					Inst().AppList = appList
+				}()
+				Inst().AppList = []string{"kubevirt-cirros-cd-with-pvc"}
+				Inst().CustomAppConfig["kubevirt-cirros-cd-with-pvc"] = scheduler.AppConfig{
+					ClaimsCount: numberOfVolumes,
+				}
+				err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+				log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+				for i := 0; i < 4; i++ {
+					taskName := fmt.Sprintf("%d", i)
+					appContexts := ScheduleApplications(taskName)
+					kubevirtScheduledAppContexts = append(kubevirtScheduledAppContexts, appContexts...)
+				}
+
+				log.InfoD("Validating kubevirt applications")
+				ValidateApplications(kubevirtScheduledAppContexts)
+			} else {
+				log.Warnf("Kubevirt is not installed. Skipping the step")
+			}
+
+		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
 			providers := GetBackupProviders()
-			backupLocationMap = make(map[string]string, 0)
+			backupLocationMap = make(map[string]string)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
@@ -361,8 +391,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		Step("Create pre and post exec rules for applications", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			preRuleNames = make(map[string]string, 0)
-			preRuleUids = make(map[string]string, 0)
+			preRuleNames = make(map[string]string)
+			preRuleUids = make(map[string]string)
 			log.InfoD("Creating pre exec rules for applications %v", Inst().AppList)
 			for _, appName := range Inst().AppList {
 				log.Infof("Creating pre backup rule for application [%s]", appName)
@@ -379,8 +409,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 					preRuleUids[appName] = preRuleUid
 				}
 			}
-			postRuleNames = make(map[string]string, 0)
-			postRuleUids = make(map[string]string, 0)
+			postRuleNames = make(map[string]string)
+			postRuleUids = make(map[string]string)
 			log.InfoD("Creating post exec rules for applications %v", Inst().AppList)
 			for _, appName := range Inst().AppList {
 				log.Infof("Creating post backup rule for application [%s]", appName)
@@ -401,11 +431,11 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		Step("Create backups with and without pre and post exec rules", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			backupToContextMapping = make(map[string][]*scheduler.Context, 0)
+			backupToContextMapping = make(map[string][]*scheduler.Context)
 			createBackupWithRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
 				backupName := fmt.Sprintf("%s-%s-%v-with-rules", BackupNamePrefix, namespace, time.Now().Unix())
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				log.InfoD("Creating a backup of namespace [%s] with pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
@@ -421,7 +451,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			createBackupWithoutRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
 				backupName := fmt.Sprintf("%s-%s-%v-without-rules", BackupNamePrefix, namespace, time.Now().Unix())
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				log.InfoD("Creating a backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
@@ -450,7 +480,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			createSingleNSBackupTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				singleNSScheduleName := fmt.Sprintf("%s-single-namespace-schedule-%v", namespace, time.Now().Unix())
 				log.InfoD("Creating schedule backup with schedule [%s] of source cluster namespace [%s]", singleNSScheduleName, namespace)
 				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, backupLocationName, backupLocationUid, []string{namespace},
@@ -471,7 +501,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				allNamespaces = append(allNamespaces, destClusterAppNamespaces[appName]...)
 			}
 			allNSScheduleName = fmt.Sprintf("%s-all-namespaces-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			labelSelectors := make(map[string]string, 0)
+			labelSelectors := make(map[string]string)
 			log.InfoD("Creating schedule backup with schedule [%s] of all namespaces of destination cluster [%s]", allNSScheduleName, allNamespaces)
 			err = CreateScheduleBackup(allNSScheduleName, DestinationClusterName, backupLocationName, backupLocationUid, allNamespaces,
 				labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
@@ -504,13 +534,33 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.FailOnError(err, "Switching context to source cluster failed")
 			}
 		})
+
+		checkPxbVersionForKubevirt, err := CompareCurrentPxBackupVersion("2.7.0", (*version.Version).GreaterThanOrEqual)
+		log.FailOnError(err, "Checking if current px-backup version is greater than or equal to 2.7.0")
+
+		if checkPxbVersionForKubevirt {
+			Step("Validating the backup type after upgrade for older backups", func() {
+				log.InfoD("Validating the backup type after upgrade for older backups")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				backupEnumerateRequest := &api.BackupEnumerateRequest{
+					OrgId: BackupOrgID,
+				}
+				resp, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateRequest)
+				for _, b := range resp.Backups {
+					log.InfoD("Validating backup [%s]", b.Name)
+					dash.VerifyFatal(b.GetBackupObjectType().Type, api.BackupInfo_BackupObjectType_All, fmt.Sprintf("Verifying backup type of [%s]", b.Name))
+				}
+			})
+		}
+
 		Step("Create backups after px-backup upgrade with and without pre and post exec rules", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			createBackupWithRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
 				backupName := fmt.Sprintf("%s-%s-%v-with-rules", BackupNamePrefix, namespace, time.Now().Unix())
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				log.InfoD("Creating a backup of namespace [%s] after px-backup upgrade with pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
@@ -522,7 +572,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			createBackupWithoutRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
 				backupName := fmt.Sprintf("%s-%s-%v-without-rules", BackupNamePrefix, namespace, time.Now().Unix())
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				log.InfoD("Creating a backup of namespace [%s] after px-backup upgrade without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
@@ -532,13 +582,26 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			}
 			_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
 		})
+		Step("Validating the backup type after upgrade for old and new backups", func() {
+			log.InfoD("Validating the backup type after upgrade for old and new backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			resp, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateRequest)
+			for _, b := range resp.Backups {
+				log.InfoD("Validating backup [%s]", b.Name)
+				dash.VerifyFatal(b.GetBackupObjectType().Type, api.BackupInfo_BackupObjectType_All, fmt.Sprintf("Verifying backup type of [%s]", b.Name))
+			}
+		})
 		Step("Restore backups created before px-backup upgrade with and without pre and post exec rules", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Restoring backups [%s] created before px-backup upgrade with rules", backupWithRuleNames)
 			for _, backupName := range backupWithRuleNames {
-				namespaceMapping := make(map[string]string, 0)
-				storageClassMapping := make(map[string]string, 0)
+				namespaceMapping := make(map[string]string)
+				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -547,8 +610,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			}
 			log.InfoD("Restoring backups [%s] created before px-backup upgrade without rules", backupWithoutRuleNames)
 			for _, backupName := range backupWithoutRuleNames {
-				namespaceMapping := make(map[string]string, 0)
-				storageClassMapping := make(map[string]string, 0)
+				namespaceMapping := make(map[string]string)
+				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -561,8 +624,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Restoring backups [%s] created after px-backup upgrade with rules", backupWithRuleNames)
 			for _, backupName := range backupAfterUpgradeWithRuleNames {
-				namespaceMapping := make(map[string]string, 0)
-				storageClassMapping := make(map[string]string, 0)
+				namespaceMapping := make(map[string]string)
+				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -571,8 +634,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			}
 			log.InfoD("Restoring backups [%s] created after px-backup upgrade without rules", backupWithoutRuleNames)
 			for _, backupName := range backupAfterUpgradeWithoutRuleNames {
-				namespaceMapping := make(map[string]string, 0)
-				storageClassMapping := make(map[string]string, 0)
+				namespaceMapping := make(map[string]string)
+				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -595,20 +658,20 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				}{
 					{
 						"test-restore-single-ns",
-						make(map[string]string, 0),
-						make(map[string]string, 0),
+						make(map[string]string),
+						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-custom-restore-single-ns",
 						map[string]string{namespace: "custom-" + namespace},
-						make(map[string]string, 0),
+						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
-						make(map[string]string, 0),
-						make(map[string]string, 0),
+						make(map[string]string),
+						make(map[string]string),
 						ReplacePolicyDelete,
 					},
 				}
@@ -646,20 +709,20 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				}{
 					{
 						"test-restore-single-ns",
-						make(map[string]string, 0),
-						make(map[string]string, 0),
+						make(map[string]string),
+						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-custom-restore-single-ns",
 						map[string]string{namespace: "custom" + namespace},
-						make(map[string]string, 0),
+						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
-						make(map[string]string, 0),
-						make(map[string]string, 0),
+						make(map[string]string),
+						make(map[string]string),
 						ReplacePolicyDelete,
 					},
 				}
@@ -686,8 +749,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.FailOnError(err, "Getting first backup name of schedule [%s] failed", allNSScheduleName)
 			restoreName := fmt.Sprintf("%s-%s", "test-restore-all-ns", RandomString(4))
 			log.InfoD("Restoring first all namespaces schedule backup [%s] in cluster [%s] with restore [%s]", firstAllNSScheduleBackupName, SourceClusterName, restoreName)
-			namespaceMapping := make(map[string]string, 0)
-			err = CreateRestoreWithValidation(ctx, restoreName, firstAllNSScheduleBackupName, namespaceMapping, make(map[string]string, 0), SourceClusterName, BackupOrgID, destClusterContexts)
+			namespaceMapping := make(map[string]string)
+			err = CreateRestoreWithValidation(ctx, restoreName, firstAllNSScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, destClusterContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first all namespaces schedule backup [%s] in cluster [%s]", restoreName, firstAllNSScheduleBackupName, restoreName))
 			restoreNames = append(restoreNames, restoreName)
 		})
@@ -706,11 +769,55 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.FailOnError(err, "Switching context to source cluster failed")
 			restoreName := fmt.Sprintf("%s-%s", "test-restore-all-ns", RandomString(4))
 			log.InfoD("Restoring next all namespaces schedule backup [%s] in cluster [%s] with restore [%s]", nextScheduleBackupName, SourceClusterName, restoreName)
-			namespaceMapping := make(map[string]string, 0)
-			err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, namespaceMapping, make(map[string]string, 0), SourceClusterName, BackupOrgID, destClusterContexts)
+			namespaceMapping := make(map[string]string)
+			err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, destClusterContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of next all namespaces schedule backup [%s] in cluster [%s]", restoreName, nextScheduleBackupName, restoreName))
 			restoreNames = append(restoreNames, restoreName)
 		})
+
+		if IsKubevirtInstalled() && checkPxbVersionForKubevirt {
+			Step("Taking backup of kubevirt VM", func() {
+				log.InfoD("Taking backup of kubevirt VM")
+				labelSelectors := make(map[string]string)
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for _, appCtx := range kubevirtScheduledAppContexts {
+					backupName := fmt.Sprintf("%s-%s", "vm-backup", RandomString(6))
+					vmBackupNames = append(vmBackupNames, backupName)
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+					var vmNames []string
+					for _, v := range vms {
+						vmNames = append(vmNames, v.Name)
+					}
+					log.Infof("VMs to be backed up - %v", vmNames)
+					err = CreateVMBackupWithValidation(ctx, backupName, vms, SourceClusterName, backupLocationName, backupLocationUid, []*scheduler.Context{appCtx},
+						labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
+				}
+			})
+
+			Step("Validating the VM backup type", func() {
+				log.InfoD("Validating the namespace backup type")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for _, backupName := range vmBackupNames {
+					log.Infof("Inspecting backup [%s]", backupName)
+					bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					log.FailOnError(err, "Fetching backup uid")
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   bkpUid,
+						OrgId: BackupOrgID,
+					}
+					backup, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+					log.FailOnError(err, "Inspecting backup [%s]", backupName)
+					dash.VerifyFatal(backup.Backup.GetBackupObjectType().Type, api.BackupInfo_BackupObjectType_VirtualMachine, fmt.Sprintf("Verifying backup type of [%s]", backupName))
+				}
+			})
+
+		}
+
 	})
 	JustAfterEach(func() {
 		allContexts := append(srcClusterContexts, destClusterContexts...)
@@ -854,7 +961,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
 			providers := GetBackupProviders()
-			backupLocationMap = make(map[string]string, 0)
+			backupLocationMap = make(map[string]string)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
@@ -893,8 +1000,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 		Step("Create pre and post exec rules for applications", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			preRuleNames = make(map[string]string, 0)
-			preRuleUids = make(map[string]string, 0)
+			preRuleNames = make(map[string]string)
+			preRuleUids = make(map[string]string)
 			log.InfoD("Creating pre exec rules for applications %v", Inst().AppList)
 			for _, appName := range Inst().AppList {
 				log.Infof("Creating pre backup rule for application [%s]", appName)
@@ -909,8 +1016,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				preRuleNames[appName] = preRuleName
 				preRuleUids[appName] = preRuleUid
 			}
-			postRuleNames = make(map[string]string, 0)
-			postRuleUids = make(map[string]string, 0)
+			postRuleNames = make(map[string]string)
+			postRuleUids = make(map[string]string)
 			log.InfoD("Creating post exec rules for applications %v", Inst().AppList)
 			for _, appName := range Inst().AppList {
 				log.Infof("Creating post backup rule for application [%s]", appName)
@@ -936,7 +1043,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 			createBackupWithRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
 				backupName := fmt.Sprintf("%s-%s-%v-%s-with-rules", BackupNamePrefix, namespace, time.Now().Unix(), RandomString(4))
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				log.InfoD("Creating a backup of namespace [%s] with pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
@@ -952,7 +1059,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 			createBackupWithoutRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
 				backupName := fmt.Sprintf("%s-%s-%v-without-rules", BackupNamePrefix, namespace, time.Now().Unix())
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				log.InfoD("Creating a backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
@@ -981,7 +1088,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			createSingleNSBackupTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
-				labelSelectors := make(map[string]string, 0)
+				labelSelectors := make(map[string]string)
 				singleNSScheduleName := fmt.Sprintf("%s-single-namespace-schedule-%v", namespace, time.Now().Unix())
 				log.InfoD("Creating schedule backup with schedule [%s] of source cluster namespace [%s]", singleNSScheduleName, namespace)
 				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, backupLocationName, backupLocationUid, []string{namespace},
@@ -1082,7 +1189,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				createBackupWithRulesTask := func(appName string) {
 					namespace := srcClusterAppNamespaces[appName][0]
 					backupName := fmt.Sprintf("%s-%s-%v-with-rules", BackupNamePrefix, namespace, time.Now().Unix())
-					labelSelectors := make(map[string]string, 0)
+					labelSelectors := make(map[string]string)
 					log.InfoD("Creating a backup of namespace [%s] after cluster upgrade with pre and post exec rules", namespace)
 					appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
@@ -1094,7 +1201,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				createBackupWithoutRulesTask := func(appName string) {
 					namespace := srcClusterAppNamespaces[appName][0]
 					backupName := fmt.Sprintf("%s-%s-%v-without-rules", BackupNamePrefix, namespace, time.Now().Unix())
-					labelSelectors := make(map[string]string, 0)
+					labelSelectors := make(map[string]string)
 					log.InfoD("Creating a backup of namespace [%s] after cluster upgrade without pre and post exec rules", namespace)
 					appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
@@ -1109,8 +1216,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				log.InfoD("Restoring backups [%s] created before cluster upgrade with rules", backupWithRuleNames)
 				for _, backupName := range backupWithRuleNames {
-					namespaceMapping := make(map[string]string, 0)
-					storageClassMapping := make(map[string]string, 0)
+					namespaceMapping := make(map[string]string)
+					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -1119,8 +1226,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				}
 				log.InfoD("Restoring backups [%s] created before cluster upgrade without rules", backupWithoutRuleNames)
 				for _, backupName := range backupWithoutRuleNames {
-					namespaceMapping := make(map[string]string, 0)
-					storageClassMapping := make(map[string]string, 0)
+					namespaceMapping := make(map[string]string)
+					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -1133,8 +1240,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				log.InfoD("Restoring backups [%s] created after px-backup upgrade with rules", backupWithRuleNames)
 				for _, backupName := range backupAfterUpgradeWithRuleNames {
-					namespaceMapping := make(map[string]string, 0)
-					storageClassMapping := make(map[string]string, 0)
+					namespaceMapping := make(map[string]string)
+					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -1143,8 +1250,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				}
 				log.InfoD("Restoring backups [%s] created after cluster upgrade without rules", backupWithoutRuleNames)
 				for _, backupName := range backupAfterUpgradeWithoutRuleNames {
-					namespaceMapping := make(map[string]string, 0)
-					storageClassMapping := make(map[string]string, 0)
+					namespaceMapping := make(map[string]string)
+					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
 					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
@@ -1176,20 +1283,20 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					}{
 						{
 							"test-restore-single-ns",
-							make(map[string]string, 0),
-							make(map[string]string, 0),
+							make(map[string]string),
+							make(map[string]string),
 							ReplacePolicyRetain,
 						},
 						{
 							"test-custom-restore-single-ns",
 							map[string]string{namespace: "custom" + namespace},
-							make(map[string]string, 0),
+							make(map[string]string),
 							ReplacePolicyRetain,
 						},
 						{
 							"test-replace-restore-single-ns",
-							make(map[string]string, 0),
-							make(map[string]string, 0),
+							make(map[string]string),
+							make(map[string]string),
 							ReplacePolicyDelete,
 						},
 					}
