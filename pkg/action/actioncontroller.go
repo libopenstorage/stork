@@ -130,7 +130,7 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		case storkv1.ActionStageWaitAfterScaleDown:
 			ac.waitAfterScaleDown(action)
 		case storkv1.ActionStageLastMileMigration:
-			ac.performLastMileMigration(action)
+			ac.performLastMileMigrationDuringFailover(action)
 		case storkv1.ActionStageScaleUpDestination:
 			ac.activateClusterDuringFailover(action, false)
 		case storkv1.ActionStageScaleUpSource:
@@ -148,7 +148,7 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 		case storkv1.ActionStageWaitAfterScaleDown:
 			ac.waitAfterScaleDown(action)
 		case storkv1.ActionStageLastMileMigration:
-			ac.performLastMileMigration(action)
+			ac.performLastMileMigrationDuringFailback(action)
 		case storkv1.ActionStageScaleUpSource:
 			ac.activateClusterDuringFailback(action, false)
 		case storkv1.ActionStageScaleUpDestination:
@@ -222,7 +222,7 @@ func (ac *ActionController) createCRD() error {
 	return k8sutils.CreateCRD(resource, validateCRDInterval, validateCRDTimeout)
 }
 
-// getLatestMigrationStatus returns the migrationschedule's latest migration's policy type and status
+// getLatestMigrationPolicyAndStatus returns the migrationSchedule's latest migration's policy type and status
 func getLatestMigrationPolicyAndStatus(migrationSchedule storkv1.MigrationSchedule) (storkv1.SchedulePolicyType, *storkv1.ScheduledMigrationStatus) {
 	var lastMigrationStatus *storkv1.ScheduledMigrationStatus
 	var schedulePolicyType storkv1.SchedulePolicyType
