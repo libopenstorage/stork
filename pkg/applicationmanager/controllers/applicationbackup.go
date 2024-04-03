@@ -568,7 +568,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
 				backup.Status.LastUpdateTimestamp = metav1.Now()
 				log.ApplicationBackupLog(backup).Infof("Auto exec Rules created, updating the CR")
-				//return updateCrFunction()
+				return updateCrFunction()
 
 			}
 		}
