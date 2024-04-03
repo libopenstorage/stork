@@ -24,19 +24,6 @@ const (
 	actionWaitInterval   time.Duration = 10 * time.Second
 )
 
-func newPerformCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	performCommands := &cobra.Command{
-		Use:   "perform",
-		Short: "perform actions",
-	}
-
-	performCommands.AddCommand(
-		newFailoverCommand(cmdFactory, ioStreams),
-		newFailbackCommand(cmdFactory, ioStreams),
-	)
-	return performCommands
-}
-
 var mockTime *time.Time
 
 // setMockTime is used in tests to update the time
@@ -52,7 +39,7 @@ func GetCurrentTime() time.Time {
 	return time.Now()
 }
 
-func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+func newPerformFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var referenceMigrationSchedule string
 	var skipSourceOperations bool
 	var includeNamespaceList []string
@@ -89,7 +76,7 @@ func newFailoverCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 	return performFailoverCommand
 }
 
-func newFailbackCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+func newPerformFailbackCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var referenceMigrationSchedule string
 	var includeNamespaceList []string
 	var excludeNamespaceList []string
