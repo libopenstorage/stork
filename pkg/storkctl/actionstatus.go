@@ -124,7 +124,9 @@ func drActionPrinter(actionList *storkv1.ActionList, options printers.GenerateOp
 			if rollbackSuccessfulNamespaces > 0 || rollbackFailedNamespaces > 0 {
 				additionalInfo = fmt.Sprintf("Rolled back Apps in : %d/%d namespaces", rollbackSuccessfulNamespaces, totalNamespaces)
 				// In case of rollback we have a failure reason as well
-				additionalInfo += " ; " + action.Status.Reason
+				if action.Status.Reason != "" {
+					additionalInfo += " ; " + action.Status.Reason
+				}
 			} else {
 				additionalInfo = fmt.Sprintf("Scaled up Apps in : %d/%d namespaces", successfulNamespaces, totalNamespaces)
 			}

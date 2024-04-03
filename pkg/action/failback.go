@@ -144,7 +144,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			// Fail the action failback if latest successful migration is older than latestMigrationThresholdTime
 			// And migrationschedule is in suspended state
 			log.ActionLog(action).Infof("The latest migration %s is not in threshold range", latestMigration.Name)
-			msg := fmt.Sprintf("Failing failback operation as the latest migration %s was not completed from the scheduled policy duration from now", latestMigration.Name)
+			msg := fmt.Sprintf("Failing the failback operation because the most recent migration, %s, was not completed within the scheduled policy duration", latestMigration.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
