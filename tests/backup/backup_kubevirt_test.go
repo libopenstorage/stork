@@ -1610,7 +1610,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseL
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 		})
 
@@ -1640,7 +1640,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseL
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 		})
 
