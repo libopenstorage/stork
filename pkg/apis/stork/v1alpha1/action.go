@@ -61,7 +61,7 @@ type ActionParameterItem struct {
 type FailoverParameter struct {
 	FailoverNamespaces         []string `json:"failoverNamespaces"`
 	MigrationScheduleReference string   `json:"migrationScheduleReference"`
-	SkipDeactivateSource       *bool    `json:"skipDeactivateSource"`
+	SkipSourceOperations       *bool    `json:"skipSourceOperations"`
 }
 
 type FailbackParameter struct {
