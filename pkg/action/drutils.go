@@ -143,18 +143,18 @@ func (ac *ActionController) remoteClusterDomainUpdate(activate bool, action *sto
 		if activate {
 			err := ac.volDriver.ActivateClusterDomain(clusterDomainUpdate)
 			if err != nil {
-				return fmt.Errorf("activation of remote cluster domain: %v failed : %v", remoteDomainName, err)
+				return fmt.Errorf("activation of cluster domain: %v failed : %v", remoteDomainName, err)
 			} else {
-				msg := fmt.Sprintf("Activation of remote cluster domain: %v successful", remoteDomainName)
+				msg := fmt.Sprintf("Activation of cluster domain: %v successful", remoteDomainName)
 				logEvents := ac.printFunc(action, "ActivateClusterDomain")
 				logEvents(msg, "out")
 			}
 		} else {
 			err := ac.volDriver.DeactivateClusterDomain(clusterDomainUpdate)
 			if err != nil {
-				return fmt.Errorf("deactivation of remote cluster domain: %v failed : %v", remoteDomainName, err)
+				return fmt.Errorf("deactivation of cluster domain: %v failed : %v", remoteDomainName, err)
 			} else {
-				msg := fmt.Sprintf("Deactivation of remote cluster domain: %v successful", remoteDomainName)
+				msg := fmt.Sprintf("Deactivation of cluster domain: %v successful", remoteDomainName)
 				logEvents := ac.printFunc(action, "DeactivateClusterDomain")
 				logEvents(msg, "out")
 			}
