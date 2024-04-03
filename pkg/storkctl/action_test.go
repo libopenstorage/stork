@@ -46,7 +46,7 @@ func TestPerformFailoverFailbackWithInvalidNamespaces(t *testing.T) {
 	defer resetTest()
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--exclude-namespaces", "ns2", "--skip-deactivate-source", "-n", "kube-system"}
+	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--exclude-namespaces", "ns2", "--skip-source-operations", "-n", "kube-system"}
 	expected := "error: can provide only one of --include-namespaces or --exclude-namespaces values at once"
 	testCommon(t, cmdArgs, nil, expected, true)
 
@@ -99,7 +99,7 @@ func TestPerformFailoverFailbackMissingClusterPair(t *testing.T) {
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1", "ns2"})
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "test-migrationschedule")
-	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, false)
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, false)
 
 	failbackActionName := "failback-test-migrationschedule-2024-01-01-000000"
 	cmdArgs = []string{"perform", "failback", "-m", "test-migrationschedule", "-n", "kube-system"}
@@ -117,7 +117,7 @@ func TestPerformFailoverFailbackWithIncludeNamespaceList(t *testing.T) {
 	mockTheTime()
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
+	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "--skip-source-operations", "-n", "kube-system"}
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -125,7 +125,7 @@ func TestPerformFailoverFailbackWithIncludeNamespaceList(t *testing.T) {
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1"})
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "test-migrationschedule")
-	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, true)
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, true)
 
 	failbackActionName := "failback-test-migrationschedule-2024-01-01-000000"
 	cmdArgs = []string{"perform", "failback", "-m", "test-migrationschedule", "--include-namespaces", "ns1", "-n", "kube-system"}
@@ -151,7 +151,7 @@ func TestPerformFailoverFailbackWithExcludeNamespaceList(t *testing.T) {
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns2"})
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "test-migrationschedule")
-	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, false)
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, false)
 
 	failbackActionName := "failback-test-migrationschedule-2024-01-01-000000"
 	cmdArgs = []string{"perform", "failback", "-m", "test-migrationschedule", "--exclude-namespaces", "ns1", "-n", "kube-system"}
@@ -170,7 +170,7 @@ func TestFailoverFailbackActionNameTruncation(t *testing.T) {
 	truncatedStr := strWithLen253[:validation.DNS1123SubdomainMaxLength-len("failover")-len("2024-01-01-000000")-2]
 	createTestMigrationSchedule(strWithLen253, "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	cmdArgs := []string{"perform", "failover", "-m", strWithLen253, "--exclude-namespaces", "ns1", "--skip-deactivate-source", "-n", "kube-system"}
+	cmdArgs := []string{"perform", "failover", "-m", strWithLen253, "--exclude-namespaces", "ns1", "--skip-source-operations", "-n", "kube-system"}
 	failoverActionName := fmt.Sprintf("failover-%v-2024-01-01-000000", truncatedStr)
 	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/%v\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", strWithLen253, failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
