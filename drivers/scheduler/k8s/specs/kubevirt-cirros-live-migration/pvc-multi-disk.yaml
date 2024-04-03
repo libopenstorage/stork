@@ -1,0 +1,30 @@
+{{/* Portworx persistent volume claim */}}
+{{ if .ClaimsCount }}
+{{- range $val := Iterate .ClaimsCount }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume-{{ $val }}
+spec:
+  storageClassName: kubevirt-sc-for-cirros-cd
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  {{- end }}
+  {{ else }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume
+spec:
+  storageClassName: kubevirt-sc-for-cirros-cd
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  {{- end }}

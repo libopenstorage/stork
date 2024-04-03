@@ -3,7 +3,9 @@ kind: VirtualMachine
 metadata:
   name: vm-cirros-containerdisk
   annotations:
+    startDataSupported: "true"
     username: "cirros"
+    appType: "kubevirt"
 spec:
   running: true
   template:
@@ -30,9 +32,15 @@ spec:
               disk:
                 bus: virtio
             {{- end }}
+          interfaces:
+            - name: default
+              masquerade: { }
         resources:
           requests:
             memory: 2048M
+      networks:
+        - name: default
+          pod: {}
       volumes:
         - name: containerdisk
           containerDisk:
