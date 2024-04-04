@@ -2211,7 +2211,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 
 		Step("Create schedule policies", func() {
 			log.InfoD("Creating schedule policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
 			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
 		})
@@ -2953,7 +2953,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 
 		Step("Create schedule policies", func() {
 			log.InfoD("Creating schedule policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
 			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
 		})
