@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
-	"github.com/devans10/pugo/flasharray"
-	"github.com/portworx/torpedo/drivers/vcluster"
-	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
 	"os"
@@ -20,6 +17,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apios "github.com/libopenstorage/openstorage/api"
@@ -41,6 +39,8 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/portworx/torpedo/drivers/vcluster"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
@@ -684,7 +684,7 @@ func updateLongevityStats(name, eventStatName string, dashStats map[string]strin
 	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
 	version, err := Inst().V.GetDriverVersion()
 	product := "px-enterprise"
-	if eventStatName == stats.AsyncDREventName || name == stats.MetroDREventName || name == stats.StorkApplicationBackupEventName {
+	if eventStatName == stats.AsyncDREventName || eventStatName == stats.MetroDREventName || eventStatName == stats.StorkApplicationBackupEventName {
 		version, err = asyncdr.GetStorkVersion()
 		product = "stork"
 	}
