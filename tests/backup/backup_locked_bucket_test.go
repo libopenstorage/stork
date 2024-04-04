@@ -676,10 +676,16 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 					log.InfoD("Create schedule backup after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Unable to px-central-admin ctx")
-					preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[i])
-					log.FailOnError(err, "Unable to fetch pre rule Uid")
-					postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[i])
-					log.FailOnError(err, "Unable to fetch post rule Uid")
+					preRuleUid := ""
+					if preRuleNameList[i] != "" {
+						preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[i])
+						log.FailOnError(err, "Unable to fetch pre rule Uid")
+					}
+					postRuleUid := ""
+					if postRuleNameList[i] != "" {
+						postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[i])
+						log.FailOnError(err, "Unable to fetch post rule Uid")
+					}
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
