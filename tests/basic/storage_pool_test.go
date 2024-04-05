@@ -75,6 +75,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 })
 
 var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion using add-disk option", nil, 0)
 	})
@@ -138,13 +139,20 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			defer exitPoolMaintenance(poolIDToResize)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			if err != nil {
+				isPoolAddDiskSupported := IsPoolAddDiskSupported()
+				if !isPoolAddDiskSupported {
+					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
+					dash.VerifyFatal(IsExpectederr, true, err.Error())
+					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
+					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
 
+				}
+			}
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
-
 		})
-
 		Step("Ensure that new pool has been expanded to the expected size", func() {
 			ValidateApplications(contexts)
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
@@ -204,6 +212,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
 				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			} else {
+
 				log.FailOnError(err, fmt.Sprintf("pool [%s] cannot be expanded due to error: %v", poolIDToResize, err))
 			}
 		})
@@ -379,6 +388,10 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 	stepLog := "should get the existing pool and expand it by adding a disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -489,7 +502,6 @@ var _ = Describe("{NodePoolsAddDisk}", func() {
 		1. Initiate pool expansion on multiple pools in the same node using add-disk
 		2. Validate pool expansion in all the pools
 	*/
-
 	nodePoolsExpansion("NodePoolsAddDisk")
 
 })
@@ -1814,6 +1826,10 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 	stepLog := "should get the existing storage node and expand the pool multiple times"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2055,6 +2071,10 @@ var _ = Describe("{AddWithPXRestart}", func() {
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2358,6 +2378,10 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2727,6 +2751,10 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 	stepLog := "should get the existing storage node with multiple pools and expand pools at same time using add-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -3045,6 +3073,10 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 	stepLog := "should get the volume with IOs, expand the pool by add-disk and perform node maintenance cycle"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3203,6 +3235,10 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 	stepLog := "should get the volume with IOs, expand the pool by add-disk and perform pool maintenance cycle"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3404,6 +3440,10 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3631,6 +3671,10 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3676,6 +3720,29 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 		log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		stepLog = fmt.Sprintf("pool expansion to the node %s", stNode.Name)
 		Step(stepLog, func() {
+			defer func() {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+				t := func() (interface{}, bool, error) {
+
+					status, err := Inst().V.GetNodePoolsStatus(*stNode)
+					if err != nil {
+						return nil, true, err
+					}
+					log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
+					if status[poolToBeResized.Uuid] == "In Maintenance" {
+						log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+						if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+							return nil, true, err
+						}
+					}
+
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+				err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
+			}()
 			log.InfoD(stepLog)
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
@@ -3686,32 +3753,23 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+			if err != nil {
+				isPoolAddDiskSupported := IsPoolAddDiskSupported()
+				if !isPoolAddDiskSupported {
+					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
+					dash.VerifyFatal(IsExpectederr, true, err.Error())
+					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
+					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
+
+				}
+
+			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
-		t := func() (interface{}, bool, error) {
 
-			status, err := Inst().V.GetNodePoolsStatus(*stNode)
-			if err != nil {
-				return nil, true, err
-			}
-			log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
-			if status[poolToBeResized.Uuid] == "In Maintenance" {
-				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
-				if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
-					return nil, true, err
-				}
-			}
-
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
-		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
-		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
 		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
@@ -3742,6 +3800,10 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 	stepLog := "should get the existing storage node,trigger add-disk and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4093,6 +4155,10 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4262,6 +4328,10 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 	stepLog := "should get the existing storage node and expand the pool by add-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4802,6 +4872,10 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		selectedNode := GetNodeWithLeastSize()
 		stNodes := node.GetStorageNodes()
@@ -5578,6 +5652,10 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7173,6 +7251,10 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 	stepLog := "Resize Disk Followed by adddisk should not create a new pool"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7587,6 +7669,10 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 	stepLog := "should get the existing storage node and expand the pool by adding a drive while one already in progress"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7698,6 +7784,10 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
 	stepLog := "should get the existing storage node and expand the pool by adding a drive while one already in progress"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -8274,6 +8364,10 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	stepLog := "should get the existing pool, expand the pool by adding disk and create a new pool and then delete the instance"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -10020,11 +10114,17 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 
 func isMaintenanceModeRequiredForAddDisk() bool {
 	isDmthin, err := IsDMthin()
-	log.FailOnError(err, "error validating for dmthin check")
-	if isDmthin {
-		return true
+	if err != nil {
+		log.FailOnError(err, "error checking if dmthin is enabled")
 	}
+	if isDmthin {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
+		return true
 
+	}
 	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
 		cmd := "uname -r"
 
@@ -10692,6 +10792,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 	itLog := "HAIncreasePoolresizeAndAdddisk"
 	It(itLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+		}
 		stepLog := "schedule Application"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)

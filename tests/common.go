@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
@@ -688,6 +689,39 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 	})
+}
+
+func IsPoolAddDiskSupported() bool {
+	DMthin, err := IsDMthin()
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
+	if DMthin {
+		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
+		if px_err != nil {
+			log.FailOnError(px_err, "Error occured :%s")
+		}
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			log.FailOnError(version_err, "Error occured while fetching current version")
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		}
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
