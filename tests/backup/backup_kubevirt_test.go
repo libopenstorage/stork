@@ -2713,7 +2713,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					schBackupAfterVMDeletion, err := GetNextScheduleBackupName(nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					schBackupAfterVMDeletion, err := GetNextCompletedScheduleBackupName(ctx, nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next non labelled schedule backup [%s] after VM deletion ", schBackupAfterVMDeletion))
 					bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(schBackupAfterVMDeletion, ctx, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] status  ", schBackupAfterVMDeletion))
@@ -2730,7 +2730,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					labelledSchBackupAfterVMDeletion, err := GetNextScheduleBackupName(labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					labelledSchBackupAfterVMDeletion, err := GetNextCompletedScheduleBackupName(ctx, labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next labelled schedule [%s] backup after VM deletion ", labelledSchBackupAfterVMDeletion))
 					bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(labelledSchBackupAfterVMDeletion, ctx, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] status  ", labelledSchBackupAfterVMDeletion))
@@ -2778,7 +2778,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					schBackupAfterVMcreation, err := GetNextScheduleBackupName(nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					schBackupAfterVMcreation, err := GetNextCompletedScheduleBackupName(ctx, nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next schedule backup [%s] after VM creation ", schBackupAfterVMcreation))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					err = GetUpdatedKubeVirtVMSpecForBackup(appContextsToBackup)
@@ -2792,7 +2792,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					labelledSchBackupAfterVMcreation, err := GetNextScheduleBackupName(labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					labelledSchBackupAfterVMcreation, err := GetNextCompletedScheduleBackupName(ctx, labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next labelled schedule [%s] backup after VM creation ", labelledSchBackupAfterVMcreation))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					err = GetUpdatedKubeVirtVMSpecForBackup(appContextsToBackup)
