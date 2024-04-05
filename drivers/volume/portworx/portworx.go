@@ -2599,6 +2599,19 @@ func (d *portworx) GetDriveSet(n *node.Node) (*torpedovolume.DriveSet, error) {
 	return &driveSetInspect, nil
 }
 
+func (d *portworx) PrintCommandOutput(cmnd string, n node.Node) {
+	output, err := d.nodeDriver.RunCommand(n, cmnd, node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("failed to run command [%s], Err: %v", cmnd, err)
+	}
+	log.Infof(output)
+
+}
+
 // WaitDriverUpOnNode waits for PX to be up on a given node
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	log.Debugf("Waiting for PX node to be up [%s/%s]", n.Name, n.VolDriverNodeID)
@@ -2657,6 +2670,9 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+		log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
+		d.PrintCommandOutput("journalctl -lu portworx* -n 100 --no-pager ", n)
+		log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
 		return fmt.Errorf("PX failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 
