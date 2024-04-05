@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"net/url"
 	"strings"
 	"time"
@@ -99,10 +100,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 					time.Sleep(30 * time.Minute)
 				}
 
-				// Sleep needed for IKS cluster upgrades
-				if Inst().S.String() == iks.SchedName {
-					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, IKS replaces all worker nodes. "+
-						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String())
+				// Sleep needed for IKS/OKE cluster upgrades
+				if Inst().S.String() == iks.SchedName || Inst().S.String() == oke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, %s replaces all worker nodes. "+
+						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String(), strings.ToUpper(Inst().S.String()))
 					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(30 * time.Minute)
 				}
@@ -142,6 +143,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)
 			})
+			PerformSystemCheck()
 		}
 
 		Step("destroy apps", func() {

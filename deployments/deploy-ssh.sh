@@ -702,8 +702,16 @@ spec:
       value: "${TARGET_CLUSTER_NAME}"
     - name: PX_ORACLE_user_ocid
       value: "${PX_ORACLE_user_ocid}"
+    - name: PX_ORACLE_compartment_id
+      value: "${PX_ORACLE_compartment_id}"
+    - name: PX_ORACLE_cluster_name
+      value: "${PX_ORACLE_cluster_name}"
     - name: PX_ORACLE_fingerprint
       value: "${PX_ORACLE_fingerprint}"
+    - name: PX_ORACLE_cluster_region
+      value: "${PX_ORACLE_cluster_region}"
+    - name: PX_ORACLE_tenancy
+      value: "${PX_ORACLE_tenancy}"
     - name: PX_ORACLE_private_key_path
       value: "${ORACLE_API_KEY}"
     - name: INSTANCE_GROUP

@@ -147,6 +147,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
 
+	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
+
 	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
 

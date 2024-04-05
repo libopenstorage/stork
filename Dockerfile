@@ -5,7 +5,7 @@ ARG MAKE_TARGET
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install setup dependencies
-RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
+RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client coreutils python3
 
 RUN GOFLAGS= GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.15.0
 
@@ -25,6 +25,8 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
 RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64"  \
     && install -c -m 0755 vcluster /usr/local/bin  \
     && rm -f vcluster
+
+
 
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
@@ -48,11 +50,18 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine:3.18.5
 
-RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat coreutils
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
+
+
+# Install Oracle CLI
+RUN bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --python-install-location /usr/bin/python3 --accept-all-defaults && \
+    chmod a+x /root/bin/oci && \
+    mv -f /root/bin/oci /usr/bin/oci
+
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
