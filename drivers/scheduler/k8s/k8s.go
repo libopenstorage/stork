@@ -4325,6 +4325,13 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", vm.Namespace, err)
 			}
 			for _, pvc := range pvcList.Items {
+				// Filter out the volumes with annotations stork.libopenstorage.org/skip-resource: true from the list
+				// This is needed in case of NFS backup-location where backup creates a volume for mounting the NFS backup location
+				if pvc.Annotations != nil {
+					if _, ok := pvc.Annotations["stork.libopenstorage.org/skip-resource"]; ok {
+						continue
+					}
+				}
 				// check if the pvc has our VM as the owner
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
@@ -6530,7 +6537,7 @@ func (k *K8s) VerifyPoolResizeARO(ruleName apapi.AutopilotRule) (bool, error) {
 	return false, fmt.Errorf("No ARO found for rule: %v ", ruleName)
 }
 
-//WaitForRebalanceAROToComplete Wait for Rebalance to complete.
+// WaitForRebalanceAROToComplete Wait for Rebalance to complete.
 func (k *K8s) WaitForRebalanceAROToComplete() error {
 	var eventCheckInterval = 60 * time.Second
 	var eventCheckTimeout = 30 * time.Minute

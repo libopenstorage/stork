@@ -2667,11 +2667,11 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				vms, err := GetAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching VMs from namespace[%s]", namespace))
 				nonLabelScheduleName = fmt.Sprintf("%s-non-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 				_, err = CreateVMScheduledBackupWithValidation(nonLabelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", backupPreUpgrade))
 				nonLabelSchNamespaceMap[namespace] = nonLabelScheduleName
-				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 			}
 		})
 
@@ -2683,11 +2683,11 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				vms, err := GetAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching VMs from namespace[%s]", namespace))
 				labelScheduleName = fmt.Sprintf("%s-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				scheduleNames = append(scheduleNames, labelScheduleName)
 				_, err = CreateVMScheduleBackupWithNamespaceLabelWithValidation(ctx, labelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] with namespace label", labelScheduleName))
 				labelSchNamespaceMap[namespace] = labelScheduleName
-				scheduleNames = append(scheduleNames, labelScheduleName)
 			}
 		})
 
