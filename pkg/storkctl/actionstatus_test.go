@@ -342,7 +342,7 @@ func createFailoverActionAndVerify(t *testing.T) string {
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1", "ns2"})
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "test-migrationschedule")
-	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, true)
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, true)
 	return failoverActionName
 }
 
