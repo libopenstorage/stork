@@ -1525,12 +1525,40 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.DerivedIoProfile &&
-				vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
-				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
-				log.Infof("requested Spec: %+v", requestedSpec)
-				log.Infof("actual Spec: %+v", vol)
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+			// Reference: https://docs.portworx.com/portworx-enterprise/concepts/io-profiles
+			if requestedSpec.IoProfile != vol.DerivedIoProfile {
+				switch requestedSpec.IoProfile {
+				case api.IoProfile_IO_PROFILE_AUTO:
+					// The profile auto-selects "db_remote" for volumes with a replication factor is
+					// greater than or equal to 2, and "none" otherwise, based on configuration details.
+					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
+						log.Infof("requested Spec: %+v", requestedSpec)
+						log.Infof("actual Spec: %+v", vol)
+						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+					}
+				case api.IoProfile_IO_PROFILE_AUTO_JOURNAL:
+					// The auto_journal IO profile adjusts a volume to use "journal" or "none"
+					// settings based on analyzing 24-second write pattern intervals to optimize
+					// performance.
+					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
+						log.Infof("requested Spec: %+v", requestedSpec)
+						log.Infof("actual Spec: %+v", vol)
+						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+					}
+				case api.IoProfile_IO_PROFILE_DB_REMOTE:
+					// The write-back flush coalescing algorithm consolidates syncs within 100ms into
+					// a single operation, necessitating at least two replications (HA factor) for
+					// reliability.
+					if vol.Spec.HaLevel >= 2 {
+						log.Infof("requested Spec: %+v", requestedSpec)
+						log.Infof("actual Spec: %+v", vol)
+						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+					}
+				default:
+					log.Infof("requested Spec: %+v", requestedSpec)
+					log.Infof("actual Spec: %+v", vol)
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+				}
 			}
 		case api.SpecSize:
 			if requestedSpec.Size != vol.Spec.Size {
