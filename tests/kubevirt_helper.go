@@ -3,6 +3,7 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"strings"
 	"time"
@@ -34,6 +35,9 @@ var (
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
 func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
 	// before adding disks check how many disks are present in the VM
+	log.InfoD("create config map")
+	CreateConfigMap()
+
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 		if err != nil {
@@ -471,4 +475,26 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 		return fmt.Errorf("replicaset mismatch for volume [%s] and volume [%s]", vol.ID, volInspect.Id)
 	}
 	return nil
+}
+
+func CreateConfigMap() {
+	// Check if a config map named kubevirt-creds exist
+	configMap, err := core.Instance().GetConfigMap("kubevirt-creds", "default")
+	log.Infof("configMap: %v", configMap)
+	log.Infof("err: %v", err)
+	if err != nil {
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "kubevirt-creds",
+			},
+			Data: map[string]string{
+				"fio-vm-multi-disk": "toor",
+			},
+		}
+		_, err = core.Instance().CreateConfigMap(configMap)
+		if err != nil {
+			log.Fatalf("failed to create config map kubevirt-creds: %v", err)
+		}
+		log.Infof("created config map kubevirt-creds")
+	}
 }

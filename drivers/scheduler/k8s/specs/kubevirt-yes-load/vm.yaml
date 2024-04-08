@@ -1,7 +1,7 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: fio-vm-multi-disk
+  name: yes-and-fio-vm
 spec:
   running: false
   template:
@@ -9,11 +9,11 @@ spec:
       labels:
         kubevirt.io/domain: ubuntu-bionic
         kubevirt-key: kubevirt-val
-        app: vm-multi-disk
+        app: yes-and-fio-vm
     spec:
       domain:
         cpu:
-          cores: 2
+          cores: 4
         devices:
           disks:
             - name: containervolume
@@ -31,18 +31,6 @@ spec:
             - name: datavolume4
               disk:
                 bus: virtio
-            - name: datavolume5
-              disk:
-                bus: virtio
-            - name: datavolume6
-              disk:
-                bus: virtio
-            - name: datavolume7
-              disk:
-                bus: virtio
-            - name: datavolume8
-              disk:
-                bus: virtio
             - name: cloudinitvolume
               disk:
                 bus: virtio
@@ -51,15 +39,15 @@ spec:
               masquerade: {}
         resources:
           requests:
-            cpu: 2
-            memory: 4096M
+            cpu: 4
+            memory: 8192M
       networks:
         - name: default
           pod: {}
       tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
-        operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
       volumes:
         - name: containervolume
           persistentVolumeClaim:
@@ -76,18 +64,6 @@ spec:
         - name: datavolume4
           dataVolume:
             name: fio-disk-4
-        - name: datavolume5
-          dataVolume:
-            name: fio-disk-5
-        - name: datavolume6
-          dataVolume:
-            name: fio-disk-6
-        - name: datavolume7
-          dataVolume:
-            name: fio-disk-7
-        - name: datavolume8
-          dataVolume:
-            name: fio-disk-8
         - name: cloudinitvolume
           cloudInitNoCloud:
             userData: |-
