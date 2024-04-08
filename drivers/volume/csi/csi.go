@@ -954,7 +954,7 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 				continue
 			}
 			// In the case of partial success, we don't want to clean up for successful PVC VS and VSC
-			if vInfo.Status == storkapi.ApplicationBackupStatusSuccessful || vInfo.Status == storkapi.ApplicationBackupStatusSkip {
+			if vInfo.Status == storkapi.ApplicationBackupStatusSuccessful {
 				continue
 			}
 			snapshotName := vInfo.BackupID

@@ -131,8 +131,6 @@ const (
 	ApplicationBackupStatusPartialSuccess ApplicationBackupStatusType = "PartialSuccess"
 	// ApplicationBackupStatusSuccessful for when backup has completed successfully
 	ApplicationBackupStatusSuccessful ApplicationBackupStatusType = "Successful"
-	// ApplicationBackupStatusSkip for when backup has been skipped
-	ApplicationBackupStatusSkip ApplicationBackupStatusType = "Skipped"
 )
 
 // ApplicationBackupStageType is the stage of the backup
