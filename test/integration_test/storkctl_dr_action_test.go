@@ -6,14 +6,16 @@ package integrationtest
 import (
 	"bytes"
 	"fmt"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/storkctl"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"os"
+	"path"
+	"strings"
 	"testing"
-	"time"
 
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 )
 
 const (
@@ -21,24 +23,23 @@ const (
 	syncDR  string = "sync-dr"
 )
 
+var kubeConfigPath string
+
 func TestStorkCtlActions(t *testing.T) {
 	// running the actions in source cluster since we only need to create the action resource not execute it
 	err := setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	mockNow := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.Local)
-	err = setMockTime(&mockNow)
-	log.FailOnError(t, err, "Error setting mock time")
+	kubeConfigPath , err = getDestinationKubeConfigFile()
+	log.FailOnError(t, err, "Error getting destination kubeconfig file")
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 	currentTestSuite = t.Name()
 	createClusterPairs(t)
 	defer cleanUpClusterPairs(t)
 	t.Run("createDefaultFailoverActionTest", createDefaultFailoverActionTest)
-	err = setRemoteConfig("")
-	log.FailOnError(t, err, "setting kubeconfig to default failed")
-	err = setMockTime(nil)
-	log.FailOnError(t, err, "Error resetting mock time")
 }
 
-func createDefaultFailoverActionTest(t *testing.T) {
+func createDefaultFailoverActionTest(t *testing.T){
 	testrailId := 257169
 	actionType := "failover"
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
@@ -53,7 +54,7 @@ func createDefaultFailoverActionTest(t *testing.T) {
 		Spec: storkv1.ActionSpec{
 			ActionParameter: storkv1.ActionParameter{
 				FailoverParameter: storkv1.FailoverParameter{
-					FailoverNamespaces:         []string{adminNs, defaultNs},
+					FailoverNamespaces:         []string{defaultNs, adminNs},
 					MigrationScheduleReference: migrationScheduleName,
 					SkipSourceOperations:       &skipSourceOperations,
 				},
@@ -64,7 +65,7 @@ func createDefaultFailoverActionTest(t *testing.T) {
 	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
 }
 
-func createDRActionTest(t *testing.T, testrailID int, args map[string]string, expectedAction *storkv1.Action ,migrationScheduleName string,
+func createDRActionTest(t *testing.T, testrailID int, args map[string]string, expectedAction *storkv1.Action, migrationScheduleName string,
 	clusterPairMode string, actionType string, namespace string) {
 	var testResult = testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
@@ -75,29 +76,77 @@ func createDRActionTest(t *testing.T, testrailID int, args map[string]string, ex
 	// Create the required migrationschedule in the given namespace
 	createMigrationSchedule(t, migrationScheduleName, namespace, clusterPairMode)
 	// Create the DR Action in the given namespace and verify output
-	createDRAction(t, namespace, actionType, migrationScheduleName, args)
-	failoverActionName := "failover-" + migrationScheduleName + "-2024-01-01-000000"
+	drActionName, _ := createDRAction(t, namespace, actionType, migrationScheduleName, args)
 	// validate the action object created
-	err := ValidateAction(t, expectedAction, failoverActionName, namespace)
+	err := ValidateAction(t, expectedAction, drActionName, namespace)
 	log.FailOnError(t, err, "Error validating the created resource")
 
+	// try to get the status as well
+	_, _, _ = getDRActionStatus(t, actionType, drActionName, namespace)
+	// Cleanup the created action resource
+	err = storkops.Instance().DeleteAction(drActionName, namespace)
+	log.FailOnError(t, err, "Error deleting the created action resource")
 	// If we are here then the test has passed
 	testResult = testResultPass
 	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func createDRAction(t *testing.T, namespace string, actionType string, migrationScheduleName string, customArgs map[string]string) {
+func createDRAction(t *testing.T, namespace string, actionType string, migrationScheduleName string, customArgs map[string]string) (string, []string) {
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	failoverActionName := "failover-" + migrationScheduleName + "-2024-01-01-000000"
-	cmdArgs := []string{"perform", actionType}
+	cmdArgs := []string{"perform", actionType, "--kubeconfig", kubeConfigPath}
 	executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
 	log.InfoD("Actual output is: %s", actualOutput)
-	expectedOutput := fmt.Sprintf("Started failover for MigrationSchedule %s/%s\nTo check failover status use the command : `storkctl get failover %v -n %s`\n", namespace, migrationScheduleName, failoverActionName, namespace)
-	Dash.VerifyFatal(t, expectedOutput, actualOutput, "Output mismatch")
+	expectedOutput := fmt.Sprintf("Started failover for MigrationSchedule %s/%s", namespace, migrationScheduleName)
+	// Break the actual output into lines
+	output := strings.Split(actualOutput, "\n")
+	// Check if the first line in output is as expected
+	Dash.VerifyFatal(t, output[0], expectedOutput, "Action creation failed")
+	// Extract the get status command from the output
+	getStatusCommand := strings.TrimSpace(strings.TrimPrefix(output[1], "To check failover status use the command : `"))
+	getStatusCommand = strings.TrimSuffix(getStatusCommand, "`")
+	getStatusCmdArgs := strings.Split(getStatusCommand, " ")
+	// Extract the action Name from the command args
+	actionName := getStatusCmdArgs[3]
+	// returning [1:] because 0th index is storkctl, which is not needed
+	return actionName, getStatusCmdArgs[1:]
+}
+
+func getDRActionStatus(t *testing.T, actionType string, actionName string, actionNamespace string) (string, string, string){
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	cmdArgs := []string{"get", actionType, actionName, "-n", actionNamespace, "--kubeconfig", kubeConfigPath}
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
+	// Get the captured output as a string
+	actualOutput := outputBuffer.String()
+	log.InfoD("Actual output is: %s", actualOutput)
+	// Break the actual output into lines
+	output := strings.Split(actualOutput, "\n")
+	Dash.VerifyFatal(t, len(output), 3, "Action status command failed")
+	// Extract the useful fields
+	fields := strings.Fields(output[1])
+    
+    // Join the fields back together to form the columns
+	// "failover-ms-4-2024-04-02-135725   02 Apr 24 13:57 UTC   Completed   Successful   Scaled up Apps in : 1/1 namespaces"
+	// CREATED timestamp is index [1:5]
+    name := fields[0]
+    currentStage := fields[6]
+	// status and moreInfo fields can be empty
+	currentStatus := ""
+	moreInfo := ""
+	if len(fields) > 7 {
+		currentStatus = fields[7]
+	}
+	if len(fields) > 8 {
+		moreInfo = strings.Join(fields[8:], " ")
+	}
+	Dash.VerifyFatal(t, name, actionName, "Action Name")
+	log.InfoD("Action %s status fields are: %s;%s;%s;", name, currentStage, currentStatus, moreInfo)
+	return currentStage, currentStatus, moreInfo
 }
 
 func ValidateAction(t *testing.T, expectedAction *storkv1.Action, actionName string, actionNamespace string) error {
@@ -105,8 +154,11 @@ func ValidateAction(t *testing.T, expectedAction *storkv1.Action, actionName str
 	log.FailOnError(t, err, "Unable to get the created action resource")
 	log.Info("Trying to validate the action resource")
 	Dash.VerifyFatal(t, actualAction.Spec.ActionType, expectedAction.Spec.ActionType, "Action ActionType")
-	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailoverParameter, expectedAction.Spec.ActionParameter.FailoverParameter, "Action FailoverParameter")
-	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailbackParameter, expectedAction.Spec.ActionParameter.FailbackParameter, "Action FailbackParameter")
+	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, expectedAction.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, "Action FailoverParameter FailoverNamespaces")
+	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, expectedAction.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "Action FailoverParameter MigrationScheduleReference")
+	Dash.VerifyFatal(t, *actualAction.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, *expectedAction.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, "Action FailoverParameter SkipSourceOperations")
+	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, expectedAction.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, "Action FailbackParameter FailbackNamespaces")
+	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, expectedAction.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, "Action FailbackParameter MigrationScheduleReference")
 	return nil
 }
 
@@ -127,9 +179,26 @@ func createMigrationSchedule(t *testing.T, migrationScheduleName string, namespa
 			},
 		},
 	}
-	migrationScheduleObj.Annotations = map[string]string{"stork.libopenstorage.org/static-copy":"true"}
+	migrationScheduleObj.Annotations = map[string]string{"stork.libopenstorage.org/static-copy": "true"}
 	migrationScheduleObj.Name = migrationScheduleName
 	migrationScheduleObj.Namespace = namespace
 	_, err := storkops.Instance().CreateMigrationSchedule(migrationScheduleObj)
 	log.FailOnError(t, err, "Error creating test migrationSchedule")
+}
+
+func getDestinationKubeConfigFile() (string, error) {
+	destKubeconfigPath := path.Join("/tmp", "dest_kubeconfig")
+	cm, err := core.Instance().GetConfigMap("destinationconfigmap", "kube-system")
+	if err != nil {
+		log.Error("Error reading config map: %v", err)
+		return "", err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		return "", fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	err = os.WriteFile(destKubeconfigPath, []byte(config), 0644)
+	return destKubeconfigPath, err
 }
