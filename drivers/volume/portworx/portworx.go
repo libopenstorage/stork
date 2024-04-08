@@ -3446,7 +3446,6 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.PortworxDriverName {
-			// volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		// Skip for volumes which are in failed state as there is no need to proceed
