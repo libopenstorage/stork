@@ -26,7 +26,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -86,7 +86,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
 
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
@@ -136,7 +136,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -238,7 +238,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -510,7 +510,7 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {

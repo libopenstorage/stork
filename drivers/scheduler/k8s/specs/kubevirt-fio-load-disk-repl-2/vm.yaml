@@ -3,7 +3,7 @@ kind: VirtualMachine
 metadata:
   name: fio-vm-multi-disk
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:

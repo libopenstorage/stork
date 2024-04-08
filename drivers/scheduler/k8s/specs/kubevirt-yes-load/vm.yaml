@@ -3,7 +3,7 @@ kind: VirtualMachine
 metadata:
   name: yes-and-fio-vm
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:
