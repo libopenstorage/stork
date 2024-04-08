@@ -858,7 +858,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					if driverName == skipDriver {
 						volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 						if err != nil {
-							return fmt.Errorf("Error getting volume for PVC %v: %v", pvc.Name, err)
+							return fmt.Errorf("error getting volume for PVC %v: %v", pvc.Name, err)
 						}
 						volumeInfo := &stork_api.ApplicationBackupVolumeInfo{}
 						volumeInfo.PersistentVolumeClaim = pvc.Name
@@ -867,8 +867,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
 						volumeInfo.DriverName = driverName
 						volumeInfo.Volume = volume
-						volumeInfo.Reason = "volume skipped from backup"
-						volumeInfo.Status = stork_api.ApplicationBackupStatusSkip
+						volumeInfo.Reason = "volumes not backed up as backuplocation for kdmp is not healthy"
+						volumeInfo.Status = stork_api.ApplicationBackupStatusFailed
 						skipVolInfo = append(skipVolInfo, volumeInfo)
 						continue
 					}
@@ -1975,8 +1975,7 @@ func (a *ApplicationBackupController) backupResources(
 	processPartialObjects := make([]runtime.Unstructured, 0)
 	failedVolInfoMap := make(map[string]stork_api.ApplicationBackupStatusType)
 	for _, vol := range backup.Status.Volumes {
-		if vol.Status == stork_api.ApplicationBackupStatusFailed ||
-			vol.Status == stork_api.ApplicationBackupStatusSkip {
+		if vol.Status == stork_api.ApplicationBackupStatusFailed {
 			failedVolInfoMap[vol.Volume] = vol.Status
 		}
 	}
@@ -2202,7 +2201,7 @@ func (a *ApplicationBackupController) backupResources(
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
 				if isPartialBackup {
-					backup.Status.Status = stork_api.ApplicationBackupSatusPartialSuccess
+					backup.Status.Status = stork_api.ApplicationBackupStatusPartialSuccess
 					backup.Status.Reason = "Some volumes were backed up"
 				}
 				if backup.Status.FailedVolCount == 0 {
