@@ -632,7 +632,7 @@ func (r *ResourceCollector) getParticularResourceInNamespaces(
 			if apierrors.IsForbidden(err) {
 				continue
 			}
-			return nil, err
+			return nil, fmt.Errorf("error gathering resources for resource %v,%v,%v: %v", resource.Name, resource.Kind, ns, err)
 		}
 		objects, err := meta.ExtractList(objectsList)
 		if err != nil {
