@@ -78,6 +78,13 @@ func (g *Gke) UpgradeScheduler(version string) error {
 }
 
 func (g *Gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+
+	instanceGroup := os.Getenv("INSTANCE_GROUP")
+	if len(instanceGroup) != 0 {
+		g.instanceGroup = instanceGroup
+	} else {
+		g.instanceGroup = "default-pool"
+	}
 	// GCP SDK requires per zone cluster size
 	if err := g.ops.SetInstanceGroupSize(g.instanceGroup, perZoneCount, timeout); err != nil {
 		return fmt.Errorf("failed to set size of node pool %s. Error: %v", g.instanceGroup, err)
@@ -87,6 +94,13 @@ func (g *Gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 }
 
 func (g *Gke) GetASGClusterSize() (int64, error) {
+
+	instanceGroup := os.Getenv("INSTANCE_GROUP")
+	if len(instanceGroup) != 0 {
+		g.instanceGroup = instanceGroup
+	} else {
+		g.instanceGroup = "default-pool"
+	}
 	nodeCount, err := g.ops.GetInstanceGroupSize(g.instanceGroup)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get size of GKE Node Pool [%s] Err: %v", g.instanceGroup, err)
@@ -115,8 +129,8 @@ func (g *Gke) upgradeGkeNodeGroupVersion(nodeGroup, version string, timeout time
 	return nil
 }
 
-func (g *Gke) DeleteNode(node node.Node, timeout time.Duration) error {
-	if err := g.ops.DeleteInstance(node.Name, node.Zone, timeout); err != nil {
+func (g *Gke) DeleteNode(node node.Node) error {
+	if err := g.ops.DeleteInstance(node.Name, node.Zone, 10*time.Minute); err != nil {
 		return err
 	}
 	return nil

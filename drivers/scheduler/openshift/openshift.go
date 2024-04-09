@@ -909,7 +909,7 @@ func (k *openshift) getMachinesCount() (int, error) {
 }
 
 // Method to recycling OCP node
-func (k *openshift) RecycleNode(n node.Node) error {
+func (k *openshift) DeleteNode(n node.Node) error {
 	// Check if node is valid before proceeding for delete a node
 	var worker []node.Node = node.GetWorkerNodes()
 	var delNode *api.StorageNode

@@ -377,7 +377,7 @@ type Driver interface {
 	DeleteSecret(namespace, name string) error
 
 	// RecyleNode deletes nodes with given node
-	RecycleNode(n node.Node) error
+	DeleteNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
 	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
@@ -438,6 +438,10 @@ type Driver interface {
 
 	// ScaleCluster scale the cluster to the given replicas
 	ScaleCluster(replicas int) error
+	// GetZones get the zones of cluster
+	GetZones() ([]string, error)
+	// GetASGClusterSize gets node count for an asg cluster
+	GetASGClusterSize() (int64, error)
 }
 
 var (

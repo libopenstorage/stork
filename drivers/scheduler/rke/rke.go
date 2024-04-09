@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
@@ -438,6 +439,15 @@ func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string)
 		}
 	}
 	return nil
+}
+
+// DeleteNode deletes the given node
+func (o *Rancher) DeleteNode(node node.Node) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteActionApproval()",
+	}
 }
 
 func init() {

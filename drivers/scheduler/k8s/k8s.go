@@ -7017,6 +7017,15 @@ func (k *K8s) UpgradeScheduler(version string) error {
 	}
 }
 
+// DeleteNode deletes the given in the cluster
+func (k *K8s) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 // DeleteSecret deletes secret with given name in given namespace
 func (k *K8s) DeleteSecret(namespace, name string) error {
 	return k8sCore.DeleteSecret(name, namespace)
@@ -7049,21 +7058,28 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 	return err
 }
 
-// RecycleNode method not supported for K8s scheduler
-func (k *K8s) RecycleNode(n node.Node) error {
-	// Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
-	}
-}
-
 // ScaleCluster scale the cluster to the given replicas
 func (k *K8s) ScaleCluster(replicas int) error {
 	// ScaleCluster is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ScaleCluster()",
+	}
+}
+
+func (k *K8s) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (k *K8s) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
 	}
 }
 

@@ -910,6 +910,22 @@ func (d *dcos) UpgradeScheduler(version string) error {
 	}
 }
 
+func (d *dcos) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (d *dcos) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
 func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
@@ -939,14 +955,6 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ParseCharts()",
-	}
-}
-
-func (d *dcos) RecycleNode(n node.Node) error {
-	//Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
 	}
 }
 
@@ -1096,6 +1104,14 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNamespaceLabel()",
+	}
+}
+
+func (d *dcos) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
 	}
 }
 

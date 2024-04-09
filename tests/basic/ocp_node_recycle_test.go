@@ -2,14 +2,13 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	"github.com/portworx/torpedo/pkg/log"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -55,7 +54,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 				Step(
 					fmt.Sprintf("Recycle a storageless node and validating the drives: %s", delNode.Name),
 					func() {
-						err := Inst().S.RecycleNode(delNode)
+						err := Inst().S.DeleteNode(delNode)
 						Expect(err).NotTo(HaveOccurred(),
 							fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
 
@@ -76,7 +75,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 			Step(
 				fmt.Sprintf("Recycle a storage node: [%s] and validating the drives", delNode.Name),
 				func() {
-					err := Inst().S.RecycleNode(delNode)
+					err := Inst().S.DeleteNode(delNode)
 					Expect(err).NotTo(HaveOccurred(),
 						fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
 				})

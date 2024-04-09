@@ -3,6 +3,7 @@ package aks
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"os"
 	"time"
 
@@ -274,20 +275,6 @@ func (a *aks) AzureLogin() error {
 }
 
 func (a *aks) UpgradeScheduler(version string) error {
-	instanceGroup := os.Getenv("INSTANCE_GROUP")
-	if len(instanceGroup) != 0 {
-		a.instanceGroup = instanceGroup
-	} else {
-		a.instanceGroup = defaultAksInstanceGroupName
-	}
-
-	log.Info("Authenticating with Azure")
-
-	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
-	if envAzureClusterName == "" {
-		return fmt.Errorf("environment variable AZURE_CLUSTER_NAME is not defined")
-	}
-	a.clusterName = envAzureClusterName
 
 	aksCluster, err := a.GetAKSCluster()
 	if err != nil {
@@ -385,6 +372,22 @@ func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
 // GetAKSCluster Gets and return AKS cluster object
 func (a *aks) GetAKSCluster() (AKSCluster, error) {
 	log.Info("Get AKS cluster object")
+
+	instanceGroup := os.Getenv("INSTANCE_GROUP")
+	if len(instanceGroup) != 0 {
+		a.instanceGroup = instanceGroup
+	} else {
+		a.instanceGroup = defaultAksInstanceGroupName
+	}
+
+	log.Info("Authenticating with Azure")
+
+	envAzureClusterName := os.Getenv("AZURE_CLUSTER_NAME")
+	if envAzureClusterName == "" {
+		return AKSCluster{}, fmt.Errorf("environment variable AZURE_CLUSTER_NAME is not defined")
+	}
+	a.clusterName = envAzureClusterName
+
 	var aksCluster AKSCluster
 
 	t := func() (interface{}, bool, error) {
@@ -466,5 +469,22 @@ func (a *aks) WaitForControlPlaneToUpgrade(version string) error {
 		return fmt.Errorf("failed to upgrade AKS Control Plane version to [%s], Err: %v", version, err)
 	}
 	log.Infof("Successfully upgraded AKS Control Plane to [%s]", version)
+	return nil
+}
+
+// DeleteNode deletes the given node
+func (a *aks) DeleteNode(node node.Node) error {
+	aksCluster, err := a.GetAKSCluster()
+	if err != nil {
+		return fmt.Errorf("failed to get AKS cluster, Err: %v", err)
+	}
+	log.Infof("Delete node [%s] from node pool [%s]", node.Hostname, a.instanceGroup)
+
+	cmd := fmt.Sprintf("%s aks nodepool delete-machines --resource-group %s --cluster-name %s --nodepool-name %s  --machine-names %s --no-wait", azCli, aksCluster.Name, aksCluster.Name, a.instanceGroup, node.Hostname)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to delete node [%s] , Err: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+	log.Infof("Deleted node [%s] from node pool [%s] successfully", node.Hostname, a.instanceGroup)
 	return nil
 }

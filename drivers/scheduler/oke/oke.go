@@ -264,7 +264,7 @@ func (o *oke) configureUser() error {
 			return fmt.Errorf("error in configuring User info in OCI CLI, error %v %v", err, stderr)
 		}
 
-		cmd = fmt.Sprintf("sudo chmod 400 %s", okeConfigFile)
+		cmd = fmt.Sprintf("chmod 400 %s", okeConfigFile)
 		_, stderr, err = osutils.ExecShell(cmd)
 		if err != nil {
 			return fmt.Errorf("error in setting permissions for oci config, error %v %v", err, stderr)
@@ -345,11 +345,7 @@ func (o *oke) GetASGClusterSize() (int64, error) {
 		return 0, err
 
 	}
-	err = o.setCluster()
-	if err != nil {
-		return 0, err
 
-	}
 	nodePool, err := o.getNodePool()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get size of node pool [%s]. Error: %v", o.instanceGroupName, err)
@@ -371,11 +367,6 @@ func (o *oke) GetZones() ([]string, error) {
 func (o *oke) UpgradeScheduler(version string) error {
 
 	err := o.configureUser()
-	if err != nil {
-		return err
-
-	}
-	err = o.setCluster()
 	if err != nil {
 		return err
 
@@ -555,17 +546,13 @@ func (o *oke) deleteNodePool(nodePool NodePool) error {
 }
 
 // DeleteNode deletes the given node
-func (o *oke) DeleteNode(node node.Node, timeout time.Duration) error {
+func (o *oke) DeleteNode(node node.Node) error {
 	err := o.configureUser()
 	if err != nil {
 		return err
 
 	}
-	err = o.setCluster()
-	if err != nil {
-		return err
 
-	}
 	log.Infof("Deleting node [%s]", node.Hostname)
 	instanceDetails, err := o.ops.GetInstance(node.Hostname)
 	if err != nil {
@@ -576,7 +563,7 @@ func (o *oke) DeleteNode(node node.Node, timeout time.Duration) error {
 	if !ok {
 		return fmt.Errorf("could not retrive oke instance details for %s", node.Hostname)
 	}
-	err = o.ops.DeleteInstance(*oracleInstance.Id, "", timeout)
+	err = o.ops.DeleteInstance(*oracleInstance.Id, "", 10*time.Minute)
 	if err != nil {
 		return err
 	}
