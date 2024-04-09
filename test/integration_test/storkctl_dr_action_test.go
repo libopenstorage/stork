@@ -29,7 +29,7 @@ func TestStorkCtlActions(t *testing.T) {
 	// running the actions in source cluster since we only need to create the action resource not execute it
 	err := setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	kubeConfigPath , err = getDestinationKubeConfigFile()
+	kubeConfigPath, err = getDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 	err = setDestinationKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
@@ -39,7 +39,7 @@ func TestStorkCtlActions(t *testing.T) {
 	t.Run("createDefaultFailoverActionTest", createDefaultFailoverActionTest)
 }
 
-func createDefaultFailoverActionTest(t *testing.T){
+func createDefaultFailoverActionTest(t *testing.T) {
 	testrailId := 257169
 	actionType := "failover"
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
@@ -115,7 +115,7 @@ func createDRAction(t *testing.T, namespace string, actionType string, migration
 	return actionName, getStatusCmdArgs[1:]
 }
 
-func getDRActionStatus(t *testing.T, actionType string, actionName string, actionNamespace string) (string, string, string){
+func getDRActionStatus(t *testing.T, actionType string, actionName string, actionNamespace string) (string, string, string) {
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
@@ -129,12 +129,12 @@ func getDRActionStatus(t *testing.T, actionType string, actionName string, actio
 	Dash.VerifyFatal(t, len(output), 3, "Action status command failed")
 	// Extract the useful fields
 	fields := strings.Fields(output[1])
-    
-    // Join the fields back together to form the columns
+
+	// Join the fields back together to form the columns
 	// "failover-ms-4-2024-04-02-135725   02 Apr 24 13:57 UTC   Completed   Successful   Scaled up Apps in : 1/1 namespaces"
 	// CREATED timestamp is index [1:5]
-    name := fields[0]
-    currentStage := fields[6]
+	name := fields[0]
+	currentStage := fields[6]
 	// status and moreInfo fields can be empty
 	currentStatus := ""
 	moreInfo := ""
