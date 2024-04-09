@@ -121,6 +121,9 @@ type AzureConfig struct {
 	SubscriptionID     string `json:"subscriptionID"`
 	ClientID           string `json:"clientID"`
 	ClientSecret       string `json:"clientSecret"`
+	// Azure-Enviroment type for azure blob storage
+	// supported option: "azure-global", "azure-china"
+	Environment        string `json:"evironment"`
 }
 
 // GoogleConfig specifies the config required to connect to Google Cloud Storage
