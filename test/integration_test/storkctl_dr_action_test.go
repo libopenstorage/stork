@@ -37,6 +37,12 @@ func TestStorkCtlActions(t *testing.T) {
 	createClusterPairs(t)
 	defer cleanUpClusterPairs(t)
 	t.Run("createDefaultFailoverActionTest", createDefaultFailoverActionTest)
+	t.Run("createFailoverActionWithIncludeNsTest", createFailoverActionWithIncludeNsTest)
+	t.Run("createFailoverActionWithExcludeNsTest", createFailoverActionWithExcludeNsTest)
+	t.Run("createFailoverActionWithSkipSourceOperationsTest", createFailoverActionWithSkipSourceOperationsTest)
+	t.Run("createDefaultFailbackActionTest", createDefaultFailbackActionTest)
+	t.Run("createFailbackActionWithIncludeNsTest", createFailbackActionWithIncludeNsTest)
+	t.Run("createFailbackActionWithExcludeNsTest", createFailbackActionWithExcludeNsTest)
 }
 
 func createDefaultFailoverActionTest(t *testing.T) {
@@ -49,19 +55,96 @@ func createDefaultFailoverActionTest(t *testing.T) {
 		"migration-reference": migrationScheduleName,
 		"namespace":           namespace,
 	}
-	skipSourceOperations := false
-	expectedAction := &storkv1.Action{
-		Spec: storkv1.ActionSpec{
-			ActionParameter: storkv1.ActionParameter{
-				FailoverParameter: storkv1.FailoverParameter{
-					FailoverNamespaces:         []string{defaultNs, adminNs},
-					MigrationScheduleReference: migrationScheduleName,
-					SkipSourceOperations:       &skipSourceOperations,
-				},
-			},
-			ActionType: storkv1.ActionTypeFailover,
-		},
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailover, migrationScheduleName, []string{defaultNs, adminNs}, false)
+	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
+}
+
+func createFailoverActionWithIncludeNsTest(t *testing.T) {
+	testrailId := 257170
+	actionType := "failover"
+	// the dummy migrationSchedule created migrates defaultNs and adminNs
+	migrationScheduleName := "test-action-automation-migration-schedule"
+	namespace := adminNs
+	cmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"include-namespaces":  defaultNs,
+		"namespace":           namespace,
 	}
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailover, migrationScheduleName, []string{defaultNs}, false)
+	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
+}
+
+func createFailoverActionWithExcludeNsTest(t *testing.T) {
+	testrailId := 296305
+	actionType := "failover"
+	// the dummy migrationSchedule created migrates defaultNs and adminNs
+	migrationScheduleName := "test-action-automation-migration-schedule"
+	namespace := adminNs
+	cmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"exclude-namespaces":  adminNs,
+		"namespace":           namespace,
+	}
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailover, migrationScheduleName, []string{defaultNs}, false)
+	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
+}
+
+func createFailoverActionWithSkipSourceOperationsTest(t *testing.T) {
+	testrailId := 257171
+	actionType := "failover"
+	// the dummy migrationSchedule created migrates defaultNs and adminNs
+	migrationScheduleName := "test-action-automation-migration-schedule"
+	namespace := adminNs
+	cmdArgs := map[string]string{
+		"migration-reference":    migrationScheduleName,
+		"skip-source-operations": "",
+		"namespace":              namespace,
+	}
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailover, migrationScheduleName, []string{defaultNs, adminNs}, true)
+	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
+}
+
+func createDefaultFailbackActionTest(t *testing.T) {
+	testrailId := 257158
+	actionType := "failback"
+	// the dummy migrationSchedule created migrates defaultNs and adminNs
+	migrationScheduleName := "test-action-automation-migration-schedule"
+	namespace := adminNs
+	cmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"namespace":           namespace,
+	}
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailback, migrationScheduleName, []string{defaultNs, adminNs}, false)
+	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
+}
+
+func createFailbackActionWithIncludeNsTest(t *testing.T) {
+	testrailId := 257159
+	actionType := "failback"
+	// the dummy migrationSchedule created migrates defaultNs and adminNs
+	migrationScheduleName := "test-action-automation-migration-schedule"
+	namespace := adminNs
+	cmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"include-namespaces":  defaultNs,
+		"namespace":           namespace,
+	}
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailback, migrationScheduleName, []string{defaultNs}, false)
+	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
+}
+
+func createFailbackActionWithExcludeNsTest(t *testing.T) {
+	testrailId := 296304
+	actionType := "failback"
+	// the dummy migrationSchedule created migrates defaultNs and adminNs
+	migrationScheduleName := "test-action-automation-migration-schedule"
+	namespace := adminNs
+	cmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"exclude-namespaces":  adminNs,
+		"namespace":           namespace,
+	}
+	expectedAction := generateDRActionObject(storkv1.ActionTypeFailback, migrationScheduleName, []string{defaultNs}, false)
 	createDRActionTest(t, testrailId, cmdArgs, expectedAction, migrationScheduleName, asyncDR, actionType, namespace)
 }
 
@@ -100,13 +183,14 @@ func createDRAction(t *testing.T, namespace string, actionType string, migration
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
 	log.InfoD("Actual output is: %s", actualOutput)
-	expectedOutput := fmt.Sprintf("Started failover for MigrationSchedule %s/%s", namespace, migrationScheduleName)
+	expectedOutput := fmt.Sprintf("Started %s for MigrationSchedule %s/%s", actionType, namespace, migrationScheduleName)
 	// Break the actual output into lines
 	output := strings.Split(actualOutput, "\n")
 	// Check if the first line in output is as expected
 	Dash.VerifyFatal(t, output[0], expectedOutput, "Action creation failed")
 	// Extract the get status command from the output
-	getStatusCommand := strings.TrimSpace(strings.TrimPrefix(output[1], "To check failover status use the command : `"))
+	prefix := fmt.Sprintf("To check %s status use the command : `", actionType)
+	getStatusCommand := strings.TrimSpace(strings.TrimPrefix(output[1], prefix))
 	getStatusCommand = strings.TrimSuffix(getStatusCommand, "`")
 	getStatusCmdArgs := strings.Split(getStatusCommand, " ")
 	// Extract the action Name from the command args
@@ -156,7 +240,9 @@ func ValidateAction(t *testing.T, expectedAction *storkv1.Action, actionName str
 	Dash.VerifyFatal(t, actualAction.Spec.ActionType, expectedAction.Spec.ActionType, "Action ActionType")
 	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, expectedAction.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, "Action FailoverParameter FailoverNamespaces")
 	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, expectedAction.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "Action FailoverParameter MigrationScheduleReference")
-	Dash.VerifyFatal(t, *actualAction.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, *expectedAction.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, "Action FailoverParameter SkipSourceOperations")
+	if expectedAction.Spec.ActionType == storkv1.ActionTypeFailover {
+		Dash.VerifyFatal(t, *actualAction.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, *expectedAction.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, "Action FailoverParameter SkipSourceOperations")
+	}
 	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, expectedAction.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, "Action FailbackParameter FailbackNamespaces")
 	Dash.VerifyFatal(t, actualAction.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, expectedAction.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, "Action FailbackParameter MigrationScheduleReference")
 	return nil
@@ -201,4 +287,26 @@ func getDestinationKubeConfigFile() (string, error) {
 	// dump to remoteFilePath
 	err = os.WriteFile(destKubeconfigPath, []byte(config), 0644)
 	return destKubeconfigPath, err
+}
+
+func generateDRActionObject(actionType storkv1.ActionType, migrationScheduleName string, namespaces []string, skipSourceOperations bool) *storkv1.Action {
+	action := storkv1.Action{
+		Spec: storkv1.ActionSpec{
+			ActionParameter: storkv1.ActionParameter{},
+			ActionType:      actionType,
+		},
+	}
+	if actionType == storkv1.ActionTypeFailback {
+		action.Spec.ActionParameter.FailbackParameter = storkv1.FailbackParameter{
+			FailbackNamespaces:         namespaces,
+			MigrationScheduleReference: migrationScheduleName,
+		}
+	} else if actionType == storkv1.ActionTypeFailover {
+		action.Spec.ActionParameter.FailoverParameter = storkv1.FailoverParameter{
+			FailoverNamespaces:         namespaces,
+			MigrationScheduleReference: migrationScheduleName,
+			SkipSourceOperations:       &skipSourceOperations,
+		}
+	}
+	return &action
 }
