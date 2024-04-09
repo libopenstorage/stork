@@ -1528,27 +1528,29 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			// Reference: https://docs.portworx.com/portworx-enterprise/concepts/io-profiles
 			if requestedSpec.IoProfile != vol.DerivedIoProfile {
 				switch requestedSpec.IoProfile {
-				case api.IoProfile_IO_PROFILE_AUTO:
-					// The profile auto-selects "db_remote" for volumes with a replication factor is
-					// greater than or equal to 2, and "none" otherwise, based on configuration details.
+				// The "db" and "sequential" IO profiles are deprecated in newer versions of
+				// Portworx, with legacy volumes labeled as such now internally treated as "auto"
+				// profile volumes.
+				case api.IoProfile_IO_PROFILE_AUTO, api.IoProfile_IO_PROFILE_DB, api.IoProfile_IO_PROFILE_SEQUENTIAL:
+					// The "auto" IO profile selects "db_remote" for volumes with a replication factor
+					// of 2 or greater, and selects "none" otherwise.
 					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
 						log.Infof("requested Spec: %+v", requestedSpec)
 						log.Infof("actual Spec: %+v", vol)
 						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 					}
 				case api.IoProfile_IO_PROFILE_AUTO_JOURNAL:
-					// The auto_journal IO profile adjusts a volume to use "journal" or "none"
-					// settings based on analyzing 24-second write pattern intervals to optimize
-					// performance.
+					// The "auto_journal" IO profile dynamically switches between "none" and "journal" based on
+					// 24-second analyses of write patterns, optimizing application performance accordingly.
 					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
 						log.Infof("requested Spec: %+v", requestedSpec)
 						log.Infof("actual Spec: %+v", vol)
 						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 					}
 				case api.IoProfile_IO_PROFILE_DB_REMOTE:
-					// The write-back flush coalescing algorithm consolidates syncs within 100ms into
-					// a single operation, necessitating at least two replications (HA factor) for
-					// reliability.
+					// The "db_remote" IO profile utilizes a write-back flush coalescing algorithm
+					// that consolidates syncs within 100ms into a single operation, necessitating at
+					// least two replications (HA factor) for reliability.
 					if vol.Spec.HaLevel >= 2 {
 						log.Infof("requested Spec: %+v", requestedSpec)
 						log.Infof("actual Spec: %+v", vol)
