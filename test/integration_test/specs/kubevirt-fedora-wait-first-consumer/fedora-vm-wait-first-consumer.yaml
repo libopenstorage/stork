@@ -62,6 +62,8 @@ spec:
   dataVolumeTemplates:
   - metadata:
       name: fedora-datavolume-wffc
+      annotations:
+        cdi.kubevirt.io/storage.usePopulator: "false"
     spec:
       source:
         pvc:

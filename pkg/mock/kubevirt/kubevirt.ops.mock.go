@@ -198,6 +198,20 @@ func (mr *MockOpsMockRecorder) GetVirtualMachineInstance(arg0, arg1, arg2 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVirtualMachineInstance", reflect.TypeOf((*MockOps)(nil).GetVirtualMachineInstance), arg0, arg1, arg2)
 }
 
+// IsKubevirtCRDInstalled mocks base method.
+func (m *MockOps) IsKubevirtCRDInstalled() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsKubevirtCRDInstalled")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IsKubevirtCRDInstalled indicates an expected call of IsKubevirtCRDInstalled.
+func (mr *MockOpsMockRecorder) IsKubevirtCRDInstalled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsKubevirtCRDInstalled", reflect.TypeOf((*MockOps)(nil).IsKubevirtCRDInstalled))
+}
+
 // IsVirtualMachineRunning mocks base method.
 func (m *MockOps) IsVirtualMachineRunning(arg0 *v10.VirtualMachine) bool {
 	m.ctrl.T.Helper()

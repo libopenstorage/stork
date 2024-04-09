@@ -216,7 +216,9 @@ func (c *Client) getPodsUsingPVWithListOptions(pvName string, opts metav1.ListOp
 	}
 
 	if pv.Status.Phase == corev1.VolumeBound {
-		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+		// In some k8s installations, we have seen that the Kind is not populated in the claim ref object. This
+		// should be ok since the kind is implicit for "ClaimRef".
+		if pv.Spec.ClaimRef != nil && (pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" || pv.Spec.ClaimRef.Kind == "") {
 			return c.getPodsUsingPVCWithListOptions(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, opts)
 		}
 	} // else the volume is not bound so cannot rely on stale claim ref objects
