@@ -27,8 +27,8 @@ var templatePVCSpecs = map[string]string{
 const (
 	importerPodPrefix            = "importer"
 	importerPodStartTimeout      = 2 * time.Minute
-	importerPodCompletionTimeout = 20 * time.Minute
-	importerPodRetryInterval     = 10 * time.Second
+	importerPodCompletionTimeout = 60 * time.Minute
+	importerPodRetryInterval     = 30 * time.Second
 
 	kubevirtTemplates                     = "kubevirt-templates"
 	kubevirtDatadiskTemplates             = "kubevirt-datadisk-templates"
