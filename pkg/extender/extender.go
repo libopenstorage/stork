@@ -3,6 +3,7 @@ package extender
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -93,6 +94,14 @@ type Extender struct {
 	server   *http.Server
 	lock     sync.Mutex
 	started  bool
+}
+
+type ErrWaitForPVCBound struct {
+	Message string
+}
+
+func (e *ErrWaitForPVCBound) Error() string {
+	return e.Message
 }
 
 // Start Starts the extender
@@ -592,6 +601,17 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		isVirtLauncherPod = true
 		err := e.processVirtLauncherPodPrioritizeRequest(encoder, args)
 		if err != nil {
+			var errWaitForPVCBound *ErrWaitForPVCBound
+			if errors.As(err, &errWaitForPVCBound) {
+				// PVC is not bound yet. This can happen in OCP 4.14+ when cloning a template PVC with WFFC.
+				// OCP starts cloning to a temp PVC in a different namespace. Our PVC will not be
+				// bound until the cloning is done and PV's claimRef is switched. Let's keep returning
+				// error until that happens. The pod will remain in the Pending state anyway even if we return
+				// success here.
+				e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, err.Error())
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			// Let the default scoring logic decide the prioritize score
 			storklog.PodLog(pod).Errorf("Failed to process special prioritization for virt launcher pod; will prioritize normally: %v", err)
 		} else {
@@ -850,16 +870,6 @@ func (e *Extender) getVMIInfo(refPod *v1.Pod) (string, types.UID) {
 	return "", ""
 }
 
-// GetPVNameFromPVC returns PV name for a PVC
-func (e *Extender) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
-	if err != nil || pvc == nil {
-		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", namespace, pvcName, err)
-	}
-
-	return pvc.Spec.VolumeName, err
-}
-
 func (e *Extender) updateForAntiHyperconvergence(
 	args schedulerapi.ExtenderArgs,
 	driverVolumes []*volume.Info,
@@ -1007,15 +1017,21 @@ func (e *Extender) processVirtLauncherPodPrioritizeRequest(
 	}
 	storklog.PodLog(pod).Debugf("VMI is using PVC %v", vmi.RootDiskPVC)
 
-	pvName, err := e.GetPVNameFromPVC(vmi.RootDiskPVC, pod.Namespace)
-	if err != nil {
-		return fmt.Errorf("unable to inspect PVC %v: %w", vmi.RootDiskPVC, err)
+	pvc, err := core.Instance().GetPersistentVolumeClaim(vmi.RootDiskPVC, pod.Namespace)
+	if err != nil || pvc == nil {
+		return fmt.Errorf("unable to inspect PVC %s/%s: %w", pod.Namespace, vmi.RootDiskPVC, err)
 	}
-	storklog.PodLog(pod).Debugf("PV for scoring %v", pvName)
+	if pvc.Status.Phase != v1.ClaimBound {
+		return &ErrWaitForPVCBound{
+			Message: fmt.Sprintf("Waiting for PVC %s/%s to be bound; cloning in progress?",
+				pod.Namespace, vmi.RootDiskPVC),
+		}
+	}
+	storklog.PodLog(pod).Debugf("PV for scoring %v", pvc.Spec.VolumeName)
 
-	volInfo, err := e.Driver.InspectVolume(pvName)
+	volInfo, err := e.Driver.InspectVolume(pvc.Spec.VolumeName)
 	if err != nil {
-		return fmt.Errorf("unable to inspect PV %v: %w", pvName, err)
+		return fmt.Errorf("unable to inspect PV %v: %w", pvc.Spec.VolumeName, err)
 	}
 
 	e.updateVirtLauncherPodPrioritizeScores(encoder,

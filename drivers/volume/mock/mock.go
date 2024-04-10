@@ -144,6 +144,7 @@ func (m *Driver) NewPVC(volumeName, namespace string) *v1.PersistentVolumeClaim 
 	pvc.Spec.VolumeName = volumeName
 	storageClassName := m.GetStorageClassName()
 	pvc.Spec.StorageClassName = &storageClassName
+	pvc.Status.Phase = v1.ClaimBound
 	m.pvcs[volumeName] = pvc
 	return pvc
 }
