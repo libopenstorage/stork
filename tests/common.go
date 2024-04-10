@@ -11340,3 +11340,15 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 	}
 	return nil
 }
+
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
