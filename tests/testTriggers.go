@@ -614,6 +614,12 @@ const (
 
 	//VolumeDriverDownVCluster creates and runs fio on vcluster and volume driver down
 	VolumeDriverDownVCluster = "VolumeDriverDownVCluster"
+
+	// SetDiscardMounts Sets and resets discard cluster wide options on the cluster
+	SetDiscardMounts = "SetDiscardMounts"
+
+	// ResetDiscardMounts Sets and resets discard cluster wide options on the cluster
+	ResetDiscardMounts = "ResetDiscardMounts"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -10505,6 +10511,100 @@ func TriggerVolumeDriverDownVCluster(contexts *[]*scheduler.Context, recordChan 
 		})
 	})
 
+}
+
+func TriggerSetDiscardMounts(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetDiscardMounts)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetDiscardMounts,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "setting and unsetting discard mount options on regular intervals "
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Starting test case here !!")
+
+		for _, appNode := range node.GetStorageNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Setting discard-mount-option on the node
+			err = SetUnSetDiscardMountRTOptions(&appNode, false)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Verify if the cluster options set for run time parameters
+			optionsMap := []string{"NodeRuntimeOptions"}
+			cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
+			if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:1") {
+				UpdateOutcome(event, err)
+				continue
+			}
+		}
+	})
+}
+
+func TriggerResetDiscardMounts(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ResetDiscardMounts)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ResetDiscardMounts,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "setting and unsetting discard mount options on regular intervals "
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Starting test case here !!")
+
+		for _, appNode := range node.GetStorageNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Setting discard-mount-option on the node
+			err = SetUnSetDiscardMountRTOptions(&appNode, true)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Verify if the cluster options set for run time parameters
+			optionsMap := []string{"NodeRuntimeOptions"}
+			cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
+			if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:0") {
+				UpdateOutcome(event, err)
+				continue
+			}
+		}
+	})
 }
 
 // CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster

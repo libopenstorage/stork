@@ -11350,5 +11350,46 @@ func ValidatePXStatus() error {
 	}
 
 	return nil
+}
 
+// GetNodeFromIPAddress returns node details from the provided IP Address
+func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
+	for _, eachNode := range node.GetNodes() {
+		log.Infof(fmt.Sprintf("Comparing [%v] with [%v]", eachNode.GetMgmtIp(), ipaddress))
+		if eachNode.GetMgmtIp() == ipaddress {
+			log.Infof("Matched IP Address [%v]", eachNode.MgmtIp)
+			return &eachNode, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
+}
+
+// IsVolumeTypePureBlock Returns true if the volume type if pureBlock
+func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error) {
+	vols, err := Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for vol, params := range vols {
+		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
+		if vol == volName && params["backend"] == k8s.PureBlock {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetUnSetDiscardMountRTOptions Set discard mount run time options on the Node
+func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
+	rtOptions := 1
+	if !unset {
+		rtOptions = 0
+	}
+	optionsMap := make(map[string]string)
+	optionsMap["discard_mount_force"] = fmt.Sprintf("%v", rtOptions)
+	err := Inst().V.SetClusterRunTimeOpts(*n, optionsMap)
+	if err != nil {
+		return err
+	}
+	return nil
 }

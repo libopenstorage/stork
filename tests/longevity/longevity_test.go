@@ -103,6 +103,8 @@ var _ = Describe("{Longevity}", func() {
 		CreateAndRunFioOnVcluster:         TriggerCreateAndRunFioOnVcluster,
 		CreateAndRunMultipleFioOnVcluster: TriggerCreateAndRunMultipleFioOnVcluster,
 		VolumeDriverDownVCluster:          TriggerVolumeDriverDownVCluster,
+		SetDiscardMounts:                  TriggerSetDiscardMounts,
+		ResetDiscardMounts:                TriggerResetDiscardMounts,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){

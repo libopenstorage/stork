@@ -591,6 +591,8 @@ func populateIntervals() {
 	triggerInterval[CreateAndRunFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[CreateAndRunMultipleFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
+	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
+	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1426,6 +1428,28 @@ func populateIntervals() {
 	triggerInterval[VolumeDriverDownVCluster][2] = 24 * baseInterval
 	triggerInterval[VolumeDriverDownVCluster][1] = 27 * baseInterval
 
+	triggerInterval[SetDiscardMounts][10] = 1 * baseInterval
+	triggerInterval[SetDiscardMounts][9] = 3 * baseInterval
+	triggerInterval[SetDiscardMounts][8] = 6 * baseInterval
+	triggerInterval[SetDiscardMounts][7] = 9 * baseInterval
+	triggerInterval[SetDiscardMounts][6] = 12 * baseInterval
+	triggerInterval[SetDiscardMounts][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[SetDiscardMounts][4] = 18 * baseInterval
+	triggerInterval[SetDiscardMounts][3] = 21 * baseInterval
+	triggerInterval[SetDiscardMounts][2] = 24 * baseInterval
+	triggerInterval[SetDiscardMounts][1] = 27 * baseInterval
+
+	triggerInterval[ResetDiscardMounts][10] = 1 * baseInterval
+	triggerInterval[ResetDiscardMounts][9] = 3 * baseInterval
+	triggerInterval[ResetDiscardMounts][8] = 6 * baseInterval
+	triggerInterval[ResetDiscardMounts][7] = 9 * baseInterval
+	triggerInterval[ResetDiscardMounts][6] = 12 * baseInterval
+	triggerInterval[ResetDiscardMounts][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ResetDiscardMounts][4] = 18 * baseInterval
+	triggerInterval[ResetDiscardMounts][3] = 21 * baseInterval
+	triggerInterval[ResetDiscardMounts][2] = 24 * baseInterval
+	triggerInterval[ResetDiscardMounts][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1640,6 +1664,8 @@ func populateIntervals() {
 	triggerInterval[StorageFullPoolExpansion][0] = 0
 	triggerInterval[HAIncreaseWithPVCResize][0] = 0
 	triggerInterval[ReallocateSharedMount][0] = 0
+	triggerInterval[SetDiscardMounts][0] = 0
+	triggerInterval[ResetDiscardMounts][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
