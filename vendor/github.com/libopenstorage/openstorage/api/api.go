@@ -66,7 +66,7 @@ const (
 	SpecExportOptionsEmpty          = "empty_export_options"
 	SpecMountOptions                = "mount_options"
 	// spec key cannot change due to parity with existing PSO storageclasses
-	SpecFaCreateOptions      = "createoptions"
+	SpecFsFormatOptions      = "createoptions"
 	SpecCSIMountOptions      = "csi_mount_options"
 	SpecSharedv4MountOptions = "sharedv4_mount_options"
 	SpecProxyProtocolS3      = "s3"
@@ -284,6 +284,8 @@ type Node struct {
 	SchedulerTopology *SchedulerTopology
 	// Flag indicating whether the node is a quorum member or not
 	NonQuorumMember bool
+	// DomainID is the ID of the cluster domain to which this node belongs to.
+	DomainID string
 }
 
 // FluentDConfig describes ip and port of a fluentdhost.
@@ -1034,6 +1036,7 @@ func (s *Node) ToStorageNode() *StorageNode {
 		SecurityStatus:    s.SecurityStatus,
 		SchedulerTopology: s.SchedulerTopology,
 		NonQuorumMember:   s.NonQuorumMember,
+		ClusterDomain:     s.DomainID,
 	}
 
 	node.Disks = make(map[string]*StorageResource)
@@ -1321,6 +1324,12 @@ func (v *VolumeSpec) IsPureVolume() bool {
 func (v *VolumeSpec) IsPureBlockVolume() bool {
 	return v.GetProxySpec() != nil && v.GetProxySpec().IsPureBlockBackend()
 }
+
+// IsNFSProxyVolume returns true if this is a nfs reflection volume
+func (v *VolumeSpec) IsNFSProxyVolume() bool {
+	return v.GetProxySpec() != nil && v.GetProxySpec().NfsSpec != nil
+}
+
 // GetCloneCreatorOwnership returns the appropriate ownership for the
 // new snapshot and if an update is required
 func (v *VolumeSpec) GetCloneCreatorOwnership(ctx context.Context) (*Ownership, bool) {

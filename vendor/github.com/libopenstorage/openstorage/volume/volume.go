@@ -3,7 +3,6 @@ package volume
 import (
 	"context"
 	"errors"
-
 	"github.com/libopenstorage/openstorage/api"
 )
 
@@ -119,7 +118,7 @@ type IODriver interface {
 type SnapshotDriver interface {
 	// Snapshot create volume snapshot.
 	// Errors ErrEnoEnt may be returned
-	Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error)
+	Snapshot(ctx context.Context, volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error)
 	// Restore restores volume to specified snapshot.
 	Restore(volumeID string, snapshotID string) error
 	// SnapshotGroup takes a snapshot of a group of volumes that can be specified with either of the following
@@ -136,7 +135,7 @@ type StatsDriver interface {
 	// cumulative stats are /proc/diskstats style stats.
 	// nonCumulative stats are stats for specific duration.
 	// Errors ErrEnoEnt may be returned
-	Stats(volumeID string, cumulative bool) (*api.Stats, error)
+	Stats(ctx context.Context, volumeID string, cumulative bool) (*api.Stats, error)
 	// UsedSize returns currently used volume size.
 	// Errors ErrEnoEnt may be returned.
 	UsedSize(volumeID string) (uint64, error)
@@ -147,7 +146,7 @@ type StatsDriver interface {
 	CapacityUsage(ID string) (*api.CapacityUsageResponse, error)
 	// VolumeUsageByNode returns capacity usage of all volumes and snaps for a
 	// given node
-	VolumeUsageByNode(nodeID string) (*api.VolumeUsageByNode, error)
+	VolumeUsageByNode(ctx context.Context, nodeID string) (*api.VolumeUsageByNode, error)
 	// RelaxedReclaimPurge triggers the purge of RelaxedReclaim queue for a
 	// given node
 	RelaxedReclaimPurge(nodeID string) (*api.RelaxedReclaimPurge, error)
@@ -250,6 +249,12 @@ type FilesystemCheckDriver interface {
 	// FilesystemCheckStop stops the filesystem check background operation on
 	// the filesystem of a specified volume, if any.
 	FilesystemCheckStop(request *api.SdkFilesystemCheckStopRequest) (*api.SdkFilesystemCheckStopResponse, error)
+	// FilesystemCheckListSnapshots lists snapshots created by fsck for a specified volume
+	FilesystemCheckListSnapshots(request *api.SdkFilesystemCheckListSnapshotsRequest) (*api.SdkFilesystemCheckListSnapshotsResponse, error)
+	// FilesystemCheckDeleteSnapshots deletes snapshots created by fsck for a specified volume
+	FilesystemCheckDeleteSnapshots(request *api.SdkFilesystemCheckDeleteSnapshotsRequest) (*api.SdkFilesystemCheckDeleteSnapshotsResponse, error)
+	// FilesystemCheckListVolumes lists volumes that require fsck check/fixes
+	FilesystemCheckListVolumes(request *api.SdkFilesystemCheckListVolumesRequest) (*api.SdkFilesystemCheckListVolumesResponse, error)
 }
 
 // ProtoDriver must be implemented by all volume drivers.  It specifies the
@@ -263,6 +268,7 @@ type ProtoDriver interface {
 	CloudMigrateDriver
 	FilesystemTrimDriver
 	FilesystemCheckDriver
+	VerifyChecksumDriver
 	// Name returns the name of the driver.
 	Name() string
 	// Type of this driver
@@ -285,7 +291,7 @@ type ProtoDriver interface {
 	Unmount(ctx context.Context, volumeID string, mountPath string, options map[string]string) error
 	// Update not all fields of the spec are supported, ErrNotSupported will be thrown for unsupported
 	// updates.
-	Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error
+	Set(ctx context.Context, volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error
 	// Status returns a set of key-value pairs which give low
 	// level diagnostic status about this driver.
 	Status() [][2]string
@@ -301,7 +307,7 @@ type ProtoDriver interface {
 type Enumerator interface {
 	// Inspect specified volumes.
 	// Returns slice of volumes that were found.
-	Inspect(volumeIDs []string) ([]*api.Volume, error)
+	Inspect(ctx context.Context, volumeIDs []string) ([]*api.Volume, error)
 	// Enumerate volumes that map to the volumeLocator. Locator fields may be regexp.
 	// If locator fields are left blank, this will return all volumes.
 	Enumerate(locator *api.VolumeLocator, labels map[string]string) ([]*api.Volume, error)
@@ -374,6 +380,17 @@ type VolumeDriverRegistry interface {
 
 	// Removes driver from registry. Does nothing if driver name does not exist.
 	Remove(name string)
+}
+
+// VerifyChecksumDriver interface exposes APIs to manage checksum validation
+// on a volume
+type VerifyChecksumDriver interface {
+	// VerifyChecksumStart starts a checksum validation on a specified volume
+	VerifyChecksumStart(request *api.SdkVerifyChecksumStartRequest) (*api.SdkVerifyChecksumStartResponse, error)
+	// VerifyChecksumStatus returns the status of checksum validation task
+	VerifyChecksumStatus(request *api.SdkVerifyChecksumStatusRequest) (*api.SdkVerifyChecksumStatusResponse, error)
+	// VerifyChecksumStop stops the checksum validation task
+	VerifyChecksumStop(request *api.SdkVerifyChecksumStopRequest) (*api.SdkVerifyChecksumStopResponse, error)
 }
 
 // NewVolumeDriverRegistry constructs a new VolumeDriverRegistry.

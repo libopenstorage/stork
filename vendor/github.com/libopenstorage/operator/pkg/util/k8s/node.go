@@ -8,7 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	cluster_v1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
+	cluster_v1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
@@ -23,7 +23,7 @@ file contains node level k8s utility functions
 // NodeInfo contains information of a k8s node, consumed by controllers
 type NodeInfo struct {
 	NodeName             string
-	LastPodCreationTime  time.Time
+	LastPodSeenTime      time.Time
 	CordonedRestartDelay time.Duration
 }
 
@@ -32,7 +32,7 @@ type NodeInfo struct {
 func IsNodeBeingDeleted(node *v1.Node, cl client.Client) (bool, error) {
 	// check if node is managed by a cluster API machine and if the machine is marked for deletion
 	if machineName, present := node.Annotations[constants.AnnotationClusterAPIMachine]; present && len(machineName) > 0 {
-		machine := &cluster_v1alpha1.Machine{}
+		machine := &cluster_v1beta1.Machine{}
 		err := cl.Get(context.TODO(), client.ObjectKey{Name: machineName, Namespace: "default"}, machine)
 		if err != nil {
 			return false, fmt.Errorf("failed to get machine: default/%s due to: %v", machineName, err)
@@ -55,16 +55,29 @@ func IsPodRecentlyCreatedAfterNodeCordoned(
 	cluster *corev1.StorageCluster,
 ) bool {
 	nodeInfo, ok := nodeInfoMap.Load(node.Name)
-	// The pod has never been created
+	// The pod is not present in the cluster
 	if !ok || nodeInfo == nil {
-		return false
+		// We don't set the last seen time here, as it will get updated in their respective
+		// reconcile loops, if the pod is present or when it is created.
+		nodeInfo = &NodeInfo{
+			NodeName:             node.Name,
+			CordonedRestartDelay: constants.DefaultCordonedRestartDelay,
+		}
+		nodeInfoMap.Store(node.Name, nodeInfo)
 	}
 
-	cordoned, startTime := IsNodeCordoned(node)
-	if !cordoned || startTime.IsZero() {
+	cordoned, cordonTime := IsNodeCordoned(node)
+	if !cordoned || cordonTime.IsZero() {
 		// Pod created but node not cordoned, reset the delay time
 		nodeInfo.CordonedRestartDelay = constants.DefaultCordonedRestartDelay
 		return false
+	}
+
+	// When the node is cordoned and the pod's last seen time is empty, it could either mean that the pod
+	// was never present or it got deleted when the operator was down. As the operator has no knowledge,
+	// we assume that the pod was deleted during a cordon+drain and set the last seen time to the cordon time.
+	if nodeInfo.LastPodSeenTime.IsZero() {
+		nodeInfo.LastPodSeenTime = cordonTime
 	}
 
 	var waitDuration time.Duration
@@ -79,13 +92,13 @@ func IsPodRecentlyCreatedAfterNodeCordoned(
 	cutOffTime := time.Now().Add(-waitDuration)
 
 	// If node recently cordoned, return true.
-	if cutOffTime.Before(startTime) {
+	if cutOffTime.Before(cordonTime) {
 		return true
 	}
 
 	// The pod won't get deleted if recently created, keep the restart delay unchanged.
 	// Otherwise the pod will get deleted, increase the restart delay for the next pod creation.
-	recentlyCreated := cutOffTime.Before(nodeInfo.LastPodCreationTime)
+	recentlyCreated := cutOffTime.Before(nodeInfo.LastPodSeenTime)
 	if !recentlyCreated && !overwriteRestartDelay {
 		nodeInfo.CordonedRestartDelay = waitDuration * 2
 		if nodeInfo.CordonedRestartDelay > constants.MaxCordonedRestartDelay {

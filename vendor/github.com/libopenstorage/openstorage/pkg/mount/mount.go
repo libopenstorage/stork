@@ -4,12 +4,14 @@
 package mount
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -18,12 +20,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/moby/sys/mountinfo"
 	"github.com/libopenstorage/openstorage/pkg/chattr"
 	"github.com/libopenstorage/openstorage/pkg/keylock"
 	"github.com/libopenstorage/openstorage/pkg/options"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/moby/sys/mountinfo"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -102,6 +104,7 @@ const (
 	mountPathRemoveDelay = 30 * time.Second
 	testDeviceEnv        = "Test_Device_Mounter"
 	bindMountPrefix      = "readonly"
+	statTimeout          = 30 * time.Second
 )
 
 var (
@@ -134,10 +137,13 @@ type PathInfo struct {
 // Info per device
 type Info struct {
 	sync.Mutex
-	Device     string
-	Minor      int
+	Device string
+	Minor  int
+	// Guarded using the above lock.
 	Mountpoint []*PathInfo
 	Fs         string
+	// Guarded using Mounter.Lock()
+	MountsInProgress int
 }
 
 // Mounter implements Ops and keeps track of active mounts for volume drivers.
@@ -323,8 +329,8 @@ func (m *Mounter) maybeRemoveDevice(device string) {
 	m.Lock()
 	defer m.Unlock()
 	if info, ok := m.mounts[device]; ok {
-		// If the device has no more mountpoints, remove it from the map
-		if len(info.Mountpoint) == 0 {
+		// If the device has no more mountpoints and no mounts in progress, remove it from the map
+		if len(info.Mountpoint) == 0 && info.MountsInProgress == 0 {
 			delete(m.mounts, device)
 		}
 	}
@@ -478,10 +484,18 @@ func (m *Mounter) Mount(
 			Fs:         fs,
 		}
 	}
+	// This variable in Info Structure is guarded using m.Lock()
+	info.MountsInProgress++
 	m.mounts[device] = info
 	m.Unlock()
 	info.Lock()
-	defer info.Unlock()
+	defer func() {
+		info.Unlock()
+		m.Lock()
+		// Info is not destroyed, even when we don't hold the lock.
+		info.MountsInProgress--
+		m.Unlock()
+	}()
 
 	// Validate input params
 	// FS check is not needed if it is a bind mount
@@ -697,7 +711,11 @@ func (m *Mounter) removeMountPath(path string) error {
 
 // RemoveMountPath makes the path writeable and removes it after a fixed delay
 func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) error {
-	if _, err := os.Stat(mountPath); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), statTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "stat", mountPath)
+	_, err := cmd.CombinedOutput()
+	if err == nil {
 		if options.IsBoolOptionSet(opts, options.OptionsWaitBeforeDelete) {
 			hasher := md5.New()
 			hasher.Write([]byte(mountPath))
