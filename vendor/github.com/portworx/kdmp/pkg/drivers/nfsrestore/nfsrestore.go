@@ -191,6 +191,8 @@ func jobForRestoreResource(
 	}
 	var opType string
 	switch restoreCR.Status.Stage {
+	case storkapi.ApplicationRestoreStageIncludeResources:
+		opType = "process-vm-resource"
 	case storkapi.ApplicationRestoreStageVolumes:
 		opType = "restore-vol"
 	case storkapi.ApplicationRestoreStageApplications:
