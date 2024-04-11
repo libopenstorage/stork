@@ -975,7 +975,7 @@ func validateMigration(t *testing.T, name, namespace string) {
 	migrationsMap, err := storkops.Instance().ValidateMigrationSchedule(
 		name, namespace, defaultWaitTimeout, defaultWaitInterval)
 	log.FailOnError(t, err, "error getting migration schedule")
-	Dash.VerifyFatal(t, migrationsMap, 1, "expected only one schedule type in migration map")
+	Dash.VerifyFatal(t, len(migrationsMap), 1, "expected only one schedule type in migration map")
 
 	migrationStatus := migrationsMap[v1alpha1.SchedulePolicyTypeInterval][0]
 	// Independently validate the migration
