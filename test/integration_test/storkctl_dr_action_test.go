@@ -25,10 +25,11 @@ const (
 
 var kubeConfigPath string
 
-func TestStorkCtlActions(t *testing.T) {
-	// running the actions in source cluster since we only need to create the action resource not execute it
+func TestStorkCtlAction(t *testing.T) {
 	err := setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
+	// since both the dr cli commands run in destination cluster
 	kubeConfigPath, err = getDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 	err = setDestinationKubeConfig()
@@ -47,7 +48,7 @@ func TestStorkCtlActions(t *testing.T) {
 
 func createDefaultFailoverActionTest(t *testing.T) {
 	testrailId := 257169
-	actionType := "failover"
+	actionType := storkv1.ActionTypeFailover
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -61,7 +62,7 @@ func createDefaultFailoverActionTest(t *testing.T) {
 
 func createFailoverActionWithIncludeNsTest(t *testing.T) {
 	testrailId := 257170
-	actionType := "failover"
+	actionType := storkv1.ActionTypeFailover
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -76,7 +77,7 @@ func createFailoverActionWithIncludeNsTest(t *testing.T) {
 
 func createFailoverActionWithExcludeNsTest(t *testing.T) {
 	testrailId := 296305
-	actionType := "failover"
+	actionType := storkv1.ActionTypeFailover
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -91,7 +92,7 @@ func createFailoverActionWithExcludeNsTest(t *testing.T) {
 
 func createFailoverActionWithSkipSourceOperationsTest(t *testing.T) {
 	testrailId := 257171
-	actionType := "failover"
+	actionType := storkv1.ActionTypeFailover
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -106,7 +107,7 @@ func createFailoverActionWithSkipSourceOperationsTest(t *testing.T) {
 
 func createDefaultFailbackActionTest(t *testing.T) {
 	testrailId := 257158
-	actionType := "failback"
+	actionType := storkv1.ActionTypeFailback
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -120,7 +121,7 @@ func createDefaultFailbackActionTest(t *testing.T) {
 
 func createFailbackActionWithIncludeNsTest(t *testing.T) {
 	testrailId := 257159
-	actionType := "failback"
+	actionType := storkv1.ActionTypeFailback
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -135,7 +136,7 @@ func createFailbackActionWithIncludeNsTest(t *testing.T) {
 
 func createFailbackActionWithExcludeNsTest(t *testing.T) {
 	testrailId := 296304
-	actionType := "failback"
+	actionType := storkv1.ActionTypeFailback
 	// the dummy migrationSchedule created migrates defaultNs and adminNs
 	migrationScheduleName := "test-action-automation-migration-schedule"
 	namespace := adminNs
@@ -149,7 +150,7 @@ func createFailbackActionWithExcludeNsTest(t *testing.T) {
 }
 
 func createDRActionTest(t *testing.T, testrailID int, args map[string]string, expectedAction *storkv1.Action, migrationScheduleName string,
-	clusterPairMode string, actionType string, namespace string) {
+	clusterPairMode string, actionType storkv1.ActionType, namespace string) {
 	var testResult = testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
@@ -174,11 +175,11 @@ func createDRActionTest(t *testing.T, testrailID int, args map[string]string, ex
 	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
-func createDRAction(t *testing.T, namespace string, actionType string, migrationScheduleName string, customArgs map[string]string) (string, []string) {
+func createDRAction(t *testing.T, namespace string, actionType storkv1.ActionType, migrationScheduleName string, customArgs map[string]string) (string, []string) {
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	cmdArgs := []string{"perform", actionType, "--kubeconfig", kubeConfigPath}
+	cmdArgs := []string{"perform", string(actionType), "--kubeconfig", kubeConfigPath}
 	executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
@@ -199,11 +200,11 @@ func createDRAction(t *testing.T, namespace string, actionType string, migration
 	return actionName, getStatusCmdArgs[1:]
 }
 
-func getDRActionStatus(t *testing.T, actionType string, actionName string, actionNamespace string) (string, string, string) {
+func getDRActionStatus(t *testing.T, actionType storkv1.ActionType, actionName string, actionNamespace string) (string, string, string) {
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	cmdArgs := []string{"get", actionType, actionName, "-n", actionNamespace, "--kubeconfig", kubeConfigPath}
+	cmdArgs := []string{"get", string(actionType), actionName, "-n", actionNamespace, "--kubeconfig", kubeConfigPath}
 	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
