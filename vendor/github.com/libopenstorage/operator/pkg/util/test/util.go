@@ -4670,7 +4670,7 @@ func validateTelemetryLogUploaderPortOnPxNodes(cluster *corev1.StorageCluster, e
 			if err != nil {
 				return nil, true, err
 			}
-			cmd = fmt.Sprintf("PXCTL_AUTH_TOKEN=%s; %s", token, cmd)
+			cmd = fmt.Sprintf("PXCTL_AUTH_TOKEN=%s %s", token, cmd)
 		}
 
 		// Get Portworx pods
@@ -4733,7 +4733,7 @@ func validateTelemetryStatusInPxctl(telemetryShouldBeEnabled bool, cluster *core
 			if err != nil {
 				return nil, true, err
 			}
-			cmd = fmt.Sprintf("PXCTL_AUTH_TOKEN=%s; %s", token, cmd)
+			cmd = fmt.Sprintf("PXCTL_AUTH_TOKEN=%s %s", token, cmd)
 		}
 
 		// Get Portworx pods
