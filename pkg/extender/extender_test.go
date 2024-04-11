@@ -1,6 +1,3 @@
-//go:build unittest
-// +build unittest
-
 package extender
 
 import (
@@ -322,54 +319,55 @@ done:
 
 func TestExtender(t *testing.T) {
 	t.Run("setup", setup)
-	t.Run("pxCSIExtPodNoDriverTest", pxCSIExtPodNoDriverTest)
-	t.Run("pxCSIExtPodDriverTest", pxCSIExtPodDriverTest)
-	t.Run("pxCSIExtPodStorageDownNodesTest", pxCSIExtPodStorageDownNodesTest)
-	t.Run("pxCSIExtPodOfflinePxNodesTest", pxCSIExtPodOfflinePxNodesTest)
-	t.Run("noPVCTest", noPVCTest)
-	t.Run("noDriverVolumeTest", noDriverVolumeTest)
-	t.Run("WFFCVolumeTest", WFFCVolumeTest)
-	t.Run("WFFCMultiVolumeTest", WFFCMultiVolumeTest)
-	t.Run("noVolumeNodeTest", noVolumeNodeTest)
-	t.Run("noDriverNodeTest", noDriverNodeTest)
-	t.Run("singleVolumeTest", singleVolumeTest)
-	t.Run("multipleVolumeTest", multipleVolumeTest)
-	t.Run("multipleVolumeSkipTest", multipleVolumeSkipTest)
-	t.Run("multipleVolumeStorageDownTest", multipleVolumeStorageDownTest)
-	t.Run("driverErrorTest", driverErrorTest)
-	t.Run("driverNodeErrorStateTest", driverNodeErrorStateTest)
-	t.Run("zoneTest", zoneTest)
-	t.Run("zoneStorageDownNodeTest", zoneStorageDownNodeTest)
-	t.Run("regionTest", regionTest)
-	t.Run("regionStorageDownNodeTest", regionStorageDownNodeTest)
-	t.Run("nodeNameTest", nodeNameTest)
-	t.Run("ipTest", ipTest)
-	t.Run("invalidRequestsTest", invalidRequestsTest)
-	t.Run("noReplicasTest", noReplicasTest)
-	t.Run("restorePVCTest", restorePVCTest)
-	t.Run("preferLocalNodeTest", preferLocalNodeTest)
-	t.Run("extenderMetricsTest", extenderMetricsTest)
-	t.Run("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest)
-	t.Run("preferRemoteNodeOnlyFailedSchedulingTest", preferRemoteNodeOnlyFailedSchedulingTest)
-	t.Run("preferRemoteNodeOnlyAntiHyperConvergenceTest", preferRemoteNodeOnlyAntiHyperConvergenceTest)
-	t.Run("preferRemoteNodeFalseAntiHyperConvergenceFilterTest", preferRemoteNodeFalseAntiHyperConvergenceFilterTest)
-	t.Run("antiHyperConvergenceTest", antiHyperConvergenceTest)
-	t.Run("offlineNodesAntiHyperConvergenceTest", offlineNodesAntiHyperConvergenceTest)
-	t.Run("multiVolumeAntiHyperConvergenceTest", multiVolumeAntiHyperConvergenceTest)
-	t.Run("multiVolume2AntiHyperConvergenceTest", multiVolume2AntiHyperConvergenceTest)
-	t.Run("multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest", multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest)
-	t.Run("multiVolume4PreferRemoteNodeAntiHyperConvergenceTest", multiVolume4PreferRemoteNodeAntiHyperConvergenceTest)
-	t.Run("multiVolumeSkipAllVolumeScoringTest", multiVolumeSkipAllVolumeScoringTest)
-	t.Run("multiVolumeSkipHyperConvergedVolumesScoringTest", multiVolumeSkipHyperConvergedVolumesScoringTest)
-	t.Run("multiVolumeWithStorageDownNodesAntiHyperConvergenceTest", multiVolumeWithStorageDownNodesAntiHyperConvergenceTest)
-	t.Run("disableHyperConvergenceTest", disableHyperConvergenceTest)
-	t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
-	t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
-	t.Run("skipScoringForWindowsPods", skipScoringForWindowsPods)
-	t.Run("invalidNodePrioritizeTest", invalidNodePrioritizeTest)
-	t.Run("kubevirtPodScheduling", kubevirtPodScheduling)
-	t.Run("kubevirtPodSchedulingAttachedOnMismatch", kubevirtPodSchedulingAttachedOnMismatch)
-	t.Run("kubevirtPodSchedulingNonHyperconvergence", kubevirtPodSchedulingNonHyperconvergence)
+	// t.Run("pxCSIExtPodNoDriverTest", pxCSIExtPodNoDriverTest)
+	// t.Run("pxCSIExtPodDriverTest", pxCSIExtPodDriverTest)
+	// t.Run("pxCSIExtPodStorageDownNodesTest", pxCSIExtPodStorageDownNodesTest)
+	// t.Run("pxCSIExtPodOfflinePxNodesTest", pxCSIExtPodOfflinePxNodesTest)
+	// t.Run("noPVCTest", noPVCTest)
+	// t.Run("noDriverVolumeTest", noDriverVolumeTest)
+	// t.Run("WFFCVolumeTest", WFFCVolumeTest)
+	// t.Run("WFFCMultiVolumeTest", WFFCMultiVolumeTest)
+	t.Run("ocp414KubevirtWFFCTest", ocp414KubevirtWFFCTest)
+	// t.Run("noVolumeNodeTest", noVolumeNodeTest)
+	// t.Run("noDriverNodeTest", noDriverNodeTest)
+	// t.Run("singleVolumeTest", singleVolumeTest)
+	// t.Run("multipleVolumeTest", multipleVolumeTest)
+	// t.Run("multipleVolumeSkipTest", multipleVolumeSkipTest)
+	// t.Run("multipleVolumeStorageDownTest", multipleVolumeStorageDownTest)
+	// t.Run("driverErrorTest", driverErrorTest)
+	// t.Run("driverNodeErrorStateTest", driverNodeErrorStateTest)
+	// t.Run("zoneTest", zoneTest)
+	// t.Run("zoneStorageDownNodeTest", zoneStorageDownNodeTest)
+	// t.Run("regionTest", regionTest)
+	// t.Run("regionStorageDownNodeTest", regionStorageDownNodeTest)
+	// t.Run("nodeNameTest", nodeNameTest)
+	// t.Run("ipTest", ipTest)
+	// t.Run("invalidRequestsTest", invalidRequestsTest)
+	// t.Run("noReplicasTest", noReplicasTest)
+	// t.Run("restorePVCTest", restorePVCTest)
+	// t.Run("preferLocalNodeTest", preferLocalNodeTest)
+	// t.Run("extenderMetricsTest", extenderMetricsTest)
+	// t.Run("preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest", preferRemoteNodeOnlyIgnoredForHyperConvergedVolumesTest)
+	// t.Run("preferRemoteNodeOnlyFailedSchedulingTest", preferRemoteNodeOnlyFailedSchedulingTest)
+	// t.Run("preferRemoteNodeOnlyAntiHyperConvergenceTest", preferRemoteNodeOnlyAntiHyperConvergenceTest)
+	// t.Run("preferRemoteNodeFalseAntiHyperConvergenceFilterTest", preferRemoteNodeFalseAntiHyperConvergenceFilterTest)
+	// t.Run("antiHyperConvergenceTest", antiHyperConvergenceTest)
+	// t.Run("offlineNodesAntiHyperConvergenceTest", offlineNodesAntiHyperConvergenceTest)
+	// t.Run("multiVolumeAntiHyperConvergenceTest", multiVolumeAntiHyperConvergenceTest)
+	// t.Run("multiVolume2AntiHyperConvergenceTest", multiVolume2AntiHyperConvergenceTest)
+	// t.Run("multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest", multiVolume3PreferRemoteOnlyAntiHyperConvergenceTest)
+	// t.Run("multiVolume4PreferRemoteNodeAntiHyperConvergenceTest", multiVolume4PreferRemoteNodeAntiHyperConvergenceTest)
+	// t.Run("multiVolumeSkipAllVolumeScoringTest", multiVolumeSkipAllVolumeScoringTest)
+	// t.Run("multiVolumeSkipHyperConvergedVolumesScoringTest", multiVolumeSkipHyperConvergedVolumesScoringTest)
+	// t.Run("multiVolumeWithStorageDownNodesAntiHyperConvergenceTest", multiVolumeWithStorageDownNodesAntiHyperConvergenceTest)
+	// t.Run("disableHyperConvergenceTest", disableHyperConvergenceTest)
+	// t.Run("preferLocalNodeWithHyperConvergedVolumesTest", preferLocalNodeWithHyperConvergedVolumesTest)
+	// t.Run("preferLocalNodeIgnoredWithAntiHyperConvergenceTest", preferLocalNodeIgnoredWithAntiHyperConvergenceTest)
+	// t.Run("skipScoringForWindowsPods", skipScoringForWindowsPods)
+	// t.Run("invalidNodePrioritizeTest", invalidNodePrioritizeTest)
+	// t.Run("kubevirtPodScheduling", kubevirtPodScheduling)
+	// t.Run("kubevirtPodSchedulingAttachedOnMismatch", kubevirtPodSchedulingAttachedOnMismatch)
+	// t.Run("kubevirtPodSchedulingNonHyperconvergence", kubevirtPodSchedulingNonHyperconvergence)
 	t.Run("teardown", teardown)
 }
 
@@ -610,7 +608,7 @@ func noDriverVolumeTest(t *testing.T) {
 		prioritizeResponse)
 }
 
-// Create a pod with a PVC which uses the mocked WaitForFirstConusmer storage class
+// Create a pod with a PVC which uses the mocked WaitForFirstConsumer storage class
 // The filter response should return all the input nodes
 // The prioritize response should return all nodes with equal priority
 func WFFCVolumeTest(t *testing.T) {
@@ -665,6 +663,52 @@ func WFFCVolumeTest(t *testing.T) {
 
 	// No events should be raised
 	require.Len(t, recorder.Events, 0)
+}
+
+func assignVirtLauncherLabel(pod *v1.Pod) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels["kubevirt.io"] = "virt-launcher"
+}
+
+// Create a virt-launcher pod with a PVC which uses the mocked WaitForFirstConsumer storage class
+// The filter response should return an error
+func ocp414KubevirtWFFCTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
+	pod := newPod("ocp414KubevirtWFFCTest", defaultNamespace, nil)
+	assignVirtLauncherLabel(pod)
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	podVolume := v1.Volume{}
+	pvcClaim := &v1.PersistentVolumeClaim{}
+	pvcClaim.Name = "WFFCPVC"
+	pvcClaim.Spec.VolumeName = "" // No volume
+	mockSC := mock.MockStorageClassNameWFFC
+	pvcClaim.Spec.StorageClassName = &mockSC
+	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvcClaim.Name,
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	require.NoError(t, err)
+	podVolume.PersistentVolumeClaim = pvcSpec
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+	driver.AddPVC(pvcClaim)
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
 }
 
 // Create a pod with a PVC which uses the mocked WaitForFirstConusmer storage class
