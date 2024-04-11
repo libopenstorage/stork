@@ -248,9 +248,11 @@ func (m Driver) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 }
 
 // GetPodVolumes Get the Volumes in the Pod that use the mock driver
-func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
+func (m Driver) GetPodVolumes(
+	podSpec *v1.PodSpec, namespace string, includePendingWFFC bool,
+) ([]*storkvolume.Info, []*storkvolume.Info, []*v1.PersistentVolumeClaim, error) {
 	if m.interfaceError != nil {
-		return nil, nil, m.interfaceError
+		return nil, nil, nil, m.interfaceError
 	}
 	var volumes []*storkvolume.Info
 	var pendingWFFC []*storkvolume.Info
@@ -260,7 +262,7 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePend
 			pvc, ok := m.pvcs[volume.PersistentVolumeClaim.ClaimName]
 			if !ok {
 				logrus.Debugf("PVCs: %+v", m.pvcs)
-				return nil, nil, &errors.ErrNotFound{
+				return nil, nil, nil, &errors.ErrNotFound{
 					ID:   volume.PersistentVolumeClaim.ClaimName,
 					Type: "PVC",
 				}
@@ -283,7 +285,7 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePend
 
 			volumeInfo, err := m.InspectVolume(pvc.Spec.VolumeName)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			if includePendingWFFC && isWFFC {
 				pendingWFFC = append(pendingWFFC, volumeInfo)
@@ -293,7 +295,7 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePend
 		}
 	}
 
-	return volumes, pendingWFFC, nil
+	return volumes, pendingWFFC, nil, nil
 }
 
 // OwnsPVCForBackup returns true because it owns all PVCs created by tests

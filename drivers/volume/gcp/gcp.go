@@ -596,8 +596,10 @@ func (g *gcp) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
-func (g *gcp) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
-	return nil, nil, &errors.ErrNotSupported{}
+func (g *gcp) GetPodVolumes(
+	podSpec *v1.PodSpec, namespace string, includePendingWFFC bool,
+) ([]*storkvolume.Info, []*storkvolume.Info, []*v1.PersistentVolumeClaim, error) {
+	return nil, nil, nil, &errors.ErrNotSupported{}
 }
 
 func (g *gcp) GetSnapshotPlugin() snapshotVolume.Plugin {

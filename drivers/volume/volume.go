@@ -112,8 +112,11 @@ type Driver interface {
 	InspectNode(id string) (*NodeInfo, error)
 
 	// GetPodVolumes Gets the volumes used by a pod backed by the driver
-	// If includePendingWFFC is set, also returns volumes that are pending due to WaitForFirstConsumer binding
-	GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*Info, []*Info, error)
+	// If includePendingWFFC is set, also returns volumes that are pending due to WaitForFirstConsumer binding in
+	// the second return param and PVCs that are not bound and have no volume assinged in the third return param.
+	GetPodVolumes(
+		podSpec *v1.PodSpec, namespace string, includePendingWFFC bool,
+	) ([]*Info, []*Info, []*v1.PersistentVolumeClaim, error)
 
 	// GetVolumeClaimTemplates Get all the volume templates from the list backed by
 	// the driver

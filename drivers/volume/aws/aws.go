@@ -587,8 +587,10 @@ func (a *aws) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
-func (a *aws) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
-	return nil, nil, &errors.ErrNotSupported{}
+func (a *aws) GetPodVolumes(
+	podSpec *v1.PodSpec, namespace string, includePendingWFFC bool,
+) ([]*storkvolume.Info, []*storkvolume.Info, []*v1.PersistentVolumeClaim, error) {
+	return nil, nil, nil, &errors.ErrNotSupported{}
 }
 
 func (a *aws) GetSnapshotPlugin() snapshotVolume.Plugin {

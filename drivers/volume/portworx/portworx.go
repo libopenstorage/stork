@@ -809,10 +809,14 @@ func (p *portworx) OwnsPV(pv *v1.PersistentVolume) bool {
 	return true
 }
 
-func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
-	// includePendingWFFC - Includes pending volumes in the second return value if they are using WaitForFirstConsumer binding mode
+func (p *portworx) GetPodVolumes(
+	podSpec *v1.PodSpec, namespace string, includePendingWFFC bool,
+) ([]*storkvolume.Info, []*storkvolume.Info, []*v1.PersistentVolumeClaim, error) {
+	// includePendingWFFC - Includes pending volumes in the second return value and pending PVCs with no volumes
+	// in the third return value if they are using WaitForFirstConsumer binding mode
 	var volumes []*storkvolume.Info
 	var pendingWFFCVolumes []*storkvolume.Info
+	var pendingWFFCPVCsWithNoVol []*v1.PersistentVolumeClaim
 	for _, volume := range podSpec.Volumes {
 		volumeName := ""
 		isPendingWFFC := false
@@ -825,7 +829,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			if !p.OwnsPVC(core.Instance(), pvc) {
@@ -837,7 +841,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 				if includePendingWFFC && isWaitingForFirstConsumer(pvc) {
 					isPendingWFFC = true
 				} else {
-					return nil, nil, &storkvolume.ErrPVCPending{
+					return nil, nil, nil, &storkvolume.ErrPVCPending{
 						Name: volume.PersistentVolumeClaim.ClaimName,
 					}
 				}
@@ -872,9 +876,11 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 			} else {
 				volumes = append(volumes, volumeInfo)
 			}
+		} else if isPendingWFFC {
+			pendingWFFCPVCsWithNoVol = append(pendingWFFCPVCsWithNoVol, pvc)
 		}
 	}
-	return volumes, pendingWFFCVolumes, nil
+	return volumes, pendingWFFCVolumes, pendingWFFCPVCsWithNoVol, nil
 }
 
 func isWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {

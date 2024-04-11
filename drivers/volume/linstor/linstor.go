@@ -263,7 +263,9 @@ func (l *linstor) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return infos, nil
 }
 
-func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePendingWFFC bool) ([]*storkvolume.Info, []*storkvolume.Info, error) {
+func (l *linstor) GetPodVolumes(
+	podSpec *v1.PodSpec, namespace string, includePendingWFFC bool,
+) ([]*storkvolume.Info, []*storkvolume.Info, []*v1.PersistentVolumeClaim, error) {
 	// includePendingWFFC - Includes pending volumes in the second return value if they are using WaitForFirstConsumer binding mode
 	var volumes []*storkvolume.Info
 	var pendingWFFCVolumes []*storkvolume.Info
@@ -275,7 +277,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePe
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			if !l.OwnsPVC(core.Instance(), pvc) {
@@ -287,7 +289,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePe
 				if includePendingWFFC && isWaitingForFirstConsumer(pvc) {
 					isPendingWFFC = true
 				} else {
-					return nil, nil, &storkvolume.ErrPVCPending{
+					return nil, nil, nil, &storkvolume.ErrPVCPending{
 						Name: volume.PersistentVolumeClaim.ClaimName,
 					}
 				}
@@ -310,7 +312,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includePe
 			}
 		}
 	}
-	return volumes, pendingWFFCVolumes, nil
+	return volumes, pendingWFFCVolumes, nil, nil
 }
 
 func isWaitingForFirstConsumer(pvc *v1.PersistentVolumeClaim) bool {

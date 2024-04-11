@@ -63,6 +63,11 @@ const (
 	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
 	// annotation to disable hyperconvergence for a pod
 	disableHyperconvergenceAnnotation = "stork.libopenstorage.org/disableHyperconvergence"
+	// When KubeVirt sees the DV in phase `WaitForFirstConsumer`, it creates an ephemeral pod
+	// (basically a virtlauncher pod without a VM payload and with kubevirt.io/ephemeral-provisioning annotation)
+	// only used to force PV provisioning
+	// Ref: https://github.com/kubevirt/kubevirt/blob/9db1b1301b2dbd8261020006b67de1a2663f6cbc/docs/localstorage-disks.md?plain=1#L38
+	kubevirtEphemeralPod = "kubevirt.io/ephemeral-provisioning"
 )
 
 var (
@@ -223,7 +228,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	// Node -> Bool to track if a Pod is not allowed to be scheduled on the node
 	nodeNoAntiHyperconvergedPodAllowed := make(map[string]bool)
 	filteredNodes := []v1.Node{}
-	driverVolumes, WFFCVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
+	driverVolumes, wffcVolumes, wffcPVCsWithNoVol, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
 	if err != nil {
 		msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
 		storklog.PodLog(pod).Warnf(msg)
@@ -232,12 +237,25 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
 		}
-		// Do driver check even if we only have pending WaitForFirstConsumer volumes
-	} else if len(driverVolumes) > 0 || len(WFFCVolumes) > 0 {
+		// Do driver check even if we only have pending WaitForFirstConsumer volumes or PVC with no volume name assigned yet
+	} else if len(driverVolumes) > 0 || len(wffcVolumes) > 0 || len(wffcPVCsWithNoVol) > 0 {
 		driverNodes, err := e.Driver.GetNodes()
 		if err != nil {
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
 		} else {
+			if e.isVirtLauncherPod(pod) && len(wffcPVCsWithNoVol) > 0 {
+				// Some PVCs are not bound yet. This can happen in OCP 4.14+ when cloning a template PVC with WFFC.
+				// OCP starts cloning to a temp PVC in a different namespace. Our PVC will not be
+				// bound until the cloning is done and PV's claimRef is switched. We need to know where the
+				// replicas land for hyperconverged scheduling of the virt-launcher pod. Let's keep returning
+				// error until that happens. Note that the pod would have remained in the Pending state anyway
+				// until the cloning is done.
+				msg := fmt.Sprintf("Waiting for PVC %s to be bound; cloning in progress?", wffcPVCsWithNoVol[0].Name)
+				storklog.PodLog(pod).Warnf(msg)
+				e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+				http.Error(w, msg, http.StatusBadRequest)
+				return
+			}
 			for _, volumeInfo := range driverVolumes {
 				// Pod is using a volume that is labeled for Windows
 				// This Pod needs to run only on Windows node
@@ -422,7 +440,7 @@ func (e *Extender) collectExtenderMetrics() error {
 			return nil
 		}
 
-		driverVolumes, _, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, false)
+		driverVolumes, _, _, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, false)
 		if err != nil {
 			msg := fmt.Sprintf("Metric: Error getting volumes for Pod for driver: %v", err)
 			storklog.PodLog(pod).Warnf(msg)
@@ -619,7 +637,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 
 	{ // Put these variables in their own scope so we can use the goto above
-		driverVolumes, _, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
+		driverVolumes, _, _, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace, true)
 		if err != nil {
 			msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
 			storklog.PodLog(pod).Warnf(msg)
@@ -814,9 +832,9 @@ func (e *Extender) nodeHasAttachedVolume(dNode *volume.NodeInfo, vol *volume.Inf
 	return false
 }
 
-// isVirtLauncherPod returns true if it is a virt launcher pod
+// isVirtLauncherPod returns true if it is a virt launcher pod (excludes the ephemeral virt launcher pods)
 func (e *Extender) isVirtLauncherPod(pod *v1.Pod) bool {
-	return pod.Labels["kubevirt.io"] == "virt-launcher"
+	return pod.Labels["kubevirt.io"] == "virt-launcher" && pod.Annotations[kubevirtEphemeralPod] != "true"
 }
 
 // getLiveMigrationInfo returns status of LiveMigration
