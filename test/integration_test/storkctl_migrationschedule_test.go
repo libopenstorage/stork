@@ -284,6 +284,17 @@ func generateClusterPairObject(name string, namespace string, options map[string
 
 func cleanUpPrerequisiteResources(t *testing.T) {
 	log.Info("Cleanup prerequisite resources was called")
+	cleanUpClusterPairs(t)
+	err := storkops.Instance().DeleteResourceTransformation("test-rt", defaultNs)
+	log.FailOnError(t, err, "Error deleting resource transformation test-rt")
+	err = storkops.Instance().DeleteResourceTransformation("test-rt", "test-ns")
+	log.FailOnError(t, err, "Error deleting resource transformation test-rt")
+	err = core.Instance().DeleteNamespace("test-ns")
+	log.FailOnError(t, err, "Error deleting namespace test-ns")
+}
+
+func cleanUpClusterPairs(t *testing.T) {
+	log.Info("Cleanup clusterpair resources was called")
 	err := storkops.Instance().DeleteClusterPair(syncDrClusterPair, defaultNs)
 	log.FailOnError(t, err, "Error deleting sync-dr cluster pair")
 	err = storkops.Instance().DeleteClusterPair(asyncDrClusterPair, defaultNs)
@@ -292,12 +303,6 @@ func cleanUpPrerequisiteResources(t *testing.T) {
 	log.FailOnError(t, err, "Error deleting async-dr admin cluster pair")
 	err = storkops.Instance().DeleteClusterPair(syncDrAdminClusterPair, adminNs)
 	log.FailOnError(t, err, "Error deleting sync-dr admin cluster pair")
-	err = storkops.Instance().DeleteResourceTransformation("test-rt", defaultNs)
-	log.FailOnError(t, err, "Error deleting resource transformation test-rt")
-	err = storkops.Instance().DeleteResourceTransformation("test-rt", "test-ns")
-	log.FailOnError(t, err, "Error deleting resource transformation test-rt")
-	err = core.Instance().DeleteNamespace("test-ns")
-	log.FailOnError(t, err, "Error deleting namespace test-ns")
 }
 
 func createResourceTransformation(t *testing.T, namespace string) {

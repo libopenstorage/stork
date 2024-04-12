@@ -335,14 +335,14 @@ func createFailoverActionAndVerify(t *testing.T) string {
 	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
 	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
 	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--skip-deactivate-source", "-n", "kube-system"}
+	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--skip-source-operations", "-n", "kube-system"}
 	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
 	testCommon(t, cmdArgs, nil, expected, false)
 	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1", "ns2"})
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "test-migrationschedule")
-	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipDeactivateSource, true)
+	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, true)
 	return failoverActionName
 }
 
