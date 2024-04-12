@@ -7913,7 +7913,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -8025,7 +8025,7 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := metromigrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -8120,7 +8120,7 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -8226,7 +8226,7 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -8358,7 +8358,7 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -8458,7 +8458,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -9317,7 +9317,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -9447,7 +9447,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return

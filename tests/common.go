@@ -10272,7 +10272,7 @@ func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 	log.InfoD("Create cluster pair between source and destination clusters")
 	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
 	migName := migrationKey + time.Now().Format("15h03m05s")
-	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 	if err != nil {
 		return err
 	}

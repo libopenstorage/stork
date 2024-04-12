@@ -193,6 +193,7 @@ func CreateMigration(
 	includeVolumes *bool,
 	includeResources *bool,
 	startApplications *bool,
+	transformSpecs []string,
 ) (*storkapi.Migration, error) {
 
 	migration := &storkapi.Migration{
@@ -207,6 +208,9 @@ func CreateMigration(
 			StartApplications: startApplications,
 			Namespaces:        []string{migrationNamespace},
 		},
+	}
+	if transformSpecs != nil && len(transformSpecs) > 0 {
+		migration.Spec.TransformSpecs = transformSpecs
 	}
 	// TODO figure out a way to check if it's an auth-enabled and add security annotations
 
