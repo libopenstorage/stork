@@ -80,6 +80,8 @@ spec:
   dataVolumeTemplates:
     - metadata:
         name: windows-2022-datavol-wait-first-consumer
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
       spec:
         preallocation: false
         source:

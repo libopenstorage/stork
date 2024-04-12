@@ -110,7 +110,12 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
+	// Verify the initial state of the VMs before making any changes to the cluster.
+	verifyInitialHyperconvergence(t, ctxs, allNodes)
+
+	// Iterate over all VMs and simulate OCP node upgrade for each.
 	for _, appCtx := range ctxs {
+		// We need to gather the testState again because it may have changed during the previous iteration.
 		testState := &kubevirtTestState{
 			appCtx:   appCtx,
 			allNodes: allNodes,
@@ -163,6 +168,9 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// Verify the initial state of the VMs before making any changes to the cluster.
+	verifyInitialHyperconvergence(t, ctxs, allNodes)
 
 	for _, appCtx := range ctxs {
 		testState := &kubevirtTestState{
@@ -224,6 +232,9 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// Verify the initial state of the VMs before making any changes to the cluster.
+	verifyInitialHyperconvergence(t, ctxs, allNodes)
 
 	for _, appCtx := range ctxs {
 		testState := &kubevirtTestState{
@@ -300,6 +311,9 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 		kubevirtScale,
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// Verify the initial state of the VMs before making any changes to the cluster.
+	verifyInitialHyperconvergence(t, ctxs, allNodes)
 
 	nodeList := node.GetNodesByName()
 
@@ -1055,4 +1069,16 @@ func restartVolumeDriverAndWaitForReady(t *testing.T, attachedNode *node.Node) {
 	require.NoError(t, err)
 
 	log.InfoD("Volume driver is up on node %s", attachedNode.Name)
+}
+
+// Verify the initial state of the VMs before making any changes to the cluster.
+func verifyInitialHyperconvergence(t *testing.T, ctxs []*scheduler.Context, allNodes map[string]node.Node) {
+	for _, appCtx := range ctxs {
+		testState := &kubevirtTestState{
+			appCtx:   appCtx,
+			allNodes: allNodes,
+		}
+		gatherInitialVMIInfo(t, testState)
+		verifyInitialVMI(t, testState)
+	}
 }

@@ -1,10 +1,14 @@
 package kubevirt
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
@@ -42,6 +46,26 @@ type VirtualMachineOps interface {
 	IsVirtualMachineRunning(*kubevirtv1.VirtualMachine) bool
 	// UpdateVirtualMachine updates existing Kubevirt VirtualMachine
 	UpdateVirtualMachine(*kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
+	// IsKubevirtCRDInstalled to check if virtualmachine crd is installed.
+	IsKubevirtCRDInstalled() error
+}
+
+var (
+	// VirtualMachineCRD
+	VirtualMachineCRD = "virtualmachines.kubevirt.io"
+	// VirtualMachineCRDError error return code for virtualMachine CRD
+	VirtualMachineCRDError = status.Error(codes.FailedPrecondition, "Kubevirt CRD not configured on the cluster.")
+)
+
+// IsKubevirtCRDInstalled will check if virtualmachines.kubevirt.io CRD exists.
+func (c *Client) IsKubevirtCRDInstalled() error {
+	_, err := c.kubevirt.ExtensionsClient().ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), VirtualMachineCRD, k8smetav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return VirtualMachineCRDError
+		}
+	}
+	return err
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -49,13 +73,19 @@ func (c *Client) ListVirtualMachines(namespace string) (*kubevirtv1.VirtualMachi
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
+		return nil, err
+	}
 	return c.kubevirt.VirtualMachine(namespace).List(&k8smetav1.ListOptions{})
 }
 
 // BatchListVirtualMachines List Kubevirt VirtualMachine in given namespace
 func (c *Client) BatchListVirtualMachines(namespace string, listOptions *k8smetav1.ListOptions) (*kubevirtv1.VirtualMachineList, error) {
 	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
 		return nil, err
 	}
 
@@ -67,13 +97,18 @@ func (c *Client) CreateVirtualMachine(vm *kubevirtv1.VirtualMachine) (*kubevirtv
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
+		return nil, err
+	}
 	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Create(vm)
 }
 
 // GetVirtualMachine Get updated VirtualMachine from client matching name and namespace
 func (c *Client) GetVirtualMachine(name string, namespace string) (*kubevirtv1.VirtualMachine, error) {
 	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
 		return nil, err
 	}
 

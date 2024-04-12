@@ -71,6 +71,8 @@ spec:
   dataVolumeTemplates:
   - metadata:
       name: fedora-root-disk
+      annotations:
+        cdi.kubevirt.io/storage.usePopulator: "false"
     spec:
       source:
         pvc:
