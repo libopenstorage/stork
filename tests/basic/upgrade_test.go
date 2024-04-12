@@ -26,14 +26,7 @@ import (
 var storkLabel = map[string]string{"name": "stork"}
 
 const (
-	pxctlCDListCmd  = "pxctl cd list"
-	ibmHelmRepoName = "ibm-helm-portworx"
-	ibmHelmRepoURL  = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
-	helmValuesFile  = "/tmp/values.yaml"
-)
-
-const (
-	validateStorageClusterTimeout = 40 * time.Minute
+	pxctlCDListCmd = "pxctl cd list"
 )
 
 // UpgradeStork test performs upgrade hops of Stork based on a given list of upgradeEndpoints
@@ -396,11 +389,11 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 
 			if IsIksCluster() {
 
-				log.Infof("Adding ibm helm repo [%s]", ibmHelmRepoName)
-				cmd := fmt.Sprintf("helm repo add %s %s", ibmHelmRepoName, ibmHelmRepoURL)
+				log.Infof("Adding ibm helm repo [%s]", IBMHelmRepoName)
+				cmd := fmt.Sprintf("helm repo add %s %s", IBMHelmRepoName, IBMHelmRepoURL)
 				log.Infof("helm command: %v ", cmd)
 				_, _, err := osutils.ExecShell(cmd)
-				log.FailOnError(err, fmt.Sprintf("error adding repo [%s]", ibmHelmRepoName))
+				log.FailOnError(err, fmt.Sprintf("error adding repo [%s]", IBMHelmRepoName))
 			}
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
@@ -415,12 +408,12 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 				upgradeHopSplit := strings.Split(upgradeHop, "/")
 				nextPXVersion := upgradeHopSplit[len(upgradeHopSplit)-1]
 
-				if f, err := osutils.FileExists(helmValuesFile); err != nil {
-					log.FailOnError(err, "error checking for file [%s]", helmValuesFile)
+				if f, err := osutils.FileExists(IBMHelmValuesFile); err != nil {
+					log.FailOnError(err, "error checking for file [%s]", IBMHelmValuesFile)
 				} else {
 					if f != nil {
-						_, err = osutils.DeleteFile(helmValuesFile)
-						log.FailOnError(err, "error deleting file [%s]", helmValuesFile)
+						_, err = osutils.DeleteFile(IBMHelmValuesFile)
+						log.FailOnError(err, "error deleting file [%s]", IBMHelmValuesFile)
 					}
 				}
 
@@ -429,25 +422,25 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 					log.Errorf("Error in getting portworx namespace. Err: %v", err.Error())
 					return
 				}
-				cmd := fmt.Sprintf("helm get values portworx -n %s > %s", pxNamespace, helmValuesFile)
+				cmd := fmt.Sprintf("helm get values portworx -n %s > %s", pxNamespace, IBMHelmValuesFile)
 				log.Infof("Running command: %v ", cmd)
 				_, _, err = osutils.ExecShell(cmd)
 				log.FailOnError(err, fmt.Sprintf("error getting values for portworx helm chart"))
 
-				f, err := osutils.FileExists(helmValuesFile)
+				f, err := osutils.FileExists(IBMHelmValuesFile)
 				if err != nil {
-					log.FailOnError(err, "error checking for file [%s]", helmValuesFile)
+					log.FailOnError(err, "error checking for file [%s]", IBMHelmValuesFile)
 				}
 				if f == nil {
-					log.FailOnError(err, "file [%s] does not exist", helmValuesFile)
+					log.FailOnError(err, "file [%s] does not exist", IBMHelmValuesFile)
 				}
 
-				cmd = fmt.Sprintf("sed -i 's/imageVersion.*/imageVersion: %s/' %s", nextPXVersion, helmValuesFile)
+				cmd = fmt.Sprintf("sed -i 's/imageVersion.*/imageVersion: %s/' %s", nextPXVersion, IBMHelmValuesFile)
 				log.Infof("Running command: %v ", cmd)
 				_, _, err = osutils.ExecShell(cmd)
-				log.FailOnError(err, fmt.Sprintf("error updating px version in [%s]", helmValuesFile))
+				log.FailOnError(err, fmt.Sprintf("error updating px version in [%s]", IBMHelmValuesFile))
 
-				cmd = fmt.Sprintf("helm upgrade portworx -n %s -f %s %s/portworx --debug", pxNamespace, helmValuesFile, ibmHelmRepoName)
+				cmd = fmt.Sprintf("helm upgrade portworx -n %s -f %s %s/portworx --debug", pxNamespace, IBMHelmValuesFile, IBMHelmRepoName)
 				log.Infof("Running command: %v ", cmd)
 				_, _, err = osutils.ExecShell(cmd)
 				log.FailOnError(err, fmt.Sprintf("error running helm upgrade for portworx"))
@@ -461,7 +454,7 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 				imageList, err := optest.GetImagesFromVersionURL(upgradeHop, k8sVersion.String())
 				log.FailOnError(err, "error getting images using URL [%s] and k8s version [%s]", upgradeHop, k8sVersion.String())
 
-				err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true)
+				err = optest.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PX upgrade from version [%s] to version [%s]", currPXVersion, nextPXVersion))
 
 				timeAfterUpgrade = time.Now()

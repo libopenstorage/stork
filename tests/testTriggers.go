@@ -4,8 +4,16 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
+	"github.com/devans10/pugo/flasharray"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"math"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"reflect"
@@ -17,7 +25,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apios "github.com/libopenstorage/openstorage/api"
@@ -84,6 +91,8 @@ const (
 	MigrationsCountField = "migrationscount"
 	// UpgradeEndpoints is a field in the configmap that contains a comma-separated list of upgrade endpoints
 	UpgradeEndpoints = "upgradeEndpoints"
+	// SchedUpgradeHops is a field in the configmap that contains a comma-separated list of scheduler upgrade hops
+	SchedUpgradeHops = "schedUpgradeHops"
 	// BaseInterval is a field in the configmap that represents base interval in minutes
 	BaseInterval = "baseInterval"
 	// VclusterFioRunTimeField is a field in the configmap that represents fio run time in seconds
@@ -484,6 +493,10 @@ const (
 	UpgradeStork = "upgradeStork"
 	// UpgradeVolumeDriver  upgrade volume driver version to the latest build
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
+	// UpgradeVolumeDriverFromCatalog upgrades volume driver from catalog according to the Inst().UpgradeStorageDriverEndpointList
+	UpgradeVolumeDriverFromCatalog = "upgradeVolumeDriverFromCatalog"
+	// UpgradeCluster upgrades the cluster according to the Inst().SchedUpgradeHops
+	UpgradeCluster = "upgradeCluster"
 	// AppTasksDown scales app up and down
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
@@ -5914,7 +5927,18 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
 				}
 				UpdateOutcome(event, err)
-
+				endpoint, version, err := SplitStorageDriverUpgradeURL(upgradeHop)
+				if err != nil {
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
+				}
+				log.InfoD("Updating StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
+				Inst().StorageDriverUpgradeEndpointURL = endpoint
+				Inst().StorageDriverUpgradeEndpointVersion = version
+				err = ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary after upgrade. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
 			})
 			validateContexts(event, contexts)
 		}
@@ -5922,6 +5946,339 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 	err := ValidateDataIntegrity(contexts)
 	UpdateOutcome(event, err)
 	updateMetrics(*event)
+}
+
+// TriggerUpdateCluster upgrades the cluster and ensures everything is running fine
+func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeCluster)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpgradeCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	// This is an exact copy of UpgradeCluster test case
+	Step("upgrade cluster and ensure everything is running fine", func() {
+		var versions []string
+		if len(Inst().SchedUpgradeHops) > 0 {
+			versions = strings.Split(Inst().SchedUpgradeHops, ",")
+		}
+		for _, v := range versions {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), v), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
+				}
+				dashStats := make(map[string]string)
+				dashStats["sched-upgrade-hop"] = v
+				updateLongevityStats(UpgradeCluster, stats.UpdateClusterEventName, dashStats)
+				err = Inst().S.UpgradeScheduler(v)
+				if mError != nil {
+					mError = fmt.Errorf("failed to validate PDB of px-storage during cluster upgrade. Err: [%v]", mError)
+					UpdateOutcome(event, mError)
+				}
+				if err != nil {
+					err = fmt.Errorf("failed to upgrade scheduler [%s] to version [%s]. Err: [%v]", Inst().S.String(), v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Sleep needed for AKS cluster upgrades
+				if Inst().S.String() == aks.SchedName {
+					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
+						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
+						"Recommended config is that you deploy PX with 6 nodes in 3 zones and set MaxStorageNodesPerZone to 2, "+
+						"so when extra AKS node gets created, PX gets deployed as Storageless node, otherwise if PX gets deployed as Storage node, "+
+						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for GKE cluster upgrades
+				if Inst().S.String() == gke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Pool upgrades, GKE creates an extra node. "+
+						"After the Node Pool upgrade is complete, GKE deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(10 * time.Minute)
+				}
+
+				// Sleep needed for EKS cluster upgrades
+				if Inst().S.String() == eks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Group upgrades, EKS creates an extra node. "+
+						"After the Node Group upgrade is complete, EKS deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for IKS cluster upgrades
+				if Inst().S.String() == iks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, IKS replaces all worker nodes. "+
+						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				PrintK8sCluterInfo()
+			})
+
+			Step("validate storage components", func() {
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				if err != nil {
+					err = fmt.Errorf("error parsing PX version the url [%s]", urlToParse)
+					UpdateOutcome(event, err)
+					return
+				}
+				err = Inst().V.ValidateDriver(u.String(), true)
+				if err != nil {
+					err = fmt.Errorf("failed to validate volume driver after upgrade to %s. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Printing cluster node info after the upgrade
+				PrintK8sCluterInfo()
+			})
+
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
+			  dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")          }*/
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err := Inst().S.RefreshNodeRegistry()
+				if err != nil {
+					err = fmt.Errorf("failed to refresh node registry after upgrade to scheduler version [%s]. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				if err != nil {
+					err = fmt.Errorf("failed to refresh driver endpoints after upgrade to scheduler version [%s]. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
+			})
+
+			Step("Validate license summary against expected SKU and features", func() {
+				log.Infof("Validating license summary against expected SKU and features")
+				err := ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary against expected SKU and features. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
+			})
+
+			Step("validate all apps after upgrade", func() {
+				ValidateApplications(*contexts)
+			})
+		}
+	})
+
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
+	updateMetrics(*event)
+}
+
+// TriggerUpgradeVolumeDriverFromCatalog performs upgrade hops of volume driver based on a given list of upgradeEndpoints from marketplace
+func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeVolumeDriverFromCatalog)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpgradeVolumeDriverFromCatalog,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	// This is an exact copy of UpgradeVolumeDriverFromCatalog test case
+	stepLog := "upgrade volume driver from catalog and ensure everything is running fine"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			storageNodes      = node.GetStorageNodes()
+			numOfNodes        = len(node.GetStorageDriverNodes())
+			timeBeforeUpgrade time.Time
+			timeAfterUpgrade  time.Time
+		)
+		ValidateApplications(*contexts)
+		stepLog = "start the upgrade of volume driver from catalog"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				UpdateOutcome(event, fmt.Errorf("unable to perform volume driver upgrade hops, none were given"))
+				return
+			}
+			if IsIksCluster() {
+				log.Infof("Adding ibm helm repo [%s]", IBMHelmRepoName)
+				cmd := fmt.Sprintf("helm repo add %s %s", IBMHelmRepoName, IBMHelmRepoURL)
+				log.Infof("helm command: %v ", cmd)
+				_, _, err := osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error adding helm repo [%s]. Err: [%v]", IBMHelmRepoName, err))
+					return
+				}
+			} else {
+				UpdateOutcome(event, fmt.Errorf("the cluster is neither IKS nor ROKS"))
+				return
+			}
+			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+			for i, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				if upgradeHop == "" {
+					UpdateOutcome(event, fmt.Errorf("the upgrade hop at index [%d] empty", i))
+					return
+				}
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting current driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
+					return
+				}
+				timeBeforeUpgrade = time.Now()
+				upgradeHopSplit := strings.Split(upgradeHop, "/")
+				nextPXVersion := upgradeHopSplit[len(upgradeHopSplit)-1]
+				if f, err := osutils.FileExists(IBMHelmValuesFile); err != nil {
+					UpdateOutcome(event, fmt.Errorf("error checking for file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				} else {
+					if f != nil {
+						_, err = osutils.DeleteFile(IBMHelmValuesFile)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("error deleting file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+							return
+						}
+					}
+				}
+				pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting portworx namespace. Err: [%v]", err))
+					return
+				}
+				cmd := fmt.Sprintf("helm get values portworx -n %s > %s", pxNamespace, IBMHelmValuesFile)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting values for portworx helm chart. Err: [%v]", err))
+					return
+				}
+				f, err := osutils.FileExists(IBMHelmValuesFile)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error checking for file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				}
+				if f == nil {
+					UpdateOutcome(event, fmt.Errorf("file [%s] does not exist", IBMHelmValuesFile))
+					return
+				}
+				cmd = fmt.Sprintf("sed -i 's/imageVersion.*/imageVersion: %s/' %s", nextPXVersion, IBMHelmValuesFile)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error updating px version in [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				}
+				dashStats := make(map[string]string)
+				dashStats["upgrade-hop"] = upgradeHop
+				updateLongevityStats(UpgradeVolumeDriverFromCatalog, stats.UpgradeVolumeDriverFromCatalogEventName, dashStats)
+				cmd = fmt.Sprintf("helm upgrade portworx -n %s -f %s %s/portworx --debug", pxNamespace, IBMHelmValuesFile, IBMHelmRepoName)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error running helm upgrade for portworx. Err: [%v]", err))
+					return
+				}
+				time.Sleep(2 * time.Minute)
+				stc, err := Inst().V.GetDriver()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting storage cluster spec. Err: [%v]", err))
+					return
+				}
+				k8sVersion, err := core.Instance().GetVersion()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting k8s version. Err: [%v]", err))
+					return
+				}
+				imageList, err := oputil.GetImagesFromVersionURL(upgradeHop, k8sVersion.String())
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting images using URL [%s] and k8s version [%s]. Err: [%v]", upgradeHop, k8sVersion.String(), err))
+					return
+				}
+				err = oputil.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error validating storage cluster after upgrade. Err: [%v]", err))
+					return
+				}
+				timeAfterUpgrade = time.Now()
+				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				upgradeStatus := "PASS"
+				if durationInMins <= expectedUpgradeTime {
+					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				} else {
+					log.Warnf("Upgrade took %d minutes more than expected time %d to complete minutes", durationInMins, expectedUpgradeTime)
+					UpdateOutcome(event, fmt.Errorf("upgrade took [%v] minutes more than expected time [%v] to complete minutes", durationInMins, expectedUpgradeTime))
+					upgradeStatus = "FAIL"
+				}
+				endpoint, version, err := SplitStorageDriverUpgradeURL(upgradeHop)
+				if err != nil {
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
+				}
+				log.InfoD("Updating from catalog StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
+				Inst().StorageDriverUpgradeEndpointURL = endpoint
+				Inst().StorageDriverUpgradeEndpointVersion = version
+				err = ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary after upgrade. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
+				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting updated driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
+					return
+				}
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+				// Validate Apps after volume driver upgrade
+				ValidateApplications(*contexts)
+			}
+		})
+		err := ValidateDataIntegrity(contexts)
+		UpdateOutcome(event, err)
+		updateMetrics(*event)
+	})
 }
 
 // TriggerUpgradeStork performs upgrade of the stork

@@ -778,6 +778,8 @@ spec:
       value: "${IKS_PX_WORKERPOOL_NAME}"
     - name: IKS_CLUSTER_REGION
       value: "${IKS_CLUSTER_REGION}"
+    - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
+      value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

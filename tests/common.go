@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
@@ -400,6 +401,124 @@ const (
 
 const (
 	pxctlCDListCmd = "pxctl cd list"
+)
+
+const (
+	IBMHelmRepoName   = "ibm-helm-portworx"
+	IBMHelmRepoURL    = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
+	IBMHelmValuesFile = "/tmp/values.yaml"
+)
+
+const (
+	ValidateStorageClusterTimeout = 40 * time.Minute
+)
+
+// LabLabel used to name the licensing features
+type LabLabel string
+
+const (
+	IBMTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
+	IBMTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
+	IBMProdLicenseSKU   = "PX-Enterprise IBM Cloud"
+	IBMProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
+)
+
+const (
+	// LabNodes - Number of nodes maximum
+	LabNodes LabLabel = "Nodes"
+	// LabVolumeSize - Volume capacity [TB] maximum
+	LabVolumeSize LabLabel = "VolumeSize"
+	// LabVolumes - Number of volumes per cluster maximum
+	LabVolumes LabLabel = "Volumes"
+	// LabSnapshots - Number of snapshots per volume maximum
+	LabSnapshots LabLabel = "Snapshots"
+	// LabHaLevel - Volume replica count
+	LabHaLevel LabLabel = "HaLevel"
+	// LabSharedVol - Shared volumes
+	LabSharedVol LabLabel = "SharedVolume"
+	// LabEncryptedVol - BYOK data encryption
+	LabEncryptedVol LabLabel = "EncryptedVolume"
+	// LabScaledVol - Volume sets
+	LabScaledVol LabLabel = "ScaledVolume"
+	// LabAggregatedVol - Storage aggregation
+	LabAggregatedVol LabLabel = "AggregatedVolume"
+	// LabResizeVolume - Resize volumes on demand
+	LabResizeVolume LabLabel = "ResizeVolume"
+	// LabCloudSnap - Snapshot to object store [CloudSnap]
+	LabCloudSnap LabLabel = "SnapshotToObjectStore"
+	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
+	LabCloudSnapDaily LabLabel = "SnapshotToObjectStoreDaily"
+	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
+	LabCloudMigration LabLabel = "CloudMigration"
+	// LabDisasterRecovery - Disaster Recovery [PX-DR]
+	LabDisasterRecovery LabLabel = "DisasterRecovery"
+	// LabAUTCapacityMgmt - Autopilot Capacity Management
+	LabAUTCapacityMgmt LabLabel = "AUTCapacityManagement"
+	// LabPlatformBare - Bare-metal hosts
+	LabPlatformBare LabLabel = "EnablePlatformBare"
+	// LabPlatformVM - Virtual machine hosts
+	LabPlatformVM LabLabel = "EnablePlatformVM"
+	// LabNodeCapacity - Node disk capacity [TB] maximum
+	LabNodeCapacity LabLabel = "NodeCapacity"
+	// LabNodeCapacityExtend - Node disk capacity extension
+	LabNodeCapacityExtend LabLabel = "NodeCapacityExtension"
+	// LabLocalAttaches - Number of attached volumes per node maximum
+	LabLocalAttaches LabLabel = "LocalVolumeAttaches"
+	// LabOIDCSecurity - OIDC Security
+	LabOIDCSecurity LabLabel = "OIDCSecurity"
+	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
+	LabGlobalSecretsOnly LabLabel = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath LabLabel = "FastPath"
+	// UnlimitedNumber represents the unlimited number of licensed resource.
+	// note - the max # Flex counts handle, is actually 999999999999999990
+	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
+
+	// -- Testing maximums below
+
+	// MaxNumNodes is a maximum nodes in a cluster
+	MaxNumNodes = int64(1000)
+	// MaxNumVolumes is a maximum number of volumes in a cluster
+	MaxNumVolumes = int64(100000)
+	// MaxVolumeSize is a maximum volume size for single volume [in TB]
+	MaxVolumeSize = int64(40)
+	// MaxNodeCapacity defines the maximum node's disk capacity [in TB]
+	MaxNodeCapacity = int64(256)
+	// MaxLocalAttachCount is a maximum number of local volume attaches
+	MaxLocalAttachCount = int64(256)
+	// MaxHaLevel is a maximum replication factor
+	MaxHaLevel = int64(3)
+	// MaxNumSnapshots is a maximum number of snapshots
+	MaxNumSnapshots = int64(64)
+)
+
+var (
+	IBMLicense = map[LabLabel]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
 )
 
 var pxRuntimeOpts string
@@ -11392,4 +11511,61 @@ func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
 		return err
 	}
 	return nil
+}
+
+// ValidatePxLicenseSummary validates the license summary by comparing SKU and feature quantities
+func ValidatePxLicenseSummary() error {
+	summary, err := Inst().V.GetLicenseSummary()
+	if err != nil {
+		return fmt.Errorf("failed to get license summary. Err: [%v]", err)
+	}
+	log.Infof("License summary: %v", summary)
+	switch {
+	case IsIksCluster():
+		log.Infof("Get SKU and compare with IBM cloud license activated using catalog")
+		// Get SKU and compare with IBM cloud license
+		isValidLicense := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMTestLicenseDRSKU || summary.SKU == IBMProdLicenseSKU || summary.SKU == IBMProdLicenseDRSKU
+		if !isValidLicense {
+			return fmt.Errorf("license type is not valid: %v", summary.SKU)
+		}
+		log.InfoD("Compare with PX IBM cloud licensed features")
+		isTestOrProdSKU := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMProdLicenseSKU
+		for _, feature := range summary.Features {
+			if limit, ok := IBMLicense[LabLabel(feature.Name)]; ok {
+				// Special handling for DisasterRecovery feature and certain SKUs
+				if !isTestOrProdSKU && LabLabel(feature.Name) == LabDisasterRecovery {
+					limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+				}
+				if !reflect.DeepEqual(feature.Quantity, limit) {
+					return fmt.Errorf("verifying quantity for [%v]: actual [%v], expected [%v]", feature.Name, feature.Quantity, limit)
+				}
+			}
+		}
+		log.Infof("Validated IBM cloud license successfully")
+	case IsAksCluster():
+		return fmt.Errorf("license validation is not supported on AKS cluster")
+	case IsEksCluster():
+		return fmt.Errorf("license validation is not supported on EKS cluster")
+	case IsOkeCluster():
+		return fmt.Errorf("license validation is not supported on OKE cluster")
+	case IsPksCluster():
+		return fmt.Errorf("license validation is not supported on PKS cluster")
+	default:
+		return fmt.Errorf("license validation is not supported on Unknown cluster")
+	}
+	return nil
+}
+
+// SplitStorageDriverUpgradeURL splits the given storage driver upgrade URL into endpoint and version
+// For the upgradeURL https://install.portworx.com/3.1.1, this returns Endpoint: https://install.portworx.com and Version: 3.1.1
+func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
+	parsedURL, err := url.Parse(upgradeURL)
+	if err != nil {
+		return "", "", err
+	}
+	pathSegments := strings.Split(strings.TrimSuffix(parsedURL.Path, "/"), "/")
+	endpoint := *parsedURL
+	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
+	pxVersion := pathSegments[len(pathSegments)-1]
+	return endpoint.String(), pxVersion, nil
 }
