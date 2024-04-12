@@ -7,6 +7,7 @@ metadata:
   annotations:
     cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-multi-disk-low-load.qcow2
     cdi.kubevirt.io/storage.bind.immediate.requested: "true"
+    cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
   storageClassName: test-multi-disk-low-load-sc
   accessModes:

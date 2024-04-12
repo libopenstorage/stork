@@ -6,6 +6,7 @@ metadata:
     app: containerized-data-importer
   annotations:
     cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/mysql-postgres-sysbench.qcow2
+    cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
   storageClassName: kubevirt-longevity-multi-disk-sc
   accessModes:

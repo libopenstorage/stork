@@ -2,6 +2,10 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fio-disk-1
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
   storageClassName: test-multi-disk-sc
   accessModes:

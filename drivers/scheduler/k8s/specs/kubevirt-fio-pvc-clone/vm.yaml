@@ -70,6 +70,8 @@ spec:
   dataVolumeTemplates:
     - metadata:
         name: fio-root-disk
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
       spec:
         source:
           pvc:
@@ -90,6 +92,8 @@ metadata:
   name: fio-data-disk-1
   labels:
     portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
   storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
   accessModes:
@@ -104,6 +108,8 @@ metadata:
   name: fio-data-disk-2
   labels:
     portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
   storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
   accessModes:
@@ -118,6 +124,8 @@ metadata:
   name: fio-data-disk-3
   labels:
     portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
   storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
   accessModes:
