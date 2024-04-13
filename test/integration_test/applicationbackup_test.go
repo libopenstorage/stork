@@ -1234,7 +1234,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	log.InfoD("Updated backup location on 2nd cluster %s: sync:%t", backupLocation2.Name, backupLocation2.Location.Sync)
 
 	backupToRestore, err := getSyncedBackupWithAnnotation(firstBackup, backupSyncAnnotation)
-	Dash.VerifyFatal(t, err != nil, true, "Backup found on the second cluster")
+	Dash.VerifyFatal(t, backupToRestore != nil, true, "Backup found on the second cluster")
 
 	// Create application restore using the backup selected, on second cluster
 	log.InfoD("Starting Restore on second cluster.")
