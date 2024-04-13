@@ -595,7 +595,9 @@ func intervalSnapshotScheduleWithSimilarLongNamesTest(t *testing.T) {
 
 	policyName := "intervalpolicy"
 	retain := 1
-	interval := 2
+	// Increasing the interval time as we have to validate multiple volumesnapshot schedules
+	// so that chances of snapshot trigerring gets reduced for verfication of later volumesnashot schedules
+	interval := 3
 	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
@@ -621,7 +623,6 @@ func intervalSnapshotScheduleWithSimilarLongNamesTest(t *testing.T) {
 	log.FailOnError(t, err, fmt.Sprintf("Error getting pvcs in namespace %s interval schedule policy", namespace))
 	log.InfoD("Found %v pvcs in namespace %s", len(pvcList.Items), namespace)
 
-	sleepTime := time.Duration((retain+1)*interval) * time.Minute
 	scheduleNames := make([]string, 0)
 	for _, pvc := range pvcList.Items {
 		scheduleName := fmt.Sprintf("intervalscheduletest-%s", pvc.Name)
@@ -647,11 +648,11 @@ func intervalSnapshotScheduleWithSimilarLongNamesTest(t *testing.T) {
 
 		_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
 		log.FailOnError(t, err, "Error creating interval snapshot schedule")
-		sleepTime := time.Duration((retain+1)*interval) * time.Minute
-		log.InfoD("Created snapshotschedule %v in namespace %v, sleeping for %v for schedule to trigger",
-			scheduleName, namespace, sleepTime)
+		log.InfoD("Created snapshotschedule %v in namespace %v", scheduleName, namespace)
 	}
 
+	sleepTime := time.Duration((retain+1)*interval) * time.Minute
+	log.InfoD("Sleeping for %v for schedule to trigger", sleepTime)
 	time.Sleep(sleepTime)
 
 	for _, scheduleName := range scheduleNames {
