@@ -651,7 +651,7 @@ func intervalSnapshotScheduleWithSimilarLongNamesTest(t *testing.T) {
 		log.InfoD("Created snapshotschedule %v in namespace %v", scheduleName, namespace)
 	}
 
-	sleepTime := time.Duration((retain+1)*interval) * time.Minute
+	sleepTime := time.Duration(interval-1) * time.Minute
 	log.InfoD("Sleeping for %v for schedule to trigger", sleepTime)
 	time.Sleep(sleepTime)
 
@@ -662,7 +662,7 @@ func intervalSnapshotScheduleWithSimilarLongNamesTest(t *testing.T) {
 			snapshotScheduleRetryInterval)
 		log.FailOnError(t, err, "Error validating interval snapshot schedule")
 		Dash.VerifyFatal(t, len(snapStatuses), 1, "Should have snapshots for only one policy type")
-		Dash.VerifyFatal(t, retain, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
+		Dash.VerifyFatal(t, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), retain, fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
 		log.InfoD("Validated snapshotschedule %v", scheduleName)
 	}
 
