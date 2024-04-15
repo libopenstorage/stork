@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name:  legacy-shared-sc-repl2
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  shared: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true

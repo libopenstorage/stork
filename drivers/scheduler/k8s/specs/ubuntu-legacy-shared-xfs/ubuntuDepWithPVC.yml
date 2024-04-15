@@ -1,0 +1,59 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: ubuntu-legacy-shared-source-pvc-xfs-01
+spec:
+  storageClassName: px-shr-intree-xfs
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: ubuntu-legacy-shared-target-pvc-xfs-01
+spec:
+  storageClassName: px-shr-intree-xfs
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ubuntu-test-deploy-xfs-0101
+  labels:
+    app: ubuntu-test-deploy-xfs-0101
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ubuntu-test-deploy-xfs-0101
+  template:
+    metadata:
+      labels:
+        app: ubuntu-test-deploy-xfs-0101
+      name: ubuntu-test-deploy-xfs-0101
+    spec:
+      containers:
+        - image: ubuntu
+          command: ["/bin/bash", "-c", "--" ]
+          args: ["i=$RANDOM;j=$RANDOM;k=0;while [ $k -le 10 ] ; do echo $i; echo $j; sleep 10; dd if=/dev/urandom of=/dataSource/testfile$i bs=1048576 count=100 ; dd if=/dataSource/testfile$i of=/dataTarget/testfile$j bs=1048576 count=100 ; done"]
+          imagePullPolicy: IfNotPresent
+          name: ubuntu
+          volumeMounts:
+            - name: testmount
+              mountPath: /dataSource
+            - name: testmount1
+              mountPath: /dataTarget
+      volumes:
+        - name: testmount
+          persistentVolumeClaim:
+            claimName: ubuntu-legacy-shared-source-pvc-xfs-01
+        - name: testmount1
+          persistentVolumeClaim:
+            claimName: ubuntu-legacy-shared-target-pvc-xfs-01

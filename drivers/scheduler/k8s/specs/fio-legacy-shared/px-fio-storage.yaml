@@ -1,0 +1,39 @@
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-legacy-shared-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  priority_io: "high"
+  io_profile: "db_remote"
+  repl: "3"
+  shared: "true"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-legacy-shared-pvc
+spec:
+  storageClassName: fio-legacy-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 2000Gi{{ end }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-legacy-shared-output-pvc
+spec:
+  storageClassName: fio-legacy-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

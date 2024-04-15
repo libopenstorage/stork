@@ -1,0 +1,45 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vdbench-legacy-shared
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vdbench-legacy-shared
+  template:
+    metadata:
+      labels:
+        app: vdbench-legacy-shared
+    spec:
+      containers:
+        - name: vdbench
+          image: portworx/vdbench:torpedo
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 500Mi
+            requests:
+              memory: 256Mi
+              cpu: 100m
+          command: ["./bench_runner.sh"]
+          args: ["Basic", "5400", "$(POD_NAME)", "output/$(POD_NAME)"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: vdbench-persistent-storage-enc
+              mountPath: /tmp
+            - name: vdbench-output-persistent-storage
+              mountPath: /output
+      volumes:
+        - name: vdbench-persistent-storage-enc
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-enc-legacy-shared
+        - name: vdbench-output-persistent-storage
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-output-legacy-shared

@@ -1494,10 +1494,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
+			/* Ignore shared setting.
 		case api.SpecShared:
 			if requestedSpec.Shared != vol.Spec.Shared {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
 			}
+			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.Sticky, vol.Spec.Sticky)
