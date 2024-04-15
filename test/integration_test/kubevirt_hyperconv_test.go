@@ -105,6 +105,7 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 		[]string{
 			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
 			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
+			"kubevirt-fedora-multiple-disks-datavol-only",
 		},
 		kubevirtScale,
 	)
@@ -164,6 +165,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		[]string{
 			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
 			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
+			"kubevirt-fedora-multiple-disks-datavol-only",
 		},
 		kubevirtScale,
 	)
@@ -307,6 +309,7 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 		[]string{
 			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
 			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
+			"kubevirt-fedora-multiple-disks-datavol-only",
 		},
 		kubevirtScale,
 	)
@@ -712,7 +715,7 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kubevirtTestState) {
 	verifyDisksAttachedOnSameNode(t, testState)
 	attachedNode := testState.vmDisks[0].attachedNode
-	log.InfoD("Restarting volume driver on node %s", attachedNode)
+	log.InfoD("Restarting volume driver on node %s", attachedNode.Name)
 	restartVolumeDriverAndWaitForReady(t, attachedNode)
 	waitForVolumeAttachmentsToMove(t, testState, attachedNode)
 }
@@ -876,7 +879,7 @@ func verifyVMProperties(
 		// verify replica node
 		replicaNodeIDs := getReplicaNodeIDs(vmDisk.apiVol)
 		if expectReplicaNode {
-			Dash.VerifyFatal(t, replicaNodeIDs[podNodeID], true, fmt.Sprintf("pod is running on node %s (%s) which is a replica node for %s", vmPod.Spec.NodeName, podNodeID, vmDisk))
+			Dash.VerifyFatal(t, replicaNodeIDs[podNodeID], true, fmt.Sprintf("pod is running on node %s (%s) which is NOT a replica node for %s", vmPod.Spec.NodeName, podNodeID, vmDisk))
 		} else {
 			Dash.VerifyFatal(t, replicaNodeIDs[podNodeID], false, fmt.Sprintf("pod is running on node %s (%s) which is a replica node for %s", vmPod.Spec.NodeName, podNodeID, vmDisk))
 		}
