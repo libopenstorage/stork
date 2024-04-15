@@ -1880,3 +1880,137 @@ func runCmd(cmd string, n node.Node) (string, error) {
 	}
 	return output, err
 }
+
+var _ = Describe("{StickyVolumeTest}", func() {
+	var testrailID = 0
+	//testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/TBD
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("StickyVolumeTest", "Validate Sticky volume deletion failure", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var (
+		contexts []*scheduler.Context
+		volList  []*volume.Volume
+	)
+
+	stepLog := "should deploy & validate applications; update sticky flag and try deleting the volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stickyvoltest-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		Step("get volume list for all apps", func() {
+			log.InfoD("get volume list for all apps")
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to list volumes for app: %s", ctx.App.Key)
+				volList = append(vols)
+			}
+		})
+
+		Step("update sticky flag for all volume(s) to 'on'", func() {
+			log.InfoD("update sticky flag for all volume(s) to 'on'")
+			for _, vol := range volList {
+				err = Inst().V.UpdateStickyFlag(vol.ID, "on")
+				log.FailOnError(err, "Failed to update sticky flag for volume: %s", vol.Name)
+			}
+		})
+
+		Step("get nodes & bounce volume driver", func() {
+			log.InfoD("get nodes & bounce volume driver")
+			for _, appNode := range node.GetStorageDriverNodes() {
+				stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StopVolDriverAndWait([]node.Node{appNode})
+					})
+
+				stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StartVolDriverAndWait([]node.Node{appNode})
+					})
+
+				Step("validate apps", func() {
+					for _, ctx := range contexts {
+						ValidateContext(ctx)
+					}
+				})
+			}
+
+			err := ValidateDataIntegrity(&contexts)
+			log.FailOnError(err, "error validating data integrity")
+		})
+
+		Step("destroy apps & pvc(s) but don't delete volume(s)", func() {
+			log.InfoD("destroy apps & pvc(s) but don't delete volume(s)")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				stepLog := fmt.Sprintf("start destroying %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+
+					for _, vol := range volList {
+						namespace := ctx.App.NameSpace
+						pvcObj, err := core.Instance().GetPersistentVolumeClaim(vol.Name, namespace)
+						if err != nil {
+							log.FailOnError(err, "Failed to get PVC for volume: %s", vol.Name)
+						} else {
+							err = core.Instance().DeletePersistentVolumeClaim(pvcObj.Name, namespace)
+							if err != nil {
+								log.FailOnError(err, "Failed to delete PVC %s", pvcObj.Name)
+							}
+						}
+					}
+
+					err = Inst().S.Destroy(ctx, opts)
+					if err != nil {
+						PrintDescribeContext(ctx)
+					}
+					log.FailOnError(err, "Failed to destroy app %s", ctx.App.Key)
+				})
+			}
+		})
+
+		Step("trying to delete the volumes with sticky=on", func() {
+			log.InfoD("trying to delete the volumes with sticky=on")
+			for _, vol := range volList {
+				err = Inst().V.DeleteVolume(vol.ID)
+				log.FailOnNoError(err, fmt.Sprintf("Expected Failure: \"Modify the sticky flag to delete this volume\";"+
+					"Failure seen: %v", err))
+			}
+		})
+
+		Step("update sticky flag for all volumes to 'off'", func() {
+			log.InfoD("update sticky flag for all volumes to 'off'")
+			for _, vol := range volList {
+				err = Inst().V.UpdateStickyFlag(vol.ID, "off")
+				log.FailOnError(err, "Failed to update sticky flag for volume: %s", vol.Name)
+			}
+		})
+
+		Step("trying to delete the volumes with sticky=off", func() {
+			log.InfoD("trying to delete the volumes with sticky=off")
+			for _, ctx := range contexts {
+				vols := DeleteVolumes(ctx, nil)
+				dash.VerifyFatal(len(vols), 0, fmt.Sprintf("Validate Volume(s) Deleted %s", vols))
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
