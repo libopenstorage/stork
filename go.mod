@@ -74,15 +74,15 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.2 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.15.1 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.1 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.5 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.5 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.19.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.22.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.27.2 // indirect
-	github.com/aws/smithy-go v1.20.1 // indirect
+	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
@@ -139,8 +139,9 @@ require (
 	github.com/IBM-Cloud/container-services-go-sdk v0.0.0-20240216115622-a311507b4b5b
 	github.com/IBM/go-sdk-core/v5 v5.15.3
 	github.com/IBM/vpc-go-sdk v0.48.0
-	github.com/aws/aws-sdk-go-v2 v1.25.1
+	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.2
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.40.5
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.148.2
 	github.com/aws/aws-sdk-go-v2/service/eks v1.39.2
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
