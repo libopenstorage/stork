@@ -6091,7 +6091,7 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 			})
 
 			Step("validate all apps after upgrade", func() {
-				ValidateApplications(*contexts)
+				validateContexts(event, contexts)
 			})
 		}
 	})
@@ -6129,7 +6129,7 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 			timeBeforeUpgrade time.Time
 			timeAfterUpgrade  time.Time
 		)
-		ValidateApplications(*contexts)
+		validateContexts(event, contexts)
 		stepLog = "start the upgrade of volume driver from catalog"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -6272,7 +6272,7 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 				statsData["status"] = upgradeStatus
 				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
 				// Validate Apps after volume driver upgrade
-				ValidateApplications(*contexts)
+				validateContexts(event, contexts)
 			}
 		})
 		err := ValidateDataIntegrity(contexts)
