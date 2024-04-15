@@ -1729,7 +1729,7 @@ func addTestModeEnvironmentVar() error {
 
 func IsCloud() bool {
 	stc, err := operator.Instance().ListStorageClusters(defaultAdminNamespace)
-	if err == nil {
+	if len(stc.Items) > 0 && err == nil {
 		log.InfoD("Storage cluster name: %s", stc.Items[0].Name)
 		if len(stc.Items) > 0 {
 			if oputils.IsEKS(&stc.Items[0]) {
