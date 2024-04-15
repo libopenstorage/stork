@@ -181,6 +181,22 @@ func GetIqnFromHosts(faClient *flasharray.Client, hostName string) ([]string, er
 	return nil, fmt.Errorf("Unable to fetch iqn details for the host specified [%v]", hostName)
 }
 
+// IsIQNExistsOnFA returns True if IQN is already associated to some Node
+func IsIQNExistsOnFA(faClient *flasharray.Client, iqnName string) (bool, error) {
+	hosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachHosts := range hosts {
+		for _, eachIqn := range eachHosts.Iqn {
+			if eachIqn == iqnName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // ListAllNetworkInterfacesOnFA returns all the list of Network Interfaces present
 func ListAllNetworkInterfacesOnFA(faClient *flasharray.Client) ([]flasharray.NetworkInterface, error) {
 	networkInterface, err := faClient.Networks.ListNetworkInterfaces()
