@@ -196,7 +196,7 @@ const (
 var TestSpecPath = "testspec"
 
 var (
-	opVer1_5_0, _   = version.NewVersion("1.5.0-")
+	// opVer1_5_0, _   = version.NewVersion("1.5.0-")
 	opVer1_9_1, _   = version.NewVersion("1.9.1-")
 	opVer1_10, _    = version.NewVersion("1.10.0-")
 	opVer23_3, _    = version.NewVersion("23.3.0-")
@@ -204,6 +204,7 @@ var (
 	opVer23_5_1, _  = version.NewVersion("23.5.1-")
 	opVer23_7, _    = version.NewVersion("23.7.0-")
 	opVer23_8, _    = version.NewVersion("23.8.0-")
+	opVer23_10, _   = version.NewVersion("23.10.0-")
 	OpVer23_10_3, _ = version.NewVersion("23.10.3-")
 	opVer24_1_0, _  = version.NewVersion("24.1.0-")
 
@@ -867,6 +868,14 @@ func ValidateStorageCluster(
 
 func validatePxPodsAnnotations(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Debug("Validate PX pods..")
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return err
+	}
+	if opVersion.LessThan(opVer23_10) {
+		logrus.Warnf("Skipping PX pods annotation validation for operator version [%s]", opVersion)
+		return nil
+	}
 	t := func() (interface{}, bool, error) {
 		// Get list of PX pods
 		pods, err := coreops.Instance().GetPodsByOwner(cluster.UID, cluster.Namespace)
@@ -5151,7 +5160,8 @@ func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interv
 	}
 
 	// PodDisruptionBudget is supported for k8s version greater than or equal to 1.21 and operator version greater than or equal to 1.5.0
-	if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer1_5_0) {
+	// Changing opVersion to 23.10.0 for PTX-23350 | TODO: add better logic with PTX-23407
+	if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer23_10) {
 		// This is only for non async DR setup
 		t := func() (interface{}, bool, error) {
 

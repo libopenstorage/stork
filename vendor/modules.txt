@@ -1082,7 +1082,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20240411205123-17cbbcb4a54e
+# github.com/libopenstorage/operator v0.0.0-20240416161334-c6f4eedd9106
 ## explicit; go 1.21
 github.com/libopenstorage/operator/api/px
 github.com/libopenstorage/operator/drivers/storage
