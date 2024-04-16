@@ -20,7 +20,6 @@ import (
 )
 
 func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv1.Action) {
-
 	if action.Status.Status == storkv1.ActionStatusSuccessful {
 		action.Status.Stage = storkv1.ActionStageScaleDownDestination
 		action.Status.Status = storkv1.ActionStatusInitial
@@ -32,6 +31,11 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
+	}
+
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusScheduled
+		ac.updateAction(action)
 	}
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
@@ -98,7 +102,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		msg := fmt.Sprintf("Waiting for the completion of migration %s", latestMigration.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusScheduled))
 		logEvents(msg, "out")
-		action.Status.Status = storkv1.ActionStatusInProgress
+		action.Status.Status = storkv1.ActionStatusScheduled
 		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
@@ -195,6 +199,11 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 		return
 	}
 
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
+	}
+
 	migrationScheduleName := action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference
 	namespaces := action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, action.Namespace)
@@ -259,6 +268,11 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
+	}
+
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
 	}
 
 	var migrationScheduleReference string
@@ -410,6 +424,11 @@ func (ac *ActionController) performLastMileMigrationDuringFailback(action *stork
 		return
 	}
 
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
+	}
+
 	migrationScheduleReference := action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleReference, action.Namespace)
@@ -429,7 +448,6 @@ func (ac *ActionController) performLastMileMigrationDuringFailback(action *stork
 
 // getLastMileMigrationSpec will get a migration spec from the given migrationschedule spec
 func getLastMileMigrationSpec(ms *storkv1.MigrationSchedule, operation string, actionCRUID string) *storkv1.Migration {
-
 	migrationName := getLastMileMigrationName(ms.GetName(), operation, actionCRUID)
 	migrationSpec := ms.Spec.Template.Spec
 	// Make startApplications always false
@@ -479,6 +497,11 @@ func (ac *ActionController) activateClusterDuringFailback(action *storkv1.Action
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
+	}
+
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
 	}
 
 	var config *rest.Config

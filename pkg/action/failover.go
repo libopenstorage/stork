@@ -32,6 +32,11 @@ func (ac *ActionController) validateBeforeFailover(action *storkv1.Action) {
 		return
 	}
 
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusScheduled
+		ac.updateAction(action)
+	}
+
 	// first get the migrationSchedule's static copy in the destination cluster
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
@@ -176,6 +181,11 @@ func (ac *ActionController) deactivateSourceDuringFailover(action *storkv1.Actio
 		return
 	}
 
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
+	}
+
 	migrationScheduleName := action.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference
 	namespaces := action.Spec.ActionParameter.FailoverParameter.FailoverNamespaces
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, action.Namespace)
@@ -191,11 +201,10 @@ func (ac *ActionController) deactivateSourceDuringFailover(action *storkv1.Actio
 	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
-		log.ActionLog(action).Errorf(msg)
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusScheduled),
-			msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
 	}
@@ -272,6 +281,11 @@ func (ac *ActionController) activateClusterDuringFailover(action *storkv1.Action
 		return
 	}
 
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
+	}
+
 	var config *rest.Config
 	namespaces := action.Spec.ActionParameter.FailoverParameter.FailoverNamespaces
 
@@ -312,11 +326,10 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
-		log.ActionLog(action).Errorf(msg)
-		ac.recorder.Event(action,
-			v1.EventTypeWarning,
-			string(storkv1.ActionStatusScheduled),
-			msg)
+		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		action.Status.Reason = msg
 		ac.updateAction(action)
 		return
 	}
@@ -432,6 +445,11 @@ func (ac *ActionController) performLastMileMigrationDuringFailover(action *stork
 		action.Status.FinishTimestamp = metav1.Now()
 		ac.updateAction(action)
 		return
+	}
+
+	if action.Status.Status == storkv1.ActionStatusInitial {
+		action.Status.Status = storkv1.ActionStatusInProgress
+		ac.updateAction(action)
 	}
 
 	migrationScheduleReference := action.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference
