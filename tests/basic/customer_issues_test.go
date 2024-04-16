@@ -1073,13 +1073,11 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 			"Verify Pod Recovers from RO mode after Bounce",
 			nil, 0)
 	})
-	var contexts []*scheduler.Context
-	var k8sCore = core.Instance()
 
 	itLog := "FADAPodRecoveryAfterBounce"
-	stepLog := "App Stuck in ContainerCreation State with Device Exists in the backend"
 	It(itLog, func() {
-		log.Infof(stepLog)
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
@@ -1143,7 +1141,7 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 				log.Infof("Validating test on Pod [%v]", eachPod)
 				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
 				log.FailOnError(err, "unable to find the node from the pod")
-				log.Infof("Pod with Name [%v] placed on Host [%v]", podNode.Name, eachPod.Status.HostIP)
+				log.Infof("Pod with Name [%v] placed on Host [%v]", eachPod.Name, eachPod.Status.HostIP)
 
 				// Stop iscsi traffic on the Node
 				log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
@@ -1196,6 +1194,185 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 					"Node did not start within the time specified")
 			}
 		})
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", func() {
+
+	/*
+				PTX : https://purestorage.atlassian.net/browse/PTX-19192
+			Test to check if Pod recovers after blocking iptable Rules and later unblocking them
+
+		Px Scenario 1  :
+			ALL Path Down with FADA volumes test cases should be tested and automated
+			Expectation : PODS should be up and running after connection restored.
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADAPodRecoveryAllPathDownUsingIptableRule",
+			"Verify Pod Recovers from RO mode after Bounce after blocking iptable Rules",
+			nil, 0)
+	})
+
+	itLog := "FADAPodRecoveryAllPathDownUsingIptableRule"
+	It(itLog, func() {
+
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
+
+		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
+		vols := make([]*volume.Volume, 0)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer flushAllIPtableRulesOnAllNodes()
+
+		stepLog = "Get all Pure Volumes and Validate "
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				appVols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
+				log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+
+				for _, eachVol := range appVols {
+					accessModes, err := getPVCAccessMode(eachVol.Name, eachVol.Namespace)
+					log.FailOnError(err, "Failed to get AccessModes for the volume [%v]", eachVol.Name)
+					for _, eachAMode := range accessModes {
+						// Validate if the Volume is Pure Volume
+						boolVol, err := Inst().V.IsPureVolume(eachVol)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+
+						// Get Details of the volume , check if the volume is PureBlock Volume
+						pureVol, err := IsVolumeTypePureBlock(ctx, eachVol.ID)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+
+						if eachAMode == "ReadWriteOnce" && boolVol && pureVol {
+							vols = append(vols, eachVol)
+						}
+					}
+				}
+			}
+		})
+
+		stepLog = "Get List of all volumes present in the cluster "
+		Step(stepLog, func() {
+			// Check if the Volume Counts matched criteria is > 0 , if not Fail the test
+			log.Infof("List of all volumes present in the cluster [%v]", vols)
+			dash.VerifyFatal(len(vols) != 0, true, fmt.Sprintf("failed to get list of Volumes belongs to Pure"))
+
+			log.Infof("List of all volumes present in the cluster [%v]", vols)
+		})
+
+		podNodes := []*corev1.Pod{}
+		stepLog = "Block iscsi port on all the nodes where volume is placed"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				inspectVolume, err := Inst().V.InspectVolume(eachVol.ID)
+				log.FailOnError(err, "Volumes inspect errored out")
+				log.Infof("VOLUME Inspect output [%v]", inspectVolume)
+
+				pods, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				for _, eachPod := range pods {
+					log.Infof("Validating test on Pod [%v]", eachPod)
+					podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+					log.FailOnError(err, "unable to find the node from the pod")
+					log.Infof("Pod with Name [%v] placed on Host [%v]", eachPod.Name, eachPod.Status.HostIP)
+
+					// Stop iscsi traffic on the Node
+					log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
+					err = blockiSCSIPortOnNode(podNode, true)
+					log.FailOnError(err, fmt.Sprintf("Failed to block iSCSI interface on Node [%v]", podNode.Name))
+					podNodes = append(podNodes, &eachPod)
+				}
+			}
+		})
+
+		// Sleep for sometime for PVC's to go in RO mode while data ingest in progress
+		time.Sleep(3 * time.Minute)
+
+		stepLog = "Verify if pods are not in Running state after blocking iptables"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				// Pod details after blocking IP
+				podsOnBlock, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+				for _, eachPodAfter := range podsOnBlock {
+					if eachPodAfter.Status.Phase == "Running" {
+						log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
+							eachPodAfter.Status.HostIP), "Pod is in Running state")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPodAfter.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+				}
+			}
+
+		})
+
+		stepLog = "Unblock Iptable rules on all the nodes"
+		Step(stepLog, func() {
+			for _, eachPod := range podNodes {
+				log.Infof("Validating test on Pod [%v]", eachPod)
+				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+				log.FailOnError(err, "unable to find the node from the pod")
+				// Revert iscsi rules that was set on the node
+				err = blockiSCSIPortOnNode(podNode, false)
+			}
+		})
+
+		// Sleep for some time for Px to come up online and working
+		time.Sleep(10 * time.Minute)
+
+		stepLog = "Verify Each pod in Running State after bringing back iptable Rules"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				// Pod details after blocking IP
+				podsAfterRevert, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				for _, eachPod := range podsAfterRevert {
+					if eachPod.Status.Phase != "Running" {
+						log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
+							eachPod.Status.HostIP), "Pod didn't bounce on the node")
+					}
+				}
+
+			}
+		})
+
+		stepLog = "wait for driver Up on all the nodes where iptables were blocked and later recovered"
+		Step(stepLog, func() {
+			for _, eachPod := range podNodes {
+				log.Infof("Validating test on Pod [%v]", eachPod)
+				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Enter and Exit maintenance mode to bring Node up
+				log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
+
+				// Validate if Volume Driver is up on all the nodes
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
+					"Node did not start within the time specified")
+			}
+		})
+
+		// Destroy All applications if test Passes
+		DestroyApps(contexts, nil)
+
 	})
 
 	JustAfterEach(func() {
