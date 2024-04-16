@@ -171,8 +171,7 @@ func (ac *ActionController) updateApplicationActivatedInRelevantMigrationSchedul
 	// relevant migrationSchedules are ones which are involved in migration of resources from at least one of the namespaces being activated.
 	// such migrationSchedules can reside in any of the activationNamespaces or in the adminNamespace
 	adminNs := utils.GetAdminNamespace()
-	migrationScheduleNamespaces := make([]string, 0)
-	migrationScheduleNamespaces = activationNamespaces
+	migrationScheduleNamespaces := activationNamespaces
 	if !slices.Contains(activationNamespaces, adminNs) {
 		migrationScheduleNamespaces = append(migrationScheduleNamespaces, adminNs)
 	}
@@ -196,9 +195,7 @@ func (ac *ActionController) updateApplicationActivatedInRelevantMigrationSchedul
 			logEvents(msg, "err")
 			ac.updateAction(action)
 		}
-		for _, item := range migrSchedules.Items {
-			migrationSchedules.Items = append(migrationSchedules.Items, item)
-		}
+		migrationSchedules.Items = append(migrationSchedules.Items, migrSchedules.Items...)
 	}
 
 	for _, migrSched := range migrationSchedules.Items {
