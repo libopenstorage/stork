@@ -3240,3 +3240,197 @@ func writeFioDataToVolume(volName string, n node.Node, size int64) error {
 	return nil
 
 }
+
+var _ = Describe("{OverCommitVolumeTest}", func() {
+	/*
+						    https://portworx.atlassian.net/browse/PTX-19103
+							Total 5 scenarios Tested
+							1. Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+							2. Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
+							3. Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes
+							4. Thin Provisioning with Global and Node Specific Settings [300% on a certain node and 200% over commit on the other nodes]
+							5. Disable all imposed cluster options and try creating thin provisioned volumes
+		                    Process:
+							1. Update the pxctl cluster with cluster option OverCommitPercent
+						    2. Check the overall storage pool capacity of a particular node
+						    3. create a volume with max of target size of the pool
+						    4. Now update the volume size more than size of the storage pool
+						    5. Check vol size is successful or not
+						    6. Also validate the creation of volume with size more than available capacity on the node
+
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("OverCommitVolumeTest", "Validate Overcommit volume size", nil, 0)
+	})
+	// check the size left in the node
+	itLog := "honor OverCommitPercent when resizing the volume"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		getRandomPoolandCalculateSize := func(snapshotPercent uint64) (selectedNode *node.Node, targetSizeGiB uint64) {
+			stNodes := node.GetStorageDriverNodes()
+			index := rand.Intn(len(stNodes))
+			selectedNode = &stNodes[index]
+			pools := selectedNode.Pools
+			poolToResize := pools[rand.Intn(len(pools))]
+			poolIDToResize := poolToResize.Uuid
+			originalSizeInBytes := poolToResize.TotalSize
+			log.InfoD("Original size of the pool %s is %d of node %s ", poolIDToResize, originalSizeInBytes, selectedNode.Name)
+			SnapshotPercent := snapshotPercent
+			SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
+			targetSizeInBytes := originalSizeInBytes - SubtractSize
+			targetSizeGiB = targetSizeInBytes / units.GiB
+			log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
+			return selectedNode, targetSizeGiB
+		}
+		CreateVolumeandValidate := func(selectedNode *node.Node, multiple uint64, targetSizeGiB uint64) {
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
+			basicVolumeCreate := fmt.Sprintf("volume create --nodes %s %s", selectedNode.Id, VolName)
+			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Base Volume creation with volume name %s successful", VolName)
+			log.InfoD("Now Resize volume with a size of %d %d time of targetsize of pool on node [%s] as %d overcommit percent imposed", multiple*targetSizeGiB, multiple, selectedNode.Name, multiple*100)
+			resizeVolumeCmd := fmt.Sprintf("volume update --size %d %s", multiple*targetSizeGiB, VolName)
+			_, volCreateErr := runPxctlCommand(resizeVolumeCmd, *selectedNode, nil)
+			log.FailOnError(volCreateErr, "volume resize failed  on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume [%s] resized to %d GiB", VolName, multiple*targetSizeGiB)
+			log.InfoD("Resize the volume more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
+			resizeVolumeGreaterThanPoolSizeCmd := fmt.Sprintf("volume update --size %d %s", (multiple+1)*targetSizeGiB, VolName)
+			_, err = runPxctlCommand(resizeVolumeGreaterThanPoolSizeCmd, *selectedNode, nil)
+			if err != nil {
+				IsExpectederr := strings.Contains(err.Error(), "Failed to resize volume")
+				dash.VerifyFatal(IsExpectederr, true, err.Error())
+			}
+
+			err = Inst().V.DeleteVolume(VolName)
+			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
+			log.InfoD("Successfully deleted volume [%s]", VolName)
+			log.InfoD("Try Creating a New Volume with size more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
+			id = uuid.New()
+			VolName = fmt.Sprintf("volume_%s", id.String()[:8])
+			volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", (multiple+1)*targetSizeGiB, selectedNode.Id, VolName)
+			_, volerr := runPxctlCommand(volCreatecmd, *selectedNode, nil)
+			IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
+			if volerr != nil {
+				dash.VerifyFatal(IsExpectederr, true, volerr.Error())
+			} else {
+				PrintInspectVolume(VolName)
+				dash.VerifyFatal(volerr, fmt.Errorf("Volume Creation should be failed"), "Volume should not be created as we have imposed the cluster options")
+			}
+			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
+			_, disable_err := runPxctlCommand(DisableClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(disable_err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+
+		}
+
+		//Case 1: Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+		stepLog = "Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(30)
+			SetClusterOptionscmdOnNode := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}} ]'", selectedNode.Id)
+			_, err := runPxctlCommand(SetClusterOptionscmdOnNode, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 1, targetSizeGiB)
+		})
+
+		// Case 2: Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
+		stepLog = "Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(15)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 15}]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 1, targetSizeGiB)
+
+		})
+
+		//Case 3 : Verify Thin Provisioning 200% (Global)  when resizing the volume are honoured
+		stepLog = "Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(15)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 2, targetSizeGiB)
+
+		})
+
+		//Case 4: Thin Provisioning with Global and Node Specific Settings
+		stepLog = "Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(30)
+			SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 3, targetSizeGiB)
+
+			log.Info("Try Creating a New Volume with size more than 200% available capacity on any other node ")
+			stNodes := node.GetStorageDriverNodes()
+			for _, node := range stNodes {
+				if node.Name != selectedNode.Name {
+					SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
+					_, err := runPxctlCommand(SetClusterOptionscmd, node, nil)
+					log.FailOnError(err, "Failed to set cluster options")
+					id := uuid.New()
+					VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+					volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", 3*targetSizeGiB, node.Id, VolName)
+					_, volerr := runPxctlCommand(volCreatecmd, node, nil)
+					if volerr != nil {
+						IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
+						dash.VerifyFatal(IsExpectederr, true, volerr.Error())
+
+					}
+					break
+				}
+
+			}
+
+		})
+		//Case 5 : Disable all imposed cluster options and try creating thin provisioned volumes
+		stepLog = "Create a volume again with size greater than Storage pool size as we have disabled the thick provisioning (Should Be created)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(0)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+			volerr := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 3*targetSizeGiB, 1)
+			log.FailOnError(volerr, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume created with name [%s]", VolName)
+			//Delete the Volume , As we have created it only for Validation Purpose
+			err = Inst().V.DeleteVolume(VolName)
+			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
+
+		})
+
+	})
+})
