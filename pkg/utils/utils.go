@@ -424,3 +424,24 @@ func GetAdminNamespace() string {
 	}
 	return adminNs
 }
+
+func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.MigrationSchedule, activationNs []string) (bool, error) {
+	namespaceList := migrationSchedule.Spec.Template.Spec.Namespaces
+	namespaceSelectors := migrationSchedule.Spec.Template.Spec.NamespaceSelectors
+	migrationNamespaces, err := GetMergedNamespacesWithLabelSelector(namespaceList, namespaceSelectors)
+	if err != nil {
+		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
+	}
+	activationNamespacesSet := make(map[string]bool)
+	for _, ns := range activationNs {
+		activationNamespacesSet[ns] = true
+	}
+	found := false
+	for _, ns := range migrationNamespaces {
+		if activationNamespacesSet[ns] {
+			found = true
+			break
+		}
+	}
+	return found, nil
+}

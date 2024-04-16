@@ -236,7 +236,7 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 	}
 	// get destination i.e. current cluster's config
 	clusterConfig := ac.config
-	ac.deactivateClusterDuringDR(action, actualNamespaces, sourceConfig, clusterConfig)
+	ac.deactivateClusterDuringDR(action, actualNamespaces, migrationNamespaces, sourceConfig, clusterConfig)
 }
 
 func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
