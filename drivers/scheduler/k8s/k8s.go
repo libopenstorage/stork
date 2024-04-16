@@ -5526,7 +5526,7 @@ func (k *K8s) WaitForCloneToSucceed(namespace, pvcName string) error {
 		if err != nil {
 			return nil, true, err
 		}
-		if clonePhase, ok := pvc.Annotations["cdi.kubevirt.io/clonePhase"]; ok && clonePhase == "Succeeded" {
+		if clonePhase, ok := pvc.Annotations["cdi.kubevirt.io/storage.condition.source.running.message"]; ok && clonePhase == "Clone Complete" {
 			log.Infof("Clone operation succeeded for PVC: %s", pvcName)
 			return nil, false, nil
 		}
