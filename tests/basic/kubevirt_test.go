@@ -4,6 +4,7 @@ import (
 	context1 "context"
 	"fmt"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -13,6 +14,8 @@ import (
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 	"time"
+	"net/url"
+	"strings"
 )
 
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
@@ -824,6 +827,100 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 			log.Infof("Removing label [%s] on node: %s", k, selectedStorageNode.Name)
 			err := Inst().S.RemoveLabelOnNode(selectedStorageNode, k)
 			log.FailOnError(err, "failed to remove label [%s] on node: %s", k, selectedStorageNode.Name)
+		}
+	})
+})
+
+var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeClusterAndValidateKubeVirt", "Upgrade OCP cluster and validate kubevirt apps", nil, 0)
+	})
+
+	var appCtxs []*scheduler.Context
+
+	itLog := "Upgrade OCP cluster and validate kubevirt apps"
+	It(itLog, func() {
+		stepLog := "schedule kubevirt VMs"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplications(taskName)...)
+			}
+		})
+		stepLog = "validate kubevirt apps before upgrade"
+		Step(stepLog, func() {
+			ValidateApplications(appCtxs)
+			for _, appCtx := range appCtxs {
+				isVmBindMounted, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(isVmBindMounted, true, "Failed to verify bind mount?")
+			}
+		})
+
+		var versions []string
+		if len(Inst().SchedUpgradeHops) > 0 {
+			versions = strings.Split(Inst().SchedUpgradeHops, ",")
+		}
+		if len(versions) == 0 {
+			log.Fatalf("No versions to upgrade")
+			return
+		}
+		for _, version := range versions {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
+				}
+
+				err = Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+
+				PrintK8sCluterInfo()
+			})
+
+			Step("validate storage components", func() {
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
+				err = Inst().V.ValidateDriver(u.String(), true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+
+				// Printing cluster node info after the upgrade
+				PrintK8sCluterInfo()
+			})
+
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Refresh Node Registry failed")
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Refresh Driver Endpoints failed")
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
+			})
+
+			stepLog = "validate kubevirt apps after upgrade and destroy"
+			Step(stepLog, func() {
+				ValidateApplications(appCtxs)
+				for _, ctx := range appCtxs {
+					isVmBindMounted, err := IsVMBindMounted(ctx, false)
+					log.FailOnError(err, "Failed to verify bind mount")
+					dash.VerifyFatal(isVmBindMounted, true, "Failed to verify bind mount?")
+				}
+				DestroyApps(appCtxs, nil)
+			})
 		}
 	})
 })
