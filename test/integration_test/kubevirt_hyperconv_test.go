@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/stork/pkg/log"
@@ -27,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	"kubevirt.io/client-go/kubecli"
 	cdiv1beta1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 )
 
@@ -273,6 +271,8 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 	)
 	allNodes := node.GetNodesByVoDriverNodeID()
 
+	// set the cluster option to reduce the wait time
+	setFixVPSJobFrequency(t, allNodes)
 	for _, appCtx := range ctxs {
 		testState := &kubevirtTestState{
 			appCtx:   appCtx,
@@ -280,7 +280,6 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 		}
 		gatherInitialVMIInfo(t, testState)
 
-		// TODO: need to set the cluster option --fix-vps-frequency-in-minutes to reduce the wait time
 		require.Eventuallyf(t, func() bool {
 			return checkVMDisksCollocation(testState)
 		}, time.Hour, 5*time.Second, "vm disks were not collocated")
@@ -480,26 +479,6 @@ func checkVMDisksCollocation(testState *kubevirtTestState) bool {
 	return true
 }
 
-func getKubevirtClient(t *testing.T) kubecli.KubevirtClient {
-	// TODO: use reflect to get kubevirt typed client until sched-ops is vendored into stork.
-	// Currently, there are vendoring issues. When those issues are fixed, we can just use the following.
-	//
-	//	kvCli := kubevirt.Instance().GetKubevirtClient()
-
-	const ptrSize = unsafe.Sizeof(new(int))
-
-	kc := kubevirt.Instance().(*kubevirt.Client)
-	_, err := kc.GetVersion() // for initClient()
-	if err != nil {
-		log.Warn("kubevirt GetVersion failed: %v", err)
-		// continue
-	}
-
-	kvCli := *(*kubecli.KubevirtClient)(unsafe.Pointer(uintptr(unsafe.Pointer(kc)) + uintptr(ptrSize)))
-	Dash.VerifyFatal(t, kvCli != nil, true, "Failed to get kubevirt client")
-	return kvCli
-}
-
 func addAndVerifyHotPlugDisks(t *testing.T, testState *kubevirtTestState) {
 	// add 3 disks with ownerRef in DataVolume. PX will deduce VM UID from that ownerref during preCreate.
 	// This simulates how OCP web interface adds the hotplug disks.
@@ -543,7 +522,7 @@ func addHotPlugDisk(t *testing.T, testState *kubevirtTestState, dvName string, w
 	appCtx := testState.appCtx
 	ns := appCtx.App.NameSpace
 
-	kvCli := getKubevirtClient(t)
+	kvCli := kubevirt.Instance().GetKubevirtClient()
 
 	dv := &cdiv1beta1.DataVolume{
 		ObjectMeta: metav1.ObjectMeta{
@@ -632,10 +611,20 @@ func verifyHotPlugDisk(t *testing.T, testState *kubevirtTestState, hpDisk *hotPl
 		Dash.VerifyFatal(t, isHotplugDiskCollocated(testState, hpDisk), true, fmt.Sprintf("%s was collocated", hpDisk))
 		return
 	}
-	// TODO: need to set the cluster option --fix-vps-frequency-in-minutes to reduce the wait time
+	// set the cluster option to reduce the wait time
+	setFixVPSJobFrequency(t, testState.allNodes)
 	require.Eventuallyf(t, func() bool {
 		return isHotplugDiskCollocated(testState, hpDisk)
 	}, time.Hour, 5*time.Second, "%s was not collocated", hpDisk)
+}
+
+func setFixVPSJobFrequency(t *testing.T, allNodes map[string]node.Node) {
+	var node node.Node
+	for _, node = range allNodes {
+		break
+	}
+	err := volumeDriver.SetClusterOpts(node, map[string]string{"--fix-vps-frequency-in-minutes": "1"})
+	require.NoError(t, err)
 }
 
 func isHotplugDiskCollocated(testState *kubevirtTestState, hpDisk *hotPlugDisk) bool {
