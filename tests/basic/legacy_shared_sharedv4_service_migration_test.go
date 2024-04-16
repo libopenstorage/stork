@@ -803,7 +803,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		setMigrateLegacySharedToSharedv4Service(true)
+		//setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(180 * time.Second) // sleep 3 minutes.
 
 		stepLog := "kill px on one nodes and let all Apps come"

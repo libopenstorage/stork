@@ -2409,7 +2409,7 @@ func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.Trigg
 				return fmt.Errorf("unable to find PID for px daemon in output [%s]", out)
 			}
 
-			pxCrashCmd := fmt.Sprintf("sudo pkill -9 %s", processPid)
+			pxCrashCmd := fmt.Sprintf("sudo kill -9 %s", processPid)
 			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
 				Timeout:         crashDriverTimeout,
 				TimeBeforeRetry: defaultRetryInterval,
