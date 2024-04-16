@@ -2,9 +2,11 @@ package tests
 
 import (
 	"fmt"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
@@ -13,7 +15,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies if the backup pods are in Ready state or not

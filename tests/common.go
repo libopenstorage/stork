@@ -9,11 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Masterminds/semver/v3"
-	"github.com/hashicorp/go-version"
-	pxapi "github.com/libopenstorage/operator/api/px"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +23,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
+	"github.com/hashicorp/go-version"
+	pxapi "github.com/libopenstorage/operator/api/px"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 
 	context1 "context"
 
