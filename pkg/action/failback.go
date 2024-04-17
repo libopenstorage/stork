@@ -36,7 +36,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("error fetching Migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
+		msg := fmt.Sprintf("error fetching MigrationSchedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -46,9 +46,9 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	}
 
 	if len(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces) > 0 {
-		namespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
+		migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to get list of namespaces from Migrationschedule %s", migrationSchedule.Name)
+			msg := fmt.Sprintf("Failed to get list of namespaces from MigrationSchedule %s", migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -57,8 +57,8 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			return
 		}
 
-		if isSubList, _, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
-			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from Migrationschedule %s", migrationSchedule.Name)
+		if isSubList, _, _ := utils.IsSubList(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, migrationNamespaces); !isSubList {
+			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from MigrationSchedule %s", migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
