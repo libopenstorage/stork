@@ -3,8 +3,13 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -13,9 +18,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
-	"net/url"
-	"strings"
-	"time"
 )
 
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
@@ -949,5 +951,89 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 				DestroyApps(appCtxs, nil)
 			})
 		}
+	})
+})
+
+var _ = Describe("{RebootRootDiskAttachedNode}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootRootDiskAttachedNode", "Reboot the node where VMs root disk is attached", nil, 0)
+		DeployVMTemplatesAndValidate()
+	})
+	var appCtxs []*scheduler.Context
+
+	itLog := "Reboot node where Kubevirt VMs root disk is attached"
+	It(itLog, func() {
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
+			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appCtxs = append(appCtxs, ScheduleApplications("reboot")...)
+			}
+		})
+		defer DestroyApps(appCtxs, nil)
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount after initial deploy")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount after intial deploy")
+		}
+
+		stepLog = "Get node where VM's root disk is attached and reboot that node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, virtualMachineCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(virtualMachineCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount pre node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "Failed to to get VMs from scheduled contexts")
+
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					log.Infof("Pre-reboot VM [%s] in namespace [%s] is scheduled on node [%s]. Rebooting it.", vm.Name, vm.Namespace, nodeName)
+					nodeObj, err := node.GetNodeByName(nodeName)
+					log.FailOnError(err, "Failed to get node obj for node name: %s", nodeName)
+
+					err = Inst().N.RebootNodeAndWait(nodeObj)
+					log.FailOnError(err, "Failed to reboot  node: %s", nodeObj.Name)
+					log.Infof("Succesfully rebooted node: %s", nodeObj.Name)
+				}
+
+				ValidateApplications(appCtxs)
+
+				// Get updated VM list and validate bind mount again
+				// TODO: PTX-23439 Add validation that VM started on a different node than it's original node
+				vms, err = GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "Failed to to get VMs from scheduled contexts")
+
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					log.Infof("Post reboot VM [%s] in namespace [%s] is scheduled on node [%s]", vm.Name, vm.Namespace, nodeName)
+				}
+
+				bindMount, err = IsVMBindMounted(virtualMachineCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount post node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+			}
+
+			ValidateApplications(appCtxs)
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
 	})
 })

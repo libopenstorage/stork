@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ubuntu-template-pvc
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/disk_0.img
+spec:
+  storageClassName: sc-vm-template
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi

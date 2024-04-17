@@ -1,0 +1,96 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  annotations:
+  labels:
+    vm.kubevirt.io/template: windows2k22-server-medium
+    vm.kubevirt.io/template.namespace: openshift
+  name: windows-test-vm-wait-first-consumer
+spec:
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/flavor: medium
+        vm.kubevirt.io/os: windows2k22
+        vm.kubevirt.io/workload: server
+      labels:
+        kubevirt.io/size: medium
+    spec:
+      domain:
+        clock:
+          timer:
+            hpet:
+              present: false
+            hyperv: {}
+            pit:
+              tickPolicy: delay
+            rtc:
+              tickPolicy: catchup
+          utc: {}
+        cpu:
+          cores: 1
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - bootOrder: 1
+            disk:
+              bus: sata
+            name: rootdisk
+          inputs:
+          - bus: usb
+            name: tablet
+            type: tablet
+          tpm: {}
+        features:
+          acpi: {}
+          apic: {}
+          hyperv:
+            frequencies: {}
+            ipi: {}
+            reenlightenment: {}
+            relaxed: {}
+            reset: {}
+            runtime: {}
+            spinlocks:
+              spinlocks: 8191
+            synic: {}
+            synictimer:
+              direct: {}
+            tlbflush: {}
+            vapic: {}
+            vpindex: {}
+          smm:
+            enabled: true
+        firmware:
+          bootloader:
+            bios: {}
+        machine:
+          type: pc-q35-rhel9.2.0
+        resources:
+          requests:
+            memory: 4Gi
+      evictionStrategy: LiveMigrate
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - dataVolume:
+          name: windows-2022-datavol-wait-first-consumer
+        name: rootdisk
+  dataVolumeTemplates:
+    - metadata:
+        name: windows-2022-datavol-wait-first-consumer
+      spec:
+        preallocation: false
+        source:
+          pvc:
+            name: win22-template-pvc
+            namespace: openshift-virtualization-os-images
+        storage:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 50Gi
+          storageClassName: sc-vm-wait-first-consumer
+          volumeMode: Filesystem

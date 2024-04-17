@@ -3,7 +3,6 @@ package tests
 import (
 	context1 "context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"regexp"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
@@ -26,12 +26,19 @@ import (
 const (
 	mountTypeBind = "bind"
 	mountTypeNFS  = "nfs"
+
+	kubevirtTemplates                     = "kubevirt-templates"
+	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
+	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
+	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
 )
 
 var (
 	defaultVmMountCheckTimeout       = 15 * time.Minute
 	defaultVmMountCheckRetryInterval = 30 * time.Second
 	k8sKubevirt                      = kubevirt.Instance()
+	importerPodCompletionTimeout     = 30 * time.Minute
+	importerPodRetryInterval         = 20 * time.Second
 )
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
@@ -647,4 +654,34 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 		}
 	}
 	return nil
+}
+func DeployVMTemplatesAndValidate() error {
+	_, err := Inst().S.Schedule("",
+		scheduler.ScheduleOptions{
+			AppKeys:   []string{kubevirtTemplates},
+			Namespace: kubevirtTemplateNamespace,
+		})
+
+	// if new templates are deployed, this function will wait for them to get imported else it will exit
+	waitForCompletedAnnotations := func() (interface{}, bool, error) {
+		// Loop through all PVCs and check for annotations that signify existing downloaded templates
+		pvcTemplates, err := core.Instance().GetPersistentVolumeClaims(kubevirtTemplateNamespace, nil)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get any PVCs in namespace: %s. Retrying.", kubevirtTemplateNamespace)
+		}
+		for _, pvc := range pvcTemplates.Items {
+			if pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation] != "Completed" {
+				return nil, true, fmt.Errorf("storage condition is not completed on pvc %s. Status: %s. Retrying.",
+					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation])
+			}
+			if pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation] != "Succeeded" {
+				return nil, true, fmt.Errorf("pod phase has not succeeded on pvc %s. Phase: %s. Retrying.",
+					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation])
+			}
+		}
+		log.Infof("All templates are downloaded.")
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)
+	return err
 }

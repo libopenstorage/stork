@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: sc-vm-template 
+parameters:
+  repl: "2"
+  sharedv4_mount_options: vers=3.0,nolock
+provisioner: pxd.portworx.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate

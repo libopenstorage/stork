@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: win22-template-pvc
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: http://pwx-ova.pwx.purestorage.com/templates/qcow2/win2022en-standard-minimal.qcow2 
+spec:
+  storageClassName: sc-vm-template
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
