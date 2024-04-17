@@ -45,7 +45,7 @@ func TestDRActions(t *testing.T) {
 
 // testDRActionFailoverMultipleNamespacesTest tests failover action for multiple namespaces
 func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
-	var testrailID, testResult = 87163548, testResultFail
+	var testrailID, testResult = 297512, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
@@ -86,34 +86,24 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 
 	sourceDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
-	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
 	sourceDeploymentReplicas := *sourceDeployments.Items[0].Spec.Replicas
 	sourceStatefulsets, err := apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
-	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
 	sourceStatefulsetReplicas := *sourceStatefulsets.Items[0].Spec.Replicas
 
 	// Create the clusterpair
 	clusterPairNamespace := defaultAdminNamespace
-	if !unidirectionalClusterpair {
-		log.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
-		log.InfoD("Name: %s", remotePairName)
-		log.InfoD("Namespace: %s", clusterPairNamespace)
-		log.InfoD("Backuplocation: %s", defaultBackupLocation)
-		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
-		log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
-		err = setSourceKubeConfig()
-		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	} else {
-		log.Info("Creating Unidirectional flag is set, will create unidirectional cluster pair:")
-		log.InfoD("Name: %s", remotePairName)
-		log.InfoD("Namespace: %s", clusterPairNamespace)
-		log.InfoD("Backuplocation: %s", defaultBackupLocation)
-		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, true, false)
-		log.FailOnError(t, err, "failed to set unidirectional cluster pair: %v", err)
-	}
+	log.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
+	log.InfoD("Name: %s", remotePairName)
+	log.InfoD("Namespace: %s", clusterPairNamespace)
+	log.InfoD("Backuplocation: %s", defaultBackupLocation)
+	log.InfoD("Secret name: %s", defaultSecretName)
+	err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+	log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Create the migration schedule
 	// we want to create the schedulePolicy and migrationSchedule using storkctl instead of scheduling apps using torpedo's scheduler
@@ -141,7 +131,7 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 	namespacesValue := fmt.Sprintf("%s,%s", mysqlNamespace, elasticsearchNamespace)
 	cmdArgs := []string{"create", "migrationschedule", migrationScheduleName, "-c", remotePairName,
 		"--namespaces", namespacesValue, "-n", defaultAdminNamespace}
-	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[instanceID])
 
 	// bump time of the world by 6 minutes
 	mockNow := time.Now().Add(6 * time.Minute)
@@ -154,6 +144,8 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 
 	// Failover the application
 	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
 	failoverCmdArgs := map[string]string{
 		"migration-reference": migrationScheduleName,
 		"include-namespaces":  namespacesValue,
@@ -165,7 +157,6 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, defaultAdminNamespace)
 
 	// Verify the application is running on the destination cluster
-	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 	destDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
 	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
@@ -176,10 +167,9 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
 	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
 
-	if !unidirectionalClusterpair {
-		err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
-		log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
-	}
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+
 	// Verify the application is not running on the source cluster
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
@@ -195,7 +185,7 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 
 	//Delete migrationSchedules using storkCtl
 	cmdArgs = []string{"delete", "migrationschedule", migrationScheduleName, "-n", defaultAdminNamespace}
-	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 
 	for schedulePolicyName := range schedulePolicyArgs {
 		cmdArgs := []string{"delete", "schedulepolicy", schedulePolicyName}
@@ -216,7 +206,7 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 
 // testDRActionFailoverSubsetNamespacesTest tests failover action for subset of namespaces
 func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
-	var testrailID, testResult = 87163549, testResultFail
+	var testrailID, testResult = 297513, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
@@ -257,34 +247,24 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 
 	sourceDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
-	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
 	sourceDeploymentReplicas := *sourceDeployments.Items[0].Spec.Replicas
 	sourceStatefulsets, err := apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
-	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
 	sourceStatefulsetReplicas := *sourceStatefulsets.Items[0].Spec.Replicas
 
 	// Create the clusterpair
 	clusterPairNamespace := defaultAdminNamespace
-	if !unidirectionalClusterpair {
-		log.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
-		log.InfoD("Name: %s", remotePairName)
-		log.InfoD("Namespace: %s", clusterPairNamespace)
-		log.InfoD("Backuplocation: %s", defaultBackupLocation)
-		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
-		log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
-		err = setSourceKubeConfig()
-		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	} else {
-		log.Info("Creating Unidirectional flag is set, will create unidirectional cluster pair:")
-		log.InfoD("Name: %s", remotePairName)
-		log.InfoD("Namespace: %s", clusterPairNamespace)
-		log.InfoD("Backuplocation: %s", defaultBackupLocation)
-		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, true, false)
-		log.FailOnError(t, err, "failed to set unidirectional cluster pair: %v", err)
-	}
+	log.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
+	log.InfoD("Name: %s", remotePairName)
+	log.InfoD("Namespace: %s", clusterPairNamespace)
+	log.InfoD("Backuplocation: %s", defaultBackupLocation)
+	log.InfoD("Secret name: %s", defaultSecretName)
+	err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+	log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Create the migration schedule
 	// we want to create the schedulePolicy and migrationSchedule using storkctl instead of scheduling apps using torpedo's scheduler
@@ -312,7 +292,7 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 	namespacesValue := fmt.Sprintf("%s,%s", mysqlNamespace, elasticsearchNamespace)
 	cmdArgs := []string{"create", "migrationschedule", migrationScheduleName, "-c", remotePairName,
 		"--namespaces", namespacesValue, "-n", defaultAdminNamespace}
-	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[instanceID])
 
 	// bump time of the world by 6 minutes
 	mockNow := time.Now().Add(6 * time.Minute)
@@ -325,6 +305,8 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 
 	// Failover the application
 	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
 	failoverCmdArgs := map[string]string{
 		"migration-reference": migrationScheduleName,
 		"include-namespaces":  elasticsearchNamespace,
@@ -336,7 +318,6 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, defaultAdminNamespace)
 
 	// Verify that only elasticsearch application is running on the destination cluster
-	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 	destDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
 	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
@@ -347,10 +328,9 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
 	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
 
-	if !unidirectionalClusterpair {
-		err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
-		log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
-	}
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+
 	// Verify that mysql application is running but not elasticsearch on the source cluster
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
@@ -366,7 +346,7 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 
 	//Delete migrationSchedules using storkCtl
 	cmdArgs = []string{"delete", "migrationschedule", migrationScheduleName, "-n", defaultAdminNamespace}
-	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 
 	for schedulePolicyName := range schedulePolicyArgs {
 		cmdArgs := []string{"delete", "schedulepolicy", schedulePolicyName}
@@ -387,7 +367,7 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 
 // testDRActionFailoverWithMigrationRunningTest tests failover action when migration is running
 func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
-	var testrailID, testResult = 87163546, testResultFail
+	var testrailID, testResult = 296306, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
@@ -419,30 +399,20 @@ func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
 
 	sourceDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
-	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
 	sourceDeploymentReplicas := *sourceDeployments.Items[0].Spec.Replicas
 
 	// Create the clusterpair
 	clusterPairNamespace := mysqlNamespace
-	if !unidirectionalClusterpair {
-		log.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
-		log.InfoD("Name: %s", remotePairName)
-		log.InfoD("Namespace: %s", clusterPairNamespace)
-		log.InfoD("Backuplocation: %s", defaultBackupLocation)
-		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
-		log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
-		err = setSourceKubeConfig()
-		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
-	} else {
-		log.Info("Creating Unidirectional flag is set, will create unidirectional cluster pair:")
-		log.InfoD("Name: %s", remotePairName)
-		log.InfoD("Namespace: %s", clusterPairNamespace)
-		log.InfoD("Backuplocation: %s", defaultBackupLocation)
-		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleUnidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, true, false)
-		log.FailOnError(t, err, "failed to set unidirectional cluster pair: %v", err)
-	}
+	log.Info("Bidirectional flag is set, will create bidirectional cluster pair:")
+	log.InfoD("Name: %s", remotePairName)
+	log.InfoD("Namespace: %s", clusterPairNamespace)
+	log.InfoD("Backuplocation: %s", defaultBackupLocation)
+	log.InfoD("Secret name: %s", defaultSecretName)
+	err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+	log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Create the migration schedule
 	// we want to create the schedulePolicy and migrationSchedule using storkctl instead of scheduling apps using torpedo's scheduler
@@ -469,7 +439,7 @@ func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
 	migrationScheduleName := "forward-migration-schedule-running-migration"
 	cmdArgs := []string{"create", "migrationschedule", migrationScheduleName, "-c", remotePairName,
 		"--namespaces", mysqlNamespace, "-n", mysqlNamespace}
-	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[instanceID])
 
 	// bump time of the world by 1 minutes
 	mockNow := time.Now().Add(1 * time.Minute)
@@ -479,6 +449,8 @@ func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
 
 	// Failover the application
 	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
 	failoverCmdArgs := map[string]string{
 		"migration-reference": migrationScheduleName,
 		"include-namespaces":  mysqlNamespace,
@@ -490,16 +462,13 @@ func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
 	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, mysqlNamespace)
 
 	// Verify the application is running on the destination cluster
-	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 	destDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
 	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
 	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, sourceDeploymentReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceDeploymentReplicas, mysqlNamespace))
 
-	if !unidirectionalClusterpair {
-		err = storkops.Instance().DeleteClusterPair(remotePairName, mysqlNamespace)
-		log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, mysqlNamespace, err)
-	}
+	err = storkops.Instance().DeleteClusterPair(remotePairName, mysqlNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, mysqlNamespace, err)
 
 	// Verify the application is not running on the source cluster
 	err = setSourceKubeConfig()
@@ -511,7 +480,7 @@ func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
 
 	//Delete migrationSchedules using storkCtl
 	cmdArgs = []string{"delete", "migrationschedule", migrationScheduleName, "-n", mysqlNamespace}
-	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[migrationKey])
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 
 	for schedulePolicyName := range schedulePolicyArgs {
 		cmdArgs := []string{"delete", "schedulepolicy", schedulePolicyName}
