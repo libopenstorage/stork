@@ -13,9 +13,9 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 	"net/url"
 	"strings"
+	"time"
 )
 
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
@@ -78,6 +78,12 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
 			log.FailOnError(err, "File integrity validation failed")
 		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -109,7 +115,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
 		})
-		defer DestroyApps(appCtxs, nil)
+
 		ValidateApplications(appCtxs)
 		stepLog = "Write some data in the VM and calculate it's md5sum"
 		Step(stepLog, func() {
@@ -136,6 +142,12 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 		Step(stepLog, func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
 			log.FailOnError(err, "File integrity validation failed")
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -248,6 +260,11 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			log.FailOnError(err, "File integrity validation failed")
 		})
 
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
 	})
 
 	JustAfterEach(func() {
@@ -380,6 +397,11 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 			log.FailOnError(err, "File integrity validation failed")
 		})
 
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
 	})
 
 	JustAfterEach(func() {
@@ -563,7 +585,6 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
-		//defer DestroyApps(appCtxs, nil)
 		ValidateApplications(appCtxs)
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
@@ -608,6 +629,12 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 		Step(stepLog, func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
 			log.FailOnError(err, "File integrity validation failed")
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
