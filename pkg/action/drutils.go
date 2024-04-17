@@ -2,9 +2,9 @@ package action
 
 import (
 	"fmt"
-
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/pborman/uuid"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -12,6 +12,7 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"slices"
 )
 
 type DRKind string
@@ -161,4 +162,67 @@ func (ac *ActionController) remoteClusterDomainUpdate(activate bool, action *sto
 		}
 	}
 	return nil
+}
+
+func (ac *ActionController) updateApplicationActivatedInRelevantMigrationSchedules(action *storkv1.Action, config *rest.Config, namespaces []string, migrationNamespaces []string, value bool) {
+	// This is best effort only. In case we encounter an error we just log events and logs. Action will not be failed.
+
+	// Only subset of namespaces which are migrated by the reference migrationSchedule are activated / deactivated
+	_, activationNamespaces, _ := utils.IsSubList(namespaces, migrationNamespaces)
+	// relevant migrationSchedules are ones which are involved in migration of resources from at least one of the namespaces being activated.
+	// such migrationSchedules can reside in any of the activationNamespaces or in the adminNamespace
+	adminNs := utils.GetAdminNamespace()
+	migrationScheduleNamespaces := activationNamespaces
+	if !slices.Contains(activationNamespaces, adminNs) {
+		migrationScheduleNamespaces = append(migrationScheduleNamespaces, adminNs)
+	}
+
+	storkClient, err := storkops.NewForConfig(config)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
+		logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
+		logEvents(msg, "err")
+		action.Status.Status = storkv1.ActionStatusFailed
+		ac.updateAction(action)
+		return
+	}
+
+	migrationSchedules := new(storkv1.MigrationScheduleList)
+	for _, ns := range migrationScheduleNamespaces {
+		migrSchedules, err := storkClient.ListMigrationSchedules(ns)
+		if err != nil {
+			msg := fmt.Sprintf("Failed to fetch the list of migrationSchedules in the namespace %v", ns)
+			logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
+			logEvents(msg, "err")
+			ac.updateAction(action)
+		}
+		migrationSchedules.Items = append(migrationSchedules.Items, migrSchedules.Items...)
+	}
+
+	for _, migrSched := range migrationSchedules.Items {
+		if migrSched.GetAnnotations() == nil || migrSched.GetAnnotations()[migration.StorkMigrationScheduleCopied] != "true" {
+			// no need to update the applicationActivated filed in case the migrationSchedule is not a static copy
+			continue
+		}
+		isMigrSchedRelevant, err := utils.DoesMigrationScheduleMigrateNamespaces(migrSched, activationNamespaces)
+		if err != nil {
+			msg := fmt.Sprintf("Failed to determine the list of namespaces migrated by the migrationSchedule %v/%v", migrSched.Namespace, migrSched.Name)
+			logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
+			logEvents(msg, "err")
+			ac.updateAction(action)
+		}
+		if isMigrSchedRelevant {
+			migrSched.Status.ApplicationActivated = value
+			_, err := storkClient.UpdateMigrationSchedule(&migrSched)
+			if err != nil {
+				msg := fmt.Sprintf("Failed to update ApplicationActivated field for the migrationSchedule %v/%v", migrSched.Namespace, migrSched.Name)
+				logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
+				logEvents(msg, "err")
+				ac.updateAction(action)
+			}
+			msg := fmt.Sprintf("Setting the ApplicationActivated status in the MigrationSchedule %v/%v to %v", migrSched.Namespace, migrSched.Name, value)
+			logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
+			logEvents(msg, "out")
+		}
+	}
 }
