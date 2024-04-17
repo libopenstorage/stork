@@ -136,6 +136,38 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 				log.ActionLog(action).Errorf("Error suspending migration schedule %s: %v", migrationSchedule.Name, err)
 				return
 			}
+
+			// before deactivating the apps in destination cluster, activate the source cluster domain (if metro-dr scenario)
+			// ideally source cluster domain should already be active since customer has performed a reverse migration themselves before initiating the failover
+			drMode, err := ac.getDRMode(migrationSchedule.Spec.Template.Spec.ClusterPair, action.Namespace)
+			if err != nil {
+				msg := fmt.Sprintf("Failed to determine the mode of the DR plan: %v", err)
+				logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+				logEvents(msg, "err")
+				action.Status.Status = storkv1.ActionStatusFailed
+				action.Status.Reason = msg
+				ac.updateAction(action)
+				return
+			}
+			log.ActionLog(action).Infof(fmt.Sprintf("drMode detected is %v", drMode))
+
+			if drMode == syncDR {
+				// activate the source cluster domain in case it isn't already active
+				err := ac.remoteClusterDomainUpdate(true, action)
+				if err != nil {
+					msg := fmt.Sprintf("Failed to activate the remote cluster domain: %v", err)
+					logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+					logEvents(msg, "err")
+					action.Status.Status = storkv1.ActionStatusFailed
+					action.Status.Reason = msg
+					ac.updateAction(action)
+					return
+				}
+				msg = "Successfully activated the remote cluster domain"
+				logEvents := ac.printFunc(action, "ClusterDomainUpdate")
+				logEvents(msg, "out")
+				ac.updateAction(action)
+			}
 			action.Status.Status = storkv1.ActionStatusSuccessful
 			ac.updateAction(action)
 			return
@@ -144,33 +176,6 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			// And migrationschedule is in suspended state
 			log.ActionLog(action).Infof("The latest migration %s is not in threshold range", latestMigration.Name)
 			msg := fmt.Sprintf("Failing the failback operation because the most recent migration, %s, was not completed within the scheduled policy duration", latestMigration.Name)
-			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-			logEvents(msg, "err")
-			action.Status.Status = storkv1.ActionStatusFailed
-			action.Status.Reason = msg
-			ac.updateAction(action)
-			return
-		}
-	}
-
-	// before deactivating the apps in destination cluster, activate the source cluster domain (if metro-dr scenario)
-	// ideally source cluster domain should already be active since customer has performed a reverse migration themselves before initiating the failover
-	drMode, err := ac.getDRMode(migrationSchedule.Spec.Template.Spec.ClusterPair, action.Namespace)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to determine the mode of the DR plan: %v", err)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-		logEvents(msg, "err")
-		action.Status.Status = storkv1.ActionStatusFailed
-		action.Status.Reason = msg
-		ac.updateAction(action)
-		return
-	}
-
-	if drMode == syncDR {
-		// activate the source cluster domain in case it isn't already active
-		err := ac.remoteClusterDomainUpdate(true, action)
-		if err != nil {
-			msg := fmt.Sprintf("Failed to activate the remote cluster domain: %v", err)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
