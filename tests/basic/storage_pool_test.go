@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"reflect"
 	"regexp"
+	"sort"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -10212,41 +10213,74 @@ func findNodeForReplAdd(vol *volume.Volume) (*node.Node, error) {
 	return nil, fmt.Errorf("failed to find a node for repl add for volume %v", vol.ID)
 }
 
-func selectPoolDeletableNode(allowKvdbNode bool) *node.Node {
-	var testNode *node.Node
-	log.Info("Select non-kvdb node or node with >1 pools)")
+// return a list of pool deletable nodes: prioritize for non-kvdb nodes
+func selectPoolDeletableNodes() []node.Node {
+	testNodes := []node.Node{}
+	log.Info("Select non-kvdb node or node with > 1 pools)")
 	stNodes := node.GetStorageNodes()
+	log.InfoD("storage nodes %+v", stNodes)
 
 	kvdbNodesIDs := []string{}
 	kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
 	log.FailOnError(err, "Error getting KVDB members")
+	log.InfoD("kvdb members %+v", kvdbMembers)
+
 	for _, n := range kvdbMembers {
 		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
 	}
-
+ 
+	// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
+	// collect non-kvdb firsts
 	for _, n := range stNodes {
-		if !Contains(kvdbNodesIDs, n.Id) {
-			testNode = &n
-			break
+		if !Contains(kvdbNodesIDs, n.Id) { // non kvdb node	 
+			log.InfoD("get non-kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			log.FailOnError(err, "cannot get pool drives")
+			log.InfoD("non-kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 0 {
+				testNodes = append(testNodes, n)
+			}
+		}  
+	}
+
+	// kvdb nodes, need at least 2 pools 
+	for _, n := range stNodes {
+		if Contains(kvdbNodesIDs, n.Id) { 
+			log.InfoD("get kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			log.FailOnError(err, "cannot get pool drives")
+			log.InfoD("kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 1 {
+				testNodes = append(testNodes, n)
+ 			}
 		}
 	}
-	if testNode == nil {
-		dash.VerifyFatal(allowKvdbNode, true, "kvdb node be selected for the pool delete test?")
-		testNode = &stNodes[0]
-		log.InfoD("cannot find nonkvdb node, select kvdb node %v for test", testNode.Addresses)
-		poolsMap, err := Inst().V.GetPoolDrives(testNode)
+	
+	if len(testNodes) == 0 { // it means all nodes are kvdb-nodes with 1 pools
+		testNode := stNodes[0]
+		log.InfoD("select kvdb node %v for test, the node need to have at least 2 pools", testNode.Name)
+		poolsMap, err := Inst().V.GetPoolDrives(&testNode)
 		log.FailOnError(err, "cannot get pool drives")
-		log.InfoD("node %v has pools %+v", testNode.Addresses, poolsMap)
+		log.InfoD("the kvdb node %v has pools %+v", testNode.Name, poolsMap)
 		if len(poolsMap) <= 1 {
 			log.InfoD("try create new pool for test")
-			err = AddCloudDrive(*testNode, -1)
+			err = AddCloudDrive(testNode, -1)
 			log.FailOnError(err, "drive add failed")
 		}
-	} else {
-		log.InfoD("found non-kvdb storage node %v", testNode.Addresses)
-	}
-	dash.VerifyFatal(testNode != nil, true, "select test node")
-	return testNode
+		testNodes = append(testNodes, testNode)
+	}  
+	
+	for _, n := range testNodes {
+		log.InfoD("found pool deletable node %v", n.Name)
+	} 
+	
+ 	dash.VerifyFatal(len(testNodes) > 0, true, "select test node")
+	return testNodes
+}
+
+func selectPoolDeletableNode() *node.Node {
+	poolDeletableNodes := selectPoolDeletableNodes()
+	return &poolDeletableNodes[0]
 }
 
 var _ = Describe("{PoolDeleteFunctionality}", func() {
@@ -10264,16 +10298,17 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 
 	ItLog := "Initiate pool delete, then add a new pool and expand the pool"
 	It(ItLog, func() {
-		testNode := selectPoolDeletableNode(false)
+		testNode := selectPoolDeletableNode()
 		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
 		selectedNode := *testNode
-		nodePools := selectedNode.StoragePools
-
+		nodePools := selectedNode.Pools
+		log.Infof("node %v has pools %+v", testNode.Name, nodePools)
 		poolToAddBack := nodePools[rand.Intn(len(nodePools))]
 		stepLog = fmt.Sprintf("Delete [%v/%v] pools on node [%v], so that 1 pool remains", len(nodePools)-1, len(nodePools), selectedNode.Name)
 		Step(stepLog, func() {
 			for _, pool := range nodePools[:len(nodePools)-1] {
-				poolID := strconv.Itoa(int(pool.ID))
+				poolID := fmt.Sprintf("%v", pool.GetID())
+				log.Infof("delete pool %v", poolID)
 				deletePoolAndValidate(selectedNode, poolID)
 			}
 		})
@@ -10289,6 +10324,7 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 
 			poolsMap, err := Inst().V.GetPoolDrives(&selectedNode)
 			log.FailOnError(err, "error getting pool drive from the node [%s]", selectedNode.Name)
+			log.Infof("poolMap %+v", poolsMap)
 			dash.VerifyFatal(len(poolsMap) == 0, true, "verify all pools deleted")
 
 			err = Inst().V.RefreshDriverEndpoints()
@@ -10391,6 +10427,12 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 		StartTorpedoTest("PoolDeleteNegative", "RunPoolDeleteNegativeTests tests cases where pool deletion should not happen", nil, 0)
 	})
 
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		selectedNode = selectPoolDeletableNode()
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
 	ItLog := "Delete pool using invalid pool ids"
 	It(ItLog, func() {
 		log.InfoD(stepLog)
@@ -10401,8 +10443,6 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
-
-		selectedNode := &node.GetStorageNodes()[0]
 
 		// test pool delete without entering pool maintenance mode - should fail
 		// TODO (do we need this check?) if IsLocalCluster(*selectedNode) || IsIksCluster() {
@@ -10523,33 +10563,27 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 	/*
 				migrated from px-test: PoolDeleteVariations
 		 		1. Verify pool deletion after creating 50 volumes
-				2. Verify pool deletion after creating 30 snaps
+				2. Verify pool deletion after creating 75 snaps
 	*/
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteVariations", "Pool delete with variations", nil, 0)
 	})
-
-	var testNode *node.Node
-	BeforeEach(func() {
-		testNode = selectPoolDeletableNode(true)
-		dash.VerifyFatal(testNode != nil, true, "very if select test node ok")
-	})
 	var contexts []*scheduler.Context
 
 	itLog := fmt.Sprintf("Verify pool delete variations")
 	It(itLog, func() {
-		log.InfoD(itLog)
 		numVolCreate := 50
 		stepLog := fmt.Sprintf("1. Verify pool deletion after creating %v volumes", numVolCreate)
 		Step(stepLog, func() {
-			deletablePools := make(map[string]string) // poolUUID to ID
-			for _, p := range testNode.Pools {
-				deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
+			log.InfoD(itLog)
+			poolDeletableNodes := selectPoolDeletableNodes()
+			poolDeletableNodesMap := map[string]*node.Node{}
+			for _, p := range poolDeletableNodes {
+				poolDeletableNodesMap[p.Id] = &p
 			}
-
-			log.InfoD("deletable pools %+v", deletablePools)
-
+			log.Infof("Deletable pools %+v", poolDeletableNodesMap)
+			
 			volumesCreated := []string{}
 			for i := 0; i < numVolCreate; i++ {
 				uuidObj := uuid.New()
@@ -10563,17 +10597,33 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			}
 
 			// select a pool with volume on it to delete
+			testNode := (*node.Node)(nil)
 			poolIDToDelete := ""
 			for _, vol := range volumesCreated {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
-				replPools := appVol.ReplicaSets[0].PoolUuids
-				for _, p := range replPools {
-					if id, ok := deletablePools[p]; ok {
-						poolIDToDelete = id
+				replNodes := appVol.ReplicaSets[0].Nodes
+				for _, n := range replNodes {
+					// the node can do pool delete
+					if t, ok := poolDeletableNodesMap[n]; ok {
+						testNode = t
+						// get poolUUID to ID in the node
+						deletablePools := make(map[string]string)
+						for _, p := range testNode.Pools {
+							deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
+						}
+						replPools := appVol.ReplicaSets[0].PoolUuids
+						// find the pool id to delete
+						for _, p := range replPools {
+							if id, ok := deletablePools[p]; ok {
+								poolIDToDelete = id
+								break
+							}
+						}
 						break
 					}
 				}
+				
 				if poolIDToDelete != "" {
 					break
 				}
@@ -10610,9 +10660,12 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 		stepLog = fmt.Sprintf("2. Verify pool deletion after creating vols and each with %v snaps %v", numVols, numVolSnaps)
 
 		Step(stepLog, func() {
-			deletablePools, err := Inst().V.GetNodePools(*testNode)
-			log.FailOnError(err, "failed to get node pool info")
-			log.Infof("Deletable pools %+v", deletablePools)
+			poolDeletableNodes := selectPoolDeletableNodes()
+			poolDeletableNodesMap := map[string]*node.Node{}
+			for _, p := range poolDeletableNodes {
+				poolDeletableNodesMap[p.Id] = &p
+			}
+			log.Infof("Deletable pools %+v", poolDeletableNodesMap)
 
 			volIDs := []string{}
 			for i := 0; i < numVols; i++ {
@@ -10639,25 +10692,39 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			}
 
 			// select a pool with volume on it to delete
+			testNode := (*node.Node)(nil)
 			poolIDToDelete := ""
 			for _, vol := range snapshotList {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
-				replPools := appVol.ReplicaSets[0].PoolUuids
-				log.Infof("vol %+v, replPools %+v", vol, replPools)
-				for _, p := range replPools {
-					if id, ok := deletablePools[p]; ok {
-						poolIDToDelete = id
+				replNodes := appVol.ReplicaSets[0].Nodes
+				for _, n := range replNodes {
+					// the node can do pool delete
+					if t, ok := poolDeletableNodesMap[n]; ok {
+						testNode = t
+						// get poolUUID to ID in the node
+						deletablePools := make(map[string]string)
+						for _, p := range testNode.Pools {
+							deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
+						}
+						replPools := appVol.ReplicaSets[0].PoolUuids
+						// find the pool id to delete
+						for _, p := range replPools {
+							if id, ok := deletablePools[p]; ok {
+								poolIDToDelete = id
+								break
+							}
+						}
 						break
 					}
 				}
+				
 				if poolIDToDelete != "" {
 					break
 				}
 			}
-
+			log.InfoD("select testNode %v poolID %v to delete", testNode.Addresses, poolIDToDelete)
 			dash.VerifyFatal(poolIDToDelete != "", true, fmt.Sprintf("target pool deletion ID: %v", poolIDToDelete))
-
 			log.InfoD("deleting all vols")
 			for _, volID := range volIDs {
 				err = Inst().V.DeleteVolume(volID)
@@ -10709,7 +10776,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 
 	itLog := "PoolDeleteServiceDisruption"
 	It(itLog, func() {
-		testNode := selectPoolDeletableNode(true)
+		testNode := selectPoolDeletableNode()
 		poolIDToDelete := ""
 
 		drvMap, err := Inst().V.GetPoolDrives(testNode)
@@ -11888,6 +11955,82 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", func() {
 			}
 		})
 		Wg.Wait()
+	})
+})
+
+var _ = Describe("{PoolDeleteMultiplePools}", func() {
+
+	/*
+		1. Have multiple pools 
+		2. Delete one of the middle pools like pool 1
+		3. Do pool maintenance operations like pool expand 
+		4. Do pool delete which is greater than pool id deleted in step 2
+		5. Restart the node to make sure things remain the same
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteMultiplePools", "Pool delete with multiple pools", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "PoolDeleteMultiplePools"
+	It(itLog, func() {
+		testNode := selectPoolDeletableNode()
+
+		drvMap, err := Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
+
+
+		numPools := len(drvMap)
+		targetNumPools := 3
+
+		for i := numPools; i < targetNumPools; i++ {
+			err = AddCloudDrive(*testNode, -1)
+			log.FailOnError(err, "drive add failed")
+		}
+
+		drvMap, err = Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
+
+		poolIDs := []string{}
+
+		for poolID := range drvMap {
+			poolIDs = append(poolIDs, poolID)
+		}
+
+		sort.Strings(poolIDs)
+		
+		dash.VerifyFatal(len(poolIDs) >= targetNumPools, true, fmt.Sprintf("requires %v pools, but only has %+v", targetNumPools, drvMap))
+
+		log.Info("test node %v, pools %+v", testNode.Name, poolIDs)
+
+		stepLog := fmt.Sprintf("1. delete second pool, id %v", poolIDs[1])
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			deletePoolAndValidate(*testNode, poolIDs[1])
+		})
+
+		// add a pool back
+		stepLog = "2. Add a drive back"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Wait 1 min for stabling everything after reboot")
+			err = AddCloudDrive(*testNode, -1)
+		})
+
+		stepLog = fmt.Sprintf("3. delete third pool, id %v", poolIDs[2])
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			deletePoolAndValidate(*testNode, poolIDs[2])
+		})
+		stepLog = "4. Verify reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = RebootNodeAndWaitForPxUp(*testNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot succeed")
+		})
 	})
 
 	JustAfterEach(func() {

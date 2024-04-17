@@ -1203,6 +1203,14 @@ func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 }
 
 func (d *portworx) ExitPoolMaintenance(n node.Node) error {
+
+	// no need to exit pool maintenance if node status is up
+	pxStatus, err := d.GetPxctlStatus(n)
+	if err == nil && pxStatus == api.Status_STATUS_OK.String(){
+		log.Infof("node is up, no need to exit pool maintenance mode")
+		return nil
+	}
+
 	cmd := fmt.Sprintf("pxctl sv pool maintenance -x -y")
 	out, err := d.nodeDriver.RunCommand(
 		n,
