@@ -425,7 +425,7 @@ func GetAdminNamespace() string {
 	return adminNs
 }
 
-func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.MigrationSchedule, activationNs []string) (bool, error) {
+func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.MigrationSchedule, activatedNSList []string) (bool, error) {
 	namespaceList := migrationSchedule.Spec.Template.Spec.Namespaces
 	namespaceSelectors := migrationSchedule.Spec.Template.Spec.NamespaceSelectors
 	migrationNamespaces, err := GetMergedNamespacesWithLabelSelector(namespaceList, namespaceSelectors)
@@ -433,7 +433,7 @@ func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.Migratio
 		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
 	}
 	activationNamespacesSet := make(map[string]bool)
-	for _, ns := range activationNs {
+	for _, ns := range activatedNSList {
 		activationNamespacesSet[ns] = true
 	}
 	found := false

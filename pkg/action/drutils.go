@@ -4,6 +4,7 @@ import (
 	"fmt"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/pborman/uuid"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -199,6 +200,10 @@ func (ac *ActionController) updateApplicationActivatedInRelevantMigrationSchedul
 	}
 
 	for _, migrSched := range migrationSchedules.Items {
+		if migrSched.GetAnnotations() == nil || migrSched.GetAnnotations()[migration.StorkMigrationScheduleCopied] != "true" {
+			// no need to update the applicationActivated filed in case the migrationSchedule is not a static copy
+			continue
+		}
 		isMigrSchedRelevant, err := utils.DoesMigrationScheduleMigrateNamespaces(migrSched, activationNamespaces)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to determine the list of namespaces migrated by the migrationSchedule %v/%v", migrSched.Namespace, migrSched.Name)
