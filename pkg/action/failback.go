@@ -74,7 +74,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting failback", migrationSchedule.Name)
+		msg := fmt.Sprintf("No migration found for MigrationSchedule %s, hence aborting failback", migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -133,7 +133,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			log.ActionLog(action).Infof(msg)
 			_, err := storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 			if err != nil {
-				log.ActionLog(action).Errorf("Error suspending migration schedule %s: %v", migrationSchedule.Name, err)
+				log.ActionLog(action).Errorf("Error suspending MigrationSchedule %s: %v", migrationSchedule.Name, err)
 				return
 			}
 
@@ -338,7 +338,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
+		msg := fmt.Sprintf("No migration found for MigrationSchedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -348,7 +348,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 	}
 
 	if !isMigrationSuccessful(latestMigration.Status) {
-		msg := fmt.Sprintf("Latest migration for Migrationschedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
+		msg := fmt.Sprintf("Latest migration for MigrationSchedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -359,7 +359,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	migrationObject, err := storkClient.GetMigration(latestMigration.Name, migrationSchedule.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to get the latest migration %s in migration schedule %s/%s: %v", latestMigration.Name, migrationSchedule.Namespace, migrationSchedule.Name, err)
+		msg := fmt.Sprintf("Failed to get the latest migration %s in MigrationSchedule %s/%s: %v", latestMigration.Name, migrationSchedule.Namespace, migrationSchedule.Name, err)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -521,7 +521,7 @@ func (ac *ActionController) activateClusterDuringFailback(action *storkv1.Action
 func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*rest.Config, error) {
 	clusterPair, err := storkops.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("error getting clusterpair (%v/%v): %v", namespace, clusterPairName, err)
+		return nil, fmt.Errorf("error getting ClusterPair (%v/%v): %v", namespace, clusterPairName, err)
 	}
 	remoteClientConfig := clientcmd.NewNonInteractiveClientConfig(
 		clusterPair.Spec.Config,
