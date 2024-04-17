@@ -196,7 +196,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		if err != nil {
 			return "", false, fmt.Errorf("failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
 		}
-		if !migr.Completed {
+		if !(migr.Phase == "Succeeded") {
 			return "", true, fmt.Errorf("waiting for migration to complete for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
 		}
 

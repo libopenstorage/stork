@@ -3,7 +3,6 @@ kind: VirtualMachine
 metadata:
   name: vm-cirros-containerdisk
   annotations:
-    startDataSupported: "true"
     username: "cirros"
     appType: "kubevirt"
 spec:

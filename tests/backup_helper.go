@@ -6975,6 +6975,45 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	return nil
 }
 
+// ValidateVMMigration validate VM is migrated to a different node after any migration operation.
+func ValidateVMMigration(vm kubevirtv1.VirtualMachine, nodeName string) error {
+	k8sKubevirt := kubevirt.Instance()
+	t := func() (interface{}, bool, error) {
+		vmObj, err := k8sKubevirt.GetVirtualMachine(vm.Name, vm.Namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", vm.Name, vm.Namespace, err.Error())
+		}
+		if vmObj.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", vm.Name, vm.Namespace, vmObj.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+		}
+
+		vmPod, err := GetVirtLauncherPodObject(vm)
+		if err != nil {
+			return "", false, err
+		}
+
+		// Get the node where the VM is scheduled after the migration
+		nodeNameAfterMigration := vmPod.Spec.NodeName
+
+		if nodeName == nodeNameAfterMigration {
+			return "", true, fmt.Errorf("VM pod live migrated [%s] in namespace [%s] but is still on the same node [%s]", vmPod.Name, vmPod.Namespace, nodeName)
+		}
+
+		if nodeName != nodeNameAfterMigration {
+			log.InfoD("VM pod live migrated to node: [%s]", nodeNameAfterMigration)
+			return "", false, nil
+		}
+		return "", false, nil
+	}
+
+	// Retry with timeout until nodeName != nodeNameAfterMigration
+	_, err := task.DoRetryWithTimeout(t, defaultVmMountCheckTimeout, defaultVmMountCheckRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetAllVMsInNamespace returns all the Kubevirt VMs in the given namespace
 func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error) {
 	k8sKubevirt := kubevirt.Instance()
@@ -7042,6 +7081,22 @@ func GetVirtLauncherPodName(vm kubevirtv1.VirtualMachine) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("virt-launcher pod not found")
+}
+
+// GetVirtLauncherPodObject returns the PodObject of the virt-launcher pod in the given namespace
+func GetVirtLauncherPodObject(vm kubevirtv1.VirtualMachine) (*corev1.Pod, error) {
+	k8sCore := core.Instance()
+	pods, err := k8sCore.GetPods(vm.Namespace, make(map[string]string))
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, fmt.Sprintf("%s-%s", "virt-launcher", vm.Name)) {
+			log.InfoD("virt-launcher pod found for vm [%s] is [%s]", vm.Name, pod.Name)
+			return &pod, nil
+		}
+	}
+	return nil, fmt.Errorf("virt-launcher pod not found")
 }
 
 // GetNumberOfDisksInVM returns the number of disks in the VM

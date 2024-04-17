@@ -123,6 +123,7 @@ const (
 	RemoveJSONFilesFromNFSBackupLocation                                               TestCaseName = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
 	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
+	KubevirtVMMigrationTest                                                            TestCaseName = "KubevirtVMMigrationTest"
 )
 
 // Test case labels
@@ -245,6 +246,7 @@ const (
 	RemoveJSONFilesFromNFSBackupLocationLabel                                               TestCaseLabel = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocationLabel                                       TestCaseLabel = "CloudSnapshotMissingValidationForNFSLocation"
 	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
+	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
 )
 
 // Common Labels
@@ -494,4 +496,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	RemoveJSONFilesFromNFSBackupLocation:         {RemoveJSONFilesFromNFSBackupLocationLabel},
 	CloudSnapshotMissingValidationForNFSLocation: {CloudSnapshotMissingValidationForNFSLocationLabel},
 	MultipleProvisionerCsiKdmpBackupAndRestore:   {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
+	KubevirtVMMigrationTest:                      {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
 }
