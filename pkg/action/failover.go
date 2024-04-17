@@ -226,11 +226,11 @@ func (ac *ActionController) deactivateSourceDuringFailover(action *storkv1.Actio
 	}
 	// get destination i.e. current cluster's config
 	clusterConfig := ac.config
-	ac.deactivateClusterDuringDR(action, actualNamespaces, clusterConfig, remoteConfig)
+	ac.deactivateClusterDuringDR(action, actualNamespaces, migrationNamespaces, clusterConfig, remoteConfig)
 }
 
 // deactivateClusterDuringDR will be used in both failover and failback to deactivate apps in source/destination clusters respectively
-func (ac *ActionController) deactivateClusterDuringDR(action *storkv1.Action, namespaces []string, activationClusterConfig *rest.Config, deactivationClusterConfig *rest.Config) {
+func (ac *ActionController) deactivateClusterDuringDR(action *storkv1.Action, namespaces []string, migrationNamespaces []string, activationClusterConfig *rest.Config, deactivationClusterConfig *rest.Config) {
 	// identify which resources to be scaled down by looking at which resources will be activated in the opposite cluster
 	resourcesBeingActivatedMap := make(map[string]map[metav1.GroupVersionKind]map[string]string)
 	for _, ns := range namespaces {
@@ -258,6 +258,8 @@ func (ac *ActionController) deactivateClusterDuringDR(action *storkv1.Action, na
 		ac.updateAction(action)
 		return
 	}
+	// Update ApplicationActivated value in relevant migrationSchedules
+	ac.updateApplicationActivatedInRelevantMigrationSchedules(action, deactivationClusterConfig, namespaces, migrationNamespaces, false)
 	msg := fmt.Sprintf("Scaling down of applications in cluster : %s successful. Moving to the next stage", deactivationClusterConfig.Host)
 	logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
 	logEvents(msg, "out")
@@ -341,6 +343,8 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 		successStatus = storkv1.ActionStatusRollbackSuccessful
 	}
 
+	namespacesSuccessfullyActivated := make([]string, 0)
+
 	for _, ns := range namespaces {
 		logEvents := ac.printFunc(action, "ScaleReplicas")
 		logEvents(fmt.Sprintf("Scaling up apps in cluster %s", config.Host), "out")
@@ -355,6 +359,7 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 				failoverSummary, failbackSummary = ac.createSummary(action, ns, failureStatus, msg)
 			} else {
 				msg := fmt.Sprintf("scaling up apps in namespace %s successful", ns)
+				namespacesSuccessfullyActivated = append(namespacesSuccessfullyActivated, ns)
 				failoverSummary, failbackSummary = ac.createSummary(action, ns, successStatus, msg)
 			}
 		} else {
@@ -368,14 +373,15 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 		}
 	}
 
-	//TODO: Also mark the relevant MigrationSchedule's applicationActivated to true
-
 	if action.Spec.ActionType == storkv1.ActionTypeFailover {
 		action.Status.Summary = &storkv1.ActionSummary{FailoverSummaryItem: failoverSummaryList}
 	} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
 		action.Status.Summary = &storkv1.ActionSummary{FailbackSummaryItem: failbackSummaryList}
 	}
+
 	if scaleUpStatus {
+		// Update ApplicationActivated value in relevant migrationSchedules
+		ac.updateApplicationActivatedInRelevantMigrationSchedules(action, config, namespacesSuccessfullyActivated, migrationNamespaces, true)
 		msg := fmt.Sprintf("Scaling up of applications in cluster : %s successful. Moving to the next stage", config.Host)
 		logEvents := ac.printFunc(action, string(successStatus))
 		logEvents(msg, "out")
