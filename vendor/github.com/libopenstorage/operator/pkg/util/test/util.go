@@ -4733,7 +4733,7 @@ func validateTelemetryLogUploaderPortOnPxNodes(cluster *corev1.StorageCluster, e
 // validateTelemetryStatusInPxctl validates Telemetry status on each PX node from the pxctl status output
 func validateTelemetryStatusInPxctl(telemetryShouldBeEnabled bool, cluster *corev1.StorageCluster) error {
 	listOptions := map[string]string{"name": "portworx"}
-	cmd := "pxctl status | grep Telemetry:"
+	cmd := "pxctl status |& grep Telemetry:"
 
 	logrus.Infof("Validate Telemetry pxctl status on all PX nodes")
 	t := func() (interface{}, bool, error) {
