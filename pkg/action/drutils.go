@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -478,6 +479,13 @@ func (ac *ActionController) remoteClusterDomainUpdate(activate bool, action *sto
 			if err != nil {
 				return fmt.Errorf("activation of cluster domain: %v failed : %v", remoteDomainName, err)
 			} else {
+				_, err := ac.waitForRemoteClusterDomainInSync(action, remoteDomainName)
+				if err != nil {
+					msg := fmt.Sprintf("Cluster domain: %v not in `%v` state.", remoteDomainName, storkv1.ClusterDomainSyncStatusInSync)
+					logEvents := ac.printFunc(action, "ActivateClusterDomain")
+					logEvents(msg, "err")
+					return err
+				}
 				msg := fmt.Sprintf("Activation of cluster domain: %v successful", remoteDomainName)
 				logEvents := ac.printFunc(action, "ActivateClusterDomain")
 				logEvents(msg, "out")
@@ -494,6 +502,36 @@ func (ac *ActionController) remoteClusterDomainUpdate(activate bool, action *sto
 		}
 	}
 	return nil
+}
+
+func (ac *ActionController) waitForRemoteClusterDomainInSync(action *storkv1.Action, clusterDomainName string) (bool, error) {
+	msg := fmt.Sprintf("Checking if clusterDomain %v is activated and InSync", clusterDomainName)
+	logEvents := ac.printFunc(action, "ActivateClusterDomain")
+	logEvents(msg, "out")
+	f := func() (interface{}, bool, error) {
+		currentClusterDomains, err := ac.volDriver.GetClusterDomains()
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get cluster domain info: %v", err)
+		}
+		log.ActionLog(action).Infof("Count of cluster domains: %v ; Current cluster domains: %v", len(currentClusterDomains.ClusterDomainInfos), currentClusterDomains)
+		for _, apiDomainInfo := range currentClusterDomains.ClusterDomainInfos {
+			if apiDomainInfo.Name == clusterDomainName {
+				if apiDomainInfo.State == storkv1.ClusterDomainActive && apiDomainInfo.SyncStatus == storkv1.ClusterDomainSyncStatusInSync {
+					log.ActionLog(action).Infof("Cluster domain: %v is in %v state and status is %v ", clusterDomainName, apiDomainInfo.State, apiDomainInfo.SyncStatus)
+					return "", false, nil
+				} else {
+					// we should retry
+					return "", true, fmt.Errorf("Cluster domain: %v is in %v state and status is %v ", clusterDomainName, apiDomainInfo.State, apiDomainInfo.SyncStatus)
+				}
+			}
+		}
+		return "", true, fmt.Errorf("failed to get cluster domain info for cluster domain : %v", clusterDomainName)
+	}
+	_, err := task.DoRetryWithTimeout(f, 10*time.Minute, 10*time.Second)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // getDRMode determine the mode of DR either from clusterPair or from the clusterDomains

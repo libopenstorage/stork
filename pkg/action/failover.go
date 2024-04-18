@@ -463,7 +463,7 @@ func (ac *ActionController) performLastMileMigrationDuringFailover(action *stork
 			err := ac.remoteClusterDomainUpdate(false, action)
 			if err != nil {
 				msg := fmt.Sprintf("Failed to deactivate the remote cluster domain: %v", err)
-				logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+				logEvents := ac.printFunc(action, "DeactivateClusterDomain")
 				logEvents(msg, "err")
 				action.Status.Status = storkv1.ActionStatusFailed
 				action.Status.Reason = msg

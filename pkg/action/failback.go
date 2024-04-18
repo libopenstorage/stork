@@ -152,7 +152,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 				err := ac.remoteClusterDomainUpdate(true, action)
 				if err != nil {
 					msg := fmt.Sprintf("Failed to activate the remote cluster domain: %v", err)
-					logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+					logEvents := ac.printFunc(action, "ActivateClusterDomain")
 					logEvents(msg, "err")
 					action.Status.Status = storkv1.ActionStatusFailed
 					action.Status.Reason = msg
