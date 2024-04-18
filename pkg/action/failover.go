@@ -2,19 +2,16 @@ package action
 
 import (
 	"fmt"
-	"slices"
-	"time"
-
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/libopenstorage/stork/pkg/utils"
-	coreops "github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"slices"
 )
 
 // validateBeforeFailover is called as part of the Initial stage of Failover
@@ -393,48 +390,6 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 		action.Status.Status = storkv1.ActionStatusFailed
 	}
 	ac.updateAction(action)
-}
-
-func (ac *ActionController) isClusterAccessible(action *storkv1.Action, config *rest.Config) bool {
-	retryCount := 5
-	waitInterval := 6 * time.Second
-	action.Status.Status = storkv1.ActionStatusScheduled
-	ac.updateAction(action)
-	for i := retryCount; i > 0; i-- {
-		coreClient, err := coreops.NewForConfig(config)
-		if err != nil {
-			log.ActionLog(action).Warnf("Cluster Accessibility test failed: %v. Number of retrys left %d ", err, i-1)
-			time.Sleep(waitInterval)
-			continue
-		}
-		// If the get k8s version call succeeds then we assume that the cluster is accessible
-		k8sVersion, err := coreClient.GetVersion()
-		if err != nil {
-			log.ActionLog(action).Warnf("Cluster Accessibility test failed: %v. Number of retrys left %d ", err, i-1)
-			time.Sleep(waitInterval)
-			continue
-		}
-		msg := fmt.Sprintf("Cluster Accessibility test passed. K8s version of the cluster : %s is %v", config.Host, k8sVersion.String())
-		logEvents := ac.printFunc(action, "RemoteClusterAccessibility")
-		logEvents(msg, "out")
-		return true
-	}
-	msg := fmt.Sprintf("Cluster Accessibility test failed. Unable to access the remote cluster : %v", config.Host)
-	logEvents := ac.printFunc(action, "RemoteClusterAccessibility")
-	logEvents(msg, "err")
-	return false
-}
-
-func (ac *ActionController) createSummary(action *storkv1.Action, ns string, status storkv1.ActionStatusType, msg string) (*storkv1.FailoverSummary, *storkv1.FailbackSummary) {
-	var failoverSummary *storkv1.FailoverSummary
-	var failbackSummary *storkv1.FailbackSummary
-	switch action.Spec.ActionType {
-	case storkv1.ActionTypeFailover:
-		failoverSummary = &storkv1.FailoverSummary{Namespace: ns, Status: status, Reason: msg}
-	case storkv1.ActionTypeFailback:
-		failbackSummary = &storkv1.FailbackSummary{Namespace: ns, Status: status, Reason: msg}
-	}
-	return failoverSummary, failbackSummary
 }
 
 func (ac *ActionController) performLastMileMigrationDuringFailover(action *storkv1.Action) {
