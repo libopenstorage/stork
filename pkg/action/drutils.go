@@ -12,7 +12,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
-	coreops "github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
@@ -521,7 +520,7 @@ func (ac *ActionController) waitForRemoteClusterDomainInSync(action *storkv1.Act
 					return "", false, nil
 				} else {
 					// we should retry
-					return "", true, fmt.Errorf("Cluster domain: %v is in %v state and status is %v ", clusterDomainName, apiDomainInfo.State, apiDomainInfo.SyncStatus)
+					return "", true, fmt.Errorf("cluster domain: %v is in %v state and status is %v ", clusterDomainName, apiDomainInfo.State, apiDomainInfo.SyncStatus)
 				}
 			}
 		}
@@ -560,7 +559,7 @@ func (ac *ActionController) isClusterAccessible(action *storkv1.Action, config *
 	action.Status.Status = storkv1.ActionStatusScheduled
 	ac.updateAction(action)
 	for i := retryCount; i > 0; i-- {
-		coreClient, err := coreops.NewForConfig(config)
+		coreClient, err := core.NewForConfig(config)
 		if err != nil {
 			log.ActionLog(action).Warnf("Cluster Accessibility test failed: %v. Number of retrys left %d ", err, i-1)
 			time.Sleep(waitInterval)
