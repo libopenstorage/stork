@@ -23,14 +23,14 @@ const (
 	syncDR  string = "sync-dr"
 )
 
-var kubeConfigPath string
+var destinationKubeConfigPath string
 
 func TestStorkCtlAction(t *testing.T) {
 	err := setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
 	// since both the dr cli commands run in destination cluster
-	kubeConfigPath, err = getDestinationKubeConfigFile()
+	destinationKubeConfigPath, err = getDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 	err = setDestinationKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
@@ -179,7 +179,7 @@ func createDRAction(t *testing.T, namespace string, actionType storkv1.ActionTyp
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	cmdArgs := []string{"perform", string(actionType), "--kubeconfig", kubeConfigPath}
+	cmdArgs := []string{"perform", string(actionType), "--kubeconfig", destinationKubeConfigPath}
 	executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
@@ -204,7 +204,7 @@ func getDRActionStatus(t *testing.T, actionType storkv1.ActionType, actionName s
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	cmdArgs := []string{"get", string(actionType), actionName, "-n", actionNamespace, "--kubeconfig", kubeConfigPath}
+	cmdArgs := []string{"get", string(actionType), actionName, "-n", actionNamespace, "--kubeconfig", destinationKubeConfigPath}
 	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
