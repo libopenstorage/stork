@@ -40,7 +40,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("error fetching Migrationschedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
+		msg := fmt.Sprintf("error fetching MigrationSchedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -50,9 +50,9 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 	}
 
 	if len(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces) > 0 {
-		namespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
+		migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to get list of namespaces from Migrationschedule %s", migrationSchedule.Name)
+			msg := fmt.Sprintf("Failed to get list of namespaces from MigrationSchedule %s", migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -61,8 +61,8 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			return
 		}
 
-		if isSubList, _, _ := utils.IsSubList(namespaces, action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces); !isSubList {
-			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from Migrationschedule %s", migrationSchedule.Name)
+		if isSubList, _, _ := utils.IsSubList(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, migrationNamespaces); !isSubList {
+			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from MigrationSchedule %s", migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -78,7 +78,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting failback", migrationSchedule.Name)
+		msg := fmt.Sprintf("No migration found for MigrationSchedule %s, hence aborting failback", migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -137,8 +137,40 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			log.ActionLog(action).Infof(msg)
 			_, err := storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 			if err != nil {
-				log.ActionLog(action).Errorf("Error suspending migration schedule %s: %v", migrationSchedule.Name, err)
+				log.ActionLog(action).Errorf("Error suspending MigrationSchedule %s: %v", migrationSchedule.Name, err)
 				return
+			}
+
+			// before deactivating the apps in destination cluster, activate the source cluster domain (if metro-dr scenario)
+			// ideally source cluster domain should already be active since customer has performed a reverse migration themselves before initiating the failover
+			drMode, err := ac.getDRMode(migrationSchedule.Spec.Template.Spec.ClusterPair, action.Namespace)
+			if err != nil {
+				msg := fmt.Sprintf("Failed to determine the mode of the DR plan: %v", err)
+				logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+				logEvents(msg, "err")
+				action.Status.Status = storkv1.ActionStatusFailed
+				action.Status.Reason = msg
+				ac.updateAction(action)
+				return
+			}
+			log.ActionLog(action).Infof(fmt.Sprintf("drMode detected is %v", drMode))
+
+			if drMode == syncDR {
+				// activate the source cluster domain in case it isn't already active
+				err := ac.remoteClusterDomainUpdate(true, action)
+				if err != nil {
+					msg := fmt.Sprintf("Failed to activate the remote cluster domain: %v", err)
+					logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+					logEvents(msg, "err")
+					action.Status.Status = storkv1.ActionStatusFailed
+					action.Status.Reason = msg
+					ac.updateAction(action)
+					return
+				}
+				msg = "Successfully activated the remote cluster domain"
+				logEvents := ac.printFunc(action, "ClusterDomainUpdate")
+				logEvents(msg, "out")
+				ac.updateAction(action)
 			}
 			action.Status.Status = storkv1.ActionStatusSuccessful
 			ac.updateAction(action)
@@ -148,33 +180,6 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			// And migrationschedule is in suspended state
 			log.ActionLog(action).Infof("The latest migration %s is not in threshold range", latestMigration.Name)
 			msg := fmt.Sprintf("Failing the failback operation because the most recent migration, %s, was not completed within the scheduled policy duration", latestMigration.Name)
-			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-			logEvents(msg, "err")
-			action.Status.Status = storkv1.ActionStatusFailed
-			action.Status.Reason = msg
-			ac.updateAction(action)
-			return
-		}
-	}
-
-	// before deactivating the apps in destination cluster, activate the source cluster domain (if metro-dr scenario)
-	// ideally source cluster domain should already be active since customer has performed a reverse migration themselves before initiating the failover
-	drMode, err := ac.getDRMode(migrationSchedule.Spec.Template.Spec.ClusterPair, action.Namespace)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to determine the mode of the DR plan: %v", err)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-		logEvents(msg, "err")
-		action.Status.Status = storkv1.ActionStatusFailed
-		action.Status.Reason = msg
-		ac.updateAction(action)
-		return
-	}
-
-	if drMode == syncDR {
-		// activate the source cluster domain in case it isn't already active
-		err := ac.remoteClusterDomainUpdate(true, action)
-		if err != nil {
-			msg := fmt.Sprintf("Failed to activate the remote cluster domain: %v", err)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -347,7 +352,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for Migrationschedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
+		msg := fmt.Sprintf("No migration found for MigrationSchedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -357,7 +362,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 	}
 
 	if !isMigrationSuccessful(latestMigration.Status) {
-		msg := fmt.Sprintf("Latest migration for Migrationschedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
+		msg := fmt.Sprintf("Latest migration for MigrationSchedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -368,7 +373,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	migrationObject, err := storkClient.GetMigration(latestMigration.Name, migrationSchedule.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to get the latest migration %s in migration schedule %s/%s: %v", latestMigration.Name, migrationSchedule.Namespace, migrationSchedule.Name, err)
+		msg := fmt.Sprintf("Failed to get the latest migration %s in MigrationSchedule %s/%s: %v", latestMigration.Name, migrationSchedule.Namespace, migrationSchedule.Name, err)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -539,7 +544,7 @@ func (ac *ActionController) activateClusterDuringFailback(action *storkv1.Action
 func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*rest.Config, error) {
 	clusterPair, err := storkops.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("error getting clusterpair (%v/%v): %v", namespace, clusterPairName, err)
+		return nil, fmt.Errorf("error getting ClusterPair (%v/%v): %v", namespace, clusterPairName, err)
 	}
 	remoteClientConfig := clientcmd.NewNonInteractiveClientConfig(
 		clusterPair.Spec.Config,
