@@ -1,0 +1,169 @@
+{{/* Portworx persistent volume claim */}}
+{{ if .ClaimsCount }}
+{{- range $val := Iterate .ClaimsCount }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume-{{ $val }}
+spec:
+  storageClassName: fedora-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-{{ $val }}
+data:
+  {{- range $i := Iterate 20 }}
+  key{{ $i }}: value{{ $i }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret-{{ $val }}
+  namespace: fed2
+  uid: fd82f809-3f3c-4b99-995c-f646ef490d4f
+data:
+  password: dHVtbXlwYXNzd29yZA==  # dummypassword in Base64
+  username: ZHVtbXl1c2VybmFtZQ==  # dummyusername in Base64
+type: Opaque
+  {{- end }}
+  {{ else }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-data-volume
+spec:
+  storageClassName: fedora-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  {{- range $i := Iterate 20 }}
+  key{{ $i }}: value{{ $i }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+data:
+  password: dHVtbXlwYXNzd29yZA==  # dummypassword in Base64
+  username: ZHVtbXl1c2VybmFtZQ==  # dummyusername in Base64
+type: Opaque
+  {{- end }}
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    kubevirt.io/os: linux
+    app: vm-fed
+  name: vm-fed
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: vm-fed
+        app: vm-fed
+    spec:
+      domain:
+        devices:
+          disks:
+            - disk:
+                bus: virtio
+              name: containerdisk
+            - disk:
+                bus: virtio
+              name: cloudinitdisk
+            {{ if .ClaimsCount }}
+            {{- range $val := Iterate .ClaimsCount }}
+            - name: datavolume{{ $val }}
+              disk:
+                bus: virtio
+            - disk:
+              name: app-config-disk-{{ $val }}
+              serial: CVLY623300HK240D{{ $val }}
+            - disk:
+              name: app-secret-disk-{{ $val }}
+              serial: D23YZ9W6WA5DJ487{{ $val }}
+            {{- end }}
+            {{ else }}
+            - name: datavolume
+              disk:
+                bus: virtio
+            - disk:
+              name: app-config-disk
+              serial: CVLY623300HK240D
+            - disk:
+              name: app-secret-disk
+              serial: D23YZ9W6WA5DJ487
+            {{- end }}
+        machine:
+          type: ""
+        resources:
+          requests:
+            memory: 2048M
+      terminationGracePeriodSeconds: 0
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: kubevirt/fedora-cloud-container-disk-demo:latest
+        {{ if .ClaimsCount }}
+        {{- range $val := Iterate .ClaimsCount }}
+        - name: datavolume{{ $val }}
+          dataVolume:
+            name: pvc-data-volume-{{ $val }}
+        - name: app-config-disk-{{ $val }}
+          configMap:
+            name: app-config-{{ $val }}
+        - name: app-secret-disk-{{ $val }}
+          secret:
+            secretName: app-secret-{{ $val }}
+        {{- end }}
+        {{ else }}
+        - name: datavolume
+          dataVolume:
+            name: pvc-data-volume
+        - name: app-config-disk
+          configMap:
+            name: app-config
+        - name: app-secret-disk
+          secret:
+            secretName: app-secret
+        {{- end }}
+        - cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              password: fedora
+              chpasswd: { expire: False }
+              bootcmd:
+                {{ if .ClaimsCount }}
+                {{- range $val := Iterate .ClaimsCount }}
+                - "sudo mkdir /mnt/app-config-{{ $val }}"
+                - "sudo mkdir /mnt/app-secret-{{ $val }}"
+                - "sudo mount /dev/$(lsblk --nodeps -no name,serial | grep CVLY623300HK240D{{ $val }} | cut -f1 -d' ') /mnt/app-config-{{ $val }}"
+                - "sudo mount /dev/$(lsblk --nodeps -no name,serial | grep D23YZ9W6WA5DJ487{{ $val }} | cut -f1 -d' ') /mnt/app-secret-{{ $val }}"
+                {{- end }}
+                {{ else }}
+                - "sudo mkdir /mnt/app-config"
+                - "sudo mkdir /mnt/app-secret"
+                - "sudo mount /dev/$(lsblk --nodeps -no name,serial | grep CVLY623300HK240D | cut -f1 -d' ') /mnt/app-config"
+                - "sudo mount /dev/$(lsblk --nodeps -no name,serial | grep D23YZ9W6WA5DJ487 | cut -f1 -d' ') /mnt/app-secret"
+                {{- end }}
+          name: cloudinitdisk
