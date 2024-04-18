@@ -64,7 +64,7 @@ func setCreateLegacySharedAsSharedv4Service(on bool) {
 	pxNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get storage nodes")
 	pxNode := GetRandomNode(pxNodes)
-	log.Infof("Setting Creation of Legacy shared volumes")
+	log.Infof("Setting Creation of Legacy shared volumes to %t", on)
 	var pxctlCmdFull string
 	pxctlCmdFull = fmt.Sprintf("cluster options update --create-legacy-shared-as-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
@@ -77,7 +77,7 @@ func setMigrateLegacySharedToSharedv4Service(on bool) {
 	pxNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get storage nodes")
 	pxNode := GetRandomNode(pxNodes)
-	log.Infof("Turning on Migration of Legacy shared volumes")
+	log.Infof("Setting Migration of Legacy shared volumes to %t", on)
 	var pxctlCmdFull string
 	pxctlCmdFull = fmt.Sprintf("cluster options update --migrate-legacy-shared-to-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
@@ -479,7 +479,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
-	var testrailID = 296732
+	var testrailID = 297580
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedServiceNodeDecomssion", "Legacy Shared to Sharedv4 Service Functional Test with Node Decommission", nil, testrailID)
@@ -533,6 +533,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			}
 			ValidateApplications(contexts)
 		})
+		// Don't Fail any of the below steps.
 		stepLog = fmt.Sprintf("Rejoin node %s", pxNode.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -631,7 +632,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(120 * time.Second) // sleep 2 minutes.
 
-		stepLog := "Decommission Node while Migration is in Progress"
+		stepLog := "Restart Node while Migration is in Progress"
 		Step(stepLog, func() {
 			err := Inst().V.RestartDriver(*nodeForPxRestart, nil)
 			log.FailOnError(err, fmt.Sprintf("error in Restart PX Driver of node %s ", nodeForPxRestart.Name))
@@ -658,7 +659,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() {
-	var testrailID = 0
+	var testrailID = 296731
 	var runID int
 	podMap := make(map[types.UID]bool)
 	volMap := make(map[string]bool)
@@ -713,7 +714,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
-	var testrailID = 296732
+	var testrailID = 297579
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumePxRestartAll", "Legacy Shared to Sharedv4 Service Functional Test with restart px on all nodes", nil, testrailID)
@@ -776,7 +777,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
-	var testrailID = 296732
+	var testrailID = 297579
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumePxkill", "Legacy Shared to Sharedv4 Service Functional Test with restart px kill on one nodes", nil, testrailID)
@@ -803,7 +804,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		//setMigrateLegacySharedToSharedv4Service(true)
+		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(180 * time.Second) // sleep 3 minutes.
 
 		stepLog := "kill px on one nodes and let all Apps come"
