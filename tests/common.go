@@ -9129,6 +9129,20 @@ func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
 	return nil
 }
 
+// IsKVDBNode returns true if a node is kvdb node else it returns false
+func IsKVDBNode(n node.Node) (bool, error) {
+	KvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, each := range KvdbNodes {
+		if each.ID == n.Id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // getReplicaNodes returns the list of nodes which has replicas
 func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 	getReplicaSets, err := Inst().V.GetReplicaSets(vol)

@@ -146,6 +146,8 @@ const (
 	AutopilotLabelNameKey = "name"
 	AutopilotLabelValue   = "autopilot"
 	PortworxNotDeployed   = "portworx not deployed"
+	// MetadataLabel is added to node if node has to be made kvdb node or never become kvdb node according to key value
+	MetaDataLabel = "px/metadata-node"
 )
 
 const (

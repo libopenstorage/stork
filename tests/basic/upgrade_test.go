@@ -2,13 +2,16 @@ package tests
 
 import (
 	"fmt"
+
 	"go.uber.org/multierr"
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/kvdbutils"
 	"github.com/portworx/torpedo/pkg/osutils"
 
 	"github.com/portworx/torpedo/pkg/log"
@@ -173,7 +176,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					log.Infof("attached vol %s", out)
 					attachedNode, err = GetNodeForGivenVolumeName(volName)
 
-					log.FailOnError(err, fmt.Sprintf("error getting  attached node fro volume %s", volName))
+					log.FailOnError(err, fmt.Sprintf("error getting  attached node for volume %s", volName))
 
 					err = writeFIOData(volName, fioJobName, *attachedNode)
 					log.FailOnError(err, fmt.Sprintf("error running fio command on node %s", n.Name))
@@ -503,4 +506,209 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+
+var _ = Describe("{UpgradePxKvdbMemberDown}", func() {
+	/*
+					https://purestorage.atlassian.net/browse/PTX-21450
+				    https://portworx.testrail.net/index.php?/cases/view/94371
+					1. Bring down a kvdb member node
+			        2. Upgrade PX
+			        3. Bring up the kvdb member node
+		            4. Verify if the kvdb member joins the cluster and everything is running fine
+	*/
+
+	JustBeforeEach(func() {
+		upgradeHopsList := make(map[string]string)
+		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["upgradeVolumeDriver"] = "true"
+		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", upgradeHopsList, 0)
+		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
+	})
+
+	var contexts []*scheduler.Context
+
+	var timeBeforeUpgrade time.Time
+	var timeAfterUpgrade time.Time
+	var kvdbNode node.Node
+
+	itLog := "Upgrade PX when kvdb member is down and after upgrade the kvdb member should join the kvdb cluster"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		storageNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Failed to get storage nodes")
+		numOfNodes := len(storageNodes)
+
+		stepLog := "schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		dash.VerifyFatal(len(Inst().UpgradeStorageDriverEndpointList) > 0, true, "Verify upgrade storage driver endpoint list is not empty")
+
+		for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+			stepLog = "Add labels to non kvdb nodes so that they don't try to become kvdb node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, n := range storageNodes {
+					kvdbFlag, err := IsKVDBNode(n)
+					log.FailOnError(err, "Failed to check if node is kvdb node")
+					if !kvdbFlag {
+						err = Inst().S.AddLabelOnNode(n, k8s.MetaDataLabel, "false")
+						log.FailOnError(err, "Failed to add labels to node : %s", n.Name)
+						log.InfoD("Added label: %v to node: %s", k8s.MetaDataLabel, n.Name)
+					}
+				}
+			})
+
+			stepLog = "Bring down a kvdb member node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				kvdbNodes, err := GetAllKvdbNodes()
+				log.FailOnError(err, "Failed to get kvdb nodes")
+
+				if len(kvdbNodes) < 2 {
+					log.FailOnError(fmt.Errorf("KVDB nodes are less than 2"), "KVDB nodes are less than 2")
+				}
+
+				kvdbNode, err = node.GetNodeDetailsByNodeID(kvdbNodes[rand.Intn(len(kvdbNodes))-1].ID)
+				log.FailOnError(err, "Failed to get kvdb node details")
+				log.InfoD("KVDB node to be stopped: %s", kvdbNode.Name)
+
+				err = Inst().V.StopDriver([]node.Node{kvdbNode}, false, nil)
+				log.FailOnError(err, "Failed to stop kvdb node")
+				log.InfoD("Stopped kvdb node: %s", kvdbNode.Name)
+			})
+
+			var wg sync.WaitGroup
+
+			stepLog = "Upgrade PX"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+					if err != nil {
+						log.Warnf("error getting driver version, Err: %v", err)
+					}
+					timeBeforeUpgrade = time.Now()
+					isDmthinBeforeUpgrade, errDmthinCheck := IsDMthin()
+					dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin before upgrade? ")
+
+					err = Inst().V.UpgradeDriver(upgradeHop)
+					timeAfterUpgrade = time.Now()
+					dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
+
+					durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+					expectedUpgradeTime := 15 * len(node.GetStorageDriverNodes())
+					dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
+					upgradeStatus := "PASS"
+					if durationInMins <= expectedUpgradeTime {
+						log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+					} else {
+						log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+						dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
+						upgradeStatus = "FAIL"
+					}
+					//check if all the versions are updated except one node.
+					var count = 0
+					for _, n := range storageNodes {
+						updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(n)
+						if err != nil {
+							log.Warnf("error getting driver version, Err: %v", err)
+						}
+						if updatedPXVersion == currPXVersion {
+							count++
+						}
+					}
+
+					if count == 1 {
+						log.Infof("All nodes are updated except the kvdb node")
+					}
+
+					updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+					if err != nil {
+						log.Warnf("error getting driver version, Err: %v", err)
+					}
+					isDmthinAfterUpgrade, errDmthinCheck := IsDMthin()
+					dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin after upgrade? ")
+					dash.VerifyFatal(isDmthinBeforeUpgrade, isDmthinAfterUpgrade, "setup type remained same pre and post upgrade")
+					majorVersion := strings.Split(currPXVersion, "-")[0]
+					statsData := make(map[string]string)
+					statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
+					statsData["fromVersion"] = currPXVersion
+					statsData["toVersion"] = updatedPXVersion
+					statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+					statsData["status"] = upgradeStatus
+					dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+				}()
+			})
+			stepLog = "Remove metadatalabel from one of the non kvdb node so that it can become kvdb node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// Get kvdb members before we remove the labels
+				_, err := GetAllKvdbNodes()
+				log.FailOnError(err, "Failed to get kvdb nodes before removing labels")
+
+				storageNodes := node.GetStorageNodes()
+				for _, n := range storageNodes {
+					kvdbFlag, err := IsKVDBNode(n)
+					log.FailOnError(err, "Failed to check if node is kvdb node")
+					if !kvdbFlag {
+						err = Inst().S.RemoveLabelOnNode(n, k8s.MetaDataLabel)
+						log.FailOnError(err, "Failed to remove labels to node : %s", n.Name)
+						log.InfoD("Removed label: %v to node: %s", k8s.MetaDataLabel, n.Name)
+						break
+					}
+				}
+
+				// Wait for sometime so that the node becomes kvdb node
+				time.Sleep(30 * time.Second)
+				nodes, err := GetStorageNodes()
+				kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
+				log.FailOnError(err, "Failed to get kvdb members")
+				err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+				log.FailOnError(err, "Failed to validate kvdb members")
+			})
+
+			stepLog = "Bring up the kvdb member node which was down"
+			Step(stepLog, func() {
+				err := Inst().V.StartDriver(kvdbNode)
+				log.FailOnError(err, "Failed to start kvdb node")
+				log.InfoD("Started kvdb node: %s", kvdbNode.Name)
+
+			})
+
+			wg.Wait()
+
+			stepLog = "Validate PX cluster after upgrade"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				ValidateApplications(contexts)
+			})
+
+			stepLog = "Remove metadatalabel from all the nodes"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				storageNodes := node.GetStorageNodes()
+				for _, n := range storageNodes {
+					err := Inst().S.RemoveLabelOnNode(n, k8s.MetaDataLabel)
+					log.FailOnError(err, "Failed to remove labels to node : %s", n.Name)
+					log.InfoD("Removed label: %v to node: %s", k8s.MetaDataLabel, n.Name)
+				}
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
 })
