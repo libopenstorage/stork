@@ -208,7 +208,10 @@ func ValidateSchedulePolicy(t *testing.T, schedulePolicy *storkv1.SchedulePolicy
 	}
 	log.Info("Trying to validate the created policy")
 	//Validating schedulePolicy.Policy because schedulePolicy.metadata cannot be validated
-	Dash.VerifyFatal(t, schedulePolicy.Policy, actualPolicy.Policy, "Created schedule policy doesn't match the expected specification")
+	Dash.VerifyFatal(t, *schedulePolicy.Policy.Interval, *actualPolicy.Policy.Interval, "SchedulePolicy Interval")
+	Dash.VerifyFatal(t, *schedulePolicy.Policy.Monthly, *actualPolicy.Policy.Monthly, "SchedulePolicy Monthly")
+	Dash.VerifyFatal(t, *schedulePolicy.Policy.Daily, *actualPolicy.Policy.Daily, "SchedulePolicy Daily")
+	Dash.VerifyFatal(t, *schedulePolicy.Policy.Weekly, *actualPolicy.Policy.Weekly, "SchedulePolicy Weekly")
 	return nil
 }
 
