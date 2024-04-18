@@ -230,10 +230,12 @@ func triggerMigrationSchedule(
 
 func executeStorkCtlCommand(t *testing.T, cmd *cobra.Command, cmdArgs []string, customArgs map[string]string) {
 	// add the custom args to the command
-	for key, value := range customArgs {
-		cmdArgs = append(cmdArgs, "--"+key)
-		if value != "" {
-			cmdArgs = append(cmdArgs, value)
+	if customArgs != nil {
+		for key, value := range customArgs {
+			cmdArgs = append(cmdArgs, "--"+key)
+			if value != "" {
+				cmdArgs = append(cmdArgs, value)
+			}
 		}
 	}
 	cmd.SetArgs(cmdArgs)
@@ -2714,27 +2716,52 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 }
 
 func blowNamespacesForTest(t *testing.T, instanceID, appKey string, skipDestDeletion bool) {
-	err := setSourceKubeConfig()
-	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
-	err = core.Instance().DeleteNamespace(namespace)
-	if !errors.IsNotFound(err) {
-		log.FailOnError(t, err, "failed to delete namespace %s on destination cluster", namespace)
-	}
+	blowNamespace(t, namespace, true)
 
 	// for negative cases the namespace is not even created on destination, so skip deleting it
 	if skipDestDeletion {
 		return
 	}
-	err = setDestinationKubeConfig()
-	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
-	err = core.Instance().DeleteNamespace(namespace)
-	if !errors.IsNotFound(err) {
-		log.FailOnError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+	blowNamespace(t, namespace, false)
+
+	err := setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+}
+
+func blowNamespaceForTest(t *testing.T, namespace string, skipDestDeletion bool) {
+
+	blowNamespace(t, namespace, true)
+
+	// for negative cases the namespace is not even created on destination, so skip deleting it
+	if skipDestDeletion {
+		return
 	}
 
-	err = setSourceKubeConfig()
+	blowNamespace(t, namespace, false)
+
+	err := setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+}
+
+func blowNamespace(t *testing.T, namespace string, source bool) {
+	if source {
+		err := setSourceKubeConfig()
+		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+		err = core.Instance().DeleteNamespace(namespace)
+		if !errors.IsNotFound(err) {
+			log.FailOnError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+		}
+	} else {
+		err := setDestinationKubeConfig()
+		log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+		err = core.Instance().DeleteNamespace(namespace)
+		if !errors.IsNotFound(err) {
+			log.FailOnError(t, err, "failed to delete namespace %s on destination cluster", namespace)
+		}
+	}
 }
