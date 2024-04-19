@@ -220,7 +220,7 @@ func getDRActionStatus(t *testing.T, actionType storkv1.ActionType, actionName s
 	for _, column := range columns {
 		startIndex[column] = strings.Index(output[0], column)
 	}
-	// Extract the value of each column 
+	// Extract the value of each column
 	name := strings.TrimSpace(output[1][startIndex["NAME"]:startIndex["CREATED"]])
 	currentStage := strings.TrimSpace(output[1][startIndex["STAGE"]:startIndex["STATUS"]])
 	currentStatus := strings.TrimSpace(output[1][startIndex["STATUS"]:startIndex["MORE INFO"]])
@@ -229,7 +229,6 @@ func getDRActionStatus(t *testing.T, actionType storkv1.ActionType, actionName s
 	log.InfoD("Action %s status fields are: %s;%s;%s;", name, currentStage, currentStatus, moreInfo)
 	return currentStage, currentStatus, moreInfo
 }
-
 
 func ValidateAction(t *testing.T, expectedAction *storkv1.Action, actionName string, actionNamespace string) error {
 	actualAction, err := storkops.Instance().GetAction(actionName, actionNamespace)
