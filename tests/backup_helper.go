@@ -1101,7 +1101,7 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 	if err != nil {
 		return nil, err
 	}
-
+	log.InfoD("Backup without check [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
