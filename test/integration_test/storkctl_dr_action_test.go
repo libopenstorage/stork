@@ -209,30 +209,27 @@ func getDRActionStatus(t *testing.T, actionType storkv1.ActionType, actionName s
 	// Get the captured output as a string
 	actualOutput := outputBuffer.String()
 	log.InfoD("Actual output is: %s", actualOutput)
-	// Break the actual output into lines
 	output := strings.Split(actualOutput, "\n")
 	Dash.VerifyFatal(t, len(output), 3, "Action status command failed")
-	// Extract the useful fields
-	fields := strings.Fields(output[1])
+	// NAME                                                                   CREATED               STAGE       STATUS       MORE INFO
+	// failback-reverse-elastic-2024-04-17-111052                             17 Apr 24 11:10 UTC   Completed   Successful   Scaled up Apps in : 1/1 namespaces
 
-	// Join the fields back together to form the columns
-	// "failover-ms-4-2024-04-02-135725   02 Apr 24 13:57 UTC   Completed   Successful   Scaled up Apps in : 1/1 namespaces"
-	// CREATED timestamp is index [1:5]
-	name := fields[0]
-	currentStage := fields[6]
-	// status and moreInfo fields can be empty
-	currentStatus := ""
-	moreInfo := ""
-	if len(fields) > 7 {
-		currentStatus = fields[7]
+	// Extract the start index of each field
+	startIndex := make(map[string]int)
+	columns := []string{"NAME", "CREATED", "STAGE", "STATUS", "MORE INFO"}
+	for _, column := range columns {
+		startIndex[column] = strings.Index(output[0], column)
 	}
-	if len(fields) > 8 {
-		moreInfo = strings.Join(fields[8:], " ")
-	}
+	// Extract the value of each column 
+	name := strings.TrimSpace(output[1][startIndex["NAME"]:startIndex["CREATED"]])
+	currentStage := strings.TrimSpace(output[1][startIndex["STAGE"]:startIndex["STATUS"]])
+	currentStatus := strings.TrimSpace(output[1][startIndex["STATUS"]:startIndex["MORE INFO"]])
+	moreInfo := strings.TrimSpace(output[1][startIndex["MORE INFO"]:])
 	Dash.VerifyFatal(t, name, actionName, "Action Name")
 	log.InfoD("Action %s status fields are: %s;%s;%s;", name, currentStage, currentStatus, moreInfo)
 	return currentStage, currentStatus, moreInfo
 }
+
 
 func ValidateAction(t *testing.T, expectedAction *storkv1.Action, actionName string, actionNamespace string) error {
 	actualAction, err := storkops.Instance().GetAction(actionName, actionNamespace)
