@@ -390,6 +390,11 @@ func setup() error {
 		return fmt.Errorf("while PX service to LoadBalancer, setting kubeconfig to destination failed %v", err)
 	}
 
+	err = addTestModeEnvironmentVar()
+	if err != nil {
+		return fmt.Errorf("TEST_MODE environment variable not set for stork in destination cluster: %v", err)
+	}
+
 	// On destination cluster, change PX service to type LoadBalancer if it is an EKS/AKS/GKE cluster
 	if volumeDriverName == storkdriver.PortworxDriverName && IsCloud() {
 		if err = changePxServiceToLoadBalancer(isInternalLBAws); err != nil {
@@ -404,7 +409,7 @@ func setup() error {
 
 	err = addTestModeEnvironmentVar()
 	if err != nil {
-		return fmt.Errorf("TEST_MODE environment variable not set for stork: %v", err)
+		return fmt.Errorf("TEST_MODE environment variable not set for stork in source cluster: %v", err)
 	}
 	SetupTestRail()
 
