@@ -2684,10 +2684,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				err := DeleteAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of kubevirt VMs from the namespace [%s]", namespace))
 			}
-			log.InfoD("Deleting remaining kubevirt VM related specs from the namespace")
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			DestroyApps(scheduledAppContexts, opts)
 		})
 
 		Step("Verify next namespace labelled and non labelled scheduled backup is success state after VM deletion", func() {
