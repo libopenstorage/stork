@@ -67,6 +67,10 @@ const (
 	PxServiceEnvName = "PX_SERVICE_NAME"
 	// PxNamespaceEnvName - PX namespace ENV name
 	PxNamespaceEnvName = "PX_NAMESPACE"
+	// PxSecretIssuerEnvName - px secret issuer ENV name
+	PxSecretIssuerEnvName = "PX_JWT_ISSUER"
+	// PxSecretEnvName - px secret ENV name
+	PxSecretEnvName = "PX_SHARED_SECRET"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
@@ -388,4 +392,31 @@ func GetPxNamespaceFromStorkDeploy(storkDeployName, storkDeployNamespace string)
 		}
 	}
 	return namespace, service, nil
+}
+
+// GetPxSecretFromStorkDeploy - will return the px secret env from stork deploy used in nfs restore of secured portworx volumes
+func GetPxSecretFromStorkDeploy(storkDeployName, storkDeployNamespace string) (string, string, error) {
+	deploy, err := apps.Instance().GetDeployment(storkDeployName, storkDeployNamespace)
+	if err != nil {
+		return "", "", err
+	}
+	var issuer, secretkey, secretvalue, secretData string
+	for _, envVar := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if envVar.Name == PxSecretIssuerEnvName {
+			issuer = envVar.Value
+		}
+		if envVar.Name == PxSecretEnvName {
+			if envVar.ValueFrom != nil && envVar.ValueFrom.SecretKeyRef != nil {
+				secretkey = envVar.ValueFrom.SecretKeyRef.Key
+				secretvalue = envVar.ValueFrom.SecretKeyRef.Name
+				//Retrieving the secret value from the secret
+				secret, err := core.Instance().GetSecret(secretvalue, storkDeployNamespace)
+				if err != nil {
+					return "", "", err
+				}
+				secretData = string(secret.Data[secretkey])
+			}
+		}
+	}
+	return issuer, secretData, nil
 }
