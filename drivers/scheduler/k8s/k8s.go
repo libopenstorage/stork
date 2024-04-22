@@ -7179,6 +7179,14 @@ func (k *K8s) GetASGClusterSize() (int64, error) {
 	}
 }
 
+func (k *K8s) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
+}
+
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
 func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	// Only FA (pure_block) volume is supported

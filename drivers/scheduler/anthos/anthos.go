@@ -869,6 +869,14 @@ func (anth *anthos) GetASGClusterSize() (int64, error) {
 	}
 }
 
+func (anth *anthos) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
+}
+
 // init registering anthos sheduler
 func init() {
 	anthos := &anthos{}

@@ -442,6 +442,9 @@ type Driver interface {
 	GetZones() ([]string, error)
 	// GetASGClusterSize gets node count for an asg cluster
 	GetASGClusterSize() (int64, error)
+
+	// SetASGClusterSize sets node count for an asg cluster
+	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 }
 
 var (

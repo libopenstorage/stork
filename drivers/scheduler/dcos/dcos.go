@@ -1123,6 +1123,14 @@ func (d *dcos) ScaleCluster(replicas int) error {
 	}
 }
 
+func (d *dcos) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

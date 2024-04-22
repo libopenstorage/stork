@@ -602,7 +602,7 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 		log.Infof("Got Cred UUID: %s", credUUID)
 		contexts = make([]*scheduler.Context, 0)
 		policyName := "intervalpolicy"
-		appScale := 30
+		appScale := 5
 
 		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
 		Step(stepLog, func() {

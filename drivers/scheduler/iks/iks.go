@@ -8,6 +8,8 @@ import (
 	"github.com/IBM-Cloud/bluemix-go/session"
 	"github.com/IBM-Cloud/container-services-go-sdk/kubernetesserviceapiv1"
 	"github.com/IBM/go-sdk-core/v5/core"
+	"github.com/libopenstorage/cloudops"
+	iks "github.com/libopenstorage/cloudops/ibm"
 	k8sCore "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -31,6 +33,7 @@ const (
 
 type IKS struct {
 	kube.K8s
+	ops              cloudops.Ops
 	clusterName      string
 	region           string
 	k8sClient        *kubernetesserviceapiv1.KubernetesServiceApiV1
@@ -49,6 +52,12 @@ func (i *IKS) Init(schedOpts scheduler.InitOptions) (err error) {
 	if err != nil {
 		return err
 	}
+
+	ops, err := iks.NewClient()
+	if err != nil {
+		return err
+	}
+	i.ops = ops
 	return nil
 }
 
@@ -439,9 +448,16 @@ func (i *IKS) DeleteNode(node node.Node) error {
 }
 
 func (i *IKS) GetASGClusterSize() (int64, error) {
-	target := containerv2.ClusterTargetHeader{
-		Provider: "vpc-gen2",
+	err := i.configureIKSClient()
+	if err != nil {
+		return 0, err
 	}
+
+	target := containerv2.ClusterTargetHeader{
+		ResourceGroup: i.resourceGroupID,
+		Provider:      "vpc-gen2",
+	}
+
 	workerPoolDetails, err := i.containerClient.WorkerPools().
 		GetWorkerPool(i.clusterName, i.pxWorkerPoolName, target)
 	if err != nil {
@@ -452,6 +468,69 @@ func (i *IKS) GetASGClusterSize() (int64, error) {
 	log.Infof("workerPoolDetails: %v", workerPoolDetails)
 
 	return int64(workerPoolDetails.WorkerCount * len(workerPoolDetails.Zones)), nil
+}
+
+func (i *IKS) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	err := i.configureIKSClient()
+	if err != nil {
+		return err
+	}
+
+	resizeReg := containerv2.ResizeWorkerPoolReq{Cluster: i.clusterName, Size: perZoneCount, Workerpool: i.pxWorkerPoolName}
+	target := containerv2.ClusterTargetHeader{
+		ResourceGroup: i.resourceGroupID,
+		Provider:      "vpc-gen2",
+	}
+	err = i.containerClient.WorkerPools().ResizeWorkerPool(resizeReg, target)
+	if err != nil {
+		return err
+	}
+
+	err = i.waitForInstanceGroupResize(i.pxWorkerPoolName, perZoneCount, timeout)
+	return err
+
+}
+
+func (i *IKS) waitForInstanceGroupResize(workerPoolName string,
+	count int64, timeout time.Duration) error {
+	target := containerv2.ClusterTargetHeader{
+		Provider: "vpc-gen2",
+	}
+
+	workerPoolDetails, err := i.containerClient.WorkerPools().
+		GetWorkerPool(i.clusterName, workerPoolName, target)
+	if err != nil {
+		return err
+	}
+
+	expectedWorkerCount := len(workerPoolDetails.Zones) * int(count)
+	if timeout > time.Nanosecond {
+		f := func() (interface{}, bool, error) {
+
+			currentWorkers, err := i.containerClient.Workers().ListByWorkerPool(i.clusterName, workerPoolName, false, containerv2.ClusterTargetHeader{
+				ResourceGroup: i.resourceGroupID,
+			})
+
+			if err != nil {
+				// Error occured, just retry
+				return nil, true, err
+			}
+			// The operation is done
+			if len(currentWorkers) == expectedWorkerCount {
+				return nil, false, nil
+			}
+			return nil,
+				true,
+				fmt.Errorf("number of current worker nodes [%d]. Waiting for [%d] nodes to become HEALTHY",
+					len(currentWorkers), expectedWorkerCount)
+		}
+
+		_, err = task.DoRetryWithTimeout(f, timeout, 15*time.Second)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func init() {

@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -465,6 +466,14 @@ func (e *EKS) GetASGClusterSize() (int64, error) {
 		totalSize += aws.ToInt32(asg.AutoScalingGroups[0].DesiredCapacity)
 	}
 	return int64(totalSize), nil
+}
+
+func (e *EKS) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
 }
 
 func init() {

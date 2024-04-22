@@ -2,6 +2,7 @@ package openshift
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/errors"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -1342,4 +1343,12 @@ func updatePrometheusAndAutopilot() error {
 	}
 	log.Infof("Successfully updated PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...", stc.Name, stc.Namespace)
 	return nil
+}
+
+func (k *openshift) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
 }

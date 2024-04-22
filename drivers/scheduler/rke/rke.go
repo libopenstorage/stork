@@ -15,6 +15,7 @@ import (
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -442,11 +443,19 @@ func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string)
 }
 
 // DeleteNode deletes the given node
-func (o *Rancher) DeleteNode(node node.Node) error {
+func (r *Rancher) DeleteNode(node node.Node) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteActionApproval()",
+	}
+}
+
+func (r *Rancher) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
 	}
 }
 

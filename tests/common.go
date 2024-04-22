@@ -745,7 +745,12 @@ func PrintCommandOutput(cmnd string) {
 }
 
 func PrintSvPoolStatus(node node.Node) {
-	runCmdGetOutput("pxctl sv pool show", node)
+	output, err := runCmdGetOutput("pxctl sv pool show", node)
+	if err != nil {
+		log.Warnf("error getting pool data on node [%s], cause: %v", node.Name, err)
+		return
+	}
+	log.Infof(output)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run

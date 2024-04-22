@@ -30,6 +30,10 @@ const (
 
 	defaultGetAksClusterTimeout  = 5 * time.Minute
 	defaultGetAksClusterInterval = 20 * time.Second
+
+	expectedProvisioningState = "Succeeded"
+	updatingProvisioningState = "Updating"
+	failedProvisioningState   = "Failed"
 )
 
 type aks struct {
@@ -306,21 +310,70 @@ func (a *aks) UpgradeScheduler(version string) error {
 	return nil
 }
 
-func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+func (a *aks) SetASGClusterSize(totalClusterSize int64, timeout time.Duration) error {
 	// Azure SDK requires total cluster size
-	zones, err := a.GetZones()
+	_, err := a.GetAKSCluster()
 	if err != nil {
 		return err
 	}
 
-	totalClusterSize := perZoneCount * int64(len(zones))
-	if err := a.ops.SetInstanceGroupSize(a.instanceGroup, totalClusterSize, timeout); err != nil {
-		return fmt.Errorf("failed to set size of node pool %s. Error: %v", a.instanceGroup, err)
+	log.Infof("Scaling AKS Node Pool [%s] to [%d]", a.instanceGroup, totalClusterSize)
+
+	cmd := fmt.Sprintf("%s aks nodepool update --resource-group %s --cluster-name %s --nodepool-name %s  --update-cluster-autoscaler --min-count %d --max-count %d --no-wait", azCli, a.clusterName, a.clusterName, a.instanceGroup, totalClusterSize, totalClusterSize)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to scale cluser [%s]  to [%d], Err: %v %v %v", a.clusterName, totalClusterSize, stderr, err, stdout)
 	}
+	err = a.waitForNodePoolToScale(totalClusterSize)
+
+	if err != nil {
+		return fmt.Errorf("failed to scale AKS Node Pool [%s] to [%d], Err: %v", a.instanceGroup, totalClusterSize, err)
+	}
+
+	log.Infof("Scaled AKS Node Pool [%s] upgrade to [%d] successfully", a.instanceGroup, totalClusterSize)
 	return nil
+
+}
+
+func (a *aks) waitForNodePoolToScale(nodeCount int64) error {
+
+	t := func() (interface{}, bool, error) {
+		aksCluster, err := a.GetAKSCluster()
+		if err != nil {
+			return nil, false, err
+		}
+
+		for _, profile := range aksCluster.AgentPoolProfiles {
+			if profile.Name == a.instanceGroup {
+				if profile.ProvisioningState == failedProvisioningState {
+					return nil, false, fmt.Errorf(" AKS Node Pool [%s] to scale to [%d] failed, expected status [%s], actual status [%s]", a.instanceGroup, nodeCount, expectedProvisioningState, profile.ProvisioningState)
+				}
+
+				if profile.ProvisioningState == updatingProvisioningState {
+					return nil, true, fmt.Errorf("waiting for AKS Node Pool [%s] to scale to [%d], expected status [%s], actual status [%s]", a.instanceGroup, nodeCount, expectedProvisioningState, profile.ProvisioningState)
+				}
+
+				if profile.Count == int(nodeCount) && profile.ProvisioningState == expectedProvisioningState {
+					log.Infof("AKS Node Pool [%s] curret ProvisioningState is [%s]", a.instanceGroup, profile.ProvisioningState)
+					return nil, false, nil
+				}
+			}
+		}
+
+		return nil, true, fmt.Errorf("AKS Node Pool [%s] count to [%d] not yet updated", a.instanceGroup, nodeCount)
+	}
+	_, err := task.DoRetryWithTimeout(t, 60*time.Minute, 2*time.Minute)
+
+	return err
 }
 
 func (a *aks) GetASGClusterSize() (int64, error) {
+	if len(a.instanceGroup) == 0 {
+		_, err := a.GetAKSCluster()
+		if err != nil {
+			return 0, err
+		}
+	}
 	nodeCount, err := a.ops.GetInstanceGroupSize(a.instanceGroup)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get size of node pool %s. Error: %v", a.instanceGroup, err)
@@ -371,6 +424,7 @@ func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
 
 // GetAKSCluster Gets and return AKS cluster object
 func (a *aks) GetAKSCluster() (AKSCluster, error) {
+
 	log.Info("Get AKS cluster object")
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
@@ -414,7 +468,6 @@ func (a *aks) GetAKSCluster() (AKSCluster, error) {
 // WaitForAKSNodePoolToUpgrade Waits for AKS Node Pool to be upgraded to a specific version
 func (a *aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
 	log.Infof("Waiting for AKS Node Pool [%s] to be upgraded to [%s]", nodePoolName, version)
-	expectedUpgradeStatus := "Succeeded"
 
 	t := func() (interface{}, bool, error) {
 		aksCluster, err := a.GetAKSCluster()
@@ -426,14 +479,14 @@ func (a *aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
 		for _, profile := range aksCluster.AgentPoolProfiles {
 			if profile.Name == nodePoolName {
 				foundNodePool = true
-				if profile.ProvisioningState != expectedUpgradeStatus {
-					return nil, true, fmt.Errorf("waiting for AKS Node Pool [%s] upgrade to [%s] to complete, expected status [%s], actual status [%s]", nodePoolName, version, expectedUpgradeStatus, profile.ProvisioningState)
+				if profile.ProvisioningState != expectedProvisioningState {
+					return nil, true, fmt.Errorf("waiting for AKS Node Pool [%s] upgrade to [%s] to complete, expected status [%s], actual status [%s]", nodePoolName, version, expectedProvisioningState, profile.ProvisioningState)
 				}
 			}
 		}
 
 		if foundNodePool {
-			log.Infof("Upgrade status for AKS Node Pool [%s] to [%s] is [%s]", nodePoolName, version, expectedUpgradeStatus)
+			log.Infof("Upgrade status for AKS Node Pool [%s] to [%s] is [%s]", nodePoolName, version, expectedProvisioningState)
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("failed to find AKS Node Pool [%s]", nodePoolName)

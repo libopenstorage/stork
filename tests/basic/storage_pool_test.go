@@ -998,6 +998,12 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 	}
 
 	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+	n, terr := GetNodeWithGivenPoolID(poolIDToResize)
+	if terr == nil {
+		PrintSvPoolStatus(*n)
+	} else {
+		log.Warnf("error getting node for pool uuid [%s]. Cause: %v", poolIDToResize, terr)
+	}
 	return err
 }
 
@@ -9924,6 +9930,13 @@ func waitForOngoingPoolExpansionToComplete(poolIDToResize string) error {
 	}
 
 	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, poolExpansionStatusCheckInterval)
+	n, terr := GetNodeWithGivenPoolID(poolIDToResize)
+	if terr == nil {
+		PrintSvPoolStatus(*n)
+	} else {
+		log.Warnf("error getting node for pool uuid [%s]", poolIDToResize)
+	}
+
 	return err
 }
 
