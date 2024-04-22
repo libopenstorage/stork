@@ -481,6 +481,9 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 	var testrailID = 297580
 	var runID int
+	var pxNode node.Node
+	var nodeDecommissioned bool
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedServiceNodeDecomssion", "Legacy Shared to Sharedv4 Service Functional Test with Node Decommission", nil, testrailID)
 		namespacePrefix := "lstsv4m-node-decom"
@@ -489,8 +492,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < numApps {
-			numberNameSpaces = numApps
+		if numberNameSpaces < 10 {
+			numberNameSpaces = 10
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -506,12 +509,16 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		setMigrateLegacySharedToSharedv4Service(true)
-		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
-
 		storageNodes, err := GetStorageNodes()
 		log.FailOnError(err, "Unable to get the storage nodes")
-		pxNode := storageNodes[rand.Intn(len(storageNodes))]
+		pxNode = storageNodes[rand.Intn(len(storageNodes))]
+		err = PrereqForNodeDecomm(pxNode, nil)
+		log.FailOnError(err, fmt.Sprintf("error in executing prereq for node %s decommission", pxNode.Name))
+
+		// Transition after preparing for decommission.
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(90 * time.Second) // sleep 1.5 minute.
+
 		err = Inst().S.PrepareNodeToDecommission(pxNode, Inst().Provisioner)
 		log.FailOnError(err, fmt.Sprintf("error preparing node %s for decommision", pxNode.Name))
 		stepLog := "Decommission Node while Migration is in Progress"
@@ -519,6 +526,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			err = Inst().V.DecommissionNode(&pxNode)
 			log.FailOnError(err, fmt.Sprintf("error in decommision of node %s ", pxNode.Name))
 		})
+		nodeDecommissioned = true
 
 		stepLog = "Validate migration process after node Decommission"
 		Step(stepLog, func() {
@@ -533,61 +541,51 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			}
 			ValidateApplications(contexts)
 		})
-		// Don't Fail any of the below steps.
-		stepLog = fmt.Sprintf("Rejoin node %s", pxNode.Name)
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			//reboot required to remove encrypted dm devices if any
-			err := Inst().N.RebootNode(pxNode, node.RebootNodeOpts{
-				Force: true,
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         defaultCommandTimeout,
-					TimeBeforeRetry: defaultRetryInterval,
-				},
-			})
-			log.FailOnError(err, fmt.Sprintf("error rebooting node %s", pxNode.Name))
-			err = Inst().V.RejoinNode(&pxNode)
-			dash.VerifyFatal(err, nil, "Validate node rejoin init")
-			var rejoinedNode *api.StorageNode
-			t := func() (interface{}, bool, error) {
-				drvNodes, err := Inst().V.GetDriverNodes()
-				if err != nil {
-					return false, true, err
-				}
-
-				for _, n := range drvNodes {
-					if n.Hostname == pxNode.Hostname {
-						rejoinedNode = n
-						return true, false, nil
-					}
-				}
-
-				return false, true, fmt.Errorf("node %s not joined yet", pxNode.Name)
-			}
-			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, defaultRetryInterval)
-			log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", pxNode.Name))
-			dash.VerifyFatal(rejoinedNode != nil, true, fmt.Sprintf("verify node [%s] rejoined PX cluster", pxNode.Name))
-			err = Inst().S.RefreshNodeRegistry()
-			log.FailOnError(err, "error refreshing node registry")
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing storage drive endpoints")
-			decommissionedNode := node.Node{}
-			for _, n := range node.GetStorageDriverNodes() {
-				if n.Name == rejoinedNode.Hostname {
-					decommissionedNode = n
-					break
-				}
-			}
-			if decommissionedNode.Name == "" {
-				log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
-			}
-			err = Inst().V.WaitDriverUpOnNode(decommissionedNode, Inst().DriverStartTimeout)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver up on rejoined node [%s] after rejoining", decommissionedNode.Name))
-		})
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		if nodeDecommissioned {
+			// Don't Fail any of the below steps.
+			//reboot required to remove encrypted dm devices if any
+			Inst().N.RebootNode(pxNode, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultCommandTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+			})
+			Inst().V.RejoinNode(&pxNode)
+			var rejoinedNode *api.StorageNode
+			t := func() (interface{}, bool, error) {
+				drvNodes, err := Inst().V.GetDriverNodes()
+				if err == nil {
+					for _, n := range drvNodes {
+						if n.Hostname == pxNode.Hostname {
+							rejoinedNode = n
+							return true, false, nil
+						}
+					}
+				}
+				return false, true, fmt.Errorf("node $s not joined yet")
+			}
+
+			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, defaultRetryInterval)
+			if err == nil {
+				Inst().S.RefreshNodeRegistry()
+				Inst().V.RefreshDriverEndpoints()
+				decommissionedNode := node.Node{}
+				for _, n := range node.GetStorageDriverNodes() {
+					if n.Name == rejoinedNode.Hostname {
+						decommissionedNode = n
+						break
+					}
+				}
+				if decommissionedNode.Name != "" {
+					Inst().V.WaitDriverUpOnNode(decommissionedNode, Inst().DriverStartTimeout)
+				}
+			}
+		}
 		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
