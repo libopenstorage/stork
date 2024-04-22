@@ -3654,7 +3654,6 @@ func checkLunsAfterVolumeDeletion(event *EventRecord, vols []*volume.Volume) {
 
 	pureClientMap := make(map[string]map[string]*flasharray.Client)
 	pureClientMap["FADA"], err = pureutils.GetFAClientMapFromPXPureSecret(pxPureSecret)
-	pureClientMap["FBDA"], err = pureutils.GetFBClientMapFromPXPureSecret(pxPureSecret)
 
 	timeout := 10 * time.Minute
 	t := func() (interface{}, bool, error) {

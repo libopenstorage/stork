@@ -57,19 +57,6 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 	return clientMap, nil
 }
 
-// GetFBClientMapFromPXPureSecret takes a PXPureSecret and returns a map of mgmt endpoints to FB clients
-func GetFBClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray.Client, error) {
-	clientMap := make(map[string]*flasharray.Client)
-	for _, fb := range secret.Blades {
-		fbClient, err := PureCreateClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create FB client for [%s]. Err: [%v]", fb.MgmtEndPoint, err)
-		}
-		clientMap[fb.MgmtEndPoint] = fbClient
-	}
-	return clientMap, nil
-}
-
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
 func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}

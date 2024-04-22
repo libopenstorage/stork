@@ -1854,8 +1854,6 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 							switch volType {
 							case VolumeFADA:
 								pureClientMap[volType], err = pureutils.GetFAClientMapFromPXPureSecret(secret)
-							case VolumeFBDA:
-								pureClientMap[volType], err = pureutils.GetFBClientMapFromPXPureSecret(secret)
 							}
 							log.FailOnError(err, "failed to get [%s] client map from secret [%s/%s]", volType, PureSecretName, volDriverNamespace)
 						}
@@ -2169,13 +2167,13 @@ func faLUNExists(faVolList []string, pvc string) bool {
 
 var _ = Describe("{FADAVolMigrateValidation}", func() {
 
-	/* 
-          1. Attach FADA PVC on Node 1, confirm proper attachment. 
-	  2. Stop PX on Node 1, ensure volume persistence in multipath -ll. 
-          3. Move deployment to Node 2, validate successful pod startup. 
-	  4. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.
+	/*
+		          1. Attach FADA PVC on Node 1, confirm proper attachment.
+			  2. Stop PX on Node 1, ensure volume persistence in multipath -ll.
+		          3. Move deployment to Node 2, validate successful pod startup.
+			  4. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.
 
-        */
+	*/
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADAVolMigrateValidation", "Migrate pods from node 1 to node and check multipath consistency", nil, 0)
@@ -2332,7 +2330,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			Step(stepLog, func() {
 				//sleep for some time for the entries to update
 				time.Sleep(30 * time.Second)
-				
+
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
