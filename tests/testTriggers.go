@@ -5520,13 +5520,13 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			statType = stats.ResizeDiskEventName
 		}
 		isDmthin, _ := IsDMthin()
+		pNode, err = GetNodeFromPoolUUID(pool.Uuid)
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+			return
+		}
 		if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
-			pNode, err = GetNodeFromPoolUUID(pool.Uuid)
-			if err != nil {
-				log.Error(err.Error())
-				UpdateOutcome(event, err)
-				return
-			}
 			err = EnterPoolMaintenance(*pNode)
 			if err != nil {
 				log.InfoD(fmt.Sprintf("Printing The storage pool status after failure of entering maintenance on Node:%s ", pNode.Name))
@@ -5571,7 +5571,6 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					} else {
 						err = RebootNodeAndWaitForPxUp(*storageNode)
 					}
-					err = RebootNodeAndWaitForPxUp(*storageNode)
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
@@ -5589,7 +5588,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 
 		}
 
-		if pNode != nil {
+		if pNode != nil && isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
 			err := ExitPoolMaintenance(*pNode)
 			if err != nil {
 				log.Error(err.Error())
