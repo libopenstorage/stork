@@ -551,7 +551,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			Inst().N.RebootNode(pxNode, node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
-						Timeout:         defaultCommandTimeout,
+					Timeout:         defaultCommandTimeout,
 					TimeBeforeRetry: defaultRetryInterval,
 				},
 			})
@@ -827,6 +827,301 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 		}
 		ValidateApplications(contexts)
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+		DestroyApps(contexts, nil)
+	})
+})
+
+func writeHelper(pxNode node.Node, volumeName string) error {
+	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volumeName)
+	createDir := fmt.Sprintf("mkdir %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+	log.Infof("Running command %s on %s", createDir, pxNode.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(pxNode, createDir, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		rmDir := fmt.Sprintf("rmdir %s", mountPath)
+		Inst().N.RunCommandWithNoRetry(pxNode, rmDir, cmdConnectionOpts)
+	}()
+	pxctlCmdfull := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volumeName)
+	log.Infof("Running command %s on %s", pxctlCmdfull, pxNode.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(pxNode, pxctlCmdfull, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		unmountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", mountPath, volumeName)
+		Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
+		unmountCmd = fmt.Sprintf("pxctl host detach %s", volumeName)
+		Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
+	}()
+	writeCmd := fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", mountPath)
+	log.Infof("Running command %s on %s", writeCmd, pxNode.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(pxNode, writeCmd, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Migrate when volume state is ha-update.
+var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
+	var testrailID = 297584
+	volumeName := "legacy-shared-volume-haupdate"
+	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrateHAupdating", "Legacy Shared to Sharedv4 Service Migration when volume is in HA update state", nil, testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+	})
+	stepLog := "Create Legacy shared volume, mount it ingest some data, update HA. Then start migration"
+	It(stepLog, func() {
+		pxctlCmdFull := fmt.Sprintf("v c -s 10 --shared=true %s", volumeName)
+		pxNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get the storage nodes")
+		pxNode := GetRandomNode(pxNodes)
+		log.Infof("Creating legacy shared volume: %s", volumeName)
+		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		log.FailOnError(err, fmt.Sprintf("error creating legacy shared volume %s", volumeName))
+		log.Infof(output)
+
+		vol, err := Inst().V.InspectVolume(volumeName)
+		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
+		dash.VerifyFatal(vol.Spec.Shared, true, "non-shared volume created unexpectedly")
+
+		err = writeHelper(pxNode, volumeName)
+		log.FailOnError(err, fmt.Sprintf("Failed writing data to volume {%v}", volumeName))
+
+		// Start Migration.
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(time.Minute) // sleep for a minute and ha-update.
+
+		pxctlCmdFull = fmt.Sprintf("v ha-update --repl 2 %s", volumeName)
+		_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		log.FailOnError(err, fmt.Sprintf("error ha-updating legacy shared volume %s", volumeName))
+
+		t := func() (interface{}, bool, error) {
+			vol, err := Inst().V.InspectVolume(volumeName)
+			if err != nil {
+				log.Infof("Inspect of volume failed for voume {%v}", volumeName)
+				return "", false, err
+			}
+
+			if !vol.Spec.Shared && vol.Spec.Sharedv4 {
+				return "", false, nil
+			}
+			return "", true, fmt.Errorf("Volume is still shared {%v}", volumeName)
+		}
+		_, err = task.DoRetryWithTimeout(t, 6 * time.Minute, time.Minute)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
+		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
+		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// Migrate when volume state is Degraded.
+var _ = Describe("{LegacySharedVolumeAppDegraded}", func() {
+	var testrailID = 297585
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppDegraded", "Legacy Shared to Sharedv4 Service when Volume in Degraded State", nil, testrailID)
+		namespacePrefix := "lstsv4mdegraded"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	It("has to verify migration is successful and pods are restarted", func() {
+		// podMap is a map of the pods using shared volumes.
+		// volMap is the list of shared volumes.
+
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+
+		var nodeForPxStop node.Node
+		var replicaSets []*api.ReplicaSet
+		found := false
+		for _, ctx := range contexts {
+			vol, apiVol, _ := getLegacySharedTestAppVol(ctx)
+			if apiVol.Spec.Shared {
+				replicaSets, err = Inst().V.GetReplicaSets(vol)
+				if err == nil {
+					found = true
+					break
+				}
+			}
+		}
+		if found {
+			// Put the volume in Degraded state.
+			replicasNodes := replicaSets[0].Nodes
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			for _, n := range storagenodes {
+				if n.Id == replicasNodes[0] {
+					nodeForPxStop = n
+					break
+				}
+			}
+			// Assert that nodeToRestart is not empty.
+			// Stop Node.
+			err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Couldn't stop driver"))
+			Inst().V.WaitDriverDownOnNode(nodeForPxStop)
+			// defer Restart
+			defer func() {
+				Inst().V.StartDriver(nodeForPxStop)
+			}()
+		}
+
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 20
+
+		setMigrateLegacySharedToSharedv4Service(true)
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Expected legacy shared volume to be 0 but is %d", countPostTimeout))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+		DestroyApps(contexts, nil)
+	})
+})
+
+// Migrate when volume state is Out of Quorum.
+var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
+	var testrailID = 297586
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppOutOfQuorum", "Legacy Shared to Sharedv4 Service when Volume in Out of Quorum State", nil, testrailID)
+		namespacePrefix := "lstsv4moutofquorum"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	It("has to verify migration is successful and pods are restarted", func() {
+		// podMap is a map of the pods using shared volumes.
+		// volMap is the list of shared volumes.
+
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+
+		var nodesForPxStop []node.Node
+		var replicaSets []*api.ReplicaSet
+		found := false
+		for _, ctx := range contexts {
+			vol, apiVol, _ := getLegacySharedTestAppVol(ctx)
+			if apiVol.Spec.Shared {
+				replicaSets, err = Inst().V.GetReplicaSets(vol)
+				if err == nil {
+					found = true
+					break
+				}
+			}
+		}
+		if found {
+			// Put the volume in Degraded state.
+			storagenodes, _ := GetStorageNodes()
+			replicasNodes := replicaSets[0].Nodes
+			for i := 0; i < len(replicasNodes); i++ {
+				for _, n := range storagenodes {
+					if n.Id == replicasNodes[i] {
+						nodesForPxStop = append(nodesForPxStop, n)
+					}
+				}
+			}
+			// Assert that nodeToRestart is not empty.
+			// Stop Node.
+			err = Inst().V.StopDriver(nodesForPxStop, false, nil)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Couldn't stop driver"))
+			for i := 0; i < len(nodesForPxStop); i++ {
+				Inst().V.WaitDriverDownOnNode(nodesForPxStop[i])
+			}
+			// defer Restart
+			defer func() {
+				for i := 0; i < len(nodesForPxStop); i++ {
+					// ignore errors.
+					Inst().V.StartDriver(nodesForPxStop[i])
+					Inst().V.WaitDriverUpOnNode(nodesForPxStop[i], 5*time.Minute)
+				}
+				ValidateApplications(contexts)
+			}()
+		}
+
+		// It takes a while to detach the volumes.
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 30
+
+		//setMigrateLegacySharedToSharedv4Service(true)
+		// Since we have stopped drivers, let us pick a node that is still alive.
+		pxctlNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get storage nodes")
+		var pxctlNode node.Node
+		foundPxctlNode := false
+		for i := 0; i < len(pxctlNodes); i++ {
+			n := pxctlNodes[i]
+			stoppedNode := false
+			for j := 0; j < len(nodesForPxStop); j++ {
+				if n.Id == nodesForPxStop[j].Id {
+					stoppedNode = true
+					break
+				}
+			}
+			if !stoppedNode {
+				pxctlNode = n
+				foundPxctlNode = true
+				break
+			}
+		}
+		dash.VerifyFatal(foundPxctlNode, true, fmt.Sprintf("Didn't find a node to issue pxctl"))
+		pxctlCmdFull := fmt.Sprintf("cluster options update --migrate-legacy-shared-to-sharedv4-service=true")
+		_, err = Inst().V.GetPxctlCmdOutput(pxctlNode, pxctlCmdFull)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Unable to set migration to true"))
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Expected legacy shared volume to be 0 but is %d", countPostTimeout))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
