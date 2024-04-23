@@ -32,6 +32,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8shelper "k8s.io/component-helpers/storage/volume"
 )
@@ -720,6 +721,14 @@ func (k *kdmp) StartRestore(
 		} else {
 			pvc.Name = bkpvInfo.PersistentVolumeClaim
 			pvc.Namespace = restoreNamespace
+		}
+		// Check if the snapshot size is larger than the pvc size.
+		// Update the pvc size to that of the snapshot size if so.
+		pvcQuantity := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+		if pvcQuantity.CmpInt64(int64(bkpvInfo.TotalSize)) == -1 {
+			newPvcQuantity := resource.NewQuantity(int64(bkpvInfo.TotalSize), resource.BinarySI)
+			logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, newPvcQuantity.String())
+			pvc.Spec.Resources.Requests[v1.ResourceStorage] = *newPvcQuantity
 		}
 		volumeInfo.PersistentVolumeClaim = bkpvInfo.PersistentVolumeClaim
 		volumeInfo.PersistentVolumeClaimUID = bkpvInfo.PersistentVolumeClaimUID
