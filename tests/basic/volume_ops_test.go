@@ -1,11 +1,15 @@
 package tests
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/restutil"
 	"math"
 	"math/rand"
+	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +47,20 @@ const (
 	fioPVScheduleName       = "tc-cs-volsnapsched"
 	fioOutputPVScheduleName = "tc-cs-volsnapsched-2"
 )
+
+type volumeDataMap struct {
+	UsedSize         float64 `json:"UsedSize"`
+	PoolID           int     `json:"PoolID"`
+	ClusterID        string  `json:"ClusterID"`
+	TotalRestoreSize float64 `json:"TotalRestoreSize"`
+}
+
+type CloudBackupSizeAPI struct {
+	Size                  string `json:"size"`
+	TotalDownloadBytes    string `json:"total_download_bytes"`
+	CompressedObjectBytes string `json:"compressed_object_bytes"`
+	Capacity              string `json:"capacity_required_for_restore"`
+}
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
@@ -973,7 +991,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		retain := 8
-		interval := 2
+		interval := 4
 
 		n := node.GetStorageDriverNodes()[0]
 		uuidCmd := "pxctl cred list -j | grep uuid"
@@ -1019,7 +1037,6 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			ValidateApplications(contexts)
 
 		})
-		volSnapMap := make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
 		stepLog = "Verify that cloud snap status"
 		Step(stepLog, func() {
@@ -1044,7 +1061,6 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				scaleFactor := time.Duration(Inst().GlobalScaleFactor * len(appVolumes))
 				err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
 				log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
-				snapMap := make(map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 				for _, v := range appVolumes {
 
 					isPureVol, err := Inst().V.IsPureVolume(v)
@@ -1057,71 +1073,71 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 					snapshotScheduleName := v.Name + "-interval-schedule"
 					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 
-					var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
-					checkSnapshotSchedules := func() (interface{}, bool, error) {
-						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-						if err != nil {
-							return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
-						}
-						if len(resp.Status.Items) == 0 {
-							return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
-						}
+					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for [%s], volume:[%s] in namespace [%s]", snapshotScheduleName, v.Name, v.Namespace))
+					dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for [%s]", snapshotScheduleName))
+					for _, snapshotStatuses := range resp.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							status := snapshotStatuses[len(snapshotStatuses)-1]
+							if status == nil {
+								log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for [%s]", snapshotScheduleName))
+							}
+							status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+							log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
+							if status.Status == snapv1.VolumeSnapshotConditionError {
+								resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+								log.Infof("SnapshotSchedule resp: %v", resp)
+								snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+								log.Infof("snapData : %v", snapData)
+								log.FailOnError(fmt.Errorf("snapshot: %s failed. status: [%v]", status.Name, status.Status), fmt.Sprintf("cloud snapshot for [%s] failed", snapshotScheduleName))
+							}
+							if status.Status == snapv1.VolumeSnapshotConditionPending {
+								log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: [%v]", status.Name, status.Status), fmt.Sprintf("cloud snapshot for [%s] stuck in pending state", snapshotScheduleName))
+							}
+							if status.Status == snapv1.VolumeSnapshotConditionReady {
+								snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+								log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
 
-						for _, snapshotStatuses := range resp.Status.Items {
-							if len(snapshotStatuses) > 0 {
-								volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
-								if volumeSnapshotStatus == nil {
-									return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+								snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+								log.Infof("Snapshot Type: %v", snapType)
+								if snapType != "cloud" {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("Snapshot Type: [%s] does not match", snapType),
+									}
+									log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
 								}
-								if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
-									return nil, false, nil
-								}
-								if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
-									return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
-								}
-								if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
-									return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
+								condition := snapData.Status.Conditions[0]
+								dash.VerifyFatal(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true, fmt.Sprintf("validate volume snapshot condition data for [%s] expteced: [%v], actual [%v]", status.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
+
+								snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+								log.Infof("Snapshot ID: %v", snapID)
+								if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+									len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+									}
+									log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
 								}
 							}
 						}
-						return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
 					}
-					_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
-					log.FailOnError(err, "error validating volume snapshot for %s", v.Name)
-
-					snapMap[v] = volumeSnapshotStatus
-
-					snapData, err := Inst().S.GetSnapShotData(ctx, volumeSnapshotStatus.Name, appNamespace)
-					log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
-
-					snapType := snapData.Spec.PortworxSnapshot.SnapshotType
-					log.Infof("Snapshot Type: %v", snapType)
-					if snapType != "cloud" {
-						err = &scheduler.ErrFailedToGetVolumeParameters{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
-						}
-						log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
-					}
-					condition := snapData.Status.Conditions[0]
-					dash.VerifyFatal(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true, fmt.Sprintf("validate volume snapshot condition data for %s expteced: %v, actual %v", volumeSnapshotStatus.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
-
-					snapID := snapData.Spec.PortworxSnapshot.SnapshotID
-					log.Infof("Snapshot ID: %v", snapID)
-					if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
-						len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
-						err = &scheduler.ErrFailedToGetVolumeParameters{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
-						}
-						log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
-					}
-
 				}
-				volSnapMap[appNamespace] = snapMap
 			}
-			log.Infof("waiting for 10 mins to create multiple cloud snaps")
-			time.Sleep(10 * time.Minute)
+		})
+
+		stepLog = "Validating cloud snapshot backup size values"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				// Validate the cloud snapshot backup size values [PTX-17342]
+				log.Infof("Validating cloud snapshot backup size values for app [%s]", ctx.App.Key)
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				log.FailOnError(err, fmt.Sprintf("error getting volume params for [%s]", ctx.App.Key))
+				for vol, params := range vols {
+					dash.VerifyFatal(validateCloudSnapValues(credUUID, vol, params), true, fmt.Sprintf("validate cloud snap values for volume [%s]", vol))
+				}
+			}
 		})
 
 		stepLog = "Update volume io_profiles on all volumes"
@@ -2135,6 +2151,54 @@ func validateCloudSnaps(appNamespace string) (map[string]string, error) {
 		}
 	}
 	return snapsMap, nil
+}
+
+func validateCloudSnapValues(credUUID string, volName string, params map[string]string) bool {
+	log.InfoD("Validating snapshot values")
+	cSnaps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil || len(cSnaps) == 0 {
+		log.FailOnError(err, "error getting cloudsnaps or no cloudsnaps found!")
+		return false
+	}
+	for _, cSnap := range cSnaps {
+		volData := cSnap.Metadata["volume"]
+		log.Infof("Volume Data from SDK: %v", volData)
+		var volumeData volumeDataMap
+		err := json.Unmarshal([]byte(volData), &volumeData)
+		if err != nil {
+			log.FailOnError(err, "Error while unmarshalling volume data")
+			return false
+		}
+		totalRestoreSize := strconv.FormatFloat(volumeData.TotalRestoreSize, 'f', -1, 64)
+		compressedSizeBytes := cSnap.Metadata["compressedSizeBytes"]
+		capacityRequiredForRestore := strconv.FormatFloat(volumeData.UsedSize, 'f', -1, 64)
+		log.Infof("TotalRestoreSize: %v, CompressedObjectBytes: %v, CapacityRequiredForRestore: %v",
+			totalRestoreSize, compressedSizeBytes, capacityRequiredForRestore)
+
+		// API GET values from v1/cloudbackups/size
+		url := fmt.Sprintf("http://%s:9021/v1/cloudbackups/size?credential_id=%s&backup_id=%s",
+			node.GetStorageDriverNodes()[0].MgmtIp, credUUID, cSnap.Id)
+		resp, respStatusCode, err := restutil.GET(url, nil, nil)
+		if err != nil || respStatusCode != http.StatusOK || len(resp) == 0 {
+			log.FailOnError(err, "Error in fetching cloud backup size, Cause: %v; Status code: %v "+
+				"\n Or the data is empty", err, respStatusCode)
+			return false
+		}
+		log.InfoD("Parsing output from cloud backup size API")
+		var cloudBackupSize CloudBackupSizeAPI
+		err = json.Unmarshal(resp, &cloudBackupSize)
+		log.Infof("CloudBackupSize: %v", cloudBackupSize)
+
+		if err != nil || cloudBackupSize.Size != totalRestoreSize ||
+			cloudBackupSize.TotalDownloadBytes != totalRestoreSize ||
+			cloudBackupSize.CompressedObjectBytes != compressedSizeBytes ||
+			cloudBackupSize.Capacity != capacityRequiredForRestore {
+			log.FailOnError(err, "Cloudsnap size mismatch: %v", cSnap.Id)
+			return false
+		}
+	}
+
+	return true
 }
 
 func trashcanRestore(volId, volName string) error {
