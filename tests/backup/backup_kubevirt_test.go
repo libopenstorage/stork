@@ -3439,6 +3439,8 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 					log.Infof("Validating all px-backup pods are ready after reboot")
 					err = ValidateAllPodsInPxBackupNamespace()
 					dash.VerifyFatal(err, nil, "px-backup pods verification successful")
+					//Adding a sleep of 2 minute, Sometimes, it takes time for the pod to become ready.
+					time.Sleep(120 * time.Second)
 					log.Infof("Taking backup of VMs after node reboot")
 					wg.Add(1)
 					backupName := fmt.Sprintf("%s-%s-%v", "post-reboot-backup", scheduledNamespace, time.Now().Unix())
