@@ -51,6 +51,21 @@ func (fs *FileSystemService) DeleteFilesystem(params map[string]string) error {
 	return nil
 }
 
+// ModifyFilesystemParms Deletes the filesystem present in the cluster
+func (fs *FileSystemService) ModifyFilesystemParameters(params map[string]string, data interface{}) ([]FsItem, error) {
+	req, err := fs.client.NewRequest("PATCH", "file-systems", params, data)
+	if err != nil {
+		return nil, err
+	}
+	m := []FsItem{}
+	_, err = fs.client.Do(req, &m, true)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+
+}
+
 /* Below set of Functions applicable for Snapshot Scheduling Policies for the filesystem */
 // GetSnapshotSchedulingPolicies Get list of Snapshot Scheduling policies of the filesystem
 func (fs *FileSystemService) GetSnapshotSchedulingPolicies(params map[string]string, data interface{}) ([]PolicyResponse, error) {

@@ -100,6 +100,17 @@ func CreateNewFileSystem(fbClient *flashblade.Client, fsName string, data interf
 }
 
 // DeleteFileSystem Deletes Filesystem from cluster
+func ModifyFileSystemParameters(fbClient *flashblade.Client, fsName string, data interface{}) ([]flashblade.FsItem, error) {
+	queryParams := make(map[string]string)
+	queryParams["names"] = fsName
+	fileParams, err := fbClient.FileSystem.ModifyFilesystemParameters(queryParams, data)
+	if err != nil {
+		return nil, err
+	}
+	return fileParams, nil
+}
+
+// DeleteFileSystem Deletes Filesystem from cluster
 func DeleteFileSystem(fbClient *flashblade.Client, fsName string) error {
 	queryParams := make(map[string]string)
 	queryParams["names"] = fsName
