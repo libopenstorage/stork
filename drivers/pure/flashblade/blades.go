@@ -10,9 +10,12 @@ func (b *BladesService) Get(data interface{}) ([]Blades, error) {
 }
 
 func (b *BladesService) GetBlades(params map[string]string, data interface{}) ([]Blades, error) {
-	req, _ := b.client.NewRequest("GET", "blades", params, data)
+	req, err := b.client.NewRequest("GET", "blades", params, data)
+	if err != nil {
+		return nil, err
+	}
 	m := []Blades{}
-	_, err := b.client.Do(req, &m, true)
+	_, err = b.client.Do(req, &m, true)
 	if err != nil {
 		return nil, err
 	}
@@ -23,9 +26,12 @@ func (b *BladesService) GetBlades(params map[string]string, data interface{}) ([
 func (b *BladesService) GetBladeTotal() ([]Blades, error) {
 	params := make(map[string]string)
 	params["total_only"] = "true"
-	req, _ := b.client.NewRequest("GET", "blades", params, nil)
+	req, err := b.client.NewRequest("GET", "blades", params, nil)
+	if err != nil {
+		return nil, err
+	}
 	m := []Blades{}
-	_, err := b.client.Do(req, &m, true)
+	_, err = b.client.Do(req, &m, true)
 	if err != nil {
 		return nil, err
 	}

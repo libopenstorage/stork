@@ -5,9 +5,12 @@ type NetworkInterfaceService struct {
 }
 
 func (net *NetworkInterfaceService) ListNetworkInterfaces(params map[string]string, data interface{}) ([]NetResponse, error) {
-	req, _ := net.client.NewRequest("GET", "network-interfaces", params, data)
+	req, err := net.client.NewRequest("GET", "network-interfaces", params, data)
+	if err != nil {
+		return nil, err
+	}
 	m := []NetResponse{}
-	_, err := net.client.Do(req, &m, false)
+	_, err = net.client.Do(req, &m, false)
 	if err != nil {
 		return nil, err
 	}
@@ -15,9 +18,12 @@ func (net *NetworkInterfaceService) ListNetworkInterfaces(params map[string]stri
 }
 
 func (net *NetworkInterfaceService) ListAllArraySubnets(params map[string]string, data interface{}) ([]SubNetResponse, error) {
-	req, _ := net.client.NewRequest("GET", "subnets", params, data)
+	req, err := net.client.NewRequest("GET", "subnets", params, data)
+	if err != nil {
+		return nil, err
+	}
 	m := []SubNetResponse{}
-	_, err := net.client.Do(req, &m, false)
+	_, err = net.client.Do(req, &m, false)
 	if err != nil {
 		return nil, err
 	}

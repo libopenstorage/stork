@@ -45,7 +45,7 @@ type Source struct {
 }
 
 // Item represents each item in the JSON array.
-type Item struct {
+type FsItem struct {
 	Name                    string        `json:"name"`
 	Created                 int64         `json:"created"`
 	FastRemoveDirectory     bool          `json:"fast_remove_directory_enabled"`
@@ -92,7 +92,7 @@ type FSResponse struct {
 	} `json:"total"`
 	ContinuationToken interface{} `json:"continuation_token"`
 	TotalItemCount    int         `json:"total_item_count"`
-	Items             []Item      `json:"items"`
+	Items             []FsItem    `json:"items"`
 }
 
 // policy Structs
