@@ -121,6 +121,9 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			ac.updateStatus(action, storkv1.ActionStatusSuccessful)
 		}
 	case storkv1.ActionTypeFailover:
+		if action.Status.Stage == storkv1.ActionStageFinal {
+			return nil
+		}
 		log.ActionLog(action).Infof("in stage %s", action.Status.Stage)
 		switch action.Status.Stage {
 		case storkv1.ActionStageInitial:
@@ -135,10 +138,11 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			ac.activateClusterDuringFailover(action, false)
 		case storkv1.ActionStageScaleUpSource:
 			ac.activateClusterDuringFailover(action, true)
-		case storkv1.ActionStageFinal:
-			return nil
 		}
 	case storkv1.ActionTypeFailback:
+		if action.Status.Stage == storkv1.ActionStageFinal {
+			return nil
+		}
 		log.ActionLog(action).Infof("in stage %s", action.Status.Stage)
 		switch action.Status.Stage {
 		case storkv1.ActionStageInitial:
@@ -153,8 +157,6 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			ac.activateClusterDuringFailback(action, false)
 		case storkv1.ActionStageScaleUpDestination:
 			ac.activateClusterDuringFailback(action, true)
-		case storkv1.ActionStageFinal:
-			return nil
 		}
 	default:
 		ac.updateStatus(action, storkv1.ActionStatusFailed)
