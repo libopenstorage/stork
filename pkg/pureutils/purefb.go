@@ -3,7 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flashblade"
-	"strings"
+	"regexp"
 )
 
 // PureCreateClientAndConnect Create FB Client and Connect
@@ -73,9 +73,14 @@ func GetAllPVCNames(fbClient *flashblade.Client) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Define Regex Pattern to fetch only PVCs created by Px
+	re, err := regexp.Compile("px_.*-pvc-.*")
+	if err != nil {
+		return nil, err
+	}
 	for _, eachPvc := range allFs {
 		for _, eachItem := range eachPvc.Items {
-			if strings.Contains("-pvc-", eachItem.Name) {
+			if re.MatchString(fmt.Sprintf("%v", eachItem.Name)) {
 				allPVCs = append(allPVCs, eachItem.Name)
 			}
 		}
