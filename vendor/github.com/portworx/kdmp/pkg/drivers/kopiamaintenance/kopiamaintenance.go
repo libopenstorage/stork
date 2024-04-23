@@ -292,7 +292,7 @@ func jobFor(
 		jobSpec.Volumes = append(jobSpec.Volumes, volume)
 	}
 
-	if drivers.CertFilePath != "" {
+	if drivers.CertFilePath != "" && !jobOption.S3DisableSSL {
 		volumeMount = corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,
 			MountPath: drivers.CertMount,
@@ -375,7 +375,7 @@ func jobFor(
 			},
 		}
 
-		if drivers.CertFilePath != "" {
+		if drivers.CertFilePath != "" && !jobOption.S3DisableSSL {
 			jobV1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 				jobV1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts,
 				volumeMount,
@@ -408,7 +408,7 @@ func jobFor(
 		},
 	}
 
-	if drivers.CertFilePath != "" {
+	if drivers.CertFilePath != "" && !jobOption.S3DisableSSL {
 		jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 			jobV1Beta1.Spec.JobTemplate.Spec.Template.Spec.Containers[0].VolumeMounts,
 			volumeMount,
