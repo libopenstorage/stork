@@ -3202,6 +3202,118 @@ var _ = Describe("{FioClonedVolumeFaultInjection}", func() {
 		}
 	})
 })
+var _ = Describe("{VolumePreCheck}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-20557
+			1. Deploy a basic volume on the cluster
+			2. Now we need to test the ha-update of the volume with different cases
+			scenarios :
+		    1. Test the ha-update sources option with an uuid of other nodes on which node is not present
+		    2. Test the ha-update sources option with an ip of nodes
+			3. Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present
+		    4. Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("volumeprecheck", "Precheck for volume operations", nil, 0)
+	})
+
+	It("volumeprecheck", func() {
+		log.InfoD("volumeprecheck")
+		stepLog := "Create a volume and perform a precheck for sources options"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stNodes := node.GetStorageDriverNodes()
+			nodesuuidWithoutReplica := make([]string, 0)
+			nodesIP := make([]string, 0)
+
+			index := rand.Intn(len(stNodes))
+			selectedNode := &stNodes[index]
+
+			var aggr_level int
+			var repl_level int
+			storageNodes := node.GetStorageNodes()
+			if len(storageNodes) >= 4 && len(storageNodes) < 9 {
+				aggr_level = 2
+				repl_level = 2
+			} else if len(storageNodes) >= 9 {
+				aggr_level = 3
+				repl_level = 3
+			} else {
+				aggr_level = 2
+				repl_level = 1
+			}
+			log.InfoD("Setting the aggr_level to %d and repl_level to %d as storage nodes in the cluster are %d", aggr_level, repl_level, len(storageNodes))
+
+			id := uuid.New()
+			volName := fmt.Sprintf("volume_%s", id.String()[:8])
+			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
+			basicVolumeCreate := fmt.Sprintf("volume create -a %d --repl %d  %s", aggr_level, repl_level, volName)
+			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s] ", volName)
+			log.InfoD("Base Volume creation with volume name %s successful", volName)
+			//find on which node volume got created
+			volInspect, err := Inst().V.InspectVolume(volName)
+			log.FailOnError(err, "Failed to inspect volume")
+			log.InfoD("Volume created on node: %s", volInspect.ReplicaSets[0].Nodes[0])
+
+			selectedNodeId := volInspect.ReplicaSets[0].Nodes[0]
+			listofNodesVolumePlaced := volInspect.ReplicaSets[0].Nodes
+
+			log.InfoD("List of nodes on which volume is placed: %v", listofNodesVolumePlaced)
+			for _, stNode := range stNodes {
+				if !Contains(listofNodesVolumePlaced, stNode.VolDriverNodeID) {
+					nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, stNode.Id)
+					nodesIP = append(nodesIP, stNode.Addresses[0])
+				}
+			}
+			if len(nodesuuidWithoutReplica) == 0 && len(listofNodesVolumePlaced) == len(storageNodes) {
+				log.InfoD("Volume Cannot be placed on other nodes as all the nodes are already used for the volume creation")
+				return
+			}
+
+			log.InfoD("Test the ha-update sources option with a uuid of other nodes on which node is not present")
+			wrongUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, nodesuuidWithoutReplica[rand.Intn(len(nodesuuidWithoutReplica))])
+			_, err = runPxctlCommand(wrongUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "does not belong to volume's replication set")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with a ip of nodes ")
+			wrongIPcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, nodesIP[rand.Intn(len(nodesIP))])
+			_, err = runPxctlCommand(wrongIPcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "could not find any node with id")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present")
+			randomUUID := uuid.New()
+			invalidUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, randomUUID)
+			_, err = runPxctlCommand(invalidUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any node with id")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present")
+			validUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, selectedNodeId)
+			_, err = runPxctlCommand(validUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			log.FailOnError(err, "Failed to update volume: %v", volName)
+			log.InfoD("Successfully updated volume: %v", volName)
+
+			log.InfoD("Delete the volume that is created for the test")
+			deleteVolumeCmd := fmt.Sprintf("volume delete %s", volName)
+			_, err = runPxctlCommand(deleteVolumeCmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to delete volume: %v", volName)
+		})
+	})
+})
 
 func writeFioDataToVolume(volName string, n node.Node, size int64) error {
 	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
