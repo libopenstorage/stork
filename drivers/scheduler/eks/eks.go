@@ -15,7 +15,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -436,44 +435,94 @@ func (e *EKS) DeleteNode(n node.Node) error {
 	return nil
 }
 
+// GetASGName returns the name of the autoscaling group for the EKS cluster
+func (e *EKS) GetASGName() (string, error) {
+	err := e.configureEKSClient()
+	if err != nil {
+		return "", fmt.Errorf("failed to configure EKS client. Err: [%v]", err)
+	}
+	nodeGroup, err := e.eksClient.DescribeNodegroup(context.TODO(), &eks.DescribeNodegroupInput{
+		ClusterName:   aws.String(e.clusterName),
+		NodegroupName: aws.String(e.pxNodeGroupName),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to describe node group [%s]. Err: [%v]", e.pxNodeGroupName, err)
+	}
+	if len(nodeGroup.Nodegroup.Resources.AutoScalingGroups) == 0 {
+		return "", fmt.Errorf("no auto scaling groups found for node group [%s]", e.pxNodeGroupName)
+	}
+	asgName := nodeGroup.Nodegroup.Resources.AutoScalingGroups[0].Name
+	log.Infof("Found ASG [%s] for node group [%s]", asgName, e.pxNodeGroupName)
+	return aws.ToString(asgName), nil
+}
+
 // GetASGClusterSize returns the total size of the EKS cluster autoscaling group
 func (e *EKS) GetASGClusterSize() (int64, error) {
 	err := e.configureEKSClient()
 	if err != nil {
 		return 0, fmt.Errorf("failed to configure EKS client. Err: [%v]", err)
 	}
-	totalSize := int32(0)
-	nodeGroup, err := e.eksClient.DescribeNodegroup(context.TODO(), &eks.DescribeNodegroupInput{
-		ClusterName:   aws.String(e.clusterName),
-		NodegroupName: aws.String(e.pxNodeGroupName),
-	})
+	asgName, err := e.GetASGName()
 	if err != nil {
-		return 0, fmt.Errorf("failed to describe node group [%s]. Err: [%v]", e.pxNodeGroupName, err)
+		return 0, err
 	}
-	if len(nodeGroup.Nodegroup.Resources.AutoScalingGroups) == 0 {
-		return 0, fmt.Errorf("no auto scaling groups found for node group [%s]", e.pxNodeGroupName)
-	}
-	asgName := nodeGroup.Nodegroup.Resources.AutoScalingGroups[0].Name
-	log.Infof("Found ASG [%s] for node group [%s]", aws.ToString(asgName), e.pxNodeGroupName)
 	asg, err := e.autoscalingClient.DescribeAutoScalingGroups(context.TODO(), &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: []string{aws.ToString(asgName)},
+		AutoScalingGroupNames: []string{asgName},
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to describe ASG [%s]. Err: [%v]", aws.ToString(asgName), err)
+		return 0, fmt.Errorf("failed to describe ASG [%s]. Err: [%v]", asgName, err)
 	}
 	log.Infof("Found %d ASGs", len(asg.AutoScalingGroups))
 	if len(asg.AutoScalingGroups) > 0 {
-		totalSize += aws.ToInt32(asg.AutoScalingGroups[0].DesiredCapacity)
+		return int64(aws.ToInt32(asg.AutoScalingGroups[0].DesiredCapacity)), nil
 	}
-	return int64(totalSize), nil
+	return 0, fmt.Errorf("no information found for ASG [%s]", asgName)
 }
 
+// SetASGClusterSize sets the size of the EKS cluster autoscaling group
 func (e *EKS) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
-	// ScaleCluster is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "SetASGClusterSize()",
+	err := e.configureEKSClient()
+	if err != nil {
+		return fmt.Errorf("failed to configure EKS client. Err: [%v]", err)
 	}
+	asgName, err := e.GetASGName()
+	if err != nil {
+		return err
+	}
+	minSize := perZoneCount
+	maxSize := perZoneCount
+	desiredCapacity := perZoneCount
+	_, err = e.autoscalingClient.UpdateAutoScalingGroup(context.TODO(), &autoscaling.UpdateAutoScalingGroupInput{
+		AutoScalingGroupName: aws.String(asgName),
+		MinSize:              aws.Int32(int32(minSize)),
+		MaxSize:              aws.Int32(int32(maxSize)),
+		DesiredCapacity:      aws.Int32(int32(desiredCapacity)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update auto scaling group [%s] settings. Min: [%d], Max: [%d], Desired: [%d], Err: [%v]", asgName, minSize, maxSize, desiredCapacity, err)
+	}
+	t := func() (interface{}, bool, error) {
+		asg, err := e.autoscalingClient.DescribeAutoScalingGroups(context.TODO(), &autoscaling.DescribeAutoScalingGroupsInput{
+			AutoScalingGroupNames: []string{asgName},
+		})
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to describe ASG [%s]. Err: [%v]", asgName, err)
+		}
+		if len(asg.AutoScalingGroups) == 0 {
+			return nil, false, fmt.Errorf("ASG [%s] not found", asgName)
+		}
+		currentCapacity := aws.ToInt32(asg.AutoScalingGroups[0].DesiredCapacity)
+		if currentCapacity == int32(desiredCapacity) {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("waiting for ASG [%s] to scale. Current desired capacity: [%d], expected: [%d]", asgName, currentCapacity, desiredCapacity)
+	}
+	_, err = task.DoRetryWithTimeout(t, timeout, defaultEKSUpgradeRetryInterval)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for ASG [%s] to reach desired capacity [%d]. Err: [%v]", asgName, desiredCapacity, err)
+	}
+	log.Infof("Successfully scaled ASG [%s] to desired capacity [%d]", asgName, desiredCapacity)
+	return nil
 }
 
 func init() {

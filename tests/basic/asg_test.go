@@ -5,6 +5,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
@@ -226,7 +227,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 func Scale(count int64) {
 	perZoneCount := count
 	// In multi-zone ASG cluster, node count is per zone
-	if Inst().S.String() != aks.SchedName {
+	if Inst().S.String() != aks.SchedName && Inst().S.String() != eks.SchedName {
 		zones, err := Inst().S.GetZones()
 		dash.VerifyFatal(err, nil, "Verify Get zones")
 
