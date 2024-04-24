@@ -113,6 +113,16 @@ type S3Config struct {
 	SSE string `json:"sse"`
 }
 
+// AzureEnvironment is the type of the azure environment
+type AzureEnvironment string
+
+const (
+	// AzurePublicCloud - azure environment type for azure public cloud
+	AzurePublic AzureEnvironment = "AzurePublicCloud"
+	// AzureChinaCloud - azure environment type for azure china cloud
+	AzureChina AzureEnvironment = "AzureChinaCloud"
+)
+
 // AzureConfig specifies the config required to connect to Azure Blob Storage
 type AzureConfig struct {
 	StorageAccountName string `json:"storageAccountName"`
@@ -121,6 +131,9 @@ type AzureConfig struct {
 	SubscriptionID     string `json:"subscriptionID"`
 	ClientID           string `json:"clientID"`
 	ClientSecret       string `json:"clientSecret"`
+	// Azure-Environment type for azure blob storage
+	// supported option: "azure-public", "azure-china"
+	Environment AzureEnvironment `json:"environment"`
 }
 
 // GoogleConfig specifies the config required to connect to Google Cloud Storage
@@ -270,6 +283,9 @@ func (bl *BackupLocation) getMergedAzureConfig(client kubernetes.Interface) erro
 		}
 		if val, ok := secretConfig.Data["storageAccountKey"]; ok && val != nil {
 			bl.Location.AzureConfig.StorageAccountKey = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["environment"]; ok && val != nil {
+			bl.Location.AzureConfig.Environment = AzureEnvironment(strings.TrimSuffix(string(val), "\n"))
 		}
 	}
 	return nil
