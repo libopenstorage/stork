@@ -562,17 +562,25 @@ func (p *portworx) enumerateVolumes(volumeNameList []string) (map[string]*storkv
 	if err != nil {
 		return nil, err
 	}
+	// Construct the stork volMap with just the names so that
+	// if Portworx failed to return the volume info, we can at least
+	//return the volume name.
 	for _, volName := range volumeNameList {
 		storkVol := &storkvolume.Info{
 			VolumeID: volName,
 		}
-		for _, vol := range vols {
-			if vol.Locator.Name == volName || vol.Id == volName {
-				storkVol = p.constructStorkVolume(vol)
-				break
-			}
-		}
 		volMap[volName] = storkVol
+	}
+	for _, vol := range vols {
+		// Construct and overwrite the stork volMap with the
+		// volume info fetched from Portworx API
+		if _, ok := volMap[vol.Locator.Name]; ok {
+			storkVol := p.constructStorkVolume(vol)
+			volMap[vol.Locator.Name] = storkVol
+		} else if _, ok := volMap[vol.Id]; ok {
+			storkVol := p.constructStorkVolume(vol)
+			volMap[vol.Id] = storkVol
+		}
 	}
 
 	return volMap, nil
@@ -879,7 +887,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 				// Only include pending volume if requested and storage class has WFFC
 				if includePendingWFFC && isWaitingForFirstConsumer(pvc) {
 					// For pending volumes we won't query Portworx.
-					// Populate at lease something about these volumes
+					// Populate at least something about these volumes
 					wffcVol := &storkvolume.Info{
 						// this would be empty for pending volumes, but the callers are simply
 						// checking for the existence of such a volume and not its contents
