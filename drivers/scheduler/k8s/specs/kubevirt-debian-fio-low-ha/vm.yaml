@@ -1,0 +1,135 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    app: fio-vm-multi-disk
+  name: fio-vm-multi-disk
+  annotations:
+    pvc.source: "cloned"
+    username: "ubuntu"
+spec:
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/workload: server
+      labels:
+        username: "ubuntu"
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - bootOrder: 1
+              disk:
+                bus: virtio
+              name: rootdisk
+          interfaces:
+            - name: default
+              masquerade: {}
+          networkInterfaceMultiqueue: true
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        resources:
+          requests:
+            cpu: 2
+            memory: 4096M
+      networks:
+        - name: default
+          pod: {}
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+      evictionStrategy: LiveMigrate
+      terminationGracePeriodSeconds: 180
+      volumes:
+        - dataVolume:
+            name: fio-root-disk
+          name: rootdisk
+        - name: fio-data-disk-1
+          persistentVolumeClaim:
+            claimName: fio-data-disk-1
+        - name: fio-data-disk-2
+          persistentVolumeClaim:
+            claimName: fio-data-disk-2
+        - name: fio-data-disk-3
+          persistentVolumeClaim:
+            claimName: fio-data-disk-3
+        - cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              user: root
+              password: toor
+              chpasswd: { expire: False }
+          name: cloudinitdisk
+  dataVolumeTemplates:
+    - metadata:
+        name: fio-root-disk
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
+      spec:
+        source:
+          pvc:
+            name: fio-debian-template-pvc-low-ha
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 10Gi
+          storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-low-ha
+          volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-1
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-low-ha
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-2
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-low-ha
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-3
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-low-ha
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
