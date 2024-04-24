@@ -739,25 +739,24 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		setMigrateLegacySharedToSharedv4Service(true)
-		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
-
-		stepLog := "Restart px on all nodes and let all Apps come up and restart Migration"
-		Step(stepLog, func() {
-			storageNodes, err := GetStorageNodes()
-			log.FailOnError(err, "Unable to get the storage nodes")
-			for i := 0; i < len(storageNodes); i++ {
-				err = Inst().V.RestartDriver(storageNodes[i], nil)
-				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", storageNodes[i].Name))
-			}
-			for i := 0; i < len(storageNodes); i++ {
-				err = Inst().V.WaitDriverUpOnNode(storageNodes[i], 10*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", storageNodes[i].Name))
-			}
-		})
 
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
+
+		storageNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get the storage nodes")
+		for i := 0; i < len(storageNodes); i++ {
+			err = Inst().V.RestartDriver(storageNodes[i], nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", storageNodes[i].Name))
+		}
+		for i := 0; i < len(storageNodes); i++ {
+			err = Inst().V.WaitDriverUpOnNode(storageNodes[i], 10*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", storageNodes[i].Name))
+		}
+
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
 		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
