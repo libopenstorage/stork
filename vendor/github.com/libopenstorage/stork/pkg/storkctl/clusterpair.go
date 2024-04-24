@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"reflect"
 	"strconv"
@@ -16,6 +17,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/validation"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -27,10 +30,22 @@ import (
 )
 
 const (
-	clusterPairSubcommand = "clusterpair"
-	cmdPathKey            = "cmd-path"
-	gcloudPath            = "./google-cloud-sdk/bin/gcloud"
-	gcloudBinaryName      = "gcloud"
+	clusterPairSubcommand  = "clusterpair"
+	cmdPathKey             = "cmd-path"
+	gcloudPath             = "./google-cloud-sdk/bin/gcloud"
+	gcloudBinaryName       = "gcloud"
+	skipResourceAnnotation = "stork.libopenstorage.org/skip-resource"
+	storkCreatedAnnotation = "stork.libopenstorage.org/created-by-stork"
+	pxAdminTokenSecret     = "px-admin-token"
+	secretNamespace        = "openstorage.io/auth-secret-namespace"
+	secretName             = "openstorage.io/auth-secret-name"
+
+	userInputCPModeAsync     = "async-dr"
+	userInputCPModeSync      = "sync-dr"
+	userInputCPModeMigration = "migration"
+
+	clusterPairDRModeDisasterRecovery = "DisasterRecovery"
+	clusterPairDRModeOnetimeMigration = "OneTimeMigration"
 )
 
 var (
@@ -236,8 +251,20 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 }
 
 func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	var sIP, dIP, sPort, dPort, srcToken, destToken, projectMappingsStr string
+	var sIP, dIP, sEP, sPort, dPort, dEP, srcToken, destToken, projectMappingsStr string
+	var mode string
 	var sFile, dFile string
+	var provider, bucket, encryptionKey string
+	var s3AccessKey, s3SecretKey, s3Region, s3EndPoint, s3StorageClass string
+	var disableSSL bool
+	var azureAccountName, azureAccountKey string
+	var googleProjectID, googleJSONKey string
+	var syncDR bool
+	var pxAuthTokenSrc, pxAuthSecretNamespaceSrc string
+	var pxAuthTokenDest, pxAuthSecretNamespaceDest string
+	var backupLocationName string
+	var unidirectional bool
+
 	createClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
 		Short: "Create ClusterPair on source and destination cluster",
@@ -258,99 +285,456 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 				util.CheckErr(err)
 				return
 			}
-			printMsg("Using PX-Service Endpoint of DR cluster to create clusterpair...\n", ioStreams.Out)
-			ip, port, token, err := getClusterPairParams(dFile, dIP)
+
+			if len(sIP) > 0 || len(sPort) > 0 || len(dIP) > 0 || len(dPort) > 0 {
+				return
+			}
+
+			if mode != userInputCPModeAsync && mode != userInputCPModeSync && mode != userInputCPModeMigration {
+				util.CheckErr(fmt.Errorf("invalid mode %s, mode value should either be %s, %s or %s", mode, userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration))
+				return
+			}
+
+			if mode == userInputCPModeSync {
+				syncDR = true
+			}
+
+			if len(sFile) == 0 {
+				util.CheckErr(getMissingParameterError("src-kube-file", "Kubeconfig file missing for source cluster"))
+				return
+			}
+
+			if len(dFile) == 0 {
+				util.CheckErr(getMissingParameterError("dest-kube-file", "Kubeconfig file missing for destination cluster"))
+				return
+			}
+
+			if sFile == dFile {
+				util.CheckErr(fmt.Errorf("source kubeconfig file and destination kubeconfig file should be different"))
+				return
+			}
+
+			sameFiles, err := utils.CompareFiles(sFile, dFile)
 			if err != nil {
-				err := fmt.Errorf("unable to create clusterpair from source to DR cluster. Err: %v", err)
 				util.CheckErr(err)
 				return
 			}
-			dIP = ip
-			if dPort == "" {
-				dPort = port
+			if sameFiles {
+				util.CheckErr(fmt.Errorf("source kubeconfig and destination kubeconfig file should be different"))
+				return
 			}
-			if destToken == "" {
+			// Handling the syncDR cases here
+			if syncDR {
+				srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, mode, true)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				conf, err := getConfig(sFile).ClientConfig()
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				storkops.Instance().SetConfig(conf)
+				core.Instance().SetConfig(conf)
+				if len(cmdFactory.GetNamespace()) > 0 {
+					err = createNamespace(sFile, cmdFactory.GetNamespace())
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+				}
+				_, err = storkops.Instance().CreateClusterPair(srcClusterPair)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
+
+				if unidirectional {
+					return
+				}
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, mode, true)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				conf, err = getConfig(dFile).ClientConfig()
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				storkops.Instance().SetConfig(conf)
+				core.Instance().SetConfig(conf)
+
+				if len(cmdFactory.GetNamespace()) > 0 {
+					err = createNamespace(dFile, cmdFactory.GetNamespace())
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+				}
+				_, err = storkops.Instance().CreateClusterPair(destClusterPair)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", clusterPairName), ioStreams.Out)
+				return
+			}
+
+			//Handling the asyncDR and migration cases here onwards
+			// Bail out if portworx-api service type is not loadbalancer type and the endpoints are not provided.
+			if !unidirectional && len(sEP) == 0 {
+				srcPXEndpoint, err := getPXEndPointDetails(sFile)
+				if err != nil {
+					err = fmt.Errorf("unable to get portworx endpoint in source cluster. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Source portworx endpoint is %s", srcPXEndpoint), ioStreams.Out)
+				sEP = srcPXEndpoint
+			}
+
+			if len(dEP) == 0 {
+				destPXEndpoint, err := getPXEndPointDetails(dFile)
+				if err != nil {
+					err = fmt.Errorf("unable to get portworx endpoint in destination cluster. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Destination portworx endpoint is %s", destPXEndpoint), ioStreams.Out)
+				dEP = destPXEndpoint
+			}
+
+			dIP, dPort, err := getHostPortFromEndPoint(dEP)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error parsing destination px endpoint %s: %v", dEP, err), ioStreams.Out)
+				return
+			}
+
+			if len(destToken) == 0 {
+				pxAuthTokenDest, pxAuthSecretNamespaceDest, err = getPXAuthToken(dFile)
+				if err != nil {
+					printMsg(fmt.Sprintf("Got error while fetching px auth token in destination cluster: %v", err), ioStreams.Out)
+				}
+				if len(pxAuthTokenDest) > 0 {
+					printMsg("Fetching px token with auth token in destination cluster", ioStreams.Out)
+				}
+				token, err := getPXToken(fmt.Sprintf("%s:%s", dIP, dPort), pxAuthTokenDest)
+				if err != nil {
+					err = fmt.Errorf("got error while fetching px token in destination cluster %s. Err: %v", dEP, err)
+					util.CheckErr(err)
+					return
+				}
 				destToken = token
 			}
 
-			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, false)
+			sConf, err := getConfig(sFile).ClientConfig()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+			dConf, err := getConfig(dFile).ClientConfig()
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
 
-			// Create cluster-pair on source cluster
-			conf, err := getConfig(sFile).ClientConfig()
+			if len(cmdFactory.GetNamespace()) > 0 {
+				err = createNamespace(sFile, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("error in creating namespace %s in source cluster: %v", cmdFactory.GetNamespace(), err))
+					return
+				}
+				err = createNamespace(dFile, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("error in creating namespace %s in destination cluster: %v", cmdFactory.GetNamespace(), err))
+					return
+				}
+			}
+
+			// backuplocation object init as it is used in different if blocks
+			backupLocation := &storkv1.BackupLocation{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      clusterPairName,
+					Namespace: cmdFactory.GetNamespace(),
+					Annotations: map[string]string{
+						skipResourceAnnotation: "true",
+						storkCreatedAnnotation: "true",
+					},
+				},
+				Location: storkv1.BackupLocationItem{},
+			}
+
+			if len(backupLocationName) > 0 {
+				err = verifyBackupLocationExistence(sFile, backupLocationName, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("input objectstoreLocation %s existence check failed with error in source cluster: %v", backupLocationName, err))
+					return
+				}
+				err = verifyBackupLocationExistence(dFile, backupLocationName, cmdFactory.GetNamespace())
+				if err != nil {
+					util.CheckErr(fmt.Errorf("input objectstoreLocation %s existence check failed with error in destination cluster: %v", backupLocationName, err))
+					return
+				}
+			} else {
+				// create backuplocation secrets in both source and destination
+				credentialData := make(map[string][]byte)
+				switch provider {
+				case "s3":
+					if s3AccessKey == "" {
+						util.CheckErr(getMissingParameterError("s3-access-key", "Access Key missing for S3"))
+						return
+					}
+					if s3SecretKey == "" {
+						util.CheckErr(getMissingParameterError("s3-secret-key", "Secret Key missing for S3"))
+						return
+					}
+					if len(s3EndPoint) == 0 {
+						util.CheckErr(getMissingParameterError("s3-endpoint", "Endpoint missing for S3"))
+						return
+					}
+					if len(s3Region) == 0 {
+						util.CheckErr(getMissingParameterError("s3-region", "Region missing for S3"))
+						return
+					}
+					credentialData["endpoint"] = []byte(s3EndPoint)
+					credentialData["accessKeyID"] = []byte(s3AccessKey)
+					credentialData["secretAccessKey"] = []byte(s3SecretKey)
+					credentialData["region"] = []byte(s3Region)
+					credentialData["disableSSL"] = []byte(strconv.FormatBool(disableSSL))
+					backupLocation.Location.Type = storkv1.BackupLocationS3
+				case "azure":
+					if azureAccountName == "" {
+						util.CheckErr(getMissingParameterError("azure-account-name", "Account Name missing for Azure"))
+						return
+					}
+					if azureAccountKey == "" {
+						util.CheckErr(getMissingParameterError("azure-account-key", "Account Key missing for Azure"))
+						return
+					}
+					credentialData["storageAccountName"] = []byte(azureAccountName)
+					credentialData["storageAccountKey"] = []byte(azureAccountKey)
+					backupLocation.Location.Type = storkv1.BackupLocationAzure
+				case "google":
+					if len(googleProjectID) == 0 {
+						util.CheckErr(getMissingParameterError("google-project-id", "Project ID missing for Google"))
+						return
+					}
+					if len(googleJSONKey) == 0 {
+						util.CheckErr(getMissingParameterError("google-key-file-path", "Json key file path missing for Google"))
+						return
+					}
+					// Read the jsonkey file
+					keyData, err := os.ReadFile(googleJSONKey)
+					if err != nil {
+						util.CheckErr(fmt.Errorf("failed to read json key file: %v", err))
+						return
+					}
+					credentialData["accountKey"] = keyData
+					credentialData["projectID"] = []byte(googleProjectID)
+					backupLocation.Location.Type = storkv1.BackupLocationGoogle
+				default:
+					util.CheckErr(getMissingParameterError("provider", "External objectstore provider needs to be either of azure, google, s3"))
+					return
+				}
+
+				credentialData["path"] = []byte(bucket)
+				credentialData["type"] = []byte(provider)
+				credentialData["encryptionKey"] = []byte(encryptionKey)
+				backupLocationName = backupLocation.Name
+
+				storkops.Instance().SetConfig(sConf)
+				core.Instance().SetConfig(sConf)
+
+				// check for already existing backuplocation
+				_, err = storkops.Instance().GetBackupLocation(backupLocationName, cmdFactory.GetNamespace())
+				if err == nil {
+					util.CheckErr(fmt.Errorf("objectstoreLocation %s already exists in source cluster namespace %s, instead use \"--use-existing-objectstorelocation %s\" to use existing location", backupLocationName, cmdFactory.GetNamespace(), backupLocationName))
+					return
+				}
+
+				printMsg(fmt.Sprintf("\nCreating Secret and ObjectstoreLocation in source cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
+				secret := &v1.Secret{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      clusterPairName,
+						Namespace: cmdFactory.GetNamespace(),
+						Annotations: map[string]string{
+							skipResourceAnnotation: "true",
+							storkCreatedAnnotation: "true",
+						},
+					},
+					Data: credentialData,
+					Type: v1.SecretTypeOpaque,
+				}
+				_, err = core.Instance().CreateSecret(secret)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				backupLocation.Location.SecretConfig = clusterPairName
+				var annotations = make(map[string]string)
+				annotations[skipResourceAnnotation] = "true"
+				_, err = storkops.Instance().CreateBackupLocation(backupLocation)
+				if err != nil {
+					err := fmt.Errorf("unable to create ObjectstoreLocation in source. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("ObjectstoreLocation %v created on source cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
+
+				storkops.Instance().SetConfig(dConf)
+				core.Instance().SetConfig(dConf)
+				// check for already existing backuplocation
+				_, err = storkops.Instance().GetBackupLocation(backupLocationName, cmdFactory.GetNamespace())
+				if err == nil {
+					util.CheckErr(fmt.Errorf("objectstoreLocation %s already exists in destination cluster namespace %s, instead use \"--use-existing-objectstorelocation %s\" to use existing location", backupLocationName, cmdFactory.GetNamespace(), backupLocationName))
+					return
+				}
+
+				printMsg(fmt.Sprintf("Creating Secret and ObjectstoreLocation in destination cluster in namespace %v...", cmdFactory.GetNamespace()), ioStreams.Out)
+				_, err = core.Instance().CreateSecret(secret)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				_, err = storkops.Instance().CreateBackupLocation(backupLocation)
+				if err != nil {
+					err := fmt.Errorf("unable to create ObjectstoreLocation in destination. Err: %v", err)
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("ObjectstoreLocation %v created on destination cluster in namespace %v\n", clusterPairName, cmdFactory.GetNamespace()), ioStreams.Out)
+			}
+
+			printMsg("Creating a cluster pair. Direction: Source -> Destination", ioStreams.Out)
+			srcClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), dIP, dPort, destToken, dFile, projectMappingsStr, pxAuthSecretNamespaceDest, false, mode, false)
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
-			storkops.Instance().SetConfig(conf)
+			storkops.Instance().SetConfig(sConf)
+			core.Instance().SetConfig(sConf)
+			srcClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocationName
 			_, err = storkops.Instance().CreateClusterPair(srcClusterPair)
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
-			printMsg("ClusterPair "+clusterPairName+" created successfully on source cluster", ioStreams.Out)
-			if sFile == "" {
-				return
-			}
-			printMsg("Using PX-Service endpoints of source cluster to create clusterpair...\n", ioStreams.Out)
-			ip, port, token, err = getClusterPairParams(sFile, sIP)
-			if err != nil {
-				err := fmt.Errorf("unable to create clusterpair from DR to source cluster. Err: %v", err)
-				util.CheckErr(err)
-				return
-			}
-			sIP = ip
-			if sPort == "" {
-				sPort = port
-			}
-			if srcToken == "" {
-				srcToken = token
-			}
-			destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, true)
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-			// Create cluster-pair on dest cluster
-			conf, err = getConfig(dFile).ClientConfig()
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-			storkops.Instance().SetConfig(conf)
-			_, err = storkops.Instance().CreateClusterPair(destClusterPair)
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-			printMsg("ClusterPair "+clusterPairName+" created successfully on destination cluster", ioStreams.Out)
+			printMsg(fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination\n", clusterPairName), ioStreams.Out)
 
+			// Create clusterpair in destination only if unidirectional flag is not set
+			if !unidirectional {
+				sIP, sPort, err := getHostPortFromEndPoint(sEP)
+				if err != nil {
+					printMsg(fmt.Sprintf("Error parsing source px endpoint %s: %v", sEP, err), ioStreams.Out)
+					return
+				}
+
+				if len(srcToken) == 0 {
+					pxAuthTokenSrc, pxAuthSecretNamespaceSrc, err = getPXAuthToken(sFile)
+					if err != nil {
+						printMsg(fmt.Sprintf("Got error while fetching px auth token in source cluster: %v", err), ioStreams.Out)
+					}
+					if len(pxAuthTokenSrc) > 0 {
+						printMsg("Fetching px token with auth token in source cluster", ioStreams.Out)
+					}
+					token, err := getPXToken(fmt.Sprintf("%s:%s", sIP, sPort), pxAuthTokenSrc)
+					if err != nil {
+						err := fmt.Errorf("got error while fetching px token in source cluster %s. Err: %v", sEP, err)
+						util.CheckErr(err)
+						return
+					}
+					srcToken = token
+				}
+				destClusterPair, err := generateClusterPair(clusterPairName, cmdFactory.GetNamespace(), sIP, sPort, srcToken, sFile, projectMappingsStr, pxAuthSecretNamespaceSrc, true, mode, false)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+
+				printMsg("Creating a cluster pair. Direction: Destination -> Source", ioStreams.Out)
+				storkops.Instance().SetConfig(dConf)
+				core.Instance().SetConfig(dConf)
+				destClusterPair.Spec.Options[storkv1.BackupLocationResourceName] = backupLocation.Name
+				_, err = storkops.Instance().CreateClusterPair(destClusterPair)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", clusterPairName), ioStreams.Out)
+			}
 		},
 	}
 
 	createClusterPairCommand.Flags().StringVarP(&sIP, "src-ip", "", "", "IP of storage node from source cluster")
-	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9001", "Port of storage node from source cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("src-ip", "instead provide --src-ep")
+	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "", "Port of storage node from source cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("src-port", "instead provide --src-ep")
+	createClusterPairCommand.Flags().StringVarP(&sEP, "src-ep", "", "", "(Optional)Endpoint of portworx-api service in source cluster")
 	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "Path to the kubeconfig of source cluster")
 	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "IP of storage node from destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "Port of storage node from destination cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("dest-ip", "instead provide --dest-ep")
+	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "", "Port of storage node from destination cluster")
+	createClusterPairCommand.Flags().MarkDeprecated("dest-port", "instead provide --dest-ep")
+	createClusterPairCommand.Flags().StringVarP(&dEP, "dest-ep", "", "", "(Optional)Endpoint of portworx-api service in destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "Path to the kubeconfig of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "(Optional)Source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "(Optional)Destination cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&projectMappingsStr, "project-mappings", "", "", projectMappingHelpString)
+	createClusterPairCommand.Flags().StringVarP(&mode, "mode", "", userInputCPModeAsync, fmt.Sprintf("Mode of DR. [%s, %s, %s]", userInputCPModeAsync, userInputCPModeSync, userInputCPModeMigration))
+	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
+	createClusterPairCommand.Flags().StringVarP(&backupLocationName, "use-existing-objectstorelocation", "", "", "(Optional) Objectstorelocation with the provided name should be present in both source and destination cluster")
+	// New parameters for creating backuplocation secret
+	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google]")
+	createClusterPairCommand.Flags().StringVar(&bucket, "bucket", "", "Bucket name")
+	createClusterPairCommand.Flags().StringVar(&encryptionKey, "encryption-key", "", "Encryption key for encrypting the data stored in the objectstore.")
+	// AWS
+	createClusterPairCommand.Flags().StringVar(&s3AccessKey, "s3-access-key", "", "Access Key for S3")
+	createClusterPairCommand.Flags().StringVar(&s3SecretKey, "s3-secret-key", "", "Secret Key for S3")
+	createClusterPairCommand.Flags().StringVar(&s3Region, "s3-region", "", "Region for S3")
+	createClusterPairCommand.Flags().StringVar(&s3EndPoint, "s3-endpoint", "", "EndPoint for S3")
+	createClusterPairCommand.Flags().StringVar(&s3StorageClass, "s3-storage-class", "", "Storage Class for S3")
+	createClusterPairCommand.Flags().BoolVar(&disableSSL, "disable-ssl", false, "Set to true to disable ssl when using S3")
+	// Azure
+	createClusterPairCommand.Flags().StringVar(&azureAccountName, "azure-account-name", "", "Account name for Azure")
+	createClusterPairCommand.Flags().StringVar(&azureAccountKey, "azure-account-key", "", "Account key for Azure")
+	// Google
+	createClusterPairCommand.Flags().StringVar(&googleProjectID, "google-project-id", "", "Project ID for Google")
+	createClusterPairCommand.Flags().StringVar(&googleJSONKey, "google-key-file-path", "", "Json key file path for Google")
 
 	return createClusterPairCommand
 }
 
-func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMappings string, reverse bool) (*storkv1.ClusterPair, error) {
+func generateClusterPair(
+	name string,
+	ns string,
+	ip string,
+	port string,
+	token string,
+	configFile string,
+	projectIDMappings string,
+	authSecretNamespace string,
+	reverse bool,
+	mode string,
+	ignoreStorageOptions bool) (*storkv1.ClusterPair, error) {
 	opts := make(map[string]string)
-	opts["ip"] = ip
-	opts["port"] = port
-	// extract token from px-endpoint command
-	opts["token"] = token
-
+	if !ignoreStorageOptions {
+		opts["ip"] = ip
+		opts["port"] = port
+		// extract token from px-endpoint command
+		opts["token"] = token
+	}
+	if mode == userInputCPModeAsync {
+		opts["mode"] = clusterPairDRModeDisasterRecovery
+	} else if mode == userInputCPModeMigration {
+		opts["mode"] = clusterPairDRModeOnetimeMigration
+	}
 	config, err := getConfig(configFile).RawConfig()
 	if err != nil {
 		return nil, err
@@ -394,6 +778,15 @@ func generateClusterPair(name, ns, ip, port, token, configFile, projectIDMapping
 
 		}
 	}
+
+	// Add the annotations for auth enabled clusters
+	if len(authSecretNamespace) > 0 {
+		annotations := make(map[string]string)
+		annotations[secretNamespace] = authSecretNamespace
+		annotations[secretName] = pxAdminTokenSecret
+		clusterPair.ObjectMeta.Annotations = annotations
+	}
+
 	return clusterPair, nil
 }
 
@@ -476,47 +869,204 @@ func getConfig(configFile string) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
 }
 
-func getClusterPairParams(config, endpoint string) (string, string, string, error) {
-	var ip, port, token string
+func getPXEndPointDetails(config string) (string, error) {
+	var ep string
 	client, err := core.NewInstanceFromConfigFile(config)
 	if err != nil {
-		return ip, port, token, err
+		return ep, err
 	}
 
 	services, err := client.ListServices("", meta.ListOptions{LabelSelector: "name=portworx-api"})
 	if err != nil || len(services.Items) == 0 {
-		err := fmt.Errorf("unable to retrieve portworx-api service from DR cluster. Err: %v", err)
-		return ip, port, token, err
+		err := fmt.Errorf("unable to retrieve portworx-api service. Err: %v", err)
+		return ep, err
 	}
-	// TODO: in case of setting up aync-dr over cloud,
-	// users set up different service as load-balancer over px apis
-	// accept px-service name as env variable
+
+	// Currently we are handling only the cases where portworx-api service is either of type LoadBalancer or clusterIP.
+	// For custom upstream network objects like route and ingress, User has to provide the endpoints.
 	svc := services.Items[0]
-	ip = endpoint
-	if ip == "" {
-		// this works only if px service is converted as load balancer type
-		// TODO: for 2 cluster where worker nodes are reachable, figure out
-		// any one worker ip by looking at px/enabled label
-		ip = svc.Spec.LoadBalancerIP
-	}
-	pxToken := os.Getenv("PX_AUTH_TOKEN")
-	for _, svcPort := range svc.Spec.Ports {
-		if svcPort.Name == "px-api" {
-			port = strconv.Itoa(int(svcPort.Port))
-			break
+	// Only if px svc is load balancer type get the IP or Host details
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+		if len(svc.Status.LoadBalancer.Ingress) > 0 {
+			if len(svc.Status.LoadBalancer.Ingress[0].Hostname) > 0 {
+				ep = svc.Status.LoadBalancer.Ingress[0].Hostname
+			} else if len(svc.Status.LoadBalancer.Ingress[0].IP) > 0 {
+				ep = svc.Status.LoadBalancer.Ingress[0].IP
+			}
 		}
+
+		for _, svcPort := range svc.Spec.Ports {
+			if svcPort.Name == "px-api" {
+				port := strconv.Itoa(int(svcPort.Port))
+				ep = net.JoinHostPort(ep, port)
+				break
+			}
+		}
+	} else if svc.Spec.Type == v1.ServiceTypeClusterIP {
+		endPoints, err := client.GetEndpoints("portworx-api", svc.Namespace)
+		if err != nil {
+			return ep, fmt.Errorf("unable to retrieve portworx-api endpoint. Err: %v", err)
+		}
+		if len(endPoints.Subsets) > 0 && len(endPoints.Subsets[0].Addresses) > 0 {
+			ip := endPoints.Subsets[0].Addresses[0].IP
+			for _, epPort := range endPoints.Subsets[0].Ports {
+				if epPort.Name == "px-api" {
+					port := strconv.Itoa(int(epPort.Port))
+					ep = net.JoinHostPort(ip, port)
+				}
+			}
+		}
+	} else {
+		return ep, fmt.Errorf("an explicit portworx endpoint is required when portworx-api service type is %s", svc.Spec.Type)
 	}
-	pxEndpoint := net.JoinHostPort(ip, port)
-	// TODO: support https as well
-	clnt, err := clusterclient.NewAuthClusterClient("http://"+pxEndpoint, "v1", pxToken, "")
+	return ep, nil
+}
+
+func getPXToken(pxEndpoint, pxToken string) (token string, err error) {
+	clnt, err := clusterclient.NewInsecureTLSAuthClusterClient(pxEndpoint, "v1", pxToken, "")
 	if err != nil {
-		return ip, port, token, err
+		return token, err
 	}
 	mgr := clusterclient.ClusterManager(clnt)
 	resp, err := mgr.GetPairToken(false)
 	if err != nil {
-		return ip, port, token, err
+		return token, err
 	}
 	token = resp.GetToken()
-	return ip, port, token, nil
+
+	return token, nil
+}
+
+func getPXAuthToken(configFile string) (authToken string, authSecretNamespace string, err error) {
+	// Create cluster-pair on source cluster
+	conf, err := getConfig(configFile).ClientConfig()
+	if err != nil {
+		util.CheckErr(err)
+		return authToken, authSecretNamespace, err
+	}
+
+	core.Instance().SetConfig(conf)
+	// Get the token from the secret px-admin-token
+	secrets, err := core.Instance().ListSecret("", meta.ListOptions{})
+	if err != nil {
+		return authToken, authSecretNamespace, fmt.Errorf("failed to list secrets, err %v", err)
+	}
+
+	var secretData []byte
+	var ok bool
+	for _, secret := range secrets.Items {
+		if secret.Name == pxAdminTokenSecret {
+			authTokenSecret, err := core.Instance().GetSecret(secret.Name, secret.Namespace)
+			if err != nil {
+				return authToken, authSecretNamespace, fmt.Errorf("unable to retrieve %v secret: %v", secret.Name, err)
+			}
+
+			if secretData, ok = authTokenSecret.Data["auth-token"]; !ok {
+				return authToken, authSecretNamespace, fmt.Errorf("invalid secret key data")
+			}
+			return string(secretData), secret.Namespace, nil
+		}
+	}
+
+	// If token secret is not found, return empty token as it is not secured cluster.
+	return authToken, authSecretNamespace, nil
+}
+
+// check if ep is like a url (basically with scheme http or https)
+// if it has scheme, get the port details or assign default port as 80 or 443 based on the scheme.
+// if it does not have any scheme, use splitHostPort to get host and port details.
+func getHostPortFromEndPoint(ep string) (string, string, error) {
+	var host, port string
+	u, err := url.Parse(ep)
+	// error gets hit for if ep is ip:port
+	if err != nil {
+		host, port, err = net.SplitHostPort(ep)
+		if err != nil {
+			return host, port, fmt.Errorf("unable to parse endpoint %s, err: %v", ep, err)
+		}
+	} else {
+		// for cases only hostname or ip (ex: abc.com or 170.160.150.140)
+		if len(u.Scheme) == 0 && len(u.Host) == 0 {
+			if net.ParseIP(ep) == nil { //  not supporting only ip address
+				host = ep
+				port = "80"
+			} else {
+				return host, port, fmt.Errorf("port is needed along with ip address %s", ep)
+			}
+		} else if len(u.Host) == 0 { // for cases abc.com:9090
+			host, port, err = net.SplitHostPort(ep)
+			if err != nil {
+				return host, port, fmt.Errorf("unable to parse endpoint %s, err: %v", ep, err)
+			}
+		} else if u.Scheme == "http" || u.Scheme == "https" {
+			port = u.Port()
+			if len(port) == 0 { // for cases http://abc.com or https://abc.com
+				host = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+				if u.Scheme == "http" {
+					port = "80"
+				} else if u.Scheme == "https" {
+					port = "443"
+				}
+			} else {
+				host, port, err = net.SplitHostPort(u.Host) // for cases http://abc.com:9090 or https://abc.com:9090
+				if err != nil {
+					return host, port, fmt.Errorf("unable to parse endpoint %s, err: %v", ep, err)
+				}
+				host = fmt.Sprintf("%s://%s", u.Scheme, host)
+			}
+		} else { // ht://abc.com
+			return host, port, fmt.Errorf("invalid endpoint %s", ep)
+		}
+	}
+	return host, port, nil
+}
+
+func getMissingParameterError(param string, desc string) error {
+	return fmt.Errorf("missing parameter %q - %s", param, desc)
+}
+
+func createNamespace(config string, namespace string) error {
+	conf, err := getConfig(config).ClientConfig()
+	if err != nil {
+		return err
+	}
+	coreOps, err := core.NewForConfig(conf)
+	if err != nil {
+		return err
+	}
+	_, err = coreOps.CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta.ObjectMeta{
+			Name: namespace,
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+func verifyBackupLocationExistence(config string, blName string, namespace string) error {
+	conf, err := getConfig(config).ClientConfig()
+	if err != nil {
+		return err
+	}
+	storkOps, err := storkops.NewForConfig(conf)
+	if err != nil {
+		return err
+	}
+	bl, err := storkOps.GetBackupLocation(blName, namespace)
+	if err != nil {
+		return err
+	}
+	if len(bl.Location.SecretConfig) > 0 {
+		coreOps, err := core.NewForConfig(conf)
+		if err != nil {
+			return err
+		}
+		_, err = coreOps.GetSecret(bl.Location.SecretConfig, namespace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

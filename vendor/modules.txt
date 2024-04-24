@@ -187,6 +187,9 @@ github.com/andygrunwald/go-jira
 # github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df
 ## explicit; go 1.18
 github.com/antlr/antlr4/runtime/Go/antlr/v4
+# github.com/aquilax/truncate v1.0.0
+## explicit
+github.com/aquilax/truncate
 # github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
@@ -602,14 +605,14 @@ github.com/go-jose/go-jose/v3
 github.com/go-jose/go-jose/v3/cipher
 github.com/go-jose/go-jose/v3/json
 github.com/go-jose/go-jose/v3/jwt
-# github.com/go-kit/kit v0.10.0
-## explicit; go 1.13
+# github.com/go-kit/kit v0.12.0
+## explicit; go 1.17
 github.com/go-kit/kit/log
 # github.com/go-kit/log v0.2.1
 ## explicit; go 1.17
 github.com/go-kit/log
 github.com/go-kit/log/level
-# github.com/go-logfmt/logfmt v0.5.1
+# github.com/go-logfmt/logfmt v0.6.0
 ## explicit; go 1.17
 github.com/go-logfmt/logfmt
 # github.com/go-logr/logr v1.3.0 => github.com/go-logr/logr v1.2.3
@@ -717,8 +720,8 @@ github.com/golang/protobuf/ptypes/wrappers
 # github.com/golang/snappy v0.0.4
 ## explicit
 github.com/golang/snappy
-# github.com/google/btree v1.0.1
-## explicit; go 1.12
+# github.com/google/btree v1.1.2
+## explicit; go 1.18
 github.com/google/btree
 # github.com/google/cel-go v0.18.1
 ## explicit; go 1.18
@@ -766,8 +769,8 @@ github.com/google/go-querystring/query
 ## explicit; go 1.12
 github.com/google/gofuzz
 github.com/google/gofuzz/bytesource
-# github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1
-## explicit; go 1.14
+# github.com/google/pprof v0.0.0-20230228050547-1710fef4ab10
+## explicit; go 1.19
 github.com/google/pprof/profile
 # github.com/google/s2a-go v0.1.7
 ## explicit; go 1.19
@@ -1027,7 +1030,7 @@ github.com/lann/ps
 ## explicit; go 1.18
 github.com/leodido/go-urn
 github.com/leodido/go-urn/scim/schema
-# github.com/lib/pq v1.10.7
+# github.com/lib/pq v1.10.9
 ## explicit; go 1.13
 github.com/lib/pq
 github.com/lib/pq/oid
@@ -1105,12 +1108,14 @@ github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 ## explicit; go 1.13
 github.com/libopenstorage/secrets/aws/credentials
-# github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066 => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
-## explicit; go 1.19
+# github.com/libopenstorage/stork v1.4.1-0.20240417024347-acff28bbdb16
+## explicit; go 1.21
 github.com/libopenstorage/stork/drivers
 github.com/libopenstorage/stork/drivers/volume
+github.com/libopenstorage/stork/pkg/aetosutils
 github.com/libopenstorage/stork/pkg/apis/stork
 github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1
+github.com/libopenstorage/stork/pkg/buildinfo
 github.com/libopenstorage/stork/pkg/cache
 github.com/libopenstorage/stork/pkg/client/clientset/versioned
 github.com/libopenstorage/stork/pkg/client/clientset/versioned/scheme
@@ -1126,8 +1131,12 @@ github.com/libopenstorage/stork/pkg/objectstore
 github.com/libopenstorage/stork/pkg/objectstore/azure
 github.com/libopenstorage/stork/pkg/objectstore/common
 github.com/libopenstorage/stork/pkg/objectstore/google
+github.com/libopenstorage/stork/pkg/objectstore/nfs
 github.com/libopenstorage/stork/pkg/objectstore/s3
+github.com/libopenstorage/stork/pkg/pluralmap
 github.com/libopenstorage/stork/pkg/resourcecollector
+github.com/libopenstorage/stork/pkg/resourceutils
+github.com/libopenstorage/stork/pkg/restutil
 github.com/libopenstorage/stork/pkg/rule
 github.com/libopenstorage/stork/pkg/schedule
 github.com/libopenstorage/stork/pkg/snapshot/controllers
@@ -1157,8 +1166,8 @@ github.com/mattn/go-runewidth
 # github.com/matttproud/golang_protobuf_extensions v1.0.4
 ## explicit; go 1.9
 github.com/matttproud/golang_protobuf_extensions/pbutil
-# github.com/miekg/dns v1.1.41
-## explicit; go 1.13
+# github.com/miekg/dns v1.1.55
+## explicit; go 1.19
 github.com/miekg/dns
 # github.com/mitchellh/copystructure v1.2.0
 ## explicit; go 1.15
@@ -1260,8 +1269,8 @@ github.com/opencontainers/go-digest
 ## explicit; go 1.18
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.1.5
-## explicit; go 1.16
+# github.com/opencontainers/runc v1.1.6
+## explicit; go 1.17
 github.com/opencontainers/runc/libcontainer/user
 # github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 ## explicit; go 1.20
@@ -1325,7 +1334,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240326040227-268b4afc2e7e
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240411193047-d17313c6c11b
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1555,8 +1564,8 @@ github.com/xlab/treeprint
 # github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d
 ## explicit
 github.com/youmark/pkcs8
-# go.etcd.io/etcd/api/v3 v3.5.4
-## explicit; go 1.16
+# go.etcd.io/etcd/api/v3 v3.5.8
+## explicit; go 1.19
 go.etcd.io/etcd/api/v3/v3rpc/rpctypes
 # go.mongodb.org/mongo-driver v1.14.0
 ## explicit; go 1.18
@@ -2777,7 +2786,6 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240221210452-7757fdc2b8ff
-# github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1

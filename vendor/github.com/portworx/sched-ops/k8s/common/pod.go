@@ -185,3 +185,11 @@ func IsPodRunning(pod corev1.Pod) bool {
 
 	return true
 }
+
+// IsPodCompleted checks if the pod is in completed state
+func IsPodCompleted(pod corev1.Pod) bool {
+	if pod.Status.Phase == corev1.PodSucceeded {
+		return true
+	}
+	return false
+}

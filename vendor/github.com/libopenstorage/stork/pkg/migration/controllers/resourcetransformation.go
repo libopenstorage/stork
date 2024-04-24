@@ -154,13 +154,7 @@ func (r *ResourceTransformationController) validateSpecPath(transform *stork_api
 		if err != nil {
 			return err
 		}
-		if !resourcecollector.GetSupportedK8SResources(kind, []string{}) {
-			return fmt.Errorf("unsupported resource kind for transformation: %s", kind)
-		}
 		for _, path := range spec.Paths {
-			// TODO: this can be validated via CRDs as well, when we have defined schema
-			// for stork crds
-			// https://portworx.atlassian.net/browse/PWX-26465
 			if path.Operation == stork_api.JsonResourcePatch {
 				return fmt.Errorf("json patch for resources is not supported, operation: %s", path.Operation)
 			}
@@ -348,7 +342,7 @@ func (c *ResourceTransformationController) createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}

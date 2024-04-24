@@ -77,8 +77,8 @@ func (f *factory) BindFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&f.context, "context", "", "name of the kubeconfig context to use")
 	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "output format. One of: table|json|yaml")
 	flags.BoolVarP(&f.watch, "watch", "w", false, "watch stork resources")
-	flags.IntVarP(&f.qps, "qps", "", 100, "restrict number of k8s API requests from stork")
-	flags.IntVarP(&f.burst, "burst", "", 100, "restrict number of k8s API requests from stork")
+	flags.IntVarP(&f.qps, "qps", "", 1000, "restrict number of k8s API requests from stork")
+	flags.IntVarP(&f.burst, "burst", "", 2000, "restrict number of k8s API requests from stork")
 }
 
 func (f *factory) BindGetFlags(flags *pflag.FlagSet) {

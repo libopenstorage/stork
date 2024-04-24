@@ -43,6 +43,14 @@ type ApplicationBackupSpec struct {
 	IncludeResources []ObjectInfo      `json:"includeResources"`
 	ResourceTypes    []string          `json:"resourceTypes"`
 	BackupType       string            `json:"backupType"`
+	// CSISnapshotClassMap is 1 to 1 Map of CSI Provisioner to its Corresponding VolumeSnapshotClass to be used for backup
+	CSISnapshotClassMap map[string]string `json:"csiSnapshotClassMap"`
+	// BackupObjectType set to All for Namespace backup, VirtualMachine for VM specific Backup
+	BackupObjectType string `json:"backupObjectType"`
+	// SkipAutoExecRules is false by default, if set true will skip auto exec rules for VM specific backup.
+	// This field is unused for non VM specific Backup.
+	SkipAutoExecRules bool `json:"skipAutoExecRules"`
+	DirectKDMP        bool `json:"directKDMP"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
@@ -59,16 +67,18 @@ const (
 
 // ApplicationBackupStatus is the status of a application backup operation
 type ApplicationBackupStatus struct {
-	Stage               ApplicationBackupStageType       `json:"stage"`
-	Status              ApplicationBackupStatusType      `json:"status"`
-	Reason              string                           `json:"reason"`
-	Resources           []*ApplicationBackupResourceInfo `json:"resources"`
-	Volumes             []*ApplicationBackupVolumeInfo   `json:"volumes"`
-	BackupPath          string                           `json:"backupPath"`
-	TriggerTimestamp    metav1.Time                      `json:"triggerTimestamp"`
-	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
-	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
-	TotalSize           uint64                           `json:"totalSize"`
+	Stage                ApplicationBackupStageType       `json:"stage"`
+	Status               ApplicationBackupStatusType      `json:"status"`
+	Reason               string                           `json:"reason"`
+	Resources            []*ApplicationBackupResourceInfo `json:"resources"`
+	Volumes              []*ApplicationBackupVolumeInfo   `json:"volumes"`
+	BackupPath           string                           `json:"backupPath"`
+	TriggerTimestamp     metav1.Time                      `json:"triggerTimestamp"`
+	LastUpdateTimestamp  metav1.Time                      `json:"lastUpdateTimestamp"`
+	FinishTimestamp      metav1.Time                      `json:"finishTimestamp"`
+	TotalSize            uint64                           `json:"totalSize"`
+	ResourceCount        int                              `json:"resourceCount"`
+	LargeResourceEnabled bool                             `json:"largeResourceEnabled"`
 }
 
 // ObjectInfo contains info about an object being backed up or restored
@@ -126,6 +136,8 @@ type ApplicationBackupStageType string
 const (
 	// ApplicationBackupStageInitial for when backup is created
 	ApplicationBackupStageInitial ApplicationBackupStageType = ""
+	// ApplicationBackupStageImportResource for when vm resources are imported
+	ApplicationBackupStageImportResource ApplicationBackupStageType = "ImportResource"
 	// ApplicationBackupStagePreExecRule for when the PreExecRule is being executed
 	ApplicationBackupStagePreExecRule ApplicationBackupStageType = "PreExecRule"
 	// ApplicationBackupStagePostExecRule for when the PostExecRule is being executed

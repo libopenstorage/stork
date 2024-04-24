@@ -9,13 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/stats"
-	"github.com/sirupsen/logrus"
-	storageapi "k8s.io/api/storage/v1"
-
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -23,10 +16,16 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/stats"
 )
 
 var dash *aetosutil.Dashboard
@@ -58,6 +57,9 @@ const (
 	tempDir                = "/tmp"
 	portworxProvisioner    = "kubernetes.io/portworx-volume"
 	DefaultScName          = "async-sc"
+	FirstCluster = 0
+	SecondCluster = 1
+	ThirdCluster = 2
 )
 
 var (

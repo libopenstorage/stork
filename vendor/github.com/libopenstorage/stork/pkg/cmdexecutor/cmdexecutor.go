@@ -90,9 +90,9 @@ func (c *cmdExecutor) Start(errChan chan error) error {
 			err = fmt.Errorf("failed to run command: %s in pod: [%s] %s due to err: %v",
 				command, c.podNamespace, c.podName, err)
 			logrus.Errorf(err.Error())
+			errChan <- err
 		}
 
-		errChan <- err
 	}()
 
 	return nil
@@ -124,9 +124,12 @@ func (c *cmdExecutor) Wait(timeout time.Duration) error {
 		_, err := core.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd},
 			c.podName, c.container, c.podNamespace)
 		if err != nil {
+			logrus.Infof("checked status on pod: [%s] %s with result: job not finished yet, will retry later",
+				c.podNamespace, c.podName)
 			return false, nil
 		}
-
+		logrus.Infof("checked status on pod: [%s] %s with result: job finished",
+			c.podNamespace, c.podName)
 		return true, nil
 	}); err != nil {
 		err = fmt.Errorf("status command: %s failed to run in pod: [%s] %s due to %v",

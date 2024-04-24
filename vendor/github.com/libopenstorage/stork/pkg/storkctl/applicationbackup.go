@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -33,6 +34,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 	var postExecRule string
 	var waitForCompletion bool
 	var backupLocation string
+	var resourceTypes string
 
 	createApplicationBackupCommand := &cobra.Command{
 		Use:     applicationBackupSubcommand,
@@ -52,6 +54,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 				util.CheckErr(fmt.Errorf("need to provide BackupLocation to use for backup"))
 				return
 			}
+
 			applicationBackup := &storkv1.ApplicationBackup{
 				Spec: storkv1.ApplicationBackupSpec{
 					Namespaces:     namespaceList,
@@ -60,6 +63,16 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 					BackupLocation: backupLocation,
 				},
 			}
+
+			if len(resourceTypes) > 0 {
+				resourceList, err := getResourceTypes(resourceTypes, cmdFactory, ioStreams)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				applicationBackup.Spec.ResourceTypes = resourceList
+			}
+
 			applicationBackup.Name = applicationBackupName
 			applicationBackup.Namespace = cmdFactory.GetNamespace()
 			_, err := storkops.Instance().CreateApplicationBackup(applicationBackup)
@@ -86,6 +99,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 	createApplicationBackupCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing applicationbackup")
 	createApplicationBackupCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing applicationbackup")
 	createApplicationBackupCommand.Flags().StringVarP(&backupLocation, "backupLocation", "b", "", "BackupLocation to use for the backup")
+	createApplicationBackupCommand.Flags().StringVarP(&resourceTypes, "resourceTypes", "", "", "List of specific resource types which need to be backed up, ex: \"Deployment,PersistentVolumeClaim\"")
 
 	return createApplicationBackupCommand
 }
@@ -271,4 +285,40 @@ func waitForApplicationBackup(name, namespace string, ioStreams genericclioption
 	}
 
 	return msg, err
+}
+
+func getResourceTypes(resourceType string, cmdFactory Factory, ioStreams genericclioptions.IOStreams) ([]string, error) {
+	resourceList := make([]string, 0)
+	resourceTypes := strings.Split(resourceType, ",")
+
+	discoveryClient, err := getDiscoveryClientForApiResources(cmdFactory)
+	if err != nil {
+		return resourceList, fmt.Errorf("error getting discoveryclient: %v", err)
+	}
+	// List the available API resources
+	apiResourceList, err := discoveryClient.ServerPreferredResources()
+	if err != nil {
+		return resourceList, fmt.Errorf("error getting API resources: %v", err)
+	}
+
+	for _, resourceType := range resourceTypes {
+		found := false
+		for _, group := range apiResourceList {
+			for _, apiResource := range group.APIResources {
+				if isValidResourceType(resourceType, apiResource) {
+					resourceList = append(resourceList, apiResource.Kind)
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			return resourceList, fmt.Errorf("error getting k8s resource type for input resourcetype: %s", resourceType)
+		}
+	}
+
+	return resourceList, nil
 }

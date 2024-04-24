@@ -13,6 +13,8 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
+	"github.com/libopenstorage/stork/pkg/pluralmap"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -91,6 +93,14 @@ type Options struct {
 	// resource collector to perform transformations on certain k8s resources.
 	// TODO: temporary change required to handle project related transformations
 	RancherProjectMappings map[string]string
+	// limit ensures the k8s APIs will use this value in ListOption while fetching
+	// the resources from cluster. In case of Large number of resources with substantial
+	// content in them, the etcd Server times-out, hence limit will be used to reduce
+	// the number of resources fetched in a single call.
+	ResourceCountLimit int64
+	// IgnoreOwnerReferencesCheck if set then resources having ownerreferences should be collected
+	// even if the owner gets collected.
+	IgnoreOwnerReferencesCheck bool
 }
 
 // Objects Collection of objects
@@ -152,16 +162,24 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
+func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string, exlcudeTypes []string) bool {
 	// Ignore CSI Snapshot object
 	if resource.Kind == "VolumeSnapshot" {
 		return false
 	}
 
+	for _, excludeType := range exlcudeTypes {
+		if strings.EqualFold(resource.Kind, excludeType) {
+			return false
+		}
+	}
+
 	// Include all namespaced CRDs
 	for _, res := range crdKinds {
 		if res.Kind == resource.Kind &&
-			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
+			res.Group == grp.Group &&
+			res.Version == grp.Version &&
+			resource.Namespaced {
 			return true
 		}
 	}
@@ -200,7 +218,8 @@ func GetSupportedK8SResources(kind string, optionalResourceTypes []string) bool 
 		"PodDisruptionBudget",
 		"Endpoints",
 		"ValidatingWebhookConfiguration",
-		"MutatingWebhookConfiguration":
+		"MutatingWebhookConfiguration",
+		"PriorityClass":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -245,7 +264,7 @@ func (r *ResourceCollector) GetResourceTypes(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, []string{}) {
 				continue
 			}
 			resource.Group = groupVersion.Group
@@ -305,9 +324,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		default:
 			selectors = labels.Set(labelSelectors).String()
 		}
-		objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
-			LabelSelector: selectors,
-		})
+		objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
 		}
@@ -337,7 +354,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		}
 	}
 
-	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap)
+	modObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(objects.Items, objects.resourceMap, opts.IgnoreOwnerReferencesCheck)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -358,7 +375,7 @@ func (r *ResourceCollector) GetResourcesForType(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
@@ -369,6 +386,106 @@ func (r *ResourceCollector) GetResourcesForType(
 	}
 	objects.Items = modObjects
 	return objects, pvcsWithOwnerReference, nil
+}
+
+func (r *ResourceCollector) GetResourcesExcludingTypes(
+	namespaces []string,
+	excludeResourceTypes []string,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	optionalResourceTypes []string,
+	allDrivers bool,
+	opts Options,
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
+	err := r.discoveryHelper.Refresh()
+	if err != nil {
+		return nil, nil, err
+	}
+	allObjects := make([]runtime.Unstructured, 0)
+	// Map to prevent collection of duplicate objects
+	resourceMap := make(map[types.UID]bool)
+	var crdResources []metav1.GroupVersionKind
+	var crdList *stork_api.ApplicationRegistrationList
+	if !reflect.ValueOf(storkcache.Instance()).IsNil() {
+		crdList, err = storkcache.Instance().ListApplicationRegistrations()
+	} else {
+		crdList, err = r.storkOps.ListApplicationRegistrations()
+	}
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	} else {
+		if crdList != nil {
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					crdResources = append(crdResources, kind.GroupVersionKind)
+				}
+			}
+		}
+	}
+
+	crbs, err := r.rbacOps.ListClusterRoleBindings()
+	if err != nil {
+		if !apierrors.IsForbidden(err) {
+			return nil, nil, err
+		}
+	}
+
+	for _, group := range r.discoveryHelper.Resources() {
+		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, resource := range group.APIResources {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, excludeResourceTypes) {
+				continue
+			}
+			objectsCollected, err := r.getParticularResourceInNamespaces(
+				resource,
+				crdResources,
+				groupVersion,
+				crbs,
+				namespaces,
+				labelSelectors,
+				excludeSelectors,
+				includeObjects,
+				optionalResourceTypes,
+				allDrivers,
+				opts,
+				resourceMap,
+			)
+
+			if err != nil {
+				return nil, nil, err
+			}
+			allObjects = append(allObjects, objectsCollected...)
+		}
+	}
+
+	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap, opts.IgnoreOwnerReferencesCheck)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Creating a list of PVCs with owner reference before calling prepareResourcesForCollection
+	// prepareResourcesForCollection can update the PVC metadata which is required when updating
+	// owner references on the destination PVC objects
+	var pvcsWithOwnerReference []v1.PersistentVolumeClaim
+	var pvc v1.PersistentVolumeClaim
+	for _, o := range pvcObjectsWithOwnerRef {
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
+		}
+		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
+	}
+
+	err = r.prepareResourcesForCollection(allObjects, namespaces, opts, crdList)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return allObjects, pvcsWithOwnerReference, nil
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
@@ -422,81 +539,32 @@ func (r *ResourceCollector) GetResources(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes, []string{}) {
 				continue
 			}
-			for _, ns := range namespaces {
-				var dynamicClient dynamic.ResourceInterface
-				if !resource.Namespaced {
-					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name))
-				} else {
-					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
-				}
+			objectsCollected, err := r.getParticularResourceInNamespaces(
+				resource,
+				crdResources,
+				groupVersion,
+				crbs,
+				namespaces,
+				labelSelectors,
+				excludeSelectors,
+				includeObjects,
+				optionalResourceTypes,
+				allDrivers,
+				opts,
+				resourceMap,
+			)
 
-				var objectToInclude map[stork_api.ObjectInfo]bool
-				if !IsNsPresentInIncludeResource(includeObjects, ns) {
-					objectToInclude = make(map[stork_api.ObjectInfo]bool)
-				} else {
-					objectToInclude = includeObjects
-				}
-
-				var selectors string
-				// PVs don't get the labels from their PVCs, so don't use the label selector
-				switch resource.Kind {
-				case "PersistentVolume":
-				default:
-					selectors = labels.Set(labelSelectors).String()
-				}
-				objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
-					LabelSelector: selectors,
-				})
-				if err != nil {
-					if apierrors.IsForbidden(err) {
-						continue
-					}
-					return nil, nil, err
-				}
-				objects, err := meta.ExtractList(objectsList)
-				if err != nil {
-					return nil, nil, err
-				}
-				for _, o := range objects {
-					runtimeObject, ok := o.(runtime.Unstructured)
-					if !ok {
-						return nil, nil, fmt.Errorf("error casting object: %v", o)
-					}
-
-					var err error
-					var collect bool
-					// If a namespace is present in both namespace list and IncludeResource Object,
-					// IncludeResource takes priority and only those resources are backed up.
-					// If a ns is only present in namespace list, all resources in that ns
-					// is backed up.
-					// With this now a user can choose to backup all resources in a ns and some
-					// selected resources from different ns
-
-					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
-					if err != nil {
-						if apierrors.IsForbidden(err) {
-							continue
-						}
-						return nil, nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
-					}
-					if !collect {
-						continue
-					}
-					metadata, err := meta.Accessor(runtimeObject)
-					if err != nil {
-						return nil, nil, err
-					}
-					allObjects = append(allObjects, runtimeObject)
-					resourceMap[metadata.GetUID()] = true
-				}
+			if err != nil {
+				return nil, nil, err
 			}
+			allObjects = append(allObjects, objectsCollected...)
 		}
 	}
 
-	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap)
+	allObjects, pvcObjectsWithOwnerRef, err := r.pruneOwnedResources(allObjects, resourceMap, opts.IgnoreOwnerReferencesCheck)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -508,7 +576,7 @@ func (r *ResourceCollector) GetResources(
 	var pvc v1.PersistentVolumeClaim
 	for _, o := range pvcObjectsWithOwnerRef {
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
-			logrus.Warnf("unable to cast pvcs with owner reference: %v", err)
+			logrus.Warnf("Unable to cast pvcs with owner reference: %v", err)
 		}
 		pvcsWithOwnerReference = append(pvcsWithOwnerReference, pvc)
 	}
@@ -519,6 +587,122 @@ func (r *ResourceCollector) GetResources(
 	}
 
 	return allObjects, pvcsWithOwnerReference, nil
+}
+
+func (r *ResourceCollector) getParticularResourceInNamespaces(
+	resource metav1.APIResource,
+	crdResources []metav1.GroupVersionKind,
+	groupVersion schema.GroupVersion,
+	crbs *rbacv1.ClusterRoleBindingList,
+	namespaces []string,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	optionalResourceTypes []string,
+	allDrivers bool,
+	opts Options,
+	resourceMap map[types.UID]bool,
+) ([]runtime.Unstructured, error) {
+	allObjects := make([]runtime.Unstructured, 0)
+
+	for _, ns := range namespaces {
+		var dynamicClient dynamic.ResourceInterface
+		if !resource.Namespaced {
+			dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name))
+		} else {
+			dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
+		}
+
+		var objectToInclude map[stork_api.ObjectInfo]bool
+		if !IsNsPresentInIncludeResource(includeObjects, ns) {
+			objectToInclude = make(map[stork_api.ObjectInfo]bool)
+		} else {
+			objectToInclude = includeObjects
+		}
+
+		var selectors string
+		// PVs don't get the labels from their PVCs, so don't use the label selector
+		switch resource.Kind {
+		case "PersistentVolume":
+		default:
+			selectors = labels.Set(labelSelectors).String()
+		}
+		objectsList, err := gatherResourceInChunks(dynamicClient, opts, selectors)
+		if err != nil {
+			if apierrors.IsForbidden(err) {
+				continue
+			}
+			return nil, fmt.Errorf("error gathering resources for resource %v,%v,%v: %v", resource.Name, resource.Kind, ns, err)
+		}
+		objects, err := meta.ExtractList(objectsList)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range objects {
+			runtimeObject, ok := o.(runtime.Unstructured)
+			if !ok {
+				return nil, fmt.Errorf("error casting object: %v", o)
+			}
+
+			var err error
+			var collect bool
+			// If a namespace is present in both namespace list and IncludeResource Object,
+			// IncludeResource takes priority and only those resources are backed up.
+			// If a ns is only present in namespace list, all resources in that ns
+			// is backed up.
+			// With this now a user can choose to backup all resources in a ns and some
+			// selected resources from different ns
+			collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, excludeSelectors, resourceMap, runtimeObject, ns, allDrivers, opts, crbs)
+			if err != nil {
+				if apierrors.IsForbidden(err) {
+					continue
+				}
+				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+			}
+			if !collect {
+				continue
+			}
+			metadata, err := meta.Accessor(runtimeObject)
+			if err != nil {
+				return nil, err
+			}
+			allObjects = append(allObjects, runtimeObject)
+			resourceMap[metadata.GetUID()] = true
+		}
+	}
+	return allObjects, nil
+}
+
+// gatherResourceInChunks() collects all the resources present per ns or resource types.
+// It does it in batch of 500 unless specified by user via a config-map. This function
+// primarily helps in avoiding server timeout error when the number of resource or size
+// of it large.
+func gatherResourceInChunks(dynamicClient dynamic.ResourceInterface, opts Options, selectors string) (*unstructured.UnstructuredList, error) {
+	var err error
+	fn := "gatherResourceInChunks"
+	objectsList := &unstructured.UnstructuredList{}
+	var temp *unstructured.UnstructuredList
+	listOps := metav1.ListOptions{
+		LabelSelector: selectors,
+		Limit:         opts.ResourceCountLimit,
+	}
+	for {
+		temp, err = dynamicClient.List(context.TODO(), listOps)
+		if err != nil {
+			logrus.Warnf("%v: failed to list resources", fn)
+			return nil, err
+		}
+		if len(temp.GetContinue()) != 0 {
+			listOps.Continue = temp.GetContinue()
+			objectsList.Items = append(objectsList.Items, temp.Items...)
+			continue
+		} else {
+			// Append the final set of data left...
+			objectsList.Items = append(objectsList.Items, temp.Items...)
+			break
+		}
+	}
+	return objectsList, err
 }
 
 // IsNsPresentInIncludeResource checks if a given ns is present in the IncludeResource object
@@ -646,6 +830,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.mutatingWebHookToBeCollected(object, namespace)
 	case "ValidatingWebhookConfiguration":
 		return r.validatingWebHookToBeCollected(object, namespace)
+	case "PriorityClass":
+		return r.validatePriorityClassToBeCollected(object, namespace)
 	}
 
 	return true, nil
@@ -660,10 +846,10 @@ func (r *ResourceCollector) objectToBeCollected(
 func (r *ResourceCollector) pruneOwnedResources(
 	objects []runtime.Unstructured,
 	resourceMap map[types.UID]bool,
+	ignoreOwnerReferencesCheck bool,
 ) ([]runtime.Unstructured, []runtime.Unstructured, error) {
 	updatedObjects := make([]runtime.Unstructured, 0)
 	pvcObjectsWithOwnerRef := make([]runtime.Unstructured, 0)
-
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -689,8 +875,23 @@ func (r *ResourceCollector) pruneOwnedResources(
 					}
 				}
 			} else {
+				// skipOwnerRefCheck is set at a resource level
+				// whereas ignoreOwnerReferencesCheck is set in migration CR
 				if !skipOwnerRefCheck(metadata.GetAnnotations()) {
 					for _, owner := range owners {
+						if ignoreOwnerReferencesCheck {
+							// Even if ignoreOwnerReferencesCheck is set, we will not collect replicaset
+							// if it's owner is deployment kind and it is already getting collected
+							if objectType.GetKind() == "ReplicaSet" {
+								// Skip object if we are already collecting its owner
+								if _, exists := resourceMap[owner.UID]; exists {
+									if owner.Kind == "Deployment" {
+										collect = false
+									}
+								}
+							}
+							break
+						}
 						// We don't collect pods, there might be some leader
 						// election objects that could have pods as the owner, so
 						// don't collect those objects
@@ -702,6 +903,9 @@ func (r *ResourceCollector) pruneOwnedResources(
 							objectType.GetKind() != "StatefulSet" &&
 							objectType.GetKind() != "ReplicaSet" &&
 							objectType.GetKind() != "DeploymentConfig" &&
+							objectType.GetKind() != "ServiceAccount" &&
+							objectType.GetKind() != "Role" &&
+							objectType.GetKind() != "RoleBinding" &&
 							objectType.GetKind() != "Service" {
 							continue
 						}
@@ -927,6 +1131,8 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	optionalResourceTypes []string,
 	vInfo []*stork_api.ApplicationRestoreVolumeInfo,
 	opts *Options,
+	backuplocationName string,
+	backuplocationNamespace string,
 ) (bool, error) {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -962,7 +1168,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		}
 		return true, nil
 	case "PersistentVolume":
-		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings, *opts)
+		return r.preparePVResourceForApply(object, pvNameMappings, vInfo, storageClassMappings, namespaceMappings, *opts, backuplocationName, backuplocationNamespace)
 	case "PersistentVolumeClaim":
 		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings, storageClassMappings, vInfo, *opts)
 	case "ClusterRoleBinding":
@@ -979,7 +1185,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.prepareRancherNetworkPolicy(object, *opts)
 	case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 		return false, r.prepareRancherApplicationResource(object, *opts)
-
+	case "VirtualMachine":
+		logrus.Tracef("Transforming kubevirt VM resource for apply")
+		return false, r.prepareVirtualMachineForApply(object, nil)
 	}
 	return false, nil
 }
@@ -1004,7 +1212,7 @@ func (r *ResourceCollector) mergeSupportedForRancherResource(
 	opts *Options,
 ) bool {
 	// return false if there is no project mapping
-	if len(opts.RancherProjectMappings) == 0 {
+	if (opts == nil) || len(opts.RancherProjectMappings) == 0 {
 		return false
 	}
 
@@ -1079,10 +1287,20 @@ func (r *ResourceCollector) ApplyResource(
 func (r *ResourceCollector) DeleteResources(
 	dynamicInterface dynamic.Interface,
 	objects []runtime.Unstructured,
+	updateTimestamp chan int,
 ) error {
 	// First delete all the objects
 	deleteStart := metav1.Now()
+	startTime := time.Now()
 	for _, object := range objects {
+		if updateTimestamp != nil {
+			elapsedTime := time.Since(startTime)
+			if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
+				updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
+				startTime = time.Now()
+			}
+		}
+
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
 			continue
@@ -1108,6 +1326,13 @@ func (r *ResourceCollector) DeleteResources(
 
 	// Then wait for them to actually be deleted
 	for _, object := range objects {
+		if updateTimestamp != nil {
+			elapsedTime := time.Since(startTime)
+			if elapsedTime > utils.TimeoutUpdateRestoreCrTimestamp {
+				updateTimestamp <- utils.UpdateRestoreCrTimestampInDeleteResourcePath
+				startTime = time.Now()
+			}
+		}
 		// Objects that support merging aren't deleted
 		if r.mergeSupportedForResource(object) {
 			continue
@@ -1140,6 +1365,40 @@ func (r *ResourceCollector) DeleteResources(
 		}
 	}
 	return nil
+}
+
+// ObjectTobeDeleted returns list of objects present on destination but not on source
+func (r *ResourceCollector) ObjectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
+	var deleteObjects []runtime.Unstructured
+	for _, o := range destObjects {
+		name, namespace, kind, err := utils.GetObjectDetails(o)
+		if err != nil {
+			// skip purging if we are not able to get object details
+			logrus.Errorf("Unable to get object details %v", err)
+			continue
+		}
+		// Don't return objects that support merging
+		if r.mergeSupportedForResource(o) {
+			continue
+		}
+		isPresent := false
+		for _, s := range srcObjects {
+			sname, snamespace, skind, err := utils.GetObjectDetails(s)
+			if err != nil {
+				// skip purging if we are not able to get object details
+				continue
+			}
+			if skind == kind && snamespace == namespace && sname == name {
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
+			deleteObjects = append(deleteObjects, o)
+		}
+	}
+	return deleteObjects
 }
 
 func (r *ResourceCollector) getDynamicClient(
@@ -1175,7 +1434,7 @@ func (r *ResourceCollector) mergeAndUpdateApplicationResource(
 	dynamicClient dynamic.ResourceInterface,
 	opts *Options) error {
 
-	if len(opts.RancherProjectMappings) == 0 {
+	if (opts == nil) || len(opts.RancherProjectMappings) == 0 {
 		return nil
 	}
 
@@ -1231,6 +1490,7 @@ func (r *ResourceCollector) prepareRancherApplicationResource(
 }
 
 func GetDefaultRuleSet() *inflect.Ruleset {
+
 	// TODO: we should use k8s code generator logic to pluralize
 	// crd resources instead of depending on inflect lib
 	ruleset := inflect.NewDefaultRuleset()
@@ -1251,5 +1511,154 @@ func GetDefaultRuleSet() *inflect.Ruleset {
 	ruleset.AddPlural("scheduling", "scheduling")
 	ruleset.AddPlural("spss", "spss")
 
+	for kind, group := range pluralmap.Instance().GetCRDKindToPluralMap() {
+		ruleset.AddPlural(kind, group)
+	}
 	return ruleset
+}
+
+func GetSupportedK8sGVR() map[schema.GroupVersionResource]string {
+	return map[schema.GroupVersionResource]string{
+		{
+			Resource: "persistentvolumeclaims",
+			Group:    "",
+			Version:  "v1",
+		}: "PersistentVolumeClaimList",
+		{
+			Resource: "persistentvolumes",
+			Group:    "",
+			Version:  "v1",
+		}: "PersistentVolumeList",
+		{
+			Resource: "services",
+			Group:    "",
+			Version:  "v1",
+		}: "ServiceList",
+		{
+			Resource: "configmaps",
+			Group:    "",
+			Version:  "v1",
+		}: "ConfigMapList",
+		{
+			Resource: "secrets",
+			Group:    "",
+			Version:  "v1",
+		}: "SecretList",
+		{
+			Resource: "serviceaccounts",
+			Group:    "",
+			Version:  "v1",
+		}: "ServiceAccountList",
+		{
+			Resource: "resourcequotas",
+			Group:    "",
+			Version:  "v1",
+		}: "ResourceQuotaList",
+		{
+			Resource: "endpoints",
+			Group:    "",
+			Version:  "v1",
+		}: "EndpointsList",
+		{
+			Resource: "limitranges",
+			Group:    "",
+			Version:  "v1",
+		}: "LimitRangeList",
+		{
+			Resource: "statefulsets",
+			Group:    "apps",
+			Version:  "v1",
+		}: "StatefulSetList",
+		{
+			Resource: "deployments",
+			Group:    "apps",
+			Version:  "v1",
+		}: "DeploymentList",
+		{
+			Resource: "daemonsets",
+			Group:    "apps",
+			Version:  "v1",
+		}: "DaemonSetList",
+		{
+			Resource: "replicasets",
+			Group:    "apps",
+			Version:  "v1",
+		}: "ReplicaSetList",
+		{
+			Resource: "ingresses",
+			Group:    "networking.k8s.io",
+			Version:  "v1",
+		}: "IngressList",
+		{
+			Resource: "roles",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "RoleList",
+		{
+			Resource: "clusterroles",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "ClusterRoleList",
+		{
+			Resource: "rolebindings",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "RoleBindingList",
+		{
+			Resource: "clusterrolebindings",
+			Group:    "rbac.authorization.k8s.io",
+			Version:  "v1",
+		}: "ClusterRoleBindingList",
+		{
+			Resource: "jobs",
+			Group:    "batch",
+			Version:  "v1",
+		}: "JobList",
+		{
+			Resource: "cronjobs",
+			Group:    "batch",
+			Version:  "v1",
+		}: "CronJobList",
+		{
+			Resource: "poddisruptionbudgets",
+			Group:    "policy",
+			Version:  "v1",
+		}: "PodDisruptionBudgetList",
+		{
+			Resource: "networkpolicies",
+			Group:    "crd.projectcalico.org",
+			Version:  "v1",
+		}: "NetworkPolicyList",
+		{
+			Resource: "mutatingwebhookconfigurations",
+			Group:    "admissionregistration.k8s.io",
+			Version:  "v1",
+		}: "MutatingWebhookConfigurationList",
+		{
+			Resource: "validatingwebhookconfigurations",
+			Group:    "admissionregistration.k8s.io",
+			Version:  "v1",
+		}: "ValidatingWebhookConfigurationList",
+		//Openshift Resources
+		{
+			Resource: "deploymentconfigs",
+			Group:    "apps.openshift.io",
+			Version:  "v1",
+		}: "DeploymentConfigList",
+		{
+			Resource: "imagestreams",
+			Group:    "image.openshift.io",
+			Version:  "v1",
+		}: "ImageStreamList",
+		{
+			Resource: "templates",
+			Group:    "template.openshift.io",
+			Version:  "v1",
+		}: "TemplateList",
+		{
+			Resource: "routes",
+			Group:    "route.openshift.io",
+			Version:  "v1",
+		}: "RouteList",
+	}
 }

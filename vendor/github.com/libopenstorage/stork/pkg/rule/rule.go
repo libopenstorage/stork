@@ -40,7 +40,8 @@ const (
 	// environment variable for command executor image registry and image registry secret.
 	cmdExecutorImageRegistryEnvVar       = "CMD-EXECUTOR-IMAGE-REGISTRY"
 	cmdExecutorImageRegistrySecretEnvVar = "CMD-EXECUTOR-IMAGE-REGISTRY-SECRET"
-	defaultCmdExecutorImage              = "cmdexecutor:0.1"
+	defaultCmdExecutorImage              = "cmdexecutor"
+	defaultCmdExecutorTag                = "0.1"
 	// annotation key value for command executor image registry and image registry secret.
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
 	cmdExecutorImageOverrideSecretKey    = "stork.libopenstorage.org/cmdexecutor-image-secret"
@@ -115,7 +116,7 @@ func Init() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(storkRuleResource)
+		err := k8sutils.CreateCRDV1(storkRuleResource)
 		if err != nil && !k8s_errors.IsAlreadyExists(err) {
 			return err
 		}
@@ -244,15 +245,20 @@ func ExecuteRule(
 		err = fmt.Errorf("failed to generate uuid for rule tasks due to: %v", err)
 		return nil, err
 	}
-
 	pods := make([]v1.Pod, 0)
 	for _, item := range rule.Rules {
 		p, err := core.Instance().GetPods(podNamespace, item.PodSelector)
 		if err != nil {
 			return nil, err
 		}
-
-		pods = append(pods, p.Items...)
+		for _, pod := range p.Items {
+			if core.Instance().IsPodCompleted(pod) {
+				logrus.Infof("Ignoring completed pod for running rule %v", pod.Name)
+				continue
+			}
+			logrus.Debugf("Including pod to run rule %v", pod.Name)
+			pods = append(pods, pod)
+		}
 	}
 
 	if len(pods) > 0 {
@@ -343,7 +349,7 @@ func executeCommandAction(
 			return err
 		}
 		// If env is not set get the values from stork deployment spec.
-		registry, registrySecret, err := k8sutils.GetImageRegistryFromDeployment(
+		registry, registrySecret, imageTag, err := k8sutils.GetImageInfoFromDeployment(
 			k8sutils.StorkDeploymentName,
 			storkPodNs,
 		)
@@ -351,14 +357,14 @@ func executeCommandAction(
 			return err
 		}
 		if len(registry) != 0 {
-			cmdExecutorImage = registry + "/" + defaultCmdExecutorImage
+			cmdExecutorImage = registry + "/" + defaultCmdExecutorImage + ":" + imageTag
 		} else {
-			cmdExecutorImage = defaultCmdExecutorImage
+			cmdExecutorImage = defaultCmdExecutorImage + ":" + defaultCmdExecutorTag
 		}
 		cmdExecutorImageSecret = registrySecret
 	} else {
 		// if env is set get it from env variable.
-		cmdExecutorImage = os.Getenv(cmdExecutorImageRegistryEnvVar) + "/" + defaultCmdExecutorImage
+		cmdExecutorImage = os.Getenv(cmdExecutorImageRegistryEnvVar) + "/" + defaultCmdExecutorImage + ":" + defaultCmdExecutorTag
 		cmdExecutorImageSecret = os.Getenv(cmdExecutorImageRegistrySecretEnvVar)
 	}
 	ruleAnnotations := rule.GetAnnotations()

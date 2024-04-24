@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -43,8 +44,29 @@ const (
 	ObjectLockIncrBackupCountKey = "object-lock-incr-backup-count"
 	// ObjectLockDefaultIncrementalCount defines default incremental backup count
 	ObjectLockDefaultIncrementalCount = 5
+	//LargeResourceSizeLimit defines the maximum size of CR beyond which the backup and restores will be treated as Large resource type.
+	LargeResourceSizeLimitName = "large-resource-size-limit"
+	//LargeResourceSizeLimitDefault defines the default size of CR beyond which the backup and restores will be treated as Large resource type.
+	LargeResourceSizeLimitDefault = 1 << (10 * 2)
 	//minProtectionPeriod defines minimum number of days, the backup are protected via object-lock feature
 	minProtectionPeriod = 1
+	// RestoreVolumeBatchCountKey - restore volume batch count value
+	RestoreVolumeBatchCountKey = "restore-volume-backup-count"
+	// DefaultRestoreVolumeBatchCount - default value for restore volume batch count
+	DefaultRestoreVolumeBatchCount = 25
+	// ResourceCountLimitKeyName defines the number of resources to be read via one List API call.
+	// It is assigned to Limit field of ListOption structure
+	ResourceCountLimitKeyName = "resource-count-limit"
+	// DefaultResourceCountLimit defines the default value for resource count for list api
+	DefaultResourceCountLimit = int64(500)
+	// DefaultRestoreVolumeBatchSleepInterval - restore volume batch sleep interval
+	DefaultRestoreVolumeBatchSleepInterval = "20s"
+	// RestoreVolumeBatchSleepIntervalKey - restore volume batch sleep interval key
+	RestoreVolumeBatchSleepIntervalKey = "restore-volume-sleep-interval"
+	// PxServiceEnvName - PX service ENV name
+	PxServiceEnvName = "PX_SERVICE_NAME"
+	// PxNamespaceEnvName - PX namespace ENV name
+	PxNamespaceEnvName = "PX_NAMESPACE"
 )
 
 // JSONPatchOp is a single json mutation done by a k8s mutating webhook
@@ -152,8 +174,31 @@ func ValidateCRDV1(client *clientset.Clientset, crdName string) error {
 	})
 }
 
-// CreateCRD creates the given custom resource
-func CreateCRD(resource apiextensions.CustomResource) error {
+// CreateCRD creates the given custom resource for the respective apiextensions version
+func CreateCRD(
+	resource apiextensions.CustomResource,
+	validateCRDTimeout time.Duration,
+	validateCRDInterval time.Duration) error {
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := CreateCRDV1(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+// CreateCRDV1 creates the given custom resource for apiextensionsV1
+func CreateCRDV1(resource apiextensions.CustomResource) error {
 	scope := apiextensionsv1.NamespaceScoped
 	if string(resource.Scope) == string(apiextensionsv1.ClusterScoped) {
 		scope = apiextensionsv1.ClusterScoped
@@ -244,11 +289,11 @@ func GetServiceAccountFromDeployment(name, namespace string) (string, error) {
 	return deploy.Spec.Template.Spec.ServiceAccountName, nil
 }
 
-// GetImageRegistryFromDeployment - extract image registry and image registry secret from deployment spec
-func GetImageRegistryFromDeployment(name, namespace string) (string, string, error) {
+// GetImageInfoFromDeployment - extract image registry, image registry secret & image tag from deployment spec
+func GetImageInfoFromDeployment(name, namespace string) (string, string, string, error) {
 	deploy, err := apps.Instance().GetDeployment(name, namespace)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	imageFields := strings.Split(deploy.Spec.Template.Spec.Containers[0].Image, "/")
 	// Here the assumption is that the image format will be <registry-name>/<extra-dir-name>/<repo-name>/image:tag
@@ -257,11 +302,14 @@ func GetImageRegistryFromDeployment(name, namespace string) (string, string, err
 	// here minus 1 is for image name
 	registryFields := imageFields[0 : len(imageFields)-1]
 	registry := strings.Join(registryFields, "/")
+
+	imageTag := strings.Split(imageFields[len(imageFields)-1], ":")[1]
+
 	imageSecret := deploy.Spec.Template.Spec.ImagePullSecrets
 	if imageSecret != nil {
-		return registry, imageSecret[0].Name, nil
+		return registry, imageSecret[0].Name, imageTag, nil
 	}
-	return registry, "", nil
+	return registry, "", imageTag, nil
 }
 
 // GetStorkPodNamespace - will return the stork pod namespace.
@@ -322,4 +370,22 @@ func IsValidBucketRetentionPeriod(bucketRetentionPeriod int64) (bool, int64, err
 	// user should set.
 	minRetentionDays := minProtectionPeriod + incrBkpCnt + 1
 	return (bucketRetentionPeriod >= minRetentionDays), minRetentionDays, nil
+}
+
+// GetPxNamespaceFromStorkDeploy - will return the px namespace env from stork deploy
+func GetPxNamespaceFromStorkDeploy(storkDeployName, storkDeployNamespace string) (string, string, error) {
+	deploy, err := apps.Instance().GetDeployment(storkDeployName, storkDeployNamespace)
+	if err != nil {
+		return "", "", err
+	}
+	var service, namespace string
+	for _, envVar := range deploy.Spec.Template.Spec.Containers[0].Env {
+		if envVar.Name == PxServiceEnvName {
+			service = envVar.Value
+		}
+		if envVar.Name == PxNamespaceEnvName {
+			namespace = envVar.Value
+		}
+	}
+	return namespace, service, nil
 }

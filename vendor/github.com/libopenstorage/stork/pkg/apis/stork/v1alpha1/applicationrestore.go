@@ -32,6 +32,8 @@ type ApplicationRestoreSpec struct {
 	IncludeResources             []ObjectInfo                        `json:"includeResources"`
 	StorageClassMapping          map[string]string                   `json:"storageClassMapping"`
 	RancherProjectMapping        map[string]string                   `json:"rancherProjectMapping"`
+	// BackupObjectType specifies if its vm specific backup Object for restore.
+	BackupObjectType string `json:"backupObjectType"`
 }
 
 // ApplicationRestoreReplacePolicyType is the replace policy for the application restore
@@ -49,16 +51,29 @@ const (
 	ApplicationRestoreReplacePolicyRetain ApplicationRestoreReplacePolicyType = "Retain"
 )
 
+type ApplicationRestoreResourceStateType string
+
+const (
+	ApplicationRestoreResourcePreparing ApplicationRestoreResourceStateType = "Preparing"
+	ApplicationRestoreResourceDeleting  ApplicationRestoreResourceStateType = "Deleting"
+	ApplicationRestoreResourceVerifying ApplicationRestoreResourceStateType = "Verifying"
+	ApplicationRestoreResourceApplying  ApplicationRestoreResourceStateType = "Applying"
+)
+
 // ApplicationRestoreStatus is the status of a application restore operation
 type ApplicationRestoreStatus struct {
-	Stage               ApplicationRestoreStageType       `json:"stage"`
-	Status              ApplicationRestoreStatusType      `json:"status"`
-	Reason              string                            `json:"reason"`
-	Resources           []*ApplicationRestoreResourceInfo `json:"resources"`
-	Volumes             []*ApplicationRestoreVolumeInfo   `json:"volumes"`
-	FinishTimestamp     metav1.Time                       `json:"finishTimestamp"`
-	LastUpdateTimestamp metav1.Time                       `json:"lastUpdateTimestamp"`
-	TotalSize           uint64                            `json:"totalSize"`
+	Stage                 ApplicationRestoreStageType         `json:"stage"`
+	Status                ApplicationRestoreStatusType        `json:"status"`
+	Reason                string                              `json:"reason"`
+	Resources             []*ApplicationRestoreResourceInfo   `json:"resources"`
+	Volumes               []*ApplicationRestoreVolumeInfo     `json:"volumes"`
+	FinishTimestamp       metav1.Time                         `json:"finishTimestamp"`
+	LastUpdateTimestamp   metav1.Time                         `json:"lastUpdateTimestamp"`
+	TotalSize             uint64                              `json:"totalSize"`
+	ResourceCount         int                                 `json:"resourceCount"`
+	LargeResourceEnabled  bool                                `json:"largeResourceEnabled"`
+	RestoredResourceCount int                                 `json:"restoredresourceCount"`
+	ResourceRestoreState  ApplicationRestoreResourceStateType `json:"resourcerestorestate"`
 }
 
 // ApplicationRestoreResourceInfo is the info for the restore of a resource
@@ -109,6 +124,8 @@ type ApplicationRestoreStageType string
 const (
 	// ApplicationRestoreStageInitial for when restore is created
 	ApplicationRestoreStageInitial ApplicationRestoreStageType = ""
+	// ApplicationRestoreStageIncludeResources for when includeResources for vm restore is processed
+	ApplicationRestoreStageIncludeResources ApplicationRestoreStageType = "IncludeResources"
 	// ApplicationRestoreStageVolumes for when volumes are being restored
 	ApplicationRestoreStageVolumes ApplicationRestoreStageType = "Volumes"
 	// ApplicationRestoreStageApplications for when applications are being

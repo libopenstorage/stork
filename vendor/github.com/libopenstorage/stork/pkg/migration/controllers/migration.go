@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
@@ -33,6 +35,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/slice"
+
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -69,6 +73,11 @@ const (
 	StorkAnnotationPrefix = "stork.libopenstorage.org/"
 	// StorkNamespacePrefix for namespace created for applying dry run resources
 	StorkNamespacePrefix = "stork-transform"
+	// StashCRLabel is the label used for stashed configmaps for the CRs if stash strategy is enabled
+	StashCRLabel         = "stash-cr"
+	StashedCMOwnedPVCKey = "ownedPVCs"
+	StashedCMCRKey       = "cr-runtime-object"
+	StashedCMCRNameKey   = "name"
 	// Max number of times to retry applying resources on the destination
 	maxApplyRetries      = 10
 	deletedMaxRetries    = 12
@@ -78,7 +87,8 @@ const (
 )
 
 var (
-	AutoCreatedPrefixes = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+	AutoCreatedPrefixes    = []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+	catergoriesExcludeList = []string{"all", "olm", "coreoperators"}
 
 	ErrReapplyLatestVersionMsg = "please apply your changes to the latest version and try again"
 )
@@ -219,6 +229,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 		defaultBool := true
 		spec.SkipDeletedNamespaces = &defaultBool
 	}
+	if spec.IgnoreOwnerReferencesCheck == nil {
+		defaultBool := false
+		spec.IgnoreOwnerReferencesCheck = &defaultBool
+	}
 	return spec
 }
 
@@ -310,12 +324,30 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			err.Error())
 		return nil
 	}
-
+	migrationNamespaces, err := m.getMigrationNamespaces(ctx, migration)
+	if err != nil {
+		err := fmt.Errorf("unable to extract migration namespaces")
+		log.MigrationLog(migration).Errorf(err.Error())
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			err.Error())
+		return nil
+	}
+	if len(migrationNamespaces) == 0 {
+		err := fmt.Errorf("no valid namespace found based on the provided 'Namespaces' and 'NamespaceSelectors'")
+		log.MigrationLog(migration).Errorf(err.Error())
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			err.Error())
+		return nil
+	}
 	// Check whether namespace is allowed to be migrated before each stage
 	// Restrict migration to only the namespace that the object belongs
 	// except for the namespace designated by the admin
-	if !m.namespaceMigrationAllowed(migration) {
-		err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
+	if !m.namespaceMigrationAllowed(migration, migrationNamespaces) {
+		err := fmt.Errorf("migration namespaces should only contain the current namespace")
 		log.MigrationLog(migration).Errorf(err.Error())
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -324,7 +356,6 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		return nil
 	}
 	var terminationChannels []chan bool
-	var err error
 	var clusterDomains *stork_api.ClusterDomains
 	if !*migration.Spec.IncludeVolumes {
 		for i := 0; i < domainsMaxRetries; i++ {
@@ -360,7 +391,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 	switch migration.Status.Stage {
 	case stork_api.MigrationStageInitial:
 		// Make sure the namespaces exist
-		for _, ns := range migration.Spec.Namespaces {
+		for _, ns := range migrationNamespaces {
 			_, err := core.Instance().GetNamespace(ns)
 			if err != nil {
 				if migration.Spec.SkipDeletedNamespaces != nil && *migration.Spec.SkipDeletedNamespaces {
@@ -465,7 +496,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		}
 		fallthrough
 	case stork_api.MigrationStagePreExecRule:
-		terminationChannels, err = m.runPreExecRule(migration)
+		terminationChannels, err = m.runPreExecRule(migration, migrationNamespaces)
 		if err != nil {
 			message := fmt.Sprintf("Error running PreExecRule: %v", err)
 			log.MigrationLog(migration).Errorf(message)
@@ -484,7 +515,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		fallthrough
 	case stork_api.MigrationStageVolumes:
 		if *migration.Spec.IncludeVolumes {
-			err := m.migrateVolumes(migration, terminationChannels)
+			err := m.migrateVolumes(migration, migrationNamespaces, terminationChannels)
 			if err != nil {
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
 				log.MigrationLog(migration).Errorf(message)
@@ -513,7 +544,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			// This is a volumeOnly migration
 			volumesOnly = true
 		}
-		err := m.migrateResources(migration, volumesOnly)
+		err := m.migrateResources(migration, migrationNamespaces, volumesOnly)
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
@@ -535,8 +566,42 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 	return nil
 }
 
+func (m *MigrationController) getMigrationNamespaces(ctx context.Context, migration *stork_api.Migration) ([]string, error) {
+	var migrationNamespaces []string
+	uniqueNamespaces := make(map[string]bool)
+
+	for _, ns := range migration.Spec.Namespaces {
+		uniqueNamespaces[ns] = true
+	}
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	for key, val := range migration.Spec.NamespaceSelectors {
+		label := key + "=" + val
+		namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: label})
+		if err != nil {
+			return nil, err
+		}
+		for _, namespace := range namespaces.Items {
+			uniqueNamespaces[namespace.GetName()] = true
+		}
+	}
+
+	for namespace := range uniqueNamespaces {
+		migrationNamespaces = append(migrationNamespaces, namespace)
+	}
+	return migrationNamespaces, nil
+}
+
 func (m *MigrationController) purgeMigratedResources(
 	migration *stork_api.Migration,
+	migrationNamespaces []string,
 	resourceCollectorOpts resourcecollector.Options,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
@@ -555,15 +620,21 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
 		return err
 	}
-	destObjects, _, err := rc.GetResources(
-		migration.Spec.Namespaces,
+	excludeSelectors := make(map[string]string)
+	if migration.Spec.ExcludeSelectors != nil {
+		excludeSelectors = migration.Spec.ExcludeSelectors
+	}
+	excludeSelectors[StashCRLabel] = "true"
+
+	destObjects, _, err := m.getResources(
+		migrationNamespaces,
+		migration,
 		migration.Spec.Selectors,
-		migration.Spec.ExcludeSelectors,
-		nil,
-		migration.Spec.IncludeOptionalResourceTypes,
-		false,
+		excludeSelectors,
 		resourceCollectorOpts,
+		true,
 	)
+
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -572,14 +643,13 @@ func (m *MigrationController) purgeMigratedResources(
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	srcObjects, _, err := m.resourceCollector.GetResources(
-		migration.Spec.Namespaces,
+	srcObjects, _, err := m.getResources(
+		migrationNamespaces,
+		migration,
 		migration.Spec.Selectors,
 		migration.Spec.ExcludeSelectors,
-		nil,
-		migration.Spec.IncludeOptionalResourceTypes,
-		false,
 		resourceCollectorOpts,
+		false,
 	)
 	if err != nil {
 		m.recorder.Event(migration,
@@ -593,19 +663,19 @@ func (m *MigrationController) purgeMigratedResources(
 	if err != nil {
 		return err
 	}
-	toBeDeleted := objectTobeDeleted(srcObjects, obj)
+	toBeDeleted := m.resourceCollector.ObjectTobeDeleted(srcObjects, obj)
 	dynamicInterface, err := dynamic.NewForConfig(remoteConfig)
 	if err != nil {
 		return err
 	}
-	err = m.resourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	err = m.resourceCollector.DeleteResources(dynamicInterface, toBeDeleted, nil)
 	if err != nil {
 		return err
 	}
 
 	// update status of cleaned up objects migration info
 	for _, r := range toBeDeleted {
-		nm, ns, kind, err := getObjectDetails(r)
+		nm, ns, kind, err := utils.GetObjectDetails(r)
 		if err != nil {
 			// log error and skip adding object to status
 			log.MigrationLog(migration).Errorf("Unable to get object details: %v", err)
@@ -621,18 +691,6 @@ func (m *MigrationController) purgeMigratedResources(
 	}
 
 	return nil
-}
-
-func getObjectDetails(o interface{}) (name, namespace, kind string, err error) {
-	metadata, err := meta.Accessor(o)
-	if err != nil {
-		return "", "", "", err
-	}
-	objType, err := meta.TypeAccessor(o)
-	if err != nil {
-		return "", "", "", err
-	}
-	return metadata.GetName(), metadata.GetNamespace(), objType.GetKind(), nil
 }
 
 func objectToCollect(destObject []runtime.Unstructured) ([]runtime.Unstructured, error) {
@@ -653,40 +711,11 @@ func objectToCollect(destObject []runtime.Unstructured) ([]runtime.Unstructured,
 	return objects, nil
 }
 
-func objectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
-	var deleteObjects []runtime.Unstructured
-	for _, o := range destObjects {
-		name, namespace, kind, err := getObjectDetails(o)
-		if err != nil {
-			// skip purging if we are not able to get object details
-			logrus.Errorf("Unable to get object details %v", err)
-			continue
-		}
-		isPresent := false
-		for _, s := range srcObjects {
-			sname, snamespace, skind, err := getObjectDetails(s)
-			if err != nil {
-				// skip purging if we are not able to get object details
-				continue
-			}
-			if skind == kind && snamespace == namespace && sname == name {
-				isPresent = true
-				break
-			}
-		}
-		if !isPresent {
-			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
-			deleteObjects = append(deleteObjects, o)
-		}
-	}
-	return deleteObjects
-}
-
-func (m *MigrationController) namespaceMigrationAllowed(migration *stork_api.Migration) bool {
+func (m *MigrationController) namespaceMigrationAllowed(migration *stork_api.Migration, migrationNamespaces []string) bool {
 	// Restrict migration to only the namespace that the object belongs
 	// except for the namespace designated by the admin
 	if migration.Namespace != m.migrationAdminNamespace {
-		for _, ns := range migration.Spec.Namespaces {
+		for _, ns := range migrationNamespaces {
 			if ns != migration.Namespace {
 				return false
 			}
@@ -695,7 +724,7 @@ func (m *MigrationController) namespaceMigrationAllowed(migration *stork_api.Mig
 	return true
 }
 
-func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, terminationChannels []chan bool) error {
+func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, migrationNamespaces []string, terminationChannels []chan bool) error {
 	defer func() {
 		for _, channel := range terminationChannels {
 			channel <- true
@@ -723,7 +752,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				storageStatus, err)
 		}
 
-		volumeInfos, err := m.volDriver.StartMigration(migration)
+		volumeInfos, err := m.volDriver.StartMigration(migration, migrationNamespaces)
 		if err != nil {
 			return err
 		}
@@ -745,7 +774,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 
 		// Run any post exec rules once migration is triggered
 		if migration.Spec.PostExecRule != "" {
-			err = m.runPostExecRule(migration)
+			err = m.runPostExecRule(migration, migrationNamespaces)
 			if err != nil {
 				message := fmt.Sprintf("Error running PostExecRule: %v", err)
 				log.MigrationLog(migration).Errorf(message)
@@ -829,13 +858,13 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			if err != nil {
 				return err
 			}
-			err = m.migrateResources(migration, false)
+			err = m.migrateResources(migration, migrationNamespaces, false)
 			if err != nil {
 				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
 				return err
 			}
 		} else {
-			err := m.migrateResources(migration, true)
+			err := m.migrateResources(migration, migrationNamespaces, true)
 			if err != nil {
 				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
 				return err
@@ -849,7 +878,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 	return m.updateMigrationCR(context.TODO(), migration)
 }
 
-func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]chan bool, error) {
+func (m *MigrationController) runPreExecRule(migration *stork_api.Migration, migrationNamespaces []string) ([]chan bool, error) {
 	if migration.Spec.PreExecRule == "" {
 		migration.Status.Stage = stork_api.MigrationStageVolumes
 		migration.Status.Status = stork_api.MigrationStatusPending
@@ -878,16 +907,12 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 			return nil, nil
 		}
 	}
+	r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
+	if err != nil {
+		return nil, err
+	}
 	terminationChannels := make([]chan bool, 0)
-	for _, ns := range migration.Spec.Namespaces {
-		r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, ns)
-		if err != nil {
-			for _, channel := range terminationChannels {
-				channel <- true
-			}
-			return nil, err
-		}
-
+	for _, ns := range migrationNamespaces {
 		ch, err := rule.ExecuteRule(r, rule.PreExecRule, migration, ns)
 		if err != nil {
 			for _, channel := range terminationChannels {
@@ -902,22 +927,21 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 	return terminationChannels, nil
 }
 
-func (m *MigrationController) runPostExecRule(migration *stork_api.Migration) error {
-	for _, ns := range migration.Spec.Namespaces {
-		r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, ns)
-		if err != nil {
-			return err
-		}
-
+func (m *MigrationController) runPostExecRule(migration *stork_api.Migration, migrationNamespaces []string) error {
+	r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
+	if err != nil {
+		return err
+	}
+	for _, ns := range migrationNamespaces {
 		_, err = rule.ExecuteRule(r, rule.PostExecRule, migration, ns)
 		if err != nil {
-			return fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
+			return fmt.Errorf("error executing PostExecRule for namespace %v: %v", ns, err)
 		}
 	}
 	return nil
 }
 
-func (m *MigrationController) migrateResources(migration *stork_api.Migration, volumesOnly bool) error {
+func (m *MigrationController) migrateResources(migration *stork_api.Migration, migrationNamespaces []string, volumesOnly bool) error {
 	clusterPair, err := storkops.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
@@ -955,22 +979,25 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	if *migration.Spec.IncludeNetworkPolicyWithCIDR {
 		resourceCollectorOpts.IncludeAllNetworkPolicies = true
 	}
+	if *migration.Spec.IgnoreOwnerReferencesCheck {
+		resourceCollectorOpts.IgnoreOwnerReferencesCheck = true
+	}
 	if volumesOnly {
-		allObjects, pvcsWithOwnerRef, err = m.getVolumeOnlyMigrationResources(migration, resourceCollectorOpts)
+		allObjects, pvcsWithOwnerRef, err = m.getVolumeOnlyMigrationResources(migration, migrationNamespaces, resourceCollectorOpts)
 		if err != nil {
 			// already raised event in getVolumeOnlyMigrationResources()
 			return err
 		}
 	} else {
-		allObjects, pvcsWithOwnerRef, err = m.resourceCollector.GetResources(
-			migration.Spec.Namespaces,
+		allObjects, pvcsWithOwnerRef, err = m.getResources(
+			migrationNamespaces,
+			migration,
 			migration.Spec.Selectors,
 			migration.Spec.ExcludeSelectors,
-			nil,
-			migration.Spec.IncludeOptionalResourceTypes,
-			false,
 			resourceCollectorOpts,
+			false,
 		)
+
 		if err != nil {
 			m.recorder.Event(migration,
 				v1.EventTypeWarning,
@@ -1041,7 +1068,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	err = m.applyResources(migration, updateObjects, resGroups, clusterPair, crdList)
+	err = m.applyResources(migration, migrationNamespaces, updateObjects, resGroups, clusterPair, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1051,7 +1078,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 		return err
 	}
 
-	err = m.updateOwnerReferenceOnPVC(migration, updateObjects, clusterPair, pvcsWithOwnerRef)
+	err = m.updateOwnerReferenceOnPVC(migration, updateObjects, clusterPair, pvcsWithOwnerRef, crdList)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -1081,7 +1108,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	}
 
 	if *migration.Spec.PurgeDeletedResources {
-		if err := m.purgeMigratedResources(migration, resourceCollectorOpts); err != nil {
+		if err := m.purgeMigratedResources(migration, migrationNamespaces, resourceCollectorOpts); err != nil {
 			message := fmt.Sprintf("Error cleaning up resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
 			m.recorder.Event(migration,
@@ -1386,7 +1413,7 @@ func (m *MigrationController) preparePVResource(
 	}
 	pv.Annotations[PVReclaimAnnotation] = string(pv.Spec.PersistentVolumeReclaimPolicy)
 	pv.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
-	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil)
+	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv, nil, nil, "", "")
 	if err != nil {
 		return err
 	}
@@ -1438,9 +1465,6 @@ func (m *MigrationController) prepareApplicationResource(
 			}
 		}
 	}
-	if *migration.Spec.StartApplications {
-		return nil
-	}
 
 	// Reset the replicas to 0 and store the current replicas in an annotation
 	replicas, found, err := unstructured.NestedInt64(content, "spec", "replicas")
@@ -1451,6 +1475,38 @@ func (m *MigrationController) prepareApplicationResource(
 		replicas = 1
 	}
 
+	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+	if err != nil {
+		return err
+	}
+	if !found {
+		annotations = make(map[string]string)
+	}
+	migrationReplicasAnnotationValue, replicaAnnotationIsPresent := annotations[StorkMigrationReplicasAnnotation]
+
+	if replicas == 0 && replicaAnnotationIsPresent {
+		//Only if the actual replica count is 0 and migrationReplicas annotation is more than 0, then carry forward the annotation.
+		migrationReplicas, err := strconv.ParseInt(migrationReplicasAnnotationValue, 10, 64)
+		if err != nil {
+			return err
+		}
+		if migrationReplicas > 0 {
+			//carry forward the migrationReplica value
+			replicas = migrationReplicas
+			//we reset the actual replica count as well in case the migration has startApplications enabled
+			err = unstructured.SetNestedField(content, replicas, "spec", "replicas")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	//No need to scale down if StartApplications is set to True in the migration spec
+	if *migration.Spec.StartApplications {
+		return nil
+	}
+
+	//we set the actual replica count to 0 to scale down the resource on target cluster
 	err = unstructured.SetNestedField(content, int64(0), "spec", "replicas")
 	if err != nil {
 		return err
@@ -1467,13 +1523,7 @@ func (m *MigrationController) prepareApplicationResource(
 	if err := unstructured.SetNestedStringMap(content, labels, "metadata", "labels"); err != nil {
 		return err
 	}
-	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
-	if err != nil {
-		return err
-	}
-	if !found {
-		annotations = make(map[string]string)
-	}
+
 	annotations[StorkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
@@ -1482,11 +1532,7 @@ func (m *MigrationController) prepareCRDClusterResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 	suspendOpts []stork_api.SuspendOptions,
-
 ) error {
-	if *migration.Spec.StartApplications {
-		return nil
-	}
 	if len(suspendOpts) == 0 {
 		return nil
 	}
@@ -1502,6 +1548,7 @@ func (m *MigrationController) prepareCRDClusterResource(
 		fields := strings.Split(suspend.Path, ".")
 		var currVal string
 		if len(fields) > 1 {
+			SuspendAnnotationValue, suspendAnnotationIsPresent := annotations[StorkAnnotationPrefix+suspend.Path]
 			var disableVersion interface{}
 			if suspend.Type == "bool" {
 				if val, err := strconv.ParseBool(suspend.Value); err != nil {
@@ -1515,6 +1562,25 @@ func (m *MigrationController) prepareCRDClusterResource(
 					return fmt.Errorf("unable to find suspend path, err: %v", err)
 				}
 				disableVersion = int64(0)
+				if curr == 0 && suspendAnnotationIsPresent {
+					//suspendAnnotation has value set as {currVal + "," + suspend.Value}
+					//we need to extract only the currVal from it
+					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
+					intValue, err := strconv.ParseInt(annotationValue, 10, 64)
+					if err != nil {
+						return err
+					}
+					if intValue > 0 {
+						//Only if the actual suspend path value is 0 and suspend annotation value is more than 0,
+						//then carry forward the annotation.
+						curr = intValue
+						//we reset the actual suspend path value as well in case the migration has startApplications enabled
+						err = unstructured.SetNestedField(content, fmt.Sprintf("%v", curr), fields...)
+						if err != nil {
+							return err
+						}
+					}
+				}
 				currVal = fmt.Sprintf("%v", curr)
 			} else if suspend.Type == "string" {
 				curr, _, err := unstructured.NestedString(content, fields...)
@@ -1522,11 +1588,29 @@ func (m *MigrationController) prepareCRDClusterResource(
 					return fmt.Errorf("unable to find suspend path, err: %v", err)
 				}
 				disableVersion = suspend.Value
+				if curr == suspend.Value && suspendAnnotationIsPresent {
+					annotationValue := strings.Split(SuspendAnnotationValue, ",")[0]
+					if annotationValue != "" {
+						//Only if the actual value is equal to suspend.Value and suspend path annotation value is not an empty string,
+						//then carry forward the annotation.
+						curr = annotationValue
+						err = unstructured.SetNestedField(content, curr, fields...)
+						if err != nil {
+							return err
+						}
+					}
+				}
 				currVal = curr
 			} else {
 				return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
 			}
 
+			//No need to scale down if StartApplications is set to True in the migration spec
+			if *migration.Spec.StartApplications {
+				return nil
+			}
+
+			//scale down the CRD resource by setting the suspendPath value to disableVersion
 			if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
 				return err
 			}
@@ -1535,6 +1619,11 @@ func (m *MigrationController) prepareCRDClusterResource(
 			annotations[StorkAnnotationPrefix+suspend.Path] = currVal + "," + suspend.Value
 		}
 	}
+
+	if *migration.Spec.StartApplications {
+		return nil
+	}
+
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
 
@@ -1660,10 +1749,16 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 	objects []runtime.Unstructured,
 	clusterPair *stork_api.ClusterPair,
 	pvcsWithOwnerRef []v1.PersistentVolumeClaim,
+	crdList *stork_api.ApplicationRegistrationList,
 ) error {
 	remoteClient, err := m.getRemoteClient(migration)
 	if err != nil {
 		return err
+	}
+
+	appRegsStashMap := make(map[string]bool)
+	if !*migration.Spec.StartApplications {
+		appRegsStashMap = getAppRegsStashMap(*crdList)
 	}
 
 	ruleset := resourcecollector.GetDefaultRuleSet()
@@ -1690,6 +1785,19 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 				}
 				// Found the source object which is the parent of the source pvc resource
 				if metadata.GetName() == pvcOwner.Name && objectType.GetKind() == pvcOwner.Kind {
+					gvk := o.GetObjectKind().GroupVersionKind()
+					keyName := getAppRegsStashMapKeyName(gvk.Group, gvk.Kind, gvk.Version)
+					// if stashCR is enabled for the owner object, ignore updating ownerreference in pvc.
+					// instead keep the information of the pvc to be updated in stashed cm
+					// which will be used for updating ownerreference as part of storkctl activate.
+					if appRegsStashMap[keyName] {
+						cmName := utils.GetStashedConfigMapName(strings.ToLower(gvk.Kind), strings.ToLower(gvk.Group), metadata.GetName())
+						err = updateStashedCMWithPVCInfo(remoteClient, cmName, metadata.GetNamespace(), destPvc.Name, pvcOwner)
+						if err != nil {
+							log.MigrationLog(migration).Errorf("updating stashed configmap %s failed with error: %v", cmName, err)
+						}
+						continue
+					}
 					ownerName = metadata.GetName()
 					resource := &metav1.APIResource{
 						Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
@@ -1733,11 +1841,13 @@ func (m *MigrationController) updateOwnerReferenceOnPVC(
 			}
 		}
 	}
+
 	return nil
 }
 
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
+	migrationNamespaces []string,
 	objects []runtime.Unstructured,
 	resGroups map[string]string,
 	clusterPair *stork_api.ClusterPair,
@@ -1750,26 +1860,26 @@ func (m *MigrationController) applyResources(
 
 	ruleset := resourcecollector.GetDefaultRuleSet()
 
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("error getting cluster config: %v", err)
+	}
+
+	srcClnt, err := apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	destClnt, err := apiextensionsclient.NewForConfig(remoteClient.remoteAdminConfig)
+	if err != nil {
+		return err
+	}
+
+	relatedCRDList := getRelatedCRDListWRTGroupAndCategories(srcClnt, ruleset, crdList, resGroups)
+
 	// create CRD on destination cluster
-	for _, crd := range crdList.Items {
+	for _, crd := range relatedCRDList {
 		for _, v := range crd.Resources {
 			// only create relevant crds on dest cluster
-			if _, ok := resGroups[v.Group]; !ok {
-				continue
-			}
-			config, err := rest.InClusterConfig()
-			if err != nil {
-				return fmt.Errorf("error getting cluster config: %v", err)
-			}
-
-			srcClnt, err := apiextensionsclient.NewForConfig(config)
-			if err != nil {
-				return err
-			}
-			destClnt, err := apiextensionsclient.NewForConfig(remoteClient.remoteAdminConfig)
-			if err != nil {
-				return err
-			}
 			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
 			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 			if err == nil {
@@ -1820,7 +1930,7 @@ func (m *MigrationController) applyResources(
 			}
 			var regErr error
 			if _, regErr = destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), res, metav1.CreateOptions{}); regErr != nil && !errors.IsAlreadyExists(regErr) {
-				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), err)
+				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), regErr)
 			}
 			if regErr == nil {
 				// wait for crd to be ready
@@ -1835,7 +1945,7 @@ func (m *MigrationController) applyResources(
 
 	// First make sure all the namespaces are created on the
 	// remote cluster
-	for _, ns := range migration.Spec.Namespaces {
+	for _, ns := range migrationNamespaces {
 		namespace, err := core.Instance().GetNamespace(ns)
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -1881,6 +1991,49 @@ func (m *MigrationController) applyResources(
 			updatedObjects = append(updatedObjects, o)
 		}
 	}
+
+	// find out the csi PVs and if the volumeHandle does not match with pv Name , delete those.
+	// https://portworx.atlassian.net/browse/PWX-30157
+	pvToPVCMapping := getPVToPVCMappingFromPVCObjects(pvcObjects)
+	var csiPVCAndPVObjects []runtime.Unstructured
+	for _, obj := range pvObjects {
+		var pv v1.PersistentVolume
+		var err error
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pv); err != nil {
+			m.updateResourceStatus(
+				migration,
+				obj,
+				stork_api.MigrationStatusFailed,
+				fmt.Sprintf("Error unmarshalling pv resource: %v", err))
+			continue
+		}
+		if pv.Spec.CSI != nil {
+			respPV, err := remoteClient.adminClient.CoreV1().PersistentVolumes().Get(context.TODO(), pv.Name, metav1.GetOptions{})
+			if err != nil {
+				logrus.Errorf("error getting pv %s: %v", pv.Name, err)
+				continue
+			}
+			if respPV.Spec.CSI != nil && respPV.Spec.CSI.VolumeHandle != pv.Name {
+				// Add the pvc object related to the PV for deleting
+				if _, ok := pvToPVCMapping[pv.Name]; ok {
+					csiPVCAndPVObjects = append(csiPVCAndPVObjects, pvToPVCMapping[pv.Name])
+				}
+				// Add the pv object to the list also for getting deleted
+				csiPVCAndPVObjects = append(csiPVCAndPVObjects, obj)
+			}
+		}
+	}
+	if len(csiPVCAndPVObjects) > 0 {
+		err = m.resourceCollector.DeleteResources(
+			remoteClient.remoteAdminInterface,
+			csiPVCAndPVObjects,
+			nil)
+		if err != nil {
+			logrus.Errorf("error deleting csi pvcs and pvs: %v ", err)
+			return err
+		}
+	}
+
 	// create/update pv object with updated policy
 	for _, obj := range pvObjects {
 		var pv v1.PersistentVolume
@@ -2165,8 +2318,13 @@ func (m *MigrationController) applyResources(
 			"Resource migrated successfully")
 	}
 
+	appRegsStashMap := make(map[string]bool)
+	if !*migration.Spec.StartApplications {
+		appRegsStashMap = getAppRegsStashMap(*crdList)
+	}
 	// apply remaining objects
-	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error) {
+	worker := func(objectChan <-chan runtime.Unstructured, errorChan chan<- error, appRegsStashMap map[string]bool) {
+		var stashCMError bool
 		for o := range objectChan {
 			metadata, err := meta.Accessor(o)
 			if err != nil {
@@ -2175,18 +2333,6 @@ func (m *MigrationController) applyResources(
 			objectType, err := meta.TypeAccessor(o)
 			if err != nil {
 				errorChan <- err
-			}
-			resource := &metav1.APIResource{
-				Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
-				Namespaced: len(metadata.GetNamespace()) > 0,
-			}
-			var dynamicClient dynamic.ResourceInterface
-			if resource.Namespaced {
-				dynamicClient = remoteClient.remoteInterface.Resource(
-					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
-			} else {
-				dynamicClient = remoteClient.remoteAdminInterface.Resource(
-					o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
 			}
 
 			unstructured, ok := o.(*unstructured.Unstructured)
@@ -2219,63 +2365,109 @@ func (m *MigrationController) applyResources(
 				unstructured.SetLabels(newLabels)
 			}
 
+			resource := &metav1.APIResource{
+				Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
+				Namespaced: len(metadata.GetNamespace()) > 0,
+			}
+			var dynamicClient dynamic.ResourceInterface
+
 			retries := 0
-			log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
-			for {
-				_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
-				if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
-					switch objectType.GetKind() {
-					case "ServiceAccount":
-						err = m.checkAndUpdateDefaultSA(migration, o)
-					case "Service":
-						var skipUpdate bool
-						skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
-						if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
-							break
-						}
-						fallthrough
-					default:
-						// Delete the resource if it already exists on the destination
-						// cluster and try creating again
-						deleteStart := metav1.Now()
-						err = dynamicClient.Delete(context.TODO(), metadata.GetName(), metav1.DeleteOptions{})
-						if err != nil && !errors.IsNotFound(err) {
-							log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
-						} else {
-							// wait for resources to get deleted
-							// 2 mins
-							for i := 0; i < deletedMaxRetries; i++ {
-								obj, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
-								if err != nil && errors.IsNotFound(err) {
-									break
-								}
-								createTime := obj.GetCreationTimestamp()
-								if deleteStart.Before(&createTime) {
-									log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
-										obj.GetName(), deleteStart, createTime)
-									break
-								}
-								if obj.GetFinalizers() != nil {
-									obj.SetFinalizers(nil)
-									_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
-									if err != nil {
-										log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
-									}
-								}
-								log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
-								time.Sleep(deletedRetryInterval)
+
+			gvk := o.GetObjectKind().GroupVersionKind()
+			keyName := getAppRegsStashMapKeyName(gvk.Group, gvk.Kind, gvk.Version)
+			stashCREnabled := appRegsStashMap[keyName]
+			if !stashCREnabled {
+				if resource.Namespaced {
+					dynamicClient = remoteClient.remoteInterface.Resource(
+						o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+				} else {
+					dynamicClient = remoteClient.remoteAdminInterface.Resource(
+						o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+				}
+			} else {
+				log.MigrationLog(migration).Infof("Getting configmap details for stashing resource %s/%s/%s", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName())
+				unstructured, err = getStashedConfigMap(unstructured, objHash)
+				if err != nil {
+					log.MigrationLog(migration).Warnf("unable to get stashed configmap content for object %s/%s/%s, error: %v", unstructured.GetAPIVersion(), unstructured.GetKind(), unstructured.GetName(), err)
+					stashCMError = true
+				}
+				if !stashCMError {
+					resource = &metav1.APIResource{
+						Name:       "configmaps",
+						Namespaced: len(metadata.GetNamespace()) > 0,
+					}
+					dynamicClient = remoteClient.remoteInterface.Resource(
+						v1.SchemeGroupVersion.WithResource("configmaps")).Namespace(unstructured.GetNamespace())
+				}
+			}
+
+			if !stashCMError {
+				log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
+				for {
+					_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+					if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
+						switch objectType.GetKind() {
+						case "ServiceAccount":
+							err = m.checkAndUpdateDefaultSA(migration, o)
+						case "Service":
+							var skipUpdate bool
+							skipUpdate, err = m.isServiceUpdated(migration, o, objHash)
+							if err == nil && skipUpdate && len(migration.Spec.TransformSpecs) == 0 {
+								break
 							}
-							_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+							fallthrough
+						default:
+							// Check the objecthash before deleting
+							equalHash := isObjectHashEqual(dynamicClient, unstructured, objHash)
+							if equalHash {
+								log.MigrationLog(migration).Infof("skipping update for resource %s/%s, no changes found since last migration", objectType.GetKind(), metadata.GetName())
+								// resetting the error as the resource status needs to be correctly updated in migration CR.
+								err = nil
+							} else {
+								// Delete the resource if it already exists on the destination
+								// cluster and try creating again
+								deleteStart := metav1.Now()
+								err = dynamicClient.Delete(context.TODO(), unstructured.GetName(), metav1.DeleteOptions{})
+								if err != nil && !errors.IsNotFound(err) {
+									log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+								} else {
+									// wait for resources to get deleted
+									// 2 mins
+									for i := 0; i < deletedMaxRetries; i++ {
+										obj, err := dynamicClient.Get(context.TODO(), unstructured.GetName(), metav1.GetOptions{})
+										if err != nil && errors.IsNotFound(err) {
+											break
+										}
+										createTime := obj.GetCreationTimestamp()
+										if deleteStart.Before(&createTime) {
+											log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+												obj.GetName(), deleteStart, createTime)
+											break
+										}
+										if obj.GetFinalizers() != nil {
+											obj.SetFinalizers(nil)
+											_, err = dynamicClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+											if err != nil {
+												log.MigrationLog(migration).Warnf("unable to delete finalizer for object %v", metadata.GetName())
+											}
+										}
+										log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+										time.Sleep(deletedRetryInterval)
+									}
+									_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
+								}
+							}
 						}
 					}
+					// Retry a few times for Unauthorized errors
+					if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
+						retries++
+						continue
+					}
+					break
 				}
-				// Retry a few times for Unauthorized errors
-				if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
-					retries++
-					continue
-				}
-				break
 			}
+
 			if err != nil {
 				m.updateResourceStatus(
 					migration,
@@ -2292,13 +2484,13 @@ func (m *MigrationController) applyResources(
 			errorChan <- nil
 		}
 	}
-
-	return m.parallelWorker(worker, updatedObjects, true)
+	return m.parallelWorker(worker, updatedObjects, appRegsStashMap, true)
 }
 
 func (m *MigrationController) parallelWorker(
-	worker func(<-chan runtime.Unstructured, chan<- error),
+	worker func(<-chan runtime.Unstructured, chan<- error, map[string]bool),
 	objects []runtime.Unstructured,
+	appRegsStashMap map[string]bool,
 	shuffle bool,
 ) error {
 	numObjects := len(objects)
@@ -2307,13 +2499,13 @@ func (m *MigrationController) parallelWorker(
 
 	if shuffle {
 		// Shuffle Object order before applying so we can get parallelism between resource types
-		rand.Seed(time.Now().UnixNano())
+		rand.New(rand.NewSource(time.Now().UnixNano()))
 		rand.Shuffle(len(objects), func(i, j int) { objects[i], objects[j] = objects[j], objects[i] })
 	}
 
 	logrus.Infof("Updating %v objects with %v parallel workers", numObjects, m.migrationMaxThreads)
 	for w := 0; w < m.migrationMaxThreads; w++ {
-		go worker(objectChan, errorChan)
+		go worker(objectChan, errorChan, appRegsStashMap)
 	}
 
 	go func() {
@@ -2410,7 +2602,7 @@ func (m *MigrationController) createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
@@ -2425,6 +2617,7 @@ func (m *MigrationController) createCRD() error {
 
 func (m *MigrationController) getVolumeOnlyMigrationResources(
 	migration *stork_api.Migration,
+	migrationNamespaces []string,
 	resourceCollectorOpts resourcecollector.Options,
 ) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
 	var resources []runtime.Unstructured
@@ -2439,7 +2632,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	objects, _, err := m.resourceCollector.GetResourcesForType(
 		resource,
 		nil,
-		migration.Spec.Namespaces,
+		migrationNamespaces,
 		migration.Spec.Selectors,
 		migration.Spec.ExcludeSelectors,
 		nil,
@@ -2465,7 +2658,7 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	objects, pvcWithOwnerRef, err = m.resourceCollector.GetResourcesForType(
 		resource,
 		nil,
-		migration.Spec.Namespaces,
+		migrationNamespaces,
 		migration.Spec.Selectors,
 		migration.Spec.ExcludeSelectors,
 		nil,
@@ -2482,4 +2675,269 @@ func (m *MigrationController) getVolumeOnlyMigrationResources(
 	}
 	resources = append(resources, objects.Items...)
 	return resources, pvcWithOwnerRef, nil
+}
+
+func getPVToPVCMappingFromPVCObjects(pvcObjects []runtime.Unstructured) map[string]runtime.Unstructured {
+	pvToPVCMapping := make(map[string]runtime.Unstructured)
+	for _, obj := range pvcObjects {
+		var pvc v1.PersistentVolumeClaim
+		var err error
+		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), &pvc); err != nil {
+			logrus.Errorf("Error unmarshalling pvc resource: %v", err)
+			continue
+		}
+		if len(pvc.Spec.VolumeName) > 0 {
+			pvToPVCMapping[pvc.Spec.VolumeName] = obj
+		}
+	}
+	return pvToPVCMapping
+}
+
+func getAppRegsStashMap(crdList stork_api.ApplicationRegistrationList) map[string]bool {
+	appRegsStashMap := make(map[string]bool)
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			appKey := getAppRegsStashMapKeyName(v.Group, v.Kind, v.Version)
+			appRegsStashMap[appKey] = v.StashStrategy.StashCR
+		}
+	}
+	return appRegsStashMap
+}
+
+func getAppRegsStashMapKeyName(group string, version string, kind string) string {
+	return fmt.Sprintf("%v-%v-%v", group, kind, version)
+}
+
+func getStashedConfigMap(obj *unstructured.Unstructured, inputObjectHash uint64) (*unstructured.Unstructured, error) {
+	configMap := &unstructured.Unstructured{}
+	jsonData, err := obj.MarshalJSON()
+	if err != nil {
+		return configMap, err
+	}
+	// obj uid is not available and appending random uid will cause the next migration's get/delete of the configmap fail
+	// hence adding kind-name for cm name.
+	cmName := utils.GetStashedConfigMapName(strings.ToLower(obj.GetKind()), strings.ToLower(obj.GroupVersionKind().Group), obj.GetName())
+
+	ownedPVCs := make(map[string][]metav1.OwnerReference)
+	ownedPVCsEncoded, err := json.Marshal(ownedPVCs)
+	if err != nil {
+		return configMap, err
+	}
+	configMapSpec := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cmName,
+			Namespace: obj.GetNamespace(),
+			Labels: map[string]string{
+				StashCRLabel:    "true",
+				"resource-kind": obj.GetKind(),
+			},
+			Annotations: map[string]string{
+				skipResourceAnnotation: "true",
+				storkCreatedAnnotation: "true",
+				// Using the objecthash of the CR which is getting put so that the objecthash check matches if there is no changes to the CR.
+				// Recalculating the hash on the configmap content will always change as the CR object has an annotation for the migration name.
+				resourcecollector.StorkResourceHash: strconv.FormatUint(inputObjectHash, 10),
+			},
+		},
+		Data: map[string]string{
+			StashedCMCRKey:       string(jsonData),
+			StashedCMOwnedPVCKey: string(ownedPVCsEncoded),
+			StashedCMCRNameKey:   obj.GetName(),
+		},
+	}
+
+	cm, err := runtime.DefaultUnstructuredConverter.ToUnstructured(configMapSpec)
+	if err != nil {
+		return nil, err
+	}
+	configMap = &unstructured.Unstructured{Object: cm}
+	return configMap, nil
+}
+
+func updateStashedCMWithPVCInfo(remoteClient *RemoteClient, configMapName string, namespace string, pvcName string, ownerReference metav1.OwnerReference) error {
+	cm, err := remoteClient.adminClient.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logrus.Errorf("error getting stashed configmap %s in namespace %s", configMapName, namespace)
+		}
+		return err
+	}
+	existingValue := cm.Data[StashedCMOwnedPVCKey]
+	nestedPVCOwnerReferenceMap := make(map[string]metav1.OwnerReference)
+	err = json.Unmarshal([]byte(existingValue), &nestedPVCOwnerReferenceMap)
+	if err != nil {
+		return err
+	}
+	nestedPVCOwnerReferenceMap[pvcName] = ownerReference
+	// Convert the nested map back to a string
+	newValue, err := json.Marshal(nestedPVCOwnerReferenceMap)
+	if err != nil {
+		return err
+	}
+	cm.Data[StashedCMOwnedPVCKey] = string(newValue)
+
+	// Update the ConfigMap
+	_, err = remoteClient.adminClient.CoreV1().ConfigMaps(namespace).Update(context.TODO(), cm, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func isObjectHashEqual(dynamicClient dynamic.ResourceInterface, u *unstructured.Unstructured, inputHashValue uint64) bool {
+	unstructuredDestination, err := dynamicClient.Get(context.TODO(), u.GetName(), metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+	content := unstructuredDestination.UnstructuredContent()
+	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+	if err != nil {
+		return false
+	}
+	if found {
+		if resHash, ok := annotations[resourcecollector.StorkResourceHash]; ok {
+			existingHashValue, err := strconv.ParseUint(resHash, 10, 64)
+			if err != nil {
+				return false
+			}
+			if existingHashValue == inputHashValue {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// getRelatedCRDListWRTGroupAndCategories takes AppRegs as input and
+// finds out all the CRDs that need to be collected.
+// The CRD list should contain
+//
+//	a. CRD matching with the required groups.
+//	b. CRDs which are related with the CRDs from above list (#a)
+func getRelatedCRDListWRTGroupAndCategories(client *apiextensionsclient.Clientset, ruleset *inflect.Ruleset, crdList *stork_api.ApplicationRegistrationList, resGroups map[string]string) []*stork_api.ApplicationRegistration {
+	filteredCRDList := make([]*stork_api.ApplicationRegistration, 0)
+	reqCategoriesMap := make(map[string]bool)
+	// find all related categories from the CRDs having same group
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			if _, ok := resGroups[v.Group]; !ok {
+				continue
+			}
+			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			crdvbeta1, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+			if err == nil {
+				for _, category := range crdvbeta1.Spec.Names.Categories {
+					if !slice.ContainsString(catergoriesExcludeList, category, strings.ToLower) {
+						reqCategoriesMap[category] = true
+					}
+				}
+				continue
+			}
+			crdv1, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+			if err == nil {
+				for _, category := range crdv1.Spec.Names.Categories {
+					if !slice.ContainsString(catergoriesExcludeList, category, strings.ToLower) {
+						reqCategoriesMap[category] = true
+					}
+				}
+				continue
+			}
+		}
+	}
+	logrus.Infof("crd categories to include are: %+v", reqCategoriesMap)
+
+	// find all crds matching the group and having related categories
+	for _, tempCRD := range crdList.Items {
+		crd := tempCRD
+		for _, v := range crd.Resources {
+			if _, ok := resGroups[v.Group]; ok {
+				filteredCRDList = append(filteredCRDList, &crd)
+				continue
+			}
+			if len(reqCategoriesMap) > 0 {
+				crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+				crdvbeta1, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+				if err == nil {
+					for _, category := range crdvbeta1.Spec.Names.Categories {
+						if _, ok := reqCategoriesMap[category]; ok {
+							filteredCRDList = append(filteredCRDList, &crd)
+							continue
+						}
+					}
+					continue
+				}
+				crdv1, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+				if err == nil {
+					for _, category := range crdv1.Spec.Names.Categories {
+						if _, ok := reqCategoriesMap[category]; ok {
+							filteredCRDList = append(filteredCRDList, &crd)
+							continue
+						}
+					}
+					continue
+				}
+			}
+		}
+	}
+
+	return filteredCRDList
+}
+
+func (m *MigrationController) getResources(
+	namespaces []string,
+	migration *stork_api.Migration,
+	labelSelectors map[string]string,
+	excludeSelectors map[string]string,
+	resourceCollectorOpts resourcecollector.Options,
+	remote bool,
+) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
+
+	var objects []runtime.Unstructured
+	var pvcs []v1.PersistentVolumeClaim
+	var err error
+
+	rc := m.resourceCollector
+	if remote {
+		rc = resourcecollector.ResourceCollector{
+			Driver: m.volDriver,
+		}
+		remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+		if err != nil {
+			return objects, pvcs, err
+		}
+
+		log.MigrationLog(migration).Infof("Setting context for getting resources in remote cluster")
+		// use seperate resource collector for collecting resources
+		// from destination cluster
+		err = rc.Init(remoteConfig)
+		if err != nil {
+			log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
+			return objects, pvcs, err
+		}
+	}
+
+	if len(migration.Spec.ExcludeResourceTypes) > 0 {
+		objects, pvcs, err = rc.GetResourcesExcludingTypes(
+			namespaces,
+			migration.Spec.ExcludeResourceTypes,
+			labelSelectors,
+			excludeSelectors,
+			nil,
+			migration.Spec.IncludeOptionalResourceTypes,
+			false,
+			resourceCollectorOpts,
+		)
+	} else {
+		objects, pvcs, err = rc.GetResources(
+			namespaces,
+			labelSelectors,
+			excludeSelectors,
+			nil,
+			migration.Spec.IncludeOptionalResourceTypes,
+			false,
+			resourceCollectorOpts,
+		)
+	}
+
+	return objects, pvcs, err
 }

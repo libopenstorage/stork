@@ -2,6 +2,7 @@ package resourcecollector
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -54,7 +55,11 @@ func TransformResources(
 			for _, path := range patch.Specs.Paths {
 				switch path.Operation {
 				case stork_api.AddResourcePath:
-					value := getNewValueForPath(path.Value, string(path.Type))
+					value, err := getNewValueForPath(path.Value, path.Type)
+					if err != nil {
+						logrus.Errorf("Unable to parse the Value for the type %s specified, path %s on resource kind: %s/,%s/%s,  err: %v", path.Type, path, patch.Kind, patch.Namespace, patch.Name, err)
+						return err
+					}
 					if path.Type == stork_api.KeyPairResourceType {
 						updateMap := value.(map[string]string)
 						err := unstructured.SetNestedStringMap(content, updateMap, strings.Split(path.Path, ".")...)
@@ -63,7 +68,8 @@ func TransformResources(
 							return err
 						}
 					} else if path.Type == stork_api.SliceResourceType {
-						err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
+						updateSlice := value.([]string)
+						err := unstructured.SetNestedStringSlice(content, updateSlice, strings.Split(path.Path, ".")...)
 						if err != nil {
 							logrus.Errorf("Unable to apply patch path %s on resource kind: %s/,%s/%s,  err: %v", path, patch.Kind, patch.Namespace, patch.Name, err)
 							return err
@@ -107,7 +113,12 @@ func TransformResources(
 						}
 						value = currList
 					} else {
-						value = path.Value
+						var err error
+						value, err = getNewValueForPath(path.Value, path.Type)
+						if err != nil {
+							logrus.Errorf("Unable to parse the Value for the type %s specified, path %s on resource kind: %s/,%s/%s,  err: %v", path.Type, path, patch.Kind, patch.Namespace, patch.Name, err)
+							return err
+						}
 					}
 					err := unstructured.SetNestedField(content, value, strings.Split(path.Path, ".")...)
 					if err != nil {
@@ -137,9 +148,13 @@ func TransformResources(
 	return nil
 }
 
-func getNewValueForPath(oldVal, valType string) interface{} {
+func getNewValueForPath(oldVal string, valType stork_api.ResourceTransformationValueType) (interface{}, error) {
 	var updatedValue interface{}
-	if valType == string(stork_api.KeyPairResourceType) {
+	var err error
+
+	switch valType {
+	case stork_api.KeyPairResourceType:
+		//TODO: here we can accept map[string]interface{}, so we can use SetNestedField instead of SetNestedStringMap
 		newVal := make(map[string]string)
 		mapList := strings.Split(oldVal, ",")
 		for _, val := range mapList {
@@ -147,13 +162,18 @@ func getNewValueForPath(oldVal, valType string) interface{} {
 			newVal[keyPair[0]] = keyPair[1]
 		}
 		updatedValue = newVal
-	} else if valType == string(stork_api.SliceResourceType) {
+	case stork_api.SliceResourceType:
+		// TODO: here we can accept []interface{}{}, so we can use SetNestedField instead of SetNestedStringSlice
 		newVal := []string{}
 		arrList := strings.Split(oldVal, ",")
 		newVal = append(newVal, arrList...)
 		updatedValue = newVal
-	} else {
+	case stork_api.IntResourceType:
+		updatedValue, err = strconv.ParseInt(oldVal, 10, 64)
+	case stork_api.BoolResourceType:
+		updatedValue, err = strconv.ParseBool(oldVal)
+	default:
 		updatedValue = oldVal
 	}
-	return updatedValue
+	return updatedValue, err
 }

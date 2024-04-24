@@ -71,6 +71,8 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 		if awsErr, ok := err.(awserr.Error); ok {
 			if awsErr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou {
 				return nil
+			} else if awsErr.Code() == s3.ErrCodeBucketAlreadyExists {
+				return nil
 			}
 		}
 	}
@@ -96,17 +98,19 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 			logrus.Warnf("GetObjLockInfo: GetObjectLockConfiguration awsErr.Code %v", awsErr.Code())
 			// When a Minio server doesn't have object-lock implemented then above API
 			// throws following error codes depending on version it runs for normal buckets
-			//	1. "ObjectLockConfigurationNotFoundError"
-			//      2. "MethodNotAllowed"
+			//  1. "ObjectLockConfigurationNotFoundError"
+			//  2. "MethodNotAllowed"
 			// Similarly in case of AWS, we need to ignore "NoSuchBucket" so that
 			// px-backup/stork can create the bucket on behalf user when validation flag is not set.
 			// With cloudian objectstore, we saw the error as "ObjectLockConfigurationNotFound"
 			// With Netapp Trident, we saw the error as "NotImplemented"
+			// With Tencent Cloud Objectstore, the error is "NoSuchBucketObjectLockConfiguration"
 			if awsErr.Code() == "ObjectLockConfigurationNotFoundError" ||
 				awsErr.Code() == "MethodNotAllowed" ||
 				awsErr.Code() == "ObjectLockConfigurationNotFound" ||
 				awsErr.Code() == "NotImplemented" ||
-				awsErr.Code() == "NoSuchBucket" {
+				awsErr.Code() == "NoSuchBucket" ||
+				awsErr.Code() == "NoSuchBucketObjectLockConfiguration" {
 				// for a non-objectlocked bucket we needn't throw error
 				return objLockInfo, nil
 			}

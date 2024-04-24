@@ -62,6 +62,8 @@ type PodOps interface {
 	DeletePodsByLabels(namespace string, labelSelector map[string]string, timeout time.Duration) error
 	// IsPodRunning checks if all containers in a pod are in running state
 	IsPodRunning(corev1.Pod) bool
+	// IsPodCompleted checks if the pod is in completed state
+	IsPodCompleted(corev1.Pod) bool
 	// IsPodReady checks if all containers in a pod are ready (passed readiness probe)
 	IsPodReady(corev1.Pod) bool
 	// IsPodBeingManaged returns true if the pod is being managed by a controller
@@ -214,7 +216,9 @@ func (c *Client) getPodsUsingPVWithListOptions(pvName string, opts metav1.ListOp
 	}
 
 	if pv.Status.Phase == corev1.VolumeBound {
-		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+		// In some k8s installations, we have seen that the Kind is not populated in the claim ref object. This
+		// should be ok since the kind is implicit for "ClaimRef".
+		if pv.Spec.ClaimRef != nil && (pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" || pv.Spec.ClaimRef.Kind == "") {
 			return c.getPodsUsingPVCWithListOptions(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, opts)
 		}
 	} // else the volume is not bound so cannot rely on stale claim ref objects
@@ -368,6 +372,11 @@ func (c *Client) DeletePodsByLabels(namespace string, listOptions map[string]str
 // IsPodRunning checks if all containers in a pod are in running state
 func (c *Client) IsPodRunning(pod corev1.Pod) bool {
 	return common.IsPodRunning(pod)
+}
+
+// IsPodCompleted checks if the pod is in completed state
+func (c *Client) IsPodCompleted(pod corev1.Pod) bool {
+	return common.IsPodCompleted(pod)
 }
 
 // IsPodReady checks if all containers in a pod are ready (passed readiness probe)

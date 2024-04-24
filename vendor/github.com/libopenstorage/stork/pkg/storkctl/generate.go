@@ -7,8 +7,9 @@ import (
 
 func newGenerateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	generateCommands := &cobra.Command{
-		Use:   "generate",
-		Short: "Generate stork specs",
+		Use:        "generate",
+		Short:      "Generate stork specs",
+		Deprecated: "use command \"create\" instead.",
 	}
 
 	generateCommands.AddCommand(

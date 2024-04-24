@@ -18,6 +18,10 @@ func (r *ResourceCollector) endpointsToBeCollected(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &endpoint); err != nil {
 		return false, fmt.Errorf("error converting to endpoint: %v", err)
 	}
+	// Don't migrate the kubernetes endpoint
+	if endpoint.GetName() == "kubernetes" && endpoint.GetNamespace() == v1.NamespaceDefault {
+		return false, nil
+	}
 
 	if endpoint.Annotations != nil {
 		// collect endpoint which has include-resources annotation applied

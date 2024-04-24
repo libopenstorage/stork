@@ -444,14 +444,14 @@ func createCRD() error {
 		return err
 	}
 	if ok {
-		err := k8sutils.CreateCRD(resource)
+		err := k8sutils.CreateCRDV1(resource)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval); err != nil {
 			return err
 		}
-		err = k8sutils.CreateCRD(policy)
+		err = k8sutils.CreateCRDV1(policy)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
