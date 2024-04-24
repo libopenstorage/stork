@@ -299,7 +299,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateRestoreWithCRValidation(restoreName, backupName, selectedBkpNamespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
-			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("Restore create: failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Restore creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("Restore create: failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Verifying restore creation after deleting new admin namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 
 			// Restore to custom namespace
 			for _, namespace := range bkpNamespaces {
@@ -309,7 +309,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.Infof("Custom restore map %v", multipleRestoreMapping)
 			customRestoreName := fmt.Sprintf("%s-%v", "multiple-application", time.Now().Unix())
 			err = CreateRestoreWithCRValidation(customRestoreName, backupName, multipleRestoreMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
-			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("Restore create: failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Restore creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("Restore create: failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Verifying restore creation after deleting new admin namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 		Step("Taking backup of multiple namespaces after admin namespace removal", func() { // This step should fail
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -318,7 +318,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateBackupWithCRValidation(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Backup creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Verifying backup creation after deleting new admin namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 		Step("Creating schedule backups for applications after admin namespace removal", func() {
 			log.InfoD("Creating schedule backups")
@@ -327,7 +327,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicSchedulePolicyNameAfterUpdate)
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			_, err = CreateScheduleBackupWithCRValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyNameAfterUpdate, schPolicyUid)
-			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Backup schedule creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to get target namespace: namespaces \"%s\" not found", newAdminNamespace)), true, fmt.Sprintf("Verifying backup creation after deleting new admin namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 	})
 	JustAfterEach(func() {

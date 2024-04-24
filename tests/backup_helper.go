@@ -168,6 +168,9 @@ const (
 	sshPodName                                = "ssh-pod"
 	sshPodNamespace                           = "ssh-pod-namespace"
 	VirtLauncherContainerName                 = "compute"
+	storkControllerConfigMap                  = "stork-controller-config"
+	storkControllerConfigMapUpdateTimeout     = 15 * time.Minute
+	storkControllerConfigMapRetry             = 30 * time.Second
 )
 
 var (
@@ -2602,6 +2605,7 @@ func BackupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 
 	}
 	_, err = task.DoRetryWithTimeout(backupSuccessCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup success check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	if err != nil {
 		return err
 	}
@@ -2934,6 +2938,8 @@ func RestoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Restore success check for restore : %s finished at [%s]", restoreName, time.Now().Format("2006-01-02 15:04:05"))
+
 	if err != nil {
 		return err
 	}
@@ -7559,7 +7565,23 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	log.InfoD("Verifying if stork controller configmap is updated with new admin namespace")
+	storkControllerCmUpdate := func() (interface{}, bool, error) {
+		storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+		if err != nil {
+			return "", false, fmt.Errorf("error getting stork controller configmap: %v", err)
+		}
+		log.Infof("Value of admin-ns in stork controller configmap is %s", storkControllerConfigMapObject.Data["admin-ns"])
+		if storkControllerConfigMapObject.Data["admin-ns"] == namespace {
+			fmt.Sprintf("Stork controller configmap is updated with new admin ns %s", namespace)
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("stork controller configmap is yet not updated with new admin ns %s", namespace)
+	}
+	_, err = task.DoRetryWithTimeout(storkControllerCmUpdate, storkControllerConfigMapUpdateTimeout, storkControllerConfigMapRetry)
+	if err != nil {
+		return nil, err
+	}
 	return stc, nil
 }
 
@@ -7575,11 +7597,7 @@ func getCurrentAdminNamespace() (string, error) {
 			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		} else {
-			adminNamespace, err := k8sutils.GetStorkPodNamespace()
-			if err != nil {
-				return "", err
-			}
-			log.InfoD("Current admin namespace - [%s]", adminNamespace)
+			adminNamespace = defaultStorkDeploymentNamespace
 			return adminNamespace, nil
 		}
 
