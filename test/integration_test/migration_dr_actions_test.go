@@ -328,9 +328,6 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
 	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
 
-	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
-	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
-
 	// Verify that mysql application is running but not elasticsearch on the source cluster
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
@@ -338,6 +335,49 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
 	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
 	Dash.VerifyFatal(t, *sourceDeployments.Items[0].Spec.Replicas, 1, fmt.Sprintf("Expected 0 replica in source in deployment in %s namespace", mysqlNamespace))
+
+	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *sourceStatefulsets.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in source in sts in %s namespace", elasticsearchNamespace))
+
+	// Failover #2 mysql ns
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	failoverCmdArgs = map[string]string{
+		"migration-reference": migrationScheduleName,
+		"include-namespaces":  mysqlNamespace,
+		"namespace":           defaultAdminNamespace,
+	}
+
+	drActionName, _ = createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailover, migrationScheduleName, failoverCmdArgs)
+
+	// Wait for failover action to complete
+	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, defaultAdminNamespace)
+
+	// Verify that both mysql and elasticsearch applications are running on the destination cluster
+	destDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, sourceDeploymentReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceDeploymentReplicas, mysqlNamespace))
+
+	destStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
+
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+
+	// Verify that both mysql and elasticsearch applications are not running on the source cluster
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	sourceDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, *sourceDeployments.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in source in deployment in %s namespace", mysqlNamespace))
 
 	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
