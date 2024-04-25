@@ -88,7 +88,7 @@ func validateAndDestroyCrMigration(t *testing.T, appName string, appPath string)
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "Error setting source kubeconfig")
 
-	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 	err = asyncdr.WaitForMigration([]*storkv1.Migration{mig})
 	log.FailOnError(t, err, "Error waiting for migration")
 
