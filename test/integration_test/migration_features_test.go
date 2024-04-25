@@ -5,6 +5,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -104,7 +106,7 @@ func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 
 	log.InfoD("Starting migration %s/%s with startApplication false", appData.Ns, migNamePref+appName)
 	startApplications := false
-	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, nil)
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
@@ -232,7 +234,7 @@ func validateCR(appName string, namespace string, kubeConfig string) (bool, erro
 		if err != nil {
 			return false, fmt.Errorf("error fetching objects while validating CR: %v", err)
 		}
-		log.InfoD("number of resources for app %s in namespace %s is %d", appName, namespace, len(objects.Items))
+		log.InfoD("Number of resources for app %s in namespace %s is %d", appName, namespace, len(objects.Items))
 		if len(objects.Items) != 1 {
 			validated = false
 		}
@@ -307,7 +309,7 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 
 	log.InfoD("Starting migration %s/%s with startApplication true", appData.Ns, migNamePref+appName)
 	startApplications := true
-	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, nil)
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
@@ -407,7 +409,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	startApplications := false
 	firstMigrationName := fmt.Sprintf("%s%s-%d", migNamePref, appName, 1)
 	log.InfoD("Starting migration %s/%s with startApplication false, iteration number: 1", appData.Ns, firstMigrationName)
-	mig1, err := asyncdr.CreateMigration(firstMigrationName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	mig1, err := asyncdr.CreateMigration(firstMigrationName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, nil)
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig1})
 	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, mig1.Name)
@@ -419,7 +421,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	// Do the migration again and verify the resource ID
 	secondMigrationName := fmt.Sprintf("%s%s-%d", migNamePref, appName, 2)
 	log.InfoD("Starting migration %s/%s with startApplication false, iteration number: 2", appData.Ns, secondMigrationName)
-	mig2, err := asyncdr.CreateMigration(secondMigrationName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	mig2, err := asyncdr.CreateMigration(secondMigrationName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, nil)
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig2})
 	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, mig2.Name)
@@ -548,7 +550,7 @@ func testFailbackWithStashStrategy(t *testing.T) {
 
 	log.InfoD("Starting migration %s/%s with startApplication false", appData.Ns, migNamePref+appName)
 	startApplications := false
-	mig, err := asyncdr.CreateMigration(migNamePref+appName, migrationNamespace, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	mig, err := asyncdr.CreateMigration(migNamePref+appName, migrationNamespace, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, nil)
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{mig})
 	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
@@ -604,7 +606,7 @@ func testFailbackWithStashStrategy(t *testing.T) {
 
 	revMigrationName := fmt.Sprintf("%s%s-%s", migNamePref, appName, "reverse")
 	log.InfoD("Starting reverse migration %s/%s with startApplication false", appData.Ns, revMigrationName)
-	revmig, err := asyncdr.CreateMigration(revMigrationName, migrationNamespace, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications)
+	revmig, err := asyncdr.CreateMigration(revMigrationName, migrationNamespace, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, nil)
 	err = asyncdr.WaitForMigration([]*storkapi.Migration{revmig})
 	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, revMigrationName)
@@ -678,4 +680,110 @@ func testFailbackWithStashStrategy(t *testing.T) {
 
 	testResult = testResultPass
 	log.InfoD("Test status at end of %s tests: %s", t.Name(), testResult)
+}
+
+func validateCRWithTransformationValue(appName string, namespace string, transfomration *storkapi.ResourceTransformation, kubeConfig string) error {
+	operatorCRMap := getSupportedOperatorCRMapping()
+	if _, ok := operatorCRMap[appName]; !ok {
+		return fmt.Errorf("app %s is not currently supported in test framework", appName)
+	}
+	resources := operatorCRMap[appName]
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
+	if err != nil {
+		return fmt.Errorf("error building config from kubeconfig failed: %v", err)
+	}
+	resourceCollector := resourcecollector.ResourceCollector{
+		Driver: nil,
+	}
+	err = resourceCollector.Init(config)
+	if err != nil {
+		return fmt.Errorf("error initing resourcecollector while validating CR: %v", err)
+	}
+
+	for _, resource := range resources {
+		objects, _, err := resourceCollector.GetResourcesForType(
+			resource,
+			nil,
+			[]string{namespace},
+			nil,
+			nil,
+			nil,
+			false,
+			resourcecollector.Options{},
+		)
+		if err != nil {
+			return fmt.Errorf("error fetching objects while validating CR: %v", err)
+		}
+		log.InfoD("Number of resources for app %s in namespace %s is %d", appName, namespace, len(objects.Items))
+		for _, object := range objects.Items {
+			for _, specObject := range transfomration.Spec.Objects {
+				for _, resourcePath := range specObject.Paths {
+					// TODO: Handle the case for delete operation when required in test validation
+					if resourcePath.Operation != storkapi.AddResourcePath && resourcePath.Operation != storkapi.ModifyResourcePathValue {
+						log.InfoD("Operation %s not supported for validation in tests", resourcePath.Operation)
+						return nil
+					}
+					content := object.UnstructuredContent()
+					err := validateNestedKeyValueInUnstructuredObject(content, resourcePath.Path, resourcePath.Type, resourcePath.Value)
+					if err != nil {
+						return fmt.Errorf("error validating nested key value in unstructured object: %v", err)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func validateNestedKeyValueInUnstructuredObject(content map[string]interface{}, resourcePath string, resourceType storkapi.ResourceTransformationValueType, resourcePathValue string) error {
+	switch resourceType {
+	case storkapi.IntResourceType:
+		value, found, err := unstructured.NestedInt64(content, strings.Split(resourcePath, ".")...)
+		if err != nil {
+			return fmt.Errorf("error getting int value from content for path %s for resourcetype %s: %v", resourcePath, resourceType, err)
+		}
+		if !found {
+			return fmt.Errorf("key %s not found in content", resourcePath)
+		}
+		expectedValue, err := strconv.ParseInt(resourcePathValue, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error parsing int value %s: %v", resourcePathValue, err)
+		}
+		if expectedValue != value {
+			return fmt.Errorf("failed in validating transformation for path %s, expected value %d got %d", resourcePath, expectedValue, value)
+		}
+		log.InfoD("Successfully validated transformation for path %s, expected value %d got %d", resourcePath, expectedValue, value)
+	case storkapi.BoolResourceType:
+		value, found, err := unstructured.NestedBool(content, strings.Split(resourcePath, ".")...)
+		if err != nil {
+			return fmt.Errorf("error getting bool value from content for path %s for resourcetype %s: %v", resourcePath, resourceType, err)
+		}
+		if !found {
+			return fmt.Errorf("key %s not found in content", resourcePath)
+		}
+		expectedValue, err := strconv.ParseBool(resourcePathValue)
+		if err != nil {
+			return fmt.Errorf("error parsing bool value %s: %v", resourcePathValue, err)
+		}
+		if expectedValue != value {
+			return fmt.Errorf("failed in validating transformation for path %s, expected value %t got %t", resourcePath, expectedValue, value)
+		}
+		log.InfoD("Successfully validated transformation for path %s, expected value %v got %v", resourcePath, expectedValue, value)
+	case storkapi.StringResourceType:
+		value, found, err := unstructured.NestedString(content, strings.Split(resourcePath, ".")...)
+		if err != nil {
+			return fmt.Errorf("error getting string value from content for path %s for resourcetype %s: %v", resourcePath, resourceType, err)
+		}
+		if !found {
+			return fmt.Errorf("key %s not found in content", resourcePath)
+		}
+		if resourcePathValue != value {
+			return fmt.Errorf("failed in validating transformation for path %s, expected value %s got %s", resourcePath, resourcePathValue, value)
+		}
+		log.InfoD("Successfully validated transformation for path %s, expected value %s got %s", resourcePath, resourcePathValue, value)
+	default:
+		return fmt.Errorf("unsupported type for validation %s", resourceType)
+	}
+	return nil
 }
