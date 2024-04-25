@@ -8720,7 +8720,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				}
 				log.InfoD("adding journal failed as expected. verifying the error")
 				re := regexp.MustCompile(".*journal exists*")
-				re1 := regexp.MustCompile(".*Journal device.*is alredy configured*")
+				re1 := regexp.MustCompile(".*Journal device.*is already configured*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)) || re1.MatchString(fmt.Sprintf("%v", err)),
 					true,
 					fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
