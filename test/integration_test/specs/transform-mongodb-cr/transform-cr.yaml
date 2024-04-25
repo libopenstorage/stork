@@ -1,0 +1,16 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind : ResourceTransformation
+metadata:
+   name: mongodb-cr-transform
+specs:
+  transformSpecs:
+  - paths:
+      - path: "spec.version"
+        value: "6.0.6"
+        type: "string"
+        operation: "modify"
+      - path: "spec.additionalMongodConfig.storage.inMemory.engineConfig.inMemorySizeGB"
+        value: "2"
+        type: "int"
+        operation: "add"
+    resource: "mongodbcommunity.mongodb.com/v1/MongoDBCommunity"
