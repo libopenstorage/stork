@@ -349,6 +349,12 @@ type Driver interface {
 	// ValidateAutopilotRuleObject validates Autopilot rule object
 	ValidateAutopilotRuleObjects() error
 
+	//WaitForRebalanceAROToComplete waits for rebalance to start
+	WaitForRebalanceAROToComplete() error
+
+	//VerifyPoolResizeARO() error
+	VerifyPoolResizeARO(apRule apapi.AutopilotRule) (bool, error)
+
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 
@@ -371,7 +377,7 @@ type Driver interface {
 	DeleteSecret(namespace, name string) error
 
 	// RecyleNode deletes nodes with given node
-	RecycleNode(n node.Node) error
+	DeleteNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
 	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
@@ -432,6 +438,13 @@ type Driver interface {
 
 	// ScaleCluster scale the cluster to the given replicas
 	ScaleCluster(replicas int) error
+	// GetZones get the zones of cluster
+	GetZones() ([]string, error)
+	// GetASGClusterSize gets node count for an asg cluster
+	GetASGClusterSize() (int64, error)
+
+	// SetASGClusterSize sets node count for an asg cluster
+	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 }
 
 var (

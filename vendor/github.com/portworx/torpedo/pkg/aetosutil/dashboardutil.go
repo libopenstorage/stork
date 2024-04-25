@@ -427,7 +427,7 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	expect(err).NotTo(haveOccurred())
 }
 
-// VerifyNotNilFatal verify error is nil and abort operation upon failure
+// VerifyNotNilFatal verify error is not nil and abort operation upon failure
 func (d *Dashboard) VerifyNotNilFatal(err error, description string) {
 	d.VerifyFatal(err != nil, true, description)
 }

@@ -70,6 +70,12 @@ func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGener
 	return nil
 }
 
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in google cloud
+func (d *genericCsi) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &genericCsi{})
 }

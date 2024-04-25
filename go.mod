@@ -22,14 +22,14 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240311222049-36e102b2df5e
+	github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240411193047-d17313c6c11b
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240424153814-f3083bdb4578
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 	github.com/prometheus/client_golang v1.15.1
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
@@ -100,6 +100,7 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
@@ -322,7 +323,7 @@ require (
 	knative.dev/pkg v0.0.0-20231023150739-56bfe0dd9626 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 	oras.land/oras-go v1.2.0 // indirect
-	sigs.k8s.io/cluster-api v0.2.11 // indirect
+	sigs.k8s.io/cluster-api v1.1.6 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.12.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.13.9 // indirect
@@ -349,7 +350,7 @@ replace (
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240327131138-e0fa03f5a66c
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240411193047-d17313c6c11b
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240326191238-71d38500911c
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240424210508-35b5433e5417
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
