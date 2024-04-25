@@ -505,6 +505,8 @@ type Driver interface {
 
 	// GetPxctlStatus returns the PX status using pxctl
 	GetPxctlStatus(n node.Node) (string, error)
+
+	DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

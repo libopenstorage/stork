@@ -132,7 +132,7 @@ type Driver interface {
 	Init(nodeOpts InitOptions) error
 
 	// DeleteNode deletes the given node
-	DeleteNode(node Node, timeout time.Duration) error
+	//DeleteNode(node Node, timeout time.Duration) error
 
 	// String returns the string name of this driver.
 	String() string
