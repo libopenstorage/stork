@@ -138,6 +138,12 @@ func (d *linstor) KillPXDaemon(n []node.Node, triggerOpts *driver_api.TriggerOpt
 	return nil
 }
 
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in linstor
+func (d *linstor) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &linstor{})
 }

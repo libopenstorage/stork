@@ -146,6 +146,8 @@ const (
 	AutopilotLabelNameKey = "name"
 	AutopilotLabelValue   = "autopilot"
 	PortworxNotDeployed   = "portworx not deployed"
+	// MetadataLabel is added to node if node has to be made kvdb node or never become kvdb node according to key value
+	MetaDataLabel = "px/metadata-node"
 )
 
 const (
@@ -1971,8 +1973,16 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		return sc, nil
 
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-		obj.Namespace = ns.Name
-		k.substituteNamespaceInPVC(obj, ns.Name)
+		clonedPVC := false
+		if source, exists := obj.Annotations["pvc.source"]; exists {
+			if source == "cloned" {
+				clonedPVC = true
+			}
+		}
+		if !clonedPVC {
+			obj.Namespace = ns.Name
+			k.substituteNamespaceInPVC(obj, ns.Name)
+		}
 
 		if pvcLabelsAnnotationValue, ok := obj.Annotations[pvcLabelsAnnotationKey]; ok {
 			pvcLabelsEnabled, _ := strconv.ParseBool(pvcLabelsAnnotationValue)
@@ -2021,6 +2031,31 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 				return pvc, nil
 			}
+		}
+		if clonedPVC {
+			endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
+			if ok && endpointAnnotation != "" {
+				t := func() (interface{}, bool, error) {
+					pvc, err = k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+					messageAnnotation, ok := pvc.Annotations[cdiPvcRunningMessageAnnotationKey]
+					if ok {
+						if messageAnnotation == cdiImportComplete {
+							log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("waiting for annotation [%s] in pvc [%s] in namespace [%s] to be %s, but got %s",
+							cdiPvcRunningMessageAnnotationKey, obj.Name, obj.Namespace, cdiImportComplete, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+					} else {
+						return "", true, fmt.Errorf("annotation [%s] not found in pvc [%s] in namespace [%s]",
+							cdiPvcRunningMessageAnnotationKey, obj.Name, obj.Namespace)
+					}
+				}
+				_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
+				if err != nil {
+					return pvc, err
+				}
+			}
+
 		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
@@ -2226,7 +2261,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		log.Infof("Secret name key flag and CSI flag for PVC: %b %b", secretNameKeyFlag, app.IsCSI)
+		log.Infof("Secret name key flag and CSI flag for PVC: %v %v", secretNameKeyFlag, app.IsCSI)
 		if secretNameKeyFlag && !app.IsCSI {
 			obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		}
@@ -4262,6 +4297,14 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			if value, exists := obj.Labels["portworx.io/kubevirt"]; exists && value == "true" {
+				log.Debugf("PVC [%s] in namespace: [%s] is labeled for kubevirt, skipping...", obj.Name, obj.Namespace)
+				continue
+			}
+			if value, exists := obj.Labels["app"]; exists && value == "containerized-data-importer" {
+				log.Debugf("PVC [%s] in namespace: [%s] is a data vol template, skipping...", obj.Name, obj.Namespace)
+				continue
+			}
 			log.Debugf("Getting PVC [%s], namespace: [%s] for depolyment [%s]", obj.Name, obj.Namespace, ctx.App.Key)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			log.Debugf("got pvc object [%s]", pvcObj.Name)
@@ -4325,6 +4368,13 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", vm.Namespace, err)
 			}
 			for _, pvc := range pvcList.Items {
+				// Filter out the volumes with annotations stork.libopenstorage.org/skip-resource: true from the list
+				// This is needed in case of NFS backup-location where backup creates a volume for mounting the NFS backup location
+				if pvc.Annotations != nil {
+					if _, ok := pvc.Annotations["stork.libopenstorage.org/skip-resource"]; ok {
+						continue
+					}
+				}
 				// check if the pvc has our VM as the owner
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
@@ -5399,40 +5449,93 @@ func (k *K8s) createVirtualMachineObjects(
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
+	isPVCcloned := false
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		// Validating to make sure the desired images are imported by CDI and volumes are ready to be used by Kubevirt VM
-		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
-		if len(virtualMachineVolumes) > 0 {
-			for _, v := range virtualMachineVolumes {
-				err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+		if source, exists := obj.Annotations["pvc.source"]; exists {
+			if source == "cloned" {
+				isPVCcloned = true
+			}
+		}
+		if !isPVCcloned {
+			// Validating to make sure the desired images are imported by CDI and volumes are ready to be used by Kubevirt VM
+			virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
+			if len(virtualMachineVolumes) > 0 {
+				for _, v := range virtualMachineVolumes {
+					err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+			// Create VirtualMachine Spec
+			if obj.Namespace != "kube-system" {
+				obj.Namespace = ns.Name
+			}
+			vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+			if k8serrors.IsAlreadyExists(err) {
+				if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+					log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+					return vm, nil
+				}
+			}
+
+			if err != nil {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create VirtualMachine: %v, Err: %v", obj.Name, err),
+				}
+			}
+			log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
+			return vm, nil
+		} else {
+			// Create VirtualMachine Spec
+			if obj.Namespace != "kube-system" {
+				obj.Namespace = ns.Name
+			}
+			vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+			if k8serrors.IsAlreadyExists(err) {
+				if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+					log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+					return vm, nil
+				}
+			}
+			// After VM creation, wait for all associated DataVolumes to be ready.
+			for _, dvt := range obj.Spec.DataVolumeTemplates {
+				err = k.WaitForCloneToSucceed(ns.Name, dvt.Name)
 				if err != nil {
 					return nil, err
 				}
 			}
-		}
-		// Create VirtualMachine Spec
-		if obj.Namespace != "kube-system" {
-			obj.Namespace = ns.Name
-		}
-		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
-		if k8serrors.IsAlreadyExists(err) {
-			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
-				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
-				return vm, nil
+			log.Infof("Sleeping for 30 seconds to let data volume settle")
+			time.Sleep(30 * time.Second)
+			vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
 			}
-		}
-
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create VirtualMachine: %v, Err: %v", obj.Name, err),
+			// Check if the VM is in 'Running' phase.
+			if !vm.Status.Ready {
+				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
 			}
+			return vm, nil
 		}
-		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
-		return vm, nil
 	}
-
 	return nil, nil
+}
+
+func (k *K8s) WaitForCloneToSucceed(namespace, pvcName string) error {
+	t := func() (interface{}, bool, error) {
+		pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+		if clonePhase, ok := pvc.Annotations["cdi.kubevirt.io/storage.condition.source.running.message"]; ok && clonePhase == "Clone Complete" {
+			log.Infof("Clone operation succeeded for PVC: %s", pvcName)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("waiting for clone operation to succeed for PVC [%s] in namespace [%s], current phase: %s", pvcName, namespace, pvc.Annotations["cdi.kubevirt.io/clonePhase"])
+	}
+	_, err := task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
+	return err
 }
 
 // createTektonObjects creates the Tektoncd objects
@@ -6456,6 +6559,138 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	return nil
 }
 
+// VerifyPoolResizeARO() created and resize completed
+func (k *K8s) VerifyPoolResizeARO(ruleName apapi.AutopilotRule) (bool, error) {
+	var ruleTriggered bool
+	namespace, err := k.GetAutopilotNamespace()
+	if err != nil {
+		return false, fmt.Errorf("No Namespace")
+	}
+
+	expectedAroStates := []apapi.RuleState{
+		apapi.RuleStateTriggered,
+		apapi.RuleStateActiveActionsPending,
+		apapi.RuleStateActiveActionsInProgress,
+		apapi.RuleStateActiveActionsTaken,
+	}
+
+	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+	if err != nil {
+		return false, fmt.Errorf("No ARO available")
+	}
+	if len(listAutopilotRuleObjects.Items) == 0 {
+		return false, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+	}
+	//Find  AROs  which has matching rule Name
+	for _, aro := range listAutopilotRuleObjects.Items {
+		log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
+		if strings.Contains(aro.GetObjectMeta().GetName(), ruleName.Name) {
+			var aroStates []apapi.RuleState
+			for _, aroStatusItem := range aro.Status.Items {
+				if aroStatusItem.State == "" {
+					continue
+				}
+				if len(aroStates) == 0 {
+					aroStates = append(aroStates, aroStatusItem.State)
+				} else {
+					var existState bool
+					for _, state := range aroStates {
+						if aroStatusItem.State == state {
+							existState = true
+						}
+					}
+					if !existState {
+						aroStates = append(aroStates, aroStatusItem.State)
+					}
+				}
+			}
+			counter := len(expectedAroStates)
+			for _, expectState := range expectedAroStates {
+				for _, actualState := range aroStates {
+					if expectState == actualState {
+						counter -= 1
+					}
+				}
+			}
+			if counter == 0 {
+				log.Debugf("autopilot rule object: %s has all expected states", aro.Name)
+				ruleTriggered = true
+			} else {
+				log.Debugf("Observed ARO STATE: %v", aroStates)
+				log.Debugf("expected  ARO STATEs: %v", expectedAroStates)
+				formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+				log.Debugf("autopilot rule objects items: %s", string(formattedObject))
+				return false, fmt.Errorf("autopilot rule object: %s doesn't have all expected states", aro.Name)
+			}
+		} else {
+			log.InfoD("Rule Name observed %v", aro.GetObjectMeta().GetName())
+			log.InfoD("Rule Name observed %v", ruleName.Name)
+		}
+	}
+	if ruleTriggered {
+		return true, nil
+	}
+	return false, fmt.Errorf("No ARO found for rule: %v ", ruleName)
+}
+
+// WaitForRebalanceAROToComplete Wait for Rebalance to complete.
+func (k *K8s) WaitForRebalanceAROToComplete() error {
+	var eventCheckInterval = 60 * time.Second
+	var eventCheckTimeout = 30 * time.Minute
+	t := func() (interface{}, bool, error) {
+		namespace, err := k.GetAutopilotNamespace()
+		if err != nil {
+			return nil, false, err
+		}
+		listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+		if err != nil {
+			return nil, true, err
+		}
+		if len(listAutopilotRuleObjects.Items) == 0 {
+			return nil, true, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+		}
+		// IF Reabalance summary started and it's timestamp before "ActiveActionsTaken" timestamp
+		// means rebalance has been started and action has been taken.
+		for _, aro := range listAutopilotRuleObjects.Items {
+			hasRebalanceStarted := false
+			var rebalanceStartedTimeStamp int64
+			log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
+			for _, aroStatusItem := range aro.Status.Items {
+				if aroStatusItem.State == "" {
+					continue
+				}
+				if strings.Contains(aroStatusItem.Message, "Rebalance summary:") {
+					hasRebalanceStarted = true
+					log.InfoD("Rebalance has started ")
+					rebalanceStartedTimeStamp = aroStatusItem.LastProcessTimestamp.Unix()
+				}
+				if aroStatusItem.State == apapi.RuleStateActiveActionsTaken {
+					if aroStatusItem.LastProcessTimestamp.Unix() > rebalanceStartedTimeStamp && hasRebalanceStarted == true {
+						log.InfoD("Rebalance Action has been taken on ARO %s ", aro.GetObjectMeta().GetName())
+						return nil, false, nil
+					} else {
+						log.InfoD(" Expected  state: %s available but it is before Rebalance Started ", aroStatusItem.State)
+					}
+				}
+				if aroStatusItem.State == apapi.RuleStateNormal && strings.Contains(aroStatusItem.Message, "ActiveActionsPending => Normal") {
+					if aroStatusItem.LastProcessTimestamp.Unix() > rebalanceStartedTimeStamp && hasRebalanceStarted == true {
+						log.InfoD("Rebalance Action has been taken on ARO %s ", aro.GetObjectMeta().GetName())
+						return nil, false, nil
+					} else {
+						log.InfoD(" Expected  state: %s available but it is before Rebalance Started ", aroStatusItem.State)
+					}
+				}
+			}
+		}
+		return nil, true, fmt.Errorf("Rebalance ARO not completed or did not start yet")
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, eventCheckTimeout, eventCheckInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetIOBandwidth takes in the pod name and namespace and returns the IOPs speed
 func (k *K8s) GetIOBandwidth(podName string, namespace string) (int, error) {
 	log.Infof("Getting the IO Speed in pod %s", podName)
@@ -6878,6 +7113,15 @@ func (k *K8s) UpgradeScheduler(version string) error {
 	}
 }
 
+// DeleteNode deletes the given in the cluster
+func (k *K8s) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 // DeleteSecret deletes secret with given name in given namespace
 func (k *K8s) DeleteSecret(namespace, name string) error {
 	return k8sCore.DeleteSecret(name, namespace)
@@ -6910,21 +7154,36 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 	return err
 }
 
-// RecycleNode method not supported for K8s scheduler
-func (k *K8s) RecycleNode(n node.Node) error {
-	// Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
-	}
-}
-
 // ScaleCluster scale the cluster to the given replicas
 func (k *K8s) ScaleCluster(replicas int) error {
 	// ScaleCluster is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ScaleCluster()",
+	}
+}
+
+func (k *K8s) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (k *K8s) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
+func (k *K8s) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
 	}
 }
 
@@ -8144,9 +8403,7 @@ func (k *K8s) createDockerRegistrySecret(secretName, secretNamespace string) (*v
 	if dockerServer != "" && dockerUsername != "" && dockerPassword != "" {
 		auths.AuthConfigs = map[string]docker_types.AuthConfig{
 			dockerServer: {
-				Username: dockerUsername,
-				Password: dockerPassword,
-				Auth:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
+				Auth: base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
 			},
 		}
 		authConfigsEnc, _ := json.Marshal(auths)
@@ -8156,18 +8413,18 @@ func (k *K8s) createDockerRegistrySecret(secretName, secretNamespace string) (*v
 				Name:      secretName,
 				Namespace: secretNamespace,
 			},
-			Type: "docker-registry",
+			Type: v1.SecretTypeDockerConfigJson,
 			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
 		}
 		secret, err := k8sCore.CreateSecret(secretObj)
 		if k8serrors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
-				log.Infof("Using existing Docker regisrty secret: %v", secret.Name)
+				log.Infof("Using existing Docker registry secret: %v", secret.Name)
 				return secret, nil
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Docker registry secret: %s. Err: %v", secretName, err)
+			return nil, fmt.Errorf("failed to create Docker registry secret: %s in namespace: %s . Err: %v", secretName, secretNamespace, err)
 		}
 		log.Infof("Created Docker registry secret: %s", secret.Name)
 		return secret, nil
