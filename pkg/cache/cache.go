@@ -43,8 +43,8 @@ type cache struct {
 }
 
 var (
-	cacheLock           sync.Mutex
-	sharedInformerCache *cache
+	cacheLock sync.Mutex
+	instance  SharedInformerCache
 
 	cacheNotInitializedErr = "shared informer cache has not been initialized yet"
 )
@@ -52,7 +52,7 @@ var (
 func CreateSharedInformerCache(mgr manager.Manager) error {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
-	if sharedInformerCache != nil {
+	if instance != nil {
 		return fmt.Errorf("shared informer cache already initialized")
 	}
 	config, err := rest.InClusterConfig()
@@ -71,7 +71,19 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 			currPod.Name = podResource.Name
 			currPod.Namespace = podResource.Namespace
 
-			currPod.Spec.Volumes = podResource.Spec.Volumes
+			// Only store volumes which we care about.
+			for _, podVolume := range podResource.Spec.Volumes {
+				if podVolume.PersistentVolumeClaim != nil {
+					currPod.Spec.Volumes = append(currPod.Spec.Volumes, podVolume)
+				} else if podVolume.PortworxVolume != nil {
+					currPod.Spec.Volumes = append(currPod.Spec.Volumes, podVolume)
+				} else if podVolume.Ephemeral != nil {
+					currPod.Spec.Volumes = append(currPod.Spec.Volumes, podVolume)
+				} else if podVolume.CSI != nil {
+					currPod.Spec.Volumes = append(currPod.Spec.Volumes, podVolume)
+				}
+			}
+
 			currPod.Spec.Containers = podResource.Spec.Containers
 			currPod.Spec.NodeName = podResource.Spec.NodeName
 
@@ -83,7 +95,9 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 		},
 	}
 
-	sharedInformerCache = &cache{}
+	sharedInformerCache := &cache{}
+	// Set the global instance
+	instance = sharedInformerCache
 	sharedInformerCache.controllerCache, err = controllercache.New(config, controllercache.Options{
 		Scheme:            mgr.GetScheme(),
 		TransformByObject: transformMap,
@@ -103,7 +117,14 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 func Instance() SharedInformerCache {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
-	return sharedInformerCache
+	return instance
+}
+
+// Only used for UTs
+func SetTestInstance(s SharedInformerCache) {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	instance = s
 }
 
 // GetStorageClass returns the storage class if present in the cache.
