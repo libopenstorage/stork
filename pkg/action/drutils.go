@@ -52,8 +52,30 @@ func (ac *ActionController) createLastMileMigration(action *storkv1.Action, conf
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
 			// If last mile migration CR does not exist, create one
-			migration := getLastMileMigrationSpec(migrationSchedule, string(action.Spec.ActionType), utils.GetShortUID(string(action.UID)))
-			_, err := storkClient.CreateMigration(migration)
+			migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
+			if err != nil {
+				msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+				logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
+				logEvents(msg, "err")
+				action.Status.Status = storkv1.ActionStatusFailed
+				action.Status.Reason = msg
+				ac.updateAction(action)
+				return
+			}
+
+			namespaces := make([]string, 0)
+			if action.Spec.ActionType == storkv1.ActionTypeFailover {
+				namespaces = action.Spec.ActionParameter.FailoverParameter.FailoverNamespaces
+			} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
+				namespaces = action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces
+			}
+
+			// only consider namespaces which are a part of both namespaces and migrationNamespaces
+			// this means if there are some invalid namespaces provided for failover/failback we will ignore them
+			_, actualNamespaces, _ := utils.IsSubList(namespaces, migrationNamespaces)
+
+			lastMileMigration := getLastMileMigrationSpec(migrationSchedule, actualNamespaces, string(action.Spec.ActionType), utils.GetShortUID(string(action.UID)))
+			_, err = storkClient.CreateMigration(lastMileMigration)
 			if err != nil {
 				msg := fmt.Sprintf("Creating last mile migration from the MigrationSchedule %s failed: %v", migrationSchedule.GetName(), err)
 				ac.recorder.Event(action,
@@ -114,9 +136,12 @@ func getLastMileMigrationName(migrationScheduleName string, operation string, in
 }
 
 // getLastMileMigrationSpec will get a migration spec from the given migrationschedule spec
-func getLastMileMigrationSpec(ms *storkv1.MigrationSchedule, operation string, actionCRUID string) *storkv1.Migration {
+func getLastMileMigrationSpec(ms *storkv1.MigrationSchedule, namespaces []string, operation string, actionCRUID string) *storkv1.Migration {
 	migrationName := getLastMileMigrationName(ms.GetName(), operation, actionCRUID)
 	migrationSpec := ms.Spec.Template.Spec
+	//Overwrite the namespaces being migrated as part of last mile migration to the namespaces being failed over/failed back
+	migrationSpec.NamespaceSelectors = nil
+	migrationSpec.Namespaces = namespaces
 	// Make startApplications always false
 	startApplications := false
 	migrationSpec.StartApplications = &startApplications
