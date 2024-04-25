@@ -15,12 +15,14 @@ const (
 	// DriverName is the name of the azure driver implementation
 	DriverName = "azure"
 	// AzureStorage Azure storage driver name
-	AzureStorage torpedovolume.StorageProvisionerType = "azure"
+	AzureStorage     torpedovolume.StorageProvisionerType = "azure"
+	AzureFileStorage torpedovolume.StorageProvisionerType = "azurefile"
 )
 
 // Provisioners types of supported provisioners
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	AzureStorage: "disk.csi.azure.com",
+	AzureStorage:     "disk.csi.azure.com",
+	AzureFileStorage: "file.csi.azure.com",
 }
 
 type azure struct {
@@ -29,7 +31,7 @@ type azure struct {
 }
 
 func (d *azure) String() string {
-	return string(AzureStorage)
+	return string(DriverName)
 }
 
 func (d *azure) ValidateVolumeCleanup() error {
@@ -82,6 +84,12 @@ func (d *azure) InspectVolume(name string) (*api.Volume, error) {
 		Type:      "Function",
 		Operation: "InspectVolume()",
 	}
+}
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in azure cloud
+func (d *azure) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
+	return nil
 }
 
 func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {

@@ -1,8 +1,12 @@
 package ssh
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	docker_types "github.com/docker/docker/api/types"
 	"io/ioutil"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"net"
 	"os"
 	"regexp"
@@ -227,6 +231,14 @@ func (s *SSH) initExecPod() error {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
 		dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Namespace = s.execPodNamespace
+		secret, err := createDockerRegistrySecret(execPodDaemonSetLabel, s.execPodNamespace)
+		if err != nil {
+			return fmt.Errorf("Error while creating docker registry secret [%s] in [%s] namespace. Err: %s", execPodDaemonSetLabel, s.execPodNamespace, err)
+		}
+		if secret != nil {
+			dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
+
+		}
 		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
@@ -237,6 +249,47 @@ func (s *SSH) initExecPod() error {
 		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
 	}
 	return nil
+}
+
+func createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret, error) {
+	var auths = struct {
+		AuthConfigs map[string]docker_types.AuthConfig `json:"auths"`
+	}{}
+
+	dockerServer := os.Getenv("IMAGE_PULL_SERVER")
+	dockerUsername := os.Getenv("IMAGE_PULL_USERNAME")
+	dockerPassword := os.Getenv("IMAGE_PULL_PASSWORD")
+
+	if dockerServer != "" && dockerUsername != "" && dockerPassword != "" {
+		auths.AuthConfigs = map[string]docker_types.AuthConfig{
+			dockerServer: {
+				Auth: base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
+			},
+		}
+		authConfigsEnc, _ := json.Marshal(auths)
+
+		secretObj := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: secretNamespace,
+			},
+			Type: v1.SecretTypeDockerConfigJson,
+			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
+		}
+		secret, err := k8sCore.CreateSecret(secretObj)
+		if k8serrors.IsAlreadyExists(err) {
+			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
+				log.Infof("Using existing Docker registry secret: %v", secret.Name)
+				return secret, nil
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Docker registry secret: %s. Err: %v", secretName, err)
+		}
+		log.Infof("Created Docker registry secret: %s", secret.Name)
+		return secret, nil
+	}
+	return nil, nil
 }
 
 func (s *SSH) initSSH() error {

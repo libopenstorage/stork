@@ -3,19 +3,18 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/google/gnostic/compiler"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
-
-	"github.com/fatih/color"
-	"github.com/sirupsen/logrus"
 )
 
 type colorizer func(...interface{}) string
@@ -332,6 +331,21 @@ func FailOnError(err error, description string, args ...interface{}) {
 		dash.Fatal(extendedFormat)
 		tpLog.Errorf(extendedFormat)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	}
+}
+
+func FailOnNoError(err error, description string, args ...interface{}) {
+	if err != nil {
+		errorString := fmt.Sprintf("%v. Err: %v", fmt.Sprintf(description, args...), err)
+		pc, _, line, _ := runtime.Caller(1)
+		callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
+		callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
+		extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, errorString)
+		dash.VerifyNotNilFatal(err, extendedFormat)
+		tpLog.Debugf(extendedFormat)
+	} else {
+		dash.Fatal(description, args...)
+		tpLog.Errorf(description, args...)
 	}
 }
 
