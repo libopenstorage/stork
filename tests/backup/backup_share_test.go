@@ -3872,7 +3872,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", Label(TestCaseLabelsMa
 				backupMap[backupName] = backupUID
 
 				// Start Restore
-				namespaceMapping[bkpNamespaces[0]] = bkpNamespaces[0] + "restored"
+				namespaceMapping[bkpNamespaces[0]] = bkpNamespaces[0] + "-" + user
 				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, user)
 				restoreNames = append(restoreNames, restoreName)
 				log.Infof("Creating restore %s for user %s", restoreName, user)
