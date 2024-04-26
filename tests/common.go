@@ -1733,13 +1733,13 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
 		}
 		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
-			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
-			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-
 			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
 			isPureFile, err := Inst().V.IsPureFileVolume(vol)
 			log.FailOnError(err, "Failed to get details about PureVolume", ctx.App.Key)
 			if !isPureFile {
+				attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
+				log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+
 				err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
 				dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
 			}
