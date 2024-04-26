@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
-
 	"math/rand"
 	"sort"
 	"strconv"
@@ -2361,5 +2360,453 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 
+	})
+})
+
+var _ = Describe("{VolAttachFAPxRestart}", func() {
+	/*
+				https://purestorage.atlassian.net/browse/PTX-21440
+			    1. Create a host in the FA whose secret is not present in pure secret
+		        2. Create a volume and attach it to the host created in step 1
+		        3. using iscsiadm commands run commands to login to the controllers
+		        4. check multipath -ll output
+		        5. Restart portworx
+		        6. The multipath entry for the volume attached from a different FA shouldn't vanish
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolAttachFAPxRestart", "Attach a vol from a FA, restart portworx and check multipath consistency", nil, 0)
+	})
+
+	var (
+		hostName               = fmt.Sprintf("torpedo-host-%v", time.Now().UnixNano())
+		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
+		faSecret               = Inst().FaSecret
+		FAclient               *flasharray.Client
+		MultipathBeforeRestart string
+		faMgmtEndPoint         string
+		faAPIToken             string
+		host                   *flasharray.Host
+		IQNExists              bool
+	)
+
+	itLog := "Attach a volume from a different FA, restart portworx and check multipath consistency"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		// select a random node to run the test
+		n := node.GetStorageDriverNodes()[0]
+
+		stepLog := "get the secrete of FA which is not present in pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get the flash array details
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
+			flashArraysInSecret := pxPureSecret.Arrays
+
+			if len(flashArraysInSecret) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+			}
+
+			for _, value := range strings.Split(faSecret, ",") {
+				faMgmtEndPoint = strings.Split(value, ":")[0]
+				faAPIToken = strings.Split(value, ":")[1]
+				if len(faMgmtEndPoint) == 0 || len(faAPIToken) == 0 {
+					continue
+				}
+				log.InfoD("famanagement endpoint: %v, faAPIToken: %v", faMgmtEndPoint, faAPIToken)
+				break
+			}
+			if len(faMgmtEndPoint) == 0 || len(faAPIToken) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+			}
+
+			for _, fa := range flashArraysInSecret {
+				if fa.MgmtEndPoint == faMgmtEndPoint {
+					log.FailOnError(fmt.Errorf("Flash Array details present in secret"), "Flash Array details should not be present in the secret")
+				}
+			}
+		})
+
+		stepLog = "Create a volume, create a host, attach the volume to the host, update iqn of the host and attach the volume to the host"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			iqn, err := GetIQNOfNode(n)
+			log.FailOnError(err, "Failed to get iqn of the node %v", n.Name)
+			log.InfoD("Iqn of the node: %v", iqn)
+
+			//create a connections to the FA whose credentials not present in the pure secret
+			FAclient, err = pureutils.PureCreateClientAndConnect(faMgmtEndPoint, faAPIToken)
+			log.FailOnError(err, "Failed to create client and connect to FA")
+
+			// Check if the IQN of the node is present in the FA if present take the existing host else create one
+			IQNExists, err = pureutils.IsIQNExistsOnFA(FAclient, iqn)
+			log.FailOnError(err, "Failed to check if iqn exists on FA")
+
+			if !IQNExists {
+				//create a host in the FA
+				host, err = pureutils.CreateNewHostOnFA(FAclient, hostName)
+				log.FailOnError(err, "Failed to create host on FA")
+				log.InfoD("Host created on FA: %v", host.Name)
+
+				//Update iqn of the specific host
+				_, err = pureutils.UpdateIQNOnSpecificHosts(FAclient, hostName, iqn)
+				log.FailOnError(err, "Failed to update iqn on host %v", hostName)
+				log.InfoD("Updated iqn on host %v", hostName)
+
+			} else {
+				// If iqn already exist in FA find the host which is using it
+				host, err = pureutils.GetHostFromIqn(FAclient, iqn)
+				log.FailOnError(err, "Failed to get host from FA")
+				log.InfoD("Host already exists on FA: %v", host)
+			}
+
+			//create a volume on the FA
+			volSize := 1048576 * rand.Intn(10)
+			volume, err := pureutils.CreateVolumeOnFABackend(FAclient, volumeName, volSize)
+			log.FailOnError(err, "Failed to create volume on FA")
+			log.InfoD("Volume created on FA: %v", volume.Name)
+
+			//Attach the volume to the host
+			connectedVolume, err := pureutils.ConnectVolumeToHost(FAclient, host.Name, volumeName)
+			log.FailOnError(err, "Failed to connect volume to host")
+			log.InfoD("Volume connected to host: %v", connectedVolume.Name)
+
+		})
+		stepLog = "Run iscsiadm commands to login to the controllers"
+		Step(stepLog, func() {
+
+			//Run iscsiadm commands to login to the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LoginIntoController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
+			}
+
+			// run multipath after login
+			cmd := "multipath -ll"
+			MultipathBeforeRestart, err = runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command before restart: %v", MultipathBeforeRestart)
+
+		})
+
+		stepLog = "Restart portworx and check multipath consistency"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.StopDriver([]node.Node{n}, false, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to stop portworx on node [%s]", n.Name))
+			err = Inst().V.WaitDriverDownOnNode(n)
+			log.FailOnError(err, fmt.Sprintf("Driver is up on node [%s]", n.Name))
+			err = Inst().V.StartDriver(n)
+			log.FailOnError(err, fmt.Sprintf("Failed to start portworx on node [%s]", n.Name))
+			err = Inst().V.WaitDriverUpOnNode(n, addDriveUpTimeOut)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", n.Name))
+			dash.VerifyFatal(err == nil, true,
+				fmt.Sprintf("PX is up after restarting on node [%s]", n.Name))
+
+			time.Sleep(10 * time.Second)
+			//run multipath after restart
+			cmd := "multipath -ll"
+			multipathAfterRestart, err := runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command after restart: %v", multipathAfterRestart)
+
+			//check if the multipath entries are same before and after restart
+			dash.VerifyFatal(MultipathBeforeRestart == multipathAfterRestart, true, "Multipath entries are same before and after restart")
+
+		})
+
+		stepLog = "Delete the volume and host from the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//log out of all the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LogoutFromController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
+			}
+
+			//disconnect volume from host
+			_, err = pureutils.DisConnectVolumeFromHost(FAclient, hostName, volumeName)
+			log.FailOnError(err, "Failed to disconnect volume from host")
+			log.InfoD("Volume disconnected from host: %v", volumeName)
+
+			//Delete the volume
+			_, err = pureutils.DeleteVolumeOnFABackend(FAclient, volumeName)
+			log.FailOnError(err, "Failed to delete volume on FA")
+			log.InfoD("Volume deleted on FA: %v", volumeName)
+
+			//Delete the host from FAbackend
+			if !IQNExists {
+				_, err = pureutils.DeleteHostOnFA(FAclient, hostName)
+				log.FailOnError(err, "Failed to delete host on FA")
+				log.InfoD("Host deleted on FA: %v", hostName)
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+func LoginIntoController(n node.Node, networkInterface flasharray.NetworkInterface, FAclient flasharray.Client) error {
+	ipAddress := networkInterface.Address
+	iqn, err := GetIQNOfFA(n, FAclient)
+	cmd := fmt.Sprintf("iscsiadm -m node -P %s -p %s -l", iqn, ipAddress)
+	iscsiAdmOutput, err := runCmd(cmd, n)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Output of iscsiadm login command: %v", iscsiAdmOutput)
+
+	return nil
+}
+
+func LogoutFromController(n node.Node, networkInterface flasharray.NetworkInterface, FAclient flasharray.Client) error {
+	ipAddress := networkInterface.Address
+	iqn, err := GetIQNOfFA(n, FAclient)
+	cmd := fmt.Sprintf("iscsiadm -m node -P %s -p %s --logout", iqn, ipAddress)
+	iscsiAdmOutput, err := runCmd(cmd, n)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Output of iscsiadm login command: %v", iscsiAdmOutput)
+
+	return nil
+}
+
+var _ = Describe("{VolAttachSameFAPxRestart}", func() {
+	/*
+				https://purestorage.atlassian.net/browse/PTX-21440
+			    1. Create a host in the FA whose secret is in pure secret
+		        2. Create a volume and attach it to the host created in step 1
+		        3. using iscsiadm commands run commands to login to the controllers
+		        4. check multipath -ll output
+		        5. Restart portworx
+		        6. The multipath entry for the volume attached from a different FA shouldn't vanish and I/O should be consistent
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolAttachSameFAPxRestart", "Attach a vol from a FA, restart portworx and check multipath consistency", nil, 0)
+	})
+
+	var (
+		hostName               = fmt.Sprintf("torpedo-host-%v", time.Now().UnixNano())
+		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
+		FAclient               *flasharray.Client
+		MultipathBeforeRestart string
+		faMgmtEndPoint         string
+		faAPIToken             string
+		host                   *flasharray.Host
+		volSize                int
+		wg                     sync.WaitGroup
+	)
+
+	itLog := "Attach a volume from a different FA, restart portworx and check multipath consistency and I/O consistency"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		// select a random node to run the test
+		n := node.GetStorageDriverNodes()[0]
+
+		stepLog := "get the secrete of FA in pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get the flash array details
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
+			flashArrays := pxPureSecret.Arrays
+
+			if len(flashArrays) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+			}
+
+			faMgmtEndPoint = flashArrays[0].MgmtEndPoint
+			faAPIToken = flashArrays[0].APIToken
+		})
+
+		stepLog = "Create a volume, create a host, attach the volume to the host, update iqn of the host and attach the volume to the host"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			iqn, err := GetIQNOfNode(n)
+			log.FailOnError(err, "Failed to get iqn of the node %v", n.Name)
+			log.InfoD("Iqn of the node: %v", iqn)
+
+			//create a connections to the FA whose credentials not present in the pure secret
+			FAclient, err = pureutils.PureCreateClientAndConnect(faMgmtEndPoint, faAPIToken)
+			log.FailOnError(err, "Failed to create client and connect to FA")
+
+			// Check if the IQN of the node is present in the FA if present take the existing host else create one
+			IQNExists, err := pureutils.IsIQNExistsOnFA(FAclient, iqn)
+			log.FailOnError(err, "Failed to check if iqn exists on FA")
+
+			if !IQNExists {
+				//create a host in the FA
+				host, err = pureutils.CreateNewHostOnFA(FAclient, hostName)
+				log.FailOnError(err, "Failed to create host on FA")
+				log.InfoD("Host created on FA: %v", host.Name)
+
+				//Update iqn of the specific host
+				_, err = pureutils.UpdateIQNOnSpecificHosts(FAclient, hostName, iqn)
+				log.FailOnError(err, "Failed to update iqn on host %v", hostName)
+				log.InfoD("Updated iqn on host %v", hostName)
+
+			} else {
+				// If iqn already exist in FA find the host which is using it
+				host, err = pureutils.GetHostFromIqn(FAclient, iqn)
+				log.FailOnError(err, "Failed to get host from FA")
+				log.InfoD("Host already exists on FA: %v", host)
+			}
+
+			//create a volume on the FA
+			volSize = 104857600000 * (rand.Intn(10) + 1)
+			volume, err := pureutils.CreateVolumeOnFABackend(FAclient, volumeName, volSize)
+			log.FailOnError(err, "Failed to create volume on FA")
+			log.InfoD("Volume created on FA: %v", volume.Name)
+
+			//Attach the volume to the host
+			connectedVolume, err := pureutils.ConnectVolumeToHost(FAclient, host.Name, volumeName)
+			log.FailOnError(err, "Failed to connect volume to host")
+			log.InfoD("Volume connected to host: %v", connectedVolume.Name)
+
+		})
+		stepLog = "Run iscsiadm commands to login to the controllers"
+		Step(stepLog, func() {
+
+			//run multipath before refresh
+			cmd := "multipath -ll"
+			output, err := runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command before PX restart : %v", output)
+
+			// Refresh the iscsi session
+			err = RefreshIscsiSession(n)
+			log.FailOnError(err, "Failed to refresh iscsi session")
+			log.InfoD("Successfully refreshed iscsi session")
+
+			//sleep for 10s for the entries to update
+			time.Sleep(10 * time.Second)
+
+			// run multipath after login
+			cmd = "multipath -ll"
+			MultipathBeforeRestart, err = runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command before PX restart : %v", MultipathBeforeRestart)
+
+			// multipath before and after shoouldn't be same
+			dash.VerifyFatal(MultipathBeforeRestart != output, true, "Multipath entries are different before and after refresh")
+
+		})
+		stepLog = "create ext4 file system on top of the volume,mount it to /home/test Start running fio on the volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Get the device path of the volume
+			cmd := "multipath -ll | grep dm-  | sort -n | tail -n 1"
+			dm, err := runCmd(cmd, n)
+			log.FailOnError(err, "Failed to get the device path of the volume")
+			log.InfoD("Device path of the volume: %v", dm)
+			dmPath := strings.Fields(dm)
+			if len(dmPath) > 2 {
+				dm = dmPath[1]
+			} else {
+				log.FailOnError(fmt.Errorf("Failed to get the device path of the volume"), "Failed to get the device path of the volume")
+			}
+			//create ext4 file system on top of the volume
+			cmd = fmt.Sprintf("mkfs.ext4 /dev/%s", dm)
+			_, err = runCmd(cmd, n)
+			log.FailOnError(err, "Failed to create ext4 file system on the volume")
+			log.InfoD("Successfully created ext4 file system on the volume")
+
+			//Mount the volume to /home/test
+			cmd = fmt.Sprintf("mkdir -p /home/test && mount /dev/%s /home/test", dm)
+			_, err = runCmd(cmd, n)
+			log.FailOnError(err, "Failed to mount the volume to /home/test")
+			log.InfoD("Successfully mounted the volume to /home/test")
+
+			//pick a random name for a file to write data into
+			fileName := fmt.Sprintf("/home/test/fio-%v", time.Now().UnixNano())
+
+			//Create a file with the random name
+			cmd = fmt.Sprintf("touch %s", fileName)
+			_, err = runCmd(cmd, n)
+			log.FailOnError(err, "Failed to create a file with the random name")
+			log.InfoD("Successfully created a file with the random name")
+
+			//run fio on the volume
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				fioCmd := fmt.Sprintf("fio --name=randwrite --ioengine=libaio --iodepth=32 --rw=randwrite --bs=4k --direct=1 --size=%vG --numjobs=1 --runtime=30 --time_based --group_reporting --filename=%s", volSize/2, fileName)
+				_, err = runCmd(fioCmd, n)
+				log.FailOnError(err, "Failed to run fio on the volume")
+				log.InfoD("Successfully ran fio on the volume")
+			}()
+
+		})
+
+		stepLog = "Restart portworx and check multipath consistency"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.StopDriver([]node.Node{n}, false, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to stop portworx on node [%s]", n.Name))
+			err = Inst().V.WaitDriverDownOnNode(n)
+			log.FailOnError(err, fmt.Sprintf("Driver is up on node [%s]", n.Name))
+			err = Inst().V.StartDriver(n)
+			log.FailOnError(err, fmt.Sprintf("Failed to start portworx on node [%s]", n.Name))
+			err = Inst().V.WaitDriverUpOnNode(n, addDriveUpTimeOut)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", n.Name))
+			dash.VerifyFatal(err == nil, true,
+				fmt.Sprintf("PX is up after restarting on node [%s]", n.Name))
+
+			//run multipath after restart
+			cmd := "multipath -ll"
+			multipathAfterRestart, err := runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+
+			//check if the multipath entries are same before and after restart
+			dash.VerifyFatal(MultipathBeforeRestart == multipathAfterRestart, true, "Multipath entries are same before and after restart")
+
+		})
+		wg.Wait()
+
+		stepLog = "Delete the volume and host from the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//disconnect volume from host
+			_, err = pureutils.DisConnectVolumeFromHost(FAclient, host.Name, volumeName)
+			log.FailOnError(err, "Failed to disconnect volume from host")
+			log.InfoD("Volume disconnected from host: %v", volumeName)
+
+			//Delete the volume
+			_, err = pureutils.DeleteVolumeOnFABackend(FAclient, volumeName)
+			log.FailOnError(err, "Failed to delete volume on FA")
+			log.InfoD("Volume deleted on FA: %v", volumeName)
+
+			//Refresh the iscsi session
+			err = RefreshIscsiSession(n)
+			log.FailOnError(err, "Failed to refresh iscsi session")
+			log.InfoD("Successfully refreshed iscsi session")
+
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
