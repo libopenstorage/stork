@@ -59,7 +59,6 @@ var _ = Describe("{DecommissionNode}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
-
 		ValidateApplications(contexts)
 
 		var storageDriverNodes []node.Node

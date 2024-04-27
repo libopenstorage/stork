@@ -898,7 +898,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("validate storage components", func() {
@@ -909,7 +909,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("update node drive endpoints", func() {

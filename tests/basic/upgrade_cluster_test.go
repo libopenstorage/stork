@@ -108,7 +108,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					time.Sleep(30 * time.Minute)
 				}
 
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("update node drive endpoints", func() {
@@ -133,7 +133,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					PrintPxctlStatus()
 				}
 				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 			})

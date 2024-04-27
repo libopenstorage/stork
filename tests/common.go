@@ -10,7 +10,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"github.com/devans10/pugo/flasharray"
+
+	"github.com/aws/aws-sdk-go/aws/awserr"
+
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -11332,7 +11336,7 @@ func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 }
 
 // PrintK8sClusterInfo prints info about K8s cluster nodes
-func PrintK8sCluterInfo() {
+func PrintK8sClusterInfo() {
 	log.Info("Get cluster info..")
 	t := func() (interface{}, bool, error) {
 		nodeList, err := core.Instance().GetNodes()
@@ -11340,16 +11344,16 @@ func PrintK8sCluterInfo() {
 			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
 		}
 		if len(nodeList.Items) > 0 {
-			for _, node := range nodeList.Items {
+			for _, n := range nodeList.Items {
 				nodeType := "Worker"
-				if core.Instance().IsNodeMaster(node) {
+				if core.Instance().IsNodeMaster(n) {
 					nodeType = "Master"
 				}
 				log.Infof(
 					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
-					node.Name, nodeType,
-					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
-					node.Status.NodeInfo.ContainerRuntimeVersion)
+					n.Name, nodeType,
+					n.Status.NodeInfo.KernelVersion, n.Status.NodeInfo.KubeletVersion, n.Status.NodeInfo.OSImage,
+					n.Status.NodeInfo.ContainerRuntimeVersion)
 			}
 			return "", false, nil
 		}
@@ -11358,6 +11362,294 @@ func PrintK8sCluterInfo() {
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
+}
+
+func CreatePXCloudCredential() error {
+	/*
+		Creating a cloud credential for cloudsnap wit the given params
+		Deleting the existing cred if exists so that we can use same creds to delete the s3 bucket once test is completed.
+	*/
+	id, secret, endpoint, s3Region, disableSSl, err := getCreateCredParams()
+
+	if err != nil {
+		return err
+	}
+
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+	if err != nil {
+		err = fmt.Errorf("error getting uuid for cloudsnap credential, cause: %v", err)
+		return err
+	}
+
+	if output != "" {
+		log.Infof("Cloud Cred exists [%s]", output)
+		log.Warnf("Deleting existing cred and creating new cred with given params")
+		credUUID := strings.Split(output, ":")[1]
+		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
+		credDeleteCmd := fmt.Sprintf("cred delete %s", credUUID)
+		output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, credDeleteCmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
+
+		if err != nil {
+			err = fmt.Errorf("error deleting existing cred [%s], cause: %v", credUUID, err)
+			return err
+		}
+
+		log.Infof("Deleted exising cred [%s]", output)
+	}
+
+	cloudCredName := "px-cloud-cred"
+
+	credCreateCmd := fmt.Sprintf("cred create %s --provider s3 --s3-access-key %s --s3-secret-key %s --s3-endpoint %s --s3-region %s", cloudCredName, id, secret, endpoint, s3Region)
+
+	if disableSSl {
+		credCreateCmd = fmt.Sprintf("%s --s3-disable-ssl", credCreateCmd)
+	}
+
+	// Execute the command and check get rebalance status
+	output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(node.GetStorageNodes()[0], credCreateCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+
+	if err != nil {
+		err = fmt.Errorf("error creating cloud cred, cause: %v", err)
+		return err
+	}
+
+	log.Infof(output)
+
+	return nil
+
+}
+
+func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
+
+	var bucketName string
+	//Stopping cloudnsnaps before bucket deletion
+	for _, ctx := range contexts {
+		if strings.Contains(ctx.App.Key, "cloudsnap") {
+
+			if bucketName == "" {
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				if err != nil {
+					err = fmt.Errorf("error getting volume params for %s, cause: %v", ctx.App.Key, err)
+					return err
+				}
+				for vol, params := range vols {
+					csBksps, err := Inst().V.GetCloudsnaps(vol, params)
+					if err != nil {
+						err = fmt.Errorf("error getting cloud snaps for %s, cause: %v", vol, err)
+						return err
+					}
+					for _, csBksp := range csBksps {
+						bkid := csBksp.GetId()
+						bucketName = strings.Split(bkid, "/")[0]
+						break
+					}
+				}
+				log.Infof("Got Bucket Name [%s]", bucketName)
+			}
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return err
+			}
+			for _, vol := range vols {
+				appVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return err
+				}
+				err = suspendCloudsnapBackup(appVol.Id)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if bucketName != "" {
+		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
+		if err != nil {
+			return err
+		}
+		var sess *session.Session
+		if strings.Contains(endpoint, "minio") {
+
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Endpoint:         aws.String(endpoint),
+					Region:           aws.String(s3Region),
+					Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+					S3ForcePathStyle: aws.Bool(true),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if strings.Contains(endpoint, "amazonaws") {
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Region:      aws.String(s3Region),
+					Credentials: credentials.NewStaticCredentials(id, secret, ""),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if sess == nil {
+			return fmt.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+		}
+
+		client := s3.New(sess)
+		err = deleteAndValidateBucketDeletion(client, bucketName)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
+	// Delete all objects and versions in the bucket
+	log.Debugf("Deleting bucket [%s]", bucketName)
+	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		// Iterate through the objects in the bucket and delete them
+		var objects []*s3.ObjectIdentifier
+		for _, obj := range page.Contents {
+			objects = append(objects, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+
+		_, err := client.DeleteObjects(&s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &s3.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			fmt.Printf("Failed to delete objects in bucket: %v\n", err)
+			return false
+		}
+
+		return true
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete objects in bucket: %v", err)
+	}
+
+	// Delete the bucket
+	_, err = client.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		var aerr awserr.Error
+		if errors.As(err, &aerr) {
+			if aerr.Code() == s3.ErrCodeNoSuchBucket {
+				log.Infof("Bucket: %v doesn't exist.!!", bucketName)
+				return nil
+			}
+			return fmt.Errorf("couldn't delete bucket: %v", err)
+		}
+	}
+
+	log.Infof("Successfully deleted the bucket: %v", bucketName)
+	return nil
+}
+
+func suspendCloudsnapBackup(volId string) error {
+
+	isBackupActive, err := IsCloudsnapBackupActiveOnVolume(volId)
+	if err != nil {
+		return fmt.Errorf("error checking backup status  for volume  [%s],Err: %v ", volId, err)
+	}
+	log.Infof("Backup status for vol [%s]: %v", volId, isBackupActive)
+
+	if isBackupActive {
+		scheduleOfVol, err := GetVolumeSnapShotScheduleOfVol(volId)
+		if err != nil {
+			return fmt.Errorf("error getting volumes snapshot schedule for volume [%s],Err: %v ", volId, err)
+		}
+
+		if !*scheduleOfVol.Spec.Suspend {
+			log.Infof("Snapshot schedule is not suspended. Suspending it")
+			makeSuspend := true
+			scheduleOfVol.Spec.Suspend = &makeSuspend
+			_, err := storkops.Instance().UpdateSnapshotSchedule(scheduleOfVol)
+			if err != nil {
+				return fmt.Errorf("error suspending volumes snapshot schedule for volume  [%s],Err: %v ", volId, err)
+			}
+
+		}
+	}
+	return nil
+}
+
+func getCreateCredParams() (id, secret, endpoint, s3Region string, disableSSLBool bool, err error) {
+
+	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
+	if id == "" {
+		id = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
+
+	if id == "" {
+		err = fmt.Errorf("S3_AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY_ID Environment variable is not provided")
+		return
+
+	}
+
+	secret = os.Getenv("S3_AWS_SECRET_ACCESS_KEY")
+	if secret == "" {
+		secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+	if secret == "" {
+		err = fmt.Errorf("S3_AWS_SECRET_ACCESS_KEY or AWS_SECRET_ACCESS_KEY Environment variable is not provided")
+		return
+	}
+
+	endpoint = os.Getenv("S3_ENDPOINT")
+	if endpoint == "" {
+		err = fmt.Errorf("S3_ENDPOINT Environment variable is not provided")
+		return
+	}
+
+	s3Region = os.Getenv("S3_REGION")
+	if s3Region == "" {
+		err = fmt.Errorf("S3_REGION Environment variable is not provided")
+		return
+	}
+
+	disableSSL := os.Getenv("S3_DISABLE_SSL")
+	disableSSLBool = false
+
+	if len(disableSSL) > 0 {
+		disableSSLBool, err = strconv.ParseBool(disableSSL)
+		if err != nil {
+			err = fmt.Errorf("S3_DISABLE_SSL=%s is not a valid boolean value,err: %v", disableSSL, err)
+			return
+		}
+	}
+
+	return
 }
 
 // ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
@@ -11505,7 +11797,7 @@ func IsCloudsnapBackupActiveOnVolume(volName string) (bool, error) {
 	}
 
 	for _, csBksp := range csBksps {
-		if csBksp.GetSrcVolumeName() == volName && csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive {
+		if csBksp.GetSrcVolumeName() == volName && (csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive || csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeNotStarted) {
 
 			return true, nil
 		}

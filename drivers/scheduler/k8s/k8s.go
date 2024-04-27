@@ -883,6 +883,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 }
 
 func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
+	log.Debugf("checking for app [%s] in [%v] for csi enabled apps", appName, options.CsiAppKeys)
 	for _, app := range options.CsiAppKeys {
 		if app == appName {
 			return true
@@ -901,6 +902,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				return nil, err
 			}
 			if isCsiApp(options, key) {
+				log.Debugf("app [%s] is csi enabled", key)
 				appSpec.IsCSI = true
 			}
 			apps = append(apps, appSpec)
@@ -1922,13 +1924,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if options.StorageProvisioner == "" {
-			if volume.GetStorageProvisioner() != PortworxStrict {
-				if app.IsCSI {
-					obj.Provisioner = CsiProvisioner
-				} else {
-					obj.Provisioner = volume.GetStorageProvisioner()
-				}
+		if volume.GetStorageProvisioner() != PortworxStrict {
+			if app.IsCSI {
+				obj.Provisioner = CsiProvisioner
+			} else {
+				obj.Provisioner = volume.GetStorageProvisioner()
 			}
 		}
 		log.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
@@ -2218,44 +2218,55 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		encryptionFlag = true
 	}
 
-	if obj, ok := spec.(*storageapi.StorageClass); ok {
-		//secure-apps list is provided for which volumes should be encrypted
-		if len(k.secureApps) > 0 || k.secretConfigMapName != "" {
-			if k.isSecureEnabled(app.Key, k.secureApps) || k.secretConfigMapName != "" {
-				if obj.Parameters == nil {
-					obj.Parameters = make(map[string]string)
-				}
-				if encryptionFlag {
-					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
-					obj.Parameters[encryptionName] = "true"
-				}
-				if app.IsCSI {
-					obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-				}
-				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-					if secretNameKeyFlag {
-						obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-						obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-					}
-					if secretNamespaceKeyFlag {
-						obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-						obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-						obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
-					}
-				} else {
-					if secretNameKeyFlag {
-						obj.Parameters[secretName] = configMap.Data[secretNameKey]
-					}
-					if secretNamespaceKeyFlag {
-						obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
-					}
-				}
+	setSecureParams := func(obj *storageapi.StorageClass) {
+		if encryptionFlag {
+			log.Infof("Adding encryption parameter to storage class app %s", app.Key)
+			obj.Parameters[encryptionName] = "true"
+		}
+		if app.IsCSI {
+			obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+			if secretNameKeyFlag {
+				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			}
+		} else {
+			if secretNameKeyFlag {
+				obj.Parameters[secretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
 			}
 		}
+	}
+
+	if obj, ok := spec.(*storageapi.StorageClass); ok {
+
+		if k.secretConfigMapName != "" {
+			if obj.Parameters == nil {
+				obj.Parameters = make(map[string]string)
+			}
+
+			//if secure-apps list is provided, check if the app is in the list and set the secure parameters for only that app
+			if len(k.secureApps) > 0 && k.isSecureEnabled(app.Key, k.secureApps) {
+				setSecureParams(obj)
+			}
+			//if secure-apps list is not provided, set the secure parameters for all apps if secret config map is provided
+			if len(k.secureApps) == 0 {
+				setSecureParams(obj)
+			}
+		}
+
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 
 		if obj.Annotations == nil {

@@ -589,17 +589,10 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	stepLog := "has to schedule cloud snap  and delete cloudsnaps"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		n := node.GetStorageDriverNodes()[0]
-		uuidCmd := "pxctl cred list -j | grep uuid"
-		output, err := runCmd(uuidCmd, n)
-		log.FailOnError(err, "error getting uuid for cloudsnap credential")
-		if output == "" {
-			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
-		}
 
-		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
-		credUUID = strings.ReplaceAll(credUUID, "\"", "")
-		log.Infof("Got Cred UUID: %s", credUUID)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
 		contexts = make([]*scheduler.Context, 0)
 		policyName := "intervalpolicy"
 		appScale := 5
@@ -627,6 +620,11 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
+
+			defer func() {
+				err := storkops.Instance().DeleteSchedulePolicy(policyName)
+				log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+			}()
 
 			for i := 0; i < appScale; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnap-%d", i))...)
@@ -762,15 +760,11 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 							}
 							log.FailOnError(err, fmt.Sprintf("error deleting Cloudsnap %s", bk.Id))
 						}
-
 					}
-
 				}
-
 				opts := make(map[string]bool)
 				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 				ValidateAndDestroy(contexts, opts)
-
 			})
 
 		})
@@ -778,6 +772,8 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		err = DeleteCloudSnapBucket(contexts)
+		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts)
 	})
 })

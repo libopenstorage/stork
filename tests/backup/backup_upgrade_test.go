@@ -1118,14 +1118,14 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 
 				err = Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 
 				err = SwitchBothKubeConfigANDContext("destination")
 				dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to destination cluster")
 
 				err = Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 
 				err = SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
@@ -1156,7 +1156,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 					// Printing cluster node info after the upgrade
-					PrintK8sCluterInfo()
+					PrintK8sClusterInfo()
 
 					err = SwitchBothKubeConfigANDContext("destination")
 					dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to destination cluster")
@@ -1176,7 +1176,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 					// Printing cluster node info after the upgrade
-					PrintK8sCluterInfo()
+					PrintK8sClusterInfo()
 
 					err = SwitchBothKubeConfigANDContext("source")
 					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
