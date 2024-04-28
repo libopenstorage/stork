@@ -974,6 +974,14 @@ func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string
 	}
 }
 
+func (d *dcos) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateVolumeSnapshotClasses is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeSnapshotClasses()",
+	}
+}
+
 func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{

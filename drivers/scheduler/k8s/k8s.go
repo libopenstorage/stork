@@ -8063,6 +8063,40 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 	return volumeSnapClass, nil
 }
 
+// CreateVolumeSnapshotClasses creates a volume snapshot class
+func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	var err error
+	var annotation = make(map[string]string)
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
+	if isDefault {
+		annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+	} else {
+		annotation = make(map[string]string)
+	}
+
+	v1obj := metav1.ObjectMeta{
+		Name:        snapClassName,
+		Annotations: annotation,
+	}
+	if len(deletePolicy) == 0 {
+		deletePolicy = "Delete"
+	}
+	snapClass := volsnapv1.VolumeSnapshotClass{
+		ObjectMeta:     v1obj,
+		Driver:         provisioner,
+		DeletionPolicy: volsnapv1.DeletionPolicy(deletePolicy),
+	}
+
+	log.Infof("Creating volume snapshot class: %v with provisioner %v", snapClassName, provisioner)
+	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
+			Name:  snapClassName,
+			Cause: err,
+		}
+	}
+	return volumeSnapClass, nil
+}
+
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
 func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 	var snap *volsnapv1.VolumeSnapshot

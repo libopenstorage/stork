@@ -382,6 +382,9 @@ type Driver interface {
 	// CreateCsiSnapshotClass create csi snapshot class
 	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
 
+	// CreateVolumeSnapshotClasses creates a volume snapshot class
+	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
 	"net/http"
 	"os/exec"
@@ -116,4 +118,35 @@ func GetNodeStatus(c *gin.Context) {
 		"UnhealthyNodes": unhealthyNodes,
 		"DegradedNodes":  degradedNodes,
 	})
+}
+
+// CreateVolumeSnapshotClass creates volume snapshot class
+func CreateVolumeSnapshotClass(c *gin.Context) {
+	log.Infof("Creating volume snapshot class")
+	var createVolumeSnapshotClassRequest struct {
+		VolumeSnapshotClassName      string `json:"volumeSnapshotClassName"`
+		Provisioner                  string `json:"provisioner"`
+		IsDefaultVolumeSnapshotClass bool   `json:"isDefaultVolumeSnapshotClass"`
+		DeletePolicy                 string `json:"deletePolicy"`
+	}
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error in init": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	if err := c.BindJSON(&createVolumeSnapshotClassRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error for request": err.Error()})
+		return
+	}
+	if len(createVolumeSnapshotClassRequest.VolumeSnapshotClassName) == 0 || len(createVolumeSnapshotClassRequest.Provisioner) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "volumesnapshotclass name  or provisioner cannot be empty", "vsc name": createVolumeSnapshotClassRequest.VolumeSnapshotClassName, "provisioner": createVolumeSnapshotClassRequest.Provisioner})
+		return
+	}
+	_, err := tests.Inst().S.CreateVolumeSnapshotClasses(createVolumeSnapshotClassRequest.VolumeSnapshotClassName, createVolumeSnapshotClassRequest.Provisioner, createVolumeSnapshotClassRequest.IsDefaultVolumeSnapshotClass, createVolumeSnapshotClassRequest.DeletePolicy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("VolumeSnapshotClass %v with provisioner %s and setting it as default: %v created successfully", createVolumeSnapshotClassRequest.VolumeSnapshotClassName, createVolumeSnapshotClassRequest.Provisioner, createVolumeSnapshotClassRequest.IsDefaultVolumeSnapshotClass)})
 }
