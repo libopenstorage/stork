@@ -204,6 +204,8 @@ var (
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 	IsBackupLongevityRun       = false
+	PvcListBeforeRun           []string
+	PvcListAfterRun            []string
 )
 
 type UserRoleAccess struct {
@@ -8630,5 +8632,53 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 			return err
 		}
 	}
+	return nil
+}
+
+// GetPVCListForNamespace retrieves the list of PVCs in the specified namespace.
+func GetPVCListForNamespace(namespace string) ([]string, error) {
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(namespace, make(map[string]string))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", namespace, err)
+	}
+	// Extract PVC names from the list
+	var pvcNameList []string
+	for _, pvc := range pvcList.Items {
+		pvcNameList = append(pvcNameList, pvc.Name)
+	}
+	return pvcNameList, nil
+}
+
+// ValidatePVCCleanup checks if there is a mismatch between the original PVC list and the current one.
+func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
+	pvcBeforeSet := make(map[string]bool)
+	pvcAfterSet := make(map[string]bool)
+
+	// Populate sets for PVC names before and after the run
+	for _, pvc := range pvcBefore {
+		pvcBeforeSet[pvc] = true
+	}
+
+	for _, pvc := range pvcAfter {
+		pvcAfterSet[pvc] = true
+	}
+
+	// Check for missing PVCs after the run
+	for pvc := range pvcBeforeSet {
+		if !pvcAfterSet[pvc] {
+			fmt.Printf("PVC '%s' is present before the run but not after the run\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
+	}
+
+	// Check for extra PVCs after the run
+	for pvc := range pvcAfterSet {
+		if !pvcBeforeSet[pvc] {
+			fmt.Printf("PVC '%s' is present after the run but not before the run\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
+	}
+
 	return nil
 }
