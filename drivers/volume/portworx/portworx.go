@@ -1206,7 +1206,7 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 
 	// no need to exit pool maintenance if node status is up
 	pxStatus, err := d.GetPxctlStatus(n)
-	if err == nil && pxStatus == api.Status_STATUS_OK.String(){
+	if err == nil && pxStatus == api.Status_STATUS_OK.String() {
 		log.Infof("node is up, no need to exit pool maintenance mode")
 		return nil
 	}
@@ -1503,10 +1503,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 			/* Ignore shared setting.
-		case api.SpecShared:
-			if requestedSpec.Shared != vol.Spec.Shared {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-			}
+			case api.SpecShared:
+				if requestedSpec.Shared != vol.Spec.Shared {
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
+				}
 			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
@@ -2446,8 +2446,17 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 				Cause: err.Error(),
 			}
 		}
+		isPureFile, err := d.IsPureFileVolume(vol)
+		if err != nil {
+			return nil, false, err
+		}
+		if isPureFile {
+			return nil, false, nil
+		}
+
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
+
 			ok, err := d.IsVolumeAttachedOnNode(pxVol, n)
 			if err != nil {
 				return nil, false, err
@@ -2461,7 +2470,6 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		if pxVol.Source.Parent != "" {
 			return nil, false, nil
 		}
-
 		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volumeName)
 	}
 

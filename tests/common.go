@@ -1739,7 +1739,9 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
 			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
 			isPureFile, err := Inst().V.IsPureFileVolume(vol)
-			log.FailOnError(err, "Failed to get details about PureVolume", ctx.App.Key)
+			log.FailOnError(err, "Failed to get details about PureFile")
+			log.Infof("Given Volume is [%v] and PureFile [%v]", vol.Name, isPureFile)
+
 			if !isPureFile {
 				attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
 				log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
@@ -1772,23 +1774,28 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		}
 
-		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
-		if err != nil {
-			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
-			processError(err, errChan...)
-		}
-		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
-			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
-			if ok {
-				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
-				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
-			} else {
-				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
-			}
-		} else {
-			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
-		}
+		isPureFile, err := Inst().V.IsPureFileVolume(v)
+		log.FailOnError(err, "Failed to get details about PureFile")
+		log.Infof("Given Volume is [%v] and PureFile [%v]", v.Name, isPureFile)
 
+		if !isPureFile {
+			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			if err != nil {
+				err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+				processError(err, errChan...)
+			}
+			if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+				FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+				if ok {
+					err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+					dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+				} else {
+					log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+				}
+			} else {
+				log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+			}
+		}
 	}
 }
 
@@ -12128,4 +12135,18 @@ func RefreshIscsiSession(n node.Node) error {
 		return err
 	}
 	return nil
+}
+
+// GetPVCObjFromVol Returns pvc object from Volume
+func GetPVCObjFromVol(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
+	return k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+}
+
+// Enables and Sets trashcan on the cluster
+func EnableTrashcanOnCluster(size string) error {
+	currNode := node.GetStorageDriverNodes()[0]
+	log.Infof("setting value of trashcan (volume-expiration-minutes) to [%v] ", size)
+	err := Inst().V.SetClusterOptsWithConfirmation(currNode,
+		map[string]string{"--volume-expiration-minutes": fmt.Sprintf("%v", size)})
+	return err
 }
