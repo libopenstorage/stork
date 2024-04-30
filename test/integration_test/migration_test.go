@@ -2225,41 +2225,41 @@ func transformCRResourceTest(t *testing.T) {
 	// Reset config in case of error
 	defer func() {
 		err = setSourceKubeConfig()
-		log.FailOnNoError(t, err, "Error resetting remote config")
+		log.FailOnError(t, err, "Error resetting remote config")
 	}()
 
 	err = setSourceKubeConfig()
-	log.FailOnNoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	appName := appNameMongo
 	appPath := appPathMongo
 	appData := asyncdr.GetAppData(appName)
 	podsCreated, err := asyncdr.PrepareApp(appName, appPath)
-	log.FailOnNoError(t, err, "Error creating pods")
+	log.FailOnError(t, err, "Error creating pods")
 
 	podsCreatedLen := len(podsCreated.Items)
 	log.InfoD("podsCreatedLen: %d", podsCreatedLen)
 	sourceClusterConfigPath, err := getClusterConfigPath(srcConfig)
-	log.FailOnNoError(t, err, "Error getting source config path")
+	log.FailOnError(t, err, "Error getting source config path")
 
 	destClusterConfigPath, err := getClusterConfigPath(destConfig)
-	log.FailOnNoError(t, err, "Error getting destination config path")
+	log.FailOnError(t, err, "Error getting destination config path")
 
 	// validate CRD on source
 	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
-	log.FailOnNoError(t, err, "Error validating source crds")
+	log.FailOnError(t, err, "Error validating source crds")
 
 	err = setSourceKubeConfig()
-	log.FailOnNoError(t, err, "Error setting source kubeconfig")
+	log.FailOnError(t, err, "Error setting source kubeconfig")
 
 	err = setMockTime(nil)
-	log.FailOnNoError(t, err, "Error resetting mock time")
+	log.FailOnError(t, err, "Error resetting mock time")
 
 	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret)
-	log.FailOnNoError(t, err, "Error creating cluster pair")
+	log.FailOnError(t, err, "Error creating cluster pair")
 
 	err = setSourceKubeConfig()
-	log.FailOnNoError(t, err, "Error setting source kubeconfig")
+	log.FailOnError(t, err, "Error setting source kubeconfig")
 
 	// create resourcetransformation object
 	ctxs, err := schedulerDriver.Schedule(instanceID,
@@ -2267,11 +2267,11 @@ func transformCRResourceTest(t *testing.T) {
 			AppKeys:   []string{appKey},
 			Namespace: appData.Ns,
 		})
-	log.FailOnNoError(t, err, "Error scheduling task")
+	log.FailOnError(t, err, "Error scheduling task")
 	Dash.VerifyFatal(t, len(ctxs), 1, "Only one task should have started")
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	log.FailOnNoError(t, err, "Error waiting for app to get to running state")
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
 
 	// wait for 2 minutes in a loop for the status to become completed
 	transformations := []string{"mongodb-cr-transform"}
@@ -2281,7 +2281,7 @@ func transformCRResourceTest(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		transformation, err = storkops.Instance().GetResourceTransformation(transformations[0], appData.Ns)
 		if err != nil {
-			log.FailOnNoError(t, err, fmt.Sprintf("Error getting resource transformation %s in namespace %s", transformations[0], appData.Ns))
+			log.FailOnError(t, err, fmt.Sprintf("Error getting resource transformation %s in namespace %s", transformations[0], appData.Ns))
 		}
 		if transformation.Status.Status == storkv1.ResourceTransformationStatusReady {
 			isResourceTransformationReady = true
@@ -2291,30 +2291,30 @@ func transformCRResourceTest(t *testing.T) {
 	}
 
 	if !isResourceTransformationReady {
-		log.FailOnNoError(t, err, "Resource transformation is not ready after 2 minutes, hence failing the test")
+		log.FailOnError(t, err, "Resource transformation is not ready after 2 minutes, hence failing the test")
 	}
 
 	log.InfoD("Starting migration %s/%s with startApplication true", appData.Ns, migNamePref+appName)
 	startApplications := true
 	mig, err := asyncdr.CreateMigration(migNamePref+appName, appData.Ns, clusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplications, transformations)
 	err = asyncdr.WaitForMigration([]*storkv1.Migration{mig})
-	log.FailOnNoError(t, err, "Error waiting for migration")
+	log.FailOnError(t, err, "Error waiting for migration")
 	log.InfoD("Migration %s/%s completed successfully ", appData.Ns, migNamePref+appName)
 
 	err = setDestinationKubeConfig()
-	log.FailOnNoError(t, err, "Error setting dest kubeconfig")
+	log.FailOnError(t, err, "Error setting dest kubeconfig")
 
 	// validate CRD on destination
 	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, destClusterConfigPath)
-	log.FailOnNoError(t, err, "Error validating destination crds")
+	log.FailOnError(t, err, "Error validating destination crds")
 
 	validated, err := validateCR(appName, appData.Ns, destClusterConfigPath)
-	log.FailOnNoError(t, err, fmt.Sprintf("Error validating CR for app %s in namespace %s", appName, appData.Ns))
+	log.FailOnError(t, err, fmt.Sprintf("Error validating CR for app %s in namespace %s", appName, appData.Ns))
 	Dash.VerifyFatal(t, validated, true, fmt.Sprintf("CR for app %s in namespace %s should have been present as startApplications is true", appName, appData.Ns))
 
 	// verify that the transformations on CR have been applied
 	err = validateCRWithTransformationValue(appName, appData.Ns, transformation, destClusterConfigPath)
-	log.FailOnNoError(t, err, fmt.Sprintf("Error validating CR for app %s in namespace %s", appName, appData.Ns))
+	log.FailOnError(t, err, fmt.Sprintf("Error validating CR for app %s in namespace %s", appName, appData.Ns))
 
 	// If we are here then the test has passed
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
@@ -2323,10 +2323,10 @@ func transformCRResourceTest(t *testing.T) {
 		log.Error("Error deleting namespace %s in destination: %v\n", appData.Ns, err)
 	}
 	err = setSourceKubeConfig()
-	log.FailOnNoError(t, err, "Error setting source kubeconfig")
+	log.FailOnError(t, err, "Error setting source kubeconfig")
 
 	err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
-	log.FailOnNoError(t, err, "Error deleting migration")
+	log.FailOnError(t, err, "Error deleting migration")
 
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	err = core.Instance().DeleteNamespace(appData.Ns)
