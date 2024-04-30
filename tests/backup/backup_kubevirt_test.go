@@ -3438,9 +3438,17 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verfiying VM [%s] is up and running after rebooting the node [%s]", vm.Name, nodeName))
 					log.Infof("Validating all px-backup pods are ready after reboot")
 					err = ValidateAllPodsInPxBackupNamespace()
-					dash.VerifyFatal(err, nil, "px-backup pods verification successful")
-					//Adding a sleep of 2 minute, Sometimes, it takes time for the pod to become ready.
-					time.Sleep(120 * time.Second)
+					dash.VerifyFatal(err, nil, "verifing px-backups pods are in running state after reboot")
+					t := func() (interface{}, bool, error) {
+						PxBackupVersion, err := GetPxBackupVersionString()
+						if err != nil {
+							return nil, false, fmt.Errorf("failed to get px-backup version string , error [%s]", err.Error())
+						}
+						log.Infof(fmt.Sprintf("fetched px-backup version %s", PxBackupVersion))
+						return nil, true, nil
+					}
+					_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, "verifing px-backup version after reboot")
 					log.Infof("Taking backup of VMs after node reboot")
 					wg.Add(1)
 					backupName := fmt.Sprintf("%s-%s-%v", "post-reboot-backup", scheduledNamespace, time.Now().Unix())
