@@ -618,9 +618,9 @@ func populateIntervals() {
 	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
 	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
+	triggerInterval[ScaleFADAVolumeAttach] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Minute
-
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
 	triggerInterval[BackupScaleMongo][8] = 3 * baseInterval
@@ -1617,6 +1617,17 @@ func populateIntervals() {
 	triggerInterval[OCPStorageNodeRecycle][2] = 24 * baseInterval
 	triggerInterval[OCPStorageNodeRecycle][1] = 30 * baseInterval
 
+	triggerInterval[ScaleFADAVolumeAttach][10] = 1 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][9] = 3 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][8] = 6 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][7] = 9 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][6] = 12 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][5] = 15 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][4] = 18 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][3] = 21 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][2] = 24 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][1] = 30 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1705,6 +1716,7 @@ func populateIntervals() {
 	triggerInterval[ReallocateSharedMount][0] = 0
 	triggerInterval[SetDiscardMounts][0] = 0
 	triggerInterval[ResetDiscardMounts][0] = 0
+	triggerInterval[ScaleFADAVolumeAttach][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

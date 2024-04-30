@@ -2,13 +2,14 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"math"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -106,6 +107,7 @@ var _ = Describe("{Longevity}", func() {
 		VolumeDriverDownVCluster:          TriggerVolumeDriverDownVCluster,
 		SetDiscardMounts:                  TriggerSetDiscardMounts,
 		ResetDiscardMounts:                TriggerResetDiscardMounts,
+		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
