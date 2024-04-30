@@ -2065,7 +2065,7 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 func isNodeHealthy(n node.Node, eventType string) error {
 	status, err := Inst().V.GetNodeStatus(n)
 	if err != nil {
-		log.Errorf("Unable to get Node [%s] status, skipping [%s] for the node", n.Name, eventType)
+		log.Errorf("Unable to get Node [%s] status, skipping [%s] for the node [%+v]. Error: [%v]", n.Name, eventType, n, err)
 		return err
 	}
 
@@ -2577,7 +2577,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
-		selectedNodes := make([]node.Node, len(nodesToReboot))
+		selectedNodes := make([]node.Node, 0)
 		for _, n := range nodesToReboot {
 			err := isNodeHealthy(n, event.Event.Type)
 			if err != nil {
