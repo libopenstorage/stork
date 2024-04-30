@@ -10,6 +10,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
@@ -18,12 +19,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var k8sCore = core.Instance()
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{SetupTeardown}", func() {
@@ -1155,5 +1159,99 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Add a test to detach all the disks from a node and then reattach them to a different node
+var _ = Describe("{NodeDiskDetachAttach}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeDiskDetachAttach", "Validate disk detach and attach", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	testName := "nodediskdetachattach"
+	stepLog := "has to detach all disks from a node and reattach them to a different node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
+		}
+
+		randomNum := rand.New(rand.NewSource(time.Now().Unix()))
+
+		ValidateApplications(contexts)
+		// Fetch the node where PX is not started
+		nonPXNodes := node.GetPXDisabledNodes()
+		// Remove disks from all nodes in nonPXNodes
+		for _, n := range nonPXNodes {
+			// Fetch the disks attached to the node
+			err := Inst().N.RemoveNonRootDisks(n)
+			log.FailOnError(err, fmt.Sprintf("Failed to remove disks on node %s", n.Name))
+		}
+		randNonPxNode := nonPXNodes[randomNum.Intn(len(nonPXNodes))]
+
+		// Fetch a random node from the StorageNodes
+		storageNodes := node.GetStorageNodes()
+		randomStorageNode := storageNodes[randomNum.Intn(len(storageNodes))]
+
+		// Fetch random storage node and detach the disks attached to that node
+		var oldNodeIDtoMatch string
+		var newNodeIDtoMatch string
+		Step(fmt.Sprintf("detach disks attached from a random storage node %s and attach to non px node %s", randomStorageNode.Name, randNonPxNode.Name), func() {
+			log.Infof("Detaching disks from node %s and attaching to node %s", randomStorageNode.Name, randNonPxNode.Name)
+			// ToDo - Ensure the above selected node has volumes/apps running on it
+			// Store the Node ID of randomStorageNode for future use
+			oldNodeIDtoMatch = randomStorageNode.Id
+			// Stop PX on the node
+			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXServiceLabelKey, "stop")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=stop on node %s", schedops.PXServiceLabelKey, randomStorageNode.Name))
+
+			err = Inst().N.MoveDisks(randomStorageNode, randNonPxNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to move disks from node %s to node %s", randomStorageNode.Name, randNonPxNode.Name))
+
+			// Add PXEnabled false label to srcVM
+			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXEnabledLabelKey, "false")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=stop on node %s", schedops.PXServiceLabelKey, randomStorageNode.Name))
+
+			// Start PX on the node
+			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXEnabledLabelKey, "true")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=true on node %s", schedops.PXEnabledLabelKey, randNonPxNode.Name))
+			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXServiceLabelKey, "start")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=start on node %s", schedops.PXServiceLabelKey, randNonPxNode.Name))
+			err = Inst().V.WaitForPxPodsToBeUp(randNonPxNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to wait for PX pods to be up on node %s", randNonPxNode.Name))
+			// Refresh the driver endpoints
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			// Wait for the driver to be up on the node
+			randNonPxNode, err = node.GetNodeByName(randNonPxNode.Name)
+			log.FailOnError(err, fmt.Sprintf("Failed to get node %s", randNonPxNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(randNonPxNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, "Validate volume is driver up")
+			// Verify the node ID is same as earlier stored Node ID
+			newNodeIDtoMatch = randNonPxNode.Id
+
+			dash.VerifyFatal(oldNodeIDtoMatch, newNodeIDtoMatch, fmt.Sprintf("Node ID mismatch for node %s after moving the disks", randNonPxNode.Name))
+			log.Infof("Node ID matches for node %s [%s == %s]", randNonPxNode.Name, oldNodeIDtoMatch, newNodeIDtoMatch)
+		})
+
+		// ToDo - Verify the integrity of apps, cluster and volumes
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

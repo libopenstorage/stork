@@ -480,3 +480,116 @@ func init() {
 func (v *vsphere) GetSupportedDriveTypes() ([]string, error) {
 	return []string{"thin", "zeroedthick", "eagerzeroedthick", "lazyzeroedthick"}, nil
 }
+
+// MoveDisks detaches all disks from the source VM and attaches it to the target
+func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
+	// Reestablish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
+
+	sourceVM, ok := vmMap[sourceNode.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", sourceNode.Name)
+	}
+
+	targetVM, ok := vmMap[targetNode.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", targetNode.Name)
+	}
+
+	devices, err := sourceVM.Device(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	// Detach disks from source VM and attach to destination VM
+	var disks []*types.VirtualDisk
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			// skip the first/root disk
+			if *disk.UnitNumber == 0 {
+				continue
+			}
+			disks = append(disks, disk)
+
+			config := &types.VirtualMachineConfigSpec{
+				DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+					&types.VirtualDeviceConfigSpec{
+						Operation: types.VirtualDeviceConfigSpecOperationRemove,
+						Device:    disk,
+					},
+				},
+			}
+			log.Debugf("Detaching disk %s from VM %s", disk.DeviceInfo.GetDescription().Label, sourceVM.Name())
+			event, err := sourceVM.Reconfigure(v.ctx, *config)
+			if err != nil {
+				return err
+			}
+
+			err = event.Wait(v.ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, disk := range disks {
+		config := &types.VirtualMachineConfigSpec{
+			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+				&types.VirtualDeviceConfigSpec{
+					Operation: types.VirtualDeviceConfigSpecOperationAdd,
+					Device:    disk,
+				},
+			},
+		}
+		log.Debugf("Attaching disk %s to VM %s", disk.DeviceInfo.GetDescription().Label, targetVM.Name())
+		event, err := targetVM.Reconfigure(v.ctx, *config)
+		if err != nil {
+			return err
+		}
+
+		err = event.Wait(v.ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// RemoveNonRootDisks removes all disks except the root disk from the VM
+func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
+	// Reestablish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
+
+	vm, ok := vmMap[n.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
+	}
+
+	devices, err := vm.Device(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			// skip the first/root disk
+			if *disk.UnitNumber == 0 {
+				continue
+			}
+			log.Debugf("Deleting disk %s from VM %s", disk.DeviceInfo.GetDescription().Label, vm.Name())
+			err = vm.RemoveDevice(v.ctx, false, disk)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
