@@ -12150,3 +12150,23 @@ func EnableTrashcanOnCluster(size string) error {
 		map[string]string{"--volume-expiration-minutes": fmt.Sprintf("%v", size)})
 	return err
 }
+
+// WaitForVolumeClean Returns True if Volume in clean state
+func WaitForVolumeClean(vol *volume.Volume) error {
+	t := func() (interface{}, bool, error) {
+		volDetails, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting volume by using id %s", vol.ID)
+		}
+
+		for _, v := range volDetails.RuntimeState {
+			log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
+			if v.GetRuntimeState()["RuntimeState"] == "clean" {
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("volume resync hasn't started")
+	}
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 60*time.Second)
+	return err
+}

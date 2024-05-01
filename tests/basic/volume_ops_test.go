@@ -1536,7 +1536,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 
 		waitForVolumeFull := func(volName *volume.Volume) error {
 			waitTillVolume := func() (interface{}, bool, error) {
-				volumeFull, err := IsVolumeFull(*randomVol)
+				volumeFull, err := IsVolumeFull(*volName)
 				if err != nil {
 					return nil, true, err
 				}
