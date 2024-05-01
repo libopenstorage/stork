@@ -134,6 +134,8 @@ type AzureConfig struct {
 	// Azure-Environment type for azure blob storage
 	// supported option: "azure-public", "azure-china"
 	Environment AzureEnvironment `json:"environment"`
+	// Resource group name
+	ResourceGroupName string `json:"resourceGroupName"`
 }
 
 // GoogleConfig specifies the config required to connect to Google Cloud Storage
@@ -286,6 +288,9 @@ func (bl *BackupLocation) getMergedAzureConfig(client kubernetes.Interface) erro
 		}
 		if val, ok := secretConfig.Data["environment"]; ok && val != nil {
 			bl.Location.AzureConfig.Environment = AzureEnvironment(strings.TrimSuffix(string(val), "\n"))
+		}
+		if val, ok := secretConfig.Data["resourceGroupName"]; ok && val != nil {
+			bl.Location.AzureConfig.ResourceGroupName = strings.TrimSuffix(string(val), "\n")
 		}
 	}
 	return nil
