@@ -3,7 +3,6 @@ package anthos
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/errors"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/errors"
 
 	"github.com/hashicorp/go-version"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -117,6 +118,7 @@ const (
 	logCollectFrequencyDuration  = 15 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
+	skipReconcilePreflightFlag   = "--skip-reconcile-before-preflight"
 )
 
 var (
@@ -484,8 +486,8 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
-	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s",
-		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath)
+	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s %s",
+		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath, skipReconcilePreflightFlag)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading user cluster is failing: [%s]. Err: (%v)", out, err)
 	}
