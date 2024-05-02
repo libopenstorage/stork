@@ -49,11 +49,9 @@ const (
 	skipResourceAnnotation  = "stork.libopenstorage.org/skip-resource"
 
 	// defaultSnapshotTimeout represents the duration to wait before timing out on snapshot completion
-	defaultSnapshotTimeout = time.Minute * 5
+	defaultSnapshotTimeout = time.Minute * 30
 	// SnapshotTimeoutKey represents the duration to wait before timing out on snapshot completion
 	SnapshotTimeoutKey = "SNAPSHOT_TIMEOUT"
-	// restoreTimeout is the duration to wait before timing out the restore
-	restoreTimeout = time.Minute * 5
 	// snapDeleteAnnotation needs to be set if volume snapshot is scheduled for deletion
 	snapDeleteAnnotation = "snapshotScheduledForDeletion"
 	// snapRestoreAnnotation needs to be set if volume snapshot is scheduled for restore
@@ -741,7 +739,12 @@ func (c *csiDriver) RestoreStatus(pvcName, namespace string) (RestoreInfo, error
 			}
 		}
 	}
-
+	// Lets use SNAPSHOT_TIMEOUT for restoreTimeout as well.
+	restoreTimeout, err := getSnapshotTimeout()
+	if err == nil {
+		logrus.Warnf("failed to obtain timeout value for snapshot %s: %v, falling back on default snapshot timeout value %s", vsName, err, defaultSnapshotTimeout.String())
+		restoreTimeout = defaultSnapshotTimeout
+	}
 	if time.Now().After(pvc.CreationTimestamp.Add(restoreTimeout)) {
 		restoreInfo.Status = StatusFailed
 		restoreInfo.Reason = formatReasonErrorMessage(fmt.Sprintf("PVC restore timeout out after %s", restoreTimeout.String()), vsError, vscError)
