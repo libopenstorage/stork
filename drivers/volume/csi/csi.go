@@ -953,10 +953,6 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 			if vInfo.DriverName != storkvolume.CSIDriverName {
 				continue
 			}
-			// In the case of partial success, we don't want to clean up for successful PVC VS and VSC
-			if vInfo.Status == storkapi.ApplicationBackupStatusSuccessful {
-				continue
-			}
 			snapshotName := vInfo.BackupID
 
 			// Delete VS
