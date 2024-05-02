@@ -32,40 +32,12 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 	stepLog := "has to create multiple sharedv4 volumes and mount to single pod"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		// set frequency mins depending on the chaos level
-		var frequency int
-		var timeout time.Duration
-
-		chaosLevel := Inst().ChaosLevel
-		if chaosLevel != 0 {
-			frequency = 10 * chaosLevel
-			timeout = (15 * time.Duration(chaosLevel) * time.Minute) / 10
-		} else {
-			frequency = 10
-			timeout = 1 * time.Minute
-		}
-		log.InfoD("setting number of volumes=%v and app readiness timeout=%v for chaos level %v",
-			frequency, timeout, chaosLevel)
-
-		customAppConfig := scheduler.AppConfig{
-			ClaimsCount: frequency,
-		}
-
-		provider := Inst().V.String()
-		contexts = []*scheduler.Context{}
-		// there should be only 1 app
-		Expect(len(Inst().AppList)).To(Equal(1))
-		appName := Inst().AppList[0]
-
-		Inst().CustomAppConfig[appName] = customAppConfig
-		err := Inst().S.RescanSpecs(Inst().SpecDir, provider)
-		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
 
 		stepLog = "schedule application with multiple sharedv4 volumes attached"
+		timeout := 5 * time.Minute
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			log.InfoD("Number of Volumes to be mounted: %v", frequency)
 
 			taskName := "sharedv4-multivol"
 
@@ -77,6 +49,10 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 			}
 
 			for _, ctx := range contexts {
+				pvcs, err := k8sCore.GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+				log.FailOnError(err, "Failed to get PVCs for app %s", ctx.App.Key)
+				timeout = (15 * time.Duration(len(pvcs.Items)) * time.Minute) / 10
+				log.InfoD("Number of Volumes to be mounted: %v", len(pvcs.Items))
 				ctx.ReadinessTimeout = timeout
 				ctx.SkipVolumeValidation = false
 				ValidateContext(ctx)
