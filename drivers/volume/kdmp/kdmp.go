@@ -354,11 +354,15 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 		crName := getGenericCRName(utils.PrefixBackup, string(backup.UID), vInfo.PersistentVolumeClaimUID, vInfo.Namespace)
 		dataExport, err := kdmpShedOps.Instance().GetDataExport(crName, vInfo.Namespace)
 		if err != nil {
-			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = fmt.Sprintf("%v", err)
-			volumeInfos = append(volumeInfos, vInfo)
+			if k8serror.IsNotFound(err) {
+				vInfo.Status = storkapi.ApplicationBackupStatusFailed
+				vInfo.Reason = fmt.Sprintf("%v", err)
+				volumeInfos = append(volumeInfos, vInfo)
+				logrus.Errorf("failed to get backup DataExport CR: %v", err)
+				continue
+			}
 			logrus.Errorf("failed to get backup DataExport CR: %v", err)
-			continue
+			return volumeInfos, err
 		}
 
 		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed &&
