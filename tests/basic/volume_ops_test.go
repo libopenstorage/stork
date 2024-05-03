@@ -344,6 +344,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+							log.FailOnError(err, fmt.Sprintf("Failed to get node for vol %s", v.Name))
 
 							replicaSets, err := Inst().V.GetReplicaSets(v)
 							log.FailOnError(err, "Failed to get vol %s replica sets", v.Name)

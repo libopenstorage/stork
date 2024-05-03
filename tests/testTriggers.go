@@ -10111,7 +10111,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		dashStats["new-scale"] = fmt.Sprintf("%d", expReplicas)
 		dashStats["storage-node"] = "true"
 		updateLongevityStats(AddStorageNode, stats.NodeScaleUpEventName, dashStats)
-		err = Inst().S.ScaleCluster(expReplicas)
+		err = Inst().S.SetASGClusterSize(int64(expReplicas), 10*time.Minute)
 		if err != nil {
 			UpdateOutcome(event, err)
 			isClusterScaled = false
@@ -10240,7 +10240,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 		dashStats["new-scale"] = fmt.Sprintf("%d", expReplicas)
 		dashStats["storage-node"] = "false"
 		updateLongevityStats(AddStoragelessNode, stats.NodeScaleUpEventName, dashStats)
-		err = Inst().S.ScaleCluster(expReplicas)
+		err = Inst().S.SetASGClusterSize(int64(expReplicas), 10*time.Minute)
 		if err != nil {
 			UpdateOutcome(event, err)
 			isClusterScaled = false

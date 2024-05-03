@@ -3,10 +3,12 @@ package tests
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/oke"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
@@ -340,3 +342,359 @@ func waitForIBMNodeToDelete(nodeToKill node.Node) error {
 	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
 	return err
 }
+
+var _ = Describe("{AddStorageNode}", func() {
+
+	var contexts []*scheduler.Context
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		wantAfterSuiteSystemCheck = true
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddStorageNode", "Add a new storage node to the cloud platform", nil, 0)
+	})
+	stepLog := "Validating the drives and pools after adding new storage node"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = fmt.Sprintf("Adding a storage node to the platform [%s]", Inst().S.String())
+
+		Step(stepLog, func() {
+
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addstnode-%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+
+			var numOfStorageNodes int
+			var maxStorageNodesPerZone uint32
+			var updatedMaxStorageNodesPerZone uint32 = 0
+			var zones []string
+			stepLog = "update maxStorageNodesPerZone in storage cluster spec"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				stc, err := Inst().V.GetDriver()
+
+				log.FailOnError(err, "error getting volume driver")
+				maxStorageNodesPerZone = *stc.Spec.CloudStorage.MaxStorageNodesPerZone
+				numOfStorageNodes = len(node.GetStorageNodes())
+				log.Infof("maxStorageNodesPerZone %d", int(maxStorageNodesPerZone))
+				log.Infof("numOfStorageNodes %d", numOfStorageNodes)
+
+				actualPerZoneCount := numOfStorageNodes
+
+				// In multi-zone ASG cluster, node count is per zone
+				if Inst().S.String() != aks.SchedName && Inst().S.String() != openshift.SchedName {
+					zones, err = Inst().S.GetZones()
+					dash.VerifyFatal(err, nil, "Verify Get zones")
+
+					actualPerZoneCount = numOfStorageNodes / len(zones)
+				}
+
+				if int(maxStorageNodesPerZone) <= actualPerZoneCount {
+					//increase max per zone
+					updatedMaxStorageNodesPerZone = uint32(actualPerZoneCount + 1)
+				}
+
+				if updatedMaxStorageNodesPerZone != 0 {
+
+					stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
+					log.InfoD("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+					pxOperator := operator.Instance()
+					_, err = pxOperator.UpdateStorageCluster(stc)
+					log.FailOnError(err, "error updating storage cluster")
+
+				}
+				PrintPxctlStatus()
+				//Scaling the cluster by one node
+				expReplicas := len(node.GetStorageDriverNodes()) + 1
+				log.InfoD("scaling up the cluster to replicas %d", expReplicas)
+				Scale(int64(expReplicas))
+				stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String())
+
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+				})
+				// After scale up, get fresh list of nodes
+				// by re-initializing scheduler and volume driver
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Verify node registry refresh")
+
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Verify driver end points refresh")
+
+			})
+
+			stepLog = "validate PX on all nodes after adding a storage node"
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				nodes := node.GetStorageDriverNodes()
+				for _, n := range nodes {
+					log.InfoD("Check PX status on %v", n.Name)
+					err := Inst().V.WaitForPxPodsToBeUp(n)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify px is up on  node %s", n.Name))
+				}
+			})
+
+			err := Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
+			PrintPxctlStatus()
+
+			expectedPerZone := maxStorageNodesPerZone
+			if updatedMaxStorageNodesPerZone != 0 {
+				expectedPerZone = updatedMaxStorageNodesPerZone
+
+			}
+			expectedStorageNodesCount := int(expectedPerZone) * len(zones)
+
+			if expectedStorageNodesCount >= len(node.GetStorageNodes()) {
+				expectedStorageNodesCount = len(node.GetStorageNodes())
+			}
+
+			updatedStorageNodesCount := len(node.GetStorageNodes())
+			dash.VerifyFatal(expectedStorageNodesCount, updatedStorageNodesCount, "verify new storage node is added")
+			ValidateAndDestroy(contexts, nil)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{AddStoragelessNode}", func() {
+
+	var contexts []*scheduler.Context
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		wantAfterSuiteSystemCheck = true
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddStoragelessNode", "Add a new storageless node the cluster", nil, 0)
+	})
+	stepLog := "Validating px after adding new storageless node"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = fmt.Sprintf("Adding a storageless node to the platform [%s]", Inst().S.String())
+
+		Step(stepLog, func() {
+
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addslnode-%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+			numOfStoragelessNodes := len(node.GetStorageLessNodes())
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				stc, err := Inst().V.GetDriver()
+
+				log.FailOnError(err, "error getting volume driver")
+				maxStorageNodesPerZone := *stc.Spec.CloudStorage.MaxStorageNodesPerZone
+				numOfStorageNodes := len(node.GetStorageNodes())
+				log.Infof("maxStorageNodesPerZone %d", int(maxStorageNodesPerZone))
+				log.Infof("numOfStoragelessNodes %d", numOfStoragelessNodes)
+				PrintPxctlStatus()
+
+				var updatedMaxStorageNodesPerZone uint32 = 0
+
+				actualPerZoneCount := numOfStorageNodes
+
+				// In multi-zone ASG cluster, node count is per zone
+				if Inst().S.String() != aks.SchedName && Inst().S.String() != openshift.SchedName {
+					zones, err := Inst().S.GetZones()
+					dash.VerifyFatal(err, nil, "Verify Get zones")
+
+					actualPerZoneCount = numOfStorageNodes / len(zones)
+				}
+
+				if int(maxStorageNodesPerZone) > actualPerZoneCount {
+					//updating max per zone
+					updatedMaxStorageNodesPerZone = uint32(actualPerZoneCount)
+					stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
+					log.InfoD("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+					pxOperator := operator.Instance()
+					_, err = pxOperator.UpdateStorageCluster(stc)
+					log.FailOnError(err, "error updating storage cluster")
+				}
+				//Scaling the cluster by one node
+				expReplicas := len(node.GetStorageDriverNodes()) + 1
+				log.InfoD("scaling up the cluster to replicas %d", expReplicas)
+				Scale(int64(expReplicas))
+
+			})
+
+			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+				Inst().AutoStorageNodeRecoveryTimeout.String())
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+			})
+			// After scale up, get fresh list of nodes
+			// by re-initializing scheduler and volume driver
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "Verify node registry refresh")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Verify driver end points refresh")
+
+			stepLog = "validate PX on all nodes after adding storageless node"
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				nodes := node.GetStorageDriverNodes()
+				for _, n := range nodes {
+					log.InfoD("Check PX status on %v", n.Name)
+					err := Inst().V.WaitForPxPodsToBeUp(n)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify px is up on  node %s", n.Name))
+				}
+			})
+
+			err := Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
+			PrintPxctlStatus()
+
+			updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
+			dash.VerifyFatal(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")
+
+			ValidateAndDestroy(contexts, nil)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RecycleStorageDriverNodes}", func() {
+
+	var contexts []*scheduler.Context
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		wantAfterSuiteSystemCheck = true
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("RecycleStorageDriverNode", "Test drives and pools after recycling a storage driver node", nil, 0)
+	})
+
+	It("Validating the drives and pools after recycling a node", func() {
+		Step("Get the storage and storageless nodes and delete them", func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("recyclenode-%d", i))...)
+			}
+			ValidateApplications(contexts)
+			storagelessNodes, err := Inst().V.GetStoragelessNodes()
+			log.FailOnError(err, fmt.Sprintf("Failed to get storageless nodes. Error: [%v]", err))
+			if storagelessNodes != nil {
+				delNode, err := node.GetNodeByName(storagelessNodes[0].Hostname)
+				log.FailOnError(err, fmt.Sprintf("Failed to get node object using Name. Error: [%v]", err))
+				Step(
+					fmt.Sprintf("Listing all nodes before recycling a storageless node %s", delNode.Name),
+					func() {
+						workerNodes := node.GetWorkerNodes()
+						for x, wNode := range workerNodes {
+							log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+						}
+					})
+				stepLog = fmt.Sprintf("Recycle a storageless node and validating the drives: %s", delNode.Name)
+				Step(
+					stepLog,
+					func() {
+						log.InfoD(stepLog)
+						err := Inst().S.DeleteNode(delNode)
+						log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
+						waitTime := 10
+						if Inst().S.String() == oke.SchedName {
+							waitTime = 15 // OKE takes more time to replace the node
+						}
+
+						stepLog = fmt.Sprintf("Wait for %d min. to node get replaced by autoscalling group", waitTime)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							time.Sleep(time.Duration(waitTime) * time.Minute)
+						})
+
+						err = Inst().S.RefreshNodeRegistry()
+						log.FailOnError(err, "Verify node registry refresh")
+
+						err = Inst().V.RefreshDriverEndpoints()
+						log.FailOnError(err, "Verify driver end points refresh")
+						stepLog = fmt.Sprintf("Validate number of storage nodes after recycling node [%v]", delNode.Name)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							ValidateClusterSize(int64(len(node.GetStorageDriverNodes())))
+							PrintPxctlStatus()
+						})
+					})
+				Step(
+					fmt.Sprintf("Listing all nodes after recycle a storageless node %s", delNode.Name),
+					func() {
+						workerNodes := node.GetWorkerNodes()
+						for x, wNode := range workerNodes {
+							log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+						}
+					})
+			}
+			// Validating the apps after recycling the StorageLess node
+			ValidateApplications(contexts)
+			workerNodes := node.GetStorageNodes()
+			delNode := workerNodes[0]
+			stepLog := fmt.Sprintf("Recycle a storage node: [%s] and validating the drives", delNode.Name)
+			Step(
+				stepLog,
+				func() {
+					log.InfoD(stepLog)
+					err := Inst().S.DeleteNode(delNode)
+					log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
+					waitTime := 10
+					if Inst().S.String() == oke.SchedName {
+						waitTime = 15 // OKE takes more time to replace the node
+					}
+
+					stepLog = fmt.Sprintf("Wait for %d min. to node get replaced by autoscalling group", waitTime)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						time.Sleep(time.Duration(waitTime) * time.Minute)
+					})
+
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Verify node registry refresh")
+
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Verify driver end points refresh")
+					stepLog = fmt.Sprintf("Validate number of storage nodes after recycling node [%v]", delNode.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						ValidateClusterSize(int64(len(node.GetStorageDriverNodes())))
+					})
+				})
+			Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
+				workerNodes := node.GetWorkerNodes()
+				for x, wNode := range workerNodes {
+					log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
+				}
+				PrintPxctlStatus()
+			})
+			// Validating the apps after recycling the Storage node
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})

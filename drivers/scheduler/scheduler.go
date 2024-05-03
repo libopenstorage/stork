@@ -440,8 +440,6 @@ type Driver interface {
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
 
-	// ScaleCluster scale the cluster to the given replicas
-	ScaleCluster(replicas int) error
 	// GetZones get the zones of cluster
 	GetZones() ([]string, error)
 	// GetASGClusterSize gets node count for an asg cluster

@@ -2,7 +2,6 @@ package openshift
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/errors"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -1139,54 +1138,6 @@ func getMachineSetName() (string, error) {
 
 }
 
-// ScaleCluster scale the cluster to the given replicas
-func (k *openshift) ScaleCluster(replicas int) error {
-
-	initialMachineCount, err := k.getMachinesCount()
-
-	machineSetName, err := getMachineSetName()
-	if err != nil {
-		return err
-	}
-	// kubectl scale machineset leela-ocp-vx6zf-worker-0 --replicas 6 -n openshift-machine-api
-	cmd := fmt.Sprintf("kubectl -n %s scale %s --replicas %d", OpenshiftMachineNamespace, machineSetName, replicas)
-	log.Infof("Executing command [%s]", cmd)
-	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
-	if err != nil {
-		return err
-	}
-	log.Infof("output: %s", string(output))
-
-	if !strings.Contains(string(output), fmt.Sprintf("%s scaled", machineSetName)) {
-		return fmt.Errorf("failed to scale [%s], output: %s", machineSetName, string(output))
-	}
-
-	log.Infof("waiting for new machine to be created")
-
-	t := func() (interface{}, bool, error) {
-		newMachineCount, err := k.getMachinesCount()
-		if err != nil {
-			return "", true, fmt.Errorf("error getting machine count, Err: %v", err)
-		}
-		if newMachineCount <= initialMachineCount {
-			return "", true, fmt.Errorf("waiting for new machine to provision initial count : [%d], current count: [%d]", initialMachineCount, newMachineCount)
-		}
-		return "", false, nil
-	}
-	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
-		return err
-	}
-
-	if _, err := k.checkAndGetNewNode(); err != nil {
-		return err
-	}
-	if err := k.RefreshNodeRegistry(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // needOcpPrereq checks if we need to do OCP Prometheus prereq and returns true or false
 func (k *openshift) needOcpPrereq(ocpVer string) (bool, error) {
 	log.Infof("Checking if OCP version  [%s] requires Prometheus configuration changes...", ocpVer)
@@ -1345,10 +1296,45 @@ func updatePrometheusAndAutopilot() error {
 	return nil
 }
 
-func (k *openshift) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
-	// ScaleCluster is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "SetASGClusterSize()",
+func (k *openshift) SetASGClusterSize(replicas int64, timeout time.Duration) error {
+	initialMachineCount, err := k.getMachinesCount()
+
+	machineSetName, err := getMachineSetName()
+	if err != nil {
+		return err
 	}
+	// kubectl scale machineset leela-ocp-vx6zf-worker-0 --replicas 6 -n openshift-machine-api
+	cmd := fmt.Sprintf("kubectl -n %s scale %s --replicas %d", OpenshiftMachineNamespace, machineSetName, replicas)
+	log.Infof("Executing command [%s]", cmd)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return err
+	}
+	log.Infof("output: %s", string(output))
+
+	if !strings.Contains(string(output), fmt.Sprintf("%s scaled", machineSetName)) {
+		return fmt.Errorf("failed to scale [%s], output: %s", machineSetName, string(output))
+	}
+
+	log.Infof("waiting for new machine to be created")
+
+	t := func() (interface{}, bool, error) {
+		newMachineCount, err := k.getMachinesCount()
+		if err != nil {
+			return "", true, fmt.Errorf("error getting machine count, Err: %v", err)
+		}
+		if newMachineCount <= initialMachineCount {
+			return "", true, fmt.Errorf("waiting for new machine to provision initial count : [%d], current count: [%d]", initialMachineCount, newMachineCount)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	if _, err := k.checkAndGetNewNode(); err != nil {
+		return err
+	}
+
+	return nil
 }

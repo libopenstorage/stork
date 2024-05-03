@@ -2230,6 +2230,8 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
 			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
 			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
 		}
 		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
 			if secretNameKeyFlag {
