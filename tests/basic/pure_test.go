@@ -2879,3 +2879,157 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 		})
 	})
 })
+
+var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23763
+		Verify that FA Pods Recovers after bringing back network Interface down on all FA's
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("FADAPodRecoveryDisableDataPortsOnFA",
+			"Verify Pod Recovers from RO mode after Bounce after blocking network interface from FA end",
+			nil, 0)
+	})
+
+	itLog := "FADAPodRecoveryDisableDataPortsOnFA"
+	It(itLog, func() {
+
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
+		//podNodes := []*corev1.Pod{}
+
+		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
+		vols := make([]*volume.Volume, 0)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		flashArrayGetIscsiPorts := func() map[string][]string {
+			flashArrays, err := FlashArrayGetIscsiPorts()
+			log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+			return flashArrays
+		}
+
+		interfaces := flashArrayGetIscsiPorts()
+		log.Infof("Map of List [%v]", interfaces)
+
+		disableInterfaces := func() {
+			stepLog = "Disable all Data ports on the FA Controller"
+			Step(stepLog, func() {
+				for mgmtIp, iFaces := range interfaces {
+					for _, eachIface := range iFaces {
+						log.Infof("Disabling Network interfaces [%v] on FA Host [%v]", eachIface, mgmtIp)
+						log.FailOnError(DisableFlashArrayNetworkInterface(mgmtIp, eachIface), "Disabling network interface failed?")
+					}
+				}
+			})
+		}
+
+		enableInterfaces := func() {
+			stepLog = "Enable all Data ports on the FA Controller"
+			Step(stepLog, func() {
+				for mgmtIp, iFaces := range interfaces {
+					for _, eachIface := range iFaces {
+						log.Infof("Enabling Interface [%v] on FA Host [%v]", eachIface, mgmtIp)
+						log.FailOnError(EnableFlashArrayNetworkInterface(mgmtIp, eachIface), "Enabling Network interface failed?")
+					}
+				}
+			})
+		}
+
+		defer enableInterfaces()
+
+		stepLog = "Get all Volumes and Validate "
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				appVols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+				vols = append(vols, appVols...)
+			}
+		})
+
+		allStorageNodes := node.GetStorageNodes()
+
+		stepLog = "Disable Data port on all FA's "
+		Step(stepLog, func() {
+			disableInterfaces()
+		})
+
+		// Sleep for sometime for PVC's to go in RO mode while data ingest in progress
+		time.Sleep(15 * time.Minute)
+
+		// Verify Px goes down on all the nodes present in the cluster
+		for _, eachNodes := range allStorageNodes {
+			log.FailOnError(Inst().V.WaitDriverDownOnNode(eachNodes), fmt.Sprintf("Driver on the Node [%v] is not down yet", eachNodes.Name))
+		}
+
+		stepLog = "Verify if pods are not in Running state after disabling "
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				// Pod details after blocking IP
+				podsOnBlock, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+				for _, eachPodAfter := range podsOnBlock {
+					if eachPodAfter.Status.Phase == "Running" {
+						log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
+							eachPodAfter.Status.HostIP), "Pod is in Running state")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPodAfter.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+				}
+			}
+		})
+
+		// Enable Back the network interface on all the FA CLuster
+		enableInterfaces()
+
+		// Sleep for some time for Px to come up online and working
+		time.Sleep(10 * time.Minute)
+
+		stepLog = "Verify that each pods comes back online once network restored"
+		Step(stepLog, func() {
+
+		})
+		// Verify Px goes down on all the nodes present in the cluster
+		for _, eachNodes := range allStorageNodes {
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+				fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+		}
+
+		stepLog = "Verify Each pod in Running State after bringing back data ports"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				// Pod details after blocking IP
+				podsAfterRevert, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				for _, eachPod := range podsAfterRevert {
+					if eachPod.Status.Phase != "Running" {
+						log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
+							eachPod.Status.HostIP), "Pod didn't bounce on the node")
+					}
+				}
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

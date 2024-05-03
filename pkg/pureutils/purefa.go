@@ -267,11 +267,15 @@ func IsNetworkInterfaceEnabled(faClient *flasharray.Client, iface string) (bool,
 
 // EnableNetworkInterface enables network interface
 func EnableNetworkInterface(faClient *flasharray.Client, iface string) (bool, error) {
-	interfaces, err := faClient.Networks.EnableNetworkInterface(iface)
+	_, err := faClient.Networks.EnableNetworkInterface(iface)
 	if err != nil {
 		return false, err
 	}
-	if interfaces.Enabled {
+	isEnabled, err := IsNetworkInterfaceEnabled(faClient, iface)
+	if err != nil {
+		return false, err
+	}
+	if isEnabled {
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to enable network interface [%v]", iface)
@@ -279,11 +283,15 @@ func EnableNetworkInterface(faClient *flasharray.Client, iface string) (bool, er
 
 // DisableNetworkInterface disabled network interface
 func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, error) {
-	interfaces, err := faClient.Networks.DisableNetworkInterface(iface)
+	_, err := faClient.Networks.DisableNetworkInterface(iface)
 	if err != nil {
 		return false, err
 	}
-	if !interfaces.Enabled {
+	isEnabled, err := IsNetworkInterfaceEnabled(faClient, iface)
+	if err != nil {
+		return false, err
+	}
+	if !isEnabled {
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)

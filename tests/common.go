@@ -12170,3 +12170,128 @@ func WaitForVolumeClean(vol *volume.Volume) error {
 	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 60*time.Second)
 	return err
 }
+
+// GetFADetailsUsed Returns list of FlashArrays used in the cluster
+func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
+	//get the flash array details
+	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
+	}
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get Px Pure Secret")
+	}
+
+	if len(pxPureSecret.Arrays) > 0 {
+		return pxPureSecret.Arrays, nil
+	}
+	return nil, fmt.Errorf("Failed to list FA Arrays ")
+}
+
+func FlashArrayGetIscsiPorts() (map[string][]string, error) {
+	flashArrays, err := GetFADetailsUsed()
+	log.FailOnError(err, "Failed to get flasharray details")
+
+	faWithIscsi := make(map[string][]string)
+	for _, eachFaInt := range flashArrays {
+		// Connect to Flash Array using Mgmt IP and API Token
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get All Data Interfaces
+		faData, err := pureutils.GetSpecificInterfaceBasedOnServiceType(faClient, "iscsi")
+		if err != nil || len(faData) == 0 {
+			log.Infof("Failed to get data interface on to FA using Mgmt IP [%v]", eachFaInt.MgmtEndPoint)
+			return nil, err
+		}
+		log.InfoD("All FA Details [%v]", faData)
+
+		for _, eachFA := range faData {
+			log.Infof("Each FA Details [%v]", eachFA)
+			if eachFA.Enabled && eachFA.Address != "" {
+				log.Infof("Fa Interface with iscsi IP [%v]", eachFA.Name)
+				faWithIscsi[eachFaInt.MgmtEndPoint] = append(faWithIscsi[eachFaInt.MgmtEndPoint], eachFA.Name)
+			}
+		}
+	}
+	return faWithIscsi, nil
+}
+
+// DisableFlashArrayNetworkInterface Disables network interface provided fa Management IP and IFace to Disable on FA
+func DisableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
+	flashArrays, err := GetFADetailsUsed()
+	if err != nil {
+		return err
+	}
+
+	for _, eachFaInt := range flashArrays {
+		// Connect to Flash Array using Mgmt IP and API Token
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
+		if err != nil {
+			return err
+		}
+
+		if eachFaInt.MgmtEndPoint == faMgmtIP {
+			isEnabled, err := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			log.FailOnError(err, fmt.Sprintf("Interface [%v] is not enabled on FA [%v]", iface, eachFaInt.MgmtEndPoint))
+			if err != nil {
+				log.Errorf("Interface [%v] is not enabled on FA [%v]", iface, eachFaInt.MgmtEndPoint)
+				return err
+			}
+			if !isEnabled {
+				log.Infof("Network interface is not enabled Ignoring...")
+				return nil
+			}
+
+			// Ignore the check here as there is an issue with API's that we are using
+			_, _ = pureutils.DisableNetworkInterface(faClient, iface)
+			time.Sleep(10 * time.Second)
+
+			isDisabled, errDis := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			log.Infof("[%v] is Enabled [%v]", iface, isDisabled)
+			if !isDisabled && errDis == nil {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("Disabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
+}
+
+// EnableFlashArrayNetworkInterface Enables network interface on FA Management IP
+func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
+	flashArrays, err := GetFADetailsUsed()
+	if err != nil {
+		return err
+	}
+	for _, eachFaInt := range flashArrays {
+		// Connect to Flash Array using Mgmt IP and API Token
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
+		if err != nil {
+			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFaInt.MgmtEndPoint)
+		}
+
+		if eachFaInt.MgmtEndPoint == faMgmtIP {
+			isEnabled, err := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Interface [%v] is not enabled on FA [%v]", iface, eachFaInt.MgmtEndPoint))
+				return err
+			}
+			if isEnabled {
+				log.Infof("Network Interface [%v] is already enabled on cluster [%v]", iface, eachFaInt.MgmtEndPoint)
+				return nil
+			}
+
+			// Ignore the check here as there is an issue with API's that we are using
+			_, _ = pureutils.EnableNetworkInterface(faClient, iface)
+			isEnabled, errDis := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			if isEnabled && errDis == nil {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("Enabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
+}
