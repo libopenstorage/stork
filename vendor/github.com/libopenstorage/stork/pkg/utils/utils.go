@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"os"
 	"strings"
 	"time"
@@ -346,4 +347,101 @@ func addResourceVersion(patchBytes []byte, resourceVersion string) ([]byte, erro
 		return nil, fmt.Errorf("error marshalling json patch: %v", err)
 	}
 	return versionBytes, nil
+}
+
+func GetMergedNamespacesWithLabelSelector(namespaceList []string, namespaceSelectors map[string]string) ([]string, error) {
+	if len(namespaceSelectors) == 0 {
+		return namespaceList, nil
+	}
+	uniqueNamespaces := make(map[string]bool)
+	for _, ns := range namespaceList {
+		uniqueNamespaces[ns] = true
+	}
+
+	for key, val := range namespaceSelectors {
+		namespaces, err := core.Instance().ListNamespaces(map[string]string{key: val})
+		if err != nil {
+			return nil, err
+		}
+		for _, namespace := range namespaces.Items {
+			uniqueNamespaces[namespace.GetName()] = true
+		}
+	}
+
+	migrationNamespaces := make([]string, 0, len(uniqueNamespaces))
+	for namespace := range uniqueNamespaces {
+		migrationNamespaces = append(migrationNamespaces, namespace)
+	}
+	return migrationNamespaces, nil
+}
+
+// IsSubList returns true if the first slice is sublist of the second slice.
+// Returns ->
+// bool isSubList : list A is a subset of list B
+// []string subsetStrings : strings common in both list A and list B
+// []string nonSubsetStrings : strings present only in list A and not in list B
+func IsSubList(listA []string, listB []string) (bool, []string, []string) {
+	// subsetStrings -> strings found in both A and B
+	// nonSubsetStrings -> strings found in A, but not in B
+	nonSubsetStrings := make([]string, 0)
+	subsetStrings := make([]string, 0)
+	superset := make(map[string]bool)
+	for _, str := range listB {
+		superset[str] = true
+	}
+	for _, str := range listA {
+		if !superset[str] {
+			nonSubsetStrings = append(nonSubsetStrings, str)
+		} else {
+			subsetStrings = append(subsetStrings, str)
+		}
+	}
+	return len(nonSubsetStrings) == 0, subsetStrings, nonSubsetStrings
+}
+
+// ExcludeListAFromListB takes 2 slices of strings as input and returns subset of B which is disjoint from A
+func ExcludeListAFromListB(listA []string, listB []string) []string {
+	nonCommonStrings := make([]string, 0)
+	setA := make(map[string]bool)
+	for _, str := range listA {
+		setA[str] = true
+	}
+	for _, str := range listB {
+		if !setA[str] {
+			nonCommonStrings = append(nonCommonStrings, str)
+		}
+	}
+	return nonCommonStrings
+}
+
+// GetAdminNamespace we fetch the value of adminNamespace from the stork-controller-cm created in kube-system namespace
+func GetAdminNamespace() string {
+	adminNs, err := k8sutils.GetConfigValue(k8sutils.StorkControllerConfigMapName, metav1.NamespaceSystem, k8sutils.AdminNsKey)
+	if err != nil {
+		logrus.Warnf("Error in reading %v cm for the key %v, switching to default value : %v",
+			k8sutils.StorkControllerConfigMapName, k8sutils.AdminNsKey, err)
+		adminNs = k8sutils.DefaultAdminNamespace
+	}
+	return adminNs
+}
+
+func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.MigrationSchedule, activatedNSList []string) (bool, error) {
+	namespaceList := migrationSchedule.Spec.Template.Spec.Namespaces
+	namespaceSelectors := migrationSchedule.Spec.Template.Spec.NamespaceSelectors
+	migrationNamespaces, err := GetMergedNamespacesWithLabelSelector(namespaceList, namespaceSelectors)
+	if err != nil {
+		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
+	}
+	activationNamespacesSet := make(map[string]bool)
+	for _, ns := range activatedNSList {
+		activationNamespacesSet[ns] = true
+	}
+	found := false
+	for _, ns := range migrationNamespaces {
+		if activationNamespacesSet[ns] {
+			found = true
+			break
+		}
+	}
+	return found, nil
 }

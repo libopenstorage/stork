@@ -34,27 +34,108 @@ type Action struct {
 
 // ActionSpec specifies the type of Action
 type ActionSpec struct {
-	ActionType ActionType `json:"actionType"`
+	ActionType      ActionType      `json:"actionType"`
+	ActionParameter ActionParameter `json:"actionParameter"`
 }
 
 // ActionType lists the various actions that can be performed
 type ActionType string
 
 const (
-	// to start apps on destination cluster
+	// ActionTypeNearSyncFailover action type to start apps on destination cluster in nearsync DR case
+	ActionTypeNearSyncFailover ActionType = "nearsyncFailover"
+	// ActionTypeFailover action type to start apps in destination cluster for sync and async DRs
 	ActionTypeFailover ActionType = "failover"
+	// ActionTypeFailback action type to migrate back to source and start apps in source
+	ActionTypeFailback ActionType = "failback"
 )
 
-// ActionStatus is the current status of the Action
-type ActionStatus string
+// ActionParameter lists the parameters required to perform the action
+type ActionParameter ActionParameterItem
+
+type ActionParameterItem struct {
+	FailoverParameter FailoverParameter `json:"failoverParameter,omitempty"`
+	FailbackParameter FailbackParameter `json:"failbackParameter,omitempty"`
+}
+
+type FailoverParameter struct {
+	FailoverNamespaces         []string `json:"failoverNamespaces"`
+	MigrationScheduleReference string   `json:"migrationScheduleReference"`
+	SkipSourceOperations       *bool    `json:"skipSourceOperations"`
+}
+
+type FailbackParameter struct {
+	FailbackNamespaces         []string `json:"failbackNamespaces"`
+	MigrationScheduleReference string   `json:"migrationScheduleReference"`
+}
+
+// ActionStatusType is the current status of the Action
+type ActionStatusType string
 
 const (
+	// ActionStatusInitial means Action CR has been created
+	ActionStatusInitial ActionStatusType = ""
 	// ActionStatusScheduled means Action is yet to start
-	ActionStatusScheduled ActionStatus = "Scheduled"
+	ActionStatusScheduled ActionStatusType = "Scheduled"
 	// ActionStatusInProgress means Action is in progress
-	ActionStatusInProgress ActionStatus = "In-Progress"
+	ActionStatusInProgress ActionStatusType = "In-Progress"
 	// ActionStatusFailed means that Action has failed
-	ActionStatusFailed ActionStatus = "Failed"
+	ActionStatusFailed ActionStatusType = "Failed"
 	// ActionStatusSuccessful means Action has completed successfully
-	ActionStatusSuccessful ActionStatus = "Successful"
+	ActionStatusSuccessful ActionStatusType = "Successful"
+	// ActionStatusRollbackSuccessful means Rollback has completed successfully
+	ActionStatusRollbackSuccessful ActionStatusType = "RollbackSuccessful"
+	// ActionStatusRollbackInProgress means Rollback failed
+	ActionStatusRollbackFailed ActionStatusType = "RollbackFailed"
 )
+
+// ActionStageType is the stage of the action
+type ActionStageType string
+
+const (
+	// ActionStageInitial for when action is created
+	ActionStageInitial ActionStageType = ""
+	// ActionStageScaleDownDestination for scaling down apps in destination
+	ActionStageScaleDownDestination ActionStageType = "ScaleDownDestination"
+	// ActionStageScaleDownSource for scaling down apps in source
+	ActionStageScaleDownSource ActionStageType = "ScaleDownSource"
+	// ActionStageScaleUpDestination for scaling apps in destination
+	ActionStageScaleUpDestination ActionStageType = "ScaleUpDestination"
+	// ActionStageScaleUpSource for scaling apps in source
+	ActionStageScaleUpSource ActionStageType = "ScaleUpSource"
+	// ActionStageLastMileMigration for doing a last migration before failover/failback to ensure data integrity
+	ActionStageLastMileMigration ActionStageType = "LastMileMigration"
+	// ActionStageWaitAfterScaleDown for waiting after scaling down of apps
+	ActionStageWaitAfterScaleDown ActionStageType = "WaitAfterScaleDown"
+	// ActionStageFinal is the final stage for action
+	ActionStageFinal ActionStageType = "Final"
+)
+
+// ActionStatus is the status of action operation
+type ActionStatus struct {
+	Stage           ActionStageType  `json:"stage"`
+	Status          ActionStatusType `json:"status"`
+	FinishTimestamp meta.Time        `json:"finishTimestamp"`
+	Summary         *ActionSummary   `json:"summary"`
+	Reason          string           `json:"reason"`
+}
+
+// ActionSummary lists the summary of the action
+type ActionSummary ActionSummaryItem
+
+// ActionSummaryItem has summary for each action type
+type ActionSummaryItem struct {
+	FailoverSummaryItem []*FailoverSummary `json:"failoverSummary,omitempty"`
+	FailbackSummaryItem []*FailbackSummary `json:"failbackSummary,omitempty"`
+}
+
+type FailoverSummary struct {
+	Namespace string           `json:"namespace"`
+	Status    ActionStatusType `json:"status"`
+	Reason    string           `json:"reason"`
+}
+type FailbackSummary struct {
+	Namespace string           `json:"namespace"`
+	Status    ActionStatusType `json:"status"`
+	Reason    string           `json:"reason"`
+}

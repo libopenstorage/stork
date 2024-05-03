@@ -1110,7 +1110,7 @@ github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 ## explicit; go 1.13
 github.com/libopenstorage/secrets/aws/credentials
-# github.com/libopenstorage/stork v1.4.1-0.20240417024347-acff28bbdb16
+# github.com/libopenstorage/stork v1.4.1-0.20240424105137-8c6fa2a3f934
 ## explicit; go 1.21
 github.com/libopenstorage/stork/drivers
 github.com/libopenstorage/stork/drivers/volume

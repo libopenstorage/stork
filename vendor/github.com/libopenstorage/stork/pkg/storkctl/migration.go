@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"io"
 	"log"
 	"os"
@@ -186,8 +187,10 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 					util.CheckErr(err)
 					return
 				}
+				// MigrationSchedule will only be relevant if it migrates at least one of the activation namespaces
+				// Only for such migrationSchedules we will need to update applicationActivated:true
 				for _, migrSched := range migrationSchedules.Items {
-					isMigrSchedRelevant, err := doesMigrationScheduleMigrateNamespaces(migrSched, activationNamespaces)
+					isMigrSchedRelevant, err := utils.DoesMigrationScheduleMigrateNamespaces(migrSched, activationNamespaces)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -208,29 +211,6 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 	activateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Activate applications in all namespaces")
 
 	return activateMigrationCommand
-}
-
-// MigrationSchedule will only be relevant if it migrates at least one of the activation namespaces
-// Only for such migrationSchedules we will need to update applicationActivated:true
-func doesMigrationScheduleMigrateNamespaces(migrSched storkv1.MigrationSchedule, activationNs []string) (bool, error) {
-	namespaceList := migrSched.Spec.Template.Spec.Namespaces
-	namespaceSelectors := migrSched.Spec.Template.Spec.NamespaceSelectors
-	migrationNamespaces, err := getMigrationNamespaces(namespaceList, namespaceSelectors)
-	if err != nil {
-		return false, fmt.Errorf("unable to get the namespaces based on the provided --namespace-selectors : %v", err)
-	}
-	activationNamespacesSet := make(map[string]bool)
-	for _, ns := range activationNs {
-		activationNamespacesSet[ns] = true
-	}
-	found := false
-	for _, ns := range migrationNamespaces {
-		if activationNamespacesSet[ns] {
-			found = true
-			break
-		}
-	}
-	return found, nil
 }
 
 func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
@@ -280,7 +260,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 					return
 				}
 				for _, migrSched := range migrationSchedules.Items {
-					isMigrSchedRelevant, err := doesMigrationScheduleMigrateNamespaces(migrSched, deactivationNamespaces)
+					isMigrSchedRelevant, err := utils.DoesMigrationScheduleMigrateNamespaces(migrSched, deactivationNamespaces)
 					if err != nil {
 						util.CheckErr(err)
 						return
