@@ -439,6 +439,32 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		return nil
 	}
 
+	// if stork got restarted we would have got IncludeResource Memory map cleaned up.
+	// Hence re-create memory map of it.
+	if IsBackupObjectTypeVirtualMachine(backup) &&
+		backup.Status.Stage != stork_api.ApplicationBackupStageInitial &&
+		backup.Status.Stage != stork_api.ApplicationBackupStageImportResource &&
+		(len(a.vmIncludeResource[string(backup.UID)]) == 0 || len(a.vmIncludeResourceMap[string(backup.UID)]) == 0) {
+		logrus.Infof("Stork seems restarted, repopulating VM resource Map for backup %v", backup.Name)
+		// First VMs from various filters provided.
+		vmList, objectMap, err := resourcecollector.GetVMIncludeListFromBackup(backup)
+		if err != nil {
+			logrus.Debugf("failed to import VM resources, after stork reboot. returning for retry")
+			return err
+		}
+		nsMap := make(map[string]bool)
+		// Second fetch VM resources from the list of filtered VMs and freeze/thaw rule for each of them.
+		// also set SkipVmAutoExecRules to true as we dont need to recreate it at this stage.
+		skipVmAutoRuleCommands := true
+		vmIncludeResources, objectMap, _, _ := resourcecollector.GetVMIncludeResourceInfoList(vmList,
+			objectMap, nsMap, skipVmAutoRuleCommands)
+
+		// update in memory data structure for later use.
+		a.vmIncludeResourceMap[string(backup.UID)] = objectMap
+		a.vmIncludeResource[string(backup.UID)] = vmIncludeResources
+		a.vmNsListMap[string(backup.UID)] = nsMap
+	}
+
 	switch backup.Status.Stage {
 	case stork_api.ApplicationBackupStageInitial:
 		// Validate parameters
@@ -750,6 +776,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		var objectMap map[stork_api.ObjectInfo]bool
 		if IsBackupObjectTypeVirtualMachine(backup) {
 			objectMap = a.vmIncludeResourceMap[string(backup.UID)]
+			if len(objectMap) == 0 {
+				// for debugging purpose only.
+				// Its possible that will have empty rsources to backup during schedule backups due
+				// to vm or namespace being deleted.
+				logrus.Warnf("found empty includeResources for VM backup during volumeBakup stage")
+			}
 		} else {
 			objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
 		}
@@ -1559,7 +1591,6 @@ func (a *ApplicationBackupController) uploadObject(
 	if err != nil {
 		return err
 	}
-
 	_, err = writer.Write(data)
 	if err != nil {
 		closeErr := writer.Close()
@@ -1776,10 +1807,15 @@ func (a *ApplicationBackupController) backupResources(
 	var objectMap map[stork_api.ObjectInfo]bool
 	if IsBackupObjectTypeVirtualMachine(backup) {
 		objectMap = a.vmIncludeResourceMap[string(backup.UID)]
+		if len(objectMap) == 0 {
+			// for debugging purpose
+			// its possible we will not have any resources during schedule backups due
+			// vm or namespace deletions
+			logrus.Warnf("found empty resources for VM backup during resourceBackup stage...")
+		}
 	} else {
 		objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
 	}
-
 	namespacelist := backup.Spec.Namespaces
 	// GetResources takes more time, if we have more number of namespaces
 	// So, submitting it in batches and in between each batch,
@@ -1927,7 +1963,6 @@ func (a *ApplicationBackupController) backupResources(
 		}
 		return nil
 	}
-
 	// Do any additional preparation for the resources if required
 	if err = a.prepareResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error preparing resources for backup: %v", err)
