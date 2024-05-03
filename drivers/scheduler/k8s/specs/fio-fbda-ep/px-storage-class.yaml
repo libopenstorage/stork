@@ -1,0 +1,35 @@
+##### FB direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-fb-sc-ep
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_file"
+  pure_export_rules: "*(rw)"
+  {{ if .StorageClassPureNfsEndpoint }}
+  pure_nfs_endpoint: "{{ .StorageClassPureNfsEndpoint }}"
+  {{ end }}
+mountOptions:
+  - nfsvers=4.1
+  - tcp
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+##### FB direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-log-fb-sc-ep
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_file"
+  pure_export_rules: "*(rw)"
+  {{ if .StorageClassPureNfsEndpoint }}
+  pure_nfs_endpoint: "{{ .StorageClassPureNfsEndpoint }}"
+  {{ end }}
+mountOptions:
+  - nfsvers=4.1
+  - tcp
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

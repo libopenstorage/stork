@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"os"
 	"path"
 	"path/filepath"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -1830,7 +1831,7 @@ func waitForNumPodsToEqual(ctx *scheduler.Context, numPods int) {
 func getSv4TestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Volume, *node.Node) {
 	vols, err := Inst().S.GetVolumes(ctx)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(vols)).To(Equal(1))
+	Expect(len(vols)).To(Not(BeZero()))
 	vol := vols[0]
 
 	apiVol, err := Inst().V.InspectVolume(vol.ID)

@@ -67,20 +67,21 @@ func (in *Context) GetID() string {
 
 // AppConfig custom settings
 type AppConfig struct {
-	Replicas             int      `yaml:"replicas"`
-	VolumeSize           string   `yaml:"volume_size"`
-	WorkloadSize         string   `yaml:"workload_size"`
-	ClaimsCount          int      `yaml:"claims_count"`
-	CustomCommand        []string `yaml:"custom_command"`
-	CustomArgs           []string `yaml:"custom_args"`
-	StorageClassSharedv4 string   `yaml:"storage_class_sharedv4"`
-	PVCAccessMode        string   `yaml:"pvc_access_mode"`
-	Repl                 string   `yaml:"repl"`
-	Fs                   string   `yaml:"fs"`
-	AggregationLevel     string   `yaml:"aggregation_level"`
-	IoProfile            string   `yaml:"io_profile"`
-	Journal              string   `yaml:"journal"`
-	DataSize             string   `yaml:"data_size"`
+	Replicas                    int      `yaml:"replicas"`
+	VolumeSize                  string   `yaml:"volume_size"`
+	WorkloadSize                string   `yaml:"workload_size"`
+	ClaimsCount                 int      `yaml:"claims_count"`
+	CustomCommand               []string `yaml:"custom_command"`
+	CustomArgs                  []string `yaml:"custom_args"`
+	StorageClassSharedv4        string   `yaml:"storage_class_sharedv4"`
+	StorageClassPureNfsEndpoint string   `yaml:"storage_class_pure_nfs_endpoint"`
+	PVCAccessMode               string   `yaml:"pvc_access_mode"`
+	Repl                        string   `yaml:"repl"`
+	Fs                          string   `yaml:"fs"`
+	AggregationLevel            string   `yaml:"aggregation_level"`
+	IoProfile                   string   `yaml:"io_profile"`
+	Journal                     string   `yaml:"journal"`
+	DataSize                    string   `yaml:"data_size"`
 }
 
 // InitOptions initialization options

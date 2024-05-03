@@ -1,0 +1,25 @@
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-fbda-1
+spec:
+  storageClassName: px-sc-fbda-ep
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-fbda-2
+spec:
+  storageClassName: px-sc-fbda-ep
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi

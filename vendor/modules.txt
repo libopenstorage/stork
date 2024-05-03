@@ -1054,7 +1054,7 @@ github.com/libopenstorage/cloudops/unsupported
 # github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e
 ## explicit
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20240221210452-7757fdc2b8ff
+# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
 ## explicit; go 1.17
 github.com/libopenstorage/openstorage/api
 github.com/libopenstorage/openstorage/api/client
@@ -1070,6 +1070,7 @@ github.com/libopenstorage/openstorage/pkg/clusterdomain
 github.com/libopenstorage/openstorage/pkg/correlation
 github.com/libopenstorage/openstorage/pkg/dbg
 github.com/libopenstorage/openstorage/pkg/defaultcontext
+github.com/libopenstorage/openstorage/pkg/defrag
 github.com/libopenstorage/openstorage/pkg/diags
 github.com/libopenstorage/openstorage/pkg/grpcserver
 github.com/libopenstorage/openstorage/pkg/grpcutil
@@ -1080,6 +1081,7 @@ github.com/libopenstorage/openstorage/pkg/nodedrain
 github.com/libopenstorage/openstorage/pkg/options
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/pkg/sched
+github.com/libopenstorage/openstorage/pkg/schedule
 github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
@@ -2785,7 +2787,7 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240221210452-7757fdc2b8ff
+# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1

@@ -1,0 +1,17 @@
+##### Portworx Storage Class for FBDA
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-sc-fbda-ep
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_file"
+  pure_export_rules: "*(no_root_squash,rw)"
+  {{ if .StorageClassPureNfsEndpoint}}
+  pure_nfs_endpoint: "{{ .StorageClassPureNfsEndpoint }}"
+  {{ end }}
+mountOptions:
+  - nfsvers=4.1
+  - tcp
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
