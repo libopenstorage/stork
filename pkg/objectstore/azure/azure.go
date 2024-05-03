@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"github.com/Azure/azure-pipeline-go/pipeline"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	az_autorest "github.com/Azure/go-autorest/autorest/azure"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -107,6 +109,63 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 
 // GetObjLockInfo fetches the object lock configuration of a bucket
 func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockInfo, error) {
-	logrus.Infof("object lock is not supported for azure provider")
-	return &common.ObjLockInfo{}, nil
+	fn := "GetObjLockInfo"
+	objLockInfo := &common.ObjLockInfo{}
+	accountName := azureblob.AccountName(backupLocation.Location.AzureConfig.StorageAccountName)
+	pipeline, err := getPipeline(backupLocation)
+	if err != nil {
+		logrus.Errorf("%v: getPipeline failed: %v", fn, err)
+		return nil, err
+	}
+	urlSuffix, err := getAzureURLSuffix(backupLocation)
+	if err != nil {
+		logrus.Errorf("%v: getAzureURLSuffix failed: %v", fn, err)
+		return nil, err
+	}
+	url, err := url.Parse(fmt.Sprintf("https://%s.blob.%s", accountName, urlSuffix))
+	if err != nil {
+		logrus.Error("%v: url.Parse failed: %v", fn, err)
+		return nil, err
+	}
+	leaseCondition := azblob.LeaseAccessConditions{}
+	response, err := azblob.NewServiceURL(*url, pipeline).
+		NewContainerURL(backupLocation.Location.Path).
+		GetProperties(context.Background(), leaseCondition)
+	if err != nil {
+		logrus.Errorf("%v:getProperties of the container %v failed ... %v", fn, err)
+		return nil, err
+	}
+	if response.HasImmutabilityPolicy() == "true" {
+		objLockInfo.LockEnabled = true
+		logrus.Infof("%v: Immutability policy is enabled on container %v", fn, backupLocation.Location.Path)
+
+		cred, err := azidentity.NewClientSecretCredential(backupLocation.Location.AzureConfig.TenantID,
+			backupLocation.Location.AzureConfig.ClientID,
+			backupLocation.Location.AzureConfig.ClientSecret, nil)
+		if err != nil {
+			logrus.Errorf("%v: failed in creating azure client with the given credential", fn)
+			return nil, err
+		}
+		ctx := context.Background()
+		clientFactory, err := armstorage.NewClientFactory(backupLocation.Location.AzureConfig.SubscriptionID, cred, nil)
+		if err != nil {
+			logrus.Errorf("failed to create client: %v", err)
+			return nil, err
+		}
+		res, err := clientFactory.NewBlobContainersClient().GetImmutabilityPolicy(ctx,
+			backupLocation.Location.AzureConfig.ResourceGroupName,
+			backupLocation.Location.AzureConfig.StorageAccountName,
+			backupLocation.Location.Path,
+			&armstorage.BlobContainersClientGetImmutabilityPolicyOptions{IfMatch: nil})
+		if err != nil {
+			logrus.Errorf("failed to  get immutabilty policy for the backuplocation %v : %v", backupLocation.Name, err)
+			return nil, err
+		}
+		properties := res.ImmutabilityPolicy.Properties
+		objLockInfo.RetentionPeriodDays = int64(*properties.ImmutabilityPeriodSinceCreationInDays)
+	} else {
+		logrus.Infof("%v: Immutability policy is disabled on container %v", fn, backupLocation.Location.Path)
+		objLockInfo.LockEnabled = false
+	}
+	return objLockInfo, nil
 }

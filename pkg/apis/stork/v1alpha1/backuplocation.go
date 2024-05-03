@@ -134,6 +134,8 @@ type AzureConfig struct {
 	// Azure-Environment type for azure blob storage
 	// supported option: "azure-public", "azure-china"
 	Environment AzureEnvironment `json:"environment"`
+	// resource group name
+	ResourceGroupName string `json:"resourceGroupName"`
 }
 
 // GoogleConfig specifies the config required to connect to Google Cloud Storage
