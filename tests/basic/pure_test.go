@@ -2899,7 +2899,6 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", func() {
 
 		var contexts []*scheduler.Context
 		var k8sCore = core.Instance()
-		//podNodes := []*corev1.Pod{}
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
