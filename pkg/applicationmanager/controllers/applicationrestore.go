@@ -662,8 +662,10 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if len(restore.Status.Volumes) != pvcCount {
 		// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
 		// gets called once per driver
-		if !nfs {
-			for driverName, vInfos := range backupVolumeInfoMappings {
+		for driverName, vInfos := range backupVolumeInfoMappings {
+			// Portworx driver restore is not supported via job as it can be a secured px volume
+			// to access the token, we need to run the restore in the same pod as the stork controller
+			if !nfs || driverName == volume.PortworxDriverName {
 				backupVolInfos := vInfos
 				driver, err := volume.Get(driverName)
 				//	BL NFS + kdmp = nfs code path
@@ -674,82 +676,85 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				if err != nil {
 					return err
 				}
-				// For each driver, check if it needs any additional resources to be
-				// restored before starting the volume restore
-				objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
-				if err != nil {
-					log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
-					return err
-				}
-				// Skip pv/pvc if replacepolicy is set to retain to avoid creating
-				if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
-					backupVolInfos, existingRestoreVolInfos, err = a.skipVolumesFromRestoreList(restore, objects, driver, vInfos)
+				var preRestoreObjects []runtime.Unstructured
+				if !nfs {
+					// For each driver, check if it needs any additional resources to be
+					// restored before starting the volume restore
+					objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
 					if err != nil {
-						log.ApplicationRestoreLog(restore).Errorf("Error while checking pvcs: %v", err)
+						log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
 						return err
 					}
-				}
-				var storageClassesBytes []byte
-				if driverName == "csi" {
-					storageClassesBytes, err = a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
+					// Skip pv/pvc if replacepolicy is set to retain to avoid creating
+					if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
+						backupVolInfos, existingRestoreVolInfos, err = a.skipVolumesFromRestoreList(restore, objects, driver, vInfos)
+						if err != nil {
+							log.ApplicationRestoreLog(restore).Errorf("Error while checking pvcs: %v", err)
+							return err
+						}
+					}
+					var storageClassesBytes []byte
+					if driverName == "csi" {
+						storageClassesBytes, err = a.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, "storageclasses.json", false)
+						if err != nil {
+							log.ApplicationRestoreLog(restore).Errorf("Error in a.downloadObject %v", err)
+							return err
+						}
+					}
+					preRestoreObjects, err = driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
 					if err != nil {
-						log.ApplicationRestoreLog(restore).Errorf("Error in a.downloadObject %v", err)
+						log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
 						return err
 					}
-				}
-				preRestoreObjects, err := driver.GetPreRestoreResources(backup, restore, objects, storageClassesBytes)
-				if err != nil {
-					log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
-					return err
-				}
 
-				// Pre-delete resources for CSI driver
-				if (driverName == "csi" || driverName == "kdmp") && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
-					objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
-					objectBasedOnIncludeResources := make([]runtime.Unstructured, 0)
-					var opts resourcecollector.Options
-					for _, o := range objects {
-						skip, err := a.resourceCollector.PrepareResourceForApply(
-							o,
-							objects,
-							objectMap,
-							restore.Spec.NamespaceMapping,
-							nil, // no need to set storage class mappings at this stage
-							nil,
-							restore.Spec.IncludeOptionalResourceTypes,
-							nil,
-							&opts,
-							restore.Spec.BackupLocation,
-							restore.Namespace,
+					// Pre-delete resources for CSI driver
+					if (driverName == "csi" || driverName == "kdmp") && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+						objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
+						objectBasedOnIncludeResources := make([]runtime.Unstructured, 0)
+						var opts resourcecollector.Options
+						for _, o := range objects {
+							skip, err := a.resourceCollector.PrepareResourceForApply(
+								o,
+								objects,
+								objectMap,
+								restore.Spec.NamespaceMapping,
+								nil, // no need to set storage class mappings at this stage
+								nil,
+								restore.Spec.IncludeOptionalResourceTypes,
+								nil,
+								&opts,
+								restore.Spec.BackupLocation,
+								restore.Namespace,
+							)
+							if err != nil {
+								return err
+							}
+							if !skip {
+								objectBasedOnIncludeResources = append(
+									objectBasedOnIncludeResources,
+									o,
+								)
+							}
+						}
+						tempObjects, err := a.getNamespacedObjectsToDelete(
+							restore,
+							objectBasedOnIncludeResources,
 						)
 						if err != nil {
 							return err
 						}
-						if !skip {
-							objectBasedOnIncludeResources = append(
-								objectBasedOnIncludeResources,
-								o,
-							)
+						err = a.resourceCollector.DeleteResources(
+							a.dynamicInterface,
+							tempObjects, updateCr)
+						if err != nil {
+							return err
 						}
 					}
-					tempObjects, err := a.getNamespacedObjectsToDelete(
-						restore,
-						objectBasedOnIncludeResources,
-					)
-					if err != nil {
-						return err
-					}
-					err = a.resourceCollector.DeleteResources(
-						a.dynamicInterface,
-						tempObjects, updateCr)
-					if err != nil {
-						return err
-					}
-				}
-				// pvc creation is not part of kdmp
-				if driverName != volume.KDMPDriverName {
-					if err := a.applyResources(restore, preRestoreObjects, updateCr); err != nil {
-						return err
+					// pvc creation is not part of kdmp
+					if driverName != volume.KDMPDriverName {
+						if err := a.applyResources(restore, preRestoreObjects, updateCr); err != nil {
+							return err
+						}
 					}
 				}
 				restore, err = a.updateRestoreCRInVolumeStage(
@@ -841,10 +846,9 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 						return err
 					}
 				}
-
 			}
 		}
-		// Check whether ResourceExport is present or not
+		// If NFS we create resourceExportCR but we will ensure to ignore PX volumes in the restore
 		if nfs {
 			err = a.client.Update(context.TODO(), restore)
 			if err != nil {
@@ -1903,7 +1907,7 @@ func (a *ApplicationRestoreController) restoreResources(
 			logrus.Debugf("resource export: %s, status: %s", resourceExport.Name, resourceExport.Status.Status)
 			switch resourceExport.Status.Status {
 			case kdmpapi.ResourceExportStatusFailed:
-				message = fmt.Sprintf("Error applying resources: %v", err)
+				message = fmt.Sprintf("Error applying resources: %v", resourceExport.Status.Reason)
 				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
 				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 				restore.Status.Reason = message
@@ -2305,7 +2309,7 @@ func (a *ApplicationRestoreController) processVMResourcesForVMRestoreFromNFS(res
 		logrus.Debugf("resource export: %s, status: %s", resourceExport.Name, resourceExport.Status.Status)
 		switch resourceExport.Status.Status {
 		case kdmpapi.ResourceExportStatusFailed:
-			message = fmt.Sprintf("Error applying resources: %v", err)
+			message = fmt.Sprintf("Error applying resources: %v", resourceExport.Status.Reason)
 			restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
 			restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 			restore.Status.Reason = message
