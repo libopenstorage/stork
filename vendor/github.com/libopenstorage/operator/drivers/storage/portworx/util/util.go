@@ -328,9 +328,6 @@ var (
 	// flag in the node object of the PX SDK response.
 	MinimumPxVersionQuorumFlag, _ = version.NewVersion("3.1.0")
 
-	// MinimumPxVersionClusterDomain is a minimal PX version that exposes cluster domain field in enumerate nodes response
-	MinimumPxVersionClusterDomain, _ = version.NewVersion("3.1.1")
-
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
 )
@@ -1410,77 +1407,35 @@ func CountStorageNodes(
 	// newer version. The Enumerate response could be coming from any node and we want to make sure that
 	// we are not talking to an old node when enumerating.
 	useQuorumFlag := true
-	useClusterDomain := true
 	for _, node := range nodeEnumerateResponse.Nodes {
-		if node.Status == api.Status_STATUS_DECOMMISSION {
-			continue
-		}
+
 		v := node.NodeLabels[NodeLabelPortworxVersion]
 		nodeVersion, err := version.NewVersion(v)
 		if err != nil {
 			logrus.Warnf("Failed to parse node version %s for node %s: %v", v, node.Id, err)
 			useQuorumFlag = false
-			useClusterDomain = false
 			break
 		}
 		if nodeVersion.LessThan(MinimumPxVersionQuorumFlag) {
 			logrus.Tracef("Node %s is older than %s. Not using quorum member flag", node.Id, MinimumPxVersionQuorumFlag.String())
 			useQuorumFlag = false
-			useClusterDomain = false
 			break
-		}
-		if nodeVersion.LessThan(MinimumPxVersionClusterDomain) {
-			logrus.Tracef("Node %s is older than %s. Cannot using cluster domain field", node.Id, MinimumPxVersionClusterDomain.String())
-			useClusterDomain = false
-		}
-	}
-
-	// We need to find kubernetes nodes that can run storage pods only for DR clusters that use px versions lesser than 3.1.1
-	k8sNodesStoragePodCouldRun := make(map[string]bool)
-	if isDRSetup && !useClusterDomain {
-		k8sNodeList := &v1.NodeList{}
-		err = k8sClient.List(context.TODO(), k8sNodeList)
-		if err != nil {
-			return -1, err
-		}
-		for _, node := range k8sNodeList.Items {
-			shouldRun, shouldContinueRunning, err := k8sutil.CheckPredicatesForStoragePod(&node, cluster, nil)
-			if err != nil {
-				return -1, err
-			}
-			if shouldRun || shouldContinueRunning {
-				k8sNodesStoragePodCouldRun[node.Name] = true
-			}
 		}
 	}
 
 	// get cluster domain of current node to fetch storage nodes count for current k8s node
 	// for Metro DR cluster, we need to calculate PDB for current k8s cluster and not Portworx cluster
-	var currentClusterDomain string
-	if isDRSetup && useClusterDomain {
-		inspectCurrentResponse, err := nodeClient.InspectCurrent(ctx, &api.SdkNodeInspectCurrentRequest{})
-		if err != nil {
-			return -1, fmt.Errorf("error while inspecting current node: %v", err)
-		}
-		currentClusterDomain = inspectCurrentResponse.Node.ClusterDomain
+	inspectCurrentResponse, err := nodeClient.InspectCurrent(ctx, &api.SdkNodeInspectCurrentRequest{})
+	if err != nil {
+		logrus.Errorf("error while inspecting current node.")
 	}
+	currentClusterDomain := inspectCurrentResponse.Node.ClusterDomain
 
 	storageNodesCount := 0
 	for _, node := range nodeEnumerateResponse.Nodes {
 		// skip decomissioned node to be calculated as part of storage node
 		if node.Status == api.Status_STATUS_DECOMMISSION {
 			continue
-		}
-		if isDRSetup && !useClusterDomain && node.SchedulerNodeName == "" {
-			k8sNode, err := coreops.Instance().SearchNodeByAddresses(
-				[]string{node.DataIp, node.MgmtIp, node.Hostname},
-			)
-			if err != nil {
-				// In Metro-DR setup, this could be expected.
-				logrus.Infof("Unable to find kubernetes node name for nodeID %v: %v", node.Id, err)
-				continue
-			}
-			node.SchedulerNodeName = k8sNode.Name
 		}
 
 		var isQuorumMember bool
@@ -1494,19 +1449,17 @@ func CountStorageNodes(
 		}
 
 		// In case of non metro-DR setup, all portworx nodes that contain backend storage in the enumerate response are storage nodes
-		// In the case of metro DR setup, for PX versions 3.1.1 onwards, px nodes of that cluster domain are counted as storage nodes
-		// When the DR cluster uses px version lesser than 3.1.1, only the nodes that are part of the current k8s cluster are counted as storage nodes
+		// In the case of metro DR setup, temporarily using existing logic to determine storage nodes count
+		// TODO: Need to update this logic in metro DR setup to use portworx nodes in the current domain
 		if isQuorumMember {
 			if !isDRSetup {
 				storageNodesCount++
-			} else if useClusterDomain {
+			} else {
 				if node.ClusterDomain == currentClusterDomain {
 					storageNodesCount++
 				} else {
-					logrus.Debugf("node %s (%s) is not part of cluster domain %s ", node.Id, node.SchedulerNodeName, currentClusterDomain)
+					logrus.Debugf("node %s is not part of cluster domain %s ", node.SchedulerNodeName, currentClusterDomain)
 				}
-			} else if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
-				storageNodesCount++
 			}
 		} else {
 			logrus.Debugf("node %s is not a quorum member, node: %+v", node.Id, node)
@@ -1901,8 +1854,4 @@ func isVersionSupported(current, target string) bool {
 	}
 
 	return currentVersion.Core().GreaterThanOrEqual(targetVersion)
-}
-
-func IsK3sClusterExt(ext string) bool {
-	return strings.HasPrefix(ext[1:], "k3s")
 }

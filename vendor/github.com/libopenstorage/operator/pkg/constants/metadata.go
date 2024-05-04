@@ -30,8 +30,6 @@ const (
 	// AnnotationPodSafeToEvict annotation tells cluster autoscaler whether the
 	// pod is safe to be evicted when scaling down a node
 	AnnotationPodSafeToEvict = "cluster-autoscaler.kubernetes.io/safe-to-evict"
-	// AnnotationOpenshiftRequiredSCC is the annotation for the required SCC (Security Context Constraints) in OpenShift
-	AnnotationOpenshiftRequiredSCC = "openshift.io/required-scc"
 	// AnnotationForceContinueUpdate annotation to force continue paused updates of storage pods (default: false)
 	AnnotationForceContinueUpdate = OperatorPrefix + "/force-continue-update"
 	// AnnotationCommonImageRegistries annotation contains the common image registries, separated by comma.
@@ -44,9 +42,6 @@ const (
 	OperatorLabelManagedByKey = OperatorPrefix + "/managed-by"
 	// OperatorLabelManagedByValue indicates that the object is managed by portworx.
 	OperatorLabelManagedByValue = "portworx"
-	// OperatorLabelNodeNameKey holds the value of the kubernetes node on whcih the portworx pod is running
-	// Used for creating a Node PDB
-	OperatorLabelNodeNameKey = OperatorPrefix + "/node-name"
 )
 
 const (
@@ -62,6 +57,5 @@ var (
 	KnownStoragePodAnnotations = []string{
 		AnnotationNodeLabels,
 		AnnotationPodSafeToEvict,
-		AnnotationOpenshiftRequiredSCC,
 	}
 )

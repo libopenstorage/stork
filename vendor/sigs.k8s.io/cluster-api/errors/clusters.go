@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-// ClusterError is a more descriptive kind of error that represents an error condition that
+// A more descriptive kind of error that represents an error condition that
 // should be set in the Cluster.Status. The "Reason" field is meant for short,
 // enum-style constants meant to be interpreted by clusters. The "Message"
 // field is meant to be read by humans.
@@ -37,7 +37,6 @@ func (e *ClusterError) Error() string {
 // value, and all arguments are Printf-style varargs fed into Sprintf to
 // construct the Message.
 
-// InvalidClusterConfiguration creates a new error for when the cluster configuration is invalid.
 func InvalidClusterConfiguration(format string, args ...interface{}) *ClusterError {
 	return &ClusterError{
 		Reason:  InvalidConfigurationClusterError,
@@ -45,7 +44,6 @@ func InvalidClusterConfiguration(format string, args ...interface{}) *ClusterErr
 	}
 }
 
-// CreateCluster creates a new error for when creating a cluster.
 func CreateCluster(format string, args ...interface{}) *ClusterError {
 	return &ClusterError{
 		Reason:  CreateClusterError,
@@ -53,7 +51,6 @@ func CreateCluster(format string, args ...interface{}) *ClusterError {
 	}
 }
 
-// DeleteCluster creates a new error for when deleting a cluster.
 func DeleteCluster(format string, args ...interface{}) *ClusterError {
 	return &ClusterError{
 		Reason:  DeleteClusterError,
