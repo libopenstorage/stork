@@ -2076,10 +2076,10 @@ func CreateUsers(numberOfUsers int) []string {
 	log.InfoD("Creating %d users", numberOfUsers)
 	var wg sync.WaitGroup
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("testuser%v-%v", i, time.Now().Unix())
-		firstName := fmt.Sprintf("FirstName%v", i)
-		lastName := fmt.Sprintf("LastName%v", i)
-		email := fmt.Sprintf("%v@cnbu.com", userName)
+		userName := fmt.Sprintf("tp-user%d-%s", i, RandomString(4))
+		firstName := fmt.Sprintf("FirstName%d", i)
+		lastName := fmt.Sprintf("LastName%d", i)
+		email := fmt.Sprintf("%s@cnbu.com", userName)
 		wg.Add(1)
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
