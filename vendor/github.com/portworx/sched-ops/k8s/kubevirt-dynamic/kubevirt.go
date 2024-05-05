@@ -270,3 +270,22 @@ func (c *Client) unstructuredGetTimestamp(obj map[string]interface{}, fields ...
 	}
 	return ret, found, nil
 }
+
+func (c *Client) getBoolCondition(conditions []interface{}, conditionType string) (bool, bool, error) {
+	condition, err := c.unstructuredFindKeyValString(conditions, "type", conditionType)
+	if err != nil {
+		return false, false, fmt.Errorf("failed while finding %s condition in vmi: %w", conditionType, err)
+	}
+	if condition != nil {
+		val, found, err := c.unstructuredGetValString(condition, "status")
+		if err != nil || !found {
+			return false, false, fmt.Errorf("failed to get status of %s condition: %w", conditionType, err)
+		}
+		boolVal, err := strconv.ParseBool(val)
+		if err != nil {
+			return false, false, fmt.Errorf("failed to parse status for %s condition: %w", conditionType, err)
+		}
+		return boolVal, true, nil
+	}
+	return false, false, nil
+}

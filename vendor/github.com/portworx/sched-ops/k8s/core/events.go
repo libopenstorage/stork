@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,6 +21,8 @@ type EventOps interface {
 	UpdateEvent(event *corev1.Event) (*corev1.Event, error)
 	// ListEvents retrieves all events registered with kubernetes
 	ListEvents(namespace string, opts metav1.ListOptions) (*corev1.EventList, error)
+	// WatchEvents sets up a watcher that listens for events in given namespace or all namespaces if the namespace is empty
+	WatchEvents(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // CreateEvent puts an event into k8s etcd
@@ -44,6 +47,30 @@ func (c *Client) ListEvents(namespace string, opts metav1.ListOptions) (*corev1.
 		return nil, err
 	}
 	return c.kubernetes.CoreV1().Events(namespace).List(context.TODO(), opts)
+}
+
+// WatchEvents sets up a watcher that listens for events in given namespace or all namespaces if the namespace is empty
+func (c *Client) WatchEvents(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.kubernetes.CoreV1().Events(namespace).Watch(context.TODO(), listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for events")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(
+		watchInterface,
+		&corev1.Event{},
+		namespace,
+		fn,
+		listOptions)
+
+	return nil
 }
 
 // RecorderOps is an interface to record k8s events

@@ -5,17 +5,24 @@ package integrationtest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	operatorv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	"github.com/libopenstorage/operator/pkg/constants"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/core"
 	kubevirt "github.com/portworx/sched-ops/k8s/kubevirt"
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -24,6 +31,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	cdiv1beta1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
@@ -35,7 +43,47 @@ const (
 	mountTypeBind       = "bind"
 	mountTypeNFS        = "nfs"
 	vpsVolAffinityLabel = "vps.portworx.io/volume-affinity"
+	pxUpdateTestLabel   = "kubevirt-update-px-test"
 )
+
+// pxUpdateValidationFailure represents a validation failure during PX update. It happens when
+// one or more virt launcher pods are still running on a node where a Portworx pod is being deleted.
+type pxUpdateValidationFailure struct {
+	timestamp        string
+	nodeName         string
+	deletedPXPod     string
+	deletionTime     string
+	virtLauncherPods map[string]string
+}
+
+type pxUpdateValidatorData struct {
+	sync.Mutex
+	// map of nodeName to map of virtLauncherPod UID to pod namespace/name
+	virtLauncherPodsByNode map[string]map[string]string
+	// px update validation failures caught by the watcher
+	failures []pxUpdateValidationFailure
+}
+
+var validatorData pxUpdateValidatorData
+
+type failedMigration struct {
+	migration *kubevirtv1.VirtualMachineInstanceMigration
+	firstSeen time.Time
+	vmStopped bool
+}
+
+type eventWatcherDataType struct {
+	sync.Mutex
+	events []corev1.Event
+}
+
+var eventWatcherData eventWatcherDataType
+
+type unblockPXUpdateData struct {
+	sync.Mutex
+	stop             bool
+	failedMigrations map[string]*failedMigration
+}
 
 type vmDisk struct {
 	diskName             string
@@ -97,6 +145,10 @@ func kubeVirtHypercOneLiveMigration(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "one-live-migr"
 
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
+
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
@@ -156,6 +208,10 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "two-live-migr"
+
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -223,6 +279,10 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "hotplug-colo"
 
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
+
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
@@ -260,6 +320,10 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "vps-fix-job"
+
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -301,6 +365,10 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
 	instanceID := "ocp-upgrade"
+
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -349,6 +417,165 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 		}
 		log.InfoD("\nCompleted upgrade simulation on node: %s", nodeName)
 	}
+
+	log.InfoD("Destroying apps")
+	destroyAndWait(t, ctxs)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func kubeVirtUpdatePX(t *testing.T) {
+	var err error
+	var testrailID, testResult = 297915, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "update-px"
+
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
+
+	ctxs := kubevirtVMScaledDeployAndValidate(
+		t,
+		instanceID,
+		[]string{
+			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
+			"kubevirt-fedora-multiple-disks-datavol-only",
+		},
+		kubevirtScale,
+	)
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	testStates := map[string]*kubevirtTestState{}
+	for _, appCtx := range ctxs {
+		testState := &kubevirtTestState{
+			appCtx:   appCtx,
+			allNodes: allNodes,
+		}
+		gatherInitialVMIInfo(t, testState)
+		testStates[appCtx.App.Key] = testState
+	}
+
+	// Background watcher to catch PX update moving forward on a node with VMs still running on it
+	startPXUpdateValidator(t)
+
+	startTime := time.Now()
+
+	// Update StorageCluster object to trigger PX update and wait for update to finish
+	updatePX(t)
+
+	// Iterate over all contexts and verify that the VM stayed up the whole time
+	for _, appCtx := range ctxs {
+		testState := testStates[appCtx.App.Key]
+		testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
+		log.FailOnError(t, err, "Failed to get pods for context %s", testState.appCtx.App.Key)
+		// This is fragile but verifyVMStayedUp requires that only testState.vmPod needs to be up-to-date
+		// and we have updated the vmPod above. Other values in the testState are not used in verifyVMStayedUp.
+		verifyVMStayedUp(t, testState)
+	}
+
+	// check if the validator caught any failures
+	checkPXUpdateValidationFailures(t, startTime)
+
+	log.InfoD("Destroying apps")
+	destroyAndWait(t, ctxs)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func kubeVirtUpdatePXBlocked(t *testing.T) {
+	var err error
+	var testrailID, testResult = 297916, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	instanceID := "update-px-blocked"
+
+	// Background watcher to capture events
+	startEventWatcher(t)
+	t.Cleanup(func() { logAndClearEvents(t) })
+
+	k8sNodes, err := core.Instance().GetNodes()
+	log.FailOnError(t, err, "Failed to get k8s nodes")
+
+	// remove our test label from all nodes first
+	for _, k8sNode := range k8sNodes.Items {
+		if _, ok := k8sNode.Labels[pxUpdateTestLabel]; ok {
+			log.InfoD("Found node %s with label %s removing label", k8sNode.Name, pxUpdateTestLabel)
+			delete(k8sNode.Labels, pxUpdateTestLabel)
+			_, err = core.Instance().UpdateNode(&k8sNode)
+			log.FailOnError(t, err, "Failed to clear %s label on node %s", pxUpdateTestLabel, k8sNode.Name)
+		}
+	}
+
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// Select a node to pin the VM to. VM can be scheduled only on this node because of nodeSelector in the VM spec
+	// used for this test.
+	//
+	//   nodeSelector:
+	//     kubevirt-update-px-test: "true"
+	//
+	nodeToPinVMTo := ""
+	for _, n := range allNodes {
+		nodeToPinVMTo = n.SchedulerNodeName
+		break
+	}
+	// VM spec has nodeSelector to make the VM run on a specific node only
+	vmNode, err := core.Instance().GetNodeByName(nodeToPinVMTo)
+	log.FailOnError(t, err, "Failed to get k8s node %s", nodeToPinVMTo)
+	vmNode.Labels[pxUpdateTestLabel] = "true"
+	log.InfoD("Adding label %s to node %s", pxUpdateTestLabel, vmNode.Name)
+	_, err = core.Instance().UpdateNode(vmNode)
+	log.FailOnError(t, err, "Failed to add %s label to node %s", pxUpdateTestLabel, vmNode.Name)
+
+	// start VM with nodeSelector to make it run only on the node with the label
+	ctxs := kubevirtVMScaledDeployAndValidate(
+		t,
+		instanceID,
+		[]string{
+			"kubevirt-fedora-with-node-selector",
+		},
+		kubevirtScale,
+	)
+
+	// Background watcher to catch PX update moving forward on a node with VMs still running on it
+	startPXUpdateValidator(t)
+
+	// Background routine to keep unblocking PX update by stopping VMs for failed migrations
+	unblockerData := unblockPXUpdateData{
+		failedMigrations: map[string]*failedMigration{},
+	}
+	go unblockPXUpdate(t, &unblockerData)
+
+	startTime := time.Now()
+
+	// Update StorageCluster object to trigger PX update and wait for update to finish
+	updatePX(t)
+
+	// there should be at least one failed VM live-migration during PX update
+	unblockerData.Lock()
+	Dash.VerifyFatal(t, len(unblockerData.failedMigrations) > 0, true, "Failed migrations not found")
+	unblockerData.stop = true
+	unblockerData.Unlock()
+
+	// check if the validator caught any failures
+	checkPXUpdateValidationFailures(t, startTime)
+
+	// verify that at least one FailedToEvict event was generated
+	found := false
+	eventWatcherData.Lock()
+	for _, event := range eventWatcherData.events {
+		if event.Reason == "FailedToEvictVM" && event.EventTime.Time.After(startTime) {
+			log.InfoD("Found FailedToEvictVM event: %s", event.Message)
+			found = true
+			break
+		}
+	}
+	eventWatcherData.Unlock()
+	Dash.VerifyFatal(t, found, true, "FailedToEvictVM event not found")
 
 	log.InfoD("Destroying apps")
 	destroyAndWait(t, ctxs)
@@ -422,10 +649,12 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
 	log.FailOnError(t, err, "Failed to get VMI name for pod %s", testState.vmPod.Name)
 
-	testState.vmiUID, testState.vmiPhase, testState.vmiPhaseTransitionTime, testState.vmUID, err = getVMIDetails(
+	var ready bool
+	ready, testState.vmiUID, testState.vmiPhase, testState.vmiPhaseTransitionTime, testState.vmUID, err = getVMIDetails(
 		testState.vmPod.Namespace, testState.vmiName)
 	log.FailOnError(t, err, "Failed to get VMI details for pod %s", testState.vmPod.Name)
 	Dash.VerifyFatal(t, testState.vmiPhase, "Running", fmt.Sprintf("VMI %s is not in Running state", testState.vmiName))
+	Dash.VerifyFatal(t, ready, true, fmt.Sprintf("VMI %s is not ready", testState.vmiName))
 }
 
 func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
@@ -619,11 +848,11 @@ func verifyHotPlugDisk(t *testing.T, testState *kubevirtTestState, hpDisk *hotPl
 }
 
 func setFixVPSJobFrequency(t *testing.T, allNodes map[string]node.Node) {
-	var node node.Node
-	for _, node = range allNodes {
+	var n node.Node
+	for _, n = range allNodes {
 		break
 	}
-	err := volumeDriver.SetClusterOpts(node, map[string]string{"--fix-vps-frequency-in-minutes": "1"})
+	err := volumeDriver.SetClusterOpts(n, map[string]string{"--fix-vps-frequency-in-minutes": "1"})
 	require.NoError(t, err)
 }
 
@@ -767,15 +996,15 @@ func cordonNonReplicaNodes(t *testing.T, vol *api.Volume, allNodes map[string]no
 	replicaNodeIDs := getReplicaNodeIDs(vol)
 	var cordonedNodes []*node.Node
 
-	for nodeID, node := range allNodes {
+	for nodeID, n := range allNodes {
 		if replicaNodeIDs[nodeID] {
 			continue
 		}
-		log.InfoD("Cordoning non-replica node %s (%s)", node.Name, nodeID)
-		err := core.Instance().CordonNode(node.Name, defaultWaitTimeout, defaultWaitInterval)
-		log.FailOnError(t, err, "Failed to cordon node %s (%s)", node.Name, nodeID)
-		node := node
-		cordonedNodes = append(cordonedNodes, &node)
+		log.InfoD("Cordoning non-replica node %s (%s)", n.Name, nodeID)
+		err := core.Instance().CordonNode(n.Name, defaultWaitTimeout, defaultWaitInterval)
+		log.FailOnError(t, err, "Failed to cordon node %s (%s)", n.Name, nodeID)
+		n := n
+		cordonedNodes = append(cordonedNodes, &n)
 	}
 	return cordonedNodes
 }
@@ -812,6 +1041,10 @@ func uncordonNodes(cordonedNodes []*node.Node) {
 	}
 }
 
+func isVirtLauncherPod(pod *corev1.Pod) bool {
+	return pod.Labels["kubevirt.io"] == "virt-launcher"
+}
+
 func getVMPod(appCtx *scheduler.Context, vol *volume.Volume) (*corev1.Pod, error) {
 	pods, err := core.Instance().GetPodsUsingPV(vol.ID)
 	if err != nil {
@@ -820,7 +1053,7 @@ func getVMPod(appCtx *scheduler.Context, vol *volume.Volume) (*corev1.Pod, error
 
 	var found corev1.Pod
 	for _, pod := range pods {
-		if pod.Labels["kubevirt.io"] == "virt-launcher" && pod.Status.Phase == corev1.PodRunning {
+		if isVirtLauncherPod(&pod) && pod.Status.Phase == corev1.PodRunning {
 			if found.Name != "" {
 				// there should be only one VM pod in the running state (otherwise live migration is in progress)
 				return nil, fmt.Errorf("more than 1 KubeVirt pods (%s, %s) are in running state for volume %s",
@@ -887,10 +1120,10 @@ func verifyVMProperties(
 }
 
 // getVMIDetails returns VMI UID, phase and time when VMI transitioned to that phase, and ownerVM's UID.
-func getVMIDetails(vmiNamespace, vmiName string) (string, string, time.Time, string, error) {
+func getVMIDetails(vmiNamespace, vmiName string) (bool, string, string, time.Time, string, error) {
 	vmi, err := kubevirtdy.Instance().GetVirtualMachineInstance(context.TODO(), vmiNamespace, vmiName)
 	if err != nil {
-		return "", "", time.Time{}, "", fmt.Errorf("failed to get VMI for %s/%s", vmiNamespace, vmiName)
+		return false, "", "", time.Time{}, "", fmt.Errorf("failed to get VMI for %s/%s", vmiNamespace, vmiName)
 	}
 
 	var transitionTime time.Time
@@ -900,10 +1133,10 @@ func getVMIDetails(vmiNamespace, vmiName string) (string, string, time.Time, str
 		}
 	}
 	if transitionTime.IsZero() {
-		return "", "", time.Time{}, "", fmt.Errorf(
+		return false, "", "", time.Time{}, "", fmt.Errorf(
 			"failed to determine when VMI %s/%s transitioned to phase %s", vmiNamespace, vmiName, vmi.Phase)
 	}
-	return vmi.UID, vmi.Phase, transitionTime, vmi.OwnerVMUID, nil
+	return vmi.Ready, vmi.UID, vmi.Phase, transitionTime, vmi.OwnerVMUID, nil
 }
 
 // Get mount type (nfs or bind) of the VM disk
@@ -962,8 +1195,9 @@ func getVMDiskMountType(pod *corev1.Pod, vmDisk *vmDisk) (string, error) {
 func verifyVMStayedUp(t *testing.T, testState *kubevirtTestState) {
 	// If a VM is stopped and started again, a new VMI object gets created with the same name (i.e. the UID will change).
 	// We are using that fact here to ensure that the VM did not stop during our test.
-	vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
+	ready, vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
 	log.FailOnError(t, err, "failed to get VMI details after the test")
+	Dash.VerifyFatal(t, ready, true, "VMI ready")
 	Dash.VerifyFatal(t, vmiPhaseAfter, "Running", "VMI phase running")
 	Dash.VerifyFatal(t, testState.vmiUID, vmiUIDAfter, "VMI UID")
 	Dash.VerifyFatal(t, testState.vmiPhaseTransitionTime, transitionTimeAfter, "transitionTimeAfter verified")
@@ -1073,4 +1307,270 @@ func verifyInitialHyperconvergence(t *testing.T, ctxs []*scheduler.Context, allN
 		gatherInitialVMIInfo(t, testState)
 		verifyInitialVMI(t, testState)
 	}
+}
+
+func updatePX(t *testing.T) {
+	var err error
+	pxNamespace := getPXNamespace(t)
+	stc := getSTC(t, pxNamespace)
+	miscArgs := stc.Annotations["portworx.io/misc-args"]
+	parts := strings.Split(miscArgs, ",")
+	currentTraceFileDiskUsage := -1
+	for _, part := range parts {
+		keyValPair := strings.Split(part, "=")
+		if len(keyValPair) == 2 && keyValPair[0] == "--tracefile-diskusage" {
+			currentTraceFileDiskUsage, err = strconv.Atoi(keyValPair[1])
+			require.NoError(t, err)
+			break
+		}
+	}
+	if currentTraceFileDiskUsage > 0 {
+		newVal := strconv.Itoa(currentTraceFileDiskUsage + 1)
+		stc.Annotations["portworx.io/misc-args"] = strings.Replace(miscArgs,
+			"--tracefile-diskusage="+strconv.Itoa(currentTraceFileDiskUsage), "--tracefile-diskusage="+newVal, 1)
+	} else {
+		stc.Annotations["portworx.io/misc-args"] = miscArgs + ",--tracefile-diskusage=7"
+	}
+	log.InfoD("Updating StorageCluster misc-args to trigger PX update: %s", stc.Annotations["portworx.io/misc-args"])
+	_, err = operator.Instance().UpdateStorageCluster(stc)
+	require.NoError(t, err)
+
+	startTime := time.Now()
+	// Wait until the update is in progress
+	log.InfoD("Waiting for PX update to start")
+	waitForStorageClusterCondition(t, pxNamespace, operatorv1.ClusterConditionTypeUpdate, operatorv1.ClusterConditionStatusInProgress,
+		5*time.Minute)
+
+	// Wait until the update is completed
+	log.InfoD("Waiting for PX update to finish")
+	waitForStorageClusterCondition(t, pxNamespace, operatorv1.ClusterConditionTypeUpdate, operatorv1.ClusterConditionStatusCompleted,
+		time.Hour)
+	log.InfoD("PX update finished in %v", time.Now().Sub(startTime))
+}
+
+func getSTC(t *testing.T, pxNamespace string) *operatorv1.StorageCluster {
+	stcs, err := operator.Instance().ListStorageClusters(pxNamespace)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stcs.Items))
+	return &(*stcs).Items[0]
+}
+
+func getPXNamespace(t *testing.T) string {
+	pxNamespaces, err := utils.GetPortworxNamespace()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(pxNamespaces))
+	return pxNamespaces[0]
+}
+
+func waitForStorageClusterCondition(
+	t *testing.T, pxNamespace string, conditionType operatorv1.ClusterConditionType,
+	status operatorv1.ClusterConditionStatus, timeout time.Duration,
+) {
+	// Example:
+	//    - lastTransitionTime: "2024-05-04T23:24:50Z"
+	//      message: Portworx update in progress, 2 nodes remaining
+	//      source: Portworx
+	//      status: InProgress
+	//      type: Update
+	//
+	require.Eventually(t, func() bool {
+		stc := getSTC(t, pxNamespace)
+		for _, condition := range stc.Status.Conditions {
+			if condition.Source == "Portworx" && condition.Type == conditionType {
+				if condition.Status == status {
+					return true
+				} else {
+					log.Info("Waiting for StorageCluster condition %q to change to %q from %q: %s",
+						conditionType, status, condition.Status, condition.Message)
+					return false
+				}
+			}
+		}
+		log.Info("Could not find Portworx condition %s in StorageClusterstatus: %v", conditionType, stc.Status.Conditions)
+		return false
+	}, timeout, 5*time.Second)
+}
+
+func isPortworxPod(pod *corev1.Pod) bool {
+	return pod.Labels["name"] == "portworx"
+}
+
+func startPXUpdateValidator(t *testing.T) {
+	validatorData.Lock()
+	defer validatorData.Unlock()
+	if validatorData.virtLauncherPodsByNode == nil {
+		validatorData.virtLauncherPodsByNode = make(map[string]map[string]string)
+		startPodWatcher(t)
+	}
+}
+
+func startPodWatcher(t *testing.T) {
+	fn := func(object runtime.Object) error {
+		validatorData.Lock()
+		defer validatorData.Unlock()
+		pod, ok := object.(*corev1.Pod)
+		if !ok {
+			err := fmt.Errorf("invalid object type on pod watch: %v", object)
+			return err
+		}
+		if !isVirtLauncherPod(pod) && !isPortworxPod(pod) {
+			return nil
+		}
+		if pod.Spec.NodeName == "" {
+			return nil
+		}
+		virtLauncherPodsByNode := validatorData.virtLauncherPodsByNode
+		log.InfoD("Pod %s/%s (%s) is in phase %s", pod.Namespace, pod.Name, pod.UID, pod.Status.Phase)
+
+		if virtLauncherPodsByNode[pod.Spec.NodeName] == nil {
+			virtLauncherPodsByNode[pod.Spec.NodeName] = make(map[string]string)
+		}
+		if isVirtLauncherPod(pod) {
+			if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+				// terminal state; remove from the map
+				delete(virtLauncherPodsByNode[pod.Spec.NodeName], string(pod.UID))
+			} else {
+				virtLauncherPodsByNode[pod.Spec.NodeName][string(pod.UID)] = pod.Namespace + "/" + pod.Name
+			}
+		} else if isPortworxPod(pod) {
+			if pod.DeletionTimestamp != nil {
+				// portworx pod is being deleted; there should not be any active virt-launcher pods on the node
+				if len(virtLauncherPodsByNode[pod.Spec.NodeName]) > 0 {
+					log.Error("Portworx pod %s/%s is being deleted but there are active virt-launcher pods on the node: %v",
+						pod.Namespace, pod.Name, virtLauncherPodsByNode[pod.Spec.NodeName])
+					virtLauncherPods := map[string]string{}
+					for uid, nsName := range virtLauncherPodsByNode[pod.Spec.NodeName] {
+						virtLauncherPods[uid] = nsName
+					}
+					validatorData.failures = append(validatorData.failures, pxUpdateValidationFailure{
+						timestamp:        time.Now().UTC().Format(time.RFC3339),
+						nodeName:         pod.Spec.NodeName,
+						deletedPXPod:     pod.Namespace + "/" + pod.Name,
+						deletionTime:     pod.DeletionTimestamp.Time.UTC().Format(time.RFC3339),
+						virtLauncherPods: virtLauncherPods,
+					})
+				}
+			}
+		}
+		return nil
+	}
+	err := core.Instance().WatchPods("", fn, metav1.ListOptions{})
+	log.FailOnError(t, err, "Failed to watch pods")
+}
+
+// check if the validator caught any failures
+func checkPXUpdateValidationFailures(t *testing.T, startTime time.Time) {
+	validatorData.Lock()
+	defer validatorData.Unlock()
+	failures := []pxUpdateValidationFailure{}
+	for _, failure := range validatorData.failures {
+		ts, err := time.Parse(time.RFC3339, failure.timestamp)
+		log.FailOnError(t, err, "Failed to parse timestamp %s", failure.timestamp)
+		if !ts.After(startTime) {
+			continue
+		}
+		log.Warn("PX pod %s on node %s was deleted at %v while the node still had VMs: %v",
+			failure.deletedPXPod, failure.nodeName, failure.deletionTime, failure.virtLauncherPods)
+		failures = append(failures, failure)
+	}
+	Dash.VerifyFatal(t, len(failures) == 0, true, fmt.Sprintf("Found validation failures: %v", failures))
+}
+
+func unblockPXUpdate(t *testing.T, unblockerData *unblockPXUpdateData) {
+	log.InfoD("Monitoring failed VMI migrations")
+	for {
+		unblockerData.Lock()
+		if unblockerData.stop {
+			unblockerData.Unlock()
+			log.InfoD("Done Monitoring failed VMI migrations")
+			return
+		}
+		stopVMsOfFailedMigrations(t, unblockerData.failedMigrations)
+		unblockerData.Unlock()
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func stopVMsOfFailedMigrations(t *testing.T, seen map[string]*failedMigration) {
+	// stop VMs for the failed migrations after some time
+	for _, migr := range seen {
+		if !migr.vmStopped && time.Since(migr.firstSeen) > 2*time.Minute {
+			stopVMForMigration(t, migr.migration)
+			migr.vmStopped = true
+		}
+	}
+	kvCli := kubevirt.Instance().GetKubevirtClient()
+
+	// check for new failed migrations
+
+	// get all migrations created by the operator
+	migrs, err := kvCli.VirtualMachineInstanceMigration("").List(&metav1.ListOptions{
+		LabelSelector: constants.OperatorLabelManagedByKey + "=" + constants.OperatorLabelManagedByValue,
+	})
+	log.FailOnError(t, err, "Failed to list migrations created by the operator")
+	for _, migr := range migrs.Items {
+		if migr.Status.Phase != "Failed" {
+			continue
+		}
+		migr := migr
+		key := fmt.Sprintf("%s/%s", migr.Namespace, migr.Name)
+		if _, ok := seen[key]; !ok {
+			seen[key] = &failedMigration{
+				migration: &migr,
+				firstSeen: time.Now(),
+			}
+			log.InfoD("Found failed migration %s on node %s", key,
+				migr.Annotations[constants.OperatorPrefix+"/vmi-migration-source-node"])
+		}
+	}
+}
+
+func stopVMForMigration(t *testing.T, migr *kubevirtv1.VirtualMachineInstanceMigration) {
+	kvCli := kubevirt.Instance().GetKubevirtClient()
+	log.InfoD("Stopping VM %s/%s for failed migration %s", migr.Namespace, migr.Spec.VMIName, migr.Name)
+	err := kvCli.VirtualMachine(migr.Namespace).Stop(migr.Spec.VMIName, &kubevirtv1.StopOptions{})
+	log.FailOnError(t, err, "Failed to stop VM %s/%s for failed migration %s",
+		migr.Namespace, migr.Spec.VMIName, migr.Name)
+}
+
+func startEventWatcher(t *testing.T) {
+	fn := func(object runtime.Object) error {
+		eventWatcherData.Lock()
+		defer eventWatcherData.Unlock()
+		event, ok := object.(*corev1.Event)
+		if !ok {
+			err := fmt.Errorf("invalid object type on event watch: %v", object)
+			return err
+		}
+		if event.InvolvedObject.Kind == "StorageNode" || event.InvolvedObject.Kind == "StorageCluster" {
+			eventWatcherData.events = append(eventWatcherData.events, *event)
+		}
+		return nil
+	}
+	eventWatcherData.Lock()
+	defer eventWatcherData.Unlock()
+	if eventWatcherData.events == nil {
+		eventWatcherData.events = []corev1.Event{}
+		log.Info("Watching events in namespace %q", pxNamespace)
+		err := core.Instance().WatchEvents(pxNamespace, fn, metav1.ListOptions{})
+		log.FailOnError(t, err, "Failed to watch events in namespace %q", pxNamespace)
+	}
+}
+
+func logAndClearEvents(t *testing.T) {
+	if !t.Failed() {
+		return
+	}
+	eventWatcherData.Lock()
+	defer func() {
+		eventWatcherData.events = []corev1.Event{}
+		eventWatcherData.Unlock()
+	}()
+	// convert eventWatcherData.events to json
+	eventsJSON, err := json.Marshal(eventWatcherData.events)
+	if err != nil {
+		log.Warn("Failed to marshal events to json: %v", err)
+		return
+	}
+	log.Info("Events generated during the test: %s", eventsJSON)
 }
