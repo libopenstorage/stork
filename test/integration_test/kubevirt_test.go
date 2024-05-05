@@ -72,6 +72,8 @@ func TestKubevirt(t *testing.T) {
 	t.Run("kubeVirtHypercHotPlugDiskCollocation", kubeVirtHypercHotPlugDiskCollocation)
 	t.Run("kubeVirtHypercVPSFixJob", kubeVirtHypercVPSFixJob)
 	t.Run("kubeVirtSimulateOCPUpgrade", kubeVirtSimulateOCPUpgrade)
+	t.Run("kubeVirtUpdatePX", kubeVirtUpdatePX)
+	t.Run("kubeVirtUpdatePXBlocked", kubeVirtUpdatePXBlocked)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {

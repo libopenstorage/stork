@@ -150,7 +150,7 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 			return "", false, fmt.Errorf("failed to get Virtual Machine")
 		}
 
-		if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning {
+		if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning && vm.Status.Ready == true {
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("Virtual Machine not in running state: %v", vm.Status.PrintableStatus)

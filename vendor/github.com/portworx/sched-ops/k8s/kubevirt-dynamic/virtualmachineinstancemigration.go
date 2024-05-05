@@ -10,6 +10,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+const (
+	// migrationPhaseFailed is the phase when the migration has failed
+	migrationPhaseFailed = "Failed"
+)
+
 var (
 	migrationResource = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstancemigrations"}
 )
@@ -22,6 +27,10 @@ type VirtualMachineInstanceMigration struct {
 	Name string
 	// VMIName is name of the VirtualMachineInstance being migrated
 	VMIName string
+	// Annotations on the migration obj
+	Annotations map[string]string
+	// Labels on the migration obj
+	Labels map[string]string
 	// Completed indicates if the migration has completed
 	Completed bool
 	// StartTimestamp has the time the migration action started
@@ -48,6 +57,10 @@ type VirtualMachineInstanceMigrationOps interface {
 	CreateVirtualMachineInstanceMigration(ctx context.Context, vmiNamespace, vmiName string) (
 		*VirtualMachineInstanceMigration, error)
 
+	// CreateVirtualMachineInstanceMigrationWithParams starts live migration of the specified VMI
+	CreateVirtualMachineInstanceMigrationWithParams(ctx context.Context, vmiNamespace, vmiName string,
+		migrationName, generateNamePrefix string, annotations, labels map[string]string) (*VirtualMachineInstanceMigration, error)
+
 	// GetVirtualMachineInstanceMigration retrieves some info about the specified VMI
 	GetVirtualMachineInstanceMigration(ctx context.Context, namespace, name string) (
 		*VirtualMachineInstanceMigration, error)
@@ -61,6 +74,14 @@ type VirtualMachineInstanceMigrationOps interface {
 func (c *Client) CreateVirtualMachineInstanceMigration(
 	ctx context.Context, vmiNamespace, vmiName string,
 ) (*VirtualMachineInstanceMigration, error) {
+	return c.CreateVirtualMachineInstanceMigrationWithParams(ctx, vmiNamespace, vmiName, "", "", nil, nil)
+}
+
+// CreateVirtualMachineInstanceMigrationWithParams starts live migration of the specified VMI
+func (c *Client) CreateVirtualMachineInstanceMigrationWithParams(
+	ctx context.Context, vmiNamespace, vmiName string, migrationName, generateNamePrefix string,
+	annotations, labels map[string]string,
+) (*VirtualMachineInstanceMigration, error) {
 
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -71,12 +92,20 @@ func (c *Client) CreateVirtualMachineInstanceMigration(
 			"apiVersion": "kubevirt.io/v1",
 			"kind":       "VirtualMachineInstanceMigration",
 			"metadata": map[string]interface{}{
-				"generateName": vmiName + "-px-",
+				"annotations": annotations,
+				"labels":      labels,
 			},
 			"spec": map[string]interface{}{
 				"vmiName": vmiName,
 			},
 		},
+	}
+	if migrationName != "" {
+		migration.Object["metadata"].(map[string]interface{})["name"] = migrationName
+	} else if generateNamePrefix != "" {
+		migration.Object["metadata"].(map[string]interface{})["generateName"] = generateNamePrefix
+	} else {
+		migration.Object["metadata"].(map[string]interface{})["generateName"] = vmiName + "-px-"
 	}
 
 	result, err := c.client.Resource(migrationResource).Namespace(vmiNamespace).Create(
@@ -174,20 +203,39 @@ func (c *Client) unstructuredGetVMIMigration(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'vmiName' from the vmi migration spec: %w", err)
 	}
+	// annotations
+	ret.Annotations, _, err = unstructured.NestedStringMap(migration.Object, "metadata", "annotations")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get 'annotations' from the vmi migration spec: %w", err)
+	}
+	// labels
+	ret.Labels, _, err = unstructured.NestedStringMap(migration.Object, "metadata", "labels")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get 'labels' from the vmi migration spec: %w", err)
+	}
 	// phase
 	ret.Phase, _, err = unstructured.NestedString(migration.Object, "status", "phase")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'phase' from the vmi migration status: %w", err)
 	}
 	// completed
-	ret.Completed, _, err = unstructured.NestedBool(migration.Object, "status", "migrationState", "completed")
+	var found bool
+	ret.Completed, found, err = unstructured.NestedBool(migration.Object, "status", "migrationState", "completed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'completed' from the vmi migration status: %w", err)
 	}
+	// migrationState is not present if the pod fails to get scheduled; we need to look at the Phase
+	if !found && ret.Phase == migrationPhaseFailed {
+		ret.Completed = true
+	}
 	// failed
-	ret.Failed, _, err = unstructured.NestedBool(migration.Object, "status", "migrationState", "failed")
+	ret.Failed, found, err = unstructured.NestedBool(migration.Object, "status", "migrationState", "failed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'failed' from the vmi migration status: %w", err)
+	}
+	// migrationState is not present if the pod fails to get scheduled; we need to look at the Phase
+	if !found && ret.Phase == migrationPhaseFailed {
+		ret.Failed = true
 	}
 	// startTimestamp
 	ret.StartTimestamp, _, err = c.unstructuredGetTimestamp(migration.Object, "status", "migrationState", "startTimestamp")
