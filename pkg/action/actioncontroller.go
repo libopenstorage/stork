@@ -159,7 +159,8 @@ func (ac *ActionController) handle(ctx context.Context, action *storkv1.Action) 
 			ac.activateClusterDuringFailback(action, true)
 		}
 	default:
-		ac.updateStatus(action, storkv1.ActionStatusFailed)
+		action.Status.Status = storkv1.ActionStatusFailed
+		ac.updateAction(action)
 		return fmt.Errorf("invalid value received for Action.Spec.ActionType")
 	}
 	return nil
@@ -194,7 +195,6 @@ func (ac *ActionController) updateStatus(action *storkv1.Action, actionStatus st
 func (ac *ActionController) updateAction(action *storkv1.Action) error {
 	err := ac.client.Update(context.TODO(), action)
 	if err != nil {
-		log.ActionLog(action).Errorf("failed to update action status to %v with error %v", action.Status, err)
 		return err
 	}
 	return nil
