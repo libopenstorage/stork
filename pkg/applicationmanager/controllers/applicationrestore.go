@@ -665,7 +665,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			// Portworx driver restore is not supported via job as it can be a secured px volume
 			// to access the token, we need to run the restore in the same pod as the stork controller
-			// this check is equivalent to (if !nfs || (nfs && driverName == volume.PortworxDriverName))
 			if !nfs || driverName == volume.PortworxDriverName {
 				backupVolInfos := vInfos
 				driver, err := volume.Get(driverName)
@@ -677,18 +676,8 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				if err != nil {
 					return err
 				}
-				var preRestoreObjects, objects []runtime.Unstructured
-				// this check is equivalent to (if nfs && driverName == volume.PortworxDriverName)
-				if nfs {
-					if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyRetain {
-						// Skip pv/pvc if replacepolicy is set to retain to avoid creating with empty object
-						backupVolInfos, existingRestoreVolInfos, err = a.skipVolumesFromRestoreList(restore, objects, driver, vInfos)
-						if err != nil {
-							log.ApplicationRestoreLog(restore).Errorf("Error while checking pvcs: %v", err)
-							return err
-						}
-					}
-				} else {
+				var preRestoreObjects []runtime.Unstructured
+				if !nfs {
 					// For each driver, check if it needs any additional resources to be
 					// restored before starting the volume restore
 					objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
@@ -1422,26 +1411,21 @@ func (a *ApplicationRestoreController) skipVolumesFromRestoreList(
 			logrus.Infof("skipping namespace %s for restore", bkupVolInfo.Namespace)
 			continue
 		}
-		ns := val
-		var pvcName string // Declare the pvcName variable
-		if objects != nil {
-			// get corresponding pvc object from objects list
-			pvcObject, err := volume.GetPVCFromObjects(objects, bkupVolInfo)
-			if err != nil {
-				return newVolInfos, existingInfos, err
-			}
-			pvcName = pvcObject.Name
 
-		} else {
-			pvcName = bkupVolInfo.PersistentVolumeClaim
+		// get corresponding pvc object from objects list
+		pvcObject, err := volume.GetPVCFromObjects(objects, bkupVolInfo)
+		if err != nil {
+			return newVolInfos, existingInfos, err
 		}
-		pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, ns)
+
+		ns := val
+		pvc, err := core.Instance().GetPersistentVolumeClaim(pvcObject.Name, ns)
 		if err != nil {
 			if k8s_errors.IsNotFound(err) {
 				newVolInfos = append(newVolInfos, bkupVolInfo)
 				continue
 			}
-			return newVolInfos, existingInfos, fmt.Errorf("error getting pvc %s/%s: %v", ns, pvcName, err) // Update the error message
+			return newVolInfos, existingInfos, fmt.Errorf("erorr getting pvc %s/%s: %v", ns, pvcObject.Name, err)
 		}
 		pvName := pvc.Spec.VolumeName
 		var zones []string
