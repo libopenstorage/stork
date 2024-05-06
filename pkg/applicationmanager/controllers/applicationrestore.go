@@ -1319,7 +1319,6 @@ func getNamespacedPVCLocation(pvc *v1.PersistentVolumeClaim) string {
 
 // getPVCToPVMapping constructs a mapping of PVC name/namespace to PV objects
 func getPVCToPVMapping(allObjects []runtime.Unstructured) (map[string]*v1.PersistentVolume, error) {
-
 	// Get mapping of PVC name to PV name
 	pvNameToPVCName := make(map[string]string)
 	for _, o := range allObjects {
@@ -1365,7 +1364,7 @@ func getPVCToPVMapping(allObjects []runtime.Unstructured) (map[string]*v1.Persis
 }
 
 func isGenericCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
-	driverName, err := volume.GetPVDriver(pv)
+	driverName, err := volume.GetPVDriverForRestore(pv)
 	if err != nil {
 		return false, err
 	}
