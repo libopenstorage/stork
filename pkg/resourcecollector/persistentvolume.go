@@ -207,7 +207,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	// checks proper driver by looking at pv name
 	if driverName == "" {
 		var err error
-		driverName, err = volume.GetPVDriver(&pv)
+		driverName, err = volume.GetPVDriverForRestore(&pv)
 		if err != nil {
 			return false, err
 		}
