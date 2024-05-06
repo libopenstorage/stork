@@ -67,6 +67,16 @@ var (
 		CSIDriverName,
 		KDMPDriverName,
 	}
+
+	orderedListOfDriversForRestore = []string{
+		PortworxDriverName,
+		AWSDriverName,
+		AzureDriverName,
+		GCEDriverName,
+		LinstorDriverName,
+		CSIDriverName,
+		KDMPDriverName,
+	}
 )
 
 // Driver defines an external volume driver interface.
@@ -390,6 +400,24 @@ func GetPVDriver(pv *v1.PersistentVolume) (string, error) {
 			continue
 		}
 		if d.OwnsPV(pv) {
+			return driverName, nil
+		}
+	}
+	return "", &errors.ErrNotSupported{
+		Feature: "VolumeDriver",
+		Reason:  fmt.Sprintf("PV %v provisioned using unsupported driver", pv.Name),
+	}
+}
+
+// GetPVDriverForRestore gets the driver associated with a PV. Returns ErrNotFound if the PV is
+// not owned by any available driver
+func GetPVDriverForRestore(pv *v1.PersistentVolume) (string, error) {
+	for _, driverName := range orderedListOfDriversForRestore {
+		driverInst, ok := volDrivers[driverName]
+		if !ok {
+			continue
+		}
+		if driverInst.OwnsPV(pv) {
 			return driverName, nil
 		}
 	}
