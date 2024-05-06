@@ -74,8 +74,10 @@ const (
 
 	// PureVolumeOUI is used to identify if a mapper device is of Pure origin
 	// (if it matches with /dev/mapper/.*24a937.*, it's a Pure volume, if it's some other format it's not)
-	PureVolumeOUI   = "24a937"
-	PureMapperRegex = "/dev/mapper/.*" + PureVolumeOUI + ".*"
+	PureVolumeOUI      = "24a937"
+	PureVolumeNvmeOUI  = "eui."
+	PureMapperRegex    = "/dev/mapper/.*" + PureVolumeOUI + ".*"
+	PureMapperEuiRegex = "/dev/mapper/" + PureVolumeNvmeOUI + ".*"
 )
 
 const (
@@ -415,7 +417,8 @@ PodLoop:
 			}
 			log.Infof("Pod [%s/%s] container [%s] and paths [%v] after checking sym links", p.Namespace, p.Name, containerName, paths)
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", PureMapperRegex, path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s",
+					PureMapperRegex, PureMapperEuiRegex, path))
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)

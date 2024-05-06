@@ -3032,3 +3032,475 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func pickRandomElementsFromArray(array []string, sampleCount int) []string {
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
+
+	// Shuffle the slice
+	rand.Shuffle(len(array), func(i, j int) {
+		array[i], array[j] = array[j], array[i]
+	})
+
+	// Pick the first two elements
+	return array[:sampleCount]
+}
+
+// Function to Enable Interfaces provided interface list
+func enableInterfaces(interfaces map[string][]string) {
+	stepLog = "Enable all Data ports on the FA Controller"
+	Step(stepLog, func() {
+		for mgmtIp, iFaces := range interfaces {
+			for _, eachIface := range iFaces {
+				log.Infof("Enabling Interface [%v] on FA Host [%v]", eachIface, mgmtIp)
+				log.FailOnError(EnableFlashArrayNetworkInterface(mgmtIp, eachIface), "Enabling Network interface failed?")
+			}
+		}
+	})
+}
+
+// Function to disable Interfaces provided interface list
+func disableInterfaces(interfaces map[string][]string) {
+	stepLog = "Disable all Data ports on the FA Controller"
+	Step(stepLog, func() {
+		for mgmtIp, iFaces := range interfaces {
+			for _, eachIface := range iFaces {
+				log.Infof("Disabling Network interfaces [%v] on FA Host [%v]", eachIface, mgmtIp)
+				log.FailOnError(DisableFlashArrayNetworkInterface(mgmtIp, eachIface), "Disabling network interface failed?")
+			}
+		}
+	})
+}
+
+// Do pool resize when few of the iscsi ports are down in FA
+var _ = Describe("{PoolResizeFewIscsiPortsDown}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23831
+		Do pool resize when few of the iscsi ports are down in FA
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("PoolResizeFewIscsiPortsDown",
+			"Do pool resize when few of the iscsi ports are down in FA",
+			nil, 0)
+	})
+
+	itLog := "PoolResizeFewIscsiPortsDown"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		//var k8sCore = core.Instance()
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
+			}
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		poolDetails := []*api.StoragePool{}
+		stepLog = "Get List of all storage pools present in the cluster"
+		Step(stepLog, func() {
+			poolsAvailable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailable)
+			for _, v := range poolsAvailable {
+				poolDetails = append(poolDetails, v)
+			}
+		})
+
+		// Pick Random Pool for Resize
+		randomPool := poolDetails[rand.Intn(len(poolDetails))]
+		log.Infof("Random pool picked for test [%v]", randomPool.GetUuid())
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		// Pick up random interfaces from each node leaving one interface to work
+		randomInterfaces := make(map[string][]string)
+		for MgmtIp, ifaces := range flashArrays {
+			if len(ifaces) == 1 {
+				Skip(fmt.Sprintf("only 1 interface present in the Backend FA. Skipping the test [%v]", "PoolResizeFewIscsiPortsDown"))
+			} else {
+				randomInterfaces[MgmtIp] = pickRandomElementsFromArray(ifaces, len(ifaces)-1)
+			}
+		}
+
+		defer enableInterfaces(randomInterfaces)
+
+		// Block Iptable Ports on each element
+		disableInterfaces(randomInterfaces)
+
+		stepLog := "Initiate pool expansion drive using Resize type Auto "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolToBeResized, err := GetStoragePoolByUUID(randomPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", randomPool.Uuid))
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", randomPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(randomPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			err = WaitForExpansionToStart(poolToBeResized.Uuid)
+			log.FailOnError(err, "pool expansion not started")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, randomPool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s expansion using resize-disk", randomPool.Uuid))
+
+		})
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Do pool resize when all the iscsi ports are down in FA
+var _ = Describe("{PoolResizeAllIscsiPortsDown}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23832
+		Do pool resize when all of iscsi ports are down in FA
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("PoolResizeAllIscsiPortsDown",
+			"Do pool resize when all of iscsi ports are down in FA",
+			nil, 0)
+	})
+
+	itLog := "PoolResizeAllIscsiPortsDown"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		//var k8sCore = core.Instance()
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
+			}
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		poolDetails := []*api.StoragePool{}
+		stepLog = "Get List of all storage pools present in the cluster"
+		Step(stepLog, func() {
+			poolsAvailable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailable)
+			for _, v := range poolsAvailable {
+				poolDetails = append(poolDetails, v)
+			}
+		})
+
+		// Pick Random Pool for Resize
+		randomPool := poolDetails[rand.Intn(len(poolDetails))]
+		log.Infof("Random pool picked for test [%v]", randomPool.GetUuid())
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		stepLog := "Initiate pool expansion drive and restart PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolToBeResized, err := GetStoragePoolByUUID(randomPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", randomPool.Uuid))
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			// Block Iptable Ports on each element
+			disableInterfaces(flashArrays)
+
+			// Sleep for 2 min before proceeding to Pool Expansion
+			time.Sleep(2 * time.Minute)
+
+			log.InfoD("Current Size of the pool %s is %d", randomPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(randomPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			log.Infof("Pool Expansion status [%v]", err)
+			if err == nil {
+				log.FailOnError(fmt.Errorf("Pool expansion completed even if all iscsi ports are down"), "pool expansion completed ?")
+			}
+		})
+
+		// Enable Back network interfaces on all the nodes
+		enableInterfaces(flashArrays)
+
+		// Wait for Px to come up
+		// Verify Px goes down on all the nodes present in the cluster
+		for _, eachNodes := range node.GetStorageNodes() {
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+				fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+		}
+
+		// Retry Pool Expand again after px comes up
+		stepLog = "Initiate pool expansion drive and restart PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolToBeResized, err := GetStoragePoolByUUID(randomPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", randomPool.Uuid))
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", randomPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(randomPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			err = WaitForExpansionToStart(poolToBeResized.Uuid)
+			log.FailOnError(err, "pool expansion not started")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, randomPool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr == nil, true, fmt.Sprintf("Verify pool %s expansion using resize-disk", randomPool.Uuid))
+
+		})
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Do pool resize when all the iscsi ports are down in FA
+var _ = Describe("{IscsiPortsDownDuringPoolExpandInProgress}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23835
+		bring iscsi port down when pool expansion in progress
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("IscsiPortsDownDuringPoolExpandInProgress",
+			"bring all iscsi port down when pool expansion in progress",
+			nil, 0)
+	})
+
+	itLog := "IscsiPortsDownDuringPoolExpandInProgress"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		//var k8sCore = core.Instance()
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
+			}
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		poolDetails := []*api.StoragePool{}
+		stepLog = "Get List of all storage pools present in the cluster"
+		Step(stepLog, func() {
+			poolsAvailable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailable)
+			for _, v := range poolsAvailable {
+				poolDetails = append(poolDetails, v)
+			}
+		})
+
+		// Pick Random Pool for Resize
+		randomPool := poolDetails[rand.Intn(len(poolDetails))]
+		log.Infof("Random pool picked for test [%v]", randomPool.GetUuid())
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		// Wait for Px to come up
+		// Verify Px goes down on all the nodes present in the cluster
+		storageNodes := node.GetStorageNodes()
+		for _, eachNodes := range storageNodes {
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+				fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+		}
+
+		// Retry Pool Expand again after px comes up
+		stepLog = "Initiate pool expansion drives"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolToBeResized, err := GetStoragePoolByUUID(randomPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", randomPool.Uuid))
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", randomPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(randomPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			err = WaitForExpansionToStart(poolToBeResized.Uuid)
+			log.FailOnError(err, "pool expansion not started")
+
+			// Block Iptable Ports on each element
+			disableInterfaces(flashArrays)
+
+			// Verify Px goes down on all the nodes present in the cluster
+			for _, eachNodes := range storageNodes {
+				log.FailOnError(Inst().V.WaitDriverDownOnNode(eachNodes), fmt.Sprintf("Driver on the Node [%v] is not down yet", eachNodes.Name))
+			}
+
+			// Enable Back network interfaces on all the nodes
+			enableInterfaces(flashArrays)
+
+			// Verify Px goes down on all the nodes present in the cluster
+			for _, eachNodes := range node.GetStorageNodes() {
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+					fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+			}
+
+			// Wait for Pool to be resized
+			resizeErr := waitForPoolToBeResized(expectedSize, randomPool.Uuid, isjournal)
+			log.Infof("%v", resizeErr)
+			dash.VerifyFatal(resizeErr == nil, true, fmt.Sprintf("Verify pool %s expansion using resize-disk", randomPool.Uuid))
+
+		})
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23835
+		bring iscsi port down when pool Creation in progress
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("IscsiPortsDownDuringNewPoolCreateInProgress",
+			"bring all iscsi port down when New Pool Creation in progress",
+			nil, 0)
+	})
+
+	itLog := "IscsiPortsDownDuringNewPoolCreateInProgress"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+
+		//var k8sCore = core.Instance()
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
+			}
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		poolId, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to Get Details of pool with Running IO")
+
+		// Get the list of nodes present in the cluster
+		nodeId, err := GetNodeFromPoolUUID(poolId)
+		log.FailOnError(err, fmt.Sprintf("Failed to Get Details of Node with Pool UUID [%v]", poolId))
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		// Wait for Px to come up
+		// Verify Px goes down on all the nodes present in the cluster
+		storageNodes := node.GetStorageNodes()
+		for _, eachNodes := range storageNodes {
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+				fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+		}
+
+		createNewPool := func(selectedNode *node.Node) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			newSpec := "size=250"
+			err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+		}
+
+		stepLog = "Initiate New Pool Creation on the  node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Get List of Pools present in the cluster
+			poolDetails := []*api.StoragePool{}
+			poolsAvailable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailable)
+			for _, v := range poolsAvailable {
+				poolDetails = append(poolDetails, v)
+			}
+
+			wg.Add(1)
+			go createNewPool(nodeId)
+
+			time.Sleep(20 * time.Second)
+
+			// Block Iptable Ports on each element
+			disableInterfaces(flashArrays)
+			wg.Wait()
+			time.Sleep(10 * time.Minute)
+
+			// Enable Back network interfaces on all the nodes
+			enableInterfaces(flashArrays)
+
+			// Verify Px goes down on all the nodes present in the cluster
+			for _, eachNodes := range node.GetStorageNodes() {
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+					fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+			}
+
+			// Get List of Pools present in the cluster
+			poolDetailsAfterEnable := []*api.StoragePool{}
+			poolsAvailableAfterEnable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailableAfterEnable)
+			for _, v := range poolsAvailableAfterEnable {
+				poolDetailsAfterEnable = append(poolDetailsAfterEnable, v)
+			}
+
+			// Comparing if new pool is created
+			dash.VerifyFatal(len(poolDetailsAfterEnable) > len(poolDetails), true, "New pool created ?")
+		})
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
