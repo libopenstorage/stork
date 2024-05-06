@@ -1693,33 +1693,43 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 // ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
 func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	Step("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		if err != nil {
-			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-			log.Error(err.Error())
+		var vols []*volume.Volume
+		var err error
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
 			processError(err, errChan...)
-		}
+		})
+		if len(vols) == 0 {
+			log.Warnf("No FlashArray DirectAccess volumes, skipping")
+		} else {
 
-		if len(pools) == 0 {
-			err = fmt.Errorf("length of pools should be greater than 0")
-			processError(err, errChan...)
-		}
-		for _, pool := range pools {
-			initialPoolSize := pool.TotalSize / units.GiB
-			err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
-				err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
 				log.Error(err.Error())
-			} else {
-				err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+				processError(err, errChan...)
+			}
+
+			if len(pools) == 0 {
+				err = fmt.Errorf("length of pools should be greater than 0")
+				processError(err, errChan...)
+			}
+			for _, pool := range pools {
+				initialPoolSize := pool.TotalSize / units.GiB
+				err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
 				if err != nil {
-					err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
-					log.Error(err)
+					err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+					log.Error(err.Error())
+				} else {
+					err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+					if err != nil {
+						err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
+						log.Error(err)
+					}
 				}
 			}
 		}
 	})
-
 }
 
 // ValidateMountOptionsWithPureVolumes is the ginkgo spec for executing a check for mountOptions flag
