@@ -3522,13 +3522,14 @@ github.com/libopenstorage/openstorage-sdk-clients v0.109.0/go.mod h1:vo0c/nLG2HI
 github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594/go.mod h1:0S4k1ouTScuVS3rxPukfEFvc5bMasmI1wpAAM0NejWQ=
 github.com/libopenstorage/operator v0.0.0-20230801044606-e27dec4914d4/go.mod h1:Lc0sagIlgkrXHn+vwR9JfZkAkSsdedtbrRx42qF0vMc=
 github.com/libopenstorage/operator v0.0.0-20240311222049-36e102b2df5e/go.mod h1://AjiHbJctf/RFsvW2zMX/MVKrU++2eMKPNmeksSYVg=
+github.com/libopenstorage/operator v0.0.0-20240327054657-6db39aae0429/go.mod h1:68jjNPA3HME2hK61cigifjqlJwPJcJBszkWzBjYA5oA=
 github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88 h1:18WXQ6DEZp11xHNOG+ouxCvQpssbwrJR2BFfoTbBuWM=
 github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88/go.mod h1:KsLOFm0UNYBSWB4YMy96763QKTM56t8WKQw3A4Xm7Nw=
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9 h1:pZQ5uaWky7KerHX2saBO971ti+IBDJRorHwcHwc+0aM=
 github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
 github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066/go.mod h1:Yst+fnOYjWk6SA5pXZBKm19wtiinjxQ/vgYTXI3k80Q=
-github.com/libopenstorage/stork v1.4.1-0.20240325115433-9b0084a011b4/go.mod h1:k3KSiL2a2ge/B7Z70QKK6wEnmQJX83bWsN8cMwlVzP8=
 github.com/libopenstorage/stork v1.4.1-0.20240417024347-acff28bbdb16/go.mod h1:l4qH7zGZe0NXWSeIFIL1Y+6dQg2OIAfbQQq98TwlPZ0=
+github.com/libopenstorage/stork v1.4.1-0.20240502174850-59e33b4ea29e/go.mod h1:K+1WdxpmU3tS1CJQITl5UlHnV3JLWHXCxTzF9cN7BEM=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 h1:5vqfYYWm4b+lbkMtvvWtWBiqLbmLN6dNvWaa7wVsz/Q=
 github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1/go.mod h1:xwNGC7xiz/BQ/wbMkvHujL8Gjgseg+x41xMek7sKRRQ=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de h1:9TO3cAIGXtEhnIaL+V+BEER86oLrvS+kWobKpbJuye0=
@@ -4073,8 +4074,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/polyfloyd/go-errorlint v1.0.5/go.mod h1:APVvOesVSAnne5SClsPxPdfvZTVDojXh1/G3qb5wjGI=
 github.com/portworx/dcos-secrets v0.0.0-20180616013705-8e8ec3f66611/go.mod h1:4hklRW/4DQpLqkcXcjtNprbH2tz/sJaNtqinfPWl/LA=
-github.com/portworx/kdmp v0.4.1-0.20240327131138-e0fa03f5a66c h1:KPiKTFsUvEx2rg6qgj/78ncXu/CVtZkTo+b1Keuv21M=
-github.com/portworx/kdmp v0.4.1-0.20240327131138-e0fa03f5a66c/go.mod h1:lUzB7fNkyapU03rQBnOuWEJ/hHBLxS1zVTYCjP0bDVo=
+github.com/portworx/kdmp v0.4.1-0.20240506055648-40385b71c050 h1:Nbm4u5O8+gEjTP2pgAyqrm0bDY26itEvPxc28D/IM2A=
+github.com/portworx/kdmp v0.4.1-0.20240506055648-40385b71c050/go.mod h1:ISxNlqAcFvPF0tM+ZKtm7h2liyL3k9wnnTNHfb9Jia4=
 github.com/portworx/kvdb v0.0.0-20190105022415-cccaa09abfc9/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
