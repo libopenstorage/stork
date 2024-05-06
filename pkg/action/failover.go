@@ -5,13 +5,11 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
-	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/libopenstorage/stork/pkg/utils"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"slices"
 )
 
 // validateBeforeFailover is called as part of the Initial stage of Failover
@@ -226,45 +224,6 @@ func (ac *ActionController) deactivateSourceDuringFailover(action *storkv1.Actio
 	ac.deactivateClusterDuringDR(action, actualNamespaces, migrationNamespaces, clusterConfig, remoteConfig)
 }
 
-// deactivateClusterDuringDR will be used in both failover and failback to deactivate apps in source/destination clusters respectively
-func (ac *ActionController) deactivateClusterDuringDR(action *storkv1.Action, namespaces []string, migrationNamespaces []string, activationClusterConfig *rest.Config, deactivationClusterConfig *rest.Config) {
-	// identify which resources to be scaled down by looking at which resources will be activated in the opposite cluster
-	resourcesBeingActivatedMap := make(map[string]map[metav1.GroupVersionKind]map[string]string)
-	for _, ns := range namespaces {
-		resourcesBeingActivatedInNamespace, err := resourceutils.ScaleUpResourcesInNamespace(ns, true, activationClusterConfig)
-		if err != nil {
-			msg := fmt.Sprintf("Failed to identify resources to be scaled down: %v", err)
-			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-			logEvents(msg, "err")
-			action.Status.Status = storkv1.ActionStatusFailed
-			action.Status.Reason = msg
-			ac.updateAction(action)
-			return
-		}
-		resourcesBeingActivatedMap[ns] = resourcesBeingActivatedInNamespace
-	}
-
-	// this method will scale down the resources which are being activated in the opposite cluster
-	err := resourceutils.ScaleDownGivenResources(namespaces, resourcesBeingActivatedMap, deactivationClusterConfig)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to scale down replicas in cluster %v : %v", deactivationClusterConfig.Host, err)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-		logEvents(msg, "err")
-		action.Status.Status = storkv1.ActionStatusFailed
-		action.Status.Reason = msg
-		ac.updateAction(action)
-		return
-	}
-	// Update ApplicationActivated value in relevant migrationSchedules
-	ac.updateApplicationActivatedInRelevantMigrationSchedules(action, deactivationClusterConfig, namespaces, migrationNamespaces, false)
-	msg := fmt.Sprintf("Scaling down of applications in cluster : %s successful. Moving to the next stage", deactivationClusterConfig.Host)
-	logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
-	logEvents(msg, "out")
-	action.Status.Status = storkv1.ActionStatusSuccessful
-	action.Status.Reason = ""
-	ac.updateAction(action)
-}
-
 // activateClusterDuringFailover is used for both activation of destination and reactivation of source during failover.
 // If rollback true -> reactivate source, else activate destination
 func (ac *ActionController) activateClusterDuringFailover(action *storkv1.Action, rollback bool) {
@@ -314,82 +273,6 @@ func (ac *ActionController) activateClusterDuringFailover(action *storkv1.Action
 		config = ac.config
 	}
 	ac.activateClusterDuringDR(action, namespaces, migrationSchedule, config, rollback)
-}
-
-func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, namespaces []string, migrationSchedule *storkv1.MigrationSchedule, config *rest.Config, rollback bool) {
-	failoverSummaryList := make([]*storkv1.FailoverSummary, 0)
-	failbackSummaryList := make([]*storkv1.FailbackSummary, 0)
-	scaleUpStatus := true
-
-	// we want to scale replicas only if the activation namespace is a subset of namespaces being migrated
-	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
-		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
-		logEvents(msg, "err")
-		action.Status.Status = storkv1.ActionStatusFailed
-		action.Status.Reason = msg
-		ac.updateAction(action)
-		return
-	}
-
-	failureStatus := storkv1.ActionStatusFailed
-	successStatus := storkv1.ActionStatusSuccessful
-	if rollback {
-		failureStatus = storkv1.ActionStatusRollbackFailed
-		successStatus = storkv1.ActionStatusRollbackSuccessful
-	}
-
-	namespacesSuccessfullyActivated := make([]string, 0)
-
-	for _, ns := range namespaces {
-		logEvents := ac.printFunc(action, "ScaleReplicas")
-		logEvents(fmt.Sprintf("Scaling up apps in cluster %s", config.Host), "out")
-		var failoverSummary *storkv1.FailoverSummary
-		var failbackSummary *storkv1.FailbackSummary
-		if slices.Contains(migrationNamespaces, ns) {
-			_, err := resourceutils.ScaleUpResourcesInNamespace(ns, false, config)
-			if err != nil {
-				scaleUpStatus = false
-				msg := fmt.Sprintf("scaling up apps in namespace %s failed: %v", ns, err)
-				log.ActionLog(action).Errorf(msg)
-				failoverSummary, failbackSummary = ac.createSummary(action, ns, failureStatus, msg)
-			} else {
-				msg := fmt.Sprintf("scaling up apps in namespace %s successful", ns)
-				namespacesSuccessfullyActivated = append(namespacesSuccessfullyActivated, ns)
-				failoverSummary, failbackSummary = ac.createSummary(action, ns, successStatus, msg)
-			}
-		} else {
-			msg := fmt.Sprintf("Skipping scaling up apps in the namespace %s since it is not one of the namespaces being migrated by the MigrationSchedule %s/%s", ns, migrationSchedule.Namespace, migrationSchedule.Name)
-			failoverSummary, failbackSummary = ac.createSummary(action, ns, successStatus, msg)
-		}
-		if action.Spec.ActionType == storkv1.ActionTypeFailover {
-			failoverSummaryList = append(failoverSummaryList, failoverSummary)
-		} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
-			failbackSummaryList = append(failbackSummaryList, failbackSummary)
-		}
-	}
-
-	if action.Spec.ActionType == storkv1.ActionTypeFailover {
-		action.Status.Summary = &storkv1.ActionSummary{FailoverSummaryItem: failoverSummaryList}
-	} else if action.Spec.ActionType == storkv1.ActionTypeFailback {
-		action.Status.Summary = &storkv1.ActionSummary{FailbackSummaryItem: failbackSummaryList}
-	}
-
-	if scaleUpStatus {
-		// Update ApplicationActivated value in relevant migrationSchedules
-		ac.updateApplicationActivatedInRelevantMigrationSchedules(action, config, namespacesSuccessfullyActivated, migrationNamespaces, true)
-		msg := fmt.Sprintf("Scaling up of applications in cluster : %s successful. Moving to the next stage", config.Host)
-		logEvents := ac.printFunc(action, string(successStatus))
-		logEvents(msg, "out")
-		action.Status.Status = storkv1.ActionStatusSuccessful
-	} else {
-		msg := fmt.Sprintf("Scaling up of applications in cluster : %s failed.", config.Host)
-		logEvents := ac.printFunc(action, string(failureStatus))
-		logEvents(msg, "out")
-		action.Status.Status = storkv1.ActionStatusFailed
-	}
-	ac.updateAction(action)
 }
 
 func (ac *ActionController) performLastMileMigrationDuringFailover(action *storkv1.Action) {
