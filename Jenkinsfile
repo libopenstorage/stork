@@ -13,7 +13,7 @@ pipeline {
     }
     stage("Run Stork CBT tests") {
       steps {
-        build(job: "${CBT_STORK_TEST_JOB_NAME}", parameters: [string(name: "GIT_BRANCH", value: GIT_COMMIT)])
+        build(job: "${CBT_STORK_TEST_JOB_NAME}", parameters: [string(name: "GIT_BRANCH", value: GIT_BRANCH)])
       }
     }
   }
