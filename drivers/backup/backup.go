@@ -252,6 +252,11 @@ type Backup interface {
 	WaitForBackupCompletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 
+	// WaitForBackupPartialCompletion waits for backup to partial complete successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry`
+	WaitForBackupPartialCompletion(ctx context.Context, backupName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
+
 	// WaitForBackupDeletion waits for backup to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry
 	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,

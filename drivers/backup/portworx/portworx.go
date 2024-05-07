@@ -985,6 +985,61 @@ func (p *portworx) WaitForBackupCompletion(
 	return nil
 }
 
+// WaitForBackupPartialCompletion waits for backup to complete successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForBackupPartialCompletion(
+	ctx context.Context,
+	backupName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+
+	backupUID, err := p.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	req := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
+	}
+	var backupError error
+	f := func() (interface{}, bool, error) {
+		inspectBkpResp, err := p.backupManager.Inspect(ctx, req)
+		if err != nil {
+			// Error occured, just retry
+			return nil, true, err
+		}
+
+		// Check if backup status is complete
+		currentStatus := inspectBkpResp.GetBackup().GetStatus().GetStatus()
+		if currentStatus == api.BackupInfo_StatusInfo_PartialSuccess {
+			// If backup is complete, dont retry again
+			return nil, false, nil
+		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
+			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
+			currentStatus == api.BackupInfo_StatusInfo_Invalid ||
+			currentStatus == api.BackupInfo_StatusInfo_Success {
+			backupError = fmt.Errorf("backup [%v] is in [%s] state. reason: [%v]",
+				req.GetName(), currentStatus,
+				inspectBkpResp.GetBackup().GetStatus().GetReason())
+			return nil, false, backupError
+		}
+		return nil,
+			true,
+			fmt.Errorf("backup [%v] is in [%s] state. Waiting to become Partial Complete",
+				req.GetName(), currentStatus)
+	}
+
+	_, err = task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil || backupError != nil {
+		return fmt.Errorf("failed to wait for backup. Error:[%v] Reason:[%v]", err, backupError)
+	}
+
+	return nil
+}
+
 // WaitForBackupDeletion waits for backup to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForBackupDeletion(
