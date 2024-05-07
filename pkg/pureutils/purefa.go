@@ -94,6 +94,20 @@ func ListAllTheVolumesFromSpecificFA(faClient *flasharray.Client) ([]flasharray.
 	return volumes, nil
 }
 
+// Verifies if Volumes
+func IsFAVolumeExists(faClient *flasharray.Client, volumeName string) (bool, error) {
+	allVolumes, err := ListAllTheVolumesFromSpecificFA(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachVol := range allVolumes {
+		if strings.Contains(eachVol.Name, volumeName) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetAllHostGroups Get all Available Host Groups from array
 func GetAllHostGroups(faClient *flasharray.Client) ([]flasharray.Hostgroup, error) {
 	hostGroup, err := faClient.Hostgroups.ListHostgroups(nil)
@@ -132,6 +146,24 @@ func CreateNewHostOnFA(faClient *flasharray.Client, hostName string) (*flasharra
 		return nil, err
 	}
 	return host, nil
+}
+
+// ListVolumesFromHosts returns list of Volumes
+func ListVolumesFromHosts(faClient *flasharray.Client) (map[string][]flasharray.ConnectedVolume, error) {
+	allHostVolumes := make(map[string][]flasharray.ConnectedVolume)
+	allHosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, eachHost := range allHosts {
+		hostVolumes, err := faClient.Hosts.ListHostConnections(eachHost.Name, nil)
+		if err != nil {
+			return nil, err
+		}
+		allHostVolumes[eachHost.Name] = hostVolumes
+	}
+	return allHostVolumes, nil
 }
 
 // ConnectVolumeToHost Connects Volume to Host

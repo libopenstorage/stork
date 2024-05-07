@@ -605,7 +605,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 	})
 	var contexts []*scheduler.Context
 
-	stepLog := "has to schedule apps and update replication factor for attached node"
+	stepLog := "Continuously creates and deletes volume while killing kvdb master node"
 	It(stepLog, func() {
 
 		var wg sync.WaitGroup
