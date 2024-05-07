@@ -3442,10 +3442,10 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 					t := func() (interface{}, bool, error) {
 						PxBackupVersion, err := GetPxBackupVersionString()
 						if err != nil {
-							return nil, false, fmt.Errorf("failed to get px-backup version string , error [%s]", err.Error())
+							return nil, true, fmt.Errorf("failed to get px-backup version string , error [%s]", err.Error())
 						}
 						log.Infof(fmt.Sprintf("fetched px-backup version %s", PxBackupVersion))
-						return nil, true, nil
+						return nil, false, nil
 					}
 					_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, "verifing px-backup version after reboot")
