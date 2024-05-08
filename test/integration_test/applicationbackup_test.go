@@ -1322,6 +1322,10 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	log.FailOnError(t, err, "Failed to delete  backup location %s on second cluster: %v.", ns.Name, err)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func waitForAppBackupCompletion(name, namespace string, timeout time.Duration) error {
@@ -1390,6 +1394,10 @@ func applicationBackupDelBackupLocation(t *testing.T) {
 	log.FailOnError(t, err, "Backups %s not deleted: %s", appBackup.Name, err)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func applicationBackupMultiple(t *testing.T) {
@@ -1444,6 +1452,10 @@ func applicationBackupMultiple(t *testing.T) {
 	validateBackupDeletionFromObjectstore(t, backupLocation, secondBackupPath)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func deleteAllBackupsNamespace(namespace string) error {
