@@ -5,14 +5,18 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 
 	"github.com/aquilax/truncate"
 	patch "github.com/evanphx/json-patch"
 	"github.com/libopenstorage/stork/drivers"
+	kdmpDriver "github.com/portworx/kdmp/pkg/drivers"
+
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -104,6 +108,13 @@ const (
 	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName                         = "portworx-service"
 	VMRestoreIncludeResourceMapAnnotation = "stork.libopenstorage.org/vm-includeresource"
+	// podSecurityStandardEnforceMode - which PS standard to enforce while deploying the k8s workload Object
+	podSecurityStandardEnforceMode = "pod-security.kubernetes.io/enforce"
+	//undefined UID or GID
+	UndefinedId   = int64(-1)
+	PsaEnabledKey = "portworx.io/psa-enabled"
+	PsaUIDKey     = "portworx.io/psa-uid"
+	PsaGIDKey     = "portworx.io/psa-gid"
 )
 
 // Map of ignored namespace to be backed up for faster lookout
@@ -444,4 +455,185 @@ func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.Migratio
 		}
 	}
 	return found, nil
+}
+
+// GetPsaDetail retrieves the Pod Security Admission (PSA) details for a given namespace.
+// i/p: namespace name
+// o/p: 1. Boolean value indicating whether PSA is enforced,
+//  2. A map of PSA label keys and their corresponding values.
+//
+// The map will be empty if no PSA labels are set for the namespace.
+func GetPsaDetail(nsName string) (IsPsaEnforced bool, psaLabelMap map[string]string, err error) {
+	fn := "GetPsaDetail"
+	IsPsaEnforced = false
+	// Read the namesapce details using k8s API and namespace name given in the input
+	ns, err := core.Instance().GetNamespace(nsName)
+	if err != nil {
+		logrus.Errorf("%s: failed to get namespace details for %s: %v", fn, nsName, err)
+		return IsPsaEnforced, nil, err
+	}
+	psaLabelMap = make(map[string]string)
+	// Defined the regular expression pattern to match the PSA label keys
+	pattern := regexp.MustCompile(`pod-security\.kubernetes\.io/(enforce|enforce-version|audit|audit-version|warn|warn-version)`)
+	// Check if the namespace has the PSA labels set
+	for k, v := range ns.GetLabels() {
+		// Use the regular expression to match the label key
+		if pattern.MatchString(k) {
+			psaLabelMap[k] = v
+			if k == podSecurityStandardEnforceMode {
+				IsPsaEnforced = true
+			}
+		}
+	}
+	return IsPsaEnforced, psaLabelMap, nil
+}
+
+// get Pod from PVC details
+func GetPodFromPVC(pvcName, namespace string) (*v1.Pod, error) {
+	fn := "GetPodFromPVCName"
+	// create pod list to store th relevant pods
+	podList := make([]*v1.Pod, 1)
+	pods, err := core.Instance().GetPodsUsingPVC(pvcName, namespace)
+	if err != nil {
+		errMsg := fmt.Sprintf("error fetching pods using PVC %s/%s: %v", namespace, pvcName, err)
+		logrus.Errorf("%s: %v", fn, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	// filter out the pods that are created by us
+	for _, pod := range pods {
+		labels := pod.ObjectMeta.Labels
+		if _, ok := labels[kdmpDriver.DriverNameLabel]; ok {
+			continue
+		}
+		podList = append(podList, &pod)
+	}
+	if len(podList) == 0 {
+		errMsg := fmt.Sprintf("no application pod found for PVC %s/%s", namespace, pvcName)
+		logrus.Debugf("%s: %v", fn, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	} else if len(podList) > 1 {
+		logrus.Warnf("%s: multiple application pods found using common PVC %s/%s", fn, namespace, pvcName)
+		// TODO we need to handle this case of PVC being used by multiple pods in the same namespace
+		// For now we will return the first pod in the list as a placeholder
+	}
+	return podList[0], nil
+}
+
+func getIdFromSecurityContext(securityContext interface{}) (int64, int64) {
+	uid := UndefinedId
+	gid := UndefinedId
+	switch s := securityContext.(type) {
+	case *v1.SecurityContext:
+		uid = int64(*s.RunAsUser)
+		gid = int64(*s.RunAsGroup)
+	case *v1.PodSecurityContext:
+		uid = int64(*s.RunAsUser)
+		gid = int64(*s.RunAsGroup)
+	default:
+		// Handle the default case here
+		logrus.Debugf("Unknown type of security context obtained: %v", s)
+	}
+	return uid, gid
+}
+
+// GetPodUserId: Get the UID/GID of the application pod which is using the PVC for which backup is triggered.
+func GetPodUserId(pod *v1.Pod) (int64, int64, error) {
+	uid := UndefinedId
+	gid := UndefinedId
+
+	//Get User ID or get Group-ID in the absence of User ID from container's security context
+	if len(pod.Spec.Containers) > 1 {
+		// Case-01: There can be more than one container present per application pod and each container could have
+		//          configured SecurityContext separately. On that case we need user intervention to pick the container,
+		//          in the absence of that for this release, we will pick first found UID logic as an best-effort approach.
+		// Case 02: If more than one container exist per pod but only one container has defined securityContext then
+		//          we can pick that though.
+		for _, container := range pod.Spec.Containers {
+			securityContext := container.SecurityContext
+			uid, gid := getIdFromSecurityContext(securityContext)
+			if uid != UndefinedId || gid != UndefinedId {
+				return uid, gid, nil
+			}
+		}
+	} else {
+		// Only one container for the pod is found, let's pick the UID or GID of it
+		securityContext := pod.Spec.Containers[0].SecurityContext
+		uid, gid := getIdFromSecurityContext(securityContext)
+		if uid != UndefinedId || gid != UndefinedId {
+			return uid, gid, nil
+		}
+	}
+	// UID or GID is not found in any of the container spec, try Getting the UID/GID from the pod's security context
+	securityContext := pod.Spec.SecurityContext
+	uid, gid = getIdFromSecurityContext(securityContext)
+	if uid != UndefinedId || gid != UndefinedId {
+		return uid, gid, nil
+	}
+	// Neither pod nor container has the securityContext defined with User Id or group Id, return error with undefined uids
+	return uid, gid, fmt.Errorf("failed to get user id or group id from securityContext of pod [%s/%s]", pod.Namespace, pod.Name)
+}
+
+// Get uid gid from application backup cr
+func GetUIDGIDFromBackupCR(backup *stork_api.ApplicationBackup, pvcName string) (int64, int64, error) {
+	fn := "GetUIDGIDFromBackupCR"
+	// read the uid and gid from the application backup cr's volume array
+	if backup != nil {
+		for _, volume := range backup.Status.Volumes {
+			if volume.PersistentVolumeClaim == pvcName {
+				logrus.Infof("%v: Found uid:[%v] and gid:[%v] for the restore of the pvc[%v]", fn, volume.JobSecurityContext.RunAsUser, volume.JobSecurityContext.RunAsGroup, volume.PersistentVolumeClaim)
+				return volume.JobSecurityContext.RunAsUser, volume.JobSecurityContext.RunAsGroup, nil
+			}
+		}
+	}
+	err := fmt.Errorf("failed to obtain uid from backup cr")
+	return UndefinedId, UndefinedId, err
+}
+
+// GetPsaEnabledAppUID - Get the UID/GID of the application pod which has psa enforcement in its namespace using the PVC
+func GetPsaEnabledAppUID(pvcName string, namespace string, backup *stork_api.ApplicationBackup, getUIDFromApp bool) (int64, int64, bool, error) {
+	fn := "GetPsaEnabledAppUID"
+	uid := UndefinedId
+	gid := UndefinedId
+	IsPsaEnforced := false
+
+	// Check if the namespace has the PSA labels set
+	IsPsaEnforced, psaLabelMap, err := GetPsaDetail(namespace)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return uid, gid, IsPsaEnforced, err
+	}
+	if !IsPsaEnforced {
+		errMsg := fmt.Sprintf("PSA is not enforced in namespace [%s], no need to enforce any uid/gid in job for backing up pvc [%s]", namespace, pvcName)
+		logrus.Debugf("%s: %v", fn, errMsg)
+		return uid, gid, IsPsaEnforced, nil
+	}
+
+	// check in the psa label map if the pod has the psa enforcement labels set to restricted
+	for k, v := range psaLabelMap {
+		// Only in case of restricted enforcement, we need to get the UID/GID of the pod
+		// otherwise baseline and privilege will work if the job pod runs with root access.
+		// TODO: Should we preserve the UID in case baseline config too, though not required for JOB.
+		if strings.Contains(k, "enforce") && v == "restricted" {
+			if getUIDFromApp {
+				// Get the pod which uses this PVC for backup scenario
+				var pod *v1.Pod
+				pod, err = GetPodFromPVC(pvcName, namespace)
+				if err != nil {
+					logrus.Errorf("%s: %v", fn, err)
+					return uid, gid, IsPsaEnforced, err
+				}
+				// Get the UID/GID of the pod
+				uid, gid, err = GetPodUserId(pod)
+			} else {
+				//get uid gid from applicationBackup CR for restore
+				uid, gid, err = GetUIDGIDFromBackupCR(backup, pvcName)
+			}
+			if err != nil {
+				logrus.Errorf("%s: %v", fn, err)
+				return uid, gid, IsPsaEnforced, err
+			}
+			break
+		}
+	}
+	return uid, gid, IsPsaEnforced, nil
 }

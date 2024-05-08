@@ -2019,6 +2019,16 @@ func (a *ApplicationBackupController) backupResources(
 				resourceExport.Labels = labels
 				resourceExport.Annotations = make(map[string]string)
 				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+				// Add psa enabled annotation in resource export cr only if the
+				// the namespace has the PSA labels set
+				psaIsEnforced, _, err := utils.GetPsaDetail(backup.Namespace)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf("%v", err)
+					return err
+				}
+				if psaIsEnforced {
+					resourceExport.Annotations[utils.PsaEnabledKey] = "true"
+				}
 				resourceExport.Name = getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
 				resourceExport.Namespace = backup.Namespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup

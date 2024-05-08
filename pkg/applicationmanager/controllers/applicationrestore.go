@@ -903,6 +903,16 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					resourceExport.Labels = labels
 					resourceExport.Annotations = make(map[string]string)
 					resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+					// Add psa enabled annotation in resource export cr only if the
+					// the namespace has the PSA labels set
+					psaIsEnforced, _, err := utils.GetPsaDetail(backup.Namespace)
+					if err != nil {
+						log.ApplicationBackupLog(backup).Errorf("%v", err)
+						return err
+					}
+					if psaIsEnforced {
+						resourceExport.Annotations[utils.PsaEnabledKey] = "true"
+					}
 					resourceExport.Name = crName
 					resourceExport.Namespace = restore.Namespace
 					resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
@@ -1902,6 +1912,16 @@ func (a *ApplicationRestoreController) restoreResources(
 				resourceExport.Labels = labels
 				resourceExport.Annotations = make(map[string]string)
 				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
+				// Add psa enabled annotation in resource export cr only if the
+				// the namespace has the PSA labels set
+				psaIsEnforced, _, err := utils.GetPsaDetail(backup.Namespace)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf("%v", err)
+					return err
+				}
+				if psaIsEnforced {
+					resourceExport.Annotations[utils.PsaEnabledKey] = "true"
+				}
 				resourceExport.Name = crName
 				resourceExport.Namespace = restore.Namespace
 				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup

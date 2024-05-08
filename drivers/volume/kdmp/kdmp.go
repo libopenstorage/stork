@@ -234,6 +234,13 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
+		// Get UID and GID from the App which is controlling this PVC.
+		getUIDFromApp := true
+		podUserId, podGroupId, psaIsEnabled, err := utils.GetPsaEnabledAppUID(pvc.Name, pvc.Namespace, backup, getUIDFromApp)
+		if err != nil {
+			logrus.Errorf("failed to get the UID and GID for pvc %s %v", pvc.Name, err)
+			return nil, err
+		}
 		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
 		zones, err := getZones(pv)
 		if err != nil {
@@ -249,6 +256,14 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkvolume.KDMPDriverName
+		// if psaIsenabled then set the a UID GID in the VolumeInfo and
+		// set annotation in dataexport CR for updating the JOB spec
+		if psaIsEnabled && podUserId != utils.UndefinedId {
+			logrus.Infof("Setting UID and GID in VolumeInfo for PVC %s", pvc.Name)
+			volumeInfo.JobSecurityContext.RunAsUser = podUserId
+			volumeInfo.JobSecurityContext.RunAsGroup = podGroupId
+		}
+
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return nil, fmt.Errorf("error getting volume for PVC: %v", err)
@@ -285,6 +300,11 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		dataExport.Annotations[utils.BackupObjectUIDKey] = string(backup.Annotations[utils.PxbackupObjectUIDKey])
 		dataExport.Annotations[pvcUIDKey] = string(pvc.UID)
 		dataExport.Annotations[kdmpStorageClassKey] = volumeInfo.StorageClass
+		if psaIsEnabled && podUserId != utils.UndefinedId {
+			dataExport.Annotations[utils.PsaEnabledKey] = "true"
+			dataExport.Annotations[utils.PsaUIDKey] = fmt.Sprintf("%d", podUserId)
+			dataExport.Annotations[utils.PsaGIDKey] = fmt.Sprintf("%d", podGroupId)
+		}
 		dataExport.Name = getGenericCRName(utils.PrefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
 		dataExport.Spec.Type = kdmpapi.DataExportKopia
@@ -778,6 +798,12 @@ func (k *kdmp) StartRestore(
 			msg := fmt.Sprintf("unable to find backup uid from applicationbackup %s/%s", restore.Namespace, restore.Spec.BackupName)
 			return nil, fmt.Errorf(msg)
 		}
+		getUIDFromApp := false
+		podUserId, podGroupId, psaIsEnabled, err := utils.GetPsaEnabledAppUID("", restoreNamespace, backup, getUIDFromApp)
+		if err != nil {
+			logrus.Errorf("failed to get the UID and GID for pvc %s %v", pvc.Name, err)
+			return nil, err
+		}
 		backupUID = backup.Annotations[backupUIDKey]
 		// create kdmp cr
 		dataExport := &kdmpapi.DataExport{}
@@ -793,6 +819,11 @@ func (k *kdmp) StartRestore(
 		dataExport.Annotations[utils.SkipResourceAnnotation] = "true"
 		dataExport.Annotations[utils.BackupObjectUIDKey] = backupUID
 		dataExport.Annotations[pvcUIDKey] = bkpvInfo.PersistentVolumeClaimUID
+		if psaIsEnabled && podUserId != utils.UndefinedId {
+			dataExport.Annotations[utils.PsaEnabledKey] = "true"
+			dataExport.Annotations[utils.PsaUIDKey] = fmt.Sprintf("%d", podUserId)
+			dataExport.Annotations[utils.PsaGIDKey] = fmt.Sprintf("%d", podGroupId)
+		}
 		dataExport.Name = getGenericCRName(prefixRestore, string(restore.UID), bkpvInfo.PersistentVolumeClaimUID, restoreNamespace)
 		dataExport.Namespace = restoreNamespace
 		dataExport.Status.TransferID = volBackup.Namespace + "/" + volBackup.Name
