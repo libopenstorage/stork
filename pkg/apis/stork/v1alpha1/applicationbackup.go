@@ -93,6 +93,13 @@ type ApplicationBackupResourceInfo struct {
 	ObjectInfo `json:",inline"`
 }
 
+// This object is used in VolumeInfo for PSA enabled cluster to retain the runAsUser ID and runAsGroup ID used by
+// Job pod(KDMP/NFS)during backup. We will use the same IDs to spin up Job Pods during restore.
+type VolumeJobSecurityContext struct {
+	RunAsUser  int64 `json:"runAsUser"`
+	RunAsGroup int64 `json:"runAsGroup"`
+}
+
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
 type ApplicationBackupVolumeInfo struct {
 	PersistentVolumeClaim    string                      `json:"persistentVolumeClaim"`
@@ -110,6 +117,9 @@ type ApplicationBackupVolumeInfo struct {
 	StorageClass             string                      `json:"storageClass"`
 	Provisioner              string                      `json:"provisioner"`
 	VolumeSnapshot           string                      `json:"volumeSnapshot"`
+	// It preserves the uid and gid of the pod that is run by the backup job
+	// that helps in restore operation. this is required only when PSA is enforced.
+	VolumeJobSecurityContext VolumeJobSecurityContext `json:",inline"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
