@@ -389,7 +389,7 @@ var _ = Describe("{AddStorageNode}", func() {
 				actualPerZoneCount := numOfStorageNodes
 
 				// In multi-zone ASG cluster, node count is per zone
-				if Inst().S.String() != aks.SchedName && Inst().S.String() != openshift.SchedName {
+				if Inst().S.String() != openshift.SchedName {
 					zones, err = Inst().S.GetZones()
 					dash.VerifyFatal(err, nil, "Verify Get zones")
 
@@ -451,9 +451,12 @@ var _ = Describe("{AddStorageNode}", func() {
 			expectedPerZone := maxStorageNodesPerZone
 			if updatedMaxStorageNodesPerZone != 0 {
 				expectedPerZone = updatedMaxStorageNodesPerZone
-
 			}
-			expectedStorageNodesCount := int(expectedPerZone) * len(zones)
+			numOfZones := 1
+			if len(zones) != 0 {
+				numOfZones = len(zones)
+			}
+			expectedStorageNodesCount := int(expectedPerZone) * numOfZones
 
 			if expectedStorageNodesCount >= len(node.GetStorageNodes()) {
 				expectedStorageNodesCount = len(node.GetStorageNodes())
@@ -579,7 +582,7 @@ var _ = Describe("{AddStoragelessNode}", func() {
 	})
 })
 
-var _ = Describe("{RecycleStorageDriverNodes}", func() {
+var _ = Describe("{RecycleStorageDriverNode}", func() {
 
 	var contexts []*scheduler.Context
 
@@ -691,6 +694,80 @@ var _ = Describe("{RecycleStorageDriverNodes}", func() {
 				PrintPxctlStatus()
 			})
 			// Validating the apps after recycling the Storage node
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RecycleAllStorageDriverNodes}", func() {
+
+	var contexts []*scheduler.Context
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		wantAfterSuiteSystemCheck = true
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("RecycleAllStorageDriverNodes", "Test drives and pools after recycling a all storage driver nodes one by one", nil, 0)
+	})
+
+	It("Validating the drives and pools after recycling a node", func() {
+		Step("Get the storage and storageless nodes and delete them", func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("recyclenode-%d", i))...)
+			}
+			ValidateApplications(contexts)
+
+			existingStorageDriverNodes := node.GetStorageDriverNodes()
+
+			for _, existingStorageDriverNode := range existingStorageDriverNodes {
+				stepLog := fmt.Sprintf("Recycling node: [%s]", existingStorageDriverNode.Name)
+				Step(
+					stepLog,
+					func() {
+						log.InfoD(stepLog)
+						err := Inst().S.DeleteNode(existingStorageDriverNode)
+						log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", existingStorageDriverNode.Name, err))
+						waitTime := 10
+						if Inst().S.String() == oke.SchedName {
+							waitTime = 15 // OKE takes more time to replace the node
+						}
+
+						stepLog = fmt.Sprintf("Wait for %d min. to node get replaced by autoscalling group", waitTime)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							time.Sleep(time.Duration(waitTime) * time.Minute)
+						})
+						err = Inst().S.RefreshNodeRegistry()
+						log.FailOnError(err, "Verify node registry refresh")
+
+						err = Inst().V.RefreshDriverEndpoints()
+						log.FailOnError(err, "Verify driver end points refresh")
+						stepLog = fmt.Sprintf("Validate number of storage nodes after recycling node [%v]", existingStorageDriverNode.Name)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							ValidateClusterSize(int64(len(node.GetStorageDriverNodes())))
+							PrintPxctlStatus()
+						})
+						nodeIdExists := false
+						if len(existingStorageDriverNode.StorageNode.Pools) > 0 {
+							newStorageDriverNodes := node.GetStorageDriverNodes()
+							for _, newStorageDriverNode := range newStorageDriverNodes {
+								if newStorageDriverNode.VolDriverNodeID == existingStorageDriverNode.VolDriverNodeID {
+									nodeIdExists = true
+									break
+								}
+							}
+							dash.VerifyFatal(nodeIdExists, true, fmt.Sprintf("Node ID [%s] exists after deleting storage node [%v]", existingStorageDriverNode.VolDriverNodeID, existingStorageDriverNode.Name))
+						}
+
+					})
+			}
+			// Validating the apps after recycling the Storage driver node
 			ValidateApplications(contexts)
 		})
 	})

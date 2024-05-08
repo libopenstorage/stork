@@ -10124,6 +10124,12 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
 	Step(stepLog, func() {
@@ -10142,7 +10148,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
@@ -10252,6 +10258,11 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !isClusterScaled {
 		return
 	}
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -10270,7 +10281,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !hasPXUp {
 		return
 	}
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
@@ -10283,7 +10294,6 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -10335,6 +10345,19 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 				updateLongevityStats(OCPStorageNodeRecycle, stats.NodeRecycleEventName, dashStats)
 				err := Inst().S.DeleteNode(delNode)
 				UpdateOutcome(event, err)
+
+				stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String())
+
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+				})
+				err = Inst().S.RefreshNodeRegistry()
+				UpdateOutcome(event, err)
+
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
 			})
 		Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
 			workerNodes := node.GetWorkerNodes()
@@ -10372,7 +10395,6 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 // TriggerReallocSharedMount peforms sharedv4 and sharedv4_svc volumes reallocation

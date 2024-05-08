@@ -292,11 +292,8 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		return nil, true, fmt.Errorf("pods pending validation current: %d. Expected: %d", lenValidatedPods, lenExpectedPods)
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	return err
 }
 
 func (k *k8sSchedOps) validateDevicesInPods(

@@ -839,6 +839,7 @@ func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
 	var sshErr error
 	var cli interface{}
+	log.Debugf("checking for usable address in: %v for node [%s]", n.Addresses, n.Name)
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
 			// check if address is responding on port 22
@@ -848,6 +849,7 @@ func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts
 		}
 		if cli, sshErr = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); sshErr == nil {
 			n.UsableAddr = addr
+			log.Debugf("usable address: [%s] for node [%s]", n.UsableAddr, n.Name)
 			return cli.(*ssh_pkg.Client), nil
 		}
 	}
