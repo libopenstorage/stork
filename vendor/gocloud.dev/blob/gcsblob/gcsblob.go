@@ -52,6 +52,7 @@
 //  - Attributes: storage.ObjectAttrs
 //  - CopyOptions.BeforeCopy: *CopyObjectHandles, *storage.Copier (if accessing both, must be in that order)
 //  - WriterOptions.BeforeWrite: **storage.ObjectHandle, *storage.Writer (if accessing both, must be in that order)
+//  - SignedURLOptions.BeforeSign: *storage.SignedURLOptions
 package gcsblob // import "gocloud.dev/blob/gcsblob"
 
 import (
@@ -82,6 +83,7 @@ import (
 	"gocloud.dev/gcerrors"
 	"gocloud.dev/gcp"
 	"gocloud.dev/internal/escape"
+	"gocloud.dev/internal/gcerr"
 	"gocloud.dev/internal/useragent"
 )
 
@@ -263,11 +265,13 @@ type Options struct {
 	// PrivateKey is the Google service account private key.
 	// Exactly one of PrivateKey or SignBytes must be non-nil to use SignedURL.
 	// See https://godoc.org/cloud.google.com/go/storage#SignedURLOptions.
+	// Deprecated: Use MakeSignBytes instead.
 	PrivateKey []byte
 
 	// SignBytes is a function for implementing custom signing.
 	// Exactly one of PrivateKey, SignBytes, or MakeSignBytes must be non-nil to use SignedURL.
 	// See https://godoc.org/cloud.google.com/go/storage#SignedURLOptions.
+	// Deprecated: Use MakeSignBytes instead.
 	SignBytes func([]byte) ([]byte, error)
 
 	// MakeSignBytes is a factory for functions that are being used in place of an empty SignBytes.
@@ -357,7 +361,7 @@ func (r *reader) As(i interface{}) bool {
 }
 
 func (b *bucket) ErrorCode(err error) gcerrors.ErrorCode {
-	if err == storage.ErrObjectNotExist {
+	if err == storage.ErrObjectNotExist || err == storage.ErrBucketNotExist {
 		return gcerrors.NotFound
 	}
 	if gerr, ok := err.(*googleapi.Error); ok {
@@ -480,6 +484,12 @@ func (b *bucket) Attributes(ctx context.Context, key string) (*driver.Attributes
 	if err != nil {
 		return nil, err
 	}
+	// GCS seems to unquote the ETag; restore them.
+	// It should be of the form "xxxx" or W/"xxxx".
+	eTag := attrs.Etag
+	if !strings.HasPrefix(eTag, "W/\"") && !strings.HasPrefix(eTag, "\"") && !strings.HasSuffix(eTag, "\"") {
+		eTag = fmt.Sprintf("%q", eTag)
+	}
 	return &driver.Attributes{
 		CacheControl:       attrs.CacheControl,
 		ContentDisposition: attrs.ContentDisposition,
@@ -487,9 +497,11 @@ func (b *bucket) Attributes(ctx context.Context, key string) (*driver.Attributes
 		ContentLanguage:    attrs.ContentLanguage,
 		ContentType:        attrs.ContentType,
 		Metadata:           attrs.Metadata,
+		CreateTime:         attrs.Created,
 		ModTime:            attrs.Updated,
 		Size:               attrs.Size,
 		MD5:                attrs.MD5,
+		ETag:               eTag,
 		AsFunc: func(i interface{}) bool {
 			p, ok := i.(*storage.ObjectAttrs)
 			if !ok {
@@ -697,7 +709,7 @@ func (b *bucket) SignedURL(ctx context.Context, key string, dopts *driver.Signed
 		numSigners++
 	}
 	if b.opts.GoogleAccessID == "" || numSigners != 1 {
-		return "", errors.New("to use SignedURL, you must call OpenBucket with a valid Options.GoogleAccessID and exactly one of Options.PrivateKey, Options.SignBytes, or Options.MakeSignBytes")
+		return "", gcerr.New(gcerr.Unimplemented, nil, 1, "gcsblob: to use SignedURL, you must call OpenBucket with a valid Options.GoogleAccessID and exactly one of Options.PrivateKey, Options.SignBytes, or Options.MakeSignBytes")
 	}
 
 	key = escapeKey(key)
@@ -711,6 +723,18 @@ func (b *bucket) SignedURL(ctx context.Context, key string, dopts *driver.Signed
 	}
 	if b.opts.MakeSignBytes != nil {
 		opts.SignBytes = b.opts.MakeSignBytes(ctx)
+	}
+	if dopts.BeforeSign != nil {
+		asFunc := func(i interface{}) bool {
+			v, ok := i.(**storage.SignedURLOptions)
+			if ok {
+				*v = opts
+			}
+			return ok
+		}
+		if err := dopts.BeforeSign(asFunc); err != nil {
+			return "", err
+		}
 	}
 	return storage.SignedURL(b.name, key, opts)
 }

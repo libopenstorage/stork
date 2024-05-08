@@ -1,6 +1,7 @@
 package azblob
 
 import (
+	"errors"
 	"net"
 	"net/url"
 	"strings"
@@ -25,11 +26,11 @@ const (
 func FormatTimesForSASSigning(startTime, expiryTime, snapshotTime time.Time) (string, string, string) {
 	ss := ""
 	if !startTime.IsZero() {
-		ss = startTime.Format(SASTimeFormat) // "yyyy-MM-ddTHH:mm:ssZ"
+		ss = formatSASTimeWithDefaultFormat(&startTime)
 	}
 	se := ""
 	if !expiryTime.IsZero() {
-		se = expiryTime.Format(SASTimeFormat) // "yyyy-MM-ddTHH:mm:ssZ"
+		se = formatSASTimeWithDefaultFormat(&expiryTime)
 	}
 	sh := ""
 	if !snapshotTime.IsZero() {
@@ -39,7 +40,38 @@ func FormatTimesForSASSigning(startTime, expiryTime, snapshotTime time.Time) (st
 }
 
 // SASTimeFormat represents the format of a SAS start or expiry time. Use it when formatting/parsing a time.Time.
-const SASTimeFormat = "2006-01-02T15:04:05Z" //"2017-07-27T00:00:00Z" // ISO 8601
+const SASTimeFormat = "2006-01-02T15:04:05Z"                                                                    //"2017-07-27T00:00:00Z" // ISO 8601
+var SASTimeFormats = []string{"2006-01-02T15:04:05.0000000Z", SASTimeFormat, "2006-01-02T15:04Z", "2006-01-02"} // ISO 8601 formats, please refer to https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas for more details.
+
+// formatSASTimeWithDefaultFormat format time with ISO 8601 in "yyyy-MM-ddTHH:mm:ssZ".
+func formatSASTimeWithDefaultFormat(t *time.Time) string {
+	return formatSASTime(t, SASTimeFormat) // By default, "yyyy-MM-ddTHH:mm:ssZ" is used
+}
+
+// formatSASTime format time with given format, use ISO 8601 in "yyyy-MM-ddTHH:mm:ssZ" by default.
+func formatSASTime(t *time.Time, format string) string {
+	if format != "" {
+		return t.Format(format)
+	}
+	return t.Format(SASTimeFormat) // By default, "yyyy-MM-ddTHH:mm:ssZ" is used
+}
+
+// parseSASTimeString try to parse sas time string.
+func parseSASTimeString(val string) (t time.Time, timeFormat string, err error) {
+	for _, sasTimeFormat := range SASTimeFormats {
+		t, err = time.Parse(sasTimeFormat, val)
+		if err == nil {
+			timeFormat = sasTimeFormat
+			break
+		}
+	}
+
+	if err != nil {
+		err = errors.New("fail to parse time with IOS 8601 formats, please refer to https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas for more details")
+	}
+
+	return
+}
 
 // https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
 
@@ -51,33 +83,48 @@ const SASTimeFormat = "2006-01-02T15:04:05Z" //"2017-07-27T00:00:00Z" // ISO 860
 // This type defines the components used by all Azure Storage resources (Containers, Blobs, Files, & Queues).
 type SASQueryParameters struct {
 	// All members are immutable or values so copies of this struct are goroutine-safe.
-	version            string      `param:"sv"`
-	services           string      `param:"ss"`
-	resourceTypes      string      `param:"srt"`
-	protocol           SASProtocol `param:"spr"`
-	startTime          time.Time   `param:"st"`
-	expiryTime         time.Time   `param:"se"`
-	snapshotTime       time.Time   `param:"snapshot"`
-	ipRange            IPRange     `param:"sip"`
-	identifier         string      `param:"si"`
-	resource           string      `param:"sr"`
-	permissions        string      `param:"sp"`
-	signature          string      `param:"sig"`
-	cacheControl       string      `param:"rscc"`
-	contentDisposition string      `param:"rscd"`
-	contentEncoding    string      `param:"rsce"`
-	contentLanguage    string      `param:"rscl"`
-	contentType        string      `param:"rsct"`
-	signedOid          string      `param:"skoid"`
-	signedTid          string      `param:"sktid"`
-	signedStart        time.Time   `param:"skt"`
-	signedExpiry       time.Time   `param:"ske"`
-	signedService      string      `param:"sks"`
-	signedVersion      string      `param:"skv"`
+	version                    string      `param:"sv"`
+	services                   string      `param:"ss"`
+	resourceTypes              string      `param:"srt"`
+	protocol                   SASProtocol `param:"spr"`
+	startTime                  time.Time   `param:"st"`
+	expiryTime                 time.Time   `param:"se"`
+	snapshotTime               time.Time   `param:"snapshot"`
+	ipRange                    IPRange     `param:"sip"`
+	identifier                 string      `param:"si"`
+	resource                   string      `param:"sr"`
+	permissions                string      `param:"sp"`
+	signature                  string      `param:"sig"`
+	cacheControl               string      `param:"rscc"`
+	contentDisposition         string      `param:"rscd"`
+	contentEncoding            string      `param:"rsce"`
+	contentLanguage            string      `param:"rscl"`
+	contentType                string      `param:"rsct"`
+	signedOid                  string      `param:"skoid"`
+	signedTid                  string      `param:"sktid"`
+	signedStart                time.Time   `param:"skt"`
+	signedService              string      `param:"sks"`
+	signedExpiry               time.Time   `param:"ske"`
+	signedVersion              string      `param:"skv"`
+	signedDirectoryDepth       string      `param:"sdd"`
+	preauthorizedAgentObjectId string      `param:"saoid"`
+	agentObjectId              string      `param:"suoid"`
+	correlationId              string      `param:"scid"`
+	// private member used for startTime and expiryTime formatting.
+	stTimeFormat string
+	seTimeFormat string
 }
 
-func (p *SASQueryParameters) SignedOid() string {
-	return p.signedOid
+func (p *SASQueryParameters) PreauthorizedAgentObjectId() string {
+	return p.preauthorizedAgentObjectId
+}
+
+func (p *SASQueryParameters) AgentObjectId() string {
+	return p.agentObjectId
+}
+
+func (p *SASQueryParameters) SignedCorrelationId() string {
+	return p.correlationId
 }
 
 func (p *SASQueryParameters) SignedTid() string {
@@ -163,6 +210,10 @@ func (p *SASQueryParameters) ContentType() string {
 	return p.contentType
 }
 
+func (p *SASQueryParameters) SignedDirectoryDepth() string {
+	return p.signedDirectoryDepth
+}
+
 // IPRange represents a SAS IP range's start IP and (optionally) end IP.
 type IPRange struct {
 	Start net.IP // Not specified if length = 0
@@ -202,9 +253,9 @@ func newSASQueryParameters(values url.Values, deleteSASParametersFromValues bool
 		case "snapshot":
 			p.snapshotTime, _ = time.Parse(SnapshotTimeFormat, val)
 		case "st":
-			p.startTime, _ = time.Parse(SASTimeFormat, val)
+			p.startTime, p.stTimeFormat, _ = parseSASTimeString(val)
 		case "se":
-			p.expiryTime, _ = time.Parse(SASTimeFormat, val)
+			p.expiryTime, p.seTimeFormat, _ = parseSASTimeString(val)
 		case "sip":
 			dashIndex := strings.Index(val, "-")
 			if dashIndex == -1 {
@@ -243,6 +294,14 @@ func newSASQueryParameters(values url.Values, deleteSASParametersFromValues bool
 			p.signedService = val
 		case "skv":
 			p.signedVersion = val
+		case "sdd":
+			p.signedDirectoryDepth = val
+		case "saoid":
+			p.preauthorizedAgentObjectId = val
+		case "suoid":
+			p.agentObjectId = val
+		case "scid":
+			p.correlationId = val
 		default:
 			isSASKey = false // We didn't recognize the query parameter
 		}
@@ -268,10 +327,10 @@ func (p *SASQueryParameters) addToValues(v url.Values) url.Values {
 		v.Add("spr", string(p.protocol))
 	}
 	if !p.startTime.IsZero() {
-		v.Add("st", p.startTime.Format(SASTimeFormat))
+		v.Add("st", formatSASTime(&(p.startTime), p.stTimeFormat))
 	}
 	if !p.expiryTime.IsZero() {
-		v.Add("se", p.expiryTime.Format(SASTimeFormat))
+		v.Add("se", formatSASTime(&(p.expiryTime), p.seTimeFormat))
 	}
 	if len(p.ipRange.Start) > 0 {
 		v.Add("sip", p.ipRange.String())
@@ -310,6 +369,18 @@ func (p *SASQueryParameters) addToValues(v url.Values) url.Values {
 	}
 	if p.contentType != "" {
 		v.Add("rsct", p.contentType)
+	}
+	if p.signedDirectoryDepth != "" {
+		v.Add("sdd", p.signedDirectoryDepth)
+	}
+	if p.preauthorizedAgentObjectId != "" {
+		v.Add("saoid", p.preauthorizedAgentObjectId)
+	}
+	if p.agentObjectId != "" {
+		v.Add("suoid", p.agentObjectId)
+	}
+	if p.correlationId != "" {
+		v.Add("scid", p.correlationId)
 	}
 	return v
 }

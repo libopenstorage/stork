@@ -84,7 +84,9 @@ func (c ContainerURL) NewPageBlobURL(blobName string) PageBlobURL {
 // Create creates a new container within a storage account. If a container with the same name already exists, the operation fails.
 // For more information, see https://docs.microsoft.com/rest/api/storageservices/create-container.
 func (c ContainerURL) Create(ctx context.Context, metadata Metadata, publicAccessType PublicAccessType) (*ContainerCreateResponse, error) {
-	return c.client.Create(ctx, nil, metadata, publicAccessType, nil)
+	return c.client.Create(ctx, nil, metadata, publicAccessType, nil,
+		nil, nil, // container encryption
+	)
 }
 
 // Delete marks the specified container for deletion. The container and any blobs contained within it are later deleted during garbage collection.
@@ -273,7 +275,7 @@ func (o *ListBlobsSegmentOptions) pointers() (prefix *string, include []ListBlob
 
 // BlobListingDetails indicates what additional information the service should return with each blob.
 type BlobListingDetails struct {
-	Copy, Metadata, Snapshots, UncommittedBlobs, Deleted bool
+	Copy, Metadata, Snapshots, UncommittedBlobs, Deleted, Tags, Versions, Permissions, LegalHold, ImmutabilityPolicy, DeletedWithVersions bool
 }
 
 // string produces the Include query parameter's value.
@@ -286,14 +288,32 @@ func (d *BlobListingDetails) slice() []ListBlobsIncludeItemType {
 	if d.Deleted {
 		items = append(items, ListBlobsIncludeItemDeleted)
 	}
+	if d.DeletedWithVersions {
+		items = append(items, ListBlobsIncludeItemDeletedwithversions)
+	}
+	if d.ImmutabilityPolicy {
+		items = append(items, ListBlobsIncludeItemImmutabilitypolicy)
+	}
+	if d.LegalHold {
+		items = append(items, ListBlobsIncludeItemLegalhold)
+	}
 	if d.Metadata {
 		items = append(items, ListBlobsIncludeItemMetadata)
+	}
+	if d.Permissions {
+		items = append(items, ListBlobsIncludeItemPermissions)
 	}
 	if d.Snapshots {
 		items = append(items, ListBlobsIncludeItemSnapshots)
 	}
 	if d.UncommittedBlobs {
 		items = append(items, ListBlobsIncludeItemUncommittedblobs)
+	}
+	if d.Tags {
+		items = append(items, ListBlobsIncludeItemTags)
+	}
+	if d.Versions {
+		items = append(items, ListBlobsIncludeItemVersions)
 	}
 	return items
 }
