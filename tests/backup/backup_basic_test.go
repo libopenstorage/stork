@@ -277,19 +277,6 @@ var _ = AfterSuite(func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
 
-		// Fetch PVC list for Px-Backup namespace
-		pxBackupNamespace, err := backup.GetPxBackupNamespace()
-		log.FailOnError(err, "failed to get Px-Backup namespace")
-		PvcListAfterRun, err = GetPVCListForNamespace(pxBackupNamespace)
-		log.FailOnError(err, "failed to list PVCs after run")
-		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
-		
-		// Verify PVC Cleanup on PX-Backup namespace
-		if err := ValidatePVCCleanup(PvcListBeforeRun, PvcListAfterRun); err != nil {
-			log.FailOnError(err, "PVC cleanup validation failed")
-		}
-		fmt.Println("PVC cleanup validation passed.")
-
 		// Deleting clusters and the corresponding cloud cred
 		var clusterCredName string
 		var clusterCredUID string
@@ -435,6 +422,19 @@ var _ = AfterSuite(func() {
 				log.Infof("Group %s was not deleted", group.Name)
 			}
 		}
+
+		// Fetch PVC list for Px-Backup namespace
+		pxBackupNamespace, err := backup.GetPxBackupNamespace()
+		log.FailOnError(err, "failed to get Px-Backup namespace")
+		PvcListAfterRun, err = GetPVCListForNamespace(pxBackupNamespace)
+		log.FailOnError(err, "failed to list PVCs after run")
+		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
+
+		// Verify PVC Cleanup on PX-Backup namespace
+		if err := ValidatePVCCleanup(PvcListBeforeRun, PvcListAfterRun); err != nil {
+			log.FailOnError(err, "PVC cleanup validation failed")
+		}
+		fmt.Println("PVC cleanup validation passed.")
 	}
 })
 
