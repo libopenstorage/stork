@@ -28,7 +28,10 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 	var namespace string
 	itLog := "Add a new disk to a kubevirtVM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -94,7 +97,10 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 	var namespace string
 	itLog := "Live migrate a kubevirtVM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -144,7 +150,10 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 	var namespace string
 	itLog := "Kill Px then Add disk to Kubevirt VM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -247,7 +256,10 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 
 	itLog := "Add disk to Kubevirt VM, Kill Px and then add another disk"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -358,7 +370,10 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 	var namespace string
 	itLog := "Increase the volume HA of a kubevirt VM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -430,7 +445,10 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 	var namespace string
 	itLog := "Decrease the volume HA of a kubevirt VM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -506,7 +524,10 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 	var namespace string
 	itLog := "Live Migrate a VM and then add a new disk to a kubevirtVM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -572,7 +593,10 @@ var _ = Describe("{AddDiskAndLiveMigrate}", func() {
 	var namespace string
 	itLog := "Add a new disk to a kubevirtVM and then Live Migrate"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -659,7 +683,10 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 	})
 
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		log.InfoD("filling up the volume completely, resizing the volumes and storage pool(s), validating and tearing down apps")
 
 		Step("Create autopilot rules for PVC and pool expand", func() {
@@ -853,7 +880,10 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 
 	itLog := "Upgrade OCP cluster and validate kubevirt apps"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		stepLog := "schedule kubevirt VMs"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
