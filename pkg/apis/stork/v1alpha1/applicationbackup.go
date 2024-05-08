@@ -93,6 +93,11 @@ type ApplicationBackupResourceInfo struct {
 	ObjectInfo `json:",inline"`
 }
 
+type VolumeJobSecurityContext struct {
+	RunAsUser  int64 `json:"runAsUser"`
+	RunAsGroup int64 `json:"runAsGroup"`
+}
+
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
 type ApplicationBackupVolumeInfo struct {
 	PersistentVolumeClaim    string                      `json:"persistentVolumeClaim"`
@@ -110,6 +115,7 @@ type ApplicationBackupVolumeInfo struct {
 	StorageClass             string                      `json:"storageClass"`
 	Provisioner              string                      `json:"provisioner"`
 	VolumeSnapshot           string                      `json:"volumeSnapshot"`
+	VolumeJobSecurityContext VolumeJobSecurityContext    `json:",inline"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
