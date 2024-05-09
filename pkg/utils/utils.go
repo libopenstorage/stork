@@ -34,6 +34,10 @@ const (
 	// PXIncrementalCountAnnotation is the annotation used to set cloud backup incremental count
 	// for volume
 	PXIncrementalCountAnnotation = "portworx.io/cloudsnap-incremental-count"
+	// Keeping track of how many backups done in a schedule
+	BackupsDoneAnnotation = "portworx.io/backups-done"
+	// kdmp repo path
+	KdmpPath = "portworx.io/kdmp-path"
 	// trimCRDGroupNameKey - groups name containing the string from this configmap field will be trimmed
 	trimCRDGroupNameKey = "TRIM_CRD_GROUP_NAME"
 	// QuitRestoreCrTimestampUpdate is sent in the channel to informs the go routine to stop any further update

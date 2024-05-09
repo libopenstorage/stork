@@ -288,7 +288,7 @@ func jobFor(
 		"--source-path",
 		"/data",
 	}, " ")
-
+	logrus.Infof("line 291 jobOption.RepoPVCName: %v", jobOption.RepoPVCName)
 	if jobOption.Compression != "" {
 		splitCmd := strings.Split(cmd, " ")
 		splitCmd = append(splitCmd, "--compression", jobOption.Compression)

@@ -22,6 +22,7 @@ import (
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
+	stork_utils "github.com/libopenstorage/stork/pkg/utils"
 
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -2325,7 +2326,8 @@ func getRepoPVCName(de *kdmpapi.DataExport, pvcName string) string {
 		subStrings := strings.Split(pvcName, "-")
 		pvcName = strings.Join(subStrings[:len(subStrings)-1], "-")
 	}
-	return pvcName
+	logrus.Infof("line 2329 reconciler - path: %v", pvcName + de.Annotations[stork_utils.KdmpPath])
+	return pvcName + "-" + de.Annotations[stork_utils.KdmpPath]
 }
 
 func getAnnotationValue(de *kdmpapi.DataExport, key string) string {
