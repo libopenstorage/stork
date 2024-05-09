@@ -305,6 +305,10 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		if podGroupId != utils.UndefinedId {
 			dataExport.Annotations[utils.PsaGIDKey] = fmt.Sprintf("%d", podGroupId)
 		}
+		if _, ok := backup.Annotations[utils.KdmpPath]; ok {
+			logrus.Infof("linme 239 adding kdmpt path to DE CR ")
+			dataExport.Annotations[utils.KdmpPath] = backup.Annotations[utils.KdmpPath]
+		}
 		dataExport.Name = getGenericCRName(utils.PrefixBackup, string(backup.UID), string(pvc.UID), pvc.Namespace)
 		dataExport.Namespace = pvc.Namespace
 		dataExport.Spec.Type = kdmpapi.DataExportKopia

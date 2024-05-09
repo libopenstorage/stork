@@ -40,6 +40,10 @@ const (
 	PXIncrementalCountAnnotation = "portworx.io/cloudsnap-incremental-count"
 	// kdmpRestorePvcSizePercentageKey - KDMP restore PVC size increase percentage
 	kdmpRestorePvcSizePercentageKey = "KDMP_RESTORE_PVC_SIZE_PERCENTAGE"
+	// Keeping track of how many backups done in a schedule
+	BackupsDoneAnnotation = "portworx.io/backups-done"
+	// kdmp repo path
+	KdmpPath = "portworx.io/kdmp-path"
 	// trimCRDGroupNameKey - groups name containing the string from this configmap field will be trimmed
 	trimCRDGroupNameKey = "TRIM_CRD_GROUP_NAME"
 	// QuitRestoreCrTimestampUpdate is sent in the channel to informs the go routine to stop any further update
