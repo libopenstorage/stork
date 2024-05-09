@@ -2172,7 +2172,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, false)
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, true)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
