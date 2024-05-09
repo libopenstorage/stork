@@ -630,6 +630,8 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", Label(TestCaseLabel
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = ValidateBackupLocation(ctx, BackupOrgID, backupLocationNames[1], BackupLocation1UID)
 			log.FailOnError(err, "backup location %s validation failed", backupLocationNames[1])
+			err = WaitForBackupLocationAddition(ctx, backupLocationNames[1], BackupLocation1UID, BackupOrgID, BackupLocationValidationTimeout, BackupLocationValidationRetryTime)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of backup location  [%s]", backupLocationNames[1]))
 		})
 
 		Step("Restore the encrypted backups after validating the encrypted backup location", func() {

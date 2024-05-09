@@ -171,6 +171,8 @@ const (
 	storkControllerConfigMap                  = "stork-controller-config"
 	storkControllerConfigMapUpdateTimeout     = 15 * time.Minute
 	storkControllerConfigMapRetry             = 30 * time.Second
+	BackupLocationValidationTimeout           = 10 * time.Minute
+	BackupLocationValidationRetryTime         = 30 * time.Second
 )
 
 var (
