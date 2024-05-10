@@ -2917,7 +2917,9 @@ func runCmd(cmd string, n node.Node) error {
 
 func runCmdOnce(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
-		Sudo: true,
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
 	})
 	if err != nil {
 		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
@@ -12458,4 +12460,79 @@ func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) 
 	}
 	return true, nil
 
+}
+
+type MultipathDevices struct {
+	DevId  string
+	DmID   string
+	Size   string
+	Status string
+	Type   string
+	Paths  []PathInfo
+}
+
+// PathInfo represents information about a path of a multipath device.
+type PathInfo struct {
+	Devnode string
+	Status  string
+}
+
+// Returns all the list of multipath devices present in the cluster nodes
+func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
+	multiPathDevs := []MultipathDevices{}
+	output, err := runCmdOnce(fmt.Sprintf("multipath -ll"), *n)
+	log.Infof("%v", err)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Output Details before parsing [%v]", output)
+
+	devDetailsPattern := regexp.MustCompile(`^(.*)\s+(dm-.*)\s+(.*)\,.*`)
+	sizeMatchPattern := regexp.MustCompile(`.*size=([0-9]+G)\s+.*`)
+	statusMatchPatern := regexp.MustCompile(`.*status\=(\w+)`)
+	sdMatchPattern := regexp.MustCompile(`.*\s+(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)`)
+
+	// Create a Reader from the string
+	reader := strings.Split(output, "\n")
+	log.Infof("Output Details [%v]", reader)
+
+	initPatternFound := false
+	multipathDevices := MultipathDevices{}
+	for i, eachLine := range reader {
+		matched := devDetailsPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			if initPatternFound {
+				multiPathDevs = append(multiPathDevs, multipathDevices)
+			}
+			multipathDevices = MultipathDevices{}
+			multipathDevices.DevId = matched[1]
+			multipathDevices.DmID = matched[2]
+			multipathDevices.Type = matched[3]
+			initPatternFound = true
+		}
+
+		matched = sizeMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Size = matched[1]
+		}
+
+		matched = statusMatchPatern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Status = matched[1]
+		}
+
+		matched = sdMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			paths := PathInfo{}
+			paths.Devnode = matched[2]
+			paths.Status = matched[4]
+			multipathDevices.Paths = append(multipathDevices.Paths, paths)
+		}
+		// Validate Last Line
+		if i == len(reader)-1 {
+			multiPathDevs = append(multiPathDevs, multipathDevices)
+		}
+	}
+
+	return multiPathDevs, nil
 }
