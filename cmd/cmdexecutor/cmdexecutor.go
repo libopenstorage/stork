@@ -19,6 +19,8 @@ import (
 const (
 	defaultStatusCheckTimeout = 900
 	statusFile                = "/tmp/cmdexecutor-status"
+	maxRetries                = 6
+	retryInterval             = 15
 )
 
 type arrayFlags []string
@@ -225,9 +227,18 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 		return nil, err
 	}
 
-	pods, err := core.Instance().GetPods(namespace, selectorsMap)
-	if err != nil {
-		return nil, err
+	var pods *v1.PodList
+
+	for i := 0; i < maxRetries; i++ {
+		pods, err = core.Instance().GetPods(namespace, selectorsMap)
+		if err != nil {
+			time.Sleep(time.Duration(retryInterval) * time.Second)
+			continue
+		}
+	}
+
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no pods found in namespace: %s with label selector: %s", namespace, labelSelector)
 	}
 
 	var podNames []types.NamespacedName
@@ -237,6 +248,7 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 			Name:      pod.Name,
 		})
 	}
+
 	return podNames, nil
 }
 
