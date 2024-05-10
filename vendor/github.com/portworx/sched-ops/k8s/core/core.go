@@ -235,6 +235,9 @@ type WatchFunc func(object runtime.Object) error
 
 // handleWatch is internal function that handles the watch.  On channel shutdown (ie. stop watch),
 // it'll attempt to reestablish its watch function.
+//
+// NOTE: When a new kind of watcher is added, handleWatch() needs to be updated to re-establish the watch
+// for the new object type.
 func (c *Client) handleWatch(
 	watchInterface watch.Interface,
 	object runtime.Object,
@@ -257,6 +260,8 @@ func (c *Client) handleWatch(
 						err = c.WatchConfigMap(cm, fn)
 					} else if _, ok := object.(*corev1.Pod); ok {
 						err = c.WatchPods(namespace, fn, listOptions)
+					} else if _, ok := object.(*corev1.Event); ok {
+						err = c.WatchEvents(namespace, fn, listOptions)
 					} else if sc, ok := object.(*corev1.Secret); ok {
 						err = c.WatchSecret(sc, fn)
 					} else if csr, ok := object.(*certv1.CertificateSigningRequest); ok {

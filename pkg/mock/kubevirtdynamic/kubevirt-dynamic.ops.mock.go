@@ -52,6 +52,21 @@ func (mr *MockOpsMockRecorder) CreateVirtualMachineInstanceMigration(arg0, arg1,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVirtualMachineInstanceMigration", reflect.TypeOf((*MockOps)(nil).CreateVirtualMachineInstanceMigration), arg0, arg1, arg2)
 }
 
+// CreateVirtualMachineInstanceMigrationWithParams mocks base method.
+func (m *MockOps) CreateVirtualMachineInstanceMigrationWithParams(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5, arg6 map[string]string) (*kubevirtdynamic.VirtualMachineInstanceMigration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateVirtualMachineInstanceMigrationWithParams", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret0, _ := ret[0].(*kubevirtdynamic.VirtualMachineInstanceMigration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateVirtualMachineInstanceMigrationWithParams indicates an expected call of CreateVirtualMachineInstanceMigrationWithParams.
+func (mr *MockOpsMockRecorder) CreateVirtualMachineInstanceMigrationWithParams(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVirtualMachineInstanceMigrationWithParams", reflect.TypeOf((*MockOps)(nil).CreateVirtualMachineInstanceMigrationWithParams), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+}
+
 // GetDataVolume mocks base method.
 func (m *MockOps) GetDataVolume(arg0 context.Context, arg1, arg2 string) (*kubevirtdynamic.DataVolume, error) {
 	m.ctrl.T.Helper()
