@@ -232,7 +232,7 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 	for i := 0; i < maxRetries; i++ {
 		pods, err = core.Instance().GetPods(namespace, selectorsMap)
 		if err != nil {
-			return err	
+			return nil, err	
 		}
 		
 		if len(pods.Items) > 0 {
