@@ -33,6 +33,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
@@ -103,7 +104,8 @@ const (
 	createdByValue      = annotationKeyPrefix + "stork"
 	lastUpdateKey       = annotationKeyPrefix + "last-update"
 	// optCSISnapshotClassName is an option for providing a snapshot class name
-	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
+	optCSISnapshotClassName              = "stork.libopenstorage.org/csi-snapshot-class-name"
+	defaultVolumeSnapshotClassAnnotation = "snapshot.storage.kubernetes.io/is-default-class"
 )
 
 var (
@@ -413,22 +415,14 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 
 	var err error
 
-	// Check whether if VolumeSnapshotClassName is given. If yes, check it's using the older way of requestParams. If yes, then migrate
-	// to new map in case of csi based backups
-	if snapshotClassName, ok := backup.Spec.Options[optCSISnapshotClassName]; ok && len(backup.Spec.CSISnapshotClassMap) == 0 {
-		vsc, err := externalsnapshotter.Instance().GetSnapshotClass(snapshotClassName)
-		if err != nil {
-			log.ApplicationBackupLog(backup).Errorf("Error getting volumesnapshotclass: %v", err)
-			a.recorder.Event(backup,
-				v1.EventTypeWarning,
-				string(stork_api.ApplicationBackupStatusFailed),
-				err.Error())
-			return nil
-		}
-		if backup.Spec.CSISnapshotClassMap == nil {
-			backup.Spec.CSISnapshotClassMap = make(map[string]string)
-		}
-		backup.Spec.CSISnapshotClassMap[vsc.Driver] = vsc.Name
+	err = handleCSINametoCSIMapMigration(&backup.Spec)
+	if err != nil {
+		log.ApplicationBackupLog(backup).Errorf("Error creating CSISnapshotMap: %v", err)
+		a.recorder.Event(backup,
+			v1.EventTypeWarning,
+			string(stork_api.ApplicationBackupStatusFailed),
+			err.Error())
+		return nil
 	}
 
 	if a.setDefaults(backup) {
@@ -707,7 +701,7 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 	backup := &stork_api.ApplicationBackup{}
 	var err error
 	for i := 0; i < maxRetry; i++ {
-		err := a.client.Get(context.TODO(), namespacedName, backup)
+		err = a.client.Get(context.TODO(), namespacedName, backup)
 		if err != nil {
 			time.Sleep(retrySleep)
 			continue
@@ -2552,6 +2546,63 @@ func (a *ApplicationBackupController) validateApplicationBackupParameters(backup
 	} else {
 		if backup.Spec.BackupObjectType != "" && backup.Spec.BackupObjectType != "All" {
 			return fmt.Errorf("backup Object Type value is invalid. Allowed value is either All or %v", resourcecollector.PxBackupObjectType_virtualMachine)
+		}
+	}
+	return nil
+}
+
+// handleCSINametoCSIMapMigration migrates the CSISnapshotName variable to CSISnapshotMap if "Default" is given
+func handleCSINametoCSIMapMigration(spec *stork_api.ApplicationBackupSpec) error {
+	// Check whether if VolumeSnapshotClassName is given. If yes, check it's using the older way of requestParams. If yes, then migrate
+	// to new map in case of csi based backups
+	if spec.Options != nil {
+		if snapshotClassName, ok := spec.Options[optCSISnapshotClassName]; ok && len(spec.CSISnapshotClassMap) == 0 {
+			vsc, err := externalsnapshotter.Instance().GetSnapshotClass(snapshotClassName)
+			// In Case of Default given, list out all csi drivers and their snapshot classes and make a map of default vsc to its respective csi driver
+			// make empty map if no default vsc found
+			if k8s_errors.IsNotFound(err) && strings.EqualFold(snapshotClassName, "default") {
+				spec.CSISnapshotClassMap = make(map[string]string)
+
+				// list all csi drivers in the cluster
+				drivers, dErr := storage.Instance().ListCsiDrivers()
+				if dErr != nil {
+					return dErr
+				}
+
+				// list all snapshot classes in the cluster
+				snapshotClasses, sErr := externalsnapshotter.Instance().ListSnapshotClasses()
+				if sErr != nil {
+					return sErr
+				}
+
+				for _, driver := range drivers.Items {
+					spec.CSISnapshotClassMap[driver.Name] = ""
+					onlySnapshotClass := ""
+					driverCount := 0
+					for _, vsc := range snapshotClasses.Items {
+						if vsc.Driver == driver.Name {
+							driverCount++
+							if isTrue, exist := vsc.GetAnnotations()[defaultVolumeSnapshotClassAnnotation]; isTrue == "true" && exist {
+								spec.CSISnapshotClassMap[driver.Name] = vsc.Name
+								break
+							}
+							if driverCount == 1 {
+								onlySnapshotClass = vsc.Name
+							}
+						}
+					}
+					if spec.CSISnapshotClassMap[driver.Name] == "" && driverCount == 1 {
+						spec.CSISnapshotClassMap[driver.Name] = onlySnapshotClass
+					}
+				}
+			} else if err != nil {
+				return err
+			} else {
+				if spec.CSISnapshotClassMap == nil {
+					spec.CSISnapshotClassMap = make(map[string]string)
+				}
+				spec.CSISnapshotClassMap[vsc.Driver] = vsc.Name
+			}
 		}
 	}
 	return nil

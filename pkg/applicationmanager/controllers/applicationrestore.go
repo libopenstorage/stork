@@ -532,7 +532,7 @@ func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
 	restore := &storkapi.ApplicationRestore{}
 	var err error
 	for i := 0; i < maxRetry; i++ {
-		err := a.client.Get(context.TODO(), namespacedName, restore)
+		err = a.client.Get(context.TODO(), namespacedName, restore)
 		if err != nil {
 			time.Sleep(retrySleep)
 			continue
