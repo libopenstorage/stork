@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	context1 "context"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -3933,8 +3935,74 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 
 	// Execute helm upgrade using cmd
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
-	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
-		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	customRegistry := os.Getenv("CUSTOM_REGISTRY")
+	customRepo := os.Getenv("CUSTOM_REPO")
+	if customRegistry == "" || customRepo == "" {
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	} else {
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+
+		// Additional settings to be appended using template
+		tmpl := `,{{range .Images}}images.{{.Name}}.repo="{{$.CustomRepo}}",images.{{.Name}}.registry="{{$.CustomRegistry}}",{{end}}`
+
+		// Define the template
+		t, err := template.New("cmd").Parse(tmpl)
+		if err != nil {
+			return err
+		}
+
+		// Data for the template
+		data := struct {
+			CustomRegistry string
+			CustomRepo     string
+			Images         []struct{ Name string }
+		}{
+			CustomRegistry: customRegistry,
+			CustomRepo:     customRepo,
+			Images: []struct{ Name string }{
+				{Name: "pxcentralApiServerImage"},
+				{Name: "pxcentralFrontendImage"},
+				{Name: "pxcentralBackendImage"},
+				{Name: "pxcentralMiddlewareImage"},
+				{Name: "postInstallSetupImage"},
+				{Name: "keycloakBackendImage"},
+				{Name: "keycloakFrontendImage"},
+				{Name: "keycloakLoginThemeImage"},
+				{Name: "keycloakInitContainerImage"},
+				{Name: "mysqlImage"},
+				{Name: "pxBackupImage"},
+				{Name: "mongodbImage"},
+				{Name: "licenseServerImage"},
+				{Name: "cortexImage"},
+				{Name: "cassandraImage"},
+				{Name: "proxyConfigImage"},
+				{Name: "consulImage"},
+				{Name: "dnsmasqImage"},
+				{Name: "grafanaImage"},
+				{Name: "prometheusImage"},
+				{Name: "prometheusConfigReloadrImage"},
+				{Name: "prometheusOperatorImage"},
+				{Name: "memcachedMetricsImage"},
+				{Name: "memcachedIndexImage"},
+				{Name: "memcachedImage"},
+				{Name: "pxBackupPrometheusImage"},
+				{Name: "pxBackupAlertmanagerImage"},
+				{Name: "pxBackupPrometheusOperatorImage"},
+				{Name: "pxBackupPrometheusConfigReloaderImage"},
+			},
+		}
+
+		// Execute the template and append the result to the existing command
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			return err
+		}
+
+		// Append the dynamically generated settings to the initial command
+		cmd += buf.String()
+	}
 	log.Infof("helm command: %v ", cmd)
 
 	pxBackupUpgradeStartTime := time.Now()
