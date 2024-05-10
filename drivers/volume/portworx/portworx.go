@@ -1256,6 +1256,7 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
 	}
+	log.Debugf("GetNodePoolsStatus output: %s", out)
 	outLines := strings.Split(out, "\n")
 
 	poolsData := make(map[string]string)

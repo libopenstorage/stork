@@ -8382,9 +8382,9 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
 		maxCloudDrives = FA_MAX_CLOUD_DRIVES
 	} else {
 		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES

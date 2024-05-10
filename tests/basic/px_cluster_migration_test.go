@@ -54,6 +54,25 @@ func waitForIKSMasterUpdate(schedVersion string) error {
 
 }
 
+func waitForIBMNodeToDelete(nodeToKill node.Node) error {
+	t := func() (interface{}, bool, error) {
+
+		currState, err := Inst().N.GetNodeState(nodeToKill)
+		if err != nil {
+			return "", true, err
+		}
+		if currState == ibm.DELETED {
+			return "", false, nil
+		}
+
+		return "", true, fmt.Errorf("node [%s] not deleted yet, current state : %s", nodeToKill.Hostname, currState)
+
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
+}
+
 func upgradeIKSWorkerNodes(schedVersion, poolName string) error {
 
 	storageDriverNodes := node.GetStorageDriverNodes()

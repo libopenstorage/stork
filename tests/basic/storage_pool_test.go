@@ -126,7 +126,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+			expectedSize = (poolToBeResized.TotalSize / units.GiB) + 100
 			expectedSize = roundUpValue(expectedSize)
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check is Journal enabled")
@@ -9836,7 +9836,13 @@ func scheduleApps() []*scheduler.Context {
 
 func pickPoolToResize(excludeNodeIDs ...string) string {
 	poolWithIO, err := GetPoolIDWithIOs(contexts)
-	if poolWithIO == "" || err != nil {
+
+	if err != nil {
+		log.Warnf("Error identifying pool with IOs, Errot: %v", err)
+	}
+	if poolWithIO != "" {
+		return poolWithIO
+	} else {
 		log.Warnf("No pool with IO found, picking a random pool in use to resize")
 	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
