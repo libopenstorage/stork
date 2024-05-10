@@ -6252,7 +6252,8 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 					UpdateOutcome(event, fmt.Errorf("error getting images using URL [%s] and k8s version [%s]. Err: [%v]", upgradeHop, k8sVersion.String(), err))
 					return
 				}
-				err = oputil.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
+				storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+				err = oputil.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("error validating storage cluster after upgrade. Err: [%v]", err))
 					return

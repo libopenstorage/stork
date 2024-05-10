@@ -457,7 +457,8 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 				imageList, err := optest.GetImagesFromVersionURL(upgradeHop, k8sVersion.String())
 				log.FailOnError(err, "error getting images using URL [%s] and k8s version [%s]", upgradeHop, k8sVersion.String())
 
-				err = optest.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
+				storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+				err = optest.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PX upgrade from version [%s] to version [%s]", currPXVersion, nextPXVersion))
 
 				timeAfterUpgrade = time.Now()
