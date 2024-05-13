@@ -507,6 +507,12 @@ type Driver interface {
 	GetPxctlStatus(n node.Node) (string, error)
 
 	DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig string) error
+
+	// EnableSkinnySnap Enables skinnysnap on the cluster
+	EnableSkinnySnap() error
+
+	// UpdateSkinnySnapReplNum update skinnysnap Repl factor
+	UpdateSkinnySnapReplNum(repl string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

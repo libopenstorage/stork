@@ -90,6 +90,7 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	pxctlClusterOptionsUpdate                 = "pxctl cluster options update"
 	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
 	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
 	pxctlCloudDriveInspect                    = "%s -j cd inspect --node %s"
@@ -147,6 +148,7 @@ const (
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
+	skinnySnapRetryInterval           = 5 * time.Second
 )
 const (
 	telemetryNotEnabled = "15"
@@ -6194,4 +6196,42 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 
 func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
 	return d.schedOps.IsPXReadyOnNode(n)
+}
+
+// EnableSkinnySnap Enables skinnysnap on the cluster
+func (d *portworx) EnableSkinnySnap() error {
+	for _, eachNode := range node.GetNodes() {
+		cmd := fmt.Sprintf("echo Y | %s --skinnysnap on", pxctlClusterOptionsUpdate)
+		_, err := d.nodeDriver.RunCommandWithNoRetry(
+			eachNode,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         skinnySnapRetryInterval,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to enable skinny Snap on Cluster, Err: %v", err)
+		}
+		break
+	}
+	return nil
+}
+
+// UpdateSkinnySnapReplNum update skinnysnap Repl factor
+func (d *portworx) UpdateSkinnySnapReplNum(repl string) error {
+	for _, eachNode := range node.GetNodes() {
+		cmd := fmt.Sprintf("echo Y | %s --skinnysnap-num-repls %s", pxctlClusterOptionsUpdate, repl)
+		_, err := d.nodeDriver.RunCommandWithNoRetry(
+			eachNode,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         skinnySnapRetryInterval,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("failed to Update SkinnySnap Repl Factor, Err: %v", err)
+		}
+		break
+	}
+	return nil
 }
