@@ -233,13 +233,13 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 	for i := 0; i < maxRetries; i++ {
 		pods, err = core.Instance().GetPods(namespace, selectorsMap)
 		if err != nil {
-			return nil, err	
+			return nil, err
 		}
-		
+
 		if len(pods.Items) > 0 {
-			break	
+			break
 		}
-		
+
 		logrus.Infof("no pods found yet in namespace: %s with label selector: %s", namespace, labelSelector)
 		time.Sleep(time.Duration(retryInterval) * time.Second)
 	}
