@@ -238,6 +238,11 @@ if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
 
+if [ -n "$ANTHOS_HOST_PATH" ]; then
+    ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
+fi
+
+
 for i in $@
 do
 case $i in
@@ -317,6 +322,9 @@ TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\"
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
 AWS_VOLUME_MOUNT="{ \"name\": \"aws-volume\", \"mountPath\": \"/root/.aws/\" }"
 
+ANTHOS_VOLUME="{ \"name\": \"anthosdir\", \"hostPath\": { \"path\": \"${ANTHOS_HOST_PATH}\", \"type\": \"Directory\" } }"
+ANTHOS_VOLUME_MOUNT="{ \"name\": \"anthosdir\", \"mountPath\": \"/anthosdir\" }"
+
 VOLUMES="${TESTRESULTS_VOLUME}"
 
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
@@ -363,6 +371,11 @@ fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+fi
+
+if [ -n "${ANTHOS_HOST_PATH}" ]; then
+  VOLUMES="${VOLUMES},${ANTHOS_VOLUME}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${ANTHOS_VOLUME_MOUNT}"
 fi
 
 BUSYBOX_IMG="busybox"
