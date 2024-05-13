@@ -1672,7 +1672,11 @@ func CreateOrUpdatePodDisruptionBudget(
 
 	if modified || len(pdb.OwnerReferences) > len(existingPDB.OwnerReferences) {
 		pdb.ResourceVersion = existingPDB.ResourceVersion
-		logrus.Infof("Updating PodDisruptionBudget %s/%s", pdb.Namespace, pdb.Name)
+		if pdb.Spec.MinAvailable == nil {
+			logrus.Infof("Updating PodDisruptionBudget %s/%s", pdb.Namespace, pdb.Name)
+		} else {
+			logrus.Infof("Updating minAvailable for PodDisruptionBudget %s/%s to %d ", pdb.Namespace, pdb.Name, pdb.Spec.MinAvailable.IntValue())
+		}
 		return k8sClient.Update(context.TODO(), pdb)
 	}
 	return nil
