@@ -58,6 +58,15 @@ type JobOpts struct {
 	AppCRNamespace             string
 	ResoureBackupName          string
 	ResoureBackupNamespace     string
+	S3DisableSSL               bool
+}
+
+// WithS3DisableSSL is job parameter
+func WithS3DisableSSL(disableSSL bool) JobOption {
+	return func(opts *JobOpts) error {
+		opts.S3DisableSSL = disableSSL
+		return nil
+	}
 }
 
 // WithResoureBackupName is job parameter
