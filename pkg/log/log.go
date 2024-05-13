@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"io"
-	defaultLogger "log"
 	"net/http"
 	"os"
 	"strings"
@@ -159,36 +158,30 @@ func Error(format string, args ...interface{}) {
 	verifyDashboard()
 	Dash.Errorf(format, args...)
 	Dash.TestLog.Errorf(format, args...)
-	defaultLogger.Printf("ERROR: %s", fmt.Sprintf(format, args...))
 }
 
 func Debug(msg string) {
 	Dash.TestLog.Debug(msg)
-	defaultLogger.Printf("DEBUG: %s", msg)
 }
 
 func Debugf(format string, args ...interface{}) {
 	Dash.TestLog.Debugf(format, args...)
-	defaultLogger.Printf("DEBUG: %s", fmt.Sprintf(format, args...))
 }
 
 func Warn(format string, args ...interface{}) {
 	verifyDashboard()
 	Dash.TestLog.Warnf(format, args...)
 	Dash.Warnf(format, args...)
-	defaultLogger.Printf("WARN: %s", fmt.Sprintf(format, args...))
 }
 
 func Info(format string, args ...interface{}) {
 	Dash.TestLog.Infof(format, args...)
-	defaultLogger.Printf("INFO: %s", fmt.Sprintf(format, args...))
 }
 
 func InfoD(format string, args ...interface{}) {
 	verifyDashboard()
 	Dash.TestLog.Infof(format, args...)
 	Dash.Infof(format, args...)
-	defaultLogger.Printf("INFO: %s", fmt.Sprintf(format, args...))
 }
 
 // GetLogInstance returns the logrus instance
