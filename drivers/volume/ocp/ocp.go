@@ -2,7 +2,10 @@ package ocp
 
 import (
 	"fmt"
+
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -98,6 +101,24 @@ func (o *ocp) InspectVolume(name string) (*api.Volume, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "InspectVolume()",
+	}
+}
+
+// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+func (o *ocp) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", o.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateFBDANFSEndpoint()",
+	}
+}
+
+// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+func (o *ocp) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volume, expectedIP string) error {
+	log.Warnf("ValidatePureFBDAMountSource function has not been implemented for volume driver - %s", o.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureFBDAMountSource()",
 	}
 }
 

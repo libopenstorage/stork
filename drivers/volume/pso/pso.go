@@ -2,13 +2,17 @@ package pso
 
 import (
 	"fmt"
-	"github.com/libopenstorage/openstorage/api"
 	"strings"
 
+	"github.com/libopenstorage/openstorage/api"
+
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -110,6 +114,25 @@ func (i *pso) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCre
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", i.String())
 	return nil
 }
+
+// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+func (i *pso) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", i.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateFBDANFSEndpoint()",
+	}
+}
+
+// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+func (i *pso) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volume, expectedIP string) error {
+	log.Warnf("ValidatePureFBDAMountSource function has not been implemented for volume driver - %s", i.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureFBDAMountSource()",
+	}
+}
+
 
 // GetPsoNamespace returns namespace where PSO is running
 func GetPsoNamespace() (string, error) {

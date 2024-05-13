@@ -2826,26 +2826,9 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("FBDAMultiTenancyBasicTest", "Validate FBDA vols get consumed over IP mentioned in `pure_nfs_endpoint` parameter of storageClass", nil, 0)
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
-
-		log.Infof("Using CustomAppConfig: %+v", Inst().CustomAppConfig)
-		// Skip the test if we don't find any of our apps
-		for appNameFromCustomAppConfig := range Inst().CustomAppConfig {
-			found := false
-			for _, appName := range Inst().AppList {
-				if appName == appNameFromCustomAppConfig {
-					found = true
-					customConfigAppName = appNameFromCustomAppConfig
-					break
-				}
-			}
-			if !found {
-				log.Warnf("App %v not found in %d contexts, skipping test", appNameFromCustomAppConfig, len(contexts))
-				Skip(fmt.Sprintf("app %v not found", appNameFromCustomAppConfig))
-			}
-		}
+		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
 		contexts = ScheduleApplications(testName)
 		ValidateApplicationsPureSDK(contexts)
-
 	})
 
 	When("pure_nfs_endpoint parameter specified in storageClass", func() {
@@ -2879,6 +2862,196 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 		})
 	})
 })
+
+var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
+	var contexts []*scheduler.Context
+	var customConfigAppName string
+	var origCustomAppConfigs, customAppConfigs map[string]scheduler.AppConfig
+
+	testName := "fbda-mt-update-endp"
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FBDAMultiTenancyUpdatePureNFSEnpoint", "Validate Pure NFS endpoint can be changed using pxctl", nil, 0)
+		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
+
+		// save the original custom app configs
+		origCustomAppConfigs = make(map[string]scheduler.AppConfig)
+		for appName, customAppConfig := range Inst().CustomAppConfig {
+			origCustomAppConfigs[appName] = customAppConfig
+		}
+
+		// update the custom app config with empty string for Pure NFS endpoint
+		// So that app uses NFS endpoint from pure.json secret.
+		Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
+			StorageClassPureNfsEndpoint: "",
+		}
+
+		Inst().CustomAppConfig = customAppConfigs
+		log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+
+		contexts = ScheduleApplications(testName)
+		ValidateApplicationsPureSDK(contexts)
+	})
+
+	When("pure_nfs_endpoint is updated through pxctl", func() {
+		It("should use newer pure_nfs_endpoint during next FBDA volume mount", func() {
+			ctx := findContext(contexts, customConfigAppName)
+			vols, err := Inst().S.GetVolumes(ctx)
+			dash.VerifyFatal(err, nil, "Failed to get list of volumes")
+			dash.VerifyFatal(len(vols) > 0, true, "Failed to get volumes")
+
+			newNFSEndpoint := origCustomAppConfigs[customConfigAppName].StorageClassPureNfsEndpoint
+			fbdaVolNames := []string{}
+
+			for _, vol := range vols {
+				if backendType, ok := vol.Labels[k8s.PureDAVolumeLabel]; !ok ||
+					backendType != k8s.PureDAVolumeLabelValueFB {
+					continue
+				}
+				fbdaVolNames = append(fbdaVolNames, vol.Name)
+
+				apiVol, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, fmt.Sprintf("Failed to inspect volume [%s]", apiVol.GetId()))
+
+				originalNFSEndpoint := apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint
+				dash.VerifyFatal(originalNFSEndpoint != newNFSEndpoint, true,
+					fmt.Sprintf("Verify new NFS endpoint [%s] is not same as old [%s].", newNFSEndpoint, originalNFSEndpoint))
+
+				err = Inst().V.UpdateFBDANFSEndpoint(apiVol.GetId(), newNFSEndpoint)
+				dash.VerifyFatal(err, nil,
+					fmt.Sprintf("Verify NFS endpoint is updated to [%s] through pxctl for volume [%s]", newNFSEndpoint, apiVol.GetId()))
+			}
+
+			// Remount FBDA volumes by,
+			// scaling down app to 0 and then back to origial replica count.
+			originalAppScaleMap, err := scaleAppToZero(ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify app [%s] is scaled down successfully. ", ctx.App.Key))
+
+			err = Inst().S.ScaleApplication(ctx, originalAppScaleMap)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify app [%s] is scaled up successfully.", ctx.App.Key))
+
+			for _, vol := range vols {
+				apiVol, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, fmt.Sprintf("Failed to inspect volume [%s]", apiVol.GetId()))
+				dash.VerifyFatal(apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint, newNFSEndpoint,
+					"FBDA volume is using NFS endpoint set using pxctl.")
+			}
+			validateMountOnHost(ctx, newNFSEndpoint, fbdaVolNames)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+		// restore the original custom app configs
+		for appName, customAppConfig := range origCustomAppConfigs {
+			Inst().CustomAppConfig[appName] = customAppConfig
+		}
+		// remove any keys that are not present in the orig map
+		for appName := range Inst().CustomAppConfig {
+			if _, ok := origCustomAppConfigs[appName]; !ok {
+				delete(Inst().CustomAppConfig, appName)
+			}
+		}
+		log.Infof("JustAfterEach restoring Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
+		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+		AfterEachTest(contexts)
+	})
+})
+
+func validateMountOnHost(ctx *scheduler.Context, newNFSEndpoint string, fbdaVolNames []string) {
+	// For each node this app is running on, get the mount table.
+	// Then check for all FBDA volumes and validate they use the correct mount source.
+	appNodes, err := Inst().S.GetNodesForApp(ctx)
+	log.FailOnError(err, fmt.Sprintf("failed to get nodes for app: %v", ctx.App.Key))
+
+	for _, n := range appNodes {
+		mountOutput, err := Inst().N.RunCommand(n, "mount", node.ConnectionOpts{
+			Timeout:         k8s.DefaultTimeout,
+			TimeBeforeRetry: k8s.DefaultRetryInterval,
+			Sudo:            true})
+		log.FailOnError(err, fmt.Sprintf("failed to get mounts on node '%s': %v", n.Name, err))
+
+		for _, line := range strings.Split(mountOutput, "\n") {
+			if !strings.Contains(line, "nfs") { // Only consider NFS volumes
+				continue
+			}
+
+			foundVol := ""
+			for _, volName := range fbdaVolNames {
+				if strings.Contains(line, volName) {
+					foundVol = volName
+					break
+				}
+			}
+
+			if foundVol == "" { // Only consider volumes that are in our list of volume names
+				continue
+			}
+
+			// Check that we are using the correct address
+			dash.VerifyFatal(strings.Contains(line, newNFSEndpoint), true,
+				fmt.Sprintf("Verify mount line for volume [%s] contains new NFS endpoint '%s'", foundVol, n.Name))
+		}
+	}
+}
+
+func scaleAppToZero(ctx *scheduler.Context) (map[string]int32, error) {
+	log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+	originalAppScaleMap := make(map[string]int32)
+	originalAppScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+	if err != nil {
+		return originalAppScaleMap, err
+	}
+
+	applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
+	for name := range originalAppScaleMap {
+		applicationScaleDownMap[name] = 0
+	}
+
+	err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+	if err != nil {
+		return originalAppScaleMap, err
+	}
+	return originalAppScaleMap, nil
+}
+
+func skipTestIfNoRequiredCustomAppConfigFound() string {
+	var customConfigAppName string
+	if Inst().CustomAppConfig == nil {
+		log.Warnf("No CustomAppConfig found, skipping test")
+		Skip("No CustomAppConfig found")
+	}
+
+	log.Infof("Using CustomAppConfig: %+v", Inst().CustomAppConfig)
+	// Skip the test if we don't find any of our apps
+	for appNameFromCustomAppConfig := range Inst().CustomAppConfig {
+		found := false
+		for _, appName := range Inst().AppList {
+			if appName == appNameFromCustomAppConfig {
+				found = true
+				customConfigAppName = appNameFromCustomAppConfig
+				break
+			}
+		}
+		if !found {
+			log.Warnf("App %v not found in %d contexts, skipping test", appNameFromCustomAppConfig, len(contexts))
+			Skip(fmt.Sprintf("app %v not found", appNameFromCustomAppConfig))
+		}
+	}
+	return customConfigAppName
+}
 
 var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", func() {
 

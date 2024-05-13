@@ -1636,6 +1636,7 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			log.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
+			log.Infof("==== Cloning volume %s\n", vols[0].Name)
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
 			request := scheduler.CSICloneRequest{
 				Timestamp:       timestamp,

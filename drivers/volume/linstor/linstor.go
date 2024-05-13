@@ -3,16 +3,19 @@ package linstor
 import (
 	"context"
 	"fmt"
-	"github.com/libopenstorage/openstorage/api"
 	"time"
+
+	"github.com/libopenstorage/openstorage/api"
 
 	lclient "github.com/LINBIT/golinstor/client"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -142,6 +145,24 @@ func (d *linstor) KillPXDaemon(n []node.Node, triggerOpts *driver_api.TriggerOpt
 func (d *linstor) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
+}
+
+// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+func (d *linstor) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", d.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateFBDANFSEndpoint()",
+	}
+}
+
+// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+func (d *linstor) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volume, expectedIP string) error {
+	log.Warnf("ValidatePureFBDAMountSource function has not been implemented for volume driver - %s", d.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureFBDAMountSource()",
+	}
 }
 
 func init() {

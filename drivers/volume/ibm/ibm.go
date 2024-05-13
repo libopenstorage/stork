@@ -2,9 +2,12 @@ package ibm
 
 import (
 	"fmt"
+
 	ibmcore "github.com/IBM/go-sdk-core/v5/core"
 	"github.com/IBM/vpc-go-sdk/vpcv1"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -95,6 +98,24 @@ func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "InspectVolume()",
+	}
+}
+
+// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+func (i *ibm) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", i.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateFBDANFSEndpoint()",
+	}
+}
+
+// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+func (i *ibm) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volume, expectedIP string) error {
+	log.Warnf("ValidatePureFBDAMountSource function has not been implemented for volume driver - %s", i.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureFBDAMountSource()",
 	}
 }
 

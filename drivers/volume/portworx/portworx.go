@@ -1903,6 +1903,29 @@ func (d *portworx) ValidateVolumeInPxctlList(volumeName string) error {
 	return nil
 }
 
+func (d *portworx) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s --pure_nfs_endpoint %s %s", pxctlVolumeUpdate, newEndpoint, volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting FBDA NFS endpoint for volume [%s] to [%s] from node [%s], Err: %v", volumeName, newEndpoint, nodes[0], err)
+	}
+	return nil
+}
+
+func (d *portworx) ValidatePureFBDAMountSource(nodes []node.Node, vols []*torpedovolume.Volume, expectedIP string) error {
+	// For each node
+	//   Run `mount` on node
+	//   Search through lines for our volume names, check that all contain right IP
+	return fmt.Errorf("not implemented (ValidatePureFBDAMountSource)")
+}
+
 func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)

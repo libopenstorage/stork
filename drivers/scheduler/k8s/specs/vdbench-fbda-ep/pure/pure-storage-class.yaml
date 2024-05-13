@@ -7,9 +7,7 @@ provisioner: pxd.portworx.com
 parameters:
   backend: "pure_file"
   pure_export_rules: "*(no_root_squash,rw)"
-  {{ if .StorageClassPureNfsEndpoint}}
   pure_nfs_endpoint: "{{ .StorageClassPureNfsEndpoint }}"
-  {{ end }}
 mountOptions:
   - nfsvers=4.1
   - tcp
