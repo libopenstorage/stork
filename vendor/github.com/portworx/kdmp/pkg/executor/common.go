@@ -46,6 +46,7 @@ const (
 	projectIDKeypath       = "/etc/cred-secret/projectid"
 	storageAccountNamePath = "/etc/cred-secret/storageaccountname"
 	storageAccountKeyPath  = "/etc/cred-secret/storageaccountkey"
+	environmentPath        = "/etc/cred-secret/environment"
 	// ServerAddr & SubPath needed for NFS based backuplocation
 	serverAddr = "/etc/cred-secret/serverAddr"
 	subPath    = "/etc/cred-secret/subPath"
@@ -98,6 +99,7 @@ type S3Config struct {
 type AzureConfig struct {
 	StorageAccountName string
 	StorageAccountKey  string
+	Environment        string
 }
 
 // GoogleConfig specifies the config required to connect to Google Cloud Storage
@@ -242,6 +244,9 @@ func parseAzure(repoName string, backupLocation storkapi.BackupLocationItem) (*R
 		Name:    repoName,
 		Path:    "azure:" + repoName + "/",
 		AuthEnv: envs,
+		AzureConfig: &AzureConfig{
+			Environment: string(backupLocation.AzureConfig.Environment),
+		},
 	}, nil
 }
 
@@ -454,9 +459,17 @@ func parseAzureCreds() (*Repository, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	environment, err := os.ReadFile(environmentPath)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed reading data from file %s: %s", environmentPath, err)
+		logrus.Errorf("%v", errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	repository.Type = storkapi.BackupLocationAzure
 	repository.AzureConfig.StorageAccountName = string(storageAccountName)
 	repository.AzureConfig.StorageAccountKey = string(storageAccountKey)
+	repository.AzureConfig.Environment = string(environment)
 
 	return repository, nil
 }
