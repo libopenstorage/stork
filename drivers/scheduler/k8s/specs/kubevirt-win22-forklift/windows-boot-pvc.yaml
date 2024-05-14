@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: win22-boot-pvc
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: http://pwx-ova.pwx.purestorage.com/templates/qcow2/win2022en-standard-minimal.qcow2 
+    cdi.kubevirt.io/storage.bind.immediate.requested: "true"
+    pvc.source: "cloned"
+spec:
+  storageClassName: sv4-wffc-localattach-multi-disk
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

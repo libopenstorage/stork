@@ -1,0 +1,235 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fio-vm-multi-disk
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+        app: vm-multi-disk
+        pvc.source: "cloned"
+    spec:
+      domain:
+        cpu:
+          cores: 4
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            - name: datavolume1
+              disk:
+                bus: virtio
+            - name: datavolume2
+              disk:
+                bus: virtio
+            - name: datavolume3
+              disk:
+                bus: virtio
+            - name: datavolume4
+              disk:
+                bus: virtio
+            - name: datavolume5
+              disk:
+                bus: virtio
+            - name: datavolume6
+              disk:
+                bus: virtio
+            - name: datavolume7
+              disk:
+                bus: virtio
+            - name: datavolume8
+              disk:
+                bus: virtio
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            cpu: 6
+            memory: 8192M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: fio-boot-pvc
+        - name: datavolume1
+          dataVolume:
+            name: fio-disk-1
+        - name: datavolume2
+          dataVolume:
+            name: fio-disk-2
+        - name: datavolume3
+          dataVolume:
+            name: fio-disk-3
+        - name: datavolume4
+          dataVolume:
+            name: fio-disk-4
+        - name: datavolume5
+          dataVolume:
+            name: fio-disk-5
+        - name: datavolume6
+          dataVolume:
+            name: fio-disk-6
+        - name: datavolume7
+          dataVolume:
+            name: fio-disk-7
+        - name: datavolume8
+          dataVolume:
+            name: fio-disk-8
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False
+              runcmd:
+                - while true; do
+                    sleep 60
+                  done
+  dataVolumeTemplates:      
+  - metadata:
+      name: fio-boot-pvc
+    spec:
+      source:
+        pvc:
+          name: root-disk-template-pvc-ea-build
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 200Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-1
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-2
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+  - metadata:
+      name: fio-disk-3
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-4
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-5
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-6
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-7
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem
+  - metadata:
+      name: fio-disk-8
+    spec:
+      source:
+        pvc:
+          name: fio-disk-template
+          namespace: openshift-virtualization-os-images
+      pvc:
+        accessModes:
+        - ReadWriteMany
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: test-multi-disk-wffc
+        volumeMode: Filesystem

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-boot-pvc
+  labels:
+    app: containerized-data-importer
+  annotations:
+    "cdi.kubevirt.io/storage.import.endpoint": "http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-multi-disk.qcow2"
+    "cdi.kubevirt.io/storage.contentType": "kubevirt"
+    forklift.konveyor.io/disk-source: "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
+    "vmID": {{ .VmID }}
+    cdi.kubevirt.io/storage.bind.immediate.requested: "true"
+    pvc.source: "cloned"
+spec:
+  storageClassName: sv4-wffc-localattach-multi-disk
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

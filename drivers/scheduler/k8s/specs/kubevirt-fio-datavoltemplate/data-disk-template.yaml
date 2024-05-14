@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-disk-template
+  namespace: openshift-virtualization-os-images
+  annotations:
+    pvc.source: "cloned"
+spec:
+  storageClassName: sv4-repl2-multi-disk
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
