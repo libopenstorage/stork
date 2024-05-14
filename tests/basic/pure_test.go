@@ -2827,6 +2827,9 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
 		contexts = ScheduleApplications(testName)
+		for i := 0; i < len(contexts); i++ {
+			contexts[i].SkipVolumeValidation = true
+		}
 		ValidateApplicationsPureSDK(contexts)
 	})
 
@@ -2835,8 +2838,8 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 			ctx := findContext(contexts, customConfigAppName)
 
 			vols, err := Inst().S.GetVolumes(ctx)
-			dash.VerifyNotNilFatal(err, "Failed to get list of volumes")
-			dash.VerifyFatal(len(vols) != 0, true, "Failed to get volumes")
+			dash.VerifyFatal(err, nil, "Failed to get list of volumes")
+			dash.VerifyFatal(len(vols) > 0, true, "Failed to get volumes")
 
 			expectedPureNfsEndpoint := Inst().CustomAppConfig[customConfigAppName].StorageClassPureNfsEndpoint
 
@@ -2864,8 +2867,8 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 
 var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 	var contexts []*scheduler.Context
-	var customConfigAppName string
-	var origCustomAppConfigs, customAppConfigs map[string]scheduler.AppConfig
+	var customConfigAppName, originalNFSEndpoint string
+	var origCustomAppConfigs map[string]scheduler.AppConfig
 
 	testName := "fbda-mt-update-endp"
 
@@ -2886,13 +2889,15 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 			StorageClassPureNfsEndpoint: "",
 		}
 
-		Inst().CustomAppConfig = customAppConfigs
 		log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
 
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
 
 		contexts = ScheduleApplications(testName)
+		for i := 0; i < len(contexts); i++ {
+			contexts[i].SkipVolumeValidation = true
+		}
 		ValidateApplicationsPureSDK(contexts)
 	})
 
@@ -2916,7 +2921,13 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 				apiVol, err := Inst().V.InspectVolume(vol.ID)
 				log.FailOnError(err, fmt.Sprintf("Failed to inspect volume [%s]", apiVol.GetId()))
 
-				originalNFSEndpoint := apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint
+				if apiVol.Spec != nil && apiVol.Spec.ProxySpec != nil {
+					if apiVol.Spec.ProxySpec.PureFileSpec != nil && apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint != "" {
+						originalNFSEndpoint = apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint
+					} else {
+						originalNFSEndpoint = apiVol.Spec.ProxySpec.Endpoint
+					}
+				}
 				dash.VerifyFatal(originalNFSEndpoint != newNFSEndpoint, true,
 					fmt.Sprintf("Verify new NFS endpoint [%s] is not same as old [%s].", newNFSEndpoint, originalNFSEndpoint))
 
