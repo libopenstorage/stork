@@ -2260,6 +2260,7 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
+	credentialData["environment"] = []byte(backupLocation.Location.AzureConfig.Environment)
 	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
