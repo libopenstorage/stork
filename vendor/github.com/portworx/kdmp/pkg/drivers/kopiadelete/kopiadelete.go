@@ -296,34 +296,40 @@ func jobFor(
 	}
 
 	if drivers.CertFilePath != "" {
-		volumeMount := corev1.VolumeMount{
-			Name:      utils.TLSCertMountVol,
-			MountPath: drivers.CertMount,
-			ReadOnly:  true,
-		}
 
-		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
-			job.Spec.Template.Spec.Containers[0].VolumeMounts,
-			volumeMount,
-		)
+		if !jobOption.S3DisableSSL {
 
-		volume := corev1.Volume{
-			Name: utils.TLSCertMountVol,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: jobOption.CertSecretName,
+			volumeMount := corev1.VolumeMount{
+				Name:      utils.TLSCertMountVol,
+				MountPath: drivers.CertMount,
+				ReadOnly:  true,
+			}
+
+			job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+				job.Spec.Template.Spec.Containers[0].VolumeMounts,
+				volumeMount,
+			)
+
+			volume := corev1.Volume{
+				Name: utils.TLSCertMountVol,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: jobOption.CertSecretName,
+					},
 				},
-			},
+			}
+
+			job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
+
+			env := []corev1.EnvVar{
+				{
+					Name:  drivers.CertDirPath,
+					Value: drivers.CertMount,
+				},
+			}
+			job.Spec.Template.Spec.Containers[0].Env = env
 		}
 
-		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, volume)
-
-		env := []corev1.EnvVar{
-			{
-				Name:  drivers.CertDirPath,
-				Value: drivers.CertMount,
-			},
-		}
 		if len(jobOption.NodeAffinity) > 0 {
 			// Deletion jobs for baas paid customer will run on the dedicated nodes assigned to customer instance
 			// Nodes wil have the following label "tenant: <instance name>"
@@ -360,10 +366,7 @@ func jobFor(
 				NodeAffinity: nodeAffinity,
 			}
 		}
-
-		job.Spec.Template.Spec.Containers[0].Env = env
 	}
-
 	return job, nil
 }
 
