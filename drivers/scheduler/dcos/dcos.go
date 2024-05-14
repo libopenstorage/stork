@@ -1006,7 +1006,7 @@ func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRe
 	}
 }
 
-func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string) error {
+func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string, timeout int) error {
 	//WaitForSinglePVCToBound is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",
