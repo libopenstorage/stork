@@ -9455,8 +9455,8 @@ func AddMetadataDisk(n node.Node) error {
 
 }
 
-// createNamespaces Create N number of namespaces and return namespace list
-func createNamespaces(nsName string, numberOfNamespaces int) ([]string, error) {
+// CreateNamespaces Create N number of namespaces and return namespace list
+func CreateNamespaces(nsName string, numberOfNamespaces int) ([]string, error) {
 
 	// Create multiple namespaces in string
 	var (
@@ -12573,7 +12573,18 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 }
 
 // CreateFlashStorageClass Creates storage class for Purity Backend
-func CreateFlashStorageClass(scName string, scType string, params map[string]string) error {
+// ReclaimPolicy can be v1.PersistentVolumeReclaimDelete, v1.PersistentVolumeReclaimRetain, v1.PersistentVolumeReclaimRecycle
+// volumeBinding storageapi.VolumeBindingImmediate, storageapi.VolumeBindingWaitForFirstConsumer
+func CreateFlashStorageClass(scName string,
+	scType string,
+	ReclaimPolicy v1.PersistentVolumeReclaimPolicy,
+	params map[string]string,
+	MountOptions []string,
+	AllowVolumeExpansion *bool,
+	VolumeBinding storageapi.VolumeBindingMode,
+	AllowedTopologies map[string][]string) error {
+
+	var reclaimPolicy v1.PersistentVolumeReclaimPolicy
 	param := make(map[string]string)
 	for key, value := range params {
 		param[key] = value
@@ -12585,14 +12596,44 @@ func CreateFlashStorageClass(scName string, scType string, params map[string]str
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
-	bindMode := storageapi.VolumeBindingImmediate
+
+	if VolumeBinding != storageapi.VolumeBindingImmediate && VolumeBinding != storageapi.VolumeBindingWaitForFirstConsumer {
+		return fmt.Errorf("Unsupported binding mode specified , please use storageapi.VolumeBindingImmediate or storageapi.VolumeBindingWaitForFirstConsumer")
+	}
+
+	// Declare Reclaim Policies
+	switch ReclaimPolicy {
+	case v1.PersistentVolumeReclaimDelete:
+		reclaimPolicy = v1.PersistentVolumeReclaimDelete
+	case v1.PersistentVolumeReclaimRetain:
+		reclaimPolicy = v1.PersistentVolumeReclaimRetain
+	case v1.PersistentVolumeReclaimRecycle:
+		reclaimPolicy = v1.PersistentVolumeReclaimRecycle
+	}
+
+	var allowedTopologies []v1.TopologySelectorTerm = nil
+	if AllowedTopologies != nil {
+		topologySelector := v1.TopologySelectorTerm{}
+		topologyList := []v1.TopologySelectorLabelRequirement{}
+		for key, value := range AllowedTopologies {
+			topology := v1.TopologySelectorLabelRequirement{}
+			topology.Key = key
+			topology.Values = value
+			topologyList = append(topologyList, topology)
+		}
+		topologySelector.MatchLabelExpressions = topologyList
+		allowedTopologies = append(allowedTopologies, topologySelector)
+	}
+
 	scObj := storageapi.StorageClass{
-		ObjectMeta:        v1obj,
-		Provisioner:       k8s.CsiProvisioner,
-		Parameters:        params,
-		ReclaimPolicy:     &reclaimPolicyDelete,
-		VolumeBindingMode: &bindMode,
+		ObjectMeta:           v1obj,
+		Provisioner:          k8s.CsiProvisioner,
+		Parameters:           param,
+		MountOptions:         MountOptions,
+		ReclaimPolicy:        &reclaimPolicy,
+		AllowVolumeExpansion: AllowVolumeExpansion,
+		VolumeBindingMode:    &VolumeBinding,
+		AllowedTopologies:    allowedTopologies,
 	}
 
 	k8storage := schedstorage.Instance()

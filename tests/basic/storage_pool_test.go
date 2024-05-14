@@ -9343,6 +9343,9 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
 			fmt.Sprintf("No pools with IO present ?"))
 
 		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		if !IsPoolAddDiskSupported() {
+			expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+		}
 		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
