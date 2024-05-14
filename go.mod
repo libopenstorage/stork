@@ -65,7 +65,7 @@ require (
 require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/mock v1.6.0
-	github.com/portworx/kdmp v0.4.1-0.20240514053032-6aee747eddfe
+	github.com/portworx/kdmp v0.4.1-0.20240514061314-e242a6c6949e
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	kubevirt.io/api v1.0.0
 	kubevirt.io/client-go v0.59.2
