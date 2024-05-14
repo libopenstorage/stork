@@ -39,6 +39,8 @@ var (
 	k8sKubevirt                      = kubevirt.Instance()
 	importerPodCompletionTimeout     = 30 * time.Minute
 	importerPodRetryInterval         = 20 * time.Second
+	defaultMigrationTimeout          = 30 * time.Minute
+	defaultMigrationRetryInterval    = 30 * time.Second
 )
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
@@ -233,7 +235,7 @@ func GetStorageClassOfVmPVC(vm *scheduler.Context) (string, error) {
 
 // StartAndWaitForVMIMigration starts the VM migration and waits for the VM to be in running state in the new node
 func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx context1.Context) error {
-
+	log.InfoD("Initiating VM migration for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
 	vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
 	if err != nil {
 		return err
@@ -275,6 +277,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 	t := func() (interface{}, bool, error) {
 		migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
 		if err != nil {
+			log.InfoD("Error: %v", err)
 			return "", false, fmt.Errorf("failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
 		}
 		if !(migr.Phase == "Succeeded") {
@@ -297,7 +300,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		log.InfoD("VM pod live migrated to node: [%s]", nodeNameAfterMigration)
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, defaultVmMountCheckTimeout, defaultVmMountCheckRetryInterval)
+	_, err = task.DoRetryWithTimeout(t, defaultMigrationTimeout, defaultMigrationRetryInterval)
 	if err != nil {
 		return err
 	}
@@ -761,4 +764,76 @@ func DeployVMTemplatesAndValidate() error {
 	}
 	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)
 	return err
+}
+
+// GetReplicaNodesOfVM returns a list of nodes where the replica of the volumes are present
+func GetReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, error) {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return nil, err
+	}
+	// Get replica nodes where the volumes are present
+	replicaNodes, err := getReplicaNodes(vols[0])
+	if err != nil {
+		return nil, err
+	}
+	replicaNodesName := []string{}
+	for _, replicaNode := range replicaNodes {
+		id, err := node.GetNodeDetailsByNodeID(replicaNode)
+		log.FailOnError(err, "Failed to get node details by node id")
+		replicaNodesName = append(replicaNodesName, id.Name)
+	}
+
+	return replicaNodesName, nil
+}
+
+func GetNonReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, error) {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return nil, err
+	}
+	// Get replica nodes where the volumes are present
+	replicaNodes, err := getReplicaNodes(vols[0])
+	if err != nil {
+		return nil, err
+	}
+	for _, replicaNode := range replicaNodes {
+		log.Infof("Replica node: %s", replicaNode)
+	}
+
+	replicaNodesName := []string{}
+	for _, replicaNode := range replicaNodes {
+		id, err := node.GetNodeDetailsByNodeID(replicaNode)
+		log.FailOnError(err, "Failed to get node details by node id")
+		replicaNodesName = append(replicaNodesName, id.Name)
+	}
+
+	// Get all nodes in the cluster
+	allNodes, err := GetStorageNodes()
+	if err != nil {
+		return nil, err
+	}
+	for _, node := range allNodes {
+		log.Infof("All nodes: %s", node.Name)
+	}
+
+	// Get non-replica nodes
+	nonReplicaNodes := []string{}
+
+	for _, node := range allNodes {
+		flag := false
+		for _, replicaNode := range replicaNodesName {
+			if node.Name == replicaNode {
+				flag = true
+			}
+		}
+		if !flag {
+			nonReplicaNodes = append(nonReplicaNodes, node.Name)
+		}
+	}
+	for _, nonReplicaNode := range nonReplicaNodes {
+		log.Infof("Non-replica node: %s", nonReplicaNode)
+	}
+
+	return nonReplicaNodes, nil
 }
