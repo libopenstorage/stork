@@ -12,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -19,6 +20,8 @@ import (
 const (
 	defaultStatusCheckTimeout = 900
 	statusFile                = "/tmp/cmdexecutor-status"
+	maxRetries                = 6
+	retryInterval             = 15
 )
 
 type arrayFlags []string
@@ -192,15 +195,26 @@ Loop:
 				logrus.Infof("finished waiting for pod, %d pods left to finish", notFinished)
 				if notFinished == 0 {
 					logrus.Infof("successfully executed command: %s on all pods: %v", command, podNames)
-					_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
-					if err != nil {
-						logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
-					}
+					createStatusFile()
 					// All executors are done, we can exit successfully now
 					break Loop
 				}
 			}
+		default:
+			if len(podNames) == 0 {
+				logrus.Infof("no pods found in namespace: %s with label selector: %s", namespace, labelSelector)
+				createStatusFile()
+				logrus.Infof("exiting successfully without running any commands")
+				break Loop
+			}
 		}
+	}
+}
+
+func createStatusFile() {
+	_, err := os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
 	}
 }
 
@@ -225,9 +239,20 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 		return nil, err
 	}
 
-	pods, err := core.Instance().GetPods(namespace, selectorsMap)
-	if err != nil {
-		return nil, err
+	var pods *v1.PodList
+
+	for i := 0; i < maxRetries; i++ {
+		pods, err = core.Instance().GetPods(namespace, selectorsMap)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(pods.Items) > 0 {
+			break
+		}
+
+		logrus.Infof("no pods found yet in namespace: %s with label selector: %s", namespace, labelSelector)
+		time.Sleep(time.Duration(retryInterval) * time.Second)
 	}
 
 	var podNames []types.NamespacedName
@@ -237,6 +262,7 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 			Name:      pod.Name,
 		})
 	}
+
 	return podNames, nil
 }
 
