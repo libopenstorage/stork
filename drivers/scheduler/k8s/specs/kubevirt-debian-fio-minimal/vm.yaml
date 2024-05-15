@@ -25,6 +25,15 @@ spec:
               disk:
                 bus: virtio
               name: rootdisk
+            - name: fio-data-disk-1
+              disk:
+                bus: virtio
+            - name: fio-data-disk-2
+              disk:
+                bus: virtio
+            - name: fio-data-disk-3
+              disk:
+                bus: virtio
           interfaces:
             - name: default
               masquerade: {}
