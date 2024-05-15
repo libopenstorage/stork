@@ -148,7 +148,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 
 	// Background watcher to capture events
 	startEventWatcher(t)
-	t.Cleanup(func() { logAndClearEvents(t) })
+	t.Cleanup(func() { logEventsOnFailure(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -218,7 +218,7 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 
 	// Background watcher to capture events
 	startEventWatcher(t)
-	t.Cleanup(func() { logAndClearEvents(t) })
+	t.Cleanup(func() { logEventsOnFailure(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -260,7 +260,7 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 
 	// Background watcher to capture events
 	startEventWatcher(t)
-	t.Cleanup(func() { logAndClearEvents(t) })
+	t.Cleanup(func() { logEventsOnFailure(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -305,7 +305,7 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 
 	// Background watcher to capture events
 	startEventWatcher(t)
-	t.Cleanup(func() { logAndClearEvents(t) })
+	t.Cleanup(func() { logEventsOnFailure(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -371,7 +371,7 @@ func kubeVirtUpdatePX(t *testing.T) {
 
 	// Background watcher to capture events
 	startEventWatcher(t)
-	t.Cleanup(func() { logAndClearEvents(t) })
+	t.Cleanup(func() { logEventsOnFailure(t) })
 
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
@@ -432,7 +432,7 @@ func kubeVirtUpdatePXBlocked(t *testing.T) {
 
 	// Background watcher to capture events
 	startEventWatcher(t)
-	t.Cleanup(func() { logAndClearEvents(t) })
+	t.Cleanup(func() { logEventsOnFailure(t) })
 
 	k8sNodes, err := core.Instance().GetNodes()
 	log.FailOnError(t, err, "Failed to get k8s nodes")
@@ -456,9 +456,13 @@ func kubeVirtUpdatePXBlocked(t *testing.T) {
 	// Select a node to pin the VM to.
 	nodeToPinVMTo := ""
 	for _, n := range allNodes {
+		if node.IsMasterNode(n) || !node.IsStorageNode(n) {
+			continue
+		}
 		nodeToPinVMTo = n.Name
 		break
 	}
+	Dash.VerifyFatal(t, nodeToPinVMTo != "", true, "Failed to find a node to pin the VM to")
 	addRemoveTestLabelOnNode(t, nodeToPinVMTo, true /*add*/)
 	t.Cleanup(func() {
 		err := addRemoveTestLabelOnNodeHelper(nodeToPinVMTo, false /*add*/)
@@ -1491,12 +1495,10 @@ func startEventWatcher(t *testing.T) {
 	}
 }
 
-func logAndClearEvents(t *testing.T) {
-	var currentEvents []corev1.Event
-	eventWatcherData.Lock()
-	currentEvents = eventWatcherData.events
-	eventWatcherData.events = make([]corev1.Event, 0)
-	eventWatcherData.Unlock()
+// Called when the test is done to log the events generated during the test if the test failed.
+// Clears the eventWatcherData.events list.
+func logEventsOnFailure(t *testing.T) {
+	currentEvents := getAndClearEvents()
 	if !t.Failed() {
 		log.Info("Test passed, ignoring %d events", len(currentEvents))
 		return
@@ -1508,6 +1510,16 @@ func logAndClearEvents(t *testing.T) {
 		return
 	}
 	log.Info("Events generated during the failed test: %s", eventsJSON)
+}
+
+// return the events collected by the watcher and clear the watcher list
+func getAndClearEvents() []corev1.Event {
+	var currentEvents []corev1.Event
+	eventWatcherData.Lock()
+	currentEvents = eventWatcherData.events
+	eventWatcherData.events = make([]corev1.Event, 0)
+	eventWatcherData.Unlock()
+	return currentEvents
 }
 
 func verifyWatcherSawEvent(t *testing.T, reason string, afterTime time.Time) {
