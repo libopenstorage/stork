@@ -169,7 +169,7 @@ func inPlaceSnapshotRestoreDataTest(t *testing.T) {
 	var testrailID, testResult = 86223, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
-
+	defer updateDashStats(t.Name(), &testResult)
 	testnamespacePostfix := "snapvdbench"
 	appCtx, err := schedulerDriver.Schedule(testnamespacePostfix,
 		scheduler.ScheduleOptions{AppKeys: []string{"vdbench-repl-2-app"}})
