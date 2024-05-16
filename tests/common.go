@@ -967,32 +967,52 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 			close(*errChan[0])
 		}
 	}()
-
-	currentPdbValue, _ := GetPDBValue()
+	t := func() (interface{}, bool, error) {
+		currentPdbValue, _ := GetPDBValue()
+		if currentPdbValue == -1 {
+			return -1, true, fmt.Errorf("failed to get PDB value")
+		}
+		return currentPdbValue, false, nil
+	}
+	currentPdbValue, _ := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 	if currentPdbValue == -1 {
 		err := fmt.Errorf("failed to get PDB value")
 		processError(err, errChan...)
 	}
+
 	Step("Validate PDB minAvailable for px storage", func() {
 		if currentPdbValue != pdbValue {
 			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
 			processError(err, errChan...)
 		}
+
 	})
 	Step("Validate number of disruptions ", func() {
-		nodes, err := Inst().V.GetDriverNodes()
+		t := func() (interface{}, bool, error) {
+			nodes, err := Inst().V.GetDriverNodes()
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
+			} else {
+				return nodes, false, nil
+			}
+		}
+		nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 		if err != nil {
 			processError(err, errChan...)
+		} else {
+			currentNumNodes := len(nodes.([]*opsapi.StorageNode))
+			if allowedDisruptions < initialNumNodes-currentNumNodes {
+				err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+				processError(err, errChan...)
+			}
+			if initialNumNodes-currentNumNodes > 1 {
+				*isClusterParallelyUpgraded = true
+
+			}
 		}
-		currentNumNodes := len(nodes)
-		if allowedDisruptions < initialNumNodes-currentNumNodes {
-			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
-			processError(err, errChan...)
-		}
-		if initialNumNodes-currentNumNodes > 1 {
-			*isClusterParallelyUpgraded = true
-		}
+
 	})
+
 }
 
 func GetPDBValue() (int, int) {
