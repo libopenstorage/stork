@@ -37,7 +37,7 @@ type NodeOps interface {
 	AddLabelOnNode(string, string, string) error
 	// RemoveLabelOnNode removes the label with key on given node
 	RemoveLabelOnNode(string, string) error
-	// WatchNode sets up a watcher that listens for the changes on Node.
+	// WatchNode sets up a watcher that listens for the changes on input node.Incase of input node as nil, It will watch on all the nodes
 	WatchNode(node *corev1.Node, fn WatchFunc) error
 	// CordonNode cordons the given node
 	CordonNode(nodeName string, timeout, retryInterval time.Duration) error
@@ -286,21 +286,19 @@ func (c *Client) RemoveLabelOnNode(name, key string) error {
 	return err
 }
 
-// WatchNode sets up a watcher that listens for the changes on Node.
+// WatchNode sets up a watcher that listens for the changes on input node and will watch all the nodes when input node is nil.
 func (c *Client) WatchNode(node *corev1.Node, watchNodeFn WatchFunc) error {
-	if node == nil {
-		return fmt.Errorf("no node given to watch")
-	}
-
 	if err := c.initClient(); err != nil {
 		return err
 	}
-
 	listOptions := metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector("metadata.name", node.Name).String(),
-		Watch:         true,
+		Watch: true,
 	}
-
+	if node != nil {
+		listOptions.FieldSelector = fields.OneTermEqualSelector("metadata.name", node.Name).String()
+	} else {
+		fmt.Printf("Watching all nodes")
+	}
 	watchInterface, err := c.kubernetes.CoreV1().Nodes().Watch(context.TODO(), listOptions)
 	if err != nil {
 		return err

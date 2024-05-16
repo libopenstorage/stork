@@ -67,11 +67,12 @@ func TestKubevirt(t *testing.T) {
 	t.Run("kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer", kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer)
 	t.Run("kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer", kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer)
 	t.Run("kubevirtDeployFedoraVMMultiVolume", kubevirtDeployFedoraVMMultiVolume)
-	t.Run("kubeVirtHypercOneLiveMigration", kubeVirtHypercOneLiveMigration)
+	t.Run("kubeVirtSimulateOCPUpgrade", kubeVirtSimulateOCPUpgrade)
 	t.Run("kubeVirtHypercTwoLiveMigrations", kubeVirtHypercTwoLiveMigrations)
 	t.Run("kubeVirtHypercHotPlugDiskCollocation", kubeVirtHypercHotPlugDiskCollocation)
 	t.Run("kubeVirtHypercVPSFixJob", kubeVirtHypercVPSFixJob)
-	t.Run("kubeVirtSimulateOCPUpgrade", kubeVirtSimulateOCPUpgrade)
+	t.Run("kubeVirtUpdatePX", kubeVirtUpdatePX)
+	t.Run("kubeVirtUpdatePXBlocked", kubeVirtUpdatePXBlocked)
 }
 
 func kubevirtDeployFedoraVMWithClonePVC(t *testing.T) {
