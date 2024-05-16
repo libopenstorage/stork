@@ -89,9 +89,8 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: cassandra-data
-      annotations:
-        volume.beta.kubernetes.io/storage-class: px-sc
     spec:
+      storageClassName: "px-sc"
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
