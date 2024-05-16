@@ -74,9 +74,8 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: mysql-vol
-      annotations:
-        volume.beta.kubernetes.io/storage-class: portworx-repl2
     spec:
+      storageClassName: "portworx-repl2"
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:

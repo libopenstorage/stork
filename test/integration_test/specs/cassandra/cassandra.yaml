@@ -91,9 +91,8 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: cassandra-data
-      annotations:
-        volume.beta.kubernetes.io/storage-class: mysql-sc
     spec:
+      storageClassName: "mysql-sc"
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:

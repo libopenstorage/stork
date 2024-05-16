@@ -2,11 +2,10 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: mysql-data-1
-  annotations:
-    volume.beta.kubernetes.io/storage-class: px-mysql-sc
   labels:
     app: mysql
 spec:
+  storageClassName: "px-mysql-sc"
   accessModes:
     - ReadWriteOnce
   resources:

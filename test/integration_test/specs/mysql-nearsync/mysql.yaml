@@ -45,11 +45,11 @@ spec:
   - metadata:
       name: mysql-data
       annotations:
-        volume.beta.kubernetes.io/storage-class: px-sc
         px/secret-name: volume-secrets
         px/secret-namespace: kube-system
         px/secret-key: mysql-secret
     spec:
+      storageClassName: "px-sc"
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
