@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	err_pkg "errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/kdmp"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/crypto"
@@ -27,6 +29,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
+	operatorOps "github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -689,6 +692,61 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				//	s3 + kdmp = legacy code path
 				//	BL NFS + EBS/GKE/Azure = legacy code path
 				//	s3 + EBS/GKE/Azure = legacy code path
+				if driverName == "pxd" {
+					backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+					if err != nil {
+						return err
+					}
+					if backupLocation.Location.Type == stork_api.BackupLocationAzure {
+						var azureEnv string
+						storageCluster, err := operatorOps.Instance().GetStorageCluster("local-px-int", "kube-system")
+						if err != nil {
+							return err
+						}
+						for _, val := range storageCluster.Spec.Env {
+							logrus.Debugf("Checking azure env type in storage cluster...")
+							if val.Name == azureEnvironmentType {
+								azureEnv = val.Value
+								logrus.Infof("Azure env type from storage Cluster %s", azureEnv)
+							}
+						}
+						if azureEnv == "" && backupLocation.Location.AzureConfig.Environment == "AzureChinaCloud" {
+							errMsg := "no azure environment type is provided in storage cluster"
+							log.ApplicationRestoreLog(restore).Errorf(errMsg)
+							a.recorder.Event(restore,
+								v1.EventTypeWarning,
+								string(stork_api.ApplicationRestoreStatusFailed),
+								errMsg)
+							restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+							restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+							restore.Status.FinishTimestamp = metav1.Now()
+							restore.Status.LastUpdateTimestamp = metav1.Now()
+							restore.Status.Reason = errMsg
+							err = a.client.Update(context.TODO(), restore)
+							if err != nil {
+								return err
+							}
+							return err_pkg.New(errMsg)
+						} else if azureEnv != "" && backupLocation.Location.AzureConfig.Environment != stork_api.AzureEnvironment(azureEnv) {
+							errMsg := fmt.Sprintf("azure environment type received from the storage cluster [%s] is not matching with the backup location cr environment type [%s]", azureEnv, string(backupLocation.Location.AzureConfig.Environment))
+							log.ApplicationRestoreLog(restore).Errorf(errMsg)
+							a.recorder.Event(restore,
+								v1.EventTypeWarning,
+								string(stork_api.ApplicationRestoreStatusFailed),
+								errMsg)
+							restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+							restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+							restore.Status.FinishTimestamp = metav1.Now()
+							restore.Status.LastUpdateTimestamp = metav1.Now()
+							restore.Status.Reason = errMsg
+							err = a.client.Update(context.TODO(), restore)
+							if err != nil {
+								return err
+							}
+							return err_pkg.New(errMsg)
+						}
+					}
+				}
 				existingRestoreVolInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 				if err != nil {
 					return err

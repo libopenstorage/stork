@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	err_pkg "errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	kdmpShedOps "github.com/portworx/sched-ops/k8s/kdmp"
+	operatorOps "github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -106,6 +108,7 @@ const (
 	// optCSISnapshotClassName is an option for providing a snapshot class name
 	optCSISnapshotClassName              = "stork.libopenstorage.org/csi-snapshot-class-name"
 	defaultVolumeSnapshotClassAnnotation = "snapshot.storage.kubernetes.io/is-default-class"
+	azureEnvironmentType                 = "AZURE_ENVIRONMENT"
 )
 
 var (
@@ -864,6 +867,61 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				driver, err = volume.Get(driverName)
 				if err != nil {
 					return err
+				}
+				if driverName == "pxd" {
+					backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+					if err != nil {
+						return err
+					}
+					if backupLocation.Location.Type == stork_api.BackupLocationAzure {
+						var azureEnv string
+						storageCluster, err := operatorOps.Instance().GetStorageCluster("local-px-int", "kube-system")
+						if err != nil {
+							return err
+						}
+						for _, val := range storageCluster.Spec.Env {
+							logrus.Debugf("Checking azure env type in storage cluster...")
+							if val.Name == azureEnvironmentType {
+								azureEnv = val.Value
+								logrus.Infof("Azure env type from storage Cluster %s", azureEnv)
+							}
+						}
+						if azureEnv == "" && backupLocation.Location.AzureConfig.Environment == "AzureChinaCloud" {
+							errMsg := "no azure environment type is provided in storage cluster"
+							log.ApplicationBackupLog(backup).Errorf(errMsg)
+							a.recorder.Event(backup,
+								v1.EventTypeWarning,
+								string(stork_api.ApplicationBackupStatusFailed),
+								errMsg)
+							backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+							backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+							backup.Status.FinishTimestamp = metav1.Now()
+							backup.Status.LastUpdateTimestamp = metav1.Now()
+							backup.Status.Reason = errMsg
+							err = a.client.Update(context.TODO(), backup)
+							if err != nil {
+								return err
+							}
+							return err_pkg.New(errMsg)
+						} else if azureEnv != "" && backupLocation.Location.AzureConfig.Environment != stork_api.AzureEnvironment(azureEnv) {
+							errMsg := fmt.Sprintf("azure environment type received from the storage cluster [%s] is not matching with the backup location cr environment type [%s]", azureEnv, string(backupLocation.Location.AzureConfig.Environment))
+							log.ApplicationBackupLog(backup).Errorf(errMsg)
+							a.recorder.Event(backup,
+								v1.EventTypeWarning,
+								string(stork_api.ApplicationBackupStatusFailed),
+								errMsg)
+							backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+							backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+							backup.Status.FinishTimestamp = metav1.Now()
+							backup.Status.LastUpdateTimestamp = metav1.Now()
+							backup.Status.Reason = errMsg
+							err = a.client.Update(context.TODO(), backup)
+							if err != nil {
+								return err
+							}
+							return err_pkg.New(errMsg)
+						}
+					}
 				}
 				batchCount := defaultBackupVolumeBatchCount
 				if len(os.Getenv(backupVolumeBatchCountEnvVar)) != 0 {
