@@ -515,10 +515,12 @@ func kubeVirtUpdatePXBlocked(t *testing.T) {
 	updatePX(t)
 
 	// there should be at least one failed VM live-migration during PX update
+	foundFailedMigration := false
 	unblockerData.Lock()
-	Dash.VerifyFatal(t, len(unblockerData.failedMigrations) > 0, true, "Failed migrations not found")
+	foundFailedMigration = len(unblockerData.failedMigrations) > 0
 	unblockerData.stop = true
 	unblockerData.Unlock()
+	Dash.VerifyFatal(t, foundFailedMigration, true, "Failed migrations not found")
 
 	// check if the validator caught any failures
 	checkPXUpdateValidationFailures(t, startTime)
@@ -1344,6 +1346,11 @@ func isPortworxPod(pod *corev1.Pod) bool {
 	return pod.Labels["name"] == "portworx"
 }
 
+// startPXUpdateValidator starts a watcher for virt-launcher and Portworx pods. It keeps track of virt-launcher pods by node
+// and reports a failure if a Portworx pod is being deleted while there are virt-launcher pods on the same node.
+// This function should be called before starting the PX update. Note that the watcher gorouting is started only
+// once across all the tests. Each test should verify that the validation failure reported by the watcher was
+// after the time the test started.
 func startPXUpdateValidator(t *testing.T) {
 	validatorData.Lock()
 	defer validatorData.Unlock()
@@ -1490,6 +1497,9 @@ func stopVMForMigration(t *testing.T, migr *kubevirtv1.VirtualMachineInstanceMig
 		migr.Namespace, migr.Spec.VMIName, migr.Name)
 }
 
+// startEventWatcher starts watching events in the PX namespace and stores them in the eventWatcherData.events list.
+// It is called at the beginning of the test to start collecting events. Note that the watcher is started
+// only once across all the tests. Each test clears the collected events during its cleanup.
 func startEventWatcher(t *testing.T) {
 	fn := func(object runtime.Object) error {
 		eventWatcherData.Lock()
@@ -1544,6 +1554,7 @@ func getAndClearEvents() []corev1.Event {
 func verifyWatcherSawEvent(t *testing.T, reason string, afterTime time.Time) {
 	found := false
 	eventWatcherData.Lock()
+	defer eventWatcherData.Unlock()
 	for _, event := range eventWatcherData.events {
 		if event.Reason != reason {
 			continue
@@ -1565,7 +1576,6 @@ func verifyWatcherSawEvent(t *testing.T, reason string, afterTime time.Time) {
 			break
 		}
 	}
-	eventWatcherData.Unlock()
 	Dash.VerifyFatal(t, found, true, fmt.Sprintf("Did not find %s event after %v", reason, afterTime))
 }
 
