@@ -4,9 +4,8 @@ metadata:
    name: mysql-data
    labels:
      app: mysql 
-   annotations:
-     volume.beta.kubernetes.io/storage-class: mysql-sc
 spec:
+   storageClassName: "mysql-sc"
    accessModes:
      - ReadWriteOnce
    resources:

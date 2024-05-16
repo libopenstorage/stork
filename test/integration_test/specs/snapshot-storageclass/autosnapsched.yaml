@@ -13,9 +13,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: autosnap
-   annotations:
-     volume.beta.kubernetes.io/storage-class: autosnap-sc
 spec:
+   storageClassName: "autosnap-sc"
    accessModes:
      - ReadWriteOnce
    resources:

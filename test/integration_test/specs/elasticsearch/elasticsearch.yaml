@@ -81,9 +81,8 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: elasticdata-vol
-      annotations:
-        volume.beta.kubernetes.io/storage-class: elasticdata-sc
     spec:
+      storageClassName: "elasticdata-sc"
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
