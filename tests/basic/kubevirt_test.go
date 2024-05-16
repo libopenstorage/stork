@@ -1619,7 +1619,7 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
 
 	itLog := "Live Migrate VM while node is in maintenance mode"
 	It(itLog, func() {
-
+		log.InfoD(itLog)
 		namespace := fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -1839,6 +1839,118 @@ var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", func() {
 			}
 		})
 
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
+
+	/*
+			1. Schedule a kubevirt VM
+			2. Cordon the non replica nodes
+		        3. initiate Live Migration of VM
+		        4. Verify VM is migrated to different node
+			5. Restart portworx on the node where VM was provisioned
+			6. The volume now should be locally attached to the node where the vm has been migrated
+			7. Uncordon the nodes
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXAndCheckIfVmBindMount", "Restart PX and check if VM is bind mounted", nil, 0)
+
+	})
+
+	var appCtxs []*scheduler.Context
+
+	itLog := "Live migrate,Restart PX and check if VM is bind mounted"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		namespace := fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
+			}
+		})
+		stepLog = "Check if vm is bind mount"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+		for _, appCtx := range appCtxs {
+			nonReplicaNodes, err := GetNonReplicaNodesOfVM(appCtx)
+			log.FailOnError(err, "Failed to get non replica nodes of VM")
+
+			defer func() {
+				//Uncordon the nodes
+				for _, nonReplicaNode := range nonReplicaNodes {
+					err = core.Instance().UnCordonNode(nonReplicaNode, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to uncordon the node")
+				}
+			}()
+			// cordon the non replica nodes
+			for _, nonReplicaNode := range nonReplicaNodes {
+				err = core.Instance().CordonNode(nonReplicaNode, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to cordon the node")
+			}
+
+			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			dash.VerifyFatal(len(vms) > 0, true, "Failed to get VMs from scheduled contexts")
+
+			for _, vm := range vms {
+				nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+				log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+				log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
+
+				nodeObj, err := node.GetNodeByName(nodeVMProvisionedOn)
+				log.FailOnError(err, "Failed to get node obj for node name: %s", nodeVMProvisionedOn)
+
+				stepLog = "live migrate the VM"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				})
+
+				stepLog = "Restart the PX on the node where VM was provisioned"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					StopVolDriverAndWait([]node.Node{nodeObj})
+					StartVolDriverAndWait([]node.Node{nodeObj})
+					log.InfoD("Succesfully restarted PX on the node: %s", nodeObj.Name)
+				})
+
+				stepLog = "After restart of the px on previously provisioned node the volume should be locally attached to the node where the vm has been migrated"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+					log.FailOnError(err, "Failed to run vm bind mount check")
+					dash.VerifyFatal(isVmBindMounted, true, "Failed to verify bind mount?")
+				})
+			}
+			stepLog = "Destroy the applications"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				DestroyApps([]*scheduler.Context{appCtx}, nil)
+			})
+		}
 	})
 
 	JustAfterEach(func() {
