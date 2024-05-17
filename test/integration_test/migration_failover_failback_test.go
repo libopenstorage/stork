@@ -64,6 +64,7 @@ func vanillaFailoverAndFailbackMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86259, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	failoverAndFailbackMigrationTest(t)
 
@@ -76,6 +77,7 @@ func rancherFailoverAndFailbackMigrationTest(t *testing.T) {
 	var testrailID, testResult = 86260, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	// Migrate the resources
 	instanceID := "mysql-migration-failover-failback-rancher"

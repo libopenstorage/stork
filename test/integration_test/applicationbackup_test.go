@@ -81,6 +81,7 @@ func TestScaleApplicationBackup(t *testing.T) {
 	var testrailID, testResult = 50785, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	if !defaultsBackupSet {
 		setDefaultsForBackup(t)

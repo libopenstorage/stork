@@ -144,6 +144,7 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	var testrailID, testResult = 93197, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "two-live-migr"
 
 	// Background watcher to capture events
@@ -214,6 +215,7 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	var testrailID, testResult = 257201, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "hotplug-colo"
 
 	// Background watcher to capture events
@@ -256,6 +258,7 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 	var testrailID, testResult = 257177, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vps-fix-job"
 
 	// Background watcher to capture events
@@ -301,6 +304,7 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 	var testrailID, testResult = 297265, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "ocp-upgrade"
 
 	// Background watcher to capture events
@@ -376,6 +380,7 @@ func kubeVirtUpdatePX(t *testing.T) {
 	var testrailID, testResult = 297915, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "update-px"
 
 	// Background watcher to capture events
@@ -447,6 +452,7 @@ func kubeVirtUpdatePXBlocked(t *testing.T) {
 	var testrailID, testResult = 297916, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "update-px-blocked"
 
 	// Background watcher to capture events
