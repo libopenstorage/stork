@@ -19,8 +19,8 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             limits:
-              memory: 1Gi
-              cpu: 100m
+              memory: 3Gi
+              cpu: 2
           {{ if .CustomCommand }}
           command: {{ .CustomCommand | array }}
           {{ else }}

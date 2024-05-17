@@ -820,7 +820,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	if ignoreErr == false && err != nil {
 		log.Infof("SSH ERR: %v", err)
 		return out, &node.ErrFailedToRunCommand{
-			Addr:  n.UsableAddr,
+			Addr:  n.Name,
 			Cause: fmt.Sprintf("failed to run command. sterr: %v, err: %v", sterr, err),
 		}
 	}

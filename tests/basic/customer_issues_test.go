@@ -762,9 +762,9 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 						}
 					}
 				}
-				opts := make(map[string]bool)
-				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-				ValidateAndDestroy(contexts, opts)
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
 			})
 
 		})
@@ -772,7 +772,12 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err = DeleteCloudSnapBucket(contexts)
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		DestroyApps(contexts, opts)
+		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts)
 	})

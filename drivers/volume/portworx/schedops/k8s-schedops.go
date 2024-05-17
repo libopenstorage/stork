@@ -239,10 +239,12 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 
 	t := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPodsUsingPV(pvName)
-		printStatus(k, pods...)
 		if err != nil {
 			return nil, true, err
 		}
+		log.Infof("Found %d pods using PV [%s]", len(pods), pvName)
+		printStatus(k, pods...)
+		log.Infof("Validating volume setup for volume [%s]", vol.Name)
 
 		resp := make([]string, 0)
 		if vol.Raw {
@@ -292,7 +294,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		return nil, true, fmt.Errorf("pods pending validation current: %d. Expected: %d", lenValidatedPods, lenExpectedPods)
 	}
 
-	_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, defaultRetryInterval)
 	return err
 }
 

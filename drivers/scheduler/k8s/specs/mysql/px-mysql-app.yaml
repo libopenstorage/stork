@@ -93,7 +93,7 @@ spec:
     spec:
       containers:
       - name: mysqlslap
-        image: adityadani/mysqlslap
+        image: portworx/mysqlslap
         imagePullPolicy: IfNotPresent
         env:
         - name: MYSQL_ROOT_PASSWORD

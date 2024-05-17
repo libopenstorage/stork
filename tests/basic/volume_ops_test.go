@@ -422,7 +422,10 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 								MaxRF = int64(len(node.GetStorageDriverNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, nil, true)
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, nil, true, opts)
 							log.FailOnError(err, "Failed to set vol %s repl factor", v.Name)
 							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Vol %s repl factor set as expected?", v.Name))
 						})
@@ -1052,6 +1055,9 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			log.InfoD(stepLog)
 
 			for _, ctx := range contexts {
+				if !strings.Contains(ctx.App.Key, "cloudsnap") {
+					continue
+				}
 				var appVolumes []*volume.Volume
 				var err error
 				appNamespace := ctx.App.Key + "-" + ctx.UID
@@ -1139,6 +1145,9 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		stepLog = "Validating cloud snapshot backup size values"
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
+				if !strings.Contains(ctx.App.Key, "cloudsnap") {
+					continue
+				}
 				// Validate the cloud snapshot backup size values [PTX-17342]
 				log.Infof("Validating cloud snapshot backup size values for app [%s]", ctx.App.Key)
 				vols, err := Inst().S.GetVolumeParameters(ctx)
@@ -1227,30 +1236,30 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 						} else {
 							log.FailOnError(fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace), "error getting volume snapshot")
 						}
-
 					}
-
 				}
 			}
-
 		})
 
-		stepLog = "Validating and Destroying apps"
+		stepLog = "Validating apps after cloudsnap restore"
 		Step(stepLog, func() {
 
 			for _, ctx := range contexts {
 				ctx.ReadinessTimeout = 15 * time.Minute
-				ctx.SkipVolumeValidation = false
+				//skipping volume validation as ip_profiles are updated
+				ctx.SkipVolumeValidation = true
 				ValidateContext(ctx)
-				opts := make(map[string]bool)
-				DestroyApps(contexts, opts)
 			}
 		})
 
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err = DeleteCloudSnapBucket(contexts)
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "error deleting cloud snap bucket")
 		AfterEachTest(contexts)
 	})
@@ -2028,7 +2037,11 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err = DeleteCloudSnapBucket(contexts)
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "error deleting cloud snap bucket")
 		AfterEachTest(contexts)
 	})
@@ -2127,6 +2140,9 @@ func validateCloudSnaps(appNamespace string) (map[string]string, error) {
 							return snapsMap, fmt.Errorf("snapshotSchedule has an empty migration in it's most recent status,Err: %v", err)
 						}
 						status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+						if err != nil {
+							return snapsMap, err
+						}
 						log.Infof("Snapshot %s has status %v", status.Name, status.Status)
 
 						if status.Status == snapv1.VolumeSnapshotConditionError {
@@ -2617,7 +2633,11 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err = DeleteCloudSnapBucket(contexts)
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts, testrailID, runID)
 	})
@@ -2866,7 +2886,11 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err = DeleteCloudSnapBucket(contexts)
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts, testrailID, runID)
 	})
