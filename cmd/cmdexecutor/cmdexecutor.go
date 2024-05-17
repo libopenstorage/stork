@@ -255,6 +255,10 @@ func getPodNamesUsingLabelSelector(labelSelector, namespace string) ([]types.Nam
 		time.Sleep(time.Duration(retryInterval) * time.Second)
 	}
 
+	if failOnNoPodsFound && len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no pods found in namespace: %s with label selector: %s", namespace, labelSelector)
+	}
+
 	var podNames []types.NamespacedName
 	for _, pod := range pods.Items {
 		podNames = append(podNames, types.NamespacedName{
@@ -288,6 +292,7 @@ var (
 	command            string
 	statusCheckTimeout int64
 	taskID             string
+	failOnNoPodsFound  bool
 )
 
 func init() {
@@ -298,4 +303,5 @@ func init() {
 	flag.StringVar(&command, "cmd", "", "The command to run inside the pod")
 	flag.StringVar(&taskID, "taskid", "", "A unique ID the caller can provide which can be later used to clean the status files created by the command executor.")
 	flag.Int64Var(&statusCheckTimeout, "timeout", int64(defaultStatusCheckTimeout), "Time in seconds to wait for the command to succeeded on a single pod")
+	flag.BoolVar(&failOnNoPodsFound, "fail-on-no-pods", false, "If set, the command executor will fail if no pods are found in the namespace with the label selector")
 }
