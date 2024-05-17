@@ -104,6 +104,7 @@ var _ = Describe("{Longevity}", func() {
 		CreateAndRunMultipleFioOnVcluster: TriggerCreateAndRunMultipleFioOnVcluster,
 		VolumeDriverDownVCluster:          TriggerVolumeDriverDownVCluster,
 		SetDiscardMounts:                  TriggerSetDiscardMounts,
+		PowerOffAllVMs:                    TriggerPowerOffAllVMs,
 		ResetDiscardMounts:                TriggerResetDiscardMounts,
 		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
 	}

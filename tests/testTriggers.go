@@ -515,6 +515,7 @@ const (
 	// UpdateVolume provides option to update volume with properties like iopriority.
 	UpdateVolume    = "updateVolume"
 	UpdateIOProfile = "updateIOProfile"
+	PowerOffAllVMs = "powerOffAllVMs"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
@@ -6483,6 +6484,124 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 			})
 	})
 	updateMetrics(*event)
+}
+
+//TriggerPowerOffVMs
+func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *EventRecord){
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PowerOffAllVMs)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PowerOffAllVMs,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Power off all worker nodes test "
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		workerNodes:= node.GetWorkerNodes()
+		var numberOfThread int = 5
+		var numberOfNodePerThread int
+		// If number of VMs to restarted is less than  numberOfThread then 
+		// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
+		// to per thread
+		if len(workerNodes) < numberOfThread{
+			numberOfThread = len(workerNodes)
+			numberOfNodePerThread = 1
+		}else{
+			numberOfNodePerThread = len(workerNodes)/numberOfThread
+		}
+		var counter int = 0
+		// Assign vms to every thread.
+		nodesInThread := make([][]node.Node, numberOfThread)
+		for t := 0; t < numberOfThread;  t++ {
+			nodesInThread[t] = make([]node.Node, numberOfNodePerThread)
+			for n:=0; n < numberOfNodePerThread; n++{
+					nodesInThread[t][n] = workerNodes[counter]
+					counter++
+			}
+		}
+		//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to 
+		// 5 threads and assign remaining 2 vms 6th thread. 
+		if counter < len(workerNodes){
+			log.Infof("Additional nodes  : %d", len(workerNodes) - counter)
+			additonalThread := make([]node.Node, len(workerNodes) - counter)
+			var index int = 0
+			for counter< len(workerNodes) {
+				additonalThread[index] = workerNodes[counter]
+				index++
+				counter++
+			}
+			nodesInThread = append(nodesInThread, additonalThread)
+			numberOfThread++
+		}
+		stepLog = "Power off all worker nodes in batches"
+		Step(stepLog, func() {
+			var poweroffwg sync.WaitGroup
+			for i := 0; i < numberOfThread; i++ {
+				poweroffwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweroffwg.Done()
+					for _, nodeInfo:= range nodeList{
+							log.Infof("Node Name : %v", nodeInfo.Name)
+							err:=Inst().N.PowerOffVM(nodeInfo)
+							UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweroffwg.Wait()
+			log.Infof("Completed power off VMs")
+			log.Infof("Wait for 5 minutes")
+			time.Sleep(time.Duration(5 * time.Minute))
+		})
+		stepLog = "Power on all worker nodes"
+		Step(stepLog, func() {
+			var poweronwg sync.WaitGroup
+			log.Infof("Poweron thread starts")
+			for i := 0; i < numberOfThread; i++ {
+				poweronwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweronwg.Done()
+					for _, nodeInfo:= range nodeList{
+							log.Infof("Node Name : %v", nodeInfo.Name)
+							err:=Inst().N.PowerOnVM(nodeInfo)
+							UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweronwg.Wait()
+			log.Infof("Completed power on Nodes")
+			for _, node := range workerNodes{
+				err := Inst().S.IsNodeReady(node)
+				err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				UpdateOutcome(event, err)
+			}
+		})
+		stepLog = "Verify APP, volume staus and check data integrity if enabled"
+		// //Wait for PX to be up on all worker nodes
+		Step(stepLog, func() {
+			for _, ctx := range *contexts {
+				log.Infof("Validating context: %v", ctx.App.Key)
+				ctx.SkipVolumeValidation = false
+				errorChan:= make(chan error, errorChannelSize)
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			}
+			err:= ValidateDataIntegrity(contexts)
+			UpdateOutcome(event, err)
+	    })
+		updateMetrics(*event)
+	})
 }
 
 // TriggerVolumeUpdate enables to test volume update

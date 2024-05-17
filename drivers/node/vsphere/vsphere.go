@@ -3,12 +3,13 @@ package vsphere
 import (
 	"context"
 	"fmt"
-	"github.com/vmware/govmomi/vim25/mo"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/vmware/govmomi/vim25/mo"
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
