@@ -3056,6 +3056,8 @@ github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae/go.mod 
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v1.2.2-0.20240229114136-e58baeb9fbe1 h1:bbvoT2bRppI3ZjFDGb6zSumAxWiNxo0lpd5FzTiFD2U=
 github.com/portworx/px-backup-api v1.2.2-0.20240229114136-e58baeb9fbe1/go.mod h1:G1pn/FceOq8W6DKaYuV8LJuKowzp4/Hdgliojl9akIU=
+github.com/portworx/px-backup-api v1.2.2-0.20240513165102-9eda9e2fc169 h1:j+6fsZnHf50b0ZaGzYptcpnUl4lL8vGJcZWBVvSZqBM=
+github.com/portworx/px-backup-api v1.2.2-0.20240513165102-9eda9e2fc169/go.mod h1:G1pn/FceOq8W6DKaYuV8LJuKowzp4/Hdgliojl9akIU=
 github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987/go.mod h1:g3pw2lI2AjqAixUCRhaBdKTY98znsCPR7NGRrlpimVU=
 github.com/portworx/pxc v0.33.0/go.mod h1:Tl7hf4K2CDr0XtxzM08sr9H/KsMhscjf9ydb+MnT0U4=
 github.com/portworx/sched-ops v0.0.0-20200123020607-b0799c4686f5/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=

@@ -66,6 +66,7 @@ message ClusterInfo {
         (gogoproto.moretags) = "secure:\"true\""
     ];
     Provider provider = 17;
+    string k8s_version = 18;
 
     // Message for maintaining status of the cluster.
     message StatusInfo {
@@ -161,6 +162,21 @@ message S3Config {
     // Server side encryption type name
     // Currently supporting only SSE-S3 and SSE-KMS type alone.
     Sse sse_type = 6;
+    // Azure environment type
+    // Currently supporting only AZURE_GLOBAL and AZURE_CHINA
+    AzureEnvironmentType azure_environment = 7;
+    // Azure resource group name. This is needed in the case of azure immutable bucket to get the retention period (optional)
+    string azure_resource_group_name = 8;
+    message AzureEnvironmentType {
+        Type type = 1;
+        enum Type {
+            Invalid = 0;
+            // Azure public environment
+            AZURE_GLOBAL = 1;
+            // Azure china environment
+            AZURE_CHINA = 2;
+        }
+    }
     enum Sse {
         Invalid = 0;
         // Server-side encryption with AWS S3 managed keys
@@ -571,6 +587,13 @@ message BackupInfo {
         string pvc_id = 12;
         string provisioner = 13;
         string volumesnapshot = 14;
+        // As part of restrictive PSA setting, if an UID or GID is used during backup then same value should be used during restore (optional)
+        JobSecurityContext job_security_context = 15;
+
+        message JobSecurityContext {
+            int64 runAsUser = 1;
+            int64 runAsGroup = 2;
+        }
     }
 
     // Message for maintaining status of the object.
@@ -809,6 +832,10 @@ message EnumerateOptions {
     repeated string owners = 9;
     // filter to use backupObjectType on object
     string backup_object_type = 10;
+    // filter based on the object status.
+    // Need to pass the string value of the status field of the object ( backup /restore )
+    // For example, {"Success", "Failed"}
+    repeated string status = 11;
 
 }
 
@@ -1059,6 +1086,8 @@ message BackupScheduleUpdateRequest {
     ObjectRef post_exec_rule_ref = 16;
     // volume snapshot class mapping for csi based backup <provisioner(string), volumesnapshotclass(string)> (optional)
     map<string, string> volume_snapshot_class_mapping = 17;
+    // Skip auto rules for VirtualMachine Backup Object type
+    bool skip_vm_auto_exec_rules = 18;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -1824,12 +1853,15 @@ message MetricsInspectRequest { string org_id = 1; }
 
 message MetricsInspectResponse {
     repeated Stats stats = 1;
+    // Time at which last stats data was synced in epoch time format
+    int64 last_sync_time = 2;
     message Stats {
         string cluster = 1;
         uint64 num_namespaces = 2;
         uint64 total_backup_size = 3;
         uint64 num_schedules = 4;
         ObjectRef cluster_ref = 5;
+        uint64 total_namespaces = 6;
     }
 }
 

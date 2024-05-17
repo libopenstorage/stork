@@ -188,6 +188,16 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.status",
+            "description": "filter based on the object status.\nNeed to pass the string value of the status field of the object ( backup /restore )\nFor example, {\"Success\", \"Failed\"}.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         ],
         "tags": [
@@ -704,6 +714,16 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.status",
+            "description": "filter based on the object status.\nNeed to pass the string value of the status field of the object ( backup /restore )\nFor example, {\"Success\", \"Failed\"}.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         ],
         "tags": [
@@ -2075,6 +2095,16 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.status",
+            "description": "filter based on the object status.\nNeed to pass the string value of the status field of the object ( backup /restore )\nFor example, {\"Success\", \"Failed\"}.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         ],
         "tags": [
@@ -2400,6 +2430,16 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.status",
+            "description": "filter based on the object status.\nNeed to pass the string value of the status field of the object ( backup /restore )\nFor example, {\"Success\", \"Failed\"}.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         ],
         "tags": [
@@ -3395,6 +3435,10 @@
         },
         "volumesnapshot": {
           "type": "string"
+        },
+        "job_security_context": {
+          "$ref": "#/definitions/VolumeJobSecurityContext",
+          "title": "As part of restrictive PSA setting, if an UID or GID is used during backup then same value should be used during restore (optional)"
         }
       }
     },
@@ -4085,6 +4129,11 @@
             "type": "string"
           },
           "title": "volume snapshot class mapping for csi based backup \u003cprovisioner(string), volumesnapshotclass(string)\u003e (optional)"
+        },
+        "skip_vm_auto_exec_rules": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "Skip auto rules for VirtualMachine Backup Object type"
         }
       },
       "title": "Define BackupScheduleUpdateRequest struct"
@@ -4467,6 +4516,9 @@
         },
         "provider": {
           "$ref": "#/definitions/ClusterInfoProvider"
+        },
+        "k8s_version": {
+          "type": "string"
         }
       }
     },
@@ -4701,6 +4753,13 @@
         "backup_object_type": {
           "type": "string",
           "title": "filter to use backupObjectType on object"
+        },
+        "status": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "filter based on the object status.\nNeed to pass the string value of the status field of the object ( backup /restore )\nFor example, {\"Success\", \"Failed\"}"
         }
       }
     },
@@ -5164,6 +5223,11 @@
           "items": {
             "$ref": "#/definitions/MetricsInspectResponseStats"
           }
+        },
+        "last_sync_time": {
+          "type": "string",
+          "format": "int64",
+          "title": "Time at which last stats data was synced in epoch time format"
         }
       }
     },
@@ -5187,6 +5251,10 @@
         },
         "cluster_ref": {
           "$ref": "#/definitions/ObjectRef"
+        },
+        "total_namespaces": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -6311,8 +6379,34 @@
         "sse_type": {
           "$ref": "#/definitions/S3ConfigSse",
           "description": "Server side encryption type name\nCurrently supporting only SSE-S3 and SSE-KMS type alone."
+        },
+        "azure_environment": {
+          "$ref": "#/definitions/S3ConfigAzureEnvironmentType",
+          "title": "Azure environment type\nCurrently supporting only AZURE_GLOBAL and AZURE_CHINA"
+        },
+        "azure_resource_group_name": {
+          "type": "string",
+          "title": "Azure resource group name. This is needed in the case of azure immutable bucket to get the retention period (optional)"
         }
       }
+    },
+    "S3ConfigAzureEnvironmentType": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/S3ConfigAzureEnvironmentTypeType"
+        }
+      }
+    },
+    "S3ConfigAzureEnvironmentTypeType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "AZURE_GLOBAL",
+        "AZURE_CHINA"
+      ],
+      "default": "Invalid",
+      "title": "- AZURE_GLOBAL: Azure public environment\n - AZURE_CHINA: Azure china environment"
     },
     "S3ConfigSse": {
       "type": "string",
@@ -6587,6 +6681,19 @@
         },
         "build_date": {
           "type": "string"
+        }
+      }
+    },
+    "VolumeJobSecurityContext": {
+      "type": "object",
+      "properties": {
+        "runAsUser": {
+          "type": "string",
+          "format": "int64"
+        },
+        "runAsGroup": {
+          "type": "string",
+          "format": "int64"
         }
       }
     }
