@@ -74,6 +74,7 @@ var _ = Describe("{Longevity}", func() {
 		MongoAsyncDR:                      TriggerMongoAsyncDR,
 		AsyncDRVolumeOnly:                 TriggerAsyncDRVolumeOnly,
 		AutoFsTrimAsyncDR:                 TriggerAutoFsTrimAsyncDR,
+		DetachDrives:                      TriggerDetachDrives,
 		IopsBwAsyncDR:                     TriggerIopsBwAsyncDR,
 		StorkApplicationBackup:            TriggerStorkApplicationBackup,
 		StorkAppBkpVolResize:              TriggerStorkAppBkpVolResize,

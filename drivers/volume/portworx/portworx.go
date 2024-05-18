@@ -2732,6 +2732,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
+			log.Infof("Status PX available %s", pxNode.Status.String())
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("PX cluster is usable but node [%s/%s] status is not ok. Expected: %v Actual: %v",

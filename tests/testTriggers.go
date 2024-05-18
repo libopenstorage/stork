@@ -43,6 +43,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -515,6 +516,7 @@ const (
 	// UpdateVolume provides option to update volume with properties like iopriority.
 	UpdateVolume    = "updateVolume"
 	UpdateIOProfile = "updateIOProfile"
+	DetachDrives = "detachDrives"
 	PowerOffAllVMs = "powerOffAllVMs"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
@@ -825,6 +827,131 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 				}
 			}
 		}
+	})
+}
+
+// TriggerDetachDrives Detach all vsphere cloud drives, verify storage node will be recoevred after node maintenance cycle.
+func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DetachDrives)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DetachDrives,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Detach cloud drives from Storage node"
+	Step(stepLog, func() {
+		var err error
+		var stc *operatorcorev1.StorageCluster
+		log.Infof(stepLog)
+		Step(stepLog,
+			func() {
+				log.Infof(stepLog)
+				getSTC := func() (interface{}, bool, error) {
+					namespace, err := Inst().S.GetPortworxNamespace()
+					if err != nil{
+						return nil, false, fmt.Errorf("Portworx namespace  %s is not found: err %v", namespace,err )
+					}
+					pxOperator := operator.Instance()
+					stcList, err := pxOperator.ListStorageClusters(namespace)
+					if err != nil {
+						return nil, false, fmt.Errorf("Storage cluster list are not available: err %v", err)
+					}
+					log.Infof("Stc list %v ",stcList)
+					stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+					if err != nil {
+						return nil, false, fmt.Errorf("Storage cluster is not available: err %v", err)
+					}
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(getSTC, 3 * time.Minute, 1 * time.Minute)
+				UpdateOutcome(event, err)
+				var nodeId string
+				storageNodes:= node.GetStorageNodes()
+				nodeId = storageNodes[0].VolDriverNodeID
+				err = Inst().N.DetachDrivesFromVM(stc, storageNodes[0].Name)
+				UpdateOutcome(event, err)
+				time.Sleep(time.Duration(1 * time.Minute))
+				statusErr := Inst().V.WaitDriverUpOnNode(storageNodes[0], 10*time.Minute)
+				if statusErr != nil {
+					if strings.Contains(statusErr.Error(), apios.Status_STATUS_STORAGE_DOWN.String()) {
+						log.Infof("Node has gone to Storage Down state after detach %v: Node %s", statusErr, storageNodes[0].Name)
+					}else{
+						UpdateOutcome(event, statusErr)
+					}
+				}
+				storageNode, err := Inst().V.GetDriverNode(&storageNodes[0])
+				UpdateOutcome(event, err)
+				if storageNode.Status.String() != apios.Status_STATUS_STORAGE_DOWN.String(){
+					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNode.SchedulerNodeName,
+					apios.Status_STATUS_STORAGE_DOWN, storageNode.Status))
+				}
+				log.Infof("Status of the storage node %s ,%v ", storageNode.SchedulerNodeName, storageNode.Status)
+				statusErr = Inst().V.EnterMaintenance(storageNodes[0])
+				UpdateOutcome(event, statusErr)
+				status, _ := Inst().V.GetNodeStatus(storageNodes[0])
+				log.Infof("Status when the storage node entered maintenance mode %s , ", status.String())
+				if status.String() != apios.Status_STATUS_MAINTENANCE.String(){
+					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
+					apios.Status_STATUS_MAINTENANCE, status))
+				}
+				statusErr = Inst().V.ExitMaintenance(storageNodes[0])
+				UpdateOutcome(event, statusErr)
+				status, _ = Inst().V.GetNodeStatus(storageNodes[0])
+				log.Infof("Node Status after exit maintenance mode %v , %s", status, storageNodes[0].Name)
+				if status.String() != apios.Status_STATUS_OK.String(){
+					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
+					apios.Status_STATUS_MAINTENANCE, status))
+				}
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
+				//There are chances that storageless node can convert storage node by attaching these drives. Hence making sure
+				//This node id is up.
+				var selectedStorageNode *node.Node
+				storageNodes = node.GetStorageNodes()
+				for _, nodeInfo := range storageNodes {
+					if nodeInfo.VolDriverNodeID == nodeId {
+						selectedStorageNode = &nodeInfo
+						log.Infof("Node which has the nodeID %v , %s", status, (*selectedStorageNode).Name)
+						break
+					}
+				}
+				if selectedStorageNode != nil{
+					status, err = Inst().V.GetNodeStatus(*selectedStorageNode)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}else{
+						log.Infof("Node Status  %v node: %s", status, (*selectedStorageNode).SchedulerNodeName)
+						if status.String() != apios.Status_STATUS_OK.String(){
+							UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", (*selectedStorageNode).SchedulerNodeName,
+							apios.Status_STATUS_OK, status))
+						}
+					}
+			    }else{
+					UpdateOutcome(event, fmt.Errorf("Failed to find the node!"))
+				}
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan:= make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+				err = ValidateDataIntegrity(contexts)
+				UpdateOutcome(event, err)
+				updateMetrics(*event)
+			})
 	})
 }
 

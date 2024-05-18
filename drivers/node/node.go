@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -213,6 +214,9 @@ type Driver interface {
 	// AddMachine adds the new machine instance to existing map
 	AddMachine(machineName string) error
 
+	// DetachDisk vdisk from node.
+	DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error
+
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
 
@@ -287,6 +291,13 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootNode()",
+	}
+}
+
+func (d *notSupportedDriver) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DetachDrivesFromVM()",
 	}
 }
 
