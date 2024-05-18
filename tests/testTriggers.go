@@ -6839,17 +6839,19 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 
 func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 	for _, ctx := range *contexts {
-		var appVolumes []*volume.Volume
-		var err error
 		if strings.Contains(ctx.App.Key, "fstrim") {
-			appVolumes, err = Inst().S.GetVolumes(ctx)
-			UpdateOutcome(event, err)
+			appVolumes, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error getting volumes for app %s: %v", ctx.App.Key, err))
+				continue
+			}
 			if len(appVolumes) == 0 {
 				UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				continue
 			}
 
 			for _, v := range appVolumes {
-				// Skip autofs trim status on Pure DA volumes
+				// Skip autofstrim status on Pure DA volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
 				if err != nil {
 					UpdateOutcome(event, err)
@@ -6861,58 +6863,48 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 					)
 					continue
 				}
-				log.Infof("Getting info : %s", v.ID)
+
+				log.Infof("Getting volume %s inspect response", v.ID)
 				appVol, err := Inst().V.InspectVolume(v.ID)
 				if err != nil {
-					log.Errorf("Error inspecting volume: %v", err)
+					UpdateOutcome(event, fmt.Errorf("error inspecting volume [%v]: %v", v.ID, err))
+					continue
 				}
+
 				attachedNode := appVol.AttachedOn
-
-				var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
-
 				t := func() (interface{}, bool, error) {
-					fsTrimStatuses, err = Inst().V.GetAutoFsTrimStatus(attachedNode)
+					fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
 					if err != nil {
 						return nil, true, fmt.Errorf("error autofstrim status node %v status", attachedNode)
 					}
-
-					return nil, false, nil
+					val, ok := fsTrimStatuses[appVol.Id]
+					var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
+					if !ok {
+						fsTrimStatus, _ = waitForFsTrimStatus(event, attachedNode, appVol.Id)
+					} else {
+						fsTrimStatus = val
+					}
+					log.Infof("autofstrim status for volume %v, status: %v", appVol.Id, val.String())
+					if fsTrimStatus != -1 {
+						if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_COMPLETED {
+							return nil, false, nil
+						} else if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
+							return nil, false, fmt.Errorf("autoFstrim failed for volume %v, status: %v", v.ID, val.String())
+						} else {
+							return nil, true, fmt.Errorf("current autofstrim status for volume %v is %v. Expected status is %v", v.ID, val.String(), opsapi.FilesystemTrim_FS_TRIM_COMPLETED)
+						}
+					} else {
+						return nil, true, fmt.Errorf("autofstrim for volume %v not started yet", v.ID)
+					}
 				}
 				_, err = task.DoRetryWithTimeout(t, defaultDriverStartTimeout, defaultRetryInterval)
 				if err != nil {
 					UpdateOutcome(event, err)
 					return
 				}
-
-				val, ok := fsTrimStatuses[appVol.Id]
-				var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
-
-				if !ok {
-					fsTrimStatus, _ = waitForFsTrimStatus(event, attachedNode, appVol.Id)
-				} else {
-					fsTrimStatus = val
-				}
-
-				if fsTrimStatus != -1 {
-
-					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_STOPPED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_UNKNOWN {
-
-						err = fmt.Errorf("AutoFstrim failed for volume %v, status: %v", v.ID, val.String())
-						UpdateOutcome(event, err)
-
-					} else {
-						log.InfoD("Autofstrim status for volume %v, status: %v", v.ID, val.String())
-
-					}
-				} else {
-					log.Infof("autofstrim for volume %v not started yet", v.ID)
-				}
-
 			}
-
 		}
 	}
-
 }
 
 func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
