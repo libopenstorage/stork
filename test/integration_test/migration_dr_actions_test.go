@@ -44,6 +44,8 @@ func TestDRActions(t *testing.T) {
 	t.Run("testDRActionFailbackDailyScheduleTest", testDRActionFailbackDailyScheduleTest)
 	t.Run("testDRActionFailbackWeeklyScheduleTest", testDRActionFailbackWeeklyScheduleTest)
 	t.Run("testDRActionFailbackMonthlyScheduleTest", testDRActionFailbackMonthlyScheduleTest)
+	t.Run("testDRActionFailbackModifiedSecondaryReplicasTest", testDRActionFailbackModifiedSecondaryReplicasTest)
+	t.Run("testDRActionFailbackSubsetNamespacesTest", testDRActionFailbackSubsetNamespacesTest)
 }
 
 // testDRActionFailoverMultipleNamespacesTest tests failover action for multiple namespaces
@@ -140,6 +142,11 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 	mockNow := time.Now().Add(6 * time.Minute)
 	err = setMockTime(&mockNow)
 	log.FailOnError(t, err, "Error setting mock time")
+	defer func() {
+		// Reset mocktime.
+		err = setMockTime(nil)
+		log.FailOnError(t, err, "Error resetting mock time")
+	}()
 
 	// Need to Validate the migrationSchedules separately because they are created using storkctl
 	// and not a part of the torpedo scheduler context
@@ -172,6 +179,8 @@ func testDRActionFailoverMultipleNamespacesTest(t *testing.T) {
 
 	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
 	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+	// Delete migrationschedule.
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
 
 	// Verify the application is not running on the source cluster
 	err = setSourceKubeConfig()
@@ -369,6 +378,7 @@ func testDRActionFailoverSubsetNamespacesTest(t *testing.T) {
 
 	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
 	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
 
 	// Verify that both mysql and elasticsearch applications are not running on the source cluster
 	err = setSourceKubeConfig()
@@ -638,6 +648,533 @@ func testDRActionFailbackMonthlyScheduleTest(t *testing.T) {
 	schedulePolicyDestArgs := make(map[string]map[string]string)
 	schedulePolicyDestArgs["migrate-every-month-dr"] = map[string]string{"policy-type": "Monthly"}
 	failBackWithMigrationSchedulesWithDifferentPolicies(t, instanceID, mysqlApp, mysqlNamespace, schedulePolicyDestArgs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// testDRActionFailbackModifiedSecondaryReplicasTest tests performing failback of an app whose number of replicas have been modified in secondary after failover.
+func testDRActionFailbackModifiedSecondaryReplicasTest(t *testing.T) {
+	var testrailID, testResult = 257160, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// Create the apps for migration.
+	// Start migrationschedule
+	instanceID := "failback-modified-secondary-replicas"
+	elasticsearchApp := "elasticsearch"
+	elasticsearchNamespace := fmt.Sprintf("%s-%s", elasticsearchApp, instanceID)
+	appKeys := []string{elasticsearchApp}
+	var err error
+	// Reset config in case of error.
+	defer func() {
+		err = setSourceKubeConfig()
+		log.FailOnError(t, err, "Error resetting remote config")
+	}()
+
+	// Schedule elasticsearch replicas.
+	var preMigrationCtxs []*scheduler.Context
+	for _, appKey := range appKeys {
+		ctxs, err := schedulerDriver.Schedule(instanceID,
+			scheduler.ScheduleOptions{
+				AppKeys: []string{appKey},
+				Labels:  nil,
+			})
+		log.FailOnError(t, err, "Error scheduling task")
+		Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+		preMigrationCtxs = append(preMigrationCtxs, ctxs[0].DeepCopy())
+	}
+
+	for _, preMigrationCtx := range preMigrationCtxs {
+		err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+		log.FailOnError(t, err, "Error waiting for app to get to running state")
+	}
+
+	sourceStatefulsets, err := apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	sourceStatefulsetReplicas := *sourceStatefulsets.Items[0].Spec.Replicas
+
+	// Create the clusterpair
+	clusterPairNamespace := defaultAdminNamespace
+	log.Info("Creating bidirectional cluster pair:")
+	log.InfoD("Name: %s", remotePairName)
+	log.InfoD("Namespace: %s", clusterPairNamespace)
+	log.InfoD("Backuplocation: %s", defaultBackupLocation)
+	log.InfoD("Secret name: %s", defaultSecretName)
+	err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+	log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Create the migration schedule.
+	// We want to create the schedulePolicy and migrationSchedule using storkctl instead of scheduling apps using torpedo's scheduler.
+	// schedulePolicyArgs is a map of schedulePolicyName : {{flag1:value1,flag2:value2,....}}.
+	schedulePolicyArgs := make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+
+	// migrationScheduleArgs is a map of migrationScheduleName : {{flag1:value1,flag2:value2,....}}
+	migrationScheduleArgs := make(map[string]map[string]string)
+	migrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "migrate-every-5m",
+	}
+
+	// Create schedulePolicies using storkCtl if any required.
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	for schedulePolicyName, customArgs := range schedulePolicyArgs {
+		cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName}
+		executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
+	}
+	// Create migrationSchedules using storkCtl.
+	migrationScheduleName := "failback-modified-secondary-replicas"
+	cmdArgs := []string{"create", "migrationschedule", migrationScheduleName, "-c", remotePairName,
+		"--namespaces", elasticsearchNamespace, "-n", defaultAdminNamespace}
+	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[instanceID])
+
+	// Bump time of the world by 6 minutes.
+	mockNow := time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	log.FailOnError(t, err, "Error setting mock time")
+
+	// Need to validate the migrationSchedules separately because they are created using storkctl
+	// and not a part of the torpedo scheduler context.
+	_, err = storkops.Instance().ValidateMigrationSchedule(migrationScheduleName, defaultAdminNamespace, defaultWaitTimeout, defaultWaitInterval)
+	err = setMockTime(nil)
+	log.FailOnError(t, err, "Error resetting mock time")
+
+	// Failover the application.
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	failoverCmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"include-namespaces":  elasticsearchNamespace,
+		"namespace":           defaultAdminNamespace,
+	}
+	drActionName, _ := createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailover, migrationScheduleName, failoverCmdArgs)
+
+	// Wait for failover action to complete.
+	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, defaultAdminNamespace)
+
+	// Verify the elasticsearch application is running on the destination cluster.
+	destStatefulsets, err := apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
+
+	// Verify the elasticsearch application is not running on the source cluster.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *sourceStatefulsets.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in source in sts in %s namespace", elasticsearchNamespace))
+
+	///////////////////////////////////////////////////////////////////////////////////////
+	// Scale the number of replicas of elasticsearch in destination cluster from 3 to 5 //
+	//////////////////////////////////////////////////////////////////////////////////////
+
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	scaleMap, err := schedulerDriver.GetScaleFactorMap(preMigrationCtxs[0])
+	log.FailOnError(t, err, "Error getting scale map")
+	newScaleMap := make(map[string]int32, len(scaleMap))
+	for name := range scaleMap {
+		newScaleMap[name] = 5
+	}
+	err = schedulerDriver.ScaleApplication(preMigrationCtxs[0], newScaleMap)
+	log.FailOnError(t, err, "Error while scaling up app")
+
+	// Wait for new replicas to come up.
+	err = schedulerDriver.WaitForRunning(preMigrationCtxs[0], defaultWaitTimeout, defaultWaitInterval)
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
+
+	//////////////////////////////////////////////////////
+	// Create reverse migrationschedule using storkCtl //
+	////////////////////////////////////////////////////
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	// Initialize reversemigrationschedule and reverse schedule policy.
+	reverseSchedulePolicyArgs := make(map[string]map[string]string)
+	reverseSchedulePolicyArgs["reverse-migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+	reverseMigrationScheduleArgs := make(map[string]map[string]string)
+	reverseMigrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "reverse-migrate-every-5m",
+	}
+
+	//Create schedulePolicies using storkCtl.
+	cmd = storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	for schedulePolicyName, customArgs := range reverseSchedulePolicyArgs {
+		cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName, "--kubeconfig", destinationKubeConfigPath}
+		executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
+	}
+	log.Info("created schedule policy")
+
+	// Create migration schedule.
+	reverseMigrationScheduleName := "reverse-failback-modified-secondary-replicas"
+	cmdArgs = []string{"create", "migrationschedule", reverseMigrationScheduleName, "-c", remotePairName,
+		"--namespaces", elasticsearchNamespace, "-n", defaultAdminNamespace, "--kubeconfig", destinationKubeConfigPath}
+	executeStorkCtlCommand(t, cmd, cmdArgs, reverseMigrationScheduleArgs[instanceID])
+
+	// Bump time of the world by 6 minutes.
+	mockNow = time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	log.FailOnError(t, err, "Error setting mock time")
+
+	// Need to Validate the migrationSchedules separately because they are created using storkctl
+	// and not a part of the torpedo scheduler context.
+	_, err = storkops.Instance().ValidateMigrationSchedule(reverseMigrationScheduleName, defaultAdminNamespace, defaultWaitTimeout, defaultWaitInterval)
+
+	log.Info("migration schedule created")
+	failbackCmdArgs := map[string]string{
+		"migration-reference": reverseMigrationScheduleName,
+		"include-namespaces":  elasticsearchNamespace,
+		"namespace":           defaultAdminNamespace,
+	}
+	drActionName, _ = createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailback, reverseMigrationScheduleName, failbackCmdArgs)
+
+	// Wait for failback action to complete.
+	waitTillActionComplete(t, storkv1.ActionTypeFailback, drActionName, defaultAdminNamespace)
+	err = setMockTime(nil)
+	log.FailOnError(t, err, "Error resetting mock time")
+
+	////////////////
+	// Assertion //
+	///////////////
+
+	// Verify the elasticsearch application is not running on the destination cluster.
+	destStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in destination in sts in %s namespace", elasticsearchNamespace))
+
+	// Verify the elasticsearch application is running on the source cluster.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	expectedReplicas := int32(5)
+	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *sourceStatefulsets.Items[0].Spec.Replicas, expectedReplicas, fmt.Sprintf("Expected %d replica in source in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
+
+	// Verify that the migration schedule in destination cluster has been suspended.
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	migrSched, err := storkops.Instance().GetMigrationSchedule(reverseMigrationScheduleName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to retrieve migration schedule: %v", err)
+
+	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
+		// Fail the test as the migration schedule is not yet suspended.
+		suspendErr := fmt.Errorf("migrationschedule is not suspended on destination cluster : %s/%s", migrSched.GetName(), migrSched.GetNamespace())
+		log.FailOnError(t, err, "Failed: %v", suspendErr)
+	}
+	log.InfoD("Successfully verified suspend migration in destination cluster")
+
+	//////////////
+	// Cleanup //
+	/////////////
+
+	// Delete destination cluster cluster-pair and migration schedule.
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
+	DeleteAndWaitForMigrationScheduleDeletion(t, reverseMigrationScheduleName, defaultAdminNamespace)
+	for schedulePolicyName := range reverseSchedulePolicyArgs {
+		err := storkops.Instance().DeleteSchedulePolicy(schedulePolicyName)
+		log.FailOnError(t, err, "error deleting up schedule policy %s", schedulePolicyName)
+	}
+	// cleanup
+	destroyAndWait(t, preMigrationCtxs)
+
+	// Delete source cluster cluster-pair and migration schedule.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in source: %v", remotePairName, defaultAdminNamespace, err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
+	DeleteAndWaitForMigrationScheduleDeletion(t, reverseMigrationScheduleName, defaultAdminNamespace)
+	for schedulePolicyName := range schedulePolicyArgs {
+		err := storkops.Instance().DeleteSchedulePolicy(schedulePolicyName)
+		log.FailOnError(t, err, "error deleting up schedule policy %s", schedulePolicyName)
+	}
+	// cleanup
+	destroyAndWait(t, preMigrationCtxs)
+	blowNamespaceForTest(t, elasticsearchNamespace, false)
+
+	// If we are here then the test has passed.
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func testDRActionFailbackSubsetNamespacesTest(t *testing.T) {
+	var testrailID, testResult = 297513, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// Create the apps for migration
+	// Start migrationschedule
+	instanceID := "subset-ns-migration-schedule-interval"
+	// appKeys is an array of appKeys that will be used to create the apps
+	mysqlApp := "mysql-1-pvc"
+	mysqlNamespace := fmt.Sprintf("%s-%s", mysqlApp, instanceID)
+	elasticsearchApp := "elasticsearch"
+	elasticsearchNamespace := fmt.Sprintf("%s-%s", elasticsearchApp, instanceID)
+	appKeys := []string{mysqlApp, elasticsearchApp}
+	var err error
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		log.FailOnError(t, err, "Error resetting remote config")
+	}()
+
+	// Schedule multiple apps
+	var preMigrationCtxs []*scheduler.Context
+	for _, appKey := range appKeys {
+		ctxs, err := schedulerDriver.Schedule(instanceID,
+			scheduler.ScheduleOptions{
+				AppKeys: []string{appKey},
+				Labels:  nil,
+			})
+		log.FailOnError(t, err, "Error scheduling task")
+		Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+		preMigrationCtxs = append(preMigrationCtxs, ctxs[0].DeepCopy())
+	}
+
+	for _, preMigrationCtx := range preMigrationCtxs {
+		err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+		log.FailOnError(t, err, "Error waiting for app to get to running state")
+	}
+
+	sourceDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
+	sourceDeploymentReplicas := *sourceDeployments.Items[0].Spec.Replicas
+	sourceStatefulsets, err := apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	sourceStatefulsetReplicas := *sourceStatefulsets.Items[0].Spec.Replicas
+
+	// Create the clusterpair
+	clusterPairNamespace := defaultAdminNamespace
+	log.Info("Creating bidirectional cluster pair:")
+	log.InfoD("Name: %s", remotePairName)
+	log.InfoD("Namespace: %s", clusterPairNamespace)
+	log.InfoD("Backuplocation: %s", defaultBackupLocation)
+	log.InfoD("Secret name: %s", defaultSecretName)
+	err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+	log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Create the migration schedule
+	// we want to create the schedulePolicy and migrationSchedule using storkctl instead of scheduling apps using torpedo's scheduler
+	// schedulePolicyArgs is a map of schedulePolicyName : {{flag1:value1,flag2:value2,....}}
+	schedulePolicyArgs := make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+
+	// migrationScheduleArgs is a map of migrationScheduleName : {{flag1:value1,flag2:value2,....}}
+	migrationScheduleArgs := make(map[string]map[string]string)
+	migrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "migrate-every-5m",
+	}
+
+	//Create schedulePolicies using storkCtl if any required
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	for schedulePolicyName, customArgs := range schedulePolicyArgs {
+		cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName}
+		executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
+	}
+	//Create migrationSchedules using storkCtl
+	migrationScheduleName := "failback-migration-schedule-subset-ns"
+	namespacesValue := fmt.Sprintf("%s,%s", mysqlNamespace, elasticsearchNamespace)
+	cmdArgs := []string{"create", "migrationschedule", migrationScheduleName, "-c", remotePairName,
+		"--namespaces", namespacesValue, "-n", defaultAdminNamespace}
+	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[instanceID])
+
+	// bump time of the world by 6 minutes
+	mockNow := time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	log.FailOnError(t, err, "Error setting mock time")
+
+	// Need to Validate the migrationSchedules separately because they are created using storkctl
+	// and not a part of the torpedo scheduler context
+	_, err = storkops.Instance().ValidateMigrationSchedule(migrationScheduleName, defaultAdminNamespace, defaultWaitTimeout, defaultWaitInterval)
+	err = setMockTime(nil)
+	log.FailOnError(t, err, "Error resetting mock time")
+
+	// Failover the application
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	failoverCmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"include-namespaces":  namespacesValue,
+		"namespace":           defaultAdminNamespace,
+	}
+	drActionName, _ := createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailover, migrationScheduleName, failoverCmdArgs)
+
+	// Wait for failover action to complete
+	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, defaultAdminNamespace)
+
+	// Verify that both mysql and elasticsearch applications are RUNNING on the DESTINATION cluster.
+	destDeployments, err := apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, sourceDeploymentReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceDeploymentReplicas, mysqlNamespace))
+
+	destStatefulsets, err := apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
+
+	// Verify that both mysql and elasticsearch applications are NOT RUNNING on the SOURCE cluster.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	sourceDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, *sourceDeployments.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in source in deployment in %s namespace", mysqlNamespace))
+
+	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *sourceStatefulsets.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in source in sts in %s namespace", elasticsearchNamespace))
+
+	//////////////////////////////////////////////////////
+	// Create reverse migrationschedule using storkCtl //
+	////////////////////////////////////////////////////
+
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	// Initialize reversemigrationschedule and reverse schedule policy.
+	reverseSchedulePolicyArgs := make(map[string]map[string]string)
+	reverseSchedulePolicyArgs["reverse-migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+	reverseMigrationScheduleArgs := make(map[string]map[string]string)
+	reverseMigrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "reverse-migrate-every-5m",
+	}
+
+	// Create schedulePolicies using storkCtl.
+	cmd = storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	for schedulePolicyName, customArgs := range reverseSchedulePolicyArgs {
+		cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName, "--kubeconfig", destinationKubeConfigPath}
+		executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
+	}
+	log.Info("created reverse schedule policy")
+
+	// Create migration schedule.
+	reverseMigrationScheduleName := "reverse-failback-migration-schedule-subset-ns"
+	cmdArgs = []string{"create", "migrationschedule", reverseMigrationScheduleName, "-c", remotePairName,
+		"--namespaces", elasticsearchNamespace, "-n", defaultAdminNamespace, "--kubeconfig", destinationKubeConfigPath}
+	executeStorkCtlCommand(t, cmd, cmdArgs, reverseMigrationScheduleArgs[instanceID])
+
+	// Bump time of the world by 6 minutes.
+	mockNow = time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	log.FailOnError(t, err, "Error setting mock time")
+
+	// Need to validate the migrationSchedules separately because they are created using storkctl
+	// and not a part of the torpedo scheduler context.
+	_, err = storkops.Instance().ValidateMigrationSchedule(reverseMigrationScheduleName, defaultAdminNamespace, defaultWaitTimeout, defaultWaitInterval)
+	log.Info("reverse migration schedule created")
+	err = setMockTime(nil)
+	log.FailOnError(t, err, "Error resetting mock time")
+
+	failbackCmdArgs := map[string]string{
+		"migration-reference": reverseMigrationScheduleName,
+		"include-namespaces":  elasticsearchNamespace,
+		"namespace":           defaultAdminNamespace,
+	}
+	drActionName, _ = createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailback, reverseMigrationScheduleName, failbackCmdArgs)
+	// Wait for failback action to complete.
+	waitTillActionComplete(t, storkv1.ActionTypeFailback, drActionName, defaultAdminNamespace)
+
+	// Verify the elasticsearch application is not running on the destination cluster.
+	destStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in destination in sts in %s namespace", elasticsearchNamespace))
+
+	// Verify the mysql application is running on the destination cluster.
+	destDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, 1, fmt.Sprintf("Expected 1 replica in destination in deployment in %s namespace", mysqlNamespace))
+
+	// Verify the elasticsearch application is running on the source cluster.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	expectedReplicas := int32(3)
+	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
+	Dash.VerifyFatal(t, len(sourceStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in source in %s namespace", elasticsearchNamespace))
+	Dash.VerifyFatal(t, *sourceStatefulsets.Items[0].Spec.Replicas, expectedReplicas, fmt.Sprintf("Expected %d replica in source in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
+
+	// Verify the mysql application is not running on the source cluster.
+	destDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
+	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
+	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in destination in deployment in %s namespace", mysqlNamespace))
+
+	// Verify that the migration schedule in destination cluster has been suspended.
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+	migrSched, err := storkops.Instance().GetMigrationSchedule(reverseMigrationScheduleName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to retrieve migration schedule: %v", err)
+
+	if migrSched.Spec.Suspend != nil && !(*migrSched.Spec.Suspend) {
+		// Fail the test as the migration schedule is not yet suspended.
+		suspendErr := fmt.Errorf("migrationschedule is not suspended on destination cluster : %s/%s", migrSched.GetName(), migrSched.GetNamespace())
+		log.FailOnError(t, err, "Failed: %v", suspendErr)
+	}
+	log.InfoD("Successfully verified suspend migration in destination cluster")
+
+	//////////////
+	// Cleanup //
+	/////////////
+
+	// Delete destination cluster cluster-pair and migration schedule.
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
+	DeleteAndWaitForMigrationScheduleDeletion(t, reverseMigrationScheduleName, defaultAdminNamespace)
+	for schedulePolicyName := range reverseSchedulePolicyArgs {
+		err := storkops.Instance().DeleteSchedulePolicy(schedulePolicyName)
+		log.FailOnError(t, err, "error deleting up schedule policy %s", schedulePolicyName)
+	}
+	// cleanup
+	destroyAndWait(t, preMigrationCtxs)
+
+	// Delete source cluster cluster-pair and migration schedule.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in source: %v", remotePairName, defaultAdminNamespace, err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
+	DeleteAndWaitForMigrationScheduleDeletion(t, reverseMigrationScheduleName, defaultAdminNamespace)
+	for schedulePolicyName := range schedulePolicyArgs {
+		err := storkops.Instance().DeleteSchedulePolicy(schedulePolicyName)
+		log.FailOnError(t, err, "error deleting up schedule policy %s", schedulePolicyName)
+	}
+	// cleanup
+	destroyAndWait(t, preMigrationCtxs)
+	blowNamespaceForTest(t, elasticsearchNamespace, false)
+	blowNamespaceForTest(t, mysqlNamespace, false)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
