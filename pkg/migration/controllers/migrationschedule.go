@@ -597,11 +597,8 @@ func (m *MigrationScheduleController) reconcileRemoteMigrationSchedule(sourceMig
 			updatedHash = sourceMigrationScheduleHash
 		}
 	} else {
-		// get the hash of the dest migration schedule
-		updatedHash, err = getMigrationScheduleHash(destMigrationSchedule)
-		if err != nil {
-			return updatedHash, err
-		}
+		// update directly with source hash
+		updatedHash = sourceMigrationScheduleHash
 	}
 	return updatedHash, nil
 }
