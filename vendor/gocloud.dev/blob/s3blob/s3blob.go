@@ -50,7 +50,11 @@
 //  - ReaderOptions.BeforeRead: *s3.GetObjectInput
 //  - Attributes: s3.HeadObjectOutput
 //  - CopyOptions.BeforeCopy: *s3.CopyObjectInput
-//  - WriterOptions.BeforeWrite: *s3manager.UploadInput
+//  - WriterOptions.BeforeWrite: *s3manager.UploadInput, *s3manager.Uploader
+//  - SignedURLOptions.BeforeSign:
+//      *s3.GetObjectInput when Options.Method == http.MethodGet, or
+//      *s3.PutObjectInput when Options.Method == http.MethodPut, or
+//      *s3.DeleteObjectInput when Options.Method == http.MethodDelete
 package s3blob // import "gocloud.dev/blob/s3blob"
 
 import (
@@ -70,6 +74,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/google/wire"
@@ -305,7 +310,7 @@ func (b *bucket) ErrorCode(err error) gcerrors.ErrorCode {
 		return gcerrors.Unknown
 	}
 	switch {
-	case e.Code() == "NoSuchKey" || e.Code() == "NotFound" || e.Code() == s3.ErrCodeObjectNotInActiveTierError:
+	case e.Code() == "NoSuchBucket" || e.Code() == "NoSuchKey" || e.Code() == "NotFound" || e.Code() == s3.ErrCodeObjectNotInActiveTierError:
 		return gcerrors.NotFound
 	default:
 		return gcerrors.Unknown
@@ -489,9 +494,11 @@ func (b *bucket) Attributes(ctx context.Context, key string) (*driver.Attributes
 		ContentLanguage:    aws.StringValue(resp.ContentLanguage),
 		ContentType:        aws.StringValue(resp.ContentType),
 		Metadata:           md,
-		ModTime:            aws.TimeValue(resp.LastModified),
-		Size:               aws.Int64Value(resp.ContentLength),
-		MD5:                eTagToMD5(resp.ETag),
+		// CreateTime not supported; left as the zero time.
+		ModTime: aws.TimeValue(resp.LastModified),
+		Size:    aws.Int64Value(resp.ContentLength),
+		MD5:     eTagToMD5(resp.ETag),
+		ETag:    aws.StringValue(resp.ETag),
 		AsFunc: func(i interface{}) bool {
 			p, ok := i.(*s3.HeadObjectOutput)
 			if !ok {
@@ -565,7 +572,7 @@ func eTagToMD5(etag *string) []byte {
 	}
 	// Strip the expected leading and trailing quotes.
 	quoted := *etag
-	if quoted[0] != '"' || quoted[len(quoted)-1] != '"' {
+	if len(quoted) < 2 || quoted[0] != '"' || quoted[len(quoted)-1] != '"' {
 		return nil
 	}
 	unquoted := quoted[1 : len(quoted)-1]
@@ -661,12 +668,17 @@ func (b *bucket) NewTypedWriter(ctx context.Context, key string, contentType str
 	}
 	if opts.BeforeWrite != nil {
 		asFunc := func(i interface{}) bool {
-			p, ok := i.(**s3manager.UploadInput)
-			if !ok {
-				return false
+			pu, ok := i.(**s3manager.Uploader)
+			if ok {
+				*pu = uploader
+				return true
 			}
-			*p = req
-			return true
+			pui, ok := i.(**s3manager.UploadInput)
+			if ok {
+				*pui = req
+				return true
+			}
+			return false
 		}
 		if err := opts.BeforeWrite(asFunc); err != nil {
 			return nil, err
@@ -720,32 +732,67 @@ func (b *bucket) Delete(ctx context.Context, key string) error {
 	return err
 }
 
-func (b *bucket) SignedURL(ctx context.Context, key string, opts *driver.SignedURLOptions) (string, error) {
+func (b *bucket) SignedURL(_ context.Context, key string, opts *driver.SignedURLOptions) (string, error) {
 	key = escapeKey(key)
+	var req *request.Request
 	switch opts.Method {
 	case http.MethodGet:
 		in := &s3.GetObjectInput{
 			Bucket: aws.String(b.name),
 			Key:    aws.String(key),
 		}
-		req, _ := b.client.GetObjectRequest(in)
-		return req.Presign(opts.Expiry)
+		if opts.BeforeSign != nil {
+			asFunc := func(i interface{}) bool {
+				v, ok := i.(**s3.GetObjectInput)
+				if ok {
+					*v = in
+				}
+				return ok
+			}
+			if err := opts.BeforeSign(asFunc); err != nil {
+				return "", err
+			}
+		}
+		req, _ = b.client.GetObjectRequest(in)
 	case http.MethodPut:
 		in := &s3.PutObjectInput{
 			Bucket:      aws.String(b.name),
 			Key:         aws.String(key),
 			ContentType: aws.String(opts.ContentType),
 		}
-		req, _ := b.client.PutObjectRequest(in)
-		return req.Presign(opts.Expiry)
+		if opts.BeforeSign != nil {
+			asFunc := func(i interface{}) bool {
+				v, ok := i.(**s3.PutObjectInput)
+				if ok {
+					*v = in
+				}
+				return ok
+			}
+			if err := opts.BeforeSign(asFunc); err != nil {
+				return "", err
+			}
+		}
+		req, _ = b.client.PutObjectRequest(in)
 	case http.MethodDelete:
 		in := &s3.DeleteObjectInput{
 			Bucket: aws.String(b.name),
 			Key:    aws.String(key),
 		}
-		req, _ := b.client.DeleteObjectRequest(in)
-		return req.Presign(opts.Expiry)
+		if opts.BeforeSign != nil {
+			asFunc := func(i interface{}) bool {
+				v, ok := i.(**s3.DeleteObjectInput)
+				if ok {
+					*v = in
+				}
+				return ok
+			}
+			if err := opts.BeforeSign(asFunc); err != nil {
+				return "", err
+			}
+		}
+		req, _ = b.client.DeleteObjectRequest(in)
 	default:
 		return "", fmt.Errorf("unsupported Method %q", opts.Method)
 	}
+	return req.Presign(opts.Expiry)
 }
