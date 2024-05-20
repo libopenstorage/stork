@@ -95,6 +95,10 @@ RUN apk add --no-cache openssh sshpass
 # Install dependancy for OCP 4.14 CLI
 RUN apk --update add gcompat
 
+# Install yq
+RUN wget https://github.com/mikefarah/yq/releases/download/v4.25.1/yq_linux_amd64 -O /usr/bin/yq && \
+    chmod +x /usr/bin/yq
+
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin

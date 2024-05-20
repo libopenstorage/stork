@@ -254,7 +254,7 @@ case $i in
 esac
 done
 
-echo "checking if we need to override test suite: ${TEST_SUITE}"
+echo "Checking if we need to override test suite: ${TEST_SUITE}"
 
 # TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
 case $FOCUS_TESTS in
@@ -800,6 +800,59 @@ spec:
 
 
 EOF
+
+if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
+    torpedo_pod_command="ginkgo"
+    torpedo_pod_args=$(yq e '.spec.containers[] | select(.name == "torpedo") | .args[]' torpedo.yaml | sed 's/,$//')
+
+	# This code removes the comma if the line ends with it.
+	# If the line is an empty string, it is quoted.
+	# Otherwise, the line is printed normally.
+    formatted_torpedo_pod_args=$(echo "$torpedo_pod_args" | awk '{
+        if ($0 ~ /,$/) {
+            gsub(/,$/, "", $0);
+            printf "%s ", $0;
+        } else {
+            if ($0 == "") {
+                printf "\"\" ";
+            } else {
+                printf "%s ", $0;
+            }
+        }
+    }')
+
+    torpedo_pod_ginkgo_command="$torpedo_pod_command $formatted_torpedo_pod_args"
+    echo "Formatted Ginkgo Command: $torpedo_pod_ginkgo_command"
+
+    # This code skips a flag followed by an empty string ("") if the next token is another flag or if it is the end of the command.
+    # This is necessary because Torpedo does not handle empty strings as expected.
+    # Example: In the input ginkgo --trace --timeout "" --fail-fast ... --fa-secret ""
+    # --timeout "" is skipped because it is immediately followed by another flag --fail-fast
+    # --fa-secret "" is also skipped because it is the last token and followed by no other arguments.
+    cleaned_torpedo_pod_ginkgo_command=$(echo "$torpedo_pod_ginkgo_command" | awk '
+	{
+	   output = "";
+	   i = 1;
+	   while (i <= NF) {
+		   if ($(i) ~ /^--/ && $(i+1) == "\"\"") {
+			   if (i+2 <= NF && $(i+2) ~ /^--/) {
+				   i += 2;
+				   continue;
+			   } else if (i+2 > NF) {
+				   i += 2;
+				   continue;
+			   }
+		   }
+		   output = output (output ? " " : "") $(i);
+		   i++;
+	   }
+	   print output;
+	}')
+    echo "Cleaned Ginkgo Command: $cleaned_torpedo_pod_ginkgo_command"
+
+    $cleaned_torpedo_pod_ginkgo_command
+    exit $?
+fi
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
