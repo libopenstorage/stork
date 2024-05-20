@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,8 +13,10 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/mitchellh/hashstructure"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -124,6 +127,9 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 			return m.client.Update(context.TODO(), migrationSchedule)
 		}
 	}
+
+	var remoteMigrSched *stork_api.MigrationSchedule
+	var remoteOps *storkops.Client
 	if !(*migrationSchedule.Spec.Suspend) {
 		remoteConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 		if err != nil {
@@ -133,7 +139,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				err.Error())
 			return err
 		}
-		remoteOps, err := storkops.NewForConfig(remoteConfig)
+		remoteOps, err = storkops.NewForConfig(remoteConfig)
 		if err != nil {
 			m.recorder.Event(migrationSchedule,
 				v1.EventTypeWarning,
@@ -151,7 +157,6 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 		}
 
 		// create migrationSchedule in remote cluster irrespective of autoSuspend value
-		var remoteMigrSched *stork_api.MigrationSchedule
 		remoteMigrSched, err = remoteOps.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
 		if errors.IsNotFound(err) {
 			namespace, err := core.Instance().GetNamespace(migrationSchedule.Namespace)
@@ -174,6 +179,11 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 			suspend := true
 			remoteMigrSchedObj.Spec.Suspend = &suspend
 			remoteMigrSchedObj.Status = stork_api.MigrationScheduleStatus{}
+			objectHash, err := getMigrationScheduleHash(migrationSchedule)
+			if err != nil {
+				return err
+			}
+			remoteMigrSchedObj.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(objectHash, 10)
 			if remoteMigrSched, err = remoteOps.CreateMigrationSchedule(remoteMigrSchedObj); err != nil {
 				return err
 			}
@@ -191,6 +201,9 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 				err.Error())
 			return err
 		}
+
+		// Reconcile the changes from source migration schedule to the remote one
+
 		if migrationSchedule.Spec.AutoSuspend && remoteMigrSched.Status.ApplicationActivated {
 			suspend := true
 			migrationSchedule.Spec.Suspend = &suspend
@@ -257,6 +270,31 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 
 		// Start a migration for a policy if required
 		if start {
+			// Reconciling the migrationschedule in remote cluster if there is a change
+			// Doing it here to limit the reconcilation check frequency
+			if remoteMigrSched != nil {
+				updatedHash, err := m.reconcileRemoteMigrationSchedule(migrationSchedule, remoteMigrSched)
+				if err != nil {
+					msg := fmt.Sprintf("Error reconciling remote migration schedule: %v", err)
+					log.MigrationScheduleLog(migrationSchedule).Error(msg)
+					return fmt.Errorf(msg)
+				}
+				if updatedHash != 0 {
+					// update the hash value in the source migration schedule
+					if remoteMigrSched.Annotations == nil {
+						remoteMigrSched.Annotations = make(map[string]string)
+					}
+					remoteMigrSched.Annotations[resourcecollector.StorkResourceHash] = strconv.FormatUint(updatedHash, 10)
+					remoteMigrSched.Spec.Template = migrationSchedule.Spec.Template
+					log.MigrationScheduleLog(migrationSchedule).Infof("Updating object hash value in remote migration schedule to %v", updatedHash)
+					if _, err := remoteOps.UpdateMigrationSchedule(remoteMigrSched); err != nil {
+						msg := fmt.Sprintf("Error updating hash value in source migration schedule: %v", err)
+						log.MigrationScheduleLog(migrationSchedule).Error(msg)
+						return fmt.Errorf(msg)
+					}
+				}
+			}
+
 			err := m.startMigration(migrationSchedule, policyType)
 			if err != nil {
 				msg := fmt.Sprintf("Error triggering migration for schedule(%v): %v", policyType, err)
@@ -533,4 +571,48 @@ func (m *MigrationScheduleController) createCRD() error {
 		return err
 	}
 	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+// reconcileRemoteMigrationSchedule needs to send the updated hash value if there is a change in the source migration schedule
+func (m *MigrationScheduleController) reconcileRemoteMigrationSchedule(sourceMigrationSchedule *stork_api.MigrationSchedule, destMigrationSchedule *stork_api.MigrationSchedule) (uint64, error) {
+	var updatedHash uint64
+	// get the hash of the source migration schedule
+	sourceMigrationScheduleHash, err := getMigrationScheduleHash(sourceMigrationSchedule)
+	if err != nil {
+		return updatedHash, err
+	}
+
+	var destMigrationScheduleHash uint64
+	// check if destination migrationschedule has object has annotation and get the hash value
+	if destMigrationSchedule.Annotations == nil {
+		destMigrationSchedule.Annotations = make(map[string]string)
+	}
+	if val, ok := destMigrationSchedule.GetAnnotations()[resourcecollector.StorkResourceHash]; ok {
+		destMigrationScheduleHash, err = strconv.ParseUint(val, 10, 64)
+		if err != nil {
+			return updatedHash, fmt.Errorf("unable to parse hash value %v of destination migration schedule, err: %v", val, err)
+		}
+		if sourceMigrationScheduleHash != destMigrationScheduleHash {
+			log.MigrationScheduleLog(sourceMigrationSchedule).Infof("Source migration schedule hash %v, destination migration schedule hash %v", sourceMigrationScheduleHash, destMigrationScheduleHash)
+			updatedHash = sourceMigrationScheduleHash
+		}
+	} else {
+		// get the hash of the dest migration schedule
+		updatedHash, err = getMigrationScheduleHash(destMigrationSchedule)
+		if err != nil {
+			return updatedHash, err
+		}
+	}
+	return updatedHash, nil
+}
+
+func getMigrationScheduleHash(migrationSchedule *stork_api.MigrationSchedule) (uint64, error) {
+	var objecthash uint64
+	// get the hash of the source migration schedule
+	objecthash, err := hashstructure.Hash(migrationSchedule.Spec.Template, &hashstructure.HashOptions{})
+	if err != nil {
+		return objecthash, fmt.Errorf("unable to generate hash for migrationschedule %v, err: %v", migrationSchedule.Name, err)
+
+	}
+	return objecthash, nil
 }
