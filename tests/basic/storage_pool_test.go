@@ -6327,7 +6327,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("changedioprioritypoolexpand-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("chgpriopoolex-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)

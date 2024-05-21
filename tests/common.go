@@ -11239,10 +11239,11 @@ func installGrafana(namespace string) {
 }
 
 func SetupProxyServer(n node.Node) error {
-
 	createDirCommand := "mkdir -p /exports/testnfsexportdir"
 	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11251,7 +11252,9 @@ func SetupProxyServer(n node.Node) error {
 
 	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
 	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11260,15 +11263,65 @@ func SetupProxyServer(n node.Node) error {
 
 	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
 	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
 	}
 	log.Infof(output)
+
+	checkExportfsCmd := "which exportfs"
+	output, err = Inst().N.RunCommandWithNoRetry(n, checkExportfsCmd, node.ConnectionOpts{
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	})
+	if err != nil || output == "" {
+		log.Warnf("The command exportfs not found")
+
+		var installNfsUtilsCmd string
+		checkDistroCmd := "source /etc/os-release && echo $ID"
+		output, err = Inst().N.RunCommandWithNoRetry(n, checkDistroCmd, node.ConnectionOpts{
+			Sudo:            true,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof("The Linux distribution is %s", output)
+
+		switch strings.TrimSpace(output) {
+		case "ubuntu", "debian":
+			log.Infof("Installing nfs-common")
+			installNfsUtilsCmd = "apt-get update && apt-get install -y nfs-common"
+		case "centos", "rhel", "fedora":
+			log.Infof("Installing nfs-utils")
+			installNfsUtilsCmd = "yum install -y nfs-utils"
+		default:
+			return fmt.Errorf("unsupported Linux distribution")
+		}
+
+		output, err = Inst().N.RunCommandWithNoRetry(n, installNfsUtilsCmd, node.ConnectionOpts{
+			Sudo:            true,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof(output)
+	} else {
+		log.Infof(output)
+	}
+
 	exportCmd := "exportfs -a"
 	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11277,7 +11330,9 @@ func SetupProxyServer(n node.Node) error {
 
 	enableNfsServerCmd := "systemctl enable nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11286,7 +11341,9 @@ func SetupProxyServer(n node.Node) error {
 
 	startNfsServerCmd := "systemctl restart nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
