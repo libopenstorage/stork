@@ -507,6 +507,17 @@ type Driver interface {
 	GetPxctlStatus(n node.Node) (string, error)
 
 	DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig string) error
+
+	// EnableSkinnySnap Enables skinnysnap on the cluster
+	EnableSkinnySnap() error
+
+	// UpdateSkinnySnapReplNum update skinnysnap Repl factor
+	UpdateSkinnySnapReplNum(repl string) error
+	// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+	UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error
+
+	// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+	ValidatePureFBDAMountSource(nodes []node.Node, vols []*Volume, expectedIP string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

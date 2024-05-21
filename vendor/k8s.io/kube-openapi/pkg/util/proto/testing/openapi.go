@@ -17,6 +17,7 @@ limitations under the License.
 package testing
 
 import (
+	"io/ioutil"
 	"os"
 	"sync"
 
@@ -41,7 +42,7 @@ func (f *Fake) OpenAPISchema() (*openapi_v2.Document, error) {
 			f.err = err
 			return
 		}
-		spec, err := os.ReadFile(f.Path)
+		spec, err := ioutil.ReadFile(f.Path)
 		if err != nil {
 			f.err = err
 			return

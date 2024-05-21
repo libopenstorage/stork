@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-// MachineError is a more descriptive kind of error that represents an error condition that
+// A more descriptive kind of error that represents an error condition that
 // should be set in the Machine.Status. The "Reason" field is meant for short,
 // enum-style constants meant to be interpreted by machines. The "Message"
 // field is meant to be read by humans.
@@ -37,7 +37,6 @@ func (e *MachineError) Error() string {
 // value, and all arguments are Printf-style varargs fed into Sprintf to
 // construct the Message.
 
-// InvalidMachineConfiguration creates a new error when a Machine has invalid configuration.
 func InvalidMachineConfiguration(msg string, args ...interface{}) *MachineError {
 	return &MachineError{
 		Reason:  InvalidConfigurationMachineError,
@@ -45,7 +44,6 @@ func InvalidMachineConfiguration(msg string, args ...interface{}) *MachineError 
 	}
 }
 
-// CreateMachine creates a new error for when creating a Machine.
 func CreateMachine(msg string, args ...interface{}) *MachineError {
 	return &MachineError{
 		Reason:  CreateMachineError,
@@ -53,7 +51,6 @@ func CreateMachine(msg string, args ...interface{}) *MachineError {
 	}
 }
 
-// UpdateMachine creates a new error for when updating a Machine.
 func UpdateMachine(msg string, args ...interface{}) *MachineError {
 	return &MachineError{
 		Reason:  UpdateMachineError,
@@ -61,7 +58,6 @@ func UpdateMachine(msg string, args ...interface{}) *MachineError {
 	}
 }
 
-// DeleteMachine creates a new error for when deleting a Machine.
 func DeleteMachine(msg string, args ...interface{}) *MachineError {
 	return &MachineError{
 		Reason:  DeleteMachineError,
