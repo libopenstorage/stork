@@ -32,7 +32,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("error fetching MigrationSchedule %s/%s for failback", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
+		msg := fmt.Sprintf("Unable to fetch the MigrationSchedule %s/%s needed for failback operation.", action.Namespace, action.Spec.ActionParameter.FailbackParameter.MigrationScheduleReference)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -54,7 +54,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		}
 
 		if isSubList, _, _ := utils.IsSubList(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, migrationNamespaces); !isSubList {
-			msg := fmt.Sprintf("Namespaces provided for failback is not a subset of namespaces from MigrationSchedule %s", migrationSchedule.Name)
+			msg := fmt.Sprintf("The namespaces specified for failback are not contained within the namespaces listed in MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -70,7 +70,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for MigrationSchedule %s, hence aborting failback", migrationSchedule.Name)
+		msg := fmt.Sprintf("No migration detected for MigrationSchedule %s/%s, resulting in the abortion of the failback operation.", migrationSchedule.Namespace, migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -91,7 +91,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// Return if any migration is ongoing
 	if !isMigrationComplete(latestMigration.Status) {
-		msg := fmt.Sprintf("Waiting for the completion of migration %s", latestMigration.Name)
+		msg := fmt.Sprintf("Pending completion of migration %s", latestMigration.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusScheduled))
 		logEvents(msg, "out")
 		action.Status.Status = storkv1.ActionStatusScheduled
@@ -125,7 +125,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			if !*migrationSchedule.Spec.Suspend {
 				migrationSchedule.Spec.Suspend = &suspend
 			}
-			msg := fmt.Sprintf("Suspending migration schedule %s before doing failback operation", migrationSchedule.Name)
+			msg := fmt.Sprintf("MigrationSchedule %s/%s is being suspended prior to executing the failback operation", migrationSchedule.Namespace, migrationSchedule.Name)
 			log.ActionLog(action).Infof(msg)
 			_, err := storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 			if err != nil {
@@ -171,7 +171,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			// Fail the action failback if latest successful migration is older than latestMigrationThresholdTime
 			// And migrationschedule is in suspended state
 			log.ActionLog(action).Infof("The latest migration %s is not in threshold range", latestMigration.Name)
-			msg := fmt.Sprintf("Failing the failback operation because the most recent migration, %s, was not completed within the scheduled policy duration", latestMigration.Name)
+			msg := fmt.Sprintf("Failback operation failed due to migration %s not completing within the scheduled policy duration", latestMigration.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -205,7 +205,7 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 	namespaces := action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleName)
+		msg := fmt.Sprintf("Unable to fetch the MigrationSchedule %s/%s needed for the %s operation.", action.Namespace, migrationScheduleName, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -216,7 +216,7 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 
 	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+		msg := fmt.Sprintf("Fetching the list of namespaces from MigrationSchedule %s/%s failed", migrationSchedule.Namespace, migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -232,7 +232,7 @@ func (ac *ActionController) deactivateDestinationDuringFailback(action *storkv1.
 	//get sourceConfig from clusterPair in destination cluster
 	sourceConfig, err := getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Error fetching the ClusterPair %s/%s", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair)
+		msg := fmt.Sprintf("Unable to fetch the ClusterPair %s/%s needed for %s operation", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -270,7 +270,7 @@ func (ac *ActionController) performLastMileMigrationDuringFailback(action *stork
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleReference)
+		msg := fmt.Sprintf("Unable to fetch the MigrationSchedule %s/%s needed for the %s operation.", action.Namespace, migrationScheduleReference, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -308,7 +308,7 @@ func (ac *ActionController) activateClusterDuringFailback(action *storkv1.Action
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleName)
+		msg := fmt.Sprintf("Unable to fetch the MigrationSchedule %s/%s needed for the %s operation.", action.Namespace, migrationScheduleName, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed

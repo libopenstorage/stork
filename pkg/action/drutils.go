@@ -36,7 +36,7 @@ const (
 func (ac *ActionController) createLastMileMigration(action *storkv1.Action, config *rest.Config, migrationSchedule *storkv1.MigrationSchedule) {
 	storkClient, err := storkops.NewForConfig(config)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
+		msg := fmt.Sprintf("Creation of the Stork client for cluster access using the Host configuration %v has failed", config.Host)
 		log.ActionLog(action).Errorf(msg)
 		action.Status.Status = storkv1.ActionStatusFailed
 		action.Status.Reason = msg
@@ -55,7 +55,7 @@ func (ac *ActionController) createLastMileMigration(action *storkv1.Action, conf
 			// If last mile migration CR does not exist, create one
 			migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 			if err != nil {
-				msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+				msg := fmt.Sprintf("Fetching the list of namespaces from MigrationSchedule %s/%s failed", migrationSchedule.Namespace, migrationSchedule.Name)
 				logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 				logEvents(msg, "err")
 				action.Status.Status = storkv1.ActionStatusFailed
@@ -78,7 +78,7 @@ func (ac *ActionController) createLastMileMigration(action *storkv1.Action, conf
 			lastMileMigration := getLastMileMigrationSpec(migrationSchedule, actualNamespaces, string(action.Spec.ActionType), utils.GetShortUID(string(action.UID)))
 			_, err = storkClient.CreateMigration(lastMileMigration)
 			if err != nil {
-				msg := fmt.Sprintf("Creating last mile migration from the MigrationSchedule %s failed: %v", migrationSchedule.GetName(), err)
+				msg := fmt.Sprintf("Creating the last mile migration from MigrationSchedule %s/%s encountered an error: %v", migrationSchedule.GetNamespace(), migrationSchedule.GetName(), err)
 				ac.recorder.Event(action,
 					v1.EventTypeWarning,
 					string(storkv1.ActionStatusFailed),
@@ -90,7 +90,7 @@ func (ac *ActionController) createLastMileMigration(action *storkv1.Action, conf
 			ac.updateAction(action)
 			return
 		} else {
-			msg := fmt.Sprintf("Failed to get the last mile migration object %s: %v", migrationName, err)
+			msg := fmt.Sprintf("Error encountered while fetching the last mile migration object %s: %v", migrationName, err)
 			log.ActionLog(action).Errorf(msg)
 			ac.recorder.Event(action,
 				v1.EventTypeWarning,
@@ -108,7 +108,7 @@ func (ac *ActionController) createLastMileMigration(action *storkv1.Action, conf
 			logEvents(msg, "out")
 			action.Status.Status = storkv1.ActionStatusSuccessful
 		} else {
-			msg := fmt.Sprintf("Failing %s operation as the last mile migration %s failed: status %s", action.Spec.ActionType, migrationObject.Name, migrationObject.Status.Status)
+			msg := fmt.Sprintf("The %s operation is aborted because the last mile migration %s failed with status %s", action.Spec.ActionType, migrationObject.Name, migrationObject.Status.Status)
 			log.ActionLog(action).Errorf(msg)
 			action.Status.Status = storkv1.ActionStatusFailed
 			action.Status.Reason = msg
@@ -175,7 +175,7 @@ func (ac *ActionController) activateClusterDuringDR(action *storkv1.Action, name
 	// we want to scale replicas only if the activation namespace is a subset of namespaces being migrated
 	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+		msg := fmt.Sprintf("Fetching the list of namespaces from MigrationSchedule %s/%s failed", migrationSchedule.Namespace, migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -323,7 +323,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleReference, action.Namespace)
 	if err != nil {
-		msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", action.Namespace, migrationScheduleReference)
+		msg := fmt.Sprintf("Unable to fetch the MigrationSchedule %s/%s needed for %s operation", action.Namespace, migrationScheduleReference, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -337,7 +337,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 	if action.Spec.ActionType == storkv1.ActionTypeFailover {
 		config, err = getClusterPairSchedulerConfig(migrationSchedule.Spec.Template.Spec.ClusterPair, migrationSchedule.Namespace)
 		if err != nil {
-			msg := fmt.Sprintf("Error fetching the ClusterPair %s/%s", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair)
+			msg := fmt.Sprintf("Unable to fetch the ClusterPair %s/%s needed for %s operation", migrationSchedule.Namespace, migrationSchedule.Spec.Template.Spec.ClusterPair, action.Spec.ActionType)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -352,7 +352,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	storkClient, err := storkops.NewForConfig(config)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
+		msg := fmt.Sprintf("Creation of the Stork client for cluster access using the Host configuration %v has failed", config.Host)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -368,7 +368,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 	if action.Spec.ActionType == storkv1.ActionTypeFailover {
 		referencedMigrationScheduleForLatestMigration, err = storkClient.GetMigrationSchedule(migrationSchedule.Name, migrationSchedule.Namespace)
 		if err != nil {
-			msg := fmt.Sprintf("Error fetching the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+			msg := fmt.Sprintf("Unable to fetch the MigrationSchedule %s/%s needed for the %s operation.", migrationSchedule.Namespace, migrationSchedule.Name, action.Spec.ActionType)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -382,7 +382,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration found for MigrationSchedule %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
+		msg := fmt.Sprintf("No migration detected for MigrationSchedule %s/%s, resulting in the abortion of the %s operation.", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -392,7 +392,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 	}
 
 	if !isMigrationSuccessful(latestMigration.Status) {
-		msg := fmt.Sprintf("Latest migration for MigrationSchedule %s/%s has not completed successfully, it's status is %s, hence aborting %s operation", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
+		msg := fmt.Sprintf("MigrationSchedule %s/%s's latest migration status is %s. Migration did not complete successfully, so the %s operation is aborted", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, latestMigration.Status, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -414,7 +414,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	migrationNamespaces, err := utils.GetMergedNamespacesWithLabelSelector(migrationSchedule.Spec.Template.Spec.Namespaces, migrationSchedule.Spec.Template.Spec.NamespaceSelectors)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to fetch list of namespaces from the MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
+		msg := fmt.Sprintf("Fetching the list of namespaces from MigrationSchedule %s/%s failed", migrationSchedule.Namespace, migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -435,7 +435,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 		return
 	}
 
-	msg := fmt.Sprintf("Pods using PVCs got scaled down successfully in cluster : %v successful. Moving to the next stage", config.Host)
+	msg := fmt.Sprintf("Successful scale down of pods using PVCs in cluster %v. Proceeding to the next stage", config.Host)
 	logEvents := ac.printFunc(action, string(storkv1.ActionStatusSuccessful))
 	logEvents(msg, "out")
 	action.Status.Status = storkv1.ActionStatusSuccessful
@@ -715,12 +715,12 @@ func (ac *ActionController) isClusterAccessible(action *storkv1.Action, config *
 			time.Sleep(waitInterval)
 			continue
 		}
-		msg := fmt.Sprintf("Cluster Accessibility test passed. K8s version of the cluster : %s is %v", config.Host, k8sVersion.String())
+		msg := fmt.Sprintf("Cluster accessibility test succeeded. Kubernetes version of cluster %s is %s", config.Host, k8sVersion.String())
 		logEvents := ac.printFunc(action, "RemoteClusterAccessibility")
 		logEvents(msg, "out")
 		return true
 	}
-	msg := fmt.Sprintf("Cluster Accessibility test failed. Unable to access the remote cluster : %v", config.Host)
+	msg := fmt.Sprintf("Cluster accessibility test unsuccessful. Remote cluster %v is inaccessible.", config.Host)
 	logEvents := ac.printFunc(action, "RemoteClusterAccessibility")
 	logEvents(msg, "err")
 	return false
@@ -741,7 +741,7 @@ func (ac *ActionController) updateApplicationActivatedInRelevantMigrationSchedul
 
 	storkClient, err := storkops.NewForConfig(config)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to create the stork client to access cluster with the config %v", config.Host)
+		msg := fmt.Sprintf("Creation of the Stork client for cluster access using the Host configuration %v has failed", config.Host)
 		logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -782,7 +782,7 @@ func (ac *ActionController) updateApplicationActivatedInRelevantMigrationSchedul
 				logEvents(msg, "err")
 				ac.updateAction(action)
 			}
-			msg := fmt.Sprintf("Setting the ApplicationActivated status in the MigrationSchedule %v/%v to %v", migrSched.Namespace, migrSched.Name, value)
+			msg := fmt.Sprintf("ApplicationActivated status in MigrationSchedule %s/%s set to %v", migrSched.Namespace, migrSched.Name, value)
 			logEvents := ac.printFunc(action, "ApplicationActivatedStatus")
 			logEvents(msg, "out")
 		}
