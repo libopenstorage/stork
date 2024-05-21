@@ -942,7 +942,19 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					return fmt.Errorf("error getting backup status: %v", err)
 				}
 				for _, volInfo := range volumeInfos {
-					if volInfo.BackupID == "" {
+					if volInfo.Status == stork_api.ApplicationBackupStatusFailed {
+						errorMsg := fmt.Sprintf("Error backing up volume %v from namespace: %v : %v", volInfo.Volume, volInfo.Namespace, volInfo.Reason)
+						a.recorder.Event(backup,
+							v1.EventTypeWarning,
+							string(volInfo.Status),
+							errorMsg)
+
+						backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+						backup.Status.FinishTimestamp = metav1.Now()
+						backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+						backup.Status.Reason = errorMsg
+						break
+					} else if volInfo.BackupID == "" {
 						log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] from namespace [%v] hasn't completed yet, retry checking status", volInfo.PersistentVolumeClaim, volInfo.Namespace)
 						// Some portworx volume snapshot is not completed yet
 						// hence we will retry checking the status in the next reconciler iteration
