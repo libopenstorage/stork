@@ -169,19 +169,19 @@ case $i in
         cloud_deletion_validation=$2
         shift
         shift
-        ;;		
+        ;;
     --internal_aws_lb)
         echo "Flag to check if AWS loadbalancer is of type Internal: $2"
         internal_aws_lb=$2
         shift
         shift
-        ;;		
+        ;;
     --px_namespace)
         echo "Flag to indicate namespace PX has been deployed in: $2"
         px_namespace=$2
         shift
         shift
-        ;;		
+        ;;
     --bidirectional-cluster-pair)
         echo "Flag to indicate if bidirectional clusterpairing is intended in tests: $2"
         bidirectional_cluster_pair=$2
@@ -193,7 +193,7 @@ case $i in
         unidirectional_cluster_pair=$2
         shift
         shift
-        ;;	
+        ;;
     --enable_dash_stats)
         echo "Flag to indicate if test results should be pushed to aetos dashboard: $2"
         enable_dash_stats=$2
@@ -251,7 +251,7 @@ case $i in
       --test_description)
         echo "test_description = $2"
         test_description=$2
-        ;;	
+        ;;
     --kubevirt-scale-count)
         echo "Scale for Kubevirt tests (default 1): $2"
         kubevirt_scale=$2
@@ -352,14 +352,14 @@ done
 
 if [ "$run_cluster_domain_test" = "true" ] ; then
 	sed -i 's/'enable_cluster_domain'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
-else 
+else
 	sed -i 's/'enable_cluster_domain'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 if [ "$focus_tests" != "" ] ; then
      echo "Running focussed test: ${focus_tests}"
 	sed -i 's|'FOCUS_TESTS'|- -test.run='"$focus_tests"'|g' /testspecs/stork-test-pod.yaml
-else 
+else
 	sed -i 's|'FOCUS_TESTS'|''|g' /testspecs/stork-test-pod.yaml
 fi
 
@@ -378,7 +378,7 @@ fi
 
 if [ "$enable_dash_stats" = "true" ] ; then
 	sed -i 's/'enable_dash'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
-else 
+else
 	sed -i 's/'enable_dash'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
@@ -467,7 +467,7 @@ sed -i 's|'aws_secret_access_key'|'"$aws_key"'|g' /testspecs/stork-test-pod.yaml
 
 if [ "$internal_aws_lb" = "true" ] ; then
 	sed -i 's/'internal_aws_lb'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
-else 
+else
 	sed -i 's/'internal_aws_lb'/'\""false"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
@@ -491,14 +491,14 @@ fi
 
 if [ "$external_test_pod" = "true" ] ; then
 	sed -i 's/'external_test_cluster'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
-else 
+else
 	sed -i 's/'external_test_cluster'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 if [ "$stork_test_version_check" = "true" ] ; then
 	sed -i 's/'stork_test_version_check'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 	sed -i 's/- -stork-version-check=false/- -stork-version-check='"$stork_test_version_check"'/g' /testspecs/stork-test-pod.yaml
-else 
+else
 	sed -i 's/'stork_test_version_check'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 

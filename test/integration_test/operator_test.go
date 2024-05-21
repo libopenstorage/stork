@@ -81,7 +81,7 @@ func validateAndDestroyCrMigration(t *testing.T, appName string, appPath string)
 	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
 	log.FailOnError(t, err, "Error validating source crds")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret, false)
 	log.FailOnError(t, err, "Error creating cluster pair")
 
 	log.InfoD("Migration Started")

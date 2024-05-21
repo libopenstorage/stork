@@ -838,7 +838,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 }
 
 // Create a cluster pair from source to destination and another cluster pair from destination to source
-func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string) error {
+func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, isMetroDR bool) error {
 	//var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err := setSourceKubeConfig()
@@ -936,15 +936,23 @@ func scheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		"--dest-kube-file", destKubeconfigPath,
 	}
 
+	// Append the sync-dr mode arg in case of metro DR.
+	if isMetroDR {
+		cmdArgs = append(cmdArgs, "--mode", "sync-dr")
+	}
+
 	if projectMappings != "" {
 		cmdArgs = append(cmdArgs, "--project-mappings")
 		cmdArgs = append(cmdArgs, projectMappings)
 	}
 
 	// Get external object store details and append to the command accordingily
-	objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
-	if err != nil {
-		return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+	objectStoreArgs := make([]string, 0)
+	if !isMetroDR {
+		objectStoreArgs, err = getObjectStoreArgs(objectStoreType, secretName)
+		if err != nil {
+			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+		}
 	}
 
 	cmdArgs = append(cmdArgs, objectStoreArgs...)

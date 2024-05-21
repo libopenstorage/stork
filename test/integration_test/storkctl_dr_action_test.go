@@ -23,7 +23,7 @@ const (
 	syncDR  string = "sync-dr"
 )
 
-var destinationKubeConfigPath string
+var destinationKubeConfigPath, srcKubeConfigPath string
 
 func TestStorkCtlAction(t *testing.T) {
 	err := setSourceKubeConfig()
@@ -284,6 +284,23 @@ func getDestinationKubeConfigFile() (string, error) {
 	// dump to remoteFilePath
 	err = os.WriteFile(destKubeconfigPath, []byte(config), 0644)
 	return destKubeconfigPath, err
+}
+
+func getSourceKubeConfigFile() (string, error) {
+	srcKubeConfigPath := path.Join("/tmp", "src_kubeconfig")
+	cm, err := core.Instance().GetConfigMap("sourceconfigmap", "kube-system")
+	if err != nil {
+		log.Error("Error reading config map: %v", err)
+		return "", err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		return "", fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	err = os.WriteFile(srcKubeConfigPath, []byte(config), 0644)
+	return srcKubeConfigPath, err
 }
 
 func generateDRActionObject(actionType storkv1.ActionType, migrationScheduleName string, namespaces []string, skipSourceOperations bool) *storkv1.Action {
