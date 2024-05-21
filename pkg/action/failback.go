@@ -54,7 +54,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 		}
 
 		if isSubList, _, _ := utils.IsSubList(action.Spec.ActionParameter.FailbackParameter.FailbackNamespaces, migrationNamespaces); !isSubList {
-			msg := fmt.Sprintf("The namespaces specified for failback are not contained within the namespaces listed in MigrationSchedule %s", migrationSchedule.Name)
+			msg := fmt.Sprintf("The namespaces specified for failback are not contained within the namespaces listed in MigrationSchedule %s/%s", migrationSchedule.Namespace, migrationSchedule.Name)
 			logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 			logEvents(msg, "err")
 			action.Status.Status = storkv1.ActionStatusFailed
@@ -70,7 +70,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration detected for MigrationSchedule %s, resulting in the abortion of the failback operation.", migrationSchedule.Name)
+		msg := fmt.Sprintf("No migration detected for MigrationSchedule %s/%s, resulting in the abortion of the failback operation.", migrationSchedule.Namespace, migrationSchedule.Name)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -125,7 +125,7 @@ func (ac *ActionController) verifyMigrationScheduleBeforeFailback(action *storkv
 			if !*migrationSchedule.Spec.Suspend {
 				migrationSchedule.Spec.Suspend = &suspend
 			}
-			msg := fmt.Sprintf("MigrationSchedule %s is being suspended prior to executing the failback operation", migrationSchedule.Name)
+			msg := fmt.Sprintf("MigrationSchedule %s/%s is being suspended prior to executing the failback operation", migrationSchedule.Namespace, migrationSchedule.Name)
 			log.ActionLog(action).Infof(msg)
 			_, err := storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 			if err != nil {

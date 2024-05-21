@@ -78,7 +78,7 @@ func (ac *ActionController) createLastMileMigration(action *storkv1.Action, conf
 			lastMileMigration := getLastMileMigrationSpec(migrationSchedule, actualNamespaces, string(action.Spec.ActionType), utils.GetShortUID(string(action.UID)))
 			_, err = storkClient.CreateMigration(lastMileMigration)
 			if err != nil {
-				msg := fmt.Sprintf("Creating the last mile migration from MigrationSchedule %s encountered an error: %v", migrationSchedule.GetName(), err)
+				msg := fmt.Sprintf("Creating the last mile migration from MigrationSchedule %s/%s encountered an error: %v", migrationSchedule.GetNamespace(), migrationSchedule.GetName(), err)
 				ac.recorder.Event(action,
 					v1.EventTypeWarning,
 					string(storkv1.ActionStatusFailed),
@@ -382,7 +382,7 @@ func (ac *ActionController) waitAfterScaleDown(action *storkv1.Action) {
 
 	// if no migration found, abort the failback process
 	if latestMigration == nil {
-		msg := fmt.Sprintf("No migration detected for MigrationSchedule %s, resulting in the abortion of the %s operation.", referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
+		msg := fmt.Sprintf("No migration detected for MigrationSchedule %s/%s, resulting in the abortion of the %s operation.", referencedMigrationScheduleForLatestMigration.Namespace, referencedMigrationScheduleForLatestMigration.Name, action.Spec.ActionType)
 		logEvents := ac.printFunc(action, string(storkv1.ActionStatusFailed))
 		logEvents(msg, "err")
 		action.Status.Status = storkv1.ActionStatusFailed
@@ -715,7 +715,7 @@ func (ac *ActionController) isClusterAccessible(action *storkv1.Action, config *
 			time.Sleep(waitInterval)
 			continue
 		}
-		msg := fmt.Sprintf("Cluster accessibility test succeeded. Kubernetes version of cluster %s is %v", config.Host, k8sVersion.String())
+		msg := fmt.Sprintf("Cluster accessibility test succeeded. Kubernetes version of cluster %s is %s", config.Host, k8sVersion.String())
 		logEvents := ac.printFunc(action, "RemoteClusterAccessibility")
 		logEvents(msg, "out")
 		return true
