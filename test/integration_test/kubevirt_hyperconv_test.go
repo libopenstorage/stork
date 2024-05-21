@@ -481,7 +481,7 @@ func kubeVirtUpdatePXBlocked(t *testing.T) {
 	// Select a node to pin the VM to.
 	nodeToPinVMTo := ""
 	for _, n := range allNodes {
-		if node.IsMasterNode(n) || !node.IsStorageNode(n) {
+		if node.IsMasterNode(n) || n.StorageNode == nil || !node.IsStorageNode(n) {
 			continue
 		}
 		nodeToPinVMTo = n.Name
