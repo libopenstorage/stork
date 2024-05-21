@@ -226,3 +226,17 @@ func GetNodeDetailsByNodeID(nodeID string) (Node, error) {
 	}
 	return Node{}, fmt.Errorf("failed to get Node Details by Node ID [%s] ", nodeID)
 }
+
+// GetPXDisabledNodes returns all the nodes where PX is disabled
+func GetPXDisabledNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if !n.IsStorageDriverInstalled {
+			// Ignore the control plane nodes
+			if !IsMasterNode(n) {
+				nodeList = append(nodeList, n)
+			}
+		}
+	}
+	return nodeList
+}

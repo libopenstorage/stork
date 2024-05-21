@@ -5,6 +5,8 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -90,6 +92,24 @@ func (d *azure) InspectVolume(name string) (*api.Volume, error) {
 func (d *azure) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
+}
+
+// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+func (d *azure) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", d.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateFBDANFSEndpoint()",
+	}
+}
+
+// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+func (d *azure) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volume, expectedIP string) error {
+	log.Warnf("ValidatePureFBDAMountSource function has not been implemented for volume driver - %s", d.String())
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureFBDAMountSource()",
+	}
 }
 
 func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {

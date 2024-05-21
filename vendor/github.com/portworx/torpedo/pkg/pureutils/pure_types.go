@@ -18,9 +18,11 @@ import (
 )
 
 const (
-	PureSecretName   = "px-pure-secret"
-	PureS3SecretName = "px-pure-secret-fbs3"
-	PureJSONKey      = "pure.json"
+	PureSecretName      = "px-pure-secret"
+	PureS3SecretName    = "px-pure-secret-fbs3"
+	PureJSONKey         = "pure.json"
+	NonPxPureSecretName = "px-non-pure-secret"
+	nonPxPureJsonKey    = "non-pure.json"
 
 	PureSecretArrayZoneLabel = "topology.portworx.io/zone"
 
@@ -76,6 +78,12 @@ func (p *PXPureSecret) GetArrayToZoneMap() map[string]string {
 	return arrayEndpointToZoneMap
 }
 
+func GetNonPxPureSecret(namespace string) (PXPureSecret, error) {
+	conf := PXPureSecret{}
+	err := GetFAPureSecret(&conf, NonPxPureSecretName, namespace)
+	return conf, err
+}
+
 func GetPXPureSecret(namespace string) (PXPureSecret, error) {
 	conf := PXPureSecret{}
 	err := GetPureSecret(&conf, PureSecretName, namespace)
@@ -86,6 +94,27 @@ func GetS3Secret(namespace string) (PXPureS3Secret, error) {
 	conf := PXPureS3Secret{}
 	err := GetPureSecret(&conf, PureS3SecretName, namespace)
 	return conf, err
+}
+
+func GetFAPureSecret(output interface{}, name, namespace string) error {
+	secret, err := core.Instance().GetSecret(name, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve secret '%s' from namespace '%s': %v", name, namespace, err)
+	}
+
+	var pureConnectionJSON []byte
+	var ok bool
+
+	if pureConnectionJSON, ok = secret.Data[nonPxPureJsonKey]; !ok {
+		return fmt.Errorf("secret '%s' is missing field '%s'", name, nonPxPureJsonKey)
+	}
+
+	err = json.Unmarshal(pureConnectionJSON, output)
+	if err != nil {
+		return fmt.Errorf("error unmarshaling pure config file from secret '%s': %v", name, err)
+	}
+
+	return nil
 }
 
 func GetPureSecret(output interface{}, name, namespace string) error {
