@@ -1092,8 +1092,6 @@ func testDRActionFailbackSubsetNamespacesTest(t *testing.T) {
 	// and not a part of the torpedo scheduler context.
 	_, err = storkops.Instance().ValidateMigrationSchedule(reverseMigrationScheduleName, defaultAdminNamespace, defaultWaitTimeout, defaultWaitInterval)
 	log.Info("reverse migration schedule created")
-	err = setMockTime(nil)
-	log.FailOnError(t, err, "Error resetting mock time")
 
 	failbackCmdArgs := map[string]string{
 		"migration-reference": reverseMigrationScheduleName,
@@ -1103,6 +1101,8 @@ func testDRActionFailbackSubsetNamespacesTest(t *testing.T) {
 	drActionName, _ = createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailback, reverseMigrationScheduleName, failbackCmdArgs)
 	// Wait for failback action to complete.
 	waitTillActionComplete(t, storkv1.ActionTypeFailback, drActionName, defaultAdminNamespace)
+	err = setMockTime(nil)
+	log.FailOnError(t, err, "Error resetting mock time")
 
 	// Verify the elasticsearch application is not running on the destination cluster.
 	destStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
