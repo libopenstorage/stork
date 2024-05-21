@@ -280,7 +280,7 @@ func (m *MigrationScheduleController) handle(ctx context.Context, migrationSched
 					return fmt.Errorf(msg)
 				}
 				if updatedHash != 0 {
-					// update the hash value in the source migration schedule
+					// update the hash value in the remote migration schedule along with the source migration schedule changes
 					if remoteMigrSched.Annotations == nil {
 						remoteMigrSched.Annotations = make(map[string]string)
 					}
@@ -600,6 +600,8 @@ func (m *MigrationScheduleController) reconcileRemoteMigrationSchedule(sourceMig
 		// update directly with source hash
 		updatedHash = sourceMigrationScheduleHash
 	}
+
+	// sending the default value if there is both source and destination hash value is same
 	return updatedHash, nil
 }
 
