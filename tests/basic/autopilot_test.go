@@ -999,7 +999,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sPvcAndPoolExpand", testSuiteName))
-		poolLabel := map[string]string{"autopilot": "adddisk"}
+		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		pvcLabel := map[string]string{"autopilot": "pvc-expand"}
 		storageNodes := node.GetStorageDriverNodes()
 		pvcApRules := []apapi.AutopilotRule{
@@ -1007,7 +1007,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 			aututils.PVCRuleByTotalSize(10, 100, ""),
 		}
 		poolApRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeResizeDisk, poolLabel),
 		}
 
 		Step("schedule apps with autopilot rules for pool expand", func() {

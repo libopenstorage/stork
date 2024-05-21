@@ -9922,8 +9922,15 @@ func triggerPoolExpansion(poolIDToResize string, targetSizeGiB uint64, expandTyp
 	stepLog := "Trigger pool expansion"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		isDMthin, _ := IsDMthin()
 		err := Inst().V.ExpandPool(poolIDToResize, expandType, targetSizeGiB, true)
-		dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+		if isDMthin && expandType == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+			dash.VerifyFatal(err != nil, true,
+				"Pool expansion request of add-disk type should be rejected with dmthin")
+			dash.VerifyFatal(strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2"), true, fmt.Sprintf("check error message: %v", err.Error()))
+		} else {
+			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+		}
 	})
 }
 func waitForOngoingPoolExpansionToComplete(poolIDToResize string) error {
