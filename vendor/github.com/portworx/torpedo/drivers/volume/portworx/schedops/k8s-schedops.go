@@ -239,10 +239,12 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 
 	t := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPodsUsingPV(pvName)
-		printStatus(k, pods...)
 		if err != nil {
 			return nil, true, err
 		}
+		log.Infof("Found %d pods using PV [%s]", len(pods), pvName)
+		printStatus(k, pods...)
+		log.Infof("Validating volume setup for volume [%s]", vol.Name)
 
 		resp := make([]string, 0)
 		if vol.Raw {
@@ -292,11 +294,8 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		return nil, true, fmt.Errorf("pods pending validation current: %d. Expected: %d", lenValidatedPods, lenExpectedPods)
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, defaultRetryInterval)
+	return err
 }
 
 func (k *k8sSchedOps) validateDevicesInPods(
@@ -361,6 +360,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
+	isNvme := false
 PodLoop:
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
@@ -415,10 +415,15 @@ PodLoop:
 			}
 			log.Infof("Pod [%s/%s] container [%s] and paths [%v] after checking sym links", p.Namespace, p.Name, containerName, paths)
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", PureMapperRegex, path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s",
+					PureMapperRegex, path))
+				pxMountNvmeRegex := regexp.MustCompile(`\/dev\/mapper\/eui\.00.*24a937.*`)
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
+					if pxMountNvmeRegex.MatchString(line) {
+						isNvme = true
+					}
 
 					if len(pxMounts) > 0 {
 						log.Debugf("Pod [%s/%s] container [%s] has PX mount: %v", pod.Namespace, pod.Name, containerName, pxMounts)
@@ -459,6 +464,9 @@ PodLoop:
 		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
 		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
 			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+			if isNvme {
+				grepPattern = fmt.Sprintf("%s | grep %s", grepPattern[:14], grepPattern[14:])
+			}
 		}
 		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)
 		volMount, _ := d.RunCommand(currentNode,
