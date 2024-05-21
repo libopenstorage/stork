@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -201,11 +202,20 @@ type Driver interface {
 	// DestroyVM powers VM
 	DestroyVM(node Node) error
 
+	// MoveDisks moves disks from one node to another
+	MoveDisks(sourceNode Node, targetNode Node) error
+
+	// RemoveNonRootDisks removes non-root disks from the node
+	RemoveNonRootDisks(node Node) error
+
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 
 	// AddMachine adds the new machine instance to existing map
 	AddMachine(machineName string) error
+
+	// DetachDisk vdisk from node.
+	DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error
 
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
@@ -281,6 +291,13 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootNode()",
+	}
+}
+
+func (d *notSupportedDriver) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DetachDrivesFromVM()",
 	}
 }
 
@@ -516,5 +533,19 @@ func (d *notSupportedDriver) GetSupportedDriveTypes() ([]string, error) {
 	return []string{}, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetSupportedDriveTypes()",
+	}
+}
+
+func (d *notSupportedDriver) MoveDisks(sourceNode Node, targetNode Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "MoveDisks()",
+	}
+}
+
+func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveNonRootDisks()",
 	}
 }

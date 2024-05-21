@@ -37,8 +37,10 @@ const (
 	FailedValidationReason = "FailedValidation"
 	// FailedComponentReason is added to an event when setting up or removing a component fails.
 	FailedComponentReason = "FailedComponent"
-	// UpdatePausedReason is added to an event when operator pauses update of the storage cluster.
+	// UpdatePausedReason is added to an event when operator pauses update of the storage cluster or node.
 	UpdatePausedReason = "UpdatePaused"
+	// FailedToEvictVM indicates that the eviction of a virtual machine failed during PX update
+	FailedToEvictVM = "FailedToEvictVM"
 	// ClusterOnlineReason is added to an event when a cluster comes online
 	ClusterOnlineReason = "ClusterOnline"
 	// MigrationPendingReason is added to an event when the migration is in pending state.

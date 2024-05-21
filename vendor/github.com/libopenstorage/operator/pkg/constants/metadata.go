@@ -15,12 +15,18 @@ const (
 	LabelValueTrue = "true"
 	// AnnotationGarbageCollection is the annotation to let operator clean up external objects on uninstallation.
 	AnnotationGarbageCollection = OperatorPrefix + "/garbage-collection"
+	// AnnotationEvictVMsDuringUpdate is the annotation to let operator evict VMs during upgrade
+	AnnotationEvictVMsDuringUpdate = OperatorPrefix + "/evict-vms-during-update"
 	// AnnotationNodeLabels is the storage pod annotation that contains node labels
 	AnnotationNodeLabels = OperatorPrefix + "/node-labels"
 	// AnnotationDisableStorage annotation to disable the storage pods from running (default: false)
 	AnnotationDisableStorage = OperatorPrefix + "/disable-storage"
 	// AnnotationReconcileObject annotation to toggle reconciliation of operator created objects
 	AnnotationReconcileObject = OperatorPrefix + "/reconcile"
+	// AnnotationControllerRevisionHashKey has the controller revision hash for which a VM live migration was triggered
+	AnnotationControllerRevisionHashKey = OperatorPrefix + "/controller-revision-hash"
+	// AnnotationVMIMigrationSourceNode has the source node for the VM live migration triggered by the operator
+	AnnotationVMIMigrationSourceNode = OperatorPrefix + "/vmi-migration-source-node"
 	// AnnotationClusterAPIMachine is the annotation key name for the name of the
 	// machine that's backing the k8s node
 	AnnotationClusterAPIMachine = "cluster.k8s.io/machine"
@@ -39,6 +45,8 @@ const (
 	// the custom registry, there is a list of hardcoded common registries, however the list
 	// may not be complete, users can use this annotation to add more.
 	AnnotationCommonImageRegistries = OperatorPrefix + "/common-image-registries"
+	// AnnotationUnschedulable tells Stork to consider the node unschedulable
+	AnnotationUnschedulable = OperatorPrefix + "/unschedulable"
 	// OperatorLabelManagedByKey is a label key that is added to any object that is
 	// managed the Portworx operator.
 	OperatorLabelManagedByKey = OperatorPrefix + "/managed-by"

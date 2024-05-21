@@ -94,6 +94,20 @@ func ListAllTheVolumesFromSpecificFA(faClient *flasharray.Client) ([]flasharray.
 	return volumes, nil
 }
 
+// Verifies if Volumes
+func IsFAVolumeExists(faClient *flasharray.Client, volumeName string) (bool, error) {
+	allVolumes, err := ListAllTheVolumesFromSpecificFA(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachVol := range allVolumes {
+		if strings.Contains(eachVol.Name, volumeName) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetAllHostGroups Get all Available Host Groups from array
 func GetAllHostGroups(faClient *flasharray.Client) ([]flasharray.Hostgroup, error) {
 	hostGroup, err := faClient.Hostgroups.ListHostgroups(nil)
@@ -134,6 +148,24 @@ func CreateNewHostOnFA(faClient *flasharray.Client, hostName string) (*flasharra
 	return host, nil
 }
 
+// ListVolumesFromHosts returns list of Volumes
+func ListVolumesFromHosts(faClient *flasharray.Client) (map[string][]flasharray.ConnectedVolume, error) {
+	allHostVolumes := make(map[string][]flasharray.ConnectedVolume)
+	allHosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, eachHost := range allHosts {
+		hostVolumes, err := faClient.Hosts.ListHostConnections(eachHost.Name, nil)
+		if err != nil {
+			return nil, err
+		}
+		allHostVolumes[eachHost.Name] = hostVolumes
+	}
+	return allHostVolumes, nil
+}
+
 // ConnectVolumeToHost Connects Volume to Host
 func ConnectVolumeToHost(faClient *flasharray.Client, hostName string, volName string) (*flasharray.ConnectedVolume, error) {
 	connectedVol, err := faClient.Hosts.ConnectHost(hostName, volName, nil)
@@ -141,6 +173,39 @@ func ConnectVolumeToHost(faClient *flasharray.Client, hostName string, volName s
 		return nil, err
 	}
 	return connectedVol, nil
+}
+
+// DisConnectVolumeFromHost Disconnects Volume from Host
+func DisConnectVolumeFromHost(faClient *flasharray.Client, hostName string, volName string) (*flasharray.ConnectedVolume, error) {
+	connectedVol, err := faClient.Hosts.DisconnectHost(hostName, volName)
+	if err != nil {
+		return nil, err
+	}
+	return connectedVol, nil
+}
+
+// DeleteVolumeOnFABackend Deletes Volume on FA Backend
+func DeleteVolumeOnFABackend(faClient *flasharray.Client, volName string) (*flasharray.Volume, error) {
+	volume, err := faClient.Volumes.DeleteVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Delete from Recycle Bin
+	_, err = faClient.Volumes.EradicateVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+	return volume, nil
+}
+
+// DeleteHostOnFA Deletes Host on FA
+func DeleteHostOnFA(faClient *flasharray.Client, hostName string) (*flasharray.Host, error) {
+	host, err := faClient.Hosts.DeleteHost(hostName)
+	if err != nil {
+		return nil, err
+	}
+	return host, nil
 }
 
 // UpdateIQNOnSpecificHosts Updates IQN on specific hosts
@@ -234,11 +299,15 @@ func IsNetworkInterfaceEnabled(faClient *flasharray.Client, iface string) (bool,
 
 // EnableNetworkInterface enables network interface
 func EnableNetworkInterface(faClient *flasharray.Client, iface string) (bool, error) {
-	interfaces, err := faClient.Networks.EnableNetworkInterface(iface)
+	_, err := faClient.Networks.EnableNetworkInterface(iface)
 	if err != nil {
 		return false, err
 	}
-	if interfaces.Enabled {
+	isEnabled, err := IsNetworkInterfaceEnabled(faClient, iface)
+	if err != nil {
+		return false, err
+	}
+	if isEnabled {
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to enable network interface [%v]", iface)
@@ -246,12 +315,32 @@ func EnableNetworkInterface(faClient *flasharray.Client, iface string) (bool, er
 
 // DisableNetworkInterface disabled network interface
 func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, error) {
-	interfaces, err := faClient.Networks.DisableNetworkInterface(iface)
+	_, err := faClient.Networks.DisableNetworkInterface(iface)
 	if err != nil {
 		return false, err
 	}
-	if !interfaces.Enabled {
+	isEnabled, err := IsNetworkInterfaceEnabled(faClient, iface)
+	if err != nil {
+		return false, err
+	}
+	if !isEnabled {
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)
+}
+
+// GetHostFromIqn returns host name from iqn
+func GetHostFromIqn(faClient *flasharray.Client, iqn string) (*flasharray.Host, error) {
+	hosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return &flasharray.Host{}, err
+	}
+	for _, eachHost := range hosts {
+		for _, eachIqn := range eachHost.Iqn {
+			if eachIqn == iqn {
+				return &eachHost, nil
+			}
+		}
+	}
+	return &flasharray.Host{}, fmt.Errorf("Failed to get host name from iqn [%v]", iqn)
 }
