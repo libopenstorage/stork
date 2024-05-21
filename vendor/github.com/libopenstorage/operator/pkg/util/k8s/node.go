@@ -8,7 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	cluster_v1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	cluster_v1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
@@ -32,7 +32,7 @@ type NodeInfo struct {
 func IsNodeBeingDeleted(node *v1.Node, cl client.Client) (bool, error) {
 	// check if node is managed by a cluster API machine and if the machine is marked for deletion
 	if machineName, present := node.Annotations[constants.AnnotationClusterAPIMachine]; present && len(machineName) > 0 {
-		machine := &cluster_v1beta1.Machine{}
+		machine := &cluster_v1alpha1.Machine{}
 		err := cl.Get(context.TODO(), client.ObjectKey{Name: machineName, Namespace: "default"}, machine)
 		if err != nil {
 			return false, fmt.Errorf("failed to get machine: default/%s due to: %v", machineName, err)

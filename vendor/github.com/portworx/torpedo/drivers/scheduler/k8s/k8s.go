@@ -883,6 +883,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 }
 
 func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
+	log.Debugf("checking for app [%s] in [%v] for csi enabled apps", appName, options.CsiAppKeys)
 	for _, app := range options.CsiAppKeys {
 		if app == appName {
 			return true
@@ -901,6 +902,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				return nil, err
 			}
 			if isCsiApp(options, key) {
+				log.Debugf("app [%s] is csi enabled", key)
 				appSpec.IsCSI = true
 			}
 			apps = append(apps, appSpec)
@@ -1922,8 +1924,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if options.StorageProvisioner == "" {
-			if volume.GetStorageProvisioner() != PortworxStrict {
+		if volume.GetStorageProvisioner() != PortworxStrict {
+			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == CsiProvisioner {
 				if app.IsCSI {
 					obj.Provisioner = CsiProvisioner
 				} else {
@@ -2218,44 +2220,57 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		encryptionFlag = true
 	}
 
-	if obj, ok := spec.(*storageapi.StorageClass); ok {
-		//secure-apps list is provided for which volumes should be encrypted
-		if len(k.secureApps) > 0 || k.secretConfigMapName != "" {
-			if k.isSecureEnabled(app.Key, k.secureApps) || k.secretConfigMapName != "" {
-				if obj.Parameters == nil {
-					obj.Parameters = make(map[string]string)
-				}
-				if encryptionFlag {
-					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
-					obj.Parameters[encryptionName] = "true"
-				}
-				if app.IsCSI {
-					obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-				}
-				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-					if secretNameKeyFlag {
-						obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-						obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-					}
-					if secretNamespaceKeyFlag {
-						obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-						obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-						obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
-					}
-				} else {
-					if secretNameKeyFlag {
-						obj.Parameters[secretName] = configMap.Data[secretNameKey]
-					}
-					if secretNamespaceKeyFlag {
-						obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
-					}
-				}
+	setSecureParams := func(obj *storageapi.StorageClass) {
+		if encryptionFlag {
+			log.Infof("Adding encryption parameter to storage class app %s", app.Key)
+			obj.Parameters[encryptionName] = "true"
+		}
+		if app.IsCSI {
+			obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+			if secretNameKeyFlag {
+				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			}
+		} else {
+			if secretNameKeyFlag {
+				obj.Parameters[secretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
 			}
 		}
+	}
+
+	if obj, ok := spec.(*storageapi.StorageClass); ok {
+
+		if k.secretConfigMapName != "" {
+			if obj.Parameters == nil {
+				obj.Parameters = make(map[string]string)
+			}
+
+			//if secure-apps list is provided, check if the app is in the list and set the secure parameters for only that app
+			if len(k.secureApps) > 0 && k.isSecureEnabled(app.Key, k.secureApps) {
+				setSecureParams(obj)
+			}
+			//if secure-apps list is not provided, set the secure parameters for all apps if secret config map is provided
+			if len(k.secureApps) == 0 {
+				setSecureParams(obj)
+			}
+		}
+
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 
 		if obj.Annotations == nil {
@@ -7519,7 +7534,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	}
 
 	// Wait for PVC to be bound
-	err = k.WaitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace, 0)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", restoredPVCName, err)
 	}
@@ -7604,7 +7619,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	}
 
 	// Wait for PVC to be bound
-	err = k.WaitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace, 0)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", clonedPVCName, err)
 	}
@@ -8052,6 +8067,40 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 	return volumeSnapClass, nil
 }
 
+// CreateVolumeSnapshotClasses creates a volume snapshot class
+func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	var err error
+	var annotation = make(map[string]string)
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
+	if isDefault {
+		annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+	} else {
+		annotation = make(map[string]string)
+	}
+
+	v1obj := metav1.ObjectMeta{
+		Name:        snapClassName,
+		Annotations: annotation,
+	}
+	if len(deletePolicy) == 0 {
+		deletePolicy = "Delete"
+	}
+	snapClass := volsnapv1.VolumeSnapshotClass{
+		ObjectMeta:     v1obj,
+		Driver:         provisioner,
+		DeletionPolicy: volsnapv1.DeletionPolicy(deletePolicy),
+	}
+
+	log.Infof("Creating volume snapshot class: %v with provisioner %v", snapClassName, provisioner)
+	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
+			Name:  snapClassName,
+			Cause: err,
+		}
+	}
+	return volumeSnapClass, nil
+}
+
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
 func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 	var snap *volsnapv1.VolumeSnapshot
@@ -8103,10 +8152,15 @@ func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
 }
 
 // WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
-func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string) error {
+func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string, timeout int) error {
 	var pvc *v1.PersistentVolumeClaim
 	var err error
 	kubeClient, err := k.getKubeClient("")
+	var timeLimit int
+	timeLimit = 30
+	if timeout != 0 && timeout < 60 {
+		timeLimit = timeout
+	}
 	if err != nil {
 		log.Error("Failed to get Kube client")
 		return err
@@ -8121,7 +8175,7 @@ func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string) error {
 		}
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, time.Duration(timeLimit)*time.Minute, 30*time.Second); err != nil {
 		return err
 	}
 	log.Infof("PVC is in bound: %s", pvc.Name)
