@@ -2204,7 +2204,6 @@ func (a *ApplicationBackupController) backupResources(
 						backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
 						backup.Status.Reason = "Volumes and resources were backed up successfully"
 					}
-					backup.Status.Reason = "Volumes and resources were backed up successfully"
 				}
 
 				// Only on success compute the total backup size
@@ -2257,7 +2256,6 @@ func (a *ApplicationBackupController) backupResources(
 			backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
 			backup.Status.Reason = "Volumes and resources were backed up successfully"
 		}
-		backup.Status.Reason = "Volumes and resources were backed up successfully"
 	}
 	// Only on success compute the total backup size
 	for _, vInfo := range backup.Status.Volumes {
