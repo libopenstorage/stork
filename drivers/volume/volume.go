@@ -142,6 +142,10 @@ type Driver interface {
 	// params are the custom backup options passed
 	DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error
 
+	// GetCloudsnapsOfGivenVolume returns cloudsnap backups of given volume
+	// params are the custom backup options passed
+	GetCloudsnapsOfGivenVolume(volumeName string, sourceVolumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error)
+
 	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
 	// params are the custom backup options passed
 	ValidateCreateCloudsnap(name string, params map[string]string) error

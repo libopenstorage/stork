@@ -361,6 +361,15 @@ func (d *DefaultDriver) GetCloudsnaps(name string, params map[string]string) ([]
 	}
 }
 
+// GetCloudsnapsOfGivenVolume returns cloudsnap backups of given volume.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) GetCloudsnapsOfGivenVolume(name string, volumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetCloudsnapsOfGivenVolume()",
+	}
+}
+
 // DeleteAllCloudsnaps deletes all  cloudsnap backups
 // params are the custom volume options passed when creating the volume.
 func (d *DefaultDriver) DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error {

@@ -212,6 +212,7 @@ func populateDisruptiveTriggers() {
 		DetachDrives:                    true,
 		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
+		DeleteCloudsnaps:                false,
 		KVDBFailover:                    true,
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
@@ -623,6 +624,7 @@ func populateIntervals() {
 	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ScaleFADAVolumeAttach] = map[int]time.Duration{}
+	triggerInterval[DeleteCloudsnaps] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -941,7 +943,6 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][3] = 21 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
-
 	baseInterval = 60 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
@@ -1203,6 +1204,17 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
 	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
+
+	triggerInterval[DeleteCloudsnaps][10] = 1 * baseInterval
+	triggerInterval[DeleteCloudsnaps][9] = 3 * baseInterval
+	triggerInterval[DeleteCloudsnaps][8] = 6 * baseInterval
+	triggerInterval[DeleteCloudsnaps][7] = 9 * baseInterval
+	triggerInterval[DeleteCloudsnaps][6] = 12 * baseInterval
+	triggerInterval[DeleteCloudsnaps][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[DeleteCloudsnaps][4] = 18 * baseInterval
+	triggerInterval[DeleteCloudsnaps][3] = 21 * baseInterval
+	triggerInterval[DeleteCloudsnaps][2] = 24 * baseInterval
+	triggerInterval[DeleteCloudsnaps][1] = 27 * baseInterval
 
 	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
 	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
@@ -1724,6 +1736,7 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
+	triggerInterval[DeleteCloudsnaps][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
 	triggerInterval[AggrVolDepReplResizeOps][0] = 0

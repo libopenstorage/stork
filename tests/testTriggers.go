@@ -18,6 +18,7 @@ import (
 	"text/template"
 	"time"
 
+
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
@@ -25,6 +26,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"golang.org/x/exp/slices"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -520,6 +522,8 @@ const (
 	PowerOffAllVMs = "powerOffAllVMs"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
+	// Delelete cloudsnaps
+	DeleteCloudsnaps = "deleteCloudsnaps"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
 	NodeRejoin = "nodeRejoin"
 	// RelaxedReclaim enables RelaxedReclaim in PX cluster
@@ -3626,6 +3630,77 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		updateMetrics(*event)
 	})
 
+}
+
+//TriggerDeleteCloudsnaps
+func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord){
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeleteCloudsnaps)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeleteCloudsnaps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Delete all cloudsnaps"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+        var volCloudsnapMap = make(map[string][]string)
+		for _, ctx := range *contexts {
+			vols, err := Inst().S.GetVolumeParameters(ctx)
+			log.Infof("Validating context: %v", ctx.App.Key)
+			log.Infof("Volumes : %v", vols)
+			UpdateOutcome(event, err)
+			for vol, params := range vols {
+				inspectedVol, err:= Inst().V.InspectVolume(vol)
+				UpdateOutcome(event, err)
+				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+				UpdateOutcome(event, err)
+				var cloudsnapIds []string
+				for _, bk := range csBksps {
+					cloudsnapIds = append(cloudsnapIds, bk.Id)
+				}
+				if len(csBksps) > 0 {
+					volCloudsnapMap[vol] = cloudsnapIds
+					err = Inst().V.DeleteAllCloudsnaps(vol,csBksps[0].SrcVolumeId, params)
+					if err != nil && !strings.Contains(err.Error(), "Key already exists") {
+						UpdateOutcome(event, err)
+					}
+				}
+			}
+		}
+		log.Infof("Wait for 10 minutes")
+		time.Sleep(600 * time.Second)
+		for _, ctx := range *contexts {
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				UpdateOutcome(event, err)
+				for vol, params := range vols {
+					log.Infof("Volume Name : %s", vol)
+					inspectedVol, err:= Inst().V.InspectVolume(vol)
+					UpdateOutcome(event, err)
+					csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+					UpdateOutcome(event, err)
+					cloudsnapIds, ok := volCloudsnapMap[vol]
+					if ok {
+						for _, bk := range csBksps {
+							if slices.Contains(cloudsnapIds, bk.Id ){
+								log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id , vol )
+								UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id , vol))
+							}
+						}
+					}
+				}
+		}
+		updateMetrics(*event)
+	})
 }
 
 // TriggerCloudSnapshotRestore perform in-place cloud snap restore

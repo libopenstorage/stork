@@ -87,6 +87,7 @@ var _ = Describe("{Longevity}", func() {
 		ResizeDiskAndReboot:               TriggerPoolResizeDiskAndReboot,
 		AutopilotRebalance:                TriggerAutopilotPoolRebalance,
 		DeleteOldNamespaces:               TriggerDeleteOldNamespaces,
+		DeleteCloudsnaps:                  TriggerDeleteCloudsnaps,
 		MetroDRMigrationSchedule:          TriggerMetroDRMigrationSchedule,
 		CloudSnapShotRestore:              TriggerCloudSnapshotRestore,
 		LocalSnapShotRestore:              TriggerLocalSnapshotRestore,
