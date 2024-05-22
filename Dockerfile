@@ -42,11 +42,7 @@ RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/down
     tar xf $GCLOUD_SDK -C $GCLOUD_INSTALL_DIR && rm -rf $GCLOUD_SDK && \
     rm -rf $GCLOUD_INSTALL_DIR/google-cloud-sdk/platform/gsutil \
     $GCLOUD_INSTALL_DIR/google-cloud-sdk/RELEASE_NOTES && \
-    gcloud components install gke-gcloud-auth-plugin && \
-    mv /usr/lib/google-cloud-sdk/bin google-cloud-sdk/ && \
-    rm -rf /usr/lib/google-cloud-sdk && \
-    mkdir /usr/lib/google-cloud-sdk && \
-    mv google-cloud-sdk /usr/lib/google-cloud-sdk/bin
+    gcloud components install gke-gcloud-auth-plugin
 
 #Create symlink /google-cloud-sdk/bin -> /usr/lib/google-cloud-sdk/bin for legacy cluster pair with gcp auth plugin
 RUN mkdir google-cloud-sdk
