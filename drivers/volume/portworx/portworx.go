@@ -3,6 +3,7 @@ package portworx
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -488,6 +489,16 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
+
+	secretConfigMap := flag.Lookup("config-map").Value.(flag.Getter).Get().(string)
+	if secretConfigMap != "" {
+		log.Infof("Fetching token from configmap: %s", secretConfigMap)
+		token, err := d.schedOps.GetTokenFromConfigMap(secretConfigMap)
+		if err != nil {
+			return err
+		}
+		d.token = token
+	}
 
 	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
 	namespace, err := d.GetVolumeDriverNamespace()

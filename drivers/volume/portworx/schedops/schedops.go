@@ -38,6 +38,8 @@ type Driver interface {
 	GetVolumeName(v *volume.Volume) string
 	// GetPortworxNamespace returns the Portworx namespace
 	GetPortworxNamespace() (string, error)
+	// GetTokenFromConfigMap returns the token from the configmap
+	GetTokenFromConfigMap(configMapName string) (string, error)
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint() (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag

@@ -80,13 +80,23 @@ func BackupInitInstance() {
 	var commitID string
 	log.Infof("Inside BackupInitInstance")
 	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:            Inst().SpecDir,
-		VolDriverName:      Inst().V.String(),
-		StorageProvisioner: Inst().Provisioner,
-		NodeDriverName:     Inst().N.String(),
-		CustomAppConfig:    Inst().CustomAppConfig,
+		SpecDir:             Inst().SpecDir,
+		VolDriverName:       Inst().V.String(),
+		StorageProvisioner:  Inst().Provisioner,
+		NodeDriverName:      Inst().N.String(),
+		CustomAppConfig:     Inst().CustomAppConfig,
+		SecretConfigMapName: Inst().ConfigMap,
+		SecureApps:          Inst().SecureAppList,
 	})
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
+	if Inst().ConfigMap != "" {
+		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		log.FailOnError(err, "Error occured while getting token from config map")
+		log.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
