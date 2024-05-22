@@ -2829,6 +2829,16 @@ func ValidateClusterSize(count int64) {
 	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
+	if Inst().S.String() == openshift.SchedName {
+		isPxOnMaster, err := IsPxRunningOnMaster()
+		log.FailOnError(err, "Failed to check if px is running on master")
+		if !isPxOnMaster {
+			node.GetMasterNodes()
+			//Removing master nodes for currentNodeCount
+			currentNodeCount = currentNodeCount - int64(len(node.GetMasterNodes()))
+		}
+	}
+
 	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
@@ -2840,6 +2850,29 @@ func ValidateClusterSize(count int64) {
 	}
 	storageNodes := node.GetStorageNodes()
 	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
+}
+
+func IsPxRunningOnMaster() (bool, error) {
+
+	var namespace string
+	var err error
+	if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+		log.Errorf("Failed to get portworx namespace. Error : %v", err)
+		return false, nil
+	}
+	var isPXOnControlplane = false
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(namespace)
+	if err == nil {
+		stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+		if err != nil {
+			return false, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
+		}
+		isPXOnControlplane, _ = strconv.ParseBool(stc.Annotations["portworx.io/run-on-master"])
+	}
+
+	return isPXOnControlplane, nil
+
 }
 
 // GetStorageNodes get storage nodes in the cluster

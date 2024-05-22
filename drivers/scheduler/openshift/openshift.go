@@ -1298,6 +1298,9 @@ func updatePrometheusAndAutopilot() error {
 
 func (k *openshift) SetASGClusterSize(replicas int64, timeout time.Duration) error {
 	initialMachineCount, err := k.getMachinesCount()
+	if err != nil {
+		return err
+	}
 
 	machineSetName, err := getMachineSetName()
 	if err != nil {
@@ -1333,6 +1336,30 @@ func (k *openshift) SetASGClusterSize(replicas int64, timeout time.Duration) err
 	}
 
 	if _, err := k.checkAndGetNewNode(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *openshift) GetASGClusterSize() (int64, error) {
+	machineCount, err := k.getMachinesCount()
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(machineCount), nil
+}
+
+func (k *openshift) GetZones() ([]string, error) {
+	//OCP has one zone
+	return []string{"zone-1"}, nil
+}
+
+func (k *openshift) Init(schedOpts scheduler.InitOptions) error {
+
+	err := k.K8s.Init(schedOpts)
+	if err != nil {
 		return err
 	}
 

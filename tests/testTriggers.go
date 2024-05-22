@@ -32,6 +32,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apios "github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo/v2"
@@ -45,7 +46,6 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
-	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -518,8 +518,8 @@ const (
 	// UpdateVolume provides option to update volume with properties like iopriority.
 	UpdateVolume    = "updateVolume"
 	UpdateIOProfile = "updateIOProfile"
-	DetachDrives = "detachDrives"
-	PowerOffAllVMs = "powerOffAllVMs"
+	DetachDrives    = "detachDrives"
+	PowerOffAllVMs  = "powerOffAllVMs"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	// Delelete cloudsnaps
@@ -862,25 +862,25 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				log.Infof(stepLog)
 				getSTC := func() (interface{}, bool, error) {
 					namespace, err := Inst().S.GetPortworxNamespace()
-					if err != nil{
-						return nil, false, fmt.Errorf("Portworx namespace  %s is not found: err %v", namespace,err )
+					if err != nil {
+						return nil, false, fmt.Errorf("Portworx namespace  %s is not found: err %v", namespace, err)
 					}
 					pxOperator := operator.Instance()
 					stcList, err := pxOperator.ListStorageClusters(namespace)
 					if err != nil {
 						return nil, false, fmt.Errorf("Storage cluster list are not available: err %v", err)
 					}
-					log.Infof("Stc list %v ",stcList)
+					log.Infof("Stc list %v ", stcList)
 					stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
 					if err != nil {
 						return nil, false, fmt.Errorf("Storage cluster is not available: err %v", err)
 					}
 					return nil, false, nil
 				}
-				_, err = task.DoRetryWithTimeout(getSTC, 3 * time.Minute, 1 * time.Minute)
+				_, err = task.DoRetryWithTimeout(getSTC, 3*time.Minute, 1*time.Minute)
 				UpdateOutcome(event, err)
 				var nodeId string
-				storageNodes:= node.GetStorageNodes()
+				storageNodes := node.GetStorageNodes()
 				nodeId = storageNodes[0].VolDriverNodeID
 				err = Inst().N.DetachDrivesFromVM(stc, storageNodes[0].Name)
 				UpdateOutcome(event, err)
@@ -889,32 +889,32 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				if statusErr != nil {
 					if strings.Contains(statusErr.Error(), apios.Status_STATUS_STORAGE_DOWN.String()) {
 						log.Infof("Node has gone to Storage Down state after detach %v: Node %s", statusErr, storageNodes[0].Name)
-					}else{
+					} else {
 						UpdateOutcome(event, statusErr)
 					}
 				}
 				storageNode, err := Inst().V.GetDriverNode(&storageNodes[0])
 				UpdateOutcome(event, err)
-				if storageNode.Status.String() != apios.Status_STATUS_STORAGE_DOWN.String(){
+				if storageNode.Status.String() != apios.Status_STATUS_STORAGE_DOWN.String() {
 					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNode.SchedulerNodeName,
-					apios.Status_STATUS_STORAGE_DOWN, storageNode.Status))
+						apios.Status_STATUS_STORAGE_DOWN, storageNode.Status))
 				}
 				log.Infof("Status of the storage node %s ,%v ", storageNode.SchedulerNodeName, storageNode.Status)
 				statusErr = Inst().V.EnterMaintenance(storageNodes[0])
 				UpdateOutcome(event, statusErr)
 				status, _ := Inst().V.GetNodeStatus(storageNodes[0])
 				log.Infof("Status when the storage node entered maintenance mode %s , ", status.String())
-				if status.String() != apios.Status_STATUS_MAINTENANCE.String(){
+				if status.String() != apios.Status_STATUS_MAINTENANCE.String() {
 					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
-					apios.Status_STATUS_MAINTENANCE, status))
+						apios.Status_STATUS_MAINTENANCE, status))
 				}
 				statusErr = Inst().V.ExitMaintenance(storageNodes[0])
 				UpdateOutcome(event, statusErr)
 				status, _ = Inst().V.GetNodeStatus(storageNodes[0])
 				log.Infof("Node Status after exit maintenance mode %v , %s", status, storageNodes[0].Name)
-				if status.String() != apios.Status_STATUS_OK.String(){
+				if status.String() != apios.Status_STATUS_OK.String() {
 					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
-					apios.Status_STATUS_MAINTENANCE, status))
+						apios.Status_STATUS_MAINTENANCE, status))
 				}
 				err = Inst().V.RefreshDriverEndpoints()
 				UpdateOutcome(event, err)
@@ -929,24 +929,24 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 						break
 					}
 				}
-				if selectedStorageNode != nil{
+				if selectedStorageNode != nil {
 					status, err = Inst().V.GetNodeStatus(*selectedStorageNode)
 					if err != nil {
 						UpdateOutcome(event, err)
-					}else{
+					} else {
 						log.Infof("Node Status  %v node: %s", status, (*selectedStorageNode).SchedulerNodeName)
-						if status.String() != apios.Status_STATUS_OK.String(){
+						if status.String() != apios.Status_STATUS_OK.String() {
 							UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", (*selectedStorageNode).SchedulerNodeName,
-							apios.Status_STATUS_OK, status))
+								apios.Status_STATUS_OK, status))
 						}
 					}
-			    }else{
+				} else {
 					UpdateOutcome(event, fmt.Errorf("Failed to find the node!"))
 				}
 				for _, ctx := range *contexts {
 					log.Infof("Validating context: %v", ctx.App.Key)
 					ctx.SkipVolumeValidation = false
-					errorChan:= make(chan error, errorChannelSize)
+					errorChan := make(chan error, errorChannelSize)
 					ValidateContext(ctx, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -5563,11 +5563,15 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
 			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
 				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
+					if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "aborting due to unclean volumes") {
+						log.Warnf("Previous Pool expanison has failed due to unclean volumes [%s], continuing with force option", updatedPoolToBeResized.LastOperation.Msg)
+						return nil, false, nil
+					}
+					return nil, false, fmt.Errorf("previous pool expansion has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 				}
 				log.InfoD("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
-					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
+					return nil, false, fmt.Errorf("pool resize not possible. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
 				}
 				return nil, true, nil
 			}
@@ -6688,8 +6692,8 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	updateMetrics(*event)
 }
 
-//TriggerPowerOffVMs
-func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *EventRecord){
+// TriggerPowerOffVMs
+func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(PowerOffAllVMs)
@@ -6709,35 +6713,35 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	stepLog := "Power off all worker nodes test "
 	Step(stepLog, func() {
 		log.Infof(stepLog)
-		workerNodes:= node.GetWorkerNodes()
+		workerNodes := node.GetWorkerNodes()
 		var numberOfThread int = 5
 		var numberOfNodePerThread int
-		// If number of VMs to restarted is less than  numberOfThread then 
+		// If number of VMs to restarted is less than  numberOfThread then
 		// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
 		// to per thread
-		if len(workerNodes) < numberOfThread{
+		if len(workerNodes) < numberOfThread {
 			numberOfThread = len(workerNodes)
 			numberOfNodePerThread = 1
-		}else{
-			numberOfNodePerThread = len(workerNodes)/numberOfThread
+		} else {
+			numberOfNodePerThread = len(workerNodes) / numberOfThread
 		}
 		var counter int = 0
 		// Assign vms to every thread.
 		nodesInThread := make([][]node.Node, numberOfThread)
-		for t := 0; t < numberOfThread;  t++ {
+		for t := 0; t < numberOfThread; t++ {
 			nodesInThread[t] = make([]node.Node, numberOfNodePerThread)
-			for n:=0; n < numberOfNodePerThread; n++{
-					nodesInThread[t][n] = workerNodes[counter]
-					counter++
+			for n := 0; n < numberOfNodePerThread; n++ {
+				nodesInThread[t][n] = workerNodes[counter]
+				counter++
 			}
 		}
-		//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to 
-		// 5 threads and assign remaining 2 vms 6th thread. 
-		if counter < len(workerNodes){
-			log.Infof("Additional nodes  : %d", len(workerNodes) - counter)
-			additonalThread := make([]node.Node, len(workerNodes) - counter)
+		//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to
+		// 5 threads and assign remaining 2 vms 6th thread.
+		if counter < len(workerNodes) {
+			log.Infof("Additional nodes  : %d", len(workerNodes)-counter)
+			additonalThread := make([]node.Node, len(workerNodes)-counter)
 			var index int = 0
-			for counter< len(workerNodes) {
+			for counter < len(workerNodes) {
 				additonalThread[index] = workerNodes[counter]
 				index++
 				counter++
@@ -6752,10 +6756,10 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				poweroffwg.Add(1)
 				go func(nodeList []node.Node) {
 					defer poweroffwg.Done()
-					for _, nodeInfo:= range nodeList{
-							log.Infof("Node Name : %v", nodeInfo.Name)
-							err:=Inst().N.PowerOffVM(nodeInfo)
-							UpdateOutcome(event, err)
+					for _, nodeInfo := range nodeList {
+						log.Infof("Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOffVM(nodeInfo)
+						UpdateOutcome(event, err)
 					}
 				}(nodesInThread[i])
 			}
@@ -6772,16 +6776,16 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				poweronwg.Add(1)
 				go func(nodeList []node.Node) {
 					defer poweronwg.Done()
-					for _, nodeInfo:= range nodeList{
-							log.Infof("Node Name : %v", nodeInfo.Name)
-							err:=Inst().N.PowerOnVM(nodeInfo)
-							UpdateOutcome(event, err)
+					for _, nodeInfo := range nodeList {
+						log.Infof("Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOnVM(nodeInfo)
+						UpdateOutcome(event, err)
 					}
 				}(nodesInThread[i])
 			}
 			poweronwg.Wait()
 			log.Infof("Completed power on Nodes")
-			for _, node := range workerNodes{
+			for _, node := range workerNodes {
 				err := Inst().S.IsNodeReady(node)
 				err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
 				UpdateOutcome(event, err)
@@ -6793,15 +6797,15 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			for _, ctx := range *contexts {
 				log.Infof("Validating context: %v", ctx.App.Key)
 				ctx.SkipVolumeValidation = false
-				errorChan:= make(chan error, errorChannelSize)
+				errorChan := make(chan error, errorChannelSize)
 				ValidateContext(ctx, &errorChan)
 				for err := range errorChan {
 					UpdateOutcome(event, err)
 				}
 			}
-			err:= ValidateDataIntegrity(contexts)
+			err := ValidateDataIntegrity(contexts)
 			UpdateOutcome(event, err)
-	    })
+		})
 		updateMetrics(*event)
 	})
 }

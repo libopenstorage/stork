@@ -403,15 +403,15 @@ func (v *vsphere) DetachDisk(vmUuid string, path string) error {
 	return fmt.Errorf("No device selected for VM: %q", vmMo)
 }
 
-//Match the paths between fileNamePath and absolute vmdk path
+// Match the paths between fileNamePath and absolute vmdk path
 func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
 	diskPath = strings.TrimSuffix(diskPath, filepath.Ext(diskPath))
 	volPath = strings.TrimSuffix(volPath, filepath.Ext(volPath))
 	return diskPath == volPath
 }
 
-//Get virtual disk path.
-//TODO need to filter only of type: DrivePaths
+// Get virtual disk path.
+// TODO need to filter only of type: DrivePaths
 func GetDiskPaths(driveset DriveSet) []string {
 	diskPaths := []string{}
 	for vmdkPath, configs := range driveset.Configs {
@@ -433,7 +433,7 @@ func GetDiskPaths(driveset DriveSet) []string {
 	return diskPaths
 }
 
-//GetDatastore
+// GetDatastore
 func GetDatastore(configs DriveConfig) string {
 	for key, val := range configs.Labels {
 		if key == "datastore" {
@@ -443,7 +443,7 @@ func GetDatastore(configs DriveConfig) string {
 	return ""
 }
 
-//GetCloudDriveConfigmapData Get clouddrive configMap data.
+// GetCloudDriveConfigmapData Get clouddrive configMap data.
 func GetCloudDriveConfigmapData(cluster *corev1.StorageCluster) (map[string]DriveSet, error) {
 	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
 	var PortworxNamespace = "kube-system"
@@ -476,6 +476,10 @@ func (v *vsphere) AddMachine(vmName string) error {
 	err = vm.Properties(v.ctx, vm.Reference(), []string{"guest.hostName"}, &vmMo)
 	if err != nil {
 		return err
+	}
+
+	if vmMo.Guest == nil {
+		return fmt.Errorf("failed to find guest info for virtual machine %s", vmName)
 	}
 
 	// Get the hostname
@@ -566,7 +570,7 @@ func (v *vsphere) PowerOnVMByName(vmName string) error {
 	// Make sure vmName is part of vmMap before using this method
 
 	var err error
-	//Reestblish connection to avoid session timeout.
+	//Reestablish connection to avoid session timeout.
 	err = v.connect()
 	if err != nil {
 		return err

@@ -5043,7 +5043,7 @@ var _ = Describe("{ResizeKvdbNoQuorum}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stoageDriverNodes := node.GetStorageDriverNodes()
+		stoageDriverNodes := node.GetStorageNodes()
 
 		nonKvdbNodes := make([]node.Node, 0)
 		kvdbNodes := make([]node.Node, 0)
@@ -5063,6 +5063,10 @@ var _ = Describe("{ResizeKvdbNoQuorum}", func() {
 			} else {
 				nonKvdbNodes = append(nonKvdbNodes, n)
 			}
+		}
+
+		if len(nonKvdbNodes) == 0 {
+			log.FailOnError(fmt.Errorf("No non kvdb nodes found"), "non kvdb nodes doesnt not exist in the cluster")
 		}
 
 		selPool := nonKvdbNodes[0].Pools[0]
