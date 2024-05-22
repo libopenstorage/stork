@@ -22,6 +22,7 @@ func newGetFailoverStatusCommand(cmdFactory Factory, ioStreams genericclioptions
 			getDRActionStatus(cmdFactory, ioStreams, storkv1.ActionTypeFailover, c, args)
 		},
 	}
+	cmdFactory.BindGetFlags(getFailoverCommand.Flags())
 	return getFailoverCommand
 }
 
@@ -33,6 +34,7 @@ func newGetFailbackStatusCommand(cmdFactory Factory, ioStreams genericclioptions
 			getDRActionStatus(cmdFactory, ioStreams, storkv1.ActionTypeFailback, c, args)
 		},
 	}
+	cmdFactory.BindGetFlags(getFailbackCommand.Flags())
 	return getFailbackCommand
 }
 
@@ -40,25 +42,33 @@ func getDRActionStatus(cmdFactory Factory, ioStreams genericclioptions.IOStreams
 	var actions *storkv1.ActionList
 	var filteredActionList *storkv1.ActionList
 	var err error
-	// user has to provide the namespace from which they want to get list of actions using -n flag
-	namespace := cmdFactory.GetNamespace()
+	// Check all namespaces else user has to provide the namespace from which they want to get list of actions using -n flag.
+	namespaces, err := cmdFactory.GetAllNamespaces()
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
 	if len(args) > 0 {
 		// name of action has been specified
 		actions = new(storkv1.ActionList)
 		for _, actionName := range args {
-			action, err := storkops.Instance().GetAction(actionName, namespace)
+			for _, ns := range namespaces {
+				action, err := storkops.Instance().GetAction(actionName, ns)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				actions.Items = append(actions.Items, *action)
+			}
+		}
+	} else {
+		// fetch all the actions in the given namespace
+		for _, ns := range namespaces {
+			actions, err = storkops.Instance().ListActions(ns)
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
-			actions.Items = append(actions.Items, *action)
-		}
-	} else {
-		// fetch all the actions in the given namespace
-		actions, err = storkops.Instance().ListActions(namespace)
-		if err != nil {
-			util.CheckErr(err)
-			return
 		}
 	}
 
