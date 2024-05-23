@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -498,10 +499,21 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 	log.FailOnError(t, err, fmt.Sprintf("Error deleting snapshot schedule %v from namespace %v",
 		snapshotScheduleName, namespace))
 
-	time.Sleep(10 * time.Second)
-	snapshotList, err := k8sextops.Instance().ListSnapshots(namespace)
-	log.FailOnError(t, err, fmt.Sprintf("Error getting list of snapshots for namespace: %v", namespace))
-	Dash.VerifyFatal(t, len(snapshotList.Items), 0, fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
+	fn := func() (interface{}, bool, error) {
+		snapshotList, err := k8sextops.Instance().ListSnapshots(namespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		// Keep retrying if the snapshots are still present.
+		if len(snapshotList.Items) > 0 {
+			return "", true, fmt.Errorf("waiting for snapshots deletion in namespace %s,expected=0,got=%d", namespace, len(snapshotList.Items))
+		}
+		return len(snapshotList.Items), false, nil
+	}
+	snapshotItems, err := task.DoRetryWithTimeout(fn, defaultWaitTimeout, defaultWaitInterval)
+	log.FailOnError(t, err, fmt.Sprintf("Error waiting for snapshots deletion in namespace: %v", namespace))
+	Dash.VerifyFatal(t, snapshotItems, 0, fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
 }
 
 func intervalSnapshotScheduleTest(t *testing.T) {
