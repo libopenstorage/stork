@@ -454,12 +454,12 @@ func GetDestinationKubeConfigFile() (string, error) {
 	destKubeconfigPath := path.Join("/tmp", "dest_kubeconfig")
 	cm, err := core.Instance().GetConfigMap("destinationconfigmap", "kube-system")
 	if err != nil {
-		log.Error("Error reading config map: %v", err)
+		log.Error("error reading config map: %v", err)
 		return "", err
 	}
 	config := cm.Data["kubeconfig"]
 	if len(config) == 0 {
-		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		configErr := "error reading kubeconfig: found empty remoteConfig in config map"
 		return "", fmt.Errorf(configErr)
 	}
 	// dump to remoteFilePath
@@ -472,12 +472,12 @@ func GetSourceKubeConfigFile() (string, error) {
 	srcKubeConfigPath := path.Join("/tmp", "src_kubeconfig")
 	cm, err := core.Instance().GetConfigMap("sourceconfigmap", "kube-system")
 	if err != nil {
-		log.Error("Error reading config map: %v", err)
+		log.Error("error reading config map: %v", err)
 		return "", err
 	}
 	config := cm.Data["kubeconfig"]
 	if len(config) == 0 {
-		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		configErr := "error reading kubeconfig: found empty remoteConfig in config map"
 		return "", fmt.Errorf(configErr)
 	}
 	// dump to remoteFilePath
