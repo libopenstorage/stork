@@ -13,6 +13,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/portworx/sched-ops/k8s/apps"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -34,11 +35,11 @@ func TestDRActions(t *testing.T) {
 
 	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
 	// since both the dr cli commands run in destination cluster
-	destinationKubeConfigPath, err = getDestinationKubeConfigFile()
+	destinationKubeConfigPath, err = utils.GetDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 
 	// Get the source kubeconfig from configmap.
-	srcKubeConfigPath, err = getDestinationKubeConfigFile()
+	srcKubeConfigPath, err = utils.GetDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 
 	t.Run("testSyncDR", testSyncDR)

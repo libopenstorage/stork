@@ -5,10 +5,13 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"os"
+	"path"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/log"
 
 	"github.com/aquilax/truncate"
 	patch "github.com/evanphx/json-patch"
@@ -444,4 +447,40 @@ func DoesMigrationScheduleMigrateNamespaces(migrationSchedule stork_api.Migratio
 		}
 	}
 	return found, nil
+}
+
+// GetDestinationKubeConfigFile returns the path of the destination cluster kubeconfig file.
+func GetDestinationKubeConfigFile() (string, error) {
+	destKubeconfigPath := path.Join("/tmp", "dest_kubeconfig")
+	cm, err := core.Instance().GetConfigMap("destinationconfigmap", "kube-system")
+	if err != nil {
+		log.Error("Error reading config map: %v", err)
+		return "", err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		return "", fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	err = os.WriteFile(destKubeconfigPath, []byte(config), 0644)
+	return destKubeconfigPath, err
+}
+
+// GetSourceKubeConfigFile returns the path of the source cluster kubeconfig file.
+func GetSourceKubeConfigFile() (string, error) {
+	srcKubeConfigPath := path.Join("/tmp", "src_kubeconfig")
+	cm, err := core.Instance().GetConfigMap("sourceconfigmap", "kube-system")
+	if err != nil {
+		log.Error("Error reading config map: %v", err)
+		return "", err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		return "", fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	err = os.WriteFile(srcKubeConfigPath, []byte(config), 0644)
+	return srcKubeConfigPath, err
 }

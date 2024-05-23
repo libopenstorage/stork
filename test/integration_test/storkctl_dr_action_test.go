@@ -7,14 +7,13 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/libopenstorage/stork/pkg/utils"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 )
 
@@ -30,7 +29,7 @@ func TestStorkCtlAction(t *testing.T) {
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
 	// since both the dr cli commands run in destination cluster
-	destinationKubeConfigPath, err = getDestinationKubeConfigFile()
+	destinationKubeConfigPath, err = utils.GetDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 	err = setDestinationKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
@@ -267,40 +266,6 @@ func createMigrationSchedule(t *testing.T, migrationScheduleName string, namespa
 	migrationScheduleObj.Namespace = namespace
 	_, err := storkops.Instance().CreateMigrationSchedule(migrationScheduleObj)
 	log.FailOnError(t, err, "Error creating test migrationSchedule")
-}
-
-func getDestinationKubeConfigFile() (string, error) {
-	destKubeconfigPath := path.Join("/tmp", "dest_kubeconfig")
-	cm, err := core.Instance().GetConfigMap("destinationconfigmap", "kube-system")
-	if err != nil {
-		log.Error("Error reading config map: %v", err)
-		return "", err
-	}
-	config := cm.Data["kubeconfig"]
-	if len(config) == 0 {
-		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
-		return "", fmt.Errorf(configErr)
-	}
-	// dump to remoteFilePath
-	err = os.WriteFile(destKubeconfigPath, []byte(config), 0644)
-	return destKubeconfigPath, err
-}
-
-func getSourceKubeConfigFile() (string, error) {
-	srcKubeConfigPath := path.Join("/tmp", "src_kubeconfig")
-	cm, err := core.Instance().GetConfigMap("sourceconfigmap", "kube-system")
-	if err != nil {
-		log.Error("Error reading config map: %v", err)
-		return "", err
-	}
-	config := cm.Data["kubeconfig"]
-	if len(config) == 0 {
-		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
-		return "", fmt.Errorf(configErr)
-	}
-	// dump to remoteFilePath
-	err = os.WriteFile(srcKubeConfigPath, []byte(config), 0644)
-	return srcKubeConfigPath, err
 }
 
 func generateDRActionObject(actionType storkv1.ActionType, migrationScheduleName string, namespaces []string, skipSourceOperations bool) *storkv1.Action {
