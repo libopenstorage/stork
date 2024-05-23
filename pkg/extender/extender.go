@@ -63,6 +63,8 @@ const (
 	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
 	// annotation to disable hyperconvergence for a pod
 	disableHyperconvergenceAnnotation = "stork.libopenstorage.org/disableHyperconvergence"
+	// annotation used by the operator to mark node as unschedulable
+	unschedulableAnnotation = "operator.libopenstorage.org/unschedulable"
 )
 
 var (
@@ -234,6 +236,15 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		}
 		// Do driver check even if we only have pending WaitForFirstConsumer volumes
 	} else if len(driverVolumes) > 0 || len(WFFCVolumes) > 0 {
+		schedulableNodes := []v1.Node{}
+		for _, node := range args.Nodes.Items {
+			if nodeMarkedUnschedulable(&node) {
+				storklog.PodLog(pod).Debugf("Filtering out node %s because of annotation %s",
+					node.Name, unschedulableAnnotation)
+				continue
+			}
+			schedulableNodes = append(schedulableNodes, node)
+		}
 		driverNodes, err := e.Driver.GetNodes()
 		if err != nil {
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
@@ -241,11 +252,11 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			for _, volumeInfo := range driverVolumes {
 				// Pod is using a volume that is labeled for Windows
 				// This Pod needs to run only on Windows node
-				// Stork will return all nodes in the filter request
+				// Stork will return all schedulable nodes in the filter request
 				if volumeInfo.WindowsVolume {
 					e.encodeFilterResponse(encoder,
 						pod,
-						args.Nodes.Items)
+						schedulableNodes)
 					return
 				}
 				onlineNodeFound := false
@@ -302,7 +313,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				}
 			}
 
-			for _, node := range args.Nodes.Items {
+			for _, node := range schedulableNodes {
 				for _, driverNode := range driverNodes {
 					storklog.PodLog(pod).Debugf("nodeInfo: %v", driverNode)
 					if (driverNode.Status == volume.NodeOnline || driverNode.Status == volume.NodeStorageDown) &&
@@ -1124,4 +1135,20 @@ func (e *Extender) updateVirtLauncherPodPrioritizeScores(
 	if err := encoder.Encode(respList); err != nil {
 		storklog.PodLog(pod).Errorf("Failed to encode response: %v", err)
 	}
+}
+
+func nodeMarkedUnschedulable(node *v1.Node) bool {
+	return getBoolVal(node.Annotations, unschedulableAnnotation, false)
+}
+
+func getBoolVal(m map[string]string, key string, defaultVal bool) bool {
+	value, exists := m[key]
+	if !exists {
+		return defaultVal
+	}
+	boolval, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultVal
+	}
+	return boolval
 }
