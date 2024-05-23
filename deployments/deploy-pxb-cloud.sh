@@ -356,9 +356,6 @@ if [ -z "${NODE_DRIVER}" ]; then
 fi
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        aks)
-            NODE_DRIVER="aks"
-            ;;
         oracle)
             NODE_DRIVER="oracle"
             ;;
