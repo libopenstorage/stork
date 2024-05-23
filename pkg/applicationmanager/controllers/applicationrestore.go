@@ -611,7 +611,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	pvcCount := 0
 	restoreDone := 0
 	backupVolumeInfoMappings := make(map[string][]*storkapi.ApplicationBackupVolumeInfo)
-	hasPXDdriver := false
 	for _, namespace := range backup.Spec.Namespaces {
 		if _, ok := restore.Spec.NamespaceMapping[namespace]; !ok {
 			continue
@@ -649,9 +648,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				backupVolumeInfoMappings[volumeBackup.DriverName] = make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 			}
 			backupVolumeInfoMappings[volumeBackup.DriverName] = append(backupVolumeInfoMappings[volumeBackup.DriverName], volumeBackup)
-			if volumeBackup.DriverName == volume.PortworxDriverName {
-				hasPXDdriver = true
-			}
 		}
 	}
 	if restore.Status.Volumes == nil {
@@ -679,10 +675,10 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		// Portworx driver restore is not supported via job as it can be a secured px volume
 		// to access the token, we need to run the driver.startRestore in the same context as the stork controller
 		// this check is equivalent to (if !nfs || (nfs && driverName == volume.PortworxDriverName))
-		if !nfs || hasPXDdriver {
+		for driverName, vInfos := range backupVolumeInfoMappings {
 			// Here backupVolumeInfoMappings is framed based on driver name mapping, hence startRestore()
 			// gets called once per driver
-			for driverName, vInfos := range backupVolumeInfoMappings {
+			if !nfs || (nfs && driverName == volume.PortworxDriverName) {
 				backupVolInfos := vInfos
 				driver, err := volume.Get(driverName)
 				//	BL NFS + kdmp = nfs code path
