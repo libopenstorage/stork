@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -1936,11 +1935,7 @@ func TestMain(m *testing.M) {
 		1,
 		"Number of different kubevirt VMs deployed and validated in kubevirt tests")
 	flag.Parse()
-	var once sync.Once
-	once.Do(func() {
-		doDashboardSetup()
-	})
-
+	doDashboardSetup()
 	if err := setup(); err != nil {
 		log.Error("Setup failed with error: %v", err)
 		os.Exit(1)
