@@ -1137,9 +1137,9 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 		}
 		// Already done with max retries, so moving to kdmp restore anyway
 		data := updateDataExportDetail{
-			stage:  kdmpapi.DataExportStageTransferScheduled,
-			status: kdmpapi.DataExportStatusInitial,
-			reason: "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
+			stage:                     kdmpapi.DataExportStageTransferScheduled,
+			status:                    kdmpapi.DataExportStatusInitial,
+			reason:                    "switching to restore from objectstore bucket as restoring from local snapshot did not happen",
 			resetLocalSnapshotRestore: true,
 		}
 		logrus.Infof("%v: In stageLocalSnapshotRestore stage, local snapshot restore failed, trying KDMP restore.", dataExport.Name)
@@ -2260,6 +2260,7 @@ func createAzureSecret(secretName string, backupLocation *storkapi.BackupLocatio
 	credentialData["path"] = []byte(backupLocation.Location.Path)
 	credentialData["storageaccountname"] = []byte(backupLocation.Location.AzureConfig.StorageAccountName)
 	credentialData["storageaccountkey"] = []byte(backupLocation.Location.AzureConfig.StorageAccountKey)
+	credentialData["environment"] = []byte(backupLocation.Location.AzureConfig.Environment)
 	err := utils.CreateJobSecret(secretName, namespace, credentialData, labels)
 
 	return err
