@@ -13,7 +13,6 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/libopenstorage/stork/pkg/utils"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 )
 
@@ -29,7 +28,7 @@ func TestStorkCtlAction(t *testing.T) {
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
 	// since both the dr cli commands run in destination cluster
-	destinationKubeConfigPath, err = utils.GetDestinationKubeConfigFile()
+	destinationKubeConfigPath, err = getDestinationKubeConfigFile()
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 	err = setDestinationKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)

@@ -2066,3 +2066,39 @@ func updateDashStats(testName string, testResult *string) {
 	stats.PushStatsToAetos(tpDash, testName, dashProductName, dashStatsType, eventStat)
 	Dash.TestCaseEnd()
 }
+
+// getDestinationKubeConfigFile returns the path of the destination cluster kubeconfig file.
+func getDestinationKubeConfigFile() (string, error) {
+	destKubeconfigPath := path.Join("/tmp", "dest_kubeconfig")
+	cm, err := core.Instance().GetConfigMap("destinationconfigmap", "kube-system")
+	if err != nil {
+		log.Error("error reading config map: %v", err)
+		return "", err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "error reading kubeconfig: found empty remoteConfig in config map"
+		return "", fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	err = os.WriteFile(destKubeconfigPath, []byte(config), 0644)
+	return destKubeconfigPath, err
+}
+
+// getSourceKubeConfigFile returns the path of the source cluster kubeconfig file.
+func getSourceKubeConfigFile() (string, error) {
+	srcKubeConfigPath := path.Join("/tmp", "src_kubeconfig")
+	cm, err := core.Instance().GetConfigMap("sourceconfigmap", "kube-system")
+	if err != nil {
+		log.Error("error reading config map: %v", err)
+		return "", err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "error reading kubeconfig: found empty remoteConfig in config map"
+		return "", fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	err = os.WriteFile(srcKubeConfigPath, []byte(config), 0644)
+	return srcKubeConfigPath, err
+}
