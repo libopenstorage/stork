@@ -116,8 +116,8 @@ const (
 	// PxOperatorMasterVersion is a tag for PX Operator master version
 	PxOperatorMasterVersion = "99.9.9"
 
-	// AksPVCControllerSecurePort is the PVC controller secure port.
-	AksPVCControllerSecurePort = "10261"
+	// CustomPVCControllerSecurePort is the PVC controller secure port.
+	CustomPVCControllerSecurePort = "10261"
 
 	pxAnnotationPrefix = "portworx.io"
 
@@ -240,6 +240,12 @@ var (
 // MockDriver creates a mock storage driver
 func MockDriver(mockCtrl *gomock.Controller) *mock.MockDriver {
 	return mock.NewMockDriver(mockCtrl)
+}
+
+func NoopKubevirtManager(mockCtrl *gomock.Controller) *mock.MockKubevirtManager {
+	kubevirtMock := mock.NewMockKubevirtManager(mockCtrl)
+	kubevirtMock.EXPECT().ClusterHasVMPods().Return(false, nil).AnyTimes()
+	return kubevirtMock
 }
 
 // FakeK8sClient creates a fake controller-runtime Kubernetes client. Also
@@ -1804,7 +1810,7 @@ func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 			NodeAffinity: cluster.Spec.Placement.NodeAffinity.DeepCopy(),
 		}
 	} else {
-		if IsK3sCluster() || IsPxDeployedOnMaster(cluster) {
+		if IsK3sOrRke2Cluster() || IsPxDeployedOnMaster(cluster) {
 			runOnMaster = true
 		}
 
@@ -1883,8 +1889,8 @@ func GetFullVersion() (*version.Version, string, error) {
 	return ver, "", err
 }
 
-// IsK3sCluster returns true or false, based on this kubernetes cluster is k3s or not
-func IsK3sCluster() bool {
+// IsK3sOrRke2Cluster returns true or false, based on this kubernetes cluster is k3s or rke2 or not
+func IsK3sOrRke2Cluster() bool {
 	// Get k8s version ext
 	_, ext, _ := GetFullVersion()
 
@@ -3139,6 +3145,7 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 			return nil, true, fmt.Errorf("failed to get %s deployment pods, Err: %v", pvcControllerDeployment.Name, err)
 		}
 
+		opVersion, err := GetPxOperatorVersion()
 		numberOfPods := 0
 		// Go through every PVC Controller pod and look for --port and --secure-port commands in portworx-pvc-controller-manager pods and match it to the pvc-controller-port and pvc-controller-secure-port passed in StorageCluster annotations
 		for _, pod := range pods {
@@ -3149,8 +3156,8 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 						for _, containerCommand := range container.Command {
 							if strings.Contains(containerCommand, "--secure-port") {
 								if len(pvcSecurePort) == 0 {
-									if isAKS(cluster) {
-										if strings.Split(containerCommand, "=")[1] != AksPVCControllerSecurePort {
+									if isAKS(cluster) || (err == nil && opVersion.GreaterThanOrEqual(opVer24_1_0) && IsK3sOrRke2Cluster()) {
+										if strings.Split(containerCommand, "=")[1] != CustomPVCControllerSecurePort {
 											return nil, true, fmt.Errorf("failed to validate secure-port, secure-port is missing in the PVC Controler pod %s", pod.Name)
 										}
 									} else {

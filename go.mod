@@ -29,7 +29,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240510194238-9854899fad94
+	github.com/libopenstorage/operator v0.0.0-20240523172951-e085c3099bd7
 	github.com/libopenstorage/stork v1.4.1-0.20240424105137-8c6fa2a3f934
 	github.com/onsi/gomega v1.31.1
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20240513165102-9eda9e2fc169
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240411224940-45db8cb87575
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240502044614-dc8638ea15f9
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.17.0
@@ -127,7 +127,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/tools v0.16.1 // indirect
 	knative.dev/pkg v0.0.0-20231023150739-56bfe0dd9626 // indirect
@@ -153,6 +152,7 @@ require (
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.14.0
 	go.uber.org/multierr v1.11.0
+	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 )
 
 require (

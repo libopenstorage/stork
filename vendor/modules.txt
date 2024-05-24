@@ -1087,7 +1087,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20240510194238-9854899fad94
+# github.com/libopenstorage/operator v0.0.0-20240523172951-e085c3099bd7
 ## explicit; go 1.21
 github.com/libopenstorage/operator/api/px
 github.com/libopenstorage/operator/drivers/storage
@@ -1336,7 +1336,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240411224940-45db8cb87575
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240502044614-dc8638ea15f9
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/anthos
