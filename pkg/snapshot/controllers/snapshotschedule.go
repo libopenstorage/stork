@@ -107,8 +107,12 @@ func (s *SnapshotScheduleController) handle(ctx context.Context, snapshotSchedul
 	}
 
 	s.setDefaults(snapshotSchedule)
+	err := s.client.Update(context.TODO(), snapshotSchedule)
+	if err != nil {
+		return err
+	}
 	// First update the status of any pending snapshots
-	err := s.updateVolumeSnapshotStatus(snapshotSchedule)
+	err = s.updateVolumeSnapshotStatus(snapshotSchedule)
 	if err != nil {
 		msg := fmt.Sprintf("Error updating snapshot status: %v", err)
 		s.recorder.Event(snapshotSchedule,
