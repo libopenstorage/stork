@@ -107,12 +107,8 @@ func (s *SnapshotScheduleController) handle(ctx context.Context, snapshotSchedul
 	}
 
 	s.setDefaults(snapshotSchedule)
-	err := s.client.Update(context.TODO(), snapshotSchedule)
-	if err != nil {
-		return err
-	}
 	// First update the status of any pending snapshots
-	err = s.updateVolumeSnapshotStatus(snapshotSchedule)
+	err := s.updateVolumeSnapshotStatus(snapshotSchedule)
 	if err != nil {
 		msg := fmt.Sprintf("Error updating snapshot status: %v", err)
 		s.recorder.Event(snapshotSchedule,
@@ -311,6 +307,9 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *
 	if err != nil {
 		return fmt.Errorf("failed to get volumesnapshot schedule %s", inputSnapshotSchedule.Name)
 	}
+	// Set the default reclaim policy.
+	s.setDefaults(snapshotSchedule)
+
 	snapshotName := s.formatVolumeSnapshotName(snapshotSchedule, policyType)
 	if snapshotSchedule.Status.Items == nil {
 		snapshotSchedule.Status.Items = make(map[stork_api.SchedulePolicyType][]*stork_api.ScheduledVolumeSnapshotStatus)
