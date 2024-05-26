@@ -5,10 +5,11 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 
 	"github.com/aquilax/truncate"
 	patch "github.com/evanphx/json-patch"

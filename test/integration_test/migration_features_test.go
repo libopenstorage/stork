@@ -93,7 +93,7 @@ func migrationStashStrategy(t *testing.T, appName string, appPath string) {
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "Error setting source kubeconfig")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret, false)
 	log.FailOnError(t, err, "Error creating cluster pair")
 
 	err = setSourceKubeConfig()
@@ -295,7 +295,7 @@ func testMigrationStashStrategyWithStartApplication(t *testing.T) {
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "Error setting source kubeconfig")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret, false)
 	log.FailOnError(t, err, "Error creating cluster pair")
 
 	// set stashstrategy
@@ -394,7 +394,7 @@ func testMultipleTimesMigrationsWithStashStrategy(t *testing.T) {
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "Error setting source kubeconfig")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkapi.BackupLocationType(backupLocation), backupSecret, false)
 	log.FailOnError(t, err, "Error creating cluster pair")
 
 	// set stashstrategy
@@ -536,7 +536,7 @@ func testFailbackWithStashStrategy(t *testing.T) {
 
 	// creating migration and clusterpair in kube-system namespace as we have to delete the ns in source for failback
 	migrationNamespace := "kube-system"
-	err = scheduleBidirectionalClusterPair(clusterPairName, migrationNamespace, "", storkapi.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, migrationNamespace, "", storkapi.BackupLocationType(backupLocation), backupSecret, false)
 	log.FailOnError(t, err, "Error creating cluster pair")
 
 	// set stashstrategy

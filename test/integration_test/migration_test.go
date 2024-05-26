@@ -1513,7 +1513,7 @@ func bidirectionalClusterPairTest(t *testing.T) {
 	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
 	for location, secret := range cmData {
 		log.InfoD("Creating a bidirectional-pair using %s as objectstore.", location)
-		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret)
+		err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace, "", storkv1.BackupLocationType(location), secret, false)
 		log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
 
 		err = setSourceKubeConfig()
@@ -2255,7 +2255,7 @@ func transformCRResourceTest(t *testing.T) {
 	err = setMockTime(nil)
 	log.FailOnError(t, err, "Error resetting mock time")
 
-	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret)
+	err = scheduleBidirectionalClusterPair(clusterPairName, appData.Ns, "", storkv1.BackupLocationType(backupLocation), backupSecret, false)
 	log.FailOnError(t, err, "Error creating cluster pair")
 
 	err = setSourceKubeConfig()
@@ -2825,7 +2825,7 @@ func scheduleClusterPairGeneric(t *testing.T, ctxs []*scheduler.Context,
 		log.InfoD("Namespace: %s", clusterPairNamespace)
 		log.InfoD("Backuplocation: %s", defaultBackupLocation)
 		log.InfoD("Secret name: %s", defaultSecretName)
-		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName)
+		err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, false)
 		log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
 		err = setSourceKubeConfig()
 		log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
