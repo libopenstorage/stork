@@ -110,6 +110,20 @@ func CreateBucket(backupLocation *stork_api.BackupLocation) error {
 // GetObjLockInfo fetches the object lock configuration of a bucket
 func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockInfo, error) {
 	fn := "GetObjLockInfo"
+	var tenantID, clientID, clientSecret, subscriptionID string
+	// Get TenantID, ClientID, ClientSecret, SubscriptionID from backupLocation.Cluster.AzureClusterConfig, if it present,
+	// Else get it from backupLocation.Location.AzureConfig ( for non cloud cluster cases).
+	if backupLocation.Cluster.AzureClusterConfig != nil {
+		tenantID = backupLocation.Cluster.AzureClusterConfig.TenantID
+		clientID = backupLocation.Cluster.AzureClusterConfig.ClientID
+		clientSecret = backupLocation.Cluster.AzureClusterConfig.ClientSecret
+		subscriptionID = backupLocation.Cluster.AzureClusterConfig.SubscriptionID
+	} else {
+		tenantID = backupLocation.Location.AzureConfig.TenantID
+		clientID = backupLocation.Location.AzureConfig.ClientID
+		clientSecret = backupLocation.Location.AzureConfig.ClientSecret
+		subscriptionID = backupLocation.Location.AzureConfig.SubscriptionID
+	}
 	objLockInfo := &common.ObjLockInfo{}
 	accountName := azureblob.AccountName(backupLocation.Location.AzureConfig.StorageAccountName)
 	pipeline, err := getPipeline(backupLocation)
@@ -139,15 +153,13 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 		objLockInfo.LockEnabled = true
 		logrus.Infof("%v: backuplocation: [%v/%v] Immutability policy is enabled on container %v", fn, backupLocation.Namespace, backupLocation.Name, backupLocation.Location.Path)
 
-		cred, err := azidentity.NewClientSecretCredential(backupLocation.Cluster.AzureClusterConfig.TenantID,
-			backupLocation.Cluster.AzureClusterConfig.ClientID,
-			backupLocation.Cluster.AzureClusterConfig.ClientSecret, nil)
+		cred, err := azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, nil)
 		if err != nil {
 			logrus.Errorf("%v: backuplocation: [%v/%v] failed in creating azure client with the given credential", fn, backupLocation.Namespace, backupLocation.Name)
 			return nil, err
 		}
 		ctx := context.Background()
-		clientFactory, err := armstorage.NewClientFactory(backupLocation.Cluster.AzureClusterConfig.SubscriptionID, cred, nil)
+		clientFactory, err := armstorage.NewClientFactory(subscriptionID, cred, nil)
 		if err != nil {
 			logrus.Errorf("%v: backuplocation: [%v/%v] failed to create client: %v", fn, backupLocation.Namespace, backupLocation.Name, err)
 			return nil, err
