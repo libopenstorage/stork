@@ -307,6 +307,9 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *
 	if err != nil {
 		return fmt.Errorf("failed to get volumesnapshot schedule %s", inputSnapshotSchedule.Name)
 	}
+	// Set the default reclaim policy.
+	s.setDefaults(snapshotSchedule)
+
 	snapshotName := s.formatVolumeSnapshotName(snapshotSchedule, policyType)
 	if snapshotSchedule.Status.Items == nil {
 		snapshotSchedule.Status.Items = make(map[stork_api.SchedulePolicyType][]*stork_api.ScheduledVolumeSnapshotStatus)
