@@ -1,4 +1,4 @@
-package flashblade
+package flasharray
 
 import (
 	"bytes"
@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -16,7 +16,7 @@ import (
 )
 
 // supportedRestVersions is used to negotiate the API version to use
-var supportedRestVersions = [...]string{"2.0", "2.1", "2.2", "2.3", "2.4"}
+var supportedRestVersions = [...]string{"2.26"}
 
 type Client struct {
 	MgmtIp      string
@@ -29,13 +29,8 @@ type Client struct {
 	Kwargs      map[string]string
 
 	// Client object defined here
-	client *http.Client
-
-	// All services supported updated here
-	Blades           *BladesService
-	Alerts           *AlertService
-	FileSystem       *FileSystemService
-	NetworkInterface *NetworkInterfaceService
+	client  *http.Client
+	Volumes *VolumeServices
 }
 
 // Type supported is used for retrieving the support API versions from the Flash Array
@@ -126,10 +121,10 @@ func (c *Client) login() error {
 }
 
 func (c *Client) Do(req *http.Request, v interface{}, reestablishSession bool) (*http.Response, error) {
-	fmt.Printf("\nRequest [%v]\n", req)
+	log.Infof("\nRequest [%v]\n", req)
 	resp, err := c.client.Do(req)
 	if err != nil {
-		fmt.Println("Do request failed")
+		log.Infof("Do request failed")
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -143,7 +138,6 @@ func (c *Client) Do(req *http.Request, v interface{}, reestablishSession bool) (
 
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
-	//fmt.Printf("[%v]", bodyString)
 	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", bodyString)), v)
 	if err != nil {
 		return nil, err
@@ -170,13 +164,13 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 	if params != nil {
 		ps := url.Values{}
 		for k, v := range params {
-			log.Printf("[DEBUG] key: %s, value: %s \n", k, v)
+			log.Infof("[DEBUG] key: %s, value: %s \n", k, v)
 			ps.Set(k, v)
 		}
 		baseURL.RawQuery = ps.Encode()
 	}
 
-	fmt.Printf("Base URL [%v]", baseURL.String())
+	log.Infof("Base URL [%v]", baseURL.String())
 
 	req, err := http.NewRequest(method, baseURL.String(), bodyReader)
 	if err != nil {
@@ -193,7 +187,7 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 		}
 	}
 
-	fmt.Printf("Adding auth token [%v]", c.AuthToken)
+	log.Infof("Adding auth token [%v]", c.AuthToken)
 	req.Header.Add("x-auth-token", fmt.Sprintf("%v", c.AuthToken))
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
@@ -219,7 +213,7 @@ func (c *Client) getAuthToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("Auth URL [%v]", authURL.String())
+	log.Infof("Auth URL [%v]", authURL.String())
 
 	bodyReader := bytes.NewReader([]byte{})
 	request, err := http.NewRequest("POST", authURL.String(), bodyReader)
@@ -227,7 +221,7 @@ func (c *Client) getAuthToken() (string, error) {
 		return "", err
 	}
 
-	fmt.Printf("API Token [%v]", c.ApiToken)
+	log.Infof("API Token [%v]", c.ApiToken)
 
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("api-token", c.ApiToken)
@@ -257,7 +251,7 @@ func (c *Client) getAuthToken() (string, error) {
 	}
 
 	authToken := httpResponse.Header.Get("x-auth-token")
-	fmt.Printf("Login Success!")
+	log.Infof("Login Success!")
 	return authToken, nil
 
 }
@@ -271,7 +265,7 @@ func (c *Client) formatPath(path string, ignoreRestVersion bool) string {
 	} else {
 		formatPath = fmt.Sprintf("https://%s/api/%s/%s", c.MgmtIp, c.RestVersion, path)
 	}
-	fmt.Println(formatPath)
+	log.Infof(formatPath)
 	return formatPath
 }
 
@@ -296,10 +290,7 @@ func getJSON(uri string, target interface{}) error {
 func (c *Client) InitializeServices() *Client {
 
 	// Initialize all services created here
-	c.Blades = &BladesService{client: c}
-	c.Alerts = &AlertService{client: c}
-	c.FileSystem = &FileSystemService{client: c}
-	c.NetworkInterface = &NetworkInterfaceService{client: c}
+	c.Volumes = &VolumeServices{client: c}
 	return c
 }
 
@@ -346,23 +337,23 @@ func getRestVersion(restVersion string, target string) (string, error) {
 		}
 		restVersion = r
 	}
-	fmt.Printf("Selected rest Version is [%v]", restVersion)
+	log.Infof("Selected rest Version is [%v]", restVersion)
 	return restVersion, nil
 }
 
-// checkRestVersion checks if the specified REST API version is supported by the flashblade and the library.
+// checkRestVersion checks if the specified REST API version is supported by the FlashArray and the library.
 func checkRestVersion(version string, target string) error {
 	// Construct the URL for checking supported API versions
 	checkURL := fmt.Sprintf("https://%s/api/api_version", target)
-	fmt.Println(checkURL)
-	// Retrieve supported API versions from the flashblade
+	log.Infof(fmt.Sprintf("URL is [%v]", checkURL))
+	// Retrieve supported API versions from the FlashArray
 	supported := &supported{}
 	err := getJSON(checkURL, supported)
 	if err != nil {
 		return err
 	}
 
-	// Check if the specified version is supported by the flashblade
+	// Check if the specified version is supported by the FlashArray
 	arraySupported := false
 	for _, v := range supported.Versions {
 		if version == v {
@@ -389,12 +380,12 @@ func checkRestVersion(version string, target string) error {
 	return nil
 }
 
-// chooseRestVersion negotiates the highest REST API version supported by the library and the flashblade.
+// chooseRestVersion negotiates the highest REST API version supported by the library and the FlashArray.
 func chooseRestVersion(target string) (string, error) {
 	// Construct the URL for checking supported API versions
 	checkURL := fmt.Sprintf("https://%s/api/api_version", target)
 
-	// Retrieve supported API versions from the flashblade
+	// Retrieve supported API versions from the FlashArray
 	supported := &supported{}
 	err := getJSON(checkURL, supported)
 	if err != nil {

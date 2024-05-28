@@ -19,7 +19,7 @@ func PureCreateFbClientAndConnect(fbMgmtEndpoint string, apiToken string) (*flas
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FB Secrets
 func GetFBMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}
-	for _, fbDetails := range secret.Arrays {
+	for _, fbDetails := range secret.Blades {
 		mgmtEndpoints = append(mgmtEndpoints, fbDetails.MgmtEndPoint)
 	}
 	return mgmtEndpoints
