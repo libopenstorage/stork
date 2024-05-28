@@ -42,6 +42,7 @@ func getDRActionStatus(cmdFactory Factory, ioStreams genericclioptions.IOStreams
 	var actions *storkv1.ActionList
 	var filteredActionList *storkv1.ActionList
 	var err error
+
 	// Check all namespaces else user has to provide the namespace from which they want to get list of actions using -n flag.
 	namespaces, err := cmdFactory.GetAllNamespaces()
 	if err != nil {
@@ -62,13 +63,15 @@ func getDRActionStatus(cmdFactory Factory, ioStreams genericclioptions.IOStreams
 			}
 		}
 	} else {
+		actions = new(storkv1.ActionList)
 		// fetch all the actions in the given namespace
 		for _, ns := range namespaces {
-			actions, err = storkops.Instance().ListActions(ns)
+			actionsList, err := storkops.Instance().ListActions(ns)
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
+			actions.Items = append(actions.Items, actionsList.Items...)
 		}
 	}
 
