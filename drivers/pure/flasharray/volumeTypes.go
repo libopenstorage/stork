@@ -1,70 +1,82 @@
 package flasharray
 
-type PriorityAdjustment struct {
-	PriorityAdjustmentOperator string `json:"priority_adjustment_operator"`
-	PriorityAdjustmentValue    int    `json:"priority_adjustment_value"`
-}
-
 type Space struct {
-	DataReduction      int   `json:"data_reduction"`
-	Shared             int64 `json:"shared"`
-	Snapshots          int   `json:"snapshots"`
-	System             int   `json:"system"`
-	ThinProvisioning   int   `json:"thin_provisioning"`
-	TotalPhysical      int   `json:"total_physical"`
-	TotalProvisioned   int64 `json:"total_provisioned"`
-	TotalReduction     int   `json:"total_reduction"`
-	Unique             int   `json:"unique"`
-	Virtual            int   `json:"virtual"`
-	UsedProvisioned    int64 `json:"used_provisioned"`
-	TotalUsed          int   `json:"total_used"`
-	SnapshotsEffective int   `json:"snapshots_effective"`
-	UniqueEffective    int   `json:"unique_effective"`
-	TotalEffective     int   `json:"total_effective"`
-}
-
-type Pod struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
+	DataReduction    float64 `json:"data_reduction"`
+	Shared           *string `json:"shared"`
+	Snapshots        int     `json:"snapshots"`
+	System           *string `json:"system"`
+	ThinProvisioning float64 `json:"thin_provisioning"`
+	TotalPhysical    int64   `json:"total_physical"`
+	TotalProvisioned int64   `json:"total_provisioned"`
+	TotalReduction   float64 `json:"total_reduction"`
+	Unique           int64   `json:"unique"`
+	Virtual          int64   `json:"virtual"`
 }
 
 type Source struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
+	Name *string `json:"name"`
+	ID   *string `json:"id"`
+}
+
+type Pod struct {
+	Name *string `json:"name"`
+	ID   *string `json:"id"`
+}
+
+type QoS struct {
+	BandwidthLimit uint64 `json:"bandwidth_limit"`
+	IopsLimit      uint64 `json:"iops_limit"`
 }
 
 type VolumeGroup struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
+	Name *string `json:"name"`
+	ID   *string `json:"id"`
 }
 
-type Qos struct {
-	BandwidthLimit int `json:"bandwidth_limit"`
-	IopsLimit      int `json:"iops_limit"`
+type Item struct {
+	Space                   Space       `json:"space"`
+	ConnectionCount         int         `json:"connection_count"`
+	Provisioned             int64       `json:"provisioned"`
+	Created                 int64       `json:"created"`
+	Source                  Source      `json:"source"`
+	Name                    string      `json:"name"`
+	ID                      string      `json:"id"`
+	Serial                  string      `json:"serial"`
+	Destroyed               bool        `json:"destroyed"`
+	TimeRemaining           *string     `json:"time_remaining"`
+	HostEncryptionKeyStatus string      `json:"host_encryption_key_status"`
+	RequestedPromotionState string      `json:"requested_promotion_state"`
+	PromotionStatus         string      `json:"promotion_status"`
+	Pod                     Pod         `json:"pod"`
+	QoS                     QoS         `json:"qos"`
+	Subtype                 string      `json:"subtype"`
+	VolumeGroup             VolumeGroup `json:"volume_group"`
 }
 
-type VolItems struct {
-	Id                      string              `json:"id"`
-	Name                    string              `json:"name"`
-	ConnectionCount         int                 `json:"connection_count"`
-	Created                 int                 `json:"created"`
-	Destroyed               bool                `json:"destroyed"`
-	HostEncryptionKeyStatus string              `json:"host_encryption_key_status"`
-	Provisioned             int                 `json:"provisioned"`
-	Qos                     *Qos                `json:"qos"`
-	PriorityAdjustment      *PriorityAdjustment `json:"priority_adjustment"`
-	Serial                  string              `json:"serial"`
-	Space                   *Space              `json:"space"`
-	TimeRemaining           int                 `json:"time_remaining"`
-	Pod                     *Pod                `json:"pod"`
-	Source                  *Source             `json:"source"`
-	Subtype                 string              `json:"subtype"`
-	VolumeGroup             *VolumeGroup        `json:"volume_group"`
-	RequestedPromotionState string              `json:"requested_promotion_state"`
-	PromotionStatus         string              `json:"promotion_status"`
-	Priority                int                 `json:"priority"`
+type Total struct {
+	Space                   Space       `json:"space"`
+	ConnectionCount         *int        `json:"connection_count"`
+	Provisioned             int64       `json:"provisioned"`
+	Created                 *int64      `json:"created"`
+	Source                  Source      `json:"source"`
+	Name                    *string     `json:"name"`
+	ID                      *string     `json:"id"`
+	Serial                  *string     `json:"serial"`
+	Destroyed               *bool       `json:"destroyed"`
+	TimeRemaining           *string     `json:"time_remaining"`
+	HostEncryptionKeyStatus *string     `json:"host_encryption_key_status"`
+	RequestedPromotionState *string     `json:"requested_promotion_state"`
+	PromotionStatus         *string     `json:"promotion_status"`
+	Pod                     Pod         `json:"pod"`
+	QoS                     QoS         `json:"qos"`
+	Subtype                 *string     `json:"subtype"`
+	VolumeGroup             VolumeGroup `json:"volume_group"`
 }
 
-type Volumes struct {
-	Volumes []Volumes `json:"total"`
+type VolResponse struct {
+	ContinuationToken  *string `json:"continuation_token"`
+	Items              []Item  `json:"items"`
+	MoreItemsRemaining bool    `json:"more_items_remaining"`
+	Total              []Total `json:"total"`
+	TotalItemCount     *int    `json:"total_item_count"`
 }

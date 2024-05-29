@@ -16,7 +16,7 @@ import (
 )
 
 // supportedRestVersions is used to negotiate the API version to use
-var supportedRestVersions = [...]string{"2.26"}
+var supportedRestVersions = [...]string{"2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8"}
 
 type Client struct {
 	MgmtIp      string
@@ -71,7 +71,7 @@ func NewClient(mgmtIp string, apiToken string, userName string, password string,
 	requestKwargs := setDefaultRequestKwargs(kwargs, verifyHTTPS, sslCert)
 	c.Kwargs = requestKwargs
 
-	authToken, err := c.getAuthToken()
+	authToken, err := c.getAuthToken(restVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (c *Client) login() error {
 	return nil
 }
 
-func (c *Client) Do(req *http.Request, v interface{}, reestablishSession bool) (*http.Response, error) {
+func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	log.Infof("\nRequest [%v]\n", req)
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -139,10 +139,10 @@ func (c *Client) Do(req *http.Request, v interface{}, reestablishSession bool) (
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
 	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", bodyString)), v)
+
 	if err != nil {
 		return nil, err
 	}
-
 	return resp, nil
 
 }
@@ -155,7 +155,6 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 	} else {
 		fpath = c.formatPath(path, false)
 	}
-
 	bodyReader := bytes.NewReader([]byte{})
 	baseURL, err := url.Parse(fpath)
 	if err != nil {
@@ -207,9 +206,9 @@ func (c *Client) NewGetRequests(path string, params map[string]string, data inte
 	return httpRequest, nil
 }
 
-func (c *Client) getAuthToken() (string, error) {
+func (c *Client) getAuthToken(restVersion string) (string, error) {
 
-	authURL, err := url.Parse(c.formatPath("api/login", true))
+	authURL, err := url.Parse(c.formatPath(fmt.Sprintf("api/%v/login", restVersion), true))
 	if err != nil {
 		return "", err
 	}
@@ -220,11 +219,12 @@ func (c *Client) getAuthToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	log.Infof("API Token [%v]", c.ApiToken)
 
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("api-token", c.ApiToken)
+
+	log.Infof(fmt.Sprintf("API Token [%v]", c.ApiToken))
 
 	tempClient := &http.Client{
 		// http.Client doesn't set the default Timeout,
