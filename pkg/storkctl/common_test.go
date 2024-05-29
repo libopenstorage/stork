@@ -5,7 +5,6 @@ package storkctl
 
 import (
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"maps"
 	"net/http"
 	"os"
@@ -15,6 +14,7 @@ import (
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/appregistration"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
 	fakeocpconfigclient "github.com/openshift/client-go/config/clientset/versioned/fake"
 	fakeocpsecurityclient "github.com/openshift/client-go/security/clientset/versioned/fake"
