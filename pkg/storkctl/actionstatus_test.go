@@ -9,7 +9,10 @@ import (
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestGetFailoverFailbackNoAction(t *testing.T) {
@@ -25,7 +28,7 @@ func TestGetFailoverFailbackNoAction(t *testing.T) {
 func TestGetFailoverSuccessfulFailoverAction(t *testing.T) {
 	defer resetTest()
 	// create a failover action
-	actionName := createFailoverActionAndVerify(t)
+	actionName := createFailoverActionAndVerify(t, "failover-test-migrationschedule-2024-01-01-000000", "test-migrationschedule", "clusterPair1", "kube-system")
 	// update the status of the action
 	actionObj, err := storkops.Instance().GetAction(actionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
@@ -82,10 +85,54 @@ func TestGetFailbackSuccessfulFailbackAction(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
+func TestGetFailoverAllNamespaces(t *testing.T) {
+	defer resetTest()
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}})
+	require.NoError(t, err, "error creating namespace")
+
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dummy-ns"}})
+	require.NoError(t, err, "error creating namespace")
+
+	////////////////////////////
+	// Create first failover //
+	///////////////////////////
+	actionName := createFailoverActionAndVerify(t, "failover-test-migrationschedule-2024-01-01-000000", "test-migrationschedule", "clusterPair1", "kube-system")
+	// Update the status of the action.
+	actionObj, err := storkops.Instance().GetAction(actionName, "kube-system")
+	require.NoError(t, err, "Error getting action")
+
+	// Update the status of the failover action.
+	actionObj.Status.Stage = storkv1.ActionStageInitial
+	actionObj.Status.Status = storkv1.ActionStatusInProgress
+	actionObj.Status.Reason = ""
+	_, err = storkops.Instance().UpdateAction(actionObj)
+	require.NoError(t, err, "Error updating action")
+
+	/////////////////////////////
+	// Create another failover //
+	///////////////////////////
+	actionName = createFailoverActionAndVerify(t, "failover-test-migrationschedule-new-2024-01-01-000000", "test-migrationschedule-new", "clusterPair2", "dummy-ns")
+	actionObj, err = storkops.Instance().GetAction(actionName, "dummy-ns")
+	require.NoError(t, err, "Error getting action")
+
+	// Update the status of the failover action.
+	actionObj.Status.Stage = storkv1.ActionStageInitial
+	actionObj.Status.Status = storkv1.ActionStatusInProgress
+	actionObj.Status.Reason = ""
+	_, err = storkops.Instance().UpdateAction(actionObj)
+	require.NoError(t, err, "Error updating action")
+
+	cmdArgs := []string{"get", "failover", "--all-namespaces"}
+	expected := "NAMESPACE     NAME                                                    CREATED   STAGE         STATUS        MORE INFO\n" +
+		"dummy-ns      failover-test-migrationschedule-new-2024-01-01-000000             Validations   In-Progress   \n" +
+		"kube-system   failover-test-migrationschedule-2024-01-01-000000                 Validations   In-Progress   \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func TestGetFailoverAllStages(t *testing.T) {
 	defer resetTest()
 	// create a failover action
-	actionName := createFailoverActionAndVerify(t)
+	actionName := createFailoverActionAndVerify(t, "failover-test-migrationschedule-2024-01-01-000000", "test-migrationschedule", "clusterPair1", "kube-system")
 	// update the status of the action
 	actionObj, err := storkops.Instance().GetAction(actionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
@@ -273,7 +320,8 @@ func TestGetFailbackAllStages(t *testing.T) {
 func TestGetFailoverFailedFailoverAction(t *testing.T) {
 	defer resetTest()
 	// create a failover action
-	actionName := createFailoverActionAndVerify(t)
+
+	actionName := createFailoverActionAndVerify(t, "failover-test-migrationschedule-2024-01-01-000000", "test-migrationschedule", "clusterPair1", "kube-system")
 	// update the status of the action
 	actionObj, err := storkops.Instance().GetAction(actionName, "kube-system")
 	require.NoError(t, err, "Error getting action")
@@ -330,18 +378,17 @@ func TestGetFailbackFailedFailbackAction(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
-func createFailoverActionAndVerify(t *testing.T) string {
+func createFailoverActionAndVerify(t *testing.T, failoverActionName, migrationScheduleName, cpair, namespace string) string {
 	mockTheTime()
-	failoverActionName := "failover-test-migrationschedule-2024-01-01-000000"
-	createTestMigrationSchedule("test-migrationschedule", "default-migration-policy", "clusterPair1", []string{"ns1", "ns2"}, "kube-system", true, t)
-	createClusterPair(t, "clusterPair1", "kube-system", "async-dr")
-	cmdArgs := []string{"perform", "failover", "-m", "test-migrationschedule", "--skip-source-operations", "-n", "kube-system"}
-	expected := fmt.Sprintf("Started failover for MigrationSchedule kube-system/test-migrationschedule\nTo check failover status use the command : `storkctl get failover %v -n kube-system`\n", failoverActionName)
+	createClusterPair(t, cpair, namespace, "async-dr")
+	createTestMigrationSchedule(migrationScheduleName, "default-migration-policy", cpair, []string{"ns1", "ns2"}, namespace, true, t)
+	cmdArgs := []string{"perform", "failover", "-m", migrationScheduleName, "--skip-source-operations", "-n", namespace}
+	expected := fmt.Sprintf("Started failover for MigrationSchedule %s/%s\nTo check failover status use the command : `storkctl get failover %v -n %s`\n", namespace, migrationScheduleName, failoverActionName, namespace)
 	testCommon(t, cmdArgs, nil, expected, false)
-	actionObj, err := storkops.Instance().GetAction(failoverActionName, "kube-system")
+	actionObj, err := storkops.Instance().GetAction(failoverActionName, namespace)
 	require.NoError(t, err, "Error getting action")
 	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.FailoverNamespaces, []string{"ns1", "ns2"})
-	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, "test-migrationschedule")
+	require.Equal(t, actionObj.Spec.ActionParameter.FailoverParameter.MigrationScheduleReference, migrationScheduleName)
 	require.Equal(t, *actionObj.Spec.ActionParameter.FailoverParameter.SkipSourceOperations, true)
 	return failoverActionName
 }
