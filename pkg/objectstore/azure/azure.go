@@ -164,19 +164,37 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 			logrus.Errorf("%v: backuplocation: [%v/%v] failed to create client: %v", fn, backupLocation.Namespace, backupLocation.Name, err)
 			return nil, err
 		}
+		// Check storage Account level retentionperiod settings.
 		res, err := clientFactory.NewBlobContainersClient().GetImmutabilityPolicy(ctx,
 			backupLocation.Location.AzureConfig.ResourceGroupName,
 			backupLocation.Location.AzureConfig.StorageAccountName,
 			backupLocation.Location.Path,
 			&armstorage.BlobContainersClientGetImmutabilityPolicyOptions{IfMatch: nil})
 		if err != nil {
-			logrus.Errorf("%v: failed to  get immutability policy for the backuplocation [%v/%v] : %v", fn, backupLocation.Namespace, backupLocation.Name, err)
+			logrus.Errorf("%v: failed to  get immutability policy for the backuplocation [%v/%v] at container level: %v", fn, backupLocation.Namespace, backupLocation.Name, err)
 			return nil, err
 		}
 		properties := res.ImmutabilityPolicy.Properties
 		objLockInfo.RetentionPeriodDays = int64(*properties.ImmutabilityPeriodSinceCreationInDays)
+		if objLockInfo.RetentionPeriodDays == 0 {
+			// Check storage Account level retentionperiod settings.
+			accountRes, err := clientFactory.NewAccountsClient().GetProperties(ctx,
+				backupLocation.Location.AzureConfig.ResourceGroupName,
+				backupLocation.Location.AzureConfig.StorageAccountName,
+				nil)
+			if err != nil {
+				logrus.Errorf("%v: failed to  get immutability policy for the backuplocation [%v/%v] at storageaccount level: %v",
+					fn, backupLocation.Namespace, backupLocation.Name, err)
+				return nil, err
+			}
+			properties := accountRes.Properties.ImmutableStorageWithVersioning.ImmutabilityPolicy
+			objLockInfo.RetentionPeriodDays = int64(*properties.ImmutabilityPeriodSinceCreationInDays)
+		}
+		logrus.Infof("%v: backuplocation: [%v/%v] Immutability policy is enabled on container %v with retention period of [%v]",
+			fn, backupLocation.Namespace, backupLocation.Name, backupLocation.Location.Path, objLockInfo.RetentionPeriodDays)
 	} else {
-		logrus.Infof("%v: backuplocation: [%v/%v] Immutability policy is disabled on container %v", fn, backupLocation.Namespace, backupLocation.Name, backupLocation.Location.Path)
+		logrus.Infof("%v: backuplocation: [%v/%v] Immutability policy is disabled on container %v",
+			fn, backupLocation.Namespace, backupLocation.Name, backupLocation.Location.Path)
 		objLockInfo.LockEnabled = false
 	}
 	return objLockInfo, nil
