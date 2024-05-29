@@ -370,6 +370,8 @@ func TestExtender(t *testing.T) {
 	t.Run("kubevirtPodScheduling", kubevirtPodScheduling)
 	t.Run("kubevirtPodSchedulingAttachedOnMismatch", kubevirtPodSchedulingAttachedOnMismatch)
 	t.Run("kubevirtPodSchedulingNonHyperconvergence", kubevirtPodSchedulingNonHyperconvergence)
+	t.Run("nodeMarkedUnschedulableTest", nodeMarkedUnschedulableTest)
+	t.Run("nodeMarkedUnschedulableWFFCVolTest", nodeMarkedUnschedulableWFFCVolTest)
 	t.Run("teardown", teardown)
 }
 
@@ -610,7 +612,7 @@ func noDriverVolumeTest(t *testing.T) {
 		prioritizeResponse)
 }
 
-// Create a pod with a PVC which uses the mocked WaitForFirstConusmer storage class
+// Create a pod with a PVC which uses the mocked WaitForFirstConsumer storage class
 // The filter response should return all the input nodes
 // The prioritize response should return all nodes with equal priority
 func WFFCVolumeTest(t *testing.T) {
@@ -2266,6 +2268,113 @@ func multiVolumeWithStorageDownNodesAntiHyperConvergenceTest(t *testing.T) {
 			defaultScore,
 			defaultScore},
 		prioritizeResponse)
+}
+
+// Mark one of the nodes as unschedulable using the operator annotation.
+// Verify that the unschedulable node is not returned in the filter response.
+func nodeMarkedUnschedulableTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "", ""))
+
+	// nodes at index 1 is marked unschedulable by the operator
+	markNodeUnschedulable(&nodes.Items[1])
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	pod := newPod("unschedTestPod", defaultNamespace, map[string]bool{"unschedVol": false})
+
+	// Normal volume
+	vol := v1.Volume{}
+	pvc := &v1.PersistentVolumeClaim{}
+	pvc.Name = "unschedPVC"
+	pvc.Spec.VolumeName = "unschedVol"
+	mockSC := driver.GetStorageClassName()
+	pvc.Spec.StorageClassName = &mockSC
+	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvc.Name,
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvc)
+	require.NoError(t, err)
+	vol.PersistentVolumeClaim = pvcSpec
+	pod.Spec.Volumes = append(pod.Spec.Volumes, vol)
+	driver.AddPVC(pvc)
+	provNodes := []int{1}
+	if err := driver.ProvisionVolume("unschedVol", provNodes, 1, nil, false, false, ""); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 2, 3, 4}, filterResponse)
+}
+
+// Create a pod with a PVC which uses the mocked WaitForFirstConsumer storage class.
+// Mark some of the nodes as unschedulable using the operator annotation.
+// The filter response should not return the unschedulable nodes.
+func nodeMarkedUnschedulableWFFCVolTest(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
+	pod := newPod("unschedWFFCVolTestPod", defaultNamespace, nil)
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "a", "us-east-1"))
+
+	// nodes at indices 2 and 3 are marked unschedulable by the operator
+	for i := 2; i < 4; i++ {
+		markNodeUnschedulable(&nodes.Items[i])
+	}
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	podVolume := v1.Volume{}
+	pvcClaim := &v1.PersistentVolumeClaim{}
+	pvcClaim.Name = "unschedWFFCPVC"
+	pvcClaim.Spec.VolumeName = "unschedWFFCVol"
+	mockSC := mock.MockStorageClassNameWFFC
+	pvcClaim.Spec.StorageClassName = &mockSC
+	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvcClaim.Name,
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	require.NoError(t, err)
+	podVolume.PersistentVolumeClaim = pvcSpec
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+	driver.AddPVC(pvcClaim)
+	provNodes := []int{}
+	if err := driver.ProvisionVolume("unschedWFFCVol", provNodes, 1, nil, false, false, ""); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 4}, filterResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
+}
+
+func markNodeUnschedulable(node *v1.Node) {
+	if node.Annotations == nil {
+		node.Annotations = make(map[string]string)
+	}
+	node.Annotations[unschedulableAnnotation] = "true"
 }
 
 // Verify disableHyperconvergenceAnnotation is honored
