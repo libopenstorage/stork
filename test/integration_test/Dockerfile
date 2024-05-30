@@ -4,9 +4,9 @@ FROM golang:1.21.10
 RUN apt-get update && \
     /usr/local/go/bin/go install -v  gotest.tools/gotestsum@latest
 
-RUN apt-get update && apt-get install -y python3-pip && apt-get install -y jq
-
-RUN pip3 install --upgrade pip
+RUN apt-get update && \
+	apt-get install -y pipx jq && \
+	pipx ensurepath
 
 #Install Google Cloud SDK
 ARG GCLOUD_SDK=google-cloud-sdk-418.0.0-linux-x86_64.tar.gz
@@ -20,14 +20,13 @@ ENV PATH "${PATH}:$GCLOUD_INSTALL_DIR/google-cloud-sdk/bin"
 RUN gcloud components install gke-gcloud-auth-plugin
 
 RUN wget -O /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
-    chmod +x /usr/local/bin/aws-iam-authenticator
-
-RUN pip3 install awscli
+    chmod +x /usr/local/bin/aws-iam-authenticator && \
+    pipx install awscli
 
 # Install kubectl
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-RUN chmod +x ./kubectl
-RUN mv ./kubectl /usr/local/bin
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+	chmod +x ./kubectl && \
+	mv ./kubectl /usr/local/bin
 
 WORKDIR /
 
