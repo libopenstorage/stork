@@ -185,8 +185,8 @@ func newUpdateSnapShotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 			}
 		},
 	}
-	updateSnapshotScheduleCommand.Flags().StringVarP(&pvc, "pvc", "p", "", "Name of the PVC for which to update snapshot schedules")
-	updateSnapshotScheduleCommand.Flags().StringVarP(&newPVCName, "newpvcname", "", "", "New name of PVC of the volume snapshot schedule")
+	updateSnapshotScheduleCommand.Flags().StringVarP(&pvc, "pvc", "p", "", "Name of the PVC whose volume snapshot schedules need to be updated")
+	updateSnapshotScheduleCommand.Flags().StringVarP(&newPVCName, "new-pvc-name", "", "", "Specify new PVC name of the volume snapshot schedule")
 
 	return updateSnapshotScheduleCommand
 }
@@ -205,7 +205,7 @@ func updateSnapshotSchedules(name string, namespace string, ioStreams genericcli
 		util.CheckErr(err)
 		return
 	}
-	msg := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully", name)
+	msg := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully with new PVC name %s", name, newPVCName)
 	printMsg(msg, ioStreams.Out)
 }
 
