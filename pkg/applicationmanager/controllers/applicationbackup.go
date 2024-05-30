@@ -1174,7 +1174,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			backup.Status.FailedVolCount++
 		}
 	}
-	if len(backup.Status.Volumes) == backup.Status.FailedVolCount {
+	if (len(backup.Status.Volumes) != 0) && (len(backup.Status.Volumes) == backup.Status.FailedVolCount) {
 		// This case signifies that none of the volumes are successfully backed up
 		// hence marking it as failed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
