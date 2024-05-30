@@ -1,7 +1,7 @@
-FROM golang:1.17.0
+FROM golang:1.21.10
 
 # Install dependancies
-RUN apt-get update && \ 
+RUN apt-get update && \
     /usr/local/go/bin/go install -v  gotest.tools/gotestsum@latest
 
 RUN apt-get update && apt-get install -y python3-pip && apt-get install -y jq
