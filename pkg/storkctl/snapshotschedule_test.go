@@ -287,8 +287,8 @@ func TestUpdateSnapshotSchedulePVCName(t *testing.T) {
 	createSnapshotScheduleAndVerify(t, name, "pvcname1", "testpolicy", namespace, "preExec", "postExec", false)
 
 	// Verify the `storkctl update volumesnapshotschedule <vss name> --newpvcname <new-pvc-name>` workflow.
-	cmdArgs := []string{"update", "volumesnapshotschedule", name, "--newpvcname", "pvcname2"}
-	expected := "VolumeSnapshotSchedule " + name + " updated successfully\n"
+	cmdArgs := []string{"update", "volumesnapshotschedule", name, "--new-pvc-name", "pvcname2"}
+	expected := "VolumeSnapshotSchedule " + name + " updated successfully with new PVC name pvcname2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(name, namespace)
@@ -299,8 +299,8 @@ func TestUpdateSnapshotSchedulePVCName(t *testing.T) {
 	// Verify the `storkctl update volumesnapshotschedule --pvc <pvc-name> --newpvcname <new-pvc-name>` workflow.
 	name = "testupdatesnapshotschedule1"
 	createSnapshotScheduleAndVerify(t, name, "pvcname1", "testpolicy", namespace, "preExec", "postExec", false)
-	cmdArgs = []string{"update", "volumesnapshotschedule", "--pvc", "pvcname1", "--newpvcname", "pvcname2"}
-	expected = "VolumeSnapshotSchedule " + name + " updated successfully\n"
+	cmdArgs = []string{"update", "volumesnapshotschedule", "--pvc", "pvcname1", "--new-pvc-name", "pvcname2"}
+	expected = "VolumeSnapshotSchedule " + name + " updated successfully with new PVC name pvcname2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	snapshotSchedule, err = storkops.Instance().GetSnapshotSchedule(name, namespace)
