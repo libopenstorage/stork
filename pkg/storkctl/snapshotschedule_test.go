@@ -288,7 +288,7 @@ func TestUpdateSnapshotSchedulePVCName(t *testing.T) {
 
 	// Verify the `storkctl update volumesnapshotschedule <vss name> --newpvcname <new-pvc-name>` workflow.
 	cmdArgs := []string{"update", "volumesnapshotschedule", name, "--new-pvc-name", "pvcname2"}
-	expected := "VolumeSnapshotSchedule " + name + " updated successfully with new PVC name pvcname2\n"
+	expected := "VolumeSnapshotSchedule " + name + " updated successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(name, namespace)
@@ -300,11 +300,22 @@ func TestUpdateSnapshotSchedulePVCName(t *testing.T) {
 	name = "testupdatesnapshotschedule1"
 	createSnapshotScheduleAndVerify(t, name, "pvcname1", "testpolicy", namespace, "preExec", "postExec", false)
 	cmdArgs = []string{"update", "volumesnapshotschedule", "--pvc", "pvcname1", "--new-pvc-name", "pvcname2"}
-	expected = "VolumeSnapshotSchedule " + name + " updated successfully with new PVC name pvcname2\n"
+	expected = "VolumeSnapshotSchedule " + name + " updated successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	snapshotSchedule, err = storkops.Instance().GetSnapshotSchedule(name, namespace)
 	require.NoError(t, err, "Error getting snapshotschedule")
 	newPVCName = snapshotSchedule.Spec.Template.Spec.PersistentVolumeClaimName
 	require.Equal(t, "pvcname2", newPVCName, "snapshot schedule not updated with the new pvc name")
+
+	// Verify that `storkctl update volumesnapshotschedule` without args and pvc flag fails.
+	cmdArgs = []string{"update", "volumesnapshotschedule"}
+	expected = "error: argument needs to be provided for snapshot schedule name if pvc isn't provided"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	// Verify the `storkctl update volumesnapshotschedule` with invalid volumesnapshotschedule failure.
+	cmdArgs = []string{"update", "volumesnapshotschedule", "non-existing-schedule", "--new-pvc-name", "pvcname1"}
+	expected = "Error from server (NotFound): volumesnapshotschedules.stork.libopenstorage.org \"non-existing-schedule\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
 }

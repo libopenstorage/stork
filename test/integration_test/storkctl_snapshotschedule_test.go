@@ -133,7 +133,7 @@ func testSnapShotScheduleModifyPVCName(t *testing.T) {
 	// Get the captured output as a string and validate it with the expected output.
 	actualOutput := outputBuffer.String()
 	log.InfoD("Actual output is: %s\n", actualOutput)
-	expectedOutput := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully with new PVC name new-pvc\n", scheduleName)
+	expectedOutput := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully\n", scheduleName)
 	Dash.VerifyFatal(t, expectedOutput, actualOutput, "Error validating the output of the command")
 
 	// Validate the snapshotschedule CR modification through the command.

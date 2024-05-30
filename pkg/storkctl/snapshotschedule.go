@@ -181,8 +181,13 @@ func newUpdateSnapShotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 			}
 
 			if len(newPVCName) != 0 {
-				updateSnapshotSchedules(snapshotSchedule, cmdFactory.GetNamespace(), ioStreams, newPVCName)
+				if err := updateSnapshotSchedules(snapshotSchedule, cmdFactory.GetNamespace(), newPVCName); err != nil {
+					util.CheckErr(err)
+					return
+				}
 			}
+			msg := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully", snapshotSchedule)
+			printMsg(msg, ioStreams.Out)
 		},
 	}
 	updateSnapshotScheduleCommand.Flags().StringVarP(&pvc, "pvc", "p", "", "Name of the PVC whose volume snapshot schedules need to be updated")
@@ -192,21 +197,18 @@ func newUpdateSnapShotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 }
 
 // updateSnapshotSchedules updates the volumesnapshotschedule with the configurations specified by the user.
-func updateSnapshotSchedules(name string, namespace string, ioStreams genericclioptions.IOStreams, newPVCName string) {
+func updateSnapshotSchedules(name string, namespace string, newPVCName string) (err error) {
 	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(name, namespace)
 	if err != nil {
-		util.CheckErr(err)
-		return
+		return err
 	}
 
 	// Update the PVC name in the fetched snapshot schedule.
 	snapshotSchedule.Spec.Template.Spec.PersistentVolumeClaimName = newPVCName
 	if _, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule); err != nil {
-		util.CheckErr(err)
-		return
+		return err
 	}
-	msg := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully with new PVC name %s", name, newPVCName)
-	printMsg(msg, ioStreams.Out)
+	return nil
 }
 
 func newDeleteSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
