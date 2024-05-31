@@ -949,21 +949,22 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 			dash.VerifyFatal(err, nil, "Scaling backup MongoDB statefulset replica to original count")
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
-			log.Infof("Verify that at least one mongodb pod is in Ready state")
+			log.Infof("Verify that at least two mongodb pod is in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
 				statefulSet, err = apps.Instance().GetStatefulSet(MongodbStatefulset, pxBackupNS)
 				if err != nil {
 					return "", true, err
 				}
 				if statefulSet.Status.ReadyReplicas < 2 {
-					return "", true, fmt.Errorf("no mongodb pods are ready yet")
+					log.Infof("Number of mongodb pods in Ready state: %v", statefulSet.Status.ReadyReplicas)
+					return "", true, fmt.Errorf("minimum 2 mongodb pods are not ready yet")
 				}
 				return "", false, nil
 			}
 			_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, PodStatusTimeOut, PodStatusRetryTime)
 			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
-			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 1, true, "Verifying that at least one mongodb pod is in Ready state")
+			dash.VerifyFatal(statefulSet.Status.ReadyReplicas >= 2, true, "Verifying that at least two mongodb pods are in Ready state")
 		})
 		Step("Check if backup is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if backup is successful after MongoDB statefulset is scaled back to original replica")
@@ -1018,21 +1019,22 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 			dash.VerifyFatal(err, nil, "Scaling back MongoDB statefulset replica to original count")
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
-			log.Infof("Verify that at least one mongodb pod is in Ready state")
+			log.Infof("Verify that at least two mongodb pod is in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
 				statefulSet, err = apps.Instance().GetStatefulSet(MongodbStatefulset, pxBackupNS)
 				if err != nil {
 					return "", true, err
 				}
-				if statefulSet.Status.ReadyReplicas < 1 {
-					return "", true, fmt.Errorf("no mongodb pods are ready yet")
+				if statefulSet.Status.ReadyReplicas < 2 {
+					log.Infof("Number of mongodb pods in Ready state: %v", statefulSet.Status.ReadyReplicas)
+					return "", true, fmt.Errorf("minimum 2 mongodb pods are not ready yet")
 				}
 				return "", false, nil
 			}
 			_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, PodStatusTimeOut, PodStatusRetryTime)
 			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
-			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
+			dash.VerifyFatal(statefulSet.Status.ReadyReplicas >= 2, true, "Verifying that at least two mongodb pods are in Ready state")
 		})
 		Step("Check if restore is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if restore is successful after MongoDB statefulset is scaled back to original replica")
