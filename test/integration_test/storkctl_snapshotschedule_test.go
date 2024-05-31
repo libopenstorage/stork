@@ -40,11 +40,10 @@ Steps:
 4. Verify if the change got reflected in the actual volumesnapshotschedule.
 */
 func testSnapShotScheduleModifyPVCName(t *testing.T) {
-	// TODO: Add testrail id here for this test.
-	// var testrailID, testResult = 50797, testResultFail
-	// runID := testrailSetupForTest(testrailID, &testResult, t.Name())
-	// defer updateTestRail(&testResult, testrailID, runID)
-	// defer updateDashStats(t.Name(), &testResult)
+	var testrailID, testResult = 298854, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 
 	/////////////////////////////////////////////////
 	// Deploy test application and schedulepolicy //
@@ -149,6 +148,6 @@ func testSnapShotScheduleModifyPVCName(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{ctx})
 
 	// If we are here then the test has passed
-	// testResult = testResultPass
-	// log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }

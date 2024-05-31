@@ -517,7 +517,6 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 }
 
 func intervalSnapshotScheduleTest(t *testing.T) {
-	// TODO: Check if the testrail ID is being rightly used here.
 	var testrailID, testResult = 50797, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
 	defer updateTestRail(&testResult, testrailID, runID)
