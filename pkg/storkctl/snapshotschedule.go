@@ -8,6 +8,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -148,56 +149,57 @@ func newGetSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericclioptio
 
 // newUpdateSnapShotScheduleCommand implements the `storkctl update` command and it's utilities.
 func newUpdateSnapShotScheduleCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	var pvc, newPVCName string
+	var newPVCName string
 	updateSnapshotScheduleCommand := &cobra.Command{
 		Use:     snapshotScheduleSubcommand,
 		Aliases: snapshotScheduleAliases,
 		Short:   "Update snapshot schedules",
 		Run: func(c *cobra.Command, args []string) {
-			var snapshotSchedule string
+			var msg, snapshotSchedule string
+			var found = false
 
-			if len(pvc) == 0 {
-				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("argument needs to be provided for snapshot schedule name if pvc isn't provided"))
-					return
-				}
-				snapshotSchedule = args[0]
-			} else {
-				snapshotScheduleList, err := storkops.Instance().ListSnapshotSchedules(cmdFactory.GetNamespace())
-				if err != nil {
-					util.CheckErr(err)
-					return
-				}
-				for _, schedule := range snapshotScheduleList.Items {
-					if schedule.Spec.Template.Spec.PersistentVolumeClaimName == pvc {
-						snapshotSchedule = schedule.Name
-					}
-				}
+			if len(args) == 0 {
+				util.CheckErr(fmt.Errorf("argument needs to be provided for snapshot schedule name"))
+				return
 			}
-
+			snapshotSchedule = args[0]
 			if len(snapshotSchedule) == 0 {
 				handleEmptyList(ioStreams.Out)
 				return
 			}
 
+			// Check if any of the flags have been provided.
+			c.Flags().VisitAll(func(flag *pflag.Flag) {
+				name := flag.Name
+				if c.Flags().Changed(name) {
+					found = true
+					return
+				}
+			})
+
 			if len(newPVCName) != 0 {
-				if err := updateSnapshotSchedules(snapshotSchedule, cmdFactory.GetNamespace(), newPVCName); err != nil {
+				if err := updateSnapshotSchedule(snapshotSchedule, cmdFactory.GetNamespace(), newPVCName); err != nil {
 					util.CheckErr(err)
 					return
 				}
 			}
-			msg := fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully", snapshotSchedule)
+
+			// Output the result.
+			if !found {
+				msg = "no valid flags provided"
+			} else {
+				msg = fmt.Sprintf("VolumeSnapshotSchedule %v updated successfully", snapshotSchedule)
+			}
 			printMsg(msg, ioStreams.Out)
 		},
 	}
-	updateSnapshotScheduleCommand.Flags().StringVarP(&pvc, "pvc", "p", "", "Name of the PVC whose volume snapshot schedules need to be updated")
-	updateSnapshotScheduleCommand.Flags().StringVarP(&newPVCName, "new-pvc-name", "", "", "Specify new PVC name of the volume snapshot schedule")
+	updateSnapshotScheduleCommand.Flags().StringVar(&newPVCName, "new-pvc-name", "", "Specify new PVC name of the volume snapshot schedule")
 
 	return updateSnapshotScheduleCommand
 }
 
-// updateSnapshotSchedules updates the volumesnapshotschedule with the configurations specified by the user.
-func updateSnapshotSchedules(name string, namespace string, newPVCName string) (err error) {
+// updateSnapshotSchedule updates the volumesnapshotschedule with the configurations specified by the user.
+func updateSnapshotSchedule(name string, namespace string, newPVCName string) (err error) {
 	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(name, namespace)
 	if err != nil {
 		return err

@@ -296,21 +296,9 @@ func TestUpdateSnapshotSchedulePVCName(t *testing.T) {
 	newPVCName := snapshotSchedule.Spec.Template.Spec.PersistentVolumeClaimName
 	require.Equal(t, "pvcname2", newPVCName, "snapshot schedule not updated with the new pvc name")
 
-	// Verify the `storkctl update volumesnapshotschedule --pvc <pvc-name> --newpvcname <new-pvc-name>` workflow.
-	name = "testupdatesnapshotschedule1"
-	createSnapshotScheduleAndVerify(t, name, "pvcname1", "testpolicy", namespace, "preExec", "postExec", false)
-	cmdArgs = []string{"update", "volumesnapshotschedule", "--pvc", "pvcname1", "--new-pvc-name", "pvcname2"}
-	expected = "VolumeSnapshotSchedule " + name + " updated successfully\n"
-	testCommon(t, cmdArgs, nil, expected, false)
-
-	snapshotSchedule, err = storkops.Instance().GetSnapshotSchedule(name, namespace)
-	require.NoError(t, err, "Error getting snapshotschedule")
-	newPVCName = snapshotSchedule.Spec.Template.Spec.PersistentVolumeClaimName
-	require.Equal(t, "pvcname2", newPVCName, "snapshot schedule not updated with the new pvc name")
-
 	// Verify that `storkctl update volumesnapshotschedule` without args and pvc flag fails.
 	cmdArgs = []string{"update", "volumesnapshotschedule"}
-	expected = "error: argument needs to be provided for snapshot schedule name if pvc isn't provided"
+	expected = "error: argument needs to be provided for snapshot schedule name"
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	// Verify the `storkctl update volumesnapshotschedule` with invalid volumesnapshotschedule failure.
