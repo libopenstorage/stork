@@ -2,15 +2,20 @@ sudo: required
 dist: focal
 services:
   - docker
-language: go
+  - mongodb
+language:
+  - go
+  - minimal
 go:
   - 1.21.x
 cache:
   directories:
     - $GOPATH/pkg/mod
 before_install:
+  - wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add -
+  - echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
   - sudo apt-get update -yq
-  - sudo apt-get install apt-transport-https ca-certificates -y
+  - sudo apt-get install apt-transport-https ca-certificates mongodb-org -y 
   - sudo update-ca-certificates
 script:
   - make all
