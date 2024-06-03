@@ -1385,6 +1385,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	Step("For validation of an app's volumes", func() {
 		var err error
+		var snapshotVolNames []string
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
@@ -1410,7 +1411,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				processError(err, errChan...)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshot(vol, params)
+				snapshotVolName, err := Inst().V.ValidateCreateSnapshot(vol, params)
 				if params["backend"] == k8s.PureBlock {
 					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
@@ -1419,6 +1420,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
+				snapshotVolNames = append(snapshotVolNames, snapshotVolName)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnap(vol, params)
@@ -1432,6 +1434,11 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 		Step("validate Pure local volume paths", func() {
 			err = Inst().V.ValidatePureLocalVolumePaths()
 			processError(err, errChan...)
+		})
+		Step("Delete the snapshot that is created ", func() {
+			for _, vol := range snapshotVolNames {
+				err = Inst().V.DeleteVolume(vol)
+			}
 		})
 	})
 }
@@ -1463,6 +1470,7 @@ func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
 func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+	var SnapshotVolumes []string
 	Step("For validation of an app's volumes", func() {
 		var (
 			err  error
@@ -1475,7 +1483,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 
 		for vol, params := range vols {
 			Step(fmt.Sprintf("get %s app's volume: %s then create snapshot using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
+				snapshotVolName, err := Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
 				if params["backend"] == k8s.PureBlock {
 					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
@@ -1484,6 +1492,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
+				SnapshotVolumes = append(SnapshotVolumes, snapshotVolName)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
@@ -1498,6 +1507,11 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
 			if err != nil {
 				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+			}
+		})
+		Step("Delete the cloudsnaps created ", func() {
+			for _, vol := range SnapshotVolumes {
+				err = Inst().V.DeleteVolume(vol)
 			}
 		})
 	})
@@ -2522,15 +2536,15 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 	}
 
 	/* Removing Data error validation till PB-6271 is resolved.
-	if allErrors != "" {
-		if IsReplacePolicySetToDelete {
-			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
-			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
-			return nil
-		} else {
-			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
-		}
-	}
+	   if allErrors != "" {
+	   	if IsReplacePolicySetToDelete {
+	   		log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+	   		IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+	   		return nil
+	   	} else {
+	   		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+	   	}
+	   }
 	*/
 
 	return nil

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -4351,5 +4352,97 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		appsValidateAndDestroy(contexts)
+	})
+})
+
+var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PWX-37370
+		1.Deploy a FADA app
+		2.Create CSI snapshots for the volumes
+		3.Create csi snap restore from the snapshots and verify the pvc are created
+		4.Delete the snapshots created in the namespace
+		5.Check if snapshot still exists in the namespace
+		6. Delete the FADA app
+
+	*/
+
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateCsiSnapshotsforFADAandDelete",
+			"Create CSI snapshots for FADA volumes and delete them", nil, 0)
+	})
+	itLog := "CreateCsiSnapshotsforFADAandDelete"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
+		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+		Inst().AppList = []string{"fio-fa-davol"}
+		stepLog := "Deploy application"
+		Step(stepLog, func() {
+			appNamespace := "fada-csi-snapshot-create"
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          appNamespace,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
+			contexts = append(contexts, context...)
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog = "Create csi snapshot class and csi snapshots for the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName := PureSnapShotClass
+			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			log.FailOnError(err, "Failed to create volume snapshot class")
+			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+		})
+		stepLog = "Creating snapshots for all apps in the context and validate them"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, PureSnapShotClass)
+				log.FailOnError(err, "Failed to create the snapshots")
+				err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap)
+				log.FailOnError(err, "Failed to validate the snapshots")
+			}
+		})
+		stepLog = "Delete the snapshots created for all apps in the context"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
+				log.FailOnError(err, "Failed to delete the snapshots")
+			}
+			log.InfoD("Deleted the snapshots successfully")
+		})
+		stepLog = "Validate all snapshots are deleted "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Wait until all snapshots are deleted")
+			time.Sleep(1 * time.Minute)
+			for _, ctx := range contexts {
+				for _, snapshot := range volumeSnapshotMap {
+					isSnapshotExists, err := Inst().S.IsCsiSnapshotExists(ctx, snapshot.Name, snapshot.Namespace)
+					log.FailOnError(err, "Failed to check if snapshot exists")
+					if !isSnapshotExists {
+						log.InfoD("Successfully deleted snapshot %v", snapshot.Name)
+					} else {
+						log.FailOnError(fmt.Errorf("Snapshot %v is not deleted", snapshot.Name), "is snapshot deleted?")
+					}
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

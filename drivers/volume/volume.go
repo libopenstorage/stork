@@ -129,10 +129,10 @@ type Driver interface {
 
 	// ValidateCreateSnapshot validates whether a snapshot has been created properly.
 	// params are the custom volume options passed
-	ValidateCreateSnapshot(name string, params map[string]string) error
+	ValidateCreateSnapshot(name string, params map[string]string) (string, error)
 
 	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
-	ValidateCreateSnapshotUsingPxctl(name string) error
+	ValidateCreateSnapshotUsingPxctl(name string) (string, error)
 
 	// GetCloudsnaps returns cloudsnap backups
 	// params are the custom backup options passed

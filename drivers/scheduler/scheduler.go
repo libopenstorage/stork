@@ -82,7 +82,7 @@ type AppConfig struct {
 	IoProfile                   string   `yaml:"io_profile"`
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
-  VmID                        string   `yaml:"vm_id"`
+	VmID                        string   `yaml:"vm_id"`
 }
 
 // InitOptions initialization options
@@ -225,7 +225,13 @@ type Driver interface {
 	DeleteSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) error
 
 	// GetSnapshotsInNameSpace get the snapshots list for the namespace
-	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error)
+	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error)
+
+	//DeleteCsiSnapshotsFromNamespace deletes the all snapshots from a namespace
+	DeleteCsiSnapshotsFromNamespace(ctx *Context, namespace string) error
+
+	//IsCsiSnapshotExists checks if a snapshot exists in the particular namespace
+	IsCsiSnapshotExists(ctx *Context, snapshotName string, namespace string) (bool, error)
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)

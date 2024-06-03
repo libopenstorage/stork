@@ -1510,10 +1510,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 			/* Ignore shared setting.
-			case api.SpecShared:
-				if requestedSpec.Shared != vol.Spec.Shared {
-					return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-				}
+			   case api.SpecShared:
+			   	if requestedSpec.Shared != vol.Spec.Shared {
+			   		return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
+			   	}
 			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
@@ -1611,7 +1611,7 @@ func (d *portworx) ValidateVolumeTopology(vol *api.Volume, params map[string]str
 	}
 }
 
-func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) error {
+func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) (string, error) {
 	// TODO: this should be refactored so we apply snapshot specs from the app specs instead
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1621,23 +1621,25 @@ func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]s
 	}
 
 	volDriver := d.getVolDriver()
-	if _, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"}); err != nil {
-		return fmt.Errorf("failed to create local snapshot, Err: %v", err)
+	volName := volumeName + "_snapshot"
+	if _, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volName}); err != nil {
+		return "", fmt.Errorf("failed to create local snapshot, Err: %v", err)
 	}
-	return nil
+	return volName, nil
 }
 
-func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
+func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) (string, error) {
 	// TODO: this should be refactored so we apply snapshot specs from the app specs instead
 	nodes := node.GetStorageDriverNodes()
-	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlLocalSnapshotCreate, volumeName, constructSnapshotName(volumeName)), node.ConnectionOpts{
+	volName := constructSnapshotName(volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlLocalSnapshotCreate, volumeName, volName), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create local snapshot using PXCTL, Err: %v", err)
+		return "", fmt.Errorf("failed to create local snapshot using PXCTL, Err: %v", err)
 	}
-	return nil
+	return volName, nil
 }
 
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
@@ -1987,23 +1989,23 @@ func GetSerialFromWWID(wwid string) (string, error) {
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 	/* Parses output like this
-	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
-	sdd                               137438953472
-	sdb                                34359738368
-	3624a9370ea876434795b4b54000a4128   6442450944
-	|-sdf                               6442450944
-	|-sdi                               6442450944
-	|-sdg                               6442450944
-	`-sdh                               6442450944
-	sde2                              134217728000
-	`-sde                             137438953472
-	sde1                                3219128320
-	`-sde                             137438953472
-	sdc                               137438953472
-	sda2                              133438636032
-	`-sda                             137438953472
-	sda1                                3999268864
-	`-sda                             137438953472
+	   [root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
+	   sdd                               137438953472
+	   sdb                                34359738368
+	   3624a9370ea876434795b4b54000a4128   6442450944
+	   |-sdf                               6442450944
+	   |-sdi                               6442450944
+	   |-sdg                               6442450944
+	   `-sdh                               6442450944
+	   sde2                              134217728000
+	   `-sde                             137438953472
+	   sde1                                3219128320
+	   `-sde                             137438953472
+	   sdc                               137438953472
+	   sda2                              133438636032
+	   `-sda                             137438953472
+	   sda1                                3999268864
+	   `-sda                             137438953472
 	*/
 
 	foundDevices := map[string]pureLocalPathEntry{}
@@ -6107,9 +6109,9 @@ func (d *portworx) DeleteSnapshotsForVolumes(volumeNames []string, clusterProvid
 // GetPoolLabelValue returns values of labels
 func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, error) {
 	/* e.x
-	1) d.GetPoolLabelValue(poolUUID, "iopriority")
-	2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
-	3) d.GetPoolLabelValue(poolUUID, "medium")
+	   1) d.GetPoolLabelValue(poolUUID, "iopriority")
+	   2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
+	   3) d.GetPoolLabelValue(poolUUID, "medium")
 	*/
 	var PropertyMatch string
 	PropertyMatch = ""

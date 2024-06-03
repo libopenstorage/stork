@@ -134,11 +134,29 @@ func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotName
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error) {
 
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteSnapShot()",
+	}
+}
+
+// DeleteCsiSnapshotsFromNamespace deletes the all snapshots from a namespace
+func (d *dcos) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, snapshotNameSpace string) error {
+
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteCsiSnapshotsFromNamespace()",
+	}
+}
+
+// IsCsiSnapshotExists checks if a snapshot exists in the particular namespace
+func (d *dcos) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsCsiSnapshotExists()",
 	}
 }
 

@@ -336,8 +336,8 @@ func (d *DefaultDriver) ValidateCreateVolume(name string, params map[string]stri
 
 // ValidateCreateSnapshot validates whether a volume has been created properly.
 // params are the custom volume options passed when creating the volume.
-func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]string) error {
-	return &errors.ErrNotSupported{
+func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]string) (string, error) {
+	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateSnapshot()",
 	}
@@ -345,8 +345,8 @@ func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]st
 
 // ValidateCreateSnapshotUsingPxctl validates whether a volume snapshot has been created properly.
 // params are the custom volume options passed when creating the volume.
-func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) error {
-	return &errors.ErrNotSupported{
+func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) (string, error) {
+	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateSnapshotUsingPxctl()",
 	}

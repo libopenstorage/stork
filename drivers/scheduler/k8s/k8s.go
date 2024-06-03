@@ -4744,17 +4744,55 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error) {
 
 	time.Sleep(10 * time.Second)
-	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
-
+	snapshotList, err := k8sExternalsnap.ListSnapshots(snapshotNameSpace)
 	if err != nil {
 		log.Infof("Snapshotsnot for app [%v] not found in namespace: %v", ctx.App.Key, snapshotNameSpace)
 		return nil, err
 	}
 
 	return snapshotList, nil
+}
+
+// IsCsiSnapshotExists checks if snapshot exists in namespace
+func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots for the app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return false, err
+	}
+	if len(snaplist.Items) == 0 {
+		log.InfoD("No Snapshots found ")
+		return false, nil
+	}
+	for _, snap := range snaplist.Items {
+		if snap.ObjectMeta.Name == snapshotName {
+			log.InfoD("Snapshot [%v] exists in namespace [%v]", snapshotName, namespace)
+			return true, nil
+		}
+	}
+	return false, nil
+
+}
+
+// DeleteCsiSnapshotsFromNamespace delete the snapshots from the namespace
+func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots for app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return err
+	}
+	for _, snap := range snaplist.Items {
+		err = k.DeleteCsiSnapshot(ctx, snap.ObjectMeta.Name, namespace)
+		if err != nil {
+			log.InfoD("Failed to delete snapshot [%v] in namespace [%v]", snap.ObjectMeta.Name, namespace)
+			return err
+		}
+	}
+	return nil
+
 }
 
 // GetNodesForApp get the node for the app
