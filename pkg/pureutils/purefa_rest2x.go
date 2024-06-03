@@ -9,9 +9,9 @@ const (
 )
 
 // PureCreateClientAndConnect Create FA Client and Connect
-func PureCreateClientAndConnectRest226(faMgmtEndpoint string, apiToken string) (*flasharray.Client, error) {
+func PureCreateClientAndConnectRest2_x(faMgmtEndpoint string, apiToken string) (*flasharray.Client, error) {
 	faClient, err := flasharray.NewClient(faMgmtEndpoint, apiToken, "", "",
-		RestAPI, false, false, "", nil)
+		RestAPI, false, false, "torpedo", nil)
 	if err != nil {
 		return nil, err
 	}

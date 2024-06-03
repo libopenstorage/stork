@@ -12936,3 +12936,176 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	}
 	return multipathMap, nil
 }
+func CreatePortworxStorageClass(scName string, ReclaimPolicy v1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.PortworxVolumeProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &ReclaimPolicy,
+		VolumeBindingMode: &VolumeBinding,
+	}
+	k8sStorage := schedstorage.Instance()
+	sc, err := k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", scName, err)
+	}
+	return sc, err
+}
+
+// Checks if list of volumes are present in group of flash arrays declared in pure.json and vice versa
+func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFadaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = NoVolumeExists
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+		if err != nil {
+			log.InfoD("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+			return err
+		}
+		for _, volumeName := range listofFadaPvc {
+			if !NoVolumeExists {
+				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
+				if pvcFadaMap[volumeName] {
+					continue
+				}
+			}
+			volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+			if volName != "" {
+				// As we found the volume we mark corresponding volume as true
+				log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = true
+
+			} else if err != nil && volName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FA [%v]", volumeName, fa.MgmtEndPoint))
+
+			} else {
+				log.Infof("Volume [%v] does not exist on FA [%v]", volumeName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = false
+			}
+		}
+	}
+	// Loop through the map to check the volume status
+	for FadaVol, volStatus := range pvcFadaMap {
+		if NoVolumeExists {
+			// when NoVolumeExists is true, we dont want any volume to be present in FA
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FA", FadaVol)
+			}
+		} else {
+			// when Novolume is false, we want all volumes to be present in FA
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FadaVol)
+			}
+		}
+	}
+	return nil
+}
+
+// Checks if list of volumes are present in group of flash blades declared in pure.json and vice versa
+func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFbdaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFbdaMap := make(map[string]bool)
+	for _, volumeName := range listofFbdaPvc {
+		pvcFbdaMap[volumeName] = NoVolumeExists
+	}
+	for _, fb := range flashBlades {
+		fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+		if err != nil {
+			return err
+		}
+		for _, volumeName := range listofFbdaPvc {
+			if !NoVolumeExists {
+				if pvcFbdaMap[volumeName] {
+					continue
+				}
+			}
+			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
+			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
+
+			if isExists && err == nil {
+				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = true
+			} else if !isExists && err == nil {
+				log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = false
+			}
+			log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+		}
+	}
+	for FbdaVol, volStatus := range pvcFbdaMap {
+		if NoVolumeExists {
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FB", FbdaVol)
+			}
+		} else {
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FbdaVol)
+			}
+		}
+	}
+	return nil
+}
+func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth uint64, reqIops uint64) error {
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = false
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+		log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+		volumes, err := pureutils.ListAllVolumesFromFA(faClient)
+		log.FailOnError(err, "Failed to list all volumes from FA")
+		for _, volname := range listofFadaPvc {
+			if pvcFadaMap[volname] {
+				continue
+			}
+			for _, volume := range volumes {
+				for _, volItem := range volume.Items {
+					if strings.Contains(volItem.Name, volname) {
+						bandwidth := volItem.QoS.BandwidthLimit
+						bandwidth = bandwidth / units.GiB
+						log.InfoD("bandwidth for volume [%v] is [%v]", volname, bandwidth)
+						iops := volItem.QoS.IopsLimit
+						log.FailOnError(err, "Failed to convert iops to int")
+						log.InfoD("iops for volume [%v] is [%v]", volname, iops)
+						//compare bandwidth and iops with max_iops and max_bandwidth
+						if bandwidth < reqBandwidth || iops < reqIops {
+							pvcFadaMap[volname] = false
+						} else {
+							pvcFadaMap[volname] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	for FadaVol, volStatus := range pvcFadaMap {
+		if !volStatus {
+			return fmt.Errorf("PVC %s does not have required iops and bandwidth", FadaVol)
+		}
+	}
+	return nil
+}

@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flashblade"
 	"regexp"
+	"strings"
 )
 
 // PureCreateClientAndConnect Create FB Client and Connect
 func PureCreateFbClientAndConnect(fbMgmtEndpoint string, apiToken string) (*flashblade.Client, error) {
-	fbClient, err := flashblade.NewClient(fbMgmtEndpoint, "", "", apiToken,
-		"", false, false, "", nil)
+	fbClient, err := flashblade.NewClient(fbMgmtEndpoint, apiToken, "", "",
+		"2.2", false, false, "torpedo", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -40,9 +41,9 @@ func GetFBClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flashblade
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
 func GetApiTokenForFbMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
-	for _, faDetails := range secret.Arrays {
-		if faDetails.MgmtEndPoint == mgmtEndPoint {
-			return faDetails.APIToken
+	for _, fbDetails := range secret.Blades {
+		if fbDetails.MgmtEndPoint == mgmtEndPoint {
+			return fbDetails.APIToken
 		}
 	}
 	return ""
@@ -97,6 +98,22 @@ func CreateNewFileSystem(fbClient *flashblade.Client, fsName string, data interf
 		return nil, err
 	}
 	return fileSys, nil
+}
+
+// GetFilesystemFullName Returns Full Name of the Filesystem
+func GetFilesystemFullName(fbClient *flashblade.Client, fsName string) (string, error) {
+	allFs, err := ListAllFileSystems(fbClient)
+	if err != nil {
+		return "", err
+	}
+	for _, eachPvc := range allFs {
+		for _, eachItem := range eachPvc.Items {
+			if strings.Contains(eachItem.Name, fsName) {
+				return eachItem.Name, nil
+			}
+		}
+	}
+	return "", nil
 }
 
 // DeleteFileSystem Deletes Filesystem from cluster

@@ -124,6 +124,8 @@ const (
 	PortworxStrict = "strict"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
+	// PortworxVolumeProvisioner is a provisioner for portworx volumes
+	PortworxVolumeProvisioner = "kubernetes.io/portworx-volume"
 	//NodeType for enabling specific features
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
