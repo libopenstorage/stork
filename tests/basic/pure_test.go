@@ -3925,6 +3925,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 
 		var wgfada sync.WaitGroup
 		wgfada.Add(1)
+		pvcNames := make(map[string][]string)
 		createFADAVolumes := func(wg *sync.WaitGroup) {
 			defer GinkgoRecover()
 			wg.Done()
@@ -3934,10 +3935,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 					pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, nsuuid.String())
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
 						"Failed to create PVC on the cluster")
-
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
-						"Errored occured while checking if PVC Bounded")
-
+					pvcNames[eachNs] = append(pvcNames[eachNs], pvcName)
 				}
 			}
 		}
@@ -3969,6 +3967,13 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 
 		wg.Wait()
 		wgfada.Wait()
+
+		for ns, eachPvc := range pvcNames {
+			for _, pvc := range eachPvc {
+				log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvc, ns, 15),
+					"Errored occured while checking if PVC Bounded")
+			}
+		}
 
 		// Get List of all PVCs created on the Namespace
 		pvcs, err := GetAllPVCFromNs(namespace[0], nil)
@@ -4046,6 +4051,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 
 		var wgfada sync.WaitGroup
 		wgfada.Add(1)
+		pvcNames := make(map[string][]string)
 		createFADAVolumes := func(wg *sync.WaitGroup) {
 			defer GinkgoRecover()
 			wg.Done()
@@ -4056,8 +4062,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
 						"Failed to create PVC on the cluster")
 
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
-						"Errored occured while checking if PVC Bounded")
+					pvcNames[eachNs] = append(pvcNames[eachNs], pvcName)
 				}
 			}
 		}
@@ -4084,6 +4089,14 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 		if !IsPoolAddDiskSupported() {
 			expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
 		}
+
+		for ns, eachPvc := range pvcNames {
+			for _, pvc := range eachPvc {
+				log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvc, ns, 15),
+					"Errored occured while checking if PVC Bounded")
+			}
+		}
+
 		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
@@ -4193,7 +4206,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
 						"Failed to create PVC on the cluster")
 
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 15),
 						"Errored occured while checking if PVC Bounded")
 				}
 			}
@@ -4209,7 +4222,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 					pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, nsuuid.String())
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
 						"Failed to create PVC on the cluster")
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 15),
 						"Errored occured while checking if PVC Bounded")
 				}
 			}

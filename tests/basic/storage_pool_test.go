@@ -8897,8 +8897,13 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID [%s]", poolUUID))
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
+		expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+		if !IsPoolAddDiskSupported() {
+			expandType = api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
+		}
+
 		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
-		err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+		err = Inst().V.ExpandPool(poolUUID, expandType, expectedSize, true)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 		isjournal, err := IsJournalEnabled()
@@ -9691,6 +9696,9 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	poolList := make(map[string]int)
 	poolListAfterCreate := make(map[string]int)
 
+	isDmthin, err := IsDMthin()
+	log.FailOnError(err, "failed to check if Node is DMThin ")
+
 	for _, eachNode := range nodes {
 		pools, _ := GetPoolsDetailsOnNode(&eachNode)
 		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
@@ -9706,13 +9714,18 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 			defer GinkgoRecover()
 			log.InfoD("Adding cloud drive on Node [%v]", eachNode.Name)
 
+			// Add Metadata Node if the provided node is not Storage Node
+			if isDmthin && !node.IsStorageNode(eachNode) {
+				log.FailOnError(AddMetadataDisk(eachNode), "Failed to add metadata disk to the node ")
+			}
+
 			err := AddCloudDrive(eachNode, -1)
 			log.FailOnError(err, "adding cloud drive failed on Node [%v]", eachNode)
 		}(eachNode)
 	}
 	wg.Wait()
 
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	log.FailOnError(err, "error refreshing driver end points")
 
 	for _, eachNode := range nodes {
