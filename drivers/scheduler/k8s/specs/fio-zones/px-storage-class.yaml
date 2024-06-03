@@ -1,0 +1,42 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-topology-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  max_iops: "1000"
+  max_bandwidth: "1G"
+  fs: "ext4"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: topology.portworx.io/zone
+        values:
+          - zone-0
+      - key: topology.portworx.io/region
+        values:
+          - region-0
+---
+##### FA direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-log-topology-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  max_iops: "1000"
+  max_bandwidth: "1G"
+  fs: "ext4"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: topology.portworx.io/zone
+        values:
+          - zone-0
+      - key: topology.portworx.io/region
+        values:
+          - region-0

@@ -4688,3 +4688,157 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", func() {
+	/*
+	           	https://purestorage.atlassian.net/browse/PTX-23996
+	           	1.Label Nodes with topology labels
+	           	2.Create a storage class with allowedTopologies
+	   		3. Deploy Apps and make sure that apps pvc are deploying on the nodes with the topology labels
+	   		4. Reboot the Node while FADA Volume Creation in Progress
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootingNodesWhileFADAvolumeCreationInProgressUsingZones",
+			"Rebooting Nodes while FADA Volume Creation in Progress using Zones",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var wg sync.WaitGroup
+		stNodes := node.GetStorageNodes()
+		selectedNodesForTopology := stNodes[:len(stNodes)/2]
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+			for _, stNode := range selectedNodesForTopology {
+				err := Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
+				err = Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
+			}
+		}()
+		Inst().AppList = []string{"fio-zones"}
+		toplogyZonelabel := "zone-0"
+		toplogyRegionLabel := "region-0"
+		stepLog := "Label few Nodes with topology and region"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, stNode := range selectedNodesForTopology {
+				err = Inst().S.AddLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel, toplogyZonelabel)
+				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", stNode.Name))
+				err = Inst().S.AddLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel, toplogyRegionLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", stNode.Name))
+			}
+		})
+		stepLog = "Schedule application on the labelled nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				taskName := "rebootnodewhilefadacreationusingzones"
+				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+					Namespace:          taskName,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.InfoD("Rebooting the labelled nodes one by one while FADA volume creation is in progress in labelled nodes")
+				for _, selectedNode := range selectedNodesForTopology {
+					log.InfoD("Stopping node %s", selectedNode.Name)
+					err := Inst().N.RebootNode(selectedNode,
+						node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+					log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
+				}
+			}()
+			wg.Wait()
+			for _, selectedNode := range selectedNodesForTopology {
+				log.InfoD("wait for node: %s to be back up", selectedNode.Name)
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(selectedNode)
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
+				}
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
+			}
+		})
+		nodeExists := func(nodes []node.Node, node string) bool {
+			for _, n := range nodes {
+				if n.Name == node {
+					return true
+				}
+			}
+			return false
+		}
+
+		stepLog = "Validate the applications are up and running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Validate the application deployed are in the labelled nodes only"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var k8sCore = core.Instance()
+				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
+				for _, pod := range pods.Items {
+					node := pod.Spec.NodeName
+					log.FailOnError(err, "unable to find the node from the pod")
+					if !nodeExists(selectedNodesForTopology, node) {
+						log.FailOnError(fmt.Errorf("Pod [%v] is running on node [%v] which is not labelled", pod.Name, node), "is Pod running on labelled node?")
+					}
+					log.InfoD("Pod [%v] is running on node [%v] which is labelled", pod.Name, node)
+				}
+			}
+		})
+		stepLog = "check volumes are also in same labelled nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get list of all volumes")
+				for _, volume := range volumes {
+					log.InfoD("checking volume [%v] is running on labelled node or not", volume.ID)
+					node, err := Inst().V.GetNodeForVolume(volume, cmdTimeout, cmdRetry)
+					log.InfoD("Node of the volume [%v] is [%v]", volume.Name, node.Name)
+					log.FailOnError(err, "Failed to get node of the volume")
+					if !nodeExists(selectedNodesForTopology, node.Name) {
+						log.FailOnError(fmt.Errorf("Volume [%v] is running on node [%v] which is not labelled", volume.Name, node), "is volume running on labelled node?")
+					}
+					log.InfoD("Volume [%v] is running on node [%v] which is labelled", volume.Name, node)
+				}
+			}
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+		AfterEachTest(contexts)
+	})
+})
