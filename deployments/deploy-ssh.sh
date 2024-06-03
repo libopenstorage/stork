@@ -794,6 +794,8 @@ spec:
       value: "${IKS_CLUSTER_REGION}"
     - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
       value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: "${GOOGLE_APPLICATION_CREDENTIALS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

@@ -30,6 +30,8 @@ type Ops interface {
 	OnpremOps
 	// ClusterOps is an interface to perform anthos cluster operations
 	ClusterOps
+	// MachineOps is an interface to perform anthos machines operations
+	MachineOps
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
 }

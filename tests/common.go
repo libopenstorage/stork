@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/devans10/pugo/flasharray"
@@ -106,6 +107,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -2843,7 +2845,7 @@ func ValidateClusterSize(count int64) {
 	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	if Inst().S.String() == openshift.SchedName {
+	if Inst().S.String() == openshift.SchedName || Inst().S.String() == anthos.SchedName {
 		isPxOnMaster, err := IsPxRunningOnMaster()
 		log.FailOnError(err, "Failed to check if px is running on master")
 		if !isPxOnMaster {

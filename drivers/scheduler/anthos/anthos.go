@@ -20,6 +20,7 @@ import (
 	anthosops "github.com/portworx/sched-ops/k8s/anthos"
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -123,6 +124,7 @@ const (
 	logCollectFrequencyDuration  = 15 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
+	defaultRetryInterval         = 1 * time.Minute
 	skipReconcilePreflightFlag   = "--skip-reconcile-before-preflight"
 	project                      = "portworx-eng"
 	location                     = "us-west1"
@@ -179,7 +181,6 @@ type AnthosInstance struct {
 type anthos struct {
 	version string
 	kube.K8s
-	Ops                 anthosops.Ops
 	adminWsSSHInstance  *ssh.SSH
 	instances           []AnthosInstance
 	adminWsNode         *node.Node
@@ -188,6 +189,7 @@ type anthos struct {
 	confPath            string
 	adminClusterUpgrade bool
 	clusterName         string
+	Ops                 anthosops.Ops
 }
 
 // Init Initialize the driver
@@ -976,6 +978,46 @@ func getStoragePDBMinAvailableSet() (int, error) {
 		return -1, fmt.Errorf("failed to parse pdb value. Err: %v", err)
 	}
 	return pdbVal, nil
+}
+
+// DeleteNode delete nodes from a cluster and return error if fails
+func (anth *anthos) DeleteNode(node node.Node) error {
+	if err := anth.getUserClusterName(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		if err := anth.Ops.DeleteMachine(context.TODO(), node.Name); err != nil {
+			log.Errorf("failed to delete node: [%s] from cluster. Err: %v", node.Name, err)
+			return nil, true, fmt.Errorf("failed to delete node: [%s] from cluster. Err: %v", node.Name, err)
+		}
+		return 0, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, errorTimeDuration, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	log.Infof("Deleted node [%s] from anthos cluster: [%s] ", node.Hostname, anth.clusterName)
+	return nil
+}
+
+// GetASGClusterSize return anthos machines counts
+func (anth *anthos) GetASGClusterSize() (int64, error) {
+	machineList, err := anth.Ops.ListMachines(context.TODO())
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(machineList.Items)), nil
+}
+
+// GetZones return zones list
+func (anth *anthos) GetZones() ([]string, error) {
+	//Anthos has no zone so returning dummy value zone-0
+	return []string{"zone-0"}, nil
+}
+
+// String returns the string name of this driver.
+func (anthos *anthos) String() string {
+	return SchedName
 }
 
 // getNodePoolMap return node pool map

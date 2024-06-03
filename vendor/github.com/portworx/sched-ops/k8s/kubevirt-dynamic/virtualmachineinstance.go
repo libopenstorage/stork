@@ -3,7 +3,6 @@ package kubevirtdynamic
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,6 +43,10 @@ type VirtualMachineInstance struct {
 	RootDiskPVC string
 	// LiveMigratable indicates if VMI can be live migrated.
 	LiveMigratable bool
+	// Ready indicates if VMI is ready.
+	Ready bool
+	// Paused indicates if VMI is paused.
+	Paused bool
 	// NodeName where VMI is currently running
 	NodeName string
 	// Phase VMI is in e.g. Running
@@ -158,7 +161,7 @@ func (c *Client) GetVirtualMachineInstance(
 		return nil, fmt.Errorf("empty pvc name for the root disk")
 	}
 
-	// check if the VMI is live migratable
+	// check if the VMI is live migratable and ready
 	// Sample yaml:
 	//  status:
 	//    conditions:
@@ -166,26 +169,31 @@ func (c *Client) GetVirtualMachineInstance(
 	//      lastTransitionTime: null
 	//      status: "True"
 	//      type: LiveMigratable
+	//    - lastProbeTime: null
+	//      lastTransitionTime: "2024-05-05T14:15:51Z"
+	//      status: "True"
+	//      type: Ready
+
 	//
 	liveMigratable := false
+	ready := false
+	paused := false
 	conditions, found, err := unstructured.NestedSlice(vmiRaw.Object, "status", "conditions")
 	if err != nil {
 		return nil, fmt.Errorf("failed to find conditions in vmi: %w", err)
 	}
 	if found {
-		condition, err := c.unstructuredFindKeyValString(conditions, "type", "LiveMigratable")
+		liveMigratable, _, err = c.getBoolCondition(conditions, "LiveMigratable")
 		if err != nil {
-			return nil, fmt.Errorf("failed while finding live migratable condition in vmi: %w", err)
+			return nil, err
 		}
-		if condition != nil {
-			val, found, err := c.unstructuredGetValString(condition, "status")
-			if err != nil || !found {
-				return nil, fmt.Errorf("failed to get status of LiveMigratable condition: %w", err)
-			}
-			liveMigratable, err = strconv.ParseBool(val)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse status for LiveMigratable condition: %w", err)
-			}
+		ready, _, err = c.getBoolCondition(conditions, "Ready")
+		if err != nil {
+			return nil, err
+		}
+		paused, _, err = c.getBoolCondition(conditions, "Paused")
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -265,6 +273,8 @@ func (c *Client) GetVirtualMachineInstance(
 		RootDisk:         rootDiskName,
 		RootDiskPVC:      pvcName,
 		LiveMigratable:   liveMigratable,
+		Ready:            ready,
+		Paused:           paused,
 		NodeName:         nodeName,
 		Phase:            currentPhase,
 		PhaseTransitions: phaseTransitions,
