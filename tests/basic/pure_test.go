@@ -4494,6 +4494,103 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		AfterEachTest(contexts)
 	})
 })
+var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-23985
+		1. Deploy an app which uses FADA volume( uses csi provisioner and a pure_block backend) and an app which uses base volume(uses portworx-volume as provisioner)
+		2. Parallely resize the pvc of FADA deployed app and also resize the base app pvc
+		3. Validate the volume resize
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateVolumeResizeInParallel", "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var wg sync.WaitGroup
+		var resizedVols []*volume.Volume
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		stepLog := "Deploy applications"
+		Step(stepLog, func() {
+			Inst().AppList = []string{"fio-cloudsnap"}
+			appNamespace := fmt.Sprintf("volumeresizeparallel-%s", Inst().InstanceID)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fio-volumeresizeparallel")...)
+			}
+		})
+		stepLog = "Deploy a app which uses FADA volume and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			context, err := Inst().S.Schedule("volumeresizeparallelfada", scheduler.ScheduleOptions{
+				AppKeys:            []string{"fio-fa-davol"},
+				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", "volumeresizeparallelfada")
+			contexts = append(contexts, context...)
+
+		})
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		resizeVolumes := func(ctx *scheduler.Context) {
+			var pvcs []*v1.PersistentVolumeClaim
+			appVolumes, err := Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "Failed to get volumes from context")
+			log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+				Inst().V.String(), ctx.App.Key, appVolumes))
+			for _, eachVol := range appVolumes {
+				pvc, err := GetPVCObjFromVol(eachVol)
+				log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+				pvcs = append(pvcs, pvc)
+			}
+			for _, pvc := range pvcs {
+				pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+				pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+				pvcSizeInt, err := strconv.Atoi(pvcSize)
+				log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+				resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt))
+				log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+				log.InfoD("Vol uid %v of the app %s", resizedVol.ID, ctx.App.Key)
+				resizedVols = append(resizedVols, resizedVol)
+			}
+		}
+		stepLog = "Do parallel resize of base apps volume and FADA volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(ctx *scheduler.Context) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					resizeVolumes(ctx)
+				}(ctx)
+			}
+			wg.Wait()
+		})
+		stepLog = "Validate volume resize on both base volume and FADA volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, vol := range resizedVols {
+				// Need to pass token before validating volume
+				params := make(map[string]string)
+				if Inst().ConfigMap != "" {
+					params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+					log.FailOnError(err, "didn't get auth token")
+				}
+				err := Inst().V.ValidateUpdateVolume(vol, params)
+				log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
 
 var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	/*
