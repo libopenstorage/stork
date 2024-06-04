@@ -4608,7 +4608,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	itLog := "Create Clone of the FADA Volume and verify the status and check creation of cloned volume in FA backend"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var volumeName string
+		var ClonevolumeName string
 		var cloneVolumeId string
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
@@ -4634,24 +4634,13 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
 				log.InfoD("Starting the Clone of the Volume")
 				for _, vol := range appsvols[:1] {
-					cloneVolumeId, err := Inst().V.CloneVolume(vol.ID)
+					cloneVolumeId, err = Inst().V.CloneVolume(vol.ID)
 					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
-					log.InfoD("Clone Volume ID [%v] for parent volume [%v]", cloneVolumeId, vol.ID)
-				}
-			}
-			log.InfoD("Get the corresponding volume name for the volId")
-			for _, context := range contexts {
-				appsvols, err := Inst().S.GetVolumes(context)
-				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
-				for _, vol := range appsvols {
-					if vol.ID == cloneVolumeId {
-						if vol.Name != "" {
-							volumeName = vol.Name
-							log.InfoD("Volume Name for the Clone Volume is [%v]", volumeName)
-						}
-						break
-
-					}
+					clonevol, err := Inst().V.InspectVolume(cloneVolumeId)
+					log.FailOnError(err, "Failed to inspect volume [%v]", cloneVolumeId)
+					log.InfoD("Get the corresponding volume name for the volId")
+					ClonevolumeName = clonevol.Locator.Name
+					log.InfoD("Clone Volume Name [%v] for parent volume [%v]", ClonevolumeName, vol.ID)
 				}
 			}
 		})
@@ -4663,16 +4652,11 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 				volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
 				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v]", volumeName))
-				log.Infof("Name of the Volume is [%v]", volName)
-
-				isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
-				log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
-
-				if isExists {
+				if volName != "" {
 					log.InfoD("Volume [%v] exists on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
-					return nil
+					cloneVolFound = true
+					break
 				}
-				log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
 
 			}
 			if !cloneVolFound {
@@ -4680,17 +4664,96 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			}
 			return nil
 		}
-		stepLog = "Check the corresponding volume clone is available in FA backend"
+		stepLog = "Check the corresponding volume clone is available in FA backend and delete the clone volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := checkVolumeExistsInFlashArrays(volumeName, flashArrays)
+			log.InfoD("Wait for 1 minute before checking the volume in FA backend")
+			time.Sleep(1 * time.Minute)
+			err := checkVolumeExistsInFlashArrays(ClonevolumeName, flashArrays)
 			log.FailOnError(err, "Failed to check if volume exists in FA backend")
+			log.InfoD("Deleting the Clone Volume")
+			err = Inst().V.DeleteVolume(cloneVolumeId)
+			log.FailOnError(err, "Failed to delete volume [%v]", ClonevolumeName)
+
 		})
 
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		appsValidateAndDestroy(contexts)
+	})
+})
+
+var _ = Describe("{DeployAppsAndStopPortworx}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-37401
+		1.Deploy Apps and parallely and stop portworx for 10 mins
+		2.After 10 mins make it up and check if the pods are running
+		3.Destroy the apps
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployAppsAndStopPortworx",
+			"Deploy Apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
+			nil, 0)
+	})
+	itLog := "DeployAppsAndStopPortworx"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+		var nodeToReboot []node.Node
+		stNodes := node.GetStorageNodes()
+		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
+		defer DestroyApps(contexts, nil)
+		stepLog := "Schedule apps on the cluster"
+		Step(stepLog, func() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
+				}
+
+			}()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
+				err := Inst().V.StopDriver(nodeToReboot, false, nil)
+				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
+			}()
+			wg.Wait()
+		})
+		stepLog = "Wait for 10 mins and then start portworx"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(10 * time.Minute)
+			err := Inst().V.StartDriver(nodeToReboot[0])
+			log.FailOnError(err, "Failed to start portworx on node [%v]", nodeToReboot[0].Name)
+			log.InfoD("wait for node: %s to be back up", nodeToReboot[0].Name)
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(nodeToReboot[0])
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodeToReboot[0].Name))
+			err = Inst().V.WaitDriverUpOnNode(nodeToReboot[0], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot[0].Name))
+			log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", nodeToReboot[0].Name))
+		})
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
 
