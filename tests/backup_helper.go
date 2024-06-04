@@ -8752,3 +8752,59 @@ func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
 
 	return nil
 }
+
+type MaintenanceJobType string
+
+const (
+	FullMaintenanceJob  MaintenanceJobType = "full-maintenance-repo"
+	QuickMaintenanceJob MaintenanceJobType = "quick-maintenance-repo"
+)
+
+// ModifyMaintenanceJobFrequency modifies the frequency of the cron job
+func ModifyMaintenanceJobFrequency(backupLocationName string, frequencyInMinutes int, maintenanceJobType MaintenanceJobType) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocationName, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+	cronJob.Spec.Schedule = fmt.Sprintf("*/%d * * * *", frequencyInMinutes)
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetCronJobByBackupLocation takes the backup location name and the job type and returns the cron job
+func GetCronJobByBackupLocation(backupLocationName string, maintenanceJobType MaintenanceJobType) (*batchv1.CronJob, error) {
+	k8sBatch := batch.Instance()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return nil, err
+	}
+	// Enumerate Backup Locations
+	backupDriver := Inst().Backup
+	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	response, err := backupDriver.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
+	if err != nil {
+		return nil, err
+	}
+	for _, backupLocation := range response.GetBackupLocations() {
+		if backupLocation.GetName() == backupLocationName {
+			cronJobName := fmt.Sprintf("%s-%s", maintenanceJobType, backupLocation.Uid[:7])
+			log.Infof("Cron Job Name: %s", cronJobName)
+			cronJob, err := k8sBatch.GetCronJob(cronJobName, pxBackupNamespace)
+			if err != nil {
+				return nil, err
+			}
+			return cronJob, nil
+		}
+	}
+	return nil, fmt.Errorf("backup location with name [%s] not found", backupLocationName)
+}

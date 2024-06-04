@@ -365,3 +365,30 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// Sample test to modify the cron job frequency
+var _ = Describe("{ModifyCronJobFrequency}", func() {
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartPxBackupTorpedoTest("ModifyCronJobFrequency", "Modifying cron job frequency", nil, 0, Mkoppal, Q2FY25)
+	})
+	It("Modify Cron Job Frequency", func() {
+		Step("Modify Cron Job Frequency", func() {
+			log.InfoD("Modify Cron Job Frequency")
+			// S3
+			err := ModifyMaintenanceJobFrequency("mkoppal-test", 2, QuickMaintenanceJob)
+			dash.VerifyFatal(err, nil, "Modifying cron job frequency")
+			err = ModifyMaintenanceJobFrequency("mkoppal-test", 7, FullMaintenanceJob)
+			dash.VerifyFatal(err, nil, "Modifying cron job frequency")
+			// NFS
+			err = ModifyMaintenanceJobFrequency("mkoppal-nfs", 3, QuickMaintenanceJob)
+			dash.VerifyFatal(err, nil, "Modifying cron job frequency")
+			err = ModifyMaintenanceJobFrequency("mkoppal-nfs", 8, FullMaintenanceJob)
+			dash.VerifyFatal(err, nil, "Modifying cron job frequency")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
