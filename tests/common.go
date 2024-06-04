@@ -11,13 +11,10 @@ import (
 	"flag"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/devans10/pugo/flasharray"
-
 	"github.com/aws/aws-sdk-go/aws/awserr"
-
+	"github.com/devans10/pugo/flasharray"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -322,6 +319,11 @@ const (
 	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 	faSecretCliFlag                  = "fa-secret"
+
+	// PSA Specific
+	kubeApiServerConfigFilePath     = "/etc/kubernetes/manifests/kube-apiserver.yaml"
+	kubeApiServerConfigFilePathBkp  = "/etc/kubernetes/kube-apiserver.yaml.bkp"
+	KubeAdmissionControllerFilePath = "/etc/kubernetes/admission/admissioncontroller.yaml"
 )
 
 // Dashboard params
@@ -390,17 +392,19 @@ const (
 )
 
 const (
-	waitResourceCleanup       = 2 * time.Minute
-	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 4 * time.Minute
-	defaultIbmVolScaleTimeout = 8 * time.Minute
-	defaultRetryInterval      = 10 * time.Second
-	defaultCmdTimeout         = 20 * time.Second
-	defaultCmdRetryInterval   = 5 * time.Second
-	defaultDriverStartTimeout = 10 * time.Minute
-	defaultKvdbRetryInterval  = 5 * time.Minute
-	addDriveUpTimeOut         = 15 * time.Minute
-	podDestroyTimeout         = 5 * time.Minute
+	waitResourceCleanup         = 2 * time.Minute
+	defaultTimeout              = 5 * time.Minute
+	defaultVolScaleTimeout      = 4 * time.Minute
+	defaultIbmVolScaleTimeout   = 8 * time.Minute
+	defaultRetryInterval        = 10 * time.Second
+	defaultCmdTimeout           = 20 * time.Second
+	defaultCmdRetryInterval     = 5 * time.Second
+	defaultDriverStartTimeout   = 10 * time.Minute
+	defaultKvdbRetryInterval    = 5 * time.Minute
+	addDriveUpTimeOut           = 15 * time.Minute
+	podDestroyTimeout           = 5 * time.Minute
+	kubeApiServerBringUpTimeout = 20 * time.Minute
+	KubeApiServerWait           = 2 * time.Minute
 )
 
 const (
@@ -3024,6 +3028,21 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 	}
 
 	return err
+
+}
+
+// runCmdOnceNonRoot runs a command once on given node as non-root user
+func runCmdOnceNonRoot(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            false,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+
+	return output, err
 
 }
 
@@ -12938,6 +12957,7 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	}
 	return multipathMap, nil
 }
+
 func CreatePortworxStorageClass(scName string, ReclaimPolicy v1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
@@ -13109,5 +13129,135 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 			return fmt.Errorf("PVC %s does not have required iops and bandwidth", FadaVol)
 		}
 	}
+	return nil
+}
+
+// RunCmdsOnAllMasterNodes Runs a set of commands on all the master nodes
+func RunCmdsOnAllMasterNodes(cmds []string) error {
+	for _, node := range node.GetMasterNodes() {
+		for _, cmd := range cmds {
+			log.InfoD(fmt.Sprintf("Running command %s on %s", cmd, node.Name))
+			_, err := runCmdOnceNonRoot(cmd, node)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ConfigureClusterLevelPSA Configure cluster level PSA settings where all newly created namespaces will be affected by
+// it and will exclude kube-system, default, px-backup and portworx namespace
+func ConfigureClusterLevelPSA(psaProfile string, skipNamespace []string) error {
+
+	// Get the namespace where portworx is present
+	pxNs, err := Inst().S.GetPortworxNamespace()
+	if err != nil {
+		return err
+	}
+
+	// Get the namespace where px-backup is present
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	// Create a list of all the namespaces which need to be excluded
+	namespaces := []string{"default", "kube-system", pxBackupNamespace}
+	if pxNs != "kube-system" {
+		namespaces = append(namespaces, pxNs)
+	}
+	namespaces = append(namespaces, skipNamespace...)
+	joined := "\"" + strings.Join(namespaces, "\",\"") + "\""
+
+	tempFilePath := kubeApiServerConfigFilePath + ".tmp"
+
+	cmds := []string{
+		fmt.Sprintf("mkdir -p /etc/kubernetes/admission"),
+		fmt.Sprintf("curl -o %s http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/admissioncontroller.yaml", KubeAdmissionControllerFilePath),
+		fmt.Sprintf("sed -i 's/{Profile}/%s/' %s", psaProfile, KubeAdmissionControllerFilePath),
+		fmt.Sprintf("sed -i 's/{NS}/%s/' %s", joined, KubeAdmissionControllerFilePath),
+		fmt.Sprintf("cat  %s > %s", kubeApiServerConfigFilePath, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/- kube-apiserver/a\ \ \  - --admission-control-config-file=/etc/kubernetes/admission/admissioncontroller.yaml' %s`, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/volumeMounts:/a\ \ \  - mountPath: /etc/kubernetes/admission/\n\ \ \ \ \ \ name: admission-conf\n\ \ \ \ \ \ readOnly: true' %s`, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/volumes:/a\  - hostPath:\n\ \ \ \ \ \ path: /etc/kubernetes/admission/\n\ \ \ \ \ \ type: DirectoryOrCreate\n\ \ \ \ name: admission-conf' %s`, tempFilePath),
+		fmt.Sprintf("cat  %s > %s", kubeApiServerConfigFilePath, kubeApiServerConfigFilePathBkp),
+		fmt.Sprintf("mv %s %s", tempFilePath, kubeApiServerConfigFilePath),
+	}
+	log.Infof(fmt.Sprintf("%s", strings.Join(cmds, "\n")))
+	// Run the above set of commands in all the master nodes
+	err = RunCmdsOnAllMasterNodes(cmds)
+	if err != nil {
+		return err
+	}
+
+	// Sleeping till the kubeAPI server comes up
+	time.Sleep(KubeApiServerWait)
+
+	// Wait for cluster to be in normal state
+	t := func() (interface{}, bool, error) {
+		if _, err := core.Instance().GetPods("kube-system", nil); err == nil {
+			return "", false, nil
+		}
+
+		return "", true, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, kubeApiServerBringUpTimeout, KubeApiServerWait)
+	if err != nil {
+		return fmt.Errorf("API server didn't come up after change")
+	}
+	return nil
+}
+
+// RevertClusterLevelPSA Revert cluster level PSA settings set in the previous release
+func RevertClusterLevelPSA() error {
+
+	tempFilePath := kubeApiServerConfigFilePath + ".tmp"
+
+	cmds := []string{
+		fmt.Sprintf("mv %s %s", kubeApiServerConfigFilePath, tempFilePath),
+		fmt.Sprintf("mv %s %s", kubeApiServerConfigFilePathBkp, kubeApiServerConfigFilePath),
+		fmt.Sprintf("rm -rf %s", tempFilePath),
+		fmt.Sprintf("rm -rf /etc/kubernetes/admission"),
+	}
+
+	// Run the above set of commands in all the master nodes
+	err := RunCmdsOnAllMasterNodes(cmds)
+	if err != nil {
+		return err
+	}
+
+	// Sleeping till the kubeAPI server comes up
+	time.Sleep(KubeApiServerWait)
+
+	// Wait for cluster to be in normal state
+	t := func() (interface{}, bool, error) {
+		if _, err := core.Instance().GetPods("kube-system", nil); err == nil {
+			return "", false, nil
+		}
+
+		return "", true, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, kubeApiServerBringUpTimeout, KubeApiServerWait)
+	if err != nil {
+		return fmt.Errorf("API server didn't come up after change")
+	}
+	return nil
+}
+
+// VerifyClusterLevelPSA Verify if the cluster level PSA settings are set correctly
+func VerifyClusterlevelPSA() error {
+	pods, err := core.Instance().GetPods("kube-system", map[string]string{"component": "kube-apiserver"})
+	if err != nil {
+		return err
+	}
+	command := pods.Items[0].Spec.Containers[0].Command
+	commandOpt := "--admission-control-config-file=/etc/kubernetes/admission/admissioncontroller.yaml"
+	if !strings.Contains(strings.Join(command, ""), commandOpt) {
+		return fmt.Errorf("PSA settings not reflecting in pod!")
+	}
+
 	return nil
 }
