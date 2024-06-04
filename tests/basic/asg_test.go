@@ -217,8 +217,8 @@ var _ = Describe("{ClusterScaleUpIncreasesMaxStorageNodesPerZone}", func() {
 			time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "Verify driver end points refresh")
-			dash.VerifyFatal(len(node.GetStorageNodes()) > len(initialStorageNodes), true, "verify new storage node is added")
 			PrintPxctlStatus()
+			dash.VerifyFatal(len(node.GetStorageNodes()) > len(initialStorageNodes), true, "verify new storage node is added")
 		})
 
 		opts := make(map[string]bool)
@@ -858,10 +858,14 @@ var _ = Describe("{RecycleAllStorageDriverNodes}", func() {
 					})
 			}
 			// Validating the apps after recycling the Storage driver node
-			ValidateApplications(contexts)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			ValidateAndDestroy(contexts, opts)
 		})
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
 	})
 })

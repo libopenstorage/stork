@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"net/url"
@@ -53,6 +54,25 @@ var _ = Describe("{UpgradeCluster}", func() {
 				close(stopSignal)
 			}()
 		}*/
+
+		preUpgradeNodeDisksMap := make(map[string]map[string]int)
+		printDisks := func(nodeDiskMap map[string]map[string]int) {
+			stNodes := node.GetStorageNodes()
+			for _, stNode := range stNodes {
+				nodeDiskMap[stNode.Name] = make(map[string]int)
+				drvNode, err := Inst().V.GetDriverNode(&stNode)
+				if err != nil {
+					log.Errorf("error getting driver node [%s]: [%v]", stNode.Name, err)
+				} else {
+					log.Infof("Node [%s] has disks: [%s]", stNode.Name, drvNode.Disks)
+					for _, disk := range drvNode.Disks {
+						nodeDiskMap[stNode.Name][disk.Medium.String()] = nodeDiskMap[stNode.Name][disk.Medium.String()] + 1
+					}
+				}
+			}
+		}
+
+		printDisks(preUpgradeNodeDisksMap)
 
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
@@ -122,6 +142,20 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				// Printing pxctl status after the upgrade
 				PrintPxctlStatus()
+				postUpgradeNodeDisksMap := make(map[string]map[string]int)
+				printDisks(postUpgradeNodeDisksMap)
+				for nodeName, disks := range preUpgradeNodeDisksMap {
+					if _, ok := postUpgradeNodeDisksMap[nodeName]; !ok {
+						log.FailOnError(fmt.Errorf("node [%s] is not present in post upgrade node disks map", nodeName), "Node is not present in post upgrade node disks map")
+
+					}
+					for diskType, diskCount := range disks {
+						if postUpgradeNodeDisksMap[nodeName][diskType] != diskCount {
+							log.Errorf("Node [%s] disk type [%s] count mismatch. Pre upgrade: [%d], Post upgrade: [%d]", nodeName, diskType, preUpgradeNodeDisksMap[nodeName][diskType], diskCount)
+							dash.VerifySafely(preUpgradeNodeDisksMap[nodeName][diskType], diskCount, fmt.Sprintf("Verify Node [%s] disk type [%s] count matched.", nodeName, diskType))
+						}
+					}
+				}
 			})
 
 			Step("validate storage components", func() {

@@ -1255,3 +1255,27 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{DeployApps}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployApps", "Validate Apps deployment", nil, 0)
+
+	})
+
+	var contexts []*scheduler.Context
+
+	It("has to deploy and  validate  apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deployapps-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
