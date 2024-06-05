@@ -4600,6 +4600,39 @@ func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string
 	return nil
 }
 
+// VerifyLabelsFromMultpleNamespaces verifies labels from multiple namespaces
+func VerifyLabelsFromMultpleNamespaces(labels map[string]string, namespaces []string) error {
+	log.Infof("Verifying labels %v in namespaces %v", labels, namespaces)
+	for _, namespace := range namespaces {
+		err := VerifyNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VerifyNamespaceLabel verifies labels in a namespace
+func VerifyNamespaceLabel(namespace string, labels map[string]string) error {
+	labelsInTheNamespace, err := Inst().S.GetNamespaceLabel(namespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Labels in namespace %v are %v", namespace, labelsInTheNamespace)
+
+	for key, label := range labels {
+		err := fmt.Errorf("label %s:%s is not present in namespace %s", key, label, namespace)
+		if _, ok := labelsInTheNamespace[key]; ok {
+			if labelsInTheNamespace[key] != label {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
 // DeleteLabelsFromMultipleNamespaces delete labels from multiple namespace
 func DeleteLabelsFromMultipleNamespaces(labels map[string]string, namespaces []string) error {
 	for _, namespace := range namespaces {
