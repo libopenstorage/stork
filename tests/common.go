@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/devans10/pugo/flasharray"
+
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
@@ -81,7 +82,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -3925,7 +3925,7 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	// Create namespace for the cluster pair on source cluster
-	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+	_, err = core.Instance().CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cpNamespace,
 			Labels: map[string]string{
@@ -3959,7 +3959,7 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	// Create namespace for the cluster pair on destination cluster
-	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+	_, err = core.Instance().CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cpNamespace,
 			Labels: map[string]string{
@@ -9339,11 +9339,13 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	var allKvdbNodes []KvdbNode
 	// Execute the command and check the alerts of type POOL
 	command := "pxctl service kvdb members list -j"
-	out, err := Inst().N.RunCommandWithNoRetry(randomNode, command, node.ConnectionOpts{
+	out, err := Inst().N.RunCommand(randomNode, command, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
 	})
-	//log.FailOnError(err, "Unable to get KVDB members from the command [%s]", command)
+	if err != nil {
+		return nil, err
+	}
 	log.InfoD("List of KVDBMembers in the cluster [%v]", out)
 
 	// Convert KVDB members to map
@@ -10595,7 +10597,7 @@ func IsVolumeExits(volName string) bool {
 	return isVolExist
 }
 
-func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
+func ValidateCRMigration(pods *corev1.PodList, appData *asyncdr.AppData) error {
 	pods_created_len := len(pods.Items)
 	log.InfoD("Num of Pods on source: %v", pods_created_len)
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -11264,7 +11266,7 @@ func KillPxStorageUsingPid(memberNode node.Node) error {
 }
 
 // GetAllPodsInNameSpace Returns list of pods running in the namespace
-func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+func GetAllPodsInNameSpace(nameSpace string) ([]corev1.Pod, error) {
 	pods, err := k8sCore.GetPods(nameSpace, nil)
 	if err != nil {
 		return nil, err
@@ -11431,7 +11433,7 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	reclaimPolicyDelete := corev1.PersistentVolumeReclaimDelete
 	bindMode := storageapi.VolumeBindingImmediate
 	allowWxpansion := true
 	scObj := storageapi.StorageClass{
@@ -11446,80 +11448,6 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	k8sStorage := k8sStorage.Instance()
 	_, err := k8sStorage.CreateStorageClass(&scObj)
 	return err
-}
-
-func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
-	stNodes := node.GetStorageNodes()
-
-	nodeSchedulableStatus := make(map[string]string)
-	stNodeNames := make(map[string]bool)
-
-	for _, stNode := range stNodes {
-		stNodeNames[stNode.Name] = true
-	}
-
-	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
-	kvdbNodes, _ := GetAllKvdbNodes()
-	for _, kvdbNode := range kvdbNodes {
-		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
-		if err == nil {
-			stNodeNames[sNode.Name] = true
-		} else {
-			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
-		}
-	}
-
-	log.Infof("stnodes are %#v", stNodeNames)
-	itr := 1
-	for {
-		log.Infof("K8s node validation. iteration: #%d", itr)
-		select {
-		case <-stopSignal:
-			log.Infof("Exiting node validations routine")
-			return
-		default:
-			nodeList, err := core.Instance().GetNodes()
-			if err != nil {
-				log.Errorf("Got error : %s", err.Error())
-				*mError = err
-				return
-			}
-
-			nodeNotReadyeCount := 0
-			for _, k8sNode := range nodeList.Items {
-				for _, status := range k8sNode.Status.Conditions {
-					if status.Type == v1.NodeReady {
-						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
-						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
-							nodeNotReadyeCount += 1
-						}
-						break
-					}
-				}
-
-			}
-			if nodeNotReadyeCount > 1 {
-				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
-					"node status:%#v", nodeSchedulableStatus)
-				log.Errorf("Got error : %s", err.Error())
-				log.Infof("Node Details: %#v", nodeList.Items)
-				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
-					IgnoreError:     false,
-					TimeBeforeRetry: defaultRetryInterval,
-					Timeout:         defaultTimeout,
-					Sudo:            true,
-				})
-				if err != nil {
-					log.Errorf("failed to get pxctl status, Err: %v", err)
-				}
-				log.Infof(output)
-				*mError = err
-				return
-			}
-		}
-		itr++
-		time.Sleep(30 * time.Second)
-	}
 }
 
 // PrintK8sClusterInfo prints info about K8s cluster nodes
@@ -12323,7 +12251,7 @@ func RefreshIscsiSession(n node.Node) error {
 }
 
 // GetPVCObjFromVol Returns pvc object from Volume
-func GetPVCObjFromVol(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
+func GetPVCObjFromVol(vol *volume.Volume) (*corev1.PersistentVolumeClaim, error) {
 	return k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
 }
 
@@ -12726,14 +12654,14 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 // volumeBinding storageapi.VolumeBindingImmediate, storageapi.VolumeBindingWaitForFirstConsumer
 func CreateFlashStorageClass(scName string,
 	scType string,
-	ReclaimPolicy v1.PersistentVolumeReclaimPolicy,
+	ReclaimPolicy corev1.PersistentVolumeReclaimPolicy,
 	params map[string]string,
 	MountOptions []string,
 	AllowVolumeExpansion *bool,
 	VolumeBinding storageapi.VolumeBindingMode,
 	AllowedTopologies map[string][]string) error {
 
-	var reclaimPolicy v1.PersistentVolumeReclaimPolicy
+	var reclaimPolicy corev1.PersistentVolumeReclaimPolicy
 	param := make(map[string]string)
 	for key, value := range params {
 		param[key] = value
@@ -12752,20 +12680,20 @@ func CreateFlashStorageClass(scName string,
 
 	// Declare Reclaim Policies
 	switch ReclaimPolicy {
-	case v1.PersistentVolumeReclaimDelete:
-		reclaimPolicy = v1.PersistentVolumeReclaimDelete
-	case v1.PersistentVolumeReclaimRetain:
-		reclaimPolicy = v1.PersistentVolumeReclaimRetain
-	case v1.PersistentVolumeReclaimRecycle:
-		reclaimPolicy = v1.PersistentVolumeReclaimRecycle
+	case corev1.PersistentVolumeReclaimDelete:
+		reclaimPolicy = corev1.PersistentVolumeReclaimDelete
+	case corev1.PersistentVolumeReclaimRetain:
+		reclaimPolicy = corev1.PersistentVolumeReclaimRetain
+	case corev1.PersistentVolumeReclaimRecycle:
+		reclaimPolicy = corev1.PersistentVolumeReclaimRecycle
 	}
 
-	var allowedTopologies []v1.TopologySelectorTerm = nil
+	var allowedTopologies []corev1.TopologySelectorTerm = nil
 	if AllowedTopologies != nil {
-		topologySelector := v1.TopologySelectorTerm{}
-		topologyList := []v1.TopologySelectorLabelRequirement{}
+		topologySelector := corev1.TopologySelectorTerm{}
+		topologyList := []corev1.TopologySelectorLabelRequirement{}
 		for key, value := range AllowedTopologies {
-			topology := v1.TopologySelectorLabelRequirement{}
+			topology := corev1.TopologySelectorLabelRequirement{}
 			topology.Key = key
 			topology.Values = value
 			topologyList = append(topologyList, topology)
@@ -12793,17 +12721,17 @@ func CreateFlashStorageClass(scName string,
 // CreateFlashPVCOnCluster Creates PVC on the Cluster
 func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, sizeGb string) error {
 	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, nameSpace)
-	pvcObj := &v1.PersistentVolumeClaim{
+	pvcObj := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Namespace: nameSpace,
 		},
-		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			StorageClassName: &scName,
-			Resources: v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse(sizeGb),
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(sizeGb),
 				},
 			},
 		},
@@ -12813,7 +12741,7 @@ func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, si
 }
 
 // GetAllPVCFromNs returns all PVC's Created on specific NameSpace
-func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]v1.PersistentVolumeClaim, error) {
+func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]corev1.PersistentVolumeClaim, error) {
 	pvcList, err := core.Instance().GetPersistentVolumeClaims(nsName, labelSelector)
 	if err != nil {
 		return nil, err
@@ -12958,7 +12886,7 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	return multipathMap, nil
 }
 
-func CreatePortworxStorageClass(scName string, ReclaimPolicy v1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
+func CreatePortworxStorageClass(scName string, ReclaimPolicy corev1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}

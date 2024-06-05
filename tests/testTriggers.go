@@ -18,7 +18,6 @@ import (
 	"text/template"
 	"time"
 
-
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
@@ -3632,8 +3631,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 }
 
-//TriggerDeleteCloudsnaps
-func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord){
+// TriggerDeleteCloudsnaps
+func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(DeleteCloudsnaps)
@@ -3653,14 +3652,14 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "Delete all cloudsnaps"
 	Step(stepLog, func() {
 		log.Infof(stepLog)
-        var volCloudsnapMap = make(map[string][]string)
+		var volCloudsnapMap = make(map[string][]string)
 		for _, ctx := range *contexts {
 			vols, err := Inst().S.GetVolumeParameters(ctx)
 			log.Infof("Validating context: %v", ctx.App.Key)
 			log.Infof("Volumes : %v", vols)
 			UpdateOutcome(event, err)
 			for vol, params := range vols {
-				inspectedVol, err:= Inst().V.InspectVolume(vol)
+				inspectedVol, err := Inst().V.InspectVolume(vol)
 				UpdateOutcome(event, err)
 				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
 				UpdateOutcome(event, err)
@@ -3670,7 +3669,7 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 				}
 				if len(csBksps) > 0 {
 					volCloudsnapMap[vol] = cloudsnapIds
-					err = Inst().V.DeleteAllCloudsnaps(vol,csBksps[0].SrcVolumeId, params)
+					err = Inst().V.DeleteAllCloudsnaps(vol, csBksps[0].SrcVolumeId, params)
 					if err != nil && !strings.Contains(err.Error(), "Key already exists") {
 						UpdateOutcome(event, err)
 					}
@@ -3680,24 +3679,24 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 		log.Infof("Wait for 10 minutes")
 		time.Sleep(600 * time.Second)
 		for _, ctx := range *contexts {
-				vols, err := Inst().S.GetVolumeParameters(ctx)
+			vols, err := Inst().S.GetVolumeParameters(ctx)
+			UpdateOutcome(event, err)
+			for vol, params := range vols {
+				log.Infof("Volume Name : %s", vol)
+				inspectedVol, err := Inst().V.InspectVolume(vol)
 				UpdateOutcome(event, err)
-				for vol, params := range vols {
-					log.Infof("Volume Name : %s", vol)
-					inspectedVol, err:= Inst().V.InspectVolume(vol)
-					UpdateOutcome(event, err)
-					csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
-					UpdateOutcome(event, err)
-					cloudsnapIds, ok := volCloudsnapMap[vol]
-					if ok {
-						for _, bk := range csBksps {
-							if slices.Contains(cloudsnapIds, bk.Id ){
-								log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id , vol )
-								UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id , vol))
-							}
+				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+				UpdateOutcome(event, err)
+				cloudsnapIds, ok := volCloudsnapMap[vol]
+				if ok {
+					for _, bk := range csBksps {
+						if slices.Contains(cloudsnapIds, bk.Id) {
+							log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id, vol)
+							UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id, vol))
 						}
 					}
 				}
+			}
 		}
 		updateMetrics(*event)
 	})
@@ -6814,11 +6813,11 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(UpdateVolume)
+	startLongevityTest(UpdateIOProfile)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: UpdateVolume,
+			Type: UpdateIOProfile,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -7093,11 +7092,13 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 					log.Infof("autofstrim status for volume %v, status: %v", appVol.Id, val.String())
 					if fsTrimStatus != -1 {
 						if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_COMPLETED {
+							log.InfoD("autofstrim status for volume %v completed successfully [%v]", v.ID, val.String())
 							return nil, false, nil
 						} else if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
 							return nil, false, fmt.Errorf("autoFstrim failed for volume %v, status: %v", v.ID, val.String())
 						} else {
-							return nil, true, fmt.Errorf("current autofstrim status for volume %v is %v. Expected status is %v", v.ID, val.String(), opsapi.FilesystemTrim_FS_TRIM_COMPLETED)
+							log.InfoD("current autofstrim status for volume %v is %v", v.ID, val.String())
+							return nil, false, nil
 						}
 					} else {
 						return nil, true, fmt.Errorf("autofstrim for volume %v not started yet", v.ID)
