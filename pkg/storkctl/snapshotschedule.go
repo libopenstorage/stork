@@ -193,7 +193,7 @@ func newUpdateSnapShotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 			printMsg(msg, ioStreams.Out)
 		},
 	}
-	updateSnapshotScheduleCommand.Flags().StringVar(&newPVCName, "new-pvc-name", "", "Specify new PVC name of the volume snapshot schedule")
+	updateSnapshotScheduleCommand.Flags().StringVar(&newPVCName, "new-pvc-name", "", "Specify the PVC name to be updated in the volumesnapshotschedule")
 
 	return updateSnapshotScheduleCommand
 }
