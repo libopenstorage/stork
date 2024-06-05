@@ -1365,6 +1365,11 @@ func testDRActionFailbackSubsetNamespacesTest(t *testing.T) {
 
 // testDRActionMetroFailover tests the failover and failover status reporting for sync DR.
 func testDRActionMetroFailover(t *testing.T) {
+	var testrailID, testResult = 257174, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
 	// Create the apps for migration.
 	// appKeys is an array of appKeys that will be used to create the apps.
 	instanceID := "metro-failover-multi-ns-migration-schedule"
@@ -1521,10 +1526,19 @@ func testDRActionMetroFailover(t *testing.T) {
 	for _, ns := range []string{mysqlNamespace, elasticsearchNamespace} {
 		blowNamespaceForTest(t, ns, false)
 	}
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 // testDRActionMetroFailback tests the failback and failback status reporting for sync DR.
 func testDRActionMetroFailback(t *testing.T) {
+	var testrailID, testResult = 257172, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
 	// Create the apps for migration.
 	// appKeys is an array of appKeys that will be used to create the apps.
 	instanceID := "metro-failback-multi-ns-migration-schedule"
@@ -1801,6 +1815,10 @@ func testDRActionMetroFailback(t *testing.T) {
 	destroyAndWait(t, preMigrationCtxs)
 	blowNamespaceForTest(t, elasticsearchNamespace, false)
 	blowNamespaceForTest(t, mysqlNamespace, false)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func failBackWithMigrationSchedulesWithDifferentPolicies(t *testing.T, instanceID string, appName string, appNamespace string, reverseSchedulePolicyArgs map[string]map[string]string) {
