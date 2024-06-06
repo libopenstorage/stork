@@ -27,7 +27,7 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
-	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
+	github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
 	github.com/libopenstorage/operator v0.0.0-20240523172951-e085c3099bd7
 	github.com/libopenstorage/stork v1.4.1-0.20240424105137-8c6fa2a3f934
@@ -311,7 +311,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b // indirect
+	github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/client v0.46.0 // indirect
 	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
@@ -375,7 +375,7 @@ require (
 )
 
 replace (
-	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
+	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-storage-blob-go => github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d

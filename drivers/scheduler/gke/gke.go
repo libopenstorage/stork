@@ -68,6 +68,21 @@ func (g *Gke) UpgradeScheduler(version string) error {
 		return err
 	}
 
+	// Update GKE Node Group Upgrade Strategy
+	upgradeStrategy := os.Getenv("GKE_UPGRADE_STRATEGY")
+	surgeSetting := os.Getenv("GKE_SURGE_VALUE")
+	if upgradeStrategy == "" {
+		upgradeStrategy = "surge"
+	}
+	if surgeSetting == "" {
+		surgeSetting = "default"
+	}
+
+	if err := g.updateGkeNodeGroupUpgradeStrategy(g.instanceGroup,
+		upgradeStrategy, defaultGkeUpgradeTimeout, surgeSetting); err != nil {
+		return err
+	}
+
 	// Upgrade GKE Node Group version
 	if err := g.upgradeGkeNodeGroupVersion(g.instanceGroup, version, defaultGkeUpgradeTimeout); err != nil {
 		return err
@@ -126,6 +141,17 @@ func (g *Gke) upgradeGkeNodeGroupVersion(nodeGroup, version string, timeout time
 		return fmt.Errorf("failed to set version for GKE Node Group [%s] to [%s], Err: %v", nodeGroup, version, err)
 	}
 	log.Infof("GKE Node Group [%s] version was successfully set to [%s]", nodeGroup, version)
+	return nil
+}
+
+// updateGkeNodeGroupUpgradeStrategy updates specified GKE Node Group's upgrade strategy
+func (g *Gke) updateGkeNodeGroupUpgradeStrategy(nodeGroup, upgradeStrategy string, timeout time.Duration, surgeSetting string) error {
+	log.Infof("Updating GKE Node Group's [%s] Upgrade Strategy to [%s]", nodeGroup, upgradeStrategy)
+
+	if err := g.ops.SetInstanceUpgradeStrategy(nodeGroup, upgradeStrategy, timeout, surgeSetting); err != nil {
+		return fmt.Errorf("failed to set upgrade strategy for GKE Node Group [%s] to [%s], Err: %v", nodeGroup, upgradeStrategy, err)
+	}
+	log.Infof("GKE Node Group [%s] upgrade strategy was successfully set to [%s]", nodeGroup, upgradeStrategy)
 	return nil
 }
 

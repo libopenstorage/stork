@@ -158,6 +158,25 @@ func (e *exponentialBackoff) SetInstanceGroupVersion(instanceGroupID string,
 
 }
 
+func (e *exponentialBackoff) SetInstanceUpgradeStrategy(instanceGroupID string,
+	upgradeStrategy string,
+	timeout time.Duration,
+	surgeSetting string) error {
+	var (
+		origErr error
+	)
+	conditionFn := func() (bool, error) {
+		origErr = e.cloudOps.SetInstanceUpgradeStrategy(instanceGroupID, upgradeStrategy, timeout, surgeSetting)
+		return e.handleError(origErr, fmt.Sprintf("Failed to set instance group version"))
+	}
+	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
+	if expErr == wait.ErrWaitTimeout {
+		return cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
+	}
+	return origErr
+
+}
+
 func (e *exponentialBackoff) GetInstanceGroupSize(instanceGroupID string) (int64, error) {
 	var (
 		count   int64
@@ -340,8 +359,8 @@ func (e *exponentialBackoff) Describe() (interface{}, error) {
 // FreeDevices returns free block devices on the instance.
 // blockDeviceMappings is a data structure that contains all block devices on
 // the instance and where they are mapped to
-func (e *exponentialBackoff) FreeDevices(blockDeviceMappings []interface{}, rootDeviceName string) ([]string, error) {
-	return e.cloudOps.FreeDevices(blockDeviceMappings, rootDeviceName)
+func (e *exponentialBackoff) FreeDevices() ([]string, error) {
+	return e.cloudOps.FreeDevices()
 }
 
 // Inspect volumes specified by volumeID

@@ -3,7 +3,7 @@ package azure
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute"
 	"github.com/Azure/go-autorest/autorest"
 )
 
@@ -92,7 +92,7 @@ func (s *scaleSetVMsClient) describeInstance(
 		s.resourceGroupName,
 		s.scaleSetName,
 		instanceID,
-		compute.InstanceView,
+		compute.InstanceViewTypesInstanceView,
 	)
 }
 

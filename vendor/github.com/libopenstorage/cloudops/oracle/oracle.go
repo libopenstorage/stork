@@ -376,36 +376,92 @@ func (o *oracleOps) DevicePath(volumeID string) (string, error) {
 		return "", err
 	}
 
-	if volumeAttachmentResp.Items == nil ||
-		len(volumeAttachmentResp.Items) == 0 ||
-		volumeAttachmentResp.Items[0].GetInstanceId() == nil ||
-		volumeAttachmentResp.Items[0].GetLifecycleState() == core.VolumeAttachmentLifecycleStateDetached ||
-		volumeAttachmentResp.Items[0].GetLifecycleState() == core.VolumeAttachmentLifecycleStateDetaching {
+	/* List of volumeAttachements for a given volume can have multiple entries,
+	one for each attachement happened in past. For e.g
+
+	[
+	   {
+	      "AvailabilityDomain=ieuf":"US-ASHBURN-AD-3
+	      CompartmentId=ocid1.compartment.oc1..aaaaaaaajzk4fsk62c57i7tzejqn4fd4kicp5242zs2hwi5ly77peu4m6tra
+	      Id=ocid1.volumeattachment.oc1.iad.anuwcljrxypu2kici6ydxpkph7goz4lv3uharrx6pcp4vqoolxxd7wiwurdq
+	      InstanceId=ocid1.instance.oc1.iad.anuwcljrxypu2kicfvzrjqfmohzma22yvpqpbewhsrs7ujkgcepgyu3enrnq
+	      TimeCreated=2023-12-11 17":"12":55.722 +0000 UTC
+	      VolumeId=ocid1.volume.oc1.iad.abuwcljrbqodecemboccq3k3y6pdp62vpvps56tu6tlbg4zc57ploucmlptq
+	      Device=/dev/oracleoci/oraclevdb
+	      DisplayName=volumeattachment20231211171255
+	      IsReadOnly=false
+	      IsShareable=false
+	      IsPvEncryptionInTransitEnabled=false
+	      IsMultipath=<nil>
+	      LifecycleState=DETACHED
+	      IscsiLoginState=
+	   }{
+	      "AvailabilityDomain=ieuf":"US-ASHBURN-AD-3
+	      CompartmentId=ocid1.compartment.oc1..aaaaaaaajzk4fsk62c57i7tzejqn4fd4kicp5242zs2hwi5ly77peu4m6tra
+	      Id=ocid1.volumeattachment.oc1.iad.anuwcljrxypu2kicgllswaeuhxxowwui6bdownczbok5s4e3k4ejcxik3bba
+	      InstanceId=ocid1.instance.oc1.iad.anuwcljrxypu2kicg3i7g757isjqo6jswbdsmoxl4nicyq26mpmigecaxl3q
+	      TimeCreated=2023-12-12 02":"59":51.745 +0000 UTC
+	      VolumeId=ocid1.volume.oc1.iad.abuwcljrbqodecemboccq3k3y6pdp62vpvps56tu6tlbg4zc57ploucmlptq
+	      Device=/dev/oracleoci/oraclevdb
+	      DisplayName=volumeattachment20231212025951
+	      IsReadOnly=false
+	      IsShareable=false
+	      IsPvEncryptionInTransitEnabled=false
+	      IsMultipath=<nil>
+	      LifecycleState=ATTACHED
+	      IscsiLoginState=
+	   }
+	]
+	*/
+
+	if volumeAttachmentResp.Items == nil || len(volumeAttachmentResp.Items) == 0 {
 		return "", cloudops.NewStorageError(cloudops.ErrVolDetached,
 			"Volume is detached", volumeID)
 	}
 
-	volumeAttachment := volumeAttachmentResp.Items[0]
+	var latestVolumeAttachment core.VolumeAttachment
+	var attachedInstanceID string
+	for _, va := range volumeAttachmentResp.Items {
+		if va.GetLifecycleState() == core.VolumeAttachmentLifecycleStateAttached {
+			// OCI Block Volumes (cloud-drives) created by PX are non-sharable,
+			// So, at any point in time, only one volumeAttachment will be in ATTACHED state
+			if attachedInstanceID == "" {
+				attachedInstanceID = *va.GetInstanceId()
+				latestVolumeAttachment = va
+			} else if attachedInstanceID == *va.GetInstanceId() {
+				latestVolumeAttachment = va
+			} else {
+				return "", cloudops.NewStorageError(cloudops.ErrVolumeAttachedOnMultipleNodes,
+					fmt.Sprintf("Volume %s is attached to multiple instances: [%s] and [%s]",
+						volumeID, attachedInstanceID, *va.GetInstanceId()), "")
+			}
+		}
+	}
 
-	if o.instance != *volumeAttachment.GetInstanceId() {
+	if latestVolumeAttachment == nil {
+		return "", cloudops.NewStorageError(cloudops.ErrVolDetached,
+			"Volume is detached", volumeID)
+	}
+
+	if o.instance != *latestVolumeAttachment.GetInstanceId() {
 		return "", cloudops.NewStorageError(cloudops.ErrVolAttachedOnRemoteNode,
 			fmt.Sprintf("Volume attached on %q current instance %q",
-				*volumeAttachment.GetInstanceId(), o.instance),
-			*volumeAttachment.GetInstanceId())
+				*latestVolumeAttachment.GetInstanceId(), o.instance),
+			*latestVolumeAttachment.GetInstanceId())
 	}
 
-	if volumeAttachment.GetLifecycleState() != core.VolumeAttachmentLifecycleStateAttached {
+	if latestVolumeAttachment.GetLifecycleState() != core.VolumeAttachmentLifecycleStateAttached {
 		return "", cloudops.NewStorageError(cloudops.ErrVolInval,
 			fmt.Sprintf("Invalid state %q, volume is not attached",
-				volumeAttachment.GetLifecycleState()), "")
+				latestVolumeAttachment.GetLifecycleState()), "")
 	}
 
-	if volumeAttachment.GetDevice() == nil {
+	if latestVolumeAttachment.GetDevice() == nil {
 		return "", cloudops.NewStorageError(cloudops.ErrVolInval,
 			"Unable to determine volume attachment path", "")
 	}
 
-	return *volumeAttachment.GetDevice(), nil
+	return *latestVolumeAttachment.GetDevice(), nil
 }
 
 // Inspect volumes specified by volumeID
@@ -612,7 +668,7 @@ func (o *oracleOps) Attach(volumeID string, options map[string]string) (string, 
 	o.mutex.Lock()
 	defer o.mutex.Unlock()
 
-	devices, err := o.FreeDevices([]interface{}{}, "")
+	devices, err := o.FreeDevices()
 	if err != nil {
 		return "", err
 	}
@@ -743,9 +799,7 @@ func (o *oracleOps) detachInternal(volumeID, instanceID string) error {
 // FreeDevices returns free block devices on the instance.
 // blockDeviceMappings is a data structure that contains all block devices on
 // the instance and where they are mapped to
-func (o *oracleOps) FreeDevices(
-	blockDeviceMappings []interface{},
-	rootDeviceName string) ([]string, error) {
+func (o *oracleOps) FreeDevices() ([]string, error) {
 	freeDevices := []string{}
 	listDevicesReq := core.ListInstanceDevicesRequest{
 		InstanceId:  common.String(o.instance),
@@ -1000,34 +1054,50 @@ func (o *oracleOps) Enumerate(volumeIds []*string,
 	for _, volIds := range volumeIds {
 		volIDsMap[*volIds] = *volIds
 	}
-	for _, vol := range resp.Items {
-		_, ok := volIDsMap[*vol.Id]
-		if !ok {
-			continue
-		}
+	for {
+		for _, vol := range resp.Items {
+			_, ok := volIDsMap[*vol.Id]
+			if !ok {
+				continue
+			}
 
-		if o.deleted(vol) {
-			continue
-		}
-		// TODO: [PWX-26616] Check if SDK itself returns list of volumes
-		// that have labels OR use volumeGroup for filtering
-		if labels != nil && !containsMap(vol.FreeformTags, labels) {
-			continue
-		}
-		if len(setIdentifier) == 0 {
-			cloudops.AddElementToMap(sets, vol, cloudops.SetIdentifierNone)
-		} else {
-			found := false
-			for tagKey, tagValue := range vol.FreeformTags {
-				if tagKey == setIdentifier {
-					cloudops.AddElementToMap(sets, vol, tagValue)
-					found = true
-					break
+			if o.deleted(vol) {
+				continue
+			}
+			// TODO: [PWX-26616] Check if SDK itself returns list of volumes
+			// that have labels OR use volumeGroup for filtering
+			if labels != nil && !containsMap(vol.FreeformTags, labels) {
+				continue
+			}
+			if len(setIdentifier) == 0 {
+				cloudops.AddElementToMap(sets, vol, cloudops.SetIdentifierNone)
+			} else {
+				found := false
+				for tagKey, tagValue := range vol.FreeformTags {
+					if tagKey == setIdentifier {
+						cloudops.AddElementToMap(sets, vol, tagValue)
+						found = true
+						break
+					}
+				}
+				if !found {
+					cloudops.AddElementToMap(sets, vol, cloudops.SetIdentifierNone)
 				}
 			}
-			if !found {
-				cloudops.AddElementToMap(sets, vol, cloudops.SetIdentifierNone)
+		}
+		if resp.OpcNextPage != nil {
+			// There are more volumes that needs to be listed from oracle cloud via Pagination
+			req = core.ListVolumesRequest{
+				CompartmentId: common.String(o.compartmentID),
+				Page:          resp.OpcNextPage,
 			}
+			resp, err = o.storage.ListVolumes(context.Background(), req)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// No more block volumes remaining to be listed.
+			break
 		}
 	}
 	return sets, nil

@@ -75,6 +75,15 @@ func (u *unsupportedCompute) SetInstanceGroupVersion(instanceGroupID string,
 	}
 }
 
+func (u *unsupportedCompute) SetInstanceUpgradeStrategy(instanceGroupID string,
+	upgradeStrategy string,
+	timeout time.Duration,
+	surgeSetting string) error {
+	return &cloudops.ErrNotSupported{
+		Operation: "SetInstanceUpgradeStrategy",
+	}
+}
+
 type unsupportedStorage struct {
 }
 
@@ -137,7 +146,7 @@ func (u *unsupportedStorage) Describe() (interface{}, error) {
 		Operation: "Describe",
 	}
 }
-func (u *unsupportedStorage) FreeDevices(blockDeviceMappings []interface{}, rootDeviceName string) ([]string, error) {
+func (u *unsupportedStorage) FreeDevices() ([]string, error) {
 	return []string{}, &cloudops.ErrNotSupported{
 		Operation: "FreeDevices",
 	}
@@ -215,5 +224,12 @@ func (u *unsupportedStorageManager) RecommendStoragePoolUpdate(
 	request *cloudops.StoragePoolUpdateRequest) (*cloudops.StoragePoolUpdateResponse, error) {
 	return nil, &cloudops.ErrNotSupported{
 		Operation: "RecommendStoragePoolUpdate",
+	}
+}
+
+func (u *unsupportedStorageManager) GetMaxDriveSize(
+	request *cloudops.MaxDriveSizeRequest) (*cloudops.MaxDriveSizeResponse, error) {
+	return nil, &cloudops.ErrNotSupported{
+		Operation: "GetMaxDriveSize",
 	}
 }
