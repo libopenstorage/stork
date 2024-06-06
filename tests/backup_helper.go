@@ -132,6 +132,7 @@ const (
 	GlobalAWSLockedBucketPrefix               = "global-aws-locked"
 	GlobalAzureLockedBucketPrefix             = "global-azure-locked"
 	GlobalGCPLockedBucketPrefix               = "global-gcp-locked"
+	AzureChinaEndpoint                        = "CHINA"
 	MongodbStatefulset                        = "pxc-backup-mongodb"
 	PxBackupDeployment                        = "px-backup"
 	BackupDeleteTimeout                       = 60 * time.Minute

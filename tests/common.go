@@ -6606,6 +6606,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderGke:
 		result, err := IsGCPBucketEmpty(bucketName)
 		return result, err
+	case drivers.ProviderAzure:
+		result, err := IsAzureBlobEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -6708,6 +6711,42 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 	}
 
 	// Iterator didn't finish, bucket is not empty
+	return false, nil
+}
+
+// IsAzureBlobEmpty returns true if bucket empty else false
+func IsAzureBlobEmpty(containerName string) (bool, error) {
+	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName)
+	if azureEndpoint == AzureChinaEndpoint {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, containerName)
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse URL [%v]: %v", urlStr, err)
+	}
+
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background() // This example uses a never-expiring context
+	listBlobsSegmentOptions := azblob.ListBlobsSegmentOptions{
+		MaxResults: 1,
+	}
+
+	listBlob, err := containerURL.ListBlobsFlatSegment(ctx, azblob.Marker{}, listBlobsSegmentOptions)
+	if err != nil {
+		return false, fmt.Errorf("failed to list blobs in container [%v]: %v", containerName, err)
+	}
+
+	if len(listBlob.Segment.BlobItems) == 0 {
+		// No blobs found, container is empty
+		return true, nil
+	}
+	// Blobs found, container is not empty
 	return false, nil
 }
 
