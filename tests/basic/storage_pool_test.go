@@ -391,7 +391,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -1835,7 +1835,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -2387,7 +2387,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -2760,7 +2760,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -3082,7 +3082,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -3244,7 +3244,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -3449,7 +3449,7 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -3799,7 +3799,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -4154,7 +4154,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -4871,7 +4871,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		selectedNode := GetNodeWithLeastSize()
@@ -5655,7 +5655,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -7719,7 +7719,7 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -7834,7 +7834,7 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -8414,7 +8414,7 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -10219,7 +10219,7 @@ func isMaintenanceModeRequiredForAddDisk() bool {
 	if isDmthin {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		return true
 
@@ -10234,23 +10234,22 @@ func isMaintenanceModeRequiredForAddDisk() bool {
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
-		log.FailOnError(err, "error getting kernal version")
+		log.FailOnError(err, "error getting kernel version")
 
 		parts := strings.Split(versionOutput, "-")
 
 		if len(parts) >= 1 {
 			kernelVersion := parts[0]
 			parsedVersion, err := semver.NewVersion(kernelVersion)
-			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", kernelVersion))
+			log.FailOnError(err, fmt.Sprintf("error parsion kernel version [%s]", kernelVersion))
 			compareVersion, err := semver.NewVersion("5.9.0")
-			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", "5.9.0"))
+			log.FailOnError(err, fmt.Sprintf("error parsion kernel version [%s]", "5.9.0"))
 			if parsedVersion.LessThan(compareVersion) {
 				return true
 			}
 		} else {
-			log.FailOnError(fmt.Errorf("unable for extract major kernal version using version: %s", versionOutput), "error in validating kernal version")
+			log.FailOnError(fmt.Errorf("unable for extract major kernel version using version: %s", versionOutput), "error in validating kernal version")
 		}
-
 	}
 
 	return false
@@ -10959,7 +10958,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 	It(itLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		stepLog := "schedule Application"
 		Step(stepLog, func() {
