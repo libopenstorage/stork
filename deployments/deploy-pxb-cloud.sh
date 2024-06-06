@@ -568,6 +568,8 @@ spec:
       value: "${AZURE_SUBSCRIPTION_ID}"
     - name: AZURE_CLUSTER_NAME
       value: "${AZURE_CLUSTER_NAME}"
+    - name: AZURE_ENDPOINT
+      value: "${AZURE_ENDPOINT}"
     - name: AWS_ACCESS_KEY_ID
       value: "${AWS_ACCESS_KEY_ID}"
     - name: AWS_SECRET_ACCESS_KEY
