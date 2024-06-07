@@ -2018,6 +2018,11 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			continue
 		}
 
+		// Ignore partitions, skip straight to the parent mapper device
+		if strings.Contains(line, "-part") {
+			continue
+		}
+
 		// If we see a WWID, we are starting a new entry
 		if strings.Contains(line, schedops.PureVolumeOUI) {
 			if currentEntry != nil {
@@ -2079,6 +2084,9 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 	dmsetupFoundMappers := []string{}
 	for _, line := range strings.Split(out, "\n") {
 		if !strings.Contains(line, schedops.PureVolumeOUI) {
+			continue
+		}
+		if strings.Contains(line, "-part") {
 			continue
 		}
 		mapperName := strings.Split(line, "\t")[0]
