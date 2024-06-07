@@ -114,6 +114,8 @@ type InitOptions struct {
 	PureVolumes bool
 	// PureSANType identifies which SAN type is being used for Pure volumes
 	PureSANType string
+	// PureFADAPod identifies what FA Pod to place FADA volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret
+	PureFADAPod string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class

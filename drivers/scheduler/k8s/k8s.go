@@ -269,6 +269,7 @@ type K8s struct {
 	VaultToken                       string
 	PureVolumes                      bool
 	PureSANType                      string
+	PureFADAPod                      string
 	RunCSISnapshotAndRestoreManyTest bool
 	helmValuesConfigMapName          string
 	secureApps                       []string
@@ -310,6 +311,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
 	k.PureSANType = schedOpts.PureSANType
+	k.PureFADAPod = schedOpts.PureFADAPod
 	k.RunCSISnapshotAndRestoreManyTest = schedOpts.RunCSISnapshotAndRestoreManyTest
 	k.secureApps = schedOpts.SecureApps
 
@@ -1948,6 +1950,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				immediate := storageapi.VolumeBindingImmediate
 				obj.VolumeBindingMode = &immediate
 				log.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
+			}
+			// If we specified a pod name, we need to set the Pure FA pod name in the storage class
+			if k.PureFADAPod != "" {
+				if backend, ok := obj.Parameters["backend"]; ok && backend == "pure_block" {
+					obj.Parameters["pure_fa_pod_name"] = k.PureFADAPod
+				}
 			}
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)

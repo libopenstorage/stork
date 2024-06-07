@@ -124,6 +124,10 @@ if [ -z "${PURE_SAN_TYPE}" ]; then
     PURE_SAN_TYPE=ISCSI
 fi
 
+if [ -z "${PURE_FADA_POD}" ]; then
+    PURE_FADA_POD=""
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -546,6 +550,7 @@ spec:
             "--pure-volumes=$IS_PURE_VOLUMES",
             "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
             "--pure-san-type=$PURE_SAN_TYPE",
+            "--pure-fada-pod=$PURE_FADA_POD",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
