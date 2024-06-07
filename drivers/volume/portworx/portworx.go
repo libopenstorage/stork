@@ -5822,9 +5822,9 @@ func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error)
 }
 
 // GetPoolDrives returns the map of poolID and drive name
-func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskResource, error) {
 
-	poolDrives := make(map[string][]string, 0)
+	poolDrives := make(map[string][]torpedovolume.DiskResource, 0)
 
 	connectionOps := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -5840,25 +5840,38 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
 	re := regexp.MustCompile(`\b\d+:\d+\b.*`)
 	matches := re.FindAllString(output, -1)
 
+	nodePoolResources := make([]torpedovolume.DiskResource, 0)
+
 	for _, match := range matches {
 		log.Debugf("Extracting pool details from [%s]", match)
-		pVals := make([]string, 0)
+		poolDiskResource := torpedovolume.DiskResource{}
 		tempVals := strings.Fields(match)
+		tempSizeVal := uint64(0)
+
 		for _, tv := range tempVals {
-			if strings.Contains(tv, ":") || strings.Contains(tv, "/") {
-				pVals = append(pVals, tv)
+			if poolDiskResource.PoolId == "" && strings.Contains(tv, ":") {
+				poolDiskResource.PoolId = strings.Split(tv, ":")[0]
+			} else if strings.Contains(tv, "/") {
+				poolDiskResource.Device = tv
+			} else if strings.Contains(tv, "_") {
+				poolDiskResource.MediaType = tv
+			} else if val, err := strconv.ParseUint(tv, 10, 64); err == nil {
+				if tempSizeVal == 0 {
+					tempSizeVal = val
+				}
+			} else if strings.Contains(tv, "GiB") || strings.Contains(tv, "TiB") {
+				if strings.Contains(tv, "TiB") {
+					tempSizeVal = tempSizeVal * 1024
+				}
+				poolDiskResource.SizeInGib = tempSizeVal
 			}
 		}
-
-		if len(pVals) >= 2 {
-			tempPoolId := pVals[0]
-			poolId := strings.Split(tempPoolId, ":")[0]
-			drvPath := pVals[1]
-
-			poolDrives[poolId] = append(poolDrives[poolId], drvPath)
-		}
-
+		nodePoolResources = append(nodePoolResources, poolDiskResource)
 	}
+	for _, res := range nodePoolResources {
+		poolDrives[res.PoolId] = append(poolDrives[res.PoolId], res)
+	}
+	log.Debugf("Pool drives for node [%s]: %#v", n.Name, poolDrives)
 	return poolDrives, nil
 }
 

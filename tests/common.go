@@ -10,6 +10,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"k8s.io/utils/strings/slices"
+	"math"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/devans10/pugo/flasharray"
@@ -8346,7 +8348,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
-	var poolUuids []string
+	var poolsInUse []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
@@ -8354,38 +8356,39 @@ func GetPoolsInUse() ([]string, error) {
 
 	for _, pv := range pvlist.Items {
 		volumeID := pv.GetName()
-		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		poolUuids, err := GetPoolIDsFromVolName(volumeID)
 		//Needed this logic as a workaround for PWX-35637
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			continue
 		}
-		break
+		poolsInUse = append(poolsInUse, poolUuids...)
 	}
 
-	return poolUuids, err
+	return poolsInUse, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) ([]string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	var isIOsInProgress bool
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
+	poolIdsWithIOs := make([]string, 0)
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		node := node.GetStorageDriverNodes()[0]
 		for _, vol := range vols {
 			appVol, err := Inst().V.InspectVolume(vol.ID)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -8398,23 +8401,15 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			if isIOsInProgress {
 				log.Infof("IOs are in progress for [%v]", vol.Name)
 				poolUuids := appVol.ReplicaSets[0].PoolUuids
 				for _, p := range poolUuids {
-					n, err := GetNodeWithGivenPoolID(p)
-					if err != nil {
-						return "", err
-					}
-					eligibilityMap, err := GetPoolExpansionEligibility(n)
-					if err != nil {
-						return "", err
-					}
-					if eligibilityMap[n.Id] && eligibilityMap[p] {
-						return p, nil
+					if !slices.Contains(poolIdsWithIOs, p) {
+						poolIdsWithIOs = append(poolIdsWithIOs, p)
 					}
 
 				}
@@ -8422,14 +8417,17 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 		}
 
 	}
+	if len(poolIdsWithIOs) > 0 {
+		return poolIdsWithIOs, nil
+	}
 
-	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
+	return nil, fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context, expandType opsapi.SdkStoragePool_ResizeOperationType, targetSizeGiB uint64) (*opsapi.StoragePool, error) {
 
-	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
+	eligibilityMap, err := GetPoolExpansionEligibility(&stNode, expandType, targetSizeGiB)
 	if err != nil {
 		return nil, err
 	}
@@ -8532,7 +8530,7 @@ func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
-func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
+func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStoragePool_ResizeOperationType, targetIncrementInGiB uint64) (map[string]bool, error) {
 	var err error
 
 	namespace, err := Inst().V.GetVolumeDriverNamespace()
@@ -8542,9 +8540,6 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
-		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	}
 	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
 	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
@@ -8580,13 +8575,52 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 		d := drvM[fmt.Sprintf("%d", pool.ID)]
 		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
-		if len(d) == POOL_MAX_CLOUD_DRIVES {
-			eligibilityMap[pool.Uuid] = false
-		}
-
 		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
+		} else {
+			if expandType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+				if len(d) == POOL_MAX_CLOUD_DRIVES {
+					log.Infof("pool %s has reached max drives", pool.Uuid)
+					eligibilityMap[pool.Uuid] = false
+				} else {
+					baseDiskSizeInGib := d[0].SizeInGib
+					poolSize := uint64(0)
+					for _, drive := range d {
+						poolSize += drive.SizeInGib
+					}
+					if targetIncrementInGiB == 0 {
+						targetIncrementInGiB = baseDiskSizeInGib
+					}
+					targetSizeGiB := poolSize + targetIncrementInGiB
+					expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
+					if expectedPoolDrivesAfterExpansion > POOL_MAX_CLOUD_DRIVES {
+						log.Infof("pool %s will reach max drives if expanded to size [%v] using add-drive", pool.Uuid, targetSizeGiB)
+						eligibilityMap[pool.Uuid] = false
+					} else {
+						currentPoolDrives := len(d)
+						expectedNodeDrivesAfterExpansion := currentNodeDrives + (expectedPoolDrivesAfterExpansion - currentPoolDrives)
+						stc, err := Inst().V.GetDriver()
+						if err != nil {
+							return nil, err
+						}
+						if stc.Spec.CloudStorage.JournalDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if stc.Spec.CloudStorage.KvdbDeviceSpec != nil || stc.Spec.CloudStorage.SystemMdDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
+							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Id, pool.Uuid, targetSizeGiB)
+							eligibilityMap[pool.Uuid] = false
+							eligibilityMap[stNode.Id] = false
+						}
+
+					}
+
+				}
+			}
 		}
+
 	}
 
 	return eligibilityMap, nil
@@ -12915,19 +12949,6 @@ func IsPureCloudProvider() bool {
 	return false
 }
 
-// GetDrivesFromSpecificPoolOnNode returns List of Drives On Specific Node
-func GetDrivesFromSpecificPoolOnNode(n *node.Node, poolId string) ([]string, error) {
-	allPools, err := Inst().V.GetPoolDrives(n)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("All Pool IDs [%v]", allPools)
-	if val, ok := allPools[poolId]; ok {
-		return val, nil
-	}
-	return nil, fmt.Errorf("Failed to get details of Drive on Pool [%v]", poolId)
-}
-
 // GetMultipathDeviceOnPool Returns list of multipath devices on Pool
 func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	multipathMap := make(map[string][]string)
@@ -12946,7 +12967,7 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	for eachPoolId, eachDev := range allPools {
 		for _, dev := range eachDev {
 			for _, multiDev := range allMultipathDev {
-				if strings.Contains(dev, multiDev) {
+				if strings.Contains(dev.Device, multiDev) {
 					multipathMap[eachPoolId] = append(multipathMap[eachPoolId], multiDev)
 				}
 			}
@@ -13127,6 +13148,7 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 		}
 	}
 	return nil
+
 }
 
 // RunCmdsOnAllMasterNodes Runs a set of commands on all the master nodes

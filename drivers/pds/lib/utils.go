@@ -2970,7 +2970,7 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 // ExpandAndValidatePxPool will pick a random px-pool and expand its size
 func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	log.InfoD("Entering into PX-POOL Expansion...")
-	poolIDToResize := PickPoolToResize(context)
+	poolIDToResize := PickPoolToResize(context, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 	poolToBeResized := GetStoragePool(poolIDToResize)
 	log.InfoD("Pool to be resized is %v", poolToBeResized)
 	log.InfoD("Verify that pool resize is not in progress")
@@ -2984,7 +2984,7 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	var expectedSize uint64
 	var expectedSizeWithJournal uint64
 	log.InfoD("Calculate expected pool size and trigger pool resize")
-	expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+	expectedSize = poolToBeResized.TotalSize + 100*units.GiB
 	expectedSize = RoundUpValue(expectedSize)
 	isjournal, err := IsJournalEnabled()
 	log.FailOnError(err, "Failed to check is Journal enabled")
@@ -3031,10 +3031,25 @@ func GetStoragePool(poolIDToResize string) *api.StoragePool {
 }
 
 // PickPoolToResize Picks any random px-pool to resize if I/0s are not running
-func PickPoolToResize(contexts []*scheduler.Context) string {
-	poolWithIO, err := GetPoolIDWithIOs(contexts)
-	if poolWithIO == "" || err != nil {
+func PickPoolToResize(contexts []*scheduler.Context, expandType api.SdkStoragePool_ResizeOperationType, targetIncrementInGiB uint64) string {
+	poolsWithIO, err := GetPoolIDWithIOs(contexts)
+	if err != nil {
 		log.Warnf("No pool with IO found, picking a random pool in use to resize")
+	}
+	for _, poolID := range poolsWithIO {
+		log.Infof("checking pool expansion eliginblity of pool [%s] with IOs", poolID)
+		n, err := GetNodeWithGivenPoolID(poolID)
+		if err != nil {
+			continue
+		}
+		eligibilityMap, err := GetPoolExpansionEligibility(n, expandType, targetIncrementInGiB)
+		if err != nil {
+			continue
+		}
+		if eligibilityMap[n.Id] && eligibilityMap[poolID] {
+			return poolID
+		}
+
 	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	log.FailOnError(err, "Error identifying pool to run test")

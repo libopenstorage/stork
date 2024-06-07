@@ -764,7 +764,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get a pool with running IO
-		poolUUID := pickPoolToResize()
+		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Node Details of the Pool with IO

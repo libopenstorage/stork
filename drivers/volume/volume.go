@@ -62,6 +62,13 @@ type DriveConfig struct {
 	Labels map[string]string
 }
 
+type DiskResource struct {
+	PoolId    string
+	Device    string
+	MediaType string
+	SizeInGib uint64
+}
+
 // Options to pass to APIs
 type Options struct {
 	ValidateReplicationUpdateTimeout time.Duration
@@ -464,7 +471,7 @@ type Driver interface {
 	AddBlockDrives(n *node.Node, drivePath []string) error
 
 	// GetPoolDrives returns the map of poolID and drive name
-	GetPoolDrives(n *node.Node) (map[string][]string, error)
+	GetPoolDrives(n *node.Node) (map[string][]DiskResource, error)
 
 	// AddCloudDrive add cloud drives to the node using PXCTL
 	AddCloudDrive(n *node.Node, devcieSpec string, poolID int32) error

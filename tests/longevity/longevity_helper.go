@@ -364,16 +364,6 @@ func setHyperConvergedType(configData *map[string]string) {
 	}
 }
 
-func setSendGridEmailAPIKey(configData *map[string]string) error {
-	if apiKey, ok := (*configData)[SendGridEmailAPIKeyField]; ok {
-		SendGridEmailAPIKey = apiKey
-		delete(*configData, SendGridEmailAPIKeyField)
-		return nil
-	}
-	return fmt.Errorf("Failed to find [%s] field in config-map [%s] in namespace [%s]",
-		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
-}
-
 func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 	// Get upgrade endpoints from configMap
 	if upgradeEndpoints, ok := (*configData)[UpgradeEndpoints]; !ok {

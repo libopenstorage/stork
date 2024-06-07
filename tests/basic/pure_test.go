@@ -2,9 +2,8 @@ package tests
 
 import (
 	"fmt"
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-
 	"github.com/devans10/pugo/flasharray"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/portworx/sched-ops/k8s/storage"
 
 	"math/rand"
@@ -3608,8 +3607,8 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
 		})
 		defer appsValidateAndDestroy(contexts)
 
-		poolId, err := GetPoolIDWithIOs(contexts)
-		log.FailOnError(err, "Failed to Get Details of pool with Running IO")
+		poolId := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
+		dash.VerifyFatal(len(poolId) > 0, true, "Pool found to resize?")
 
 		// Get the list of nodes present in the cluster
 		nodeId, err := GetNodeFromPoolUUID(poolId)

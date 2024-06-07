@@ -1096,7 +1096,7 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 }
 
 // GetPoolDrives returns the map of poolID and drive name
-func (d *DefaultDriver) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+func (d *DefaultDriver) GetPoolDrives(n *node.Node) (map[string][]DiskResource, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPoolDrives()",

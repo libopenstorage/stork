@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"math/rand"
 	"path"
 	"strings"
@@ -1274,6 +1275,329 @@ var _ = Describe("{DeployApps}", func() {
 		ValidateApplications(contexts)
 
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
+	/*
+		Restart Multiple Storage Nodes with one KVDB Master in parallel and wait for the node to come back online
+		https://portworx.atlassian.net/browse/PTX-17618
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartMultipleStorageNodeOneKVDBMaster",
+			"Restart Multiple Storage Nodes with one KVDB Master",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+
+		listOfStorageNodes := node.GetStorageNodes()
+		// Test Needs minimum of 3 nodes other than 3 KVDB Member nodes
+		// so that few storage nodes (except kvdb nodes ) can be restarted
+		dash.VerifyFatal(len(listOfStorageNodes) >= 6, true, "Test Needs minimum of 6 Storage Nodes")
+
+		// assuming that there are minimum number of 3 nodes minus kvdb member nodes , we pick atleast 50% of the nodes for restating
+		var nodesToReboot []node.Node
+		getKVDBNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+
+		// Verifying if we have kvdb quorum set
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes")
+
+		// Get 50 % of other nodes for restart
+		nodeCountsForRestart := (len(listOfStorageNodes) - len(getKVDBNodes)) / 2
+		log.InfoD("total nodes picked for rebooting [%v]", nodeCountsForRestart)
+
+		isKVDBNode := func(n node.Node) (bool, bool) {
+			for _, eachKvdb := range getKVDBNodes {
+				if n.Id == eachKvdb.ID {
+					if eachKvdb.Leader == true {
+						return true, true
+					} else {
+						return true, false
+					}
+				}
+			}
+			return false, false
+		}
+
+		count := 0
+		// Add one KVDB node to the List
+		for _, each := range listOfStorageNodes {
+			kvdbNode, master := isKVDBNode(each)
+			if kvdbNode == true && master == true {
+				nodesToReboot = append(nodesToReboot, each)
+				count = count + 1
+			}
+		}
+		// Add nodes which are not KVDB Nodes
+		for _, each := range listOfStorageNodes {
+			kvdbNode, _ := isKVDBNode(each)
+			if kvdbNode == false {
+				if count <= nodeCountsForRestart {
+					nodesToReboot = append(nodesToReboot, each)
+					count = count + 1
+				}
+			}
+		}
+
+		for _, eachNode := range nodesToReboot {
+			log.InfoD("Selected Node [%v] for Restart", eachNode.Name)
+		}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootmulparallel-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Initiate all node reboot at once using Go Routines
+		wg.Add(len(nodesToReboot))
+
+		rebootNode := func(n node.Node) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			log.InfoD("Rebooting Node [%v]", n.Name)
+
+			err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				},
+			})
+			log.FailOnError(err, "failed to reboot Node [%v]", n.Name)
+
+		}
+
+		// Initiating Go Routing to reboot all the nodes at once
+		rebootAllNodes := func() {
+			for _, each := range nodesToReboot {
+				log.InfoD("Node to Reboot [%v]", each.Name)
+				go rebootNode(each)
+			}
+			wg.Wait()
+
+			// Wait for connection to come back online after reboot
+			for _, each := range nodesToReboot {
+				err = Inst().N.TestConnection(each, node.ConnectionOpts{
+					Timeout:         15 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+
+				err = Inst().S.IsNodeReady(each)
+				log.FailOnError(err, "Node [%v] is not in ready state", each.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(each, Inst().DriverStartTimeout)
+				log.FailOnError(err, "failed waiting for driver up on Node[%v]", each.Name)
+			}
+		}
+
+		// Reboot all the Nodes at once
+		rebootAllNodes()
+
+		// Verifications
+		getKVDBNodes, err = GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes after node reboot")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
+	/*
+		KVDB failover when lots of snap create/delete, volume inspect requests are coming
+		https://portworx.atlassian.net/browse/PTX-17729
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("KvdbFailoverSnapVolCreateDelete",
+			"KVDB failover when lot of snap create/delete, volume inspect requests are coming",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Expand multiple pool in the cluster at once in parallel"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		wg.Add(4)
+		var volumesCreated []string
+		var snapshotsCreated []string
+
+		terminate := false
+
+		stopRoutine := func() {
+			if !terminate {
+				terminate = true
+				wg.Done()
+				for _, each := range volumesCreated {
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
+				}
+				for _, each := range snapshotsCreated {
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					}
+				}
+			}
+		}
+		defer stopRoutine()
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			// Volume Create continuously
+			for {
+				if terminate {
+					break
+				}
+				// Create Volume on the Cluster
+				uuidObj := uuid.New()
+				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+				Size := uint64(rand.Intn(10) + 1)   // Size of the Volume between 1G to 10G
+				haUpdate := int64(rand.Intn(3) + 1) // Size of the HA between 1 and 3
+
+				volId, err := Inst().V.CreateVolume(VolName, Size, int64(haUpdate))
+				log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+				log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+
+				volumesCreated = append(volumesCreated, volId)
+			}
+		}()
+
+		inspectDeleteVolume := func(volumeId string) error {
+			defer GinkgoRecover()
+			if IsVolumeExits(volumeId) {
+				// inspect volume
+				appVol, err := Inst().V.InspectVolume(volumeId)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
+
+				err = Inst().V.DeleteVolume(appVol.Id)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
+			}
+			return nil
+		}
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			// Create Snapshots on Volumes continuously
+			for {
+				if terminate {
+					break
+				}
+				if len(volumesCreated) > 5 {
+					for _, eachVol := range volumesCreated {
+						uuidCreated := uuid.New()
+						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol, uuidCreated.String())
+
+						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol, snapshotName)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err, "error Creating Snapshot [%s]", eachVol)
+						}
+
+						snapshotsCreated = append(snapshotsCreated, snapshotResponse.GetSnapshotId())
+						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+
+						err = inspectDeleteVolume(eachVol)
+						log.FailOnError(err, "Inspect and Delete Volume failed on cluster with Volume ID [%v]", eachVol)
+
+						// Remove the first element
+						for i := 0; i < len(volumesCreated)-1; i++ {
+							volumesCreated[i] = volumesCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+					}
+				}
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			// Delete Snapshots on Volumes continuously
+			for {
+				if terminate {
+					break
+				}
+				if len(snapshotsCreated) > 5 {
+					for _, each := range snapshotsCreated {
+						err := inspectDeleteVolume(each)
+						log.FailOnError(err, "Inspect and Delete Snapshot failed on cluster with snapshot ID [%v]", each)
+
+						// Remove the first element
+						for i := 0; i < len(snapshotsCreated)-1; i++ {
+							snapshotsCreated[i] = snapshotsCreated[i+1]
+						}
+						// Resize the array by truncating the last element
+						snapshotsCreated = snapshotsCreated[:len(snapshotsCreated)-1]
+					}
+				}
+			}
+		}()
+
+		for i := 0; i < 6; i++ {
+			// Wait for KVDB Members to be online
+			err := WaitForKVDBMembers()
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed waiting for KVDB members to be active")
+			}
+
+			// Kill KVDB Master Node
+			masterNode, err := GetKvdbMasterNode()
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed getting details of KVDB master node")
+			}
+
+			// Get KVDB Master PID
+			pid, err := GetKvdbMasterPID(*masterNode)
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed getting PID of KVDB master node")
+			}
+
+			log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+			// Kill kvdb master PID for regular intervals
+			err = KillKvdbMemberUsingPid(*masterNode)
+			if err != nil {
+				stopRoutine()
+				log.FailOnError(err, "failed to kill KVDB Node")
+			}
+
+			// Wait for some time after killing kvdb master Node
+			time.Sleep(5 * time.Minute)
+		}
+
+		terminate = true
+		wg.Wait()
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)

@@ -38,7 +38,7 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 300)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 	})
@@ -103,7 +103,7 @@ var _ = Describe("{PoolExpandSmoke}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 	})
@@ -171,7 +171,7 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -256,7 +256,7 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -346,7 +346,7 @@ var _ = Describe("{PoolExpandDiskResizeWithReboot}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -401,7 +401,7 @@ var _ = Describe("{PoolExpandDiskAddWithReboot}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -456,7 +456,7 @@ var _ = Describe("{PoolExpandDiskResizePXRestart}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -518,7 +518,7 @@ var _ = Describe("{PoolExpandDiskAddPXRestart}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -645,7 +645,7 @@ var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -721,7 +721,7 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -836,7 +836,7 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -903,7 +903,7 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -977,7 +977,7 @@ var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -1057,7 +1057,7 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 	})
@@ -1137,7 +1137,7 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 	})
@@ -1273,7 +1273,7 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 	})
@@ -1336,7 +1336,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", func() {
 		contexts = scheduleApps()
 	})
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
@@ -1433,7 +1433,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -1492,7 +1492,7 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -1591,7 +1591,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 		ValidateApplications(contexts)
 	})
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -1684,7 +1684,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 		contexts = scheduleApps()
 	})
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -1874,7 +1874,7 @@ var _ = Describe("{DriveAddDifferentTypesAndResize}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
