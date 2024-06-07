@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
+	"github.com/rancher/norman/types"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"os"
 	"strings"
@@ -457,6 +458,78 @@ func (r *Rancher) SetASGClusterSize(perZoneCount int64, timeout time.Duration) e
 		Type:      "Function",
 		Operation: "SetASGClusterSize()",
 	}
+}
+
+// CreateCustomPodSecurityAdmissionConfigurationTemplate creates a custom PSA template
+func (r *Rancher) CreateCustomPodSecurityAdmissionConfigurationTemplate(psaTemplateName string, description string, psaTemplateDefaults *rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults, psaTemplateExemptions *rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions) error {
+	PSAInterface := &rancherClient.PodSecurityAdmissionConfigurationTemplate{
+		Name:        psaTemplateName,
+		Description: description,
+		Configuration: &rancherClient.PodSecurityAdmissionConfigurationTemplateSpec{
+			Defaults:   psaTemplateDefaults,
+			Exemptions: psaTemplateExemptions,
+		},
+	}
+	log.InfoD("Create custom PSA template: %v with template defaults %v and template exemptions %v", psaTemplateName, psaTemplateDefaults, psaTemplateExemptions)
+	_, err := r.client.PodSecurityAdmissionConfigurationTemplate.Create(PSAInterface)
+	return err
+}
+
+// GetRKEClusterList returns the list of RKE clusters added to Rancher
+func (r *Rancher) GetRKEClusterList() ([]string, error) {
+	var clusterList []string
+	log.InfoD("Getting list of RKE clusters added to Rancher")
+	clusterCollection, err := r.client.Cluster.List(nil)
+	if err != nil {
+		return clusterList, err
+	}
+	for _, cluster := range clusterCollection.Data {
+		clusterList = append(clusterList, cluster.Name)
+	}
+	return clusterList, nil
+}
+
+// GetCurrentClusterWidePSA returns the current cluster wide PSA configured
+func (r *Rancher) GetCurrentClusterWidePSA(clusterName string) (string, error) {
+	clusterCollection, err := r.client.Cluster.List(nil)
+	if err != nil {
+		return "", err
+	}
+	for _, cluster := range clusterCollection.Data {
+		if cluster.Name == clusterName {
+			log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
+			return cluster.DefaultPodSecurityAdmissionConfigurationTemplateName, nil
+		}
+	}
+	return "", fmt.Errorf("cluster with cluster name %s is not present", clusterName)
+}
+
+// GetPodSecurityAdmissionConfigurationTemplateList returns the list of PSA Templates present in the Rancher
+func (r *Rancher) GetPodSecurityAdmissionConfigurationTemplateList() (*rancherClient.PodSecurityAdmissionConfigurationTemplateCollection, error) {
+	var listOptions *types.ListOpts
+	log.InfoD("Fetching the list PSA Templates present in the Rancher")
+	psaList, err := r.client.PodSecurityAdmissionConfigurationTemplate.ListAll(listOptions)
+	return psaList, err
+}
+
+// UpdateClusterWidePSA add the cluster wide PSA to the given cluster
+func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error {
+	clusterCollection, err := r.client.Cluster.List(nil)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Updating cluster wide PSA %v for cluster %v", psaName, clusterName)
+	for _, cluster := range clusterCollection.Data {
+		if cluster.Name == clusterName {
+			clusterInterface := &rancherClient.Cluster{
+				Name: cluster.Name,
+				DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+			}
+			_, err = r.client.Cluster.Update(&cluster, clusterInterface)
+			return err
+		}
+	}
+	return fmt.Errorf("cluster with cluster name %s is not present", clusterName)
 }
 
 func init() {

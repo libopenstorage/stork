@@ -18,3 +18,4 @@ type PodSecurityAdmissionConfigurationTemplateDefaults struct {
 	Warn           string `json:"warn,omitempty" yaml:"warn,omitempty"`
 	WarnVersion    string `json:"warn-version,omitempty" yaml:"warn-version,omitempty"`
 }
+

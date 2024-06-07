@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1173,5 +1174,69 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
+	})
+})
+
+// This is a dummy PSA testcase to validate the PSA related methods for RKE
+var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]...), func() {
+	JustBeforeEach(func() {
+		log.InfoD("No pre-configuration needed")
+	})
+
+	It("Dummy PSA testcase to validate the PSA related methods for RKE", func() {
+		Step("Dummy PSA testcase to validate the PSA related methods for RKE", func() {
+			var clusterList []string
+			var err1 error
+			var defaultExemptListForRestrictedPSA []string
+			log.InfoD("Getting the list of all the RKE clusters added to rancher")
+			clusterList, err1 = Inst().S.(*rke.Rancher).GetRKEClusterList()
+			log.FailOnError(err1, "Getting RKE cluster list")
+			log.InfoD("The RKE cluster list is %v", clusterList)
+			err := RemoveElementByValue(&clusterList, RancherActiveCluster)
+
+			log.InfoD("Getting the cluster wide PSA setting at the beginning of the testcase")
+			currentPSA, err := Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
+			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
+			log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+
+			log.InfoD("Getting the list of default PSA templates present in the Rancher")
+			psaList, err := Inst().S.(*rke.Rancher).GetPodSecurityAdmissionConfigurationTemplateList()
+			log.FailOnError(err, "Getting default PSA list")
+			log.InfoD("Default PSA Template list is %v", psaList)
+			for _, psa := range psaList.Data {
+				if psa.Name == "rancher-restricted" {
+					defaultExemptListForRestrictedPSA = psa.Configuration.Exemptions.Namespaces
+					break
+				}
+			}
+			log.InfoD("Exempted list of namespaces for default PSA rancher-restricted is %v", defaultExemptListForRestrictedPSA)
+
+			log.InfoD("Creating a custom PSA template with restricted mode")
+			psaTemplateDefaults := &rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults{
+				Enforce: "restricted",
+			}
+			pxBackupNS, err := backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting backup namespace")
+			portworxNamespace, err := Inst().S.GetPortworxNamespace()
+			log.FailOnError(err, "Getting portworx namespace")
+			nsExemptList := []string{"default", pxBackupNS, portworxNamespace}
+			newList := AppendList(nsExemptList, defaultExemptListForRestrictedPSA)
+			psaTemplateExemptions := &rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions{
+				Namespaces: newList,
+			}
+			err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate("custom-restricted-psa3", "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
+			log.FailOnError(err, "Creating new PSA template with restricted mode")
+			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], "custom-restricted-psa3")
+			log.FailOnError(err, "Adding custom PSA with restricted mode")
+
+			log.InfoD("Verifying if custom PSA is applied to the cluster")
+			currentPSA, err = Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
+			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
+			log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+		})
+	})
+
+	JustAfterEach(func() {
+		log.InfoD("Nothing to be deleted")
 	})
 })

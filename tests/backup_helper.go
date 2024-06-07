@@ -3763,6 +3763,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 	return false
 }
 
+// AppendList append only unique items of one list into another list
+func AppendList[T comparable](dataSlice1 []T, dataSlice2 []T) []T {
+	totalLength := len(dataSlice1) + len(dataSlice2)
+	map1 := make(map[T]bool, totalLength)
+	list1 := make([]T, 0, totalLength)
+	for _, element := range dataSlice1 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	for _, element := range dataSlice2 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	return list1
+}
+
 func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	backupEnumerateReq := &api.BackupEnumerateRequest{
