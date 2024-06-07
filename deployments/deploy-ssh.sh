@@ -242,7 +242,6 @@ if [ -n "$ANTHOS_HOST_PATH" ]; then
     ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
 fi
 
-
 for i in $@
 do
 case $i in
@@ -861,6 +860,10 @@ if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
     $cleaned_torpedo_pod_ginkgo_command
     exit $?
 fi
+
+if [ -z "${ANTHOS_HOST_PATH}" ]; then
+  sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/d' torpedo.yaml
+fi 
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
