@@ -13280,3 +13280,64 @@ func VerifyClusterlevelPSA() error {
 
 	return nil
 }
+
+// DeleteFilesFromS3Bucket deletes any supplied file from the supplied bucket
+func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove specific files: [%v]", err)
+	}
+
+	s3Client := s3.New(sess)
+
+	// List objects in the bucket.
+	listInput := &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}
+	listOutput, err := s3Client.ListObjectsV2(listInput)
+	if err != nil {
+		return fmt.Errorf("Failed to list objects in S3 bucket: [%v]", err)
+	}
+
+	// Filter objects that contain the fileName in their key.
+	var objectsToDelete []*s3.ObjectIdentifier
+	for _, item := range listOutput.Contents {
+		if strings.Contains(*item.Key, fileName) {
+			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+				Key: item.Key,
+			})
+		}
+	}
+	if len(objectsToDelete) == 0 {
+		return nil
+	}
+
+	// Create a batch delete request.
+	deleteInput := &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &s3.Delete{
+			Objects: objectsToDelete,
+		},
+	}
+	keys := make([]string, len(deleteInput.Delete.Objects))
+	for i, obj := range deleteInput.Delete.Objects {
+		keys[i] = *obj.Key
+	}
+	bucket := *deleteInput.Bucket
+
+	// Delete the filtered objects.
+	_, err = s3Client.DeleteObjects(deleteInput)
+	if err != nil {
+		return fmt.Errorf("Failed to delete objects from S3 bucket: [%v]", err)
+	}
+	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
+	return nil
+}
