@@ -2019,7 +2019,7 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 		}
 
 		// Ignore partitions, skip straight to the parent mapper device
-		if strings.Contains(line, "-part") {
+		if strings.Contains(line, "p") && !strings.Contains(line, "sd") { // "p" covers both "<serial>p<number>" and "<serial>-part<number>", but we don't want to skip "sd*p" devices
 			continue
 		}
 

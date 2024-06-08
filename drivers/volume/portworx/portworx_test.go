@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -276,4 +277,70 @@ func TestEstimatedVolumeSize(t *testing.T) {
 		msg = fmt.Sprintf("Expected: %v, got: %v", tc.expectedResizeCount, resizeCount)
 		require.Equal(t, tc.expectedResizeCount, resizeCount)
 	}
+}
+
+func TestParseLsblkOutput_PFormat(t *testing.T) {
+	lsblkOutput := strings.ReplaceAll(`
+3624a9370afb23ff64fc142a600062859p1    3219128320
+*-3624a9370afb23ff64fc142a600062859 1073741824000
+  |-sdf                             1073741824000
+  *-sdg                             1073741824000
+sdd                                  137438953472
+sdb                                   68719476736
+3624a9370afb23ff64fc142a600062859p2 1070521630208
+*-3624a9370afb23ff64fc142a600062859 1073741824000
+  |-sdf                             1073741824000
+  *-sdg                             1073741824000
+sde                                  137438953472
+sdc                                  137438953472
+sda2                                 133438636032
+*-sda                                137438953472
+sda1                                   3999268864
+*-sda                                137438953472
+3624a9370afb23ff64fc142a600062868     34359738368
+|-sdp                                 34359738368
+*-sdap                                34359738368`, "*", "`")
+	out, err := parseLsblkOutput(lsblkOutput)
+	require.NoError(t, err)
+	require.Contains(t, out, "3624a9370afb23ff64fc142a600062859")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062859"].SinglePaths, "sdf")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062859"].SinglePaths, "sdg")
+	require.Equal(t, uint64(1073741824000), out["3624a9370afb23ff64fc142a600062859"].Size)
+	require.Contains(t, out, "3624a9370afb23ff64fc142a600062868")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062868"].SinglePaths, "sdp")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062868"].SinglePaths, "sdap")
+	require.Equal(t, uint64(34359738368), out["3624a9370afb23ff64fc142a600062868"].Size)
+}
+
+func TestParseLsblkOutput_PartFormat(t *testing.T) {
+	lsblkOutput := strings.ReplaceAll(`
+3624a9370afb23ff64fc142a600062859-part1    3219128320
+*-3624a9370afb23ff64fc142a600062859     1073741824000
+  |-sdf                                 1073741824000
+  *-sdg                                 1073741824000
+sdd                                      137438953472
+sdb                                       68719476736
+3624a9370afb23ff64fc142a600062859-part2 1070521630208
+*-3624a9370afb23ff64fc142a600062859     1073741824000
+  |-sdf                                 1073741824000
+  *-sdg                                 1073741824000
+sde                                      137438953472
+sdc                                      137438953472
+sda2                                     133438636032
+*-sda                                    137438953472
+sda1                                       3999268864
+*-sda                                    137438953472
+3624a9370afb23ff64fc142a600062868         34359738368
+|-sdap                                    34359738368
+*-sdp                                     34359738368`, "*", "`")
+	out, err := parseLsblkOutput(lsblkOutput)
+	require.NoError(t, err)
+	require.Contains(t, out, "3624a9370afb23ff64fc142a600062859")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062859"].SinglePaths, "sdf")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062859"].SinglePaths, "sdg")
+	require.Equal(t, uint64(1073741824000), out["3624a9370afb23ff64fc142a600062859"].Size)
+	require.Contains(t, out, "3624a9370afb23ff64fc142a600062868")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062868"].SinglePaths, "sdp")
+	require.Contains(t, out["3624a9370afb23ff64fc142a600062868"].SinglePaths, "sdap")
+	require.Equal(t, uint64(34359738368), out["3624a9370afb23ff64fc142a600062868"].Size)
 }
