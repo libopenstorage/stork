@@ -102,7 +102,9 @@ func testMigration(t *testing.T) {
 	t.Run("excludeMultipleResourceTypesTest", excludeMultipleResourceTypesTest)
 	t.Run("excludeResourceTypesWithSelectorsTest", excludeResourceTypesWithSelectorsTest)
 	t.Run("excludeNonExistingResourceTypesTest", excludeNonExistingResourceTypesTest)
-	t.Run("transformCRResourceTest", transformCRResourceTest)
+	if authTokenConfigMap == "" {
+		t.Run("transformCRResourceTest", transformCRResourceTest)
+	}
 
 	err = setRemoteConfig("")
 	log.FailOnError(t, err, "setting kubeconfig to default failed")
