@@ -1154,6 +1154,23 @@ func getVMDiskMountType(pod *corev1.Pod, vmDisk *vmDisk) (string, error) {
 }
 
 func verifyVMStayedUp(t *testing.T, testState *kubevirtTestState) {
+
+	// VMI ready condition seems to flip to "false" for a moment even if the VM is running.
+	// Give it some time to stabilize. We will verify the VMI UID to ensure that the VM did not restart.
+	require.Eventuallyf(t, func() bool {
+		ready, _, _, _, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
+		if err != nil {
+			log.Warn("Failed to get VMI %s/%s: %v", testState.vmPod.Namespace, testState.vmiName, err)
+			return false
+		}
+		if !ready {
+			log.Warn("Waiting for VMI %s/%s to be ready", testState.vmPod.Namespace, testState.vmiName)
+			return false
+		}
+		log.InfoD("VMI %s/%s is ready", testState.vmPod.Namespace, testState.vmiName)
+		return true
+	}, 1*time.Minute, 5*time.Second, "VMI %s/%s did not become ready", testState.vmPod.Namespace, testState.vmiName)
+
 	// If a VM is stopped and started again, a new VMI object gets created with the same name (i.e. the UID will change).
 	// We are using that fact here to ensure that the VM did not stop during our test.
 	ready, vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
