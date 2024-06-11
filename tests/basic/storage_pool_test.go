@@ -5560,8 +5560,8 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 		var expectedSize uint64
 		var expectedSizeWithJournal uint64
 
-		// Marking the expected size to be 2TB
-		expectedSize = (2048 * 1024 * 1024 * 1024 * 1024) / units.TiB
+		// Marking the expected size to be 20TB
+		expectedSize = (2048 * 1024 * 1024 * 1024 * 1024 * 1024) / units.TiB
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
