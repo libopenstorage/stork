@@ -1,0 +1,50 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: async-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+---
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: hippo
+spec:
+  image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi8-15.3-2
+  postgresVersion: 15
+  instances:
+    - name: instance1
+      dataVolumeClaimSpec:
+        accessModes:
+        - "ReadWriteMany"
+        storageClassName: async-sc # Specify your storage class here
+        resources:
+          requests:
+            storage: 1Gi
+  backups:
+    pgbackrest:
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi8-2.45-2
+      repos:
+      - name: repo1
+        volume:
+          volumeClaimSpec:
+            accessModes:
+            - "ReadWriteMany"
+            storageClassName: async-sc # Specify your storage class here
+            resources:
+              requests:
+                storage: 1Gi
+      - name: repo2
+        volume:
+          volumeClaimSpec:
+            accessModes:
+            - "ReadWriteMany"
+            storageClassName: async-sc # Specify your storage class here
+            resources:
+              requests:
+                storage: 1Gi
+  proxy:
+    pgBouncer:
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbouncer:ubi8-1.19-2

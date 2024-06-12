@@ -2,8 +2,11 @@ package tests
 
 import (
 	//"context"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -15,6 +18,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,8 +26,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/storkctlcli"
-
 	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -44,23 +48,24 @@ const (
 	migrationKey              = "async-dr-"
 	migrationSchedKey         = "mig-sched-"
 	metromigrationKey         = "metro-dr-"
+	clusterwideNs             = "openshift-operators"
 )
 
 var (
-	kubeConfigWritten   bool
+	kubeConfigWritten bool
 )
 
 type failoverFailbackParam struct {
-	action string
-	failoverOrFailbackNs string
-	migrationSchedName string
-	configPath string
-	single bool
-	skipSourceOp bool
-	includeNs bool
-	excludeNs bool
+	action                    string
+	failoverOrFailbackNs      string
+	migrationSchedName        string
+	configPath                string
+	single                    bool
+	skipSourceOp              bool
+	includeNs                 bool
+	excludeNs                 bool
 	extraArgsFailoverFailback map[string]string
-	contexts []*scheduler.Context
+	contexts                  []*scheduler.Context
 }
 
 // This test performs basic test of starting an application, creating cluster pair,
@@ -476,9 +481,172 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", func()
 	})
 })
 
+var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", func() {
+	testrailID = 296287
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296287
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkctlPerformFailoverFailbackPostgresql", "Failover and Failback using storkctl for postgresql namespaced operator", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	
+	var (
+		appPath = "/torpedo/deployments/customconfigs/pgo.yaml"
+		opPath = "/torpedo/deployments/customconfigs/pgo-operator.yaml"
+		opName = "pgo"
+		crName = "postgrescluster"
+		ns = "post"
+	)
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			
+			podList, err := createOperatorBasedApp(appPath, opPath, ns, false)
+			log.FailOnError(err, "Failed to create operator based app")
+			log.Infof("PodList is: %v", podList)
+			podCount := len(podList.Items)
+			validateOperatorMigFailover(ns, "asyncdr", opName, crName, podCount, false)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", func() {
+	testrailID = 296285
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296285
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkctlPerformFailoverFailbackElasticSearch", "Failover and Failback using storkctl for elasticsearch namespaced operator", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var (
+		appPath = "/torpedo/deployments/customconfigs/elasticcr.yaml"
+		opPath = "/torpedo/deployments/customconfigs/elastic-op.yaml"
+		opName = "elastic-operator"
+		crName = "elasticsearch"
+		ns = "esop"
+	)
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			podList, err := createOperatorBasedApp(appPath, opPath, ns, false)
+			log.FailOnError(err, "Failed to create operator based app")
+			log.Infof("PodList is: %v", podList)
+			podCount := len(podList.Items)
+			validateOperatorMigFailover(ns, "asyncdr", opName, crName, podCount, false)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", func() {
+	testrailID = 297919
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297919
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkctlPerformFailoverFailbackPostgresqlClusterwide", "Failover and Failback using storkctl for postgresql clusterwide operator", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var (
+		appPath = "/torpedo/deployments/customconfigs/pgo.yaml"
+		opPath = "/torpedo/deployments/customconfigs/pgo-operator-clusterwide.yaml"
+		opName = "pgo"
+		crName = "postgrescluster"
+		ns = "pgcw-" + time.Now().Format("15h03m05s")
+	)
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			podList, err := createOperatorBasedApp(appPath, opPath, ns, true)
+			log.FailOnError(err, "Failed to create operator based app")
+			log.Infof("PodList is: %v", podList)
+			podCount := len(podList.Items)
+			validateOperatorMigFailover(ns, "asyncdr", opName, crName, podCount, true)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
+	testrailID = 297921
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297921
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkctlPerformFailoverFailbackeckEsClusterwide", "Failover and Failback using storkctl for elasticsearch clusterwide operator", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var (
+		appPath = "/torpedo/deployments/customconfigs/elasticcr.yaml"
+		opPath = "/torpedo/deployments/customconfigs/elastic-op-cw.yaml"
+		opName = "elastic-operator"
+		crName = "elasticsearch"
+		ns = "escw-" + time.Now().Format("15h03m05s")
+	)
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			podList, err := createOperatorBasedApp(appPath, opPath, ns, true)
+			log.FailOnError(err, "Failed to create operator based app")
+			log.Infof("PodList is: %v", podList)
+			podCount := len(podList.Items)
+			validateOperatorMigFailover(ns, "asyncdr", opName, crName, podCount, true)
+		})
+	})
+	
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool) {
 	defaultNs := "kube-system"
-    migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
+	migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
 	migNamespaces := strings.Join(migrationNamespaces, ",")
 	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
 	log.FailOnError(err, "Failed to get source configPath: %v", err)
@@ -515,21 +683,21 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		extraArgsFailoverFailback["exclude-namespaces"] = migrationNamespaces[0]
 	}
 	failoverParam := failoverFailbackParam{
-		action: "failover",
-		failoverOrFailbackNs: defaultNs,
-		migrationSchedName: migrationSchedName,
-		configPath: kubeConfigPathDest,
-		single: single,
-		skipSourceOp: skipSourceOp,
-		includeNs: includeNs,
-		excludeNs: excludeNs,
+		action:                    "failover",
+		failoverOrFailbackNs:      defaultNs,
+		migrationSchedName:        migrationSchedName,
+		configPath:                kubeConfigPathDest,
+		single:                    single,
+		skipSourceOp:              skipSourceOp,
+		includeNs:                 includeNs,
+		excludeNs:                 excludeNs,
 		extraArgsFailoverFailback: extraArgsFailoverFailback,
-		contexts: contexts,
+		contexts:                  contexts,
 	}
 	performFailoverFailback(failoverParam)
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
-	    log.FailOnError(err, "Error setting source config: %v", err)
+		log.FailOnError(err, "Error setting source config: %v", err)
 		for _, ctx := range contexts {
 			waitForPodsToBeRunning(ctx, false)
 		}
@@ -547,16 +715,16 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		}
 		createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPathDest, extraArgs)
 		failoverback := failoverFailbackParam{
-			action: "failback",
-			failoverOrFailbackNs: defaultNs,
-			migrationSchedName: newMigSched,
-			configPath: kubeConfigPathDest,
-			single: single,
-			skipSourceOp: false,
-			includeNs: includeNs,
-			excludeNs: excludeNs,
+			action:                    "failback",
+			failoverOrFailbackNs:      defaultNs,
+			migrationSchedName:        newMigSched,
+			configPath:                kubeConfigPathDest,
+			single:                    single,
+			skipSourceOp:              false,
+			includeNs:                 includeNs,
+			excludeNs:                 excludeNs,
 			extraArgsFailoverFailback: extraArgsFailoverFailback,
-			contexts: contexts,
+			contexts:                  contexts,
 		}
 		performFailoverFailback(failoverback)
 	}
@@ -661,7 +829,7 @@ func WaitForMigration(migrationList []*storkapi.Migration) error {
 			if err != nil {
 				return "", false, err
 			}
-			if mig.Status.Status != storkapi.MigrationStatusSuccessful {
+			if mig.Status.Status != storkapi.MigrationStatusSuccessful && mig.Status.Status != storkapi.MigrationStatusPartialSuccess {
 				log.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
 				isComplete = false
 			}
@@ -726,9 +894,9 @@ func createMigSchdAndValidateMigration(migSchedName, cpName, migNs, resetConfigP
 	log.FailOnError(err, "Error creating migrationschedule: %v", err)
 	err = hardSetConfig(resetConfigPath)
 	log.FailOnError(err, "Error setting destination config: %v", err)
+	time.Sleep(time.Second * 30)
 	migSchedule, err := storkops.Instance().GetMigrationSchedule(migSchedName, migNs)
 	log.FailOnError(err, "failed to get migrationschedule %v, err: %v", migSchedName, err)
-	time.Sleep(time.Second * 30)
 	migrations := migSchedule.Status.Items["Interval"]
 	for _, mig := range migrations {
 		migration, err = storkops.Instance().GetMigration(mig.Name, migNs)
@@ -750,7 +918,7 @@ func performFailoverFailback(foFbParams failoverFailbackParam) {
 	actionName := getStatusCmdArgs[3]
 	err = storkctlcli.WaitForActionSuccessful(actionName, foFbParams.failoverOrFailbackNs, Inst().GlobalScaleFactor)
 	log.FailOnError(err, "Error in performing %v: %v", foFbParams.action, err)
-	validatePodsRunning(foFbParams.action, foFbParams.single, foFbParams.includeNs, foFbParams.excludeNs, foFbParams.contexts) 
+	validatePodsRunning(foFbParams.action, foFbParams.single, foFbParams.includeNs, foFbParams.excludeNs, foFbParams.contexts)
 }
 
 func validatePodsRunning(action string, single, includeNs, excludeNs bool, contexts []*scheduler.Context) {
@@ -817,10 +985,265 @@ func hardSetConfig(configPath string) error {
 
 func waitForPodsToBeRunning(context *scheduler.Context, expectedFail bool) {
 	log.Infof("Verifying Context [%v]", context.App.Key)
-	err := Inst().S.WaitForRunning(context, 5 * time.Minute, 10 * time.Second)
+	err := Inst().S.WaitForRunning(context, 5*time.Minute, 10*time.Second)
 	if expectedFail {
 		log.FailOnNoError(err, "Pods are up on destination, they shouldn't be up")
 	} else {
 		log.FailOnError(err, "Error waiting for pods to be up")
 	}
+}
+
+func validateOperatorMigFailover(namespace, clusterType, opName, crName string, podCount int, clusterwide bool) {
+	cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
+	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
+	log.FailOnError(err, "Failed to get source configPath: %v", err)
+	kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
+	log.FailOnError(err, "Failed to get destination configPath: %v", err)
+	if clusterType == "asyncdr" {
+		err = ScheduleBidirectionalClusterPair(cpName, namespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+	} else {
+		err = ScheduleBidirectionalClusterPair(cpName, namespace, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+	}
+	log.FailOnError(err, "Failed creating bidirectional cluster pair")
+	log.Infof("Start migration schedule and perform failover")
+	migrationSchedName := migrationSchedKey + time.Now().Format("15h03m05s")
+	extraArgs := map[string]string{
+		"namespaces":             namespace,
+		"kubeconfig":             kubeConfigPathSrc,
+		"exclude-resource-types": "ClusterServiceVersion,operatorconditions,OperatorGroup,InstallPlan,Subscription",
+		"exclude-selectors":      "olm.managed=true",
+	}
+	extraArgsFailoverFailback := map[string]string{
+		"kubeconfig": kubeConfigPathDest,
+	}
+	err = patchStashStrategy(crName)
+	log.FailOnError(err, "Failed to patch stash strategy")
+	createMigSchdAndValidateMigration(migrationSchedName, cpName, namespace, kubeConfigPathSrc, extraArgs)
+	err = hardSetConfig(kubeConfigPathSrc)
+	log.FailOnError(err, "Switching context to source cluster failed")
+	scaleCrApp(namespace, opName, true, clusterwide)
+	err = SetCustomKubeConfig(asyncdr.SecondCluster)
+	log.FailOnError(err, "Switching context to second cluster failed")
+	err, output := storkctlcli.PerformFailoverOrFailback("failover", namespace, migrationSchedName, false, extraArgsFailoverFailback)
+	log.FailOnError(err, "Error running perform %v: %v", "failover", err)
+	actionName := extractActionName(output, "failover")
+	err = storkctlcli.WaitForActionSuccessful(actionName, namespace, Inst().GlobalScaleFactor)
+	log.FailOnError(err, "Error in performing %v: %v", "failover", err)
+	time.Sleep(5 * time.Minute)
+	podListDest, err := core.Instance().GetPods(namespace, nil)
+	if err != nil {
+		log.Errorf("Error getting podlist: %v", err)
+	}
+	err = asyncdr.WaitForPodToBeRunning(podListDest)
+	if err != nil {
+		log.Errorf("Error waiting for pod to be running: %v", err)
+	}
+	podCountDest := len(podListDest.Items)
+	dash.VerifyFatal(podCountDest == podCount, true, "Pod count is not equal to expected")
+	err = patchStashStrategy(crName)
+	log.FailOnError(err, "Failed to patch stash strategy")
+	err = hardSetConfig(kubeConfigPathDest)
+	log.FailOnError(err, "Switching context to dest cluster failed")
+	migrationSchedNameRev := migrationSchedKey + time.Now().Format("15h03m05s") + "-rev"
+	extraArgs["kubeconfig"] = kubeConfigPathDest
+	createMigSchdAndValidateMigration(migrationSchedNameRev, cpName, namespace, kubeConfigPathDest, extraArgs)
+	err = hardSetConfig(kubeConfigPathDest)	
+	log.FailOnError(err, "Failed to set destination kubeconfig")
+	scaleCrApp(namespace, opName, true, clusterwide)
+	err = SetDestinationKubeConfig()
+	log.FailOnError(err, "Failed to set destination kubeconfig")
+	err, output = storkctlcli.PerformFailoverOrFailback("failback", namespace, migrationSchedNameRev, false, extraArgsFailoverFailback)
+	log.FailOnError(err, "Error running perform %v: %v", "failback", err)
+	actionName = extractActionName(output, "failback")
+	err = storkctlcli.WaitForActionSuccessful(actionName, namespace, Inst().GlobalScaleFactor)
+	log.FailOnError(err, "Error in performing %v: %v", "failback", err)
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "Failed to set source kubeconfig")
+	scaleCrApp(namespace, opName, false, clusterwide)
+	time.Sleep(5 * time.Minute)
+	err = hardSetConfig(kubeConfigPathSrc)
+	log.FailOnError(err, "Failed to set source kubeconfig")
+	podListFailback, err := core.Instance().GetPods(namespace, nil)
+	if err != nil {
+		log.Errorf("Error getting podlist: %v", err)
+	}
+	err = asyncdr.WaitForPodToBeRunning(podListFailback)
+	if err != nil {
+		log.Errorf("Error waiting for pod to be running: %v", err)
+	}
+	podCountFailback := len(podListFailback.Items)
+	dash.VerifyFatal(podCountFailback == podCount, true, "Pod count is not equal to expected")
+}
+
+func scaleCrApp(namespace, opName string, down, cw bool) {
+	opNs := namespace
+	if cw {
+		opNs = clusterwideNs
+	}
+	desRepl := int32(1)
+	if down {
+		desRepl = int32(0)
+	}
+	deplop, err := apps.Instance().GetDeployment(opName, opNs)
+	log.FailOnError(err, "Failed to get deployment")
+	deplop.Spec.Replicas = &desRepl
+	_, err = apps.Instance().UpdateDeployment(deplop)
+	log.FailOnError(err, "Failed to scale deployment")
+
+	if down {
+		depl, err := apps.Instance().ListDeployments(namespace, meta_v1.ListOptions{})
+		log.FailOnError(err, "Failed to list deployments")
+		for _, d := range depl.Items {
+			if d.Name != opName {
+				d.Spec.Replicas = &desRepl
+				_, err = apps.Instance().UpdateDeployment(&d)
+				log.FailOnError(err, "Failed to scale down deployment")
+			}
+		}
+		sts, err := apps.Instance().ListStatefulSets(namespace, meta_v1.ListOptions{})
+		log.FailOnError(err, "Failed to list deployments")
+		for _, s := range sts.Items {
+			s.Spec.Replicas = &desRepl
+			_, err = apps.Instance().UpdateStatefulSet(&s)
+			log.FailOnError(err, "Failed to scale down statefulset")
+		}
+	}
+}
+
+func createOperatorBasedApp(appPath, opPath, ns string, clusterwide bool) (*v1.PodList, error) {
+	nsSpec := &v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: ns,
+		},
+	}
+	_, err := core.Instance().CreateNamespace(nsSpec)
+	if err != nil {
+		return nil, err
+	}
+	if clusterwide {
+		deployAndWaitForRunning(opPath, clusterwideNs, "src")
+	} else {
+		deployAndWaitForRunning(opPath, ns, "src")
+	}
+	deployAndWaitForRunning(appPath, ns, "src")
+	podList, err := core.Instance().GetPods(ns, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		return nil, err
+	}
+	_, err = core.Instance().CreateNamespace(nsSpec)
+	if err != nil {
+		return nil, err
+	}
+	// Deploy operator
+	if clusterwide {
+		deployAndWaitForRunning(opPath, clusterwideNs, "dest")
+	} else {
+		deployAndWaitForRunning(opPath, ns, "dest")
+	}
+	return podList, nil
+}
+
+func deployAndWaitForRunning(path, namespace, cluster string) error {
+	cmd := fmt.Sprintf("kubectl apply -f %v -n %v", path, namespace)
+	if cluster == "dest" {
+		kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
+		if err != nil {
+			return err
+		}
+		cmd = fmt.Sprintf("kubectl apply -f %v -n %v --kubeconfig %v", path, namespace, kubeConfigPathDest)
+		err = hardSetConfig(kubeConfigPathDest)
+		if err != nil {
+			return err
+		}
+	}	
+	log.InfoD("Running command: %v", cmd)
+	_, _, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return err
+	}
+	// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+	time.Sleep(1 * time.Minute)
+	podList, err := core.Instance().GetPods(namespace, nil)
+	if err != nil {
+		return err
+	}
+	err = asyncdr.WaitForPodToBeRunning(podList)
+	if err != nil {
+		return err
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type PatchOperation struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
+}
+
+type ApplicationRegistration struct {
+	Resources []struct {
+	} `json:"resources"`
+}
+
+func getNumResources(crName string) (int, error) {
+	cmd := exec.Command("kubectl", "get", "applicationregistration", crName, "-o", "json")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		log.Infof("Error getting applicationregistration: %v", err)
+		return 0, err
+	}
+	var appReg ApplicationRegistration
+	err = json.Unmarshal(out.Bytes(), &appReg)
+	if err != nil {
+		log.Infof("Error unmarshalling JSON: %v", err)
+		return 0, err
+	}
+	return len(appReg.Resources), nil
+}
+
+func patchStashStrategy(crName string) error {
+	var patches []PatchOperation
+	numResources, err := getNumResources(crName)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < numResources; i++ {
+		patches = append(patches, PatchOperation{
+			Op:    "replace",
+			Path:  fmt.Sprintf("/resources/%d/stashStrategy/stashCR", i),
+			Value: true,
+		})
+	}
+	patchBytes, err := json.Marshal(patches)
+	if err != nil {
+		log.Infof("Error marshalling patches: %v", err)
+		return err
+	}
+	cmd := fmt.Sprintf(`kubectl patch applicationregistration %v --type='json' -p='%s'`, crName, string(patchBytes))
+	log.Infof("Running command: %v", cmd)
+	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		log.Infof("Error running command: %v and err is: %v", cmd, err)
+		return err
+	}
+	return nil
+}
+
+func extractActionName(output, action string) string {
+	splitOutput := strings.Split(output, "\n")
+	prefix := fmt.Sprintf("To check %s status use the command : `", action)
+	getStatusCommand := strings.TrimSpace(strings.TrimPrefix(splitOutput[1], prefix))
+	getStatusCommand = strings.TrimSuffix(getStatusCommand, "`")
+	getStatusCmdArgs := strings.Split(getStatusCommand, " ")
+	return getStatusCmdArgs[3]
 }

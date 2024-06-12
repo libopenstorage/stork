@@ -1,0 +1,22 @@
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  annotations:
+    olm.providedAPIs: PGAdmin.v1beta1.postgres-operator.crunchydata.com,PGUpgrade.v1beta1.postgres-operator.crunchydata.com,PostgresCluster.v1beta1.postgres-operator.crunchydata.com
+  name: pgo-test-opg
+spec:
+  targetNamespaces:
+  - post
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: postgresql
+spec:
+  channel: "v5"
+  installPlanApproval: Automatic
+  name: postgresql 
+  source: community-operators 
+  sourceNamespace: openshift-marketplace
+  startingCSV: postgresoperator.v5.5.2
