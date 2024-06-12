@@ -8948,3 +8948,14 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 	_, err = k8sBatch.UpdateCronJob(cronJob)
 	return err
 }
+
+// CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
+func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
+	volumeSnapshotClassParameters := make(map[string]string)
+	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	if err != nil {
+		return nil, err
+	}
+	return volumeSnapshotClass, nil
+}

@@ -1000,6 +1000,15 @@ func (d *dcos) CreateVolumeSnapshotClasses(snapClassName string, provisioner str
 	}
 }
 
+// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+func (d *dcos) CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateVolumeSnapshotClassesWithParameters is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeSnapshotClassesWithParameters()",
+	}
+}
+
 func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{
