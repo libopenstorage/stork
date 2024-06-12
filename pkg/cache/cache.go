@@ -39,7 +39,7 @@ type SharedInformerCache interface {
 	// ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
 	ListTransformedPods() (*corev1.PodList, error)
 
-	// WatchPods watches registers the pod event handler with the informer cache
+	// WatchPods registers the pod event handlers with the informer cache
 	WatchPods(fn func(object interface{})) error
 }
 
