@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:5.7
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: rootpassword
+          volumeMounts:
+            - name: mysql-portworx
+              mountPath: /var/lib/mysql
+            - name: mysql-cephfs
+              mountPath: /etc/mysql/conf.d
+      volumes:
+        - name: mysql-portworx
+          persistentVolumeClaim:
+            claimName: mysql-portworx-pvc
+        - name: mysql-cephfs
+          persistentVolumeClaim:
+            claimName: mysql-cephfs-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:13
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgrespassword
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-portworx
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-cephfs
+              mountPath: /etc/postgresql/conf.d
+      volumes:
+        - name: postgres-portworx
+          persistentVolumeClaim:
+            claimName: postgres-portworx-pvc
+        - name: postgres-cephfs
+          persistentVolumeClaim:
+            claimName: postgres-cephfs-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-portworx-pvc
+  labels:
+    backupVolumeType: pxd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: px-csi-db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-cephfs-pvc
+  labels:
+    backupVolumeType: csi
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ocs-storagecluster-cephfs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-portworx-pvc
+  labels:
+    backupVolumeType: pxd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: px-csi-db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-cephfs-pvc
+  labels:
+    backupVolumeType: csi
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ocs-storagecluster-cephfs

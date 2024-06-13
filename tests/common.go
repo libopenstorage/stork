@@ -875,6 +875,8 @@ func IsPoolAddDiskSupported() bool {
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
+	// Apps for which we have to skip volume validation due to various limitations
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pxb-multipleapp-multivol"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -893,8 +895,8 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-			// In case of tektoncd skip the volume validation as the pods are created through jobs and not deployments or sts
-			if strings.Contains(ctx.App.Key, "tektoncd") {
+			// Check whether the given app should be excluded from volume validation.
+			if IsPresent(excludeAppContextList, ctx.App.Key) {
 				ctx.SkipVolumeValidation = true
 			}
 			if !ctx.SkipVolumeValidation {

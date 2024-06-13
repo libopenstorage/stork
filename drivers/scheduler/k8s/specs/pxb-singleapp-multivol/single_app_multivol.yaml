@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:5.7
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: rootpassword
+          volumeMounts:
+            - name: mysql-portworx
+              mountPath: /var/lib/mysql
+            - name: mysql-cephfs
+              mountPath: /etc/mysql/conf.d
+            - name: mysql-thincsi
+              mountPath: /var/lib/mysql-aggr
+      volumes:
+        - name: mysql-portworx
+          persistentVolumeClaim:
+            claimName: mysql-portworx-pvc
+        - name: mysql-cephfs
+          persistentVolumeClaim:
+            claimName: mysql-cephfs-pvc
+        - name: mysql-thincsi
+          persistentVolumeClaim:
+            claimName:  mysql-thincsi-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-portworx-pvc
+  labels:
+    backupVolumeType : pxd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: px-csi-db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-cephfs-pvc
+  labels:
+    backupVolumeType : csi
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ocs-storagecluster-cephfs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-thincsi-pvc
+  labels:
+    backupVolumeType: kdmp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: thin
