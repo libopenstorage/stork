@@ -1322,6 +1322,13 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 github.com/pmezard/go-difflib/difflib
+# github.com/portworx/kdmp v0.4.1-0.20240327131138-e0fa03f5a66c
+## explicit; go 1.21
+github.com/portworx/kdmp/pkg/apis/kdmp
+github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1
+github.com/portworx/kdmp/pkg/client/clientset/versioned
+github.com/portworx/kdmp/pkg/client/clientset/versioned/scheme
+github.com/portworx/kdmp/pkg/client/clientset/versioned/typed/kdmp/v1alpha1
 # github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd
 ## explicit; go 1.17
 github.com/portworx/kvdb
@@ -1350,6 +1357,7 @@ github.com/portworx/sched-ops/k8s/dynamic
 github.com/portworx/sched-ops/k8s/errors
 github.com/portworx/sched-ops/k8s/externalsnapshotter
 github.com/portworx/sched-ops/k8s/externalstorage
+github.com/portworx/sched-ops/k8s/kdmp
 github.com/portworx/sched-ops/k8s/kubevirt
 github.com/portworx/sched-ops/k8s/kubevirt-dynamic
 github.com/portworx/sched-ops/k8s/networking

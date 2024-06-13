@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -363,5 +364,151 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase fails a KDMP backup
+var _ = Describe("{KDMPFailure}", func() {
+
+	var (
+		backupNames          []string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		labelSelectors       map[string]string
+		providers            []string
+		allVirtualMachines   []kubevirtv1.VirtualMachine
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("BasicBackupCreation", "Deploying backup", nil, 84755, Sagrawal, Q4FY23)
+
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = GetBackupProviders()
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+
+		log.InfoD("switching to destination context")
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+		kubevirtOnDestinationCluster := IsKubevirtInstalled()
+
+		log.InfoD("switching to default context")
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		kubevirtOnSourceCluster := IsKubevirtInstalled()
+
+		if kubevirtOnSourceCluster && kubevirtOnDestinationCluster {
+			log.InfoD("Get a list of all Vms in case of Kubevirt")
+			for _, appCtx := range scheduledAppContexts {
+				allVms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Unable to get Virtual Machines from [%s]", appCtx.ScheduleOptions.Namespace)
+				allVirtualMachines = append(allVirtualMachines, allVms...)
+			}
+		}
+
+	})
+
+	It("Basic Backup Creation", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+		})
+
+		Step("Taking backup of application from source cluster", func() {
+			log.InfoD("taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+
+			backupNames = make([]string, 0)
+			for i, appCtx := range scheduledAppContexts {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				backupName := fmt.Sprintf("%s-%s-%s", "autogenerated-backup", scheduledNamespace, RandomString(4))
+				// goroutine to create backup
+				wg.Add(2)
+				// Create a goroutine which will keep for data export CR in a given namespace and delete it as soon as it finds it
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := DeleteAllDataExportCRs(appCtx.ScheduleOptions.Namespace)
+					dash.VerifyFatal(err, nil, "Waiting for DataExport CR")
+				}(appCtx)
+				go func(backupName string, scheduledNamespace string, i int) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+					log.Infof("Error for backup failure: %s", err.Error())
+					dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("backup status for [%s] expected was [[Success]] but got [Failed] because of [Volume backups failed]", backupName)),
+						true, fmt.Sprintf("Expected failure of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
+				}(backupName, scheduledNamespace, i)
+			}
+			wg.Wait()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+
 	})
 })

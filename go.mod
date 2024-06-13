@@ -114,6 +114,7 @@ require (
 	github.com/montanaflynn/stats v0.0.0-20180911141734-db72e6cae808 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	github.com/portworx/kdmp v0.4.1-0.20240327131138-e0fa03f5a66c // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
@@ -361,7 +362,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
 	k8s.io/kubectl v0.25.2 // indirect
 	k8s.io/kubernetes v1.25.1 // indirect
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11
 	sigs.k8s.io/controller-runtime v0.14.5 // indirect
