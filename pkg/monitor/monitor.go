@@ -183,9 +183,27 @@ func (m *Monitor) podMonitor() error {
 		return nil
 	}
 
-	if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
-		log.Errorf("failed to watch pods due to: %v", err)
-		return err
+	podHandler := func(object interface{}) {
+		pod, ok := object.(*v1.Pod)
+		if !ok {
+			log.Errorf("invalid object type on pod watch from cache: %v", object)
+		} else {
+			fn(pod)
+		}
+	}
+
+	if storkcache.Instance() != nil {
+		log.Debugf("Shared informer cache has been initialized, using it for pod monitor.")
+		err := storkcache.Instance().WatchPods(podHandler)
+		if err != nil {
+			log.Errorf("failed to watch pods with informer cache for health monitoring, err: %v", err)
+		}
+	} else {
+		log.Warnf("Shared informer cache has not been initialized, using watch for pod monitor.")
+		if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
+			log.Errorf("failed to watch pods for health monitoring due to: %v", err)
+			return err
+		}
 	}
 
 	return nil
