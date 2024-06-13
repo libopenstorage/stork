@@ -8,6 +8,9 @@ parameters:
   csi.storage.k8s.io/fstype: xfs
   placement_strategy: "repl-affinity-vps"
   createoptions: -b size=2048
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 provisioner: pxd.portworx.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
@@ -24,6 +27,9 @@ parameters:
   csi.storage.k8s.io/fstype: ext4
   placement_strategy: "repl-affinity-vps"
   createoptions: -b 2048
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 provisioner: pxd.portworx.com 
 reclaimPolicy: Delete
 volumeBindingMode: Immediate

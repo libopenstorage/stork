@@ -9,6 +9,9 @@ parameters:
   max_iops: "1000"
   max_bandwidth: "1G"
   fs: "ext4"
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 ---
@@ -23,6 +26,9 @@ parameters:
   max_iops: "1000"
   max_bandwidth: "1G"
   fs: "ext4"
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 

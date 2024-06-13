@@ -5,6 +5,9 @@ metadata:
   name: mount-fa-sc
 parameters:
   backend: "pure_block"
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 provisioner: pxd.portworx.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate

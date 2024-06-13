@@ -83,6 +83,7 @@ type AppConfig struct {
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
 	VmID                        string   `yaml:"vm_id"`
+	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
 }
 
 // InitOptions initialization options
