@@ -5,7 +5,7 @@ metadata:
     app: fedora-vm
     vm.kubevirt.io/template: fedora-server-small
     vm.kubevirt.io/template.namespace: openshift
-  name: fedora-test-vm
+  name: fedora-test-vm-wait-first-consumer
 spec:
   running: true
   template:
@@ -52,7 +52,7 @@ spec:
       terminationGracePeriodSeconds: 180
       volumes:
       - dataVolume:
-          name: fedora-datavolume-original
+          name: fedora-datavolume-wffc
         name: rootdisk
       - cloudInitNoCloud:
           userData: |-
@@ -63,9 +63,9 @@ spec:
         name: cloudinitdisk
   dataVolumeTemplates:
   - metadata:
-      name: fedora-datavolume-original
+      name: fedora-datavolume-wffc
       annotations:
-        cdi.kubevirt.io/storage.bind.immediate.requested: "true"
+        cdi.kubevirt.io/storage.usePopulator: "false"
     spec:
       source:
         pvc:
@@ -77,5 +77,5 @@ spec:
         resources:
           requests:
             storage: 50Gi
-        storageClassName: sc-sharedv4svc-nolock
+        storageClassName: sc-sharedv4svc-wffc
         volumeMode: Filesystem
