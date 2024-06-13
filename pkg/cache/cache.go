@@ -6,9 +6,11 @@ import (
 	"sync"
 
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/client-go/rest"
+	clientCache "k8s.io/client-go/tools/cache"
 	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -36,6 +38,9 @@ type SharedInformerCache interface {
 
 	// ListTransformedPods lists the all the Pods from the cache after applying TransformFunc
 	ListTransformedPods() (*corev1.PodList, error)
+
+	// WatchPods registers the pod event handlers with the informer cache
+	WatchPods(fn func(object interface{})) error
 }
 
 type cache struct {
@@ -83,6 +88,8 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 					currPod.Spec.Volumes = append(currPod.Spec.Volumes, podVolume)
 				}
 			}
+
+			currPod.ObjectMeta.DeletionTimestamp = podResource.ObjectMeta.DeletionTimestamp
 
 			currPod.Spec.Containers = podResource.Spec.Containers
 			currPod.Spec.NodeName = podResource.Spec.NodeName
@@ -203,4 +210,24 @@ func (c *cache) ListTransformedPods() (*corev1.PodList, error) {
 		return nil, err
 	}
 	return podList, nil
+}
+
+// WatchPods uses handlers for different pod events with shared informers.
+func (c *cache) WatchPods(fn func(object interface{})) error {
+	informer, err := c.controllerCache.GetInformer(context.Background(), &corev1.Pod{})
+	if err != nil {
+		logrus.WithError(err).Error("error getting the informer for pods")
+		return err
+	}
+
+	informer.AddEventHandler(clientCache.ResourceEventHandlerFuncs{
+		AddFunc: fn,
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			// Only considering the new pod object
+			fn(newObj)
+		},
+		DeleteFunc: fn,
+	})
+
+	return nil
 }

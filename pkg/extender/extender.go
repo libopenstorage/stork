@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -483,9 +484,28 @@ func (e *Extender) collectExtenderMetrics() error {
 		return nil
 	}
 
-	if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
-		log.Errorf("failed to watch pods due to: %v", err)
-		return err
+	podHandler := func(object interface{}) {
+		pod, ok := object.(*v1.Pod)
+		if !ok {
+			log.Errorf("invalid object type on pod watch from cache: %v", object)
+		} else {
+			fn(pod)
+		}
+	}
+
+	if storkcache.Instance() != nil {
+		log.Debugf("Shared informer cache has been initialized, using it for extender metrics.")
+		err := storkcache.Instance().WatchPods(podHandler)
+		if err != nil {
+			log.Errorf("failed to watch pods with informer cache for health monitoring, err: %v", err)
+		}
+		log.Errorf("failed to watch pods with informer cache for metrics, err: %v", err)
+	} else {
+		log.Warnf("Shared informer cache has not been initialized, using watch for extender metrics.")
+		if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
+			log.Errorf("failed to watch pods for metrics due to: %v", err)
+			return err
+		}
 	}
 	return nil
 }
