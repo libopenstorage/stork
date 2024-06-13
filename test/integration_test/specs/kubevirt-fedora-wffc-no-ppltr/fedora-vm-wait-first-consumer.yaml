@@ -2,10 +2,10 @@ apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   labels:
-    app: fedora-no-vps
+    app: fedora-vm
     vm.kubevirt.io/template: fedora-server-small
     vm.kubevirt.io/template.namespace: openshift
-  name: fedora-no-vps
+  name: fedora-test-vm-wait-first-consumer
 spec:
   running: true
   template:
@@ -50,17 +50,8 @@ spec:
       terminationGracePeriodSeconds: 180
       volumes:
       - dataVolume:
-          name: fedora-root-disk
+          name: fedora-datavolume-wffc
         name: rootdisk
-      - name: fedora-data-disk-1
-        persistentVolumeClaim:
-          claimName: fedora-data-disk-1
-      - name: fedora-data-disk-2
-        persistentVolumeClaim:
-          claimName: fedora-data-disk-2
-      - name: fedora-data-disk-3
-        persistentVolumeClaim:
-          claimName: fedora-data-disk-3
       - cloudInitNoCloud:
           userData: |-
             #cloud-config
@@ -70,7 +61,7 @@ spec:
         name: cloudinitdisk
   dataVolumeTemplates:
   - metadata:
-      name: fedora-root-disk
+      name: fedora-datavolume-wffc
       annotations:
         cdi.kubevirt.io/storage.usePopulator: "false"
     spec:
@@ -86,48 +77,3 @@ spec:
             storage: 50Gi
         storageClassName: sc-sharedv4svc-wffc
         volumeMode: Filesystem
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: fedora-data-disk-1
-  labels:
-    testSkipKubeVirtVPSDuringCreate: "true"
-    portworx.io/kubevirt: "true"
-spec:
-  storageClassName: sc-sharedv4svc-wffc
-  accessModes:
-  - ReadWriteMany
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: fedora-data-disk-2
-  labels:
-    testSkipKubeVirtVPSDuringCreate: "true"
-    portworx.io/kubevirt: "true"
-spec:
-  storageClassName: sc-sharedv4svc-wffc
-  accessModes:
-  - ReadWriteMany
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: fedora-data-disk-3
-  labels:
-    testSkipKubeVirtVPSDuringCreate: "true"
-    portworx.io/kubevirt: "true"
-spec:
-  storageClassName: sc-sharedv4svc-wffc
-  accessModes:
-  - ReadWriteMany
-  resources:
-    requests:
-      storage: 10Gi

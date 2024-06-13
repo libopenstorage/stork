@@ -71,8 +71,6 @@ spec:
   dataVolumeTemplates:
   - metadata:
       name: fedora-root-disk
-      annotations:
-        cdi.kubevirt.io/storage.usePopulator: "false"
     spec:
       source:
         pvc:
@@ -84,7 +82,7 @@ spec:
         resources:
           requests:
             storage: 50Gi
-        storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+        storageClassName: sc-sharedv4svc-wffc-no-clone
         volumeMode: Filesystem
 ---
 apiVersion: v1
@@ -94,7 +92,7 @@ metadata:
   labels:
     portworx.io/kubevirt: "true"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-wffc-no-clone
   accessModes:
   - ReadWriteMany
   resources:
@@ -108,7 +106,7 @@ metadata:
   labels:
     portworx.io/kubevirt: "true"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-wffc-no-clone
   accessModes:
   - ReadWriteMany
   resources:
@@ -122,7 +120,7 @@ metadata:
   labels:
     portworx.io/kubevirt: "true"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-wffc-no-clone
   accessModes:
   - ReadWriteMany
   resources:

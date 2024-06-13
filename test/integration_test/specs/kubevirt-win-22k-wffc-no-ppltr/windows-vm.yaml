@@ -94,5 +94,5 @@ spec:
           resources:
             requests:
               storage: 50Gi
-          storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+          storageClassName: sc-sharedv4svc-wffc
           volumeMode: Filesystem

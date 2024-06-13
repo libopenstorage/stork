@@ -38,13 +38,14 @@ import (
 )
 
 const (
-	cmdRetry              = 5 * time.Second
-	cmdTimeout            = 1 * time.Minute
-	mountTypeBind         = "bind"
-	mountTypeNFS          = "nfs"
-	vpsVolAffinityLabel   = "vps.portworx.io/volume-affinity"
-	pxUpdateTestLabel     = "kubevirt-update-px-test"
-	stcAnnotationMiscArgs = "portworx.io/misc-args"
+	cmdRetry               = 5 * time.Second
+	cmdTimeout             = 1 * time.Minute
+	mountTypeBind          = "bind"
+	mountTypeNFS           = "nfs"
+	vpsVolAffinityLabel    = "vps.portworx.io/volume-affinity"
+	pxUpdateTestLabel      = "kubevirt-update-px-test"
+	stcAnnotationMiscArgs  = "portworx.io/misc-args"
+	usePopulatorAnnotation = "cdi.kubevirt.io/storage.usePopulator"
 )
 
 // pxUpdateValidationFailure represents a validation failure during PX update. It happens when
@@ -147,6 +148,11 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "two-live-migr"
 
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// disable VPS fix job so that it does not interfere with the test
+	setFixVPSJobFrequency(t, allNodes, 0)
+
 	// Background watcher to capture events
 	startEventWatcher(t)
 	t.Cleanup(func() { logEventsOnFailure(t) })
@@ -155,16 +161,18 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 		t,
 		instanceID,
 		[]string{
-			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
-			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
-			"kubevirt-fedora-multiple-disks-datavol-only",
+			"kubevirt-fedora-wffc", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-fedora-wffc-no-ppltr", "kubevirt-fedora-multi-disks-wffc-no-ppltr",
+			"kubevirt-win-22k-wffc", "kubevirt-win-22k-wffc-no-ppltr",
 		},
 		kubevirtScale,
 	)
-	allNodes := node.GetNodesByVoDriverNodeID()
 
 	// Verify the initial state of the VMs before making any changes to the cluster.
 	verifyInitialHyperconvergence(t, ctxs, allNodes)
+
+	// enable VPS fix job; it should not do anything since the volumes are already collocated
+	setFixVPSJobFrequency(t, allNodes, 1)
 
 	for _, appCtx := range ctxs {
 		testState := &kubevirtTestState{
@@ -188,7 +196,11 @@ func kubeVirtHypercTwoLiveMigrations(t *testing.T) {
 
 		// start a live migration and wait for it to finish
 		// vmPod changes after the live migration
-		startAndWaitForVMIMigration(t, testState, true /* expectReplicaNode */)
+		startAndWaitForVMIMigration(t, testState)
+		verifyVMProperties(t, testState,
+			false, /* expectAttachedNodeChanged (attached node should not change after live migration) */
+			false, /* expectBindMount (test always live-migrates a bind-mounted VM, so the new mount should be NFS) */
+			true /* expectReplicaNode */)
 
 		// restart px on the original node and make sure that the volume attachment has moved
 		restartVolumeDriverAndWaitForAttachmentToMove(t, testState)
@@ -222,18 +234,26 @@ func kubeVirtHypercHotPlugDiskCollocation(t *testing.T) {
 	startEventWatcher(t)
 	t.Cleanup(func() { logEventsOnFailure(t) })
 
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// disable VPS fix job so that it does not interfere with the test
+	setFixVPSJobFrequency(t, allNodes, 0)
+
 	ctxs := kubevirtVMScaledDeployAndValidate(
 		t,
 		instanceID,
 		[]string{
-			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer",
+			"kubevirt-fedora-wffc", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-fedora-wffc-no-ppltr", "kubevirt-fedora-multi-disks-wffc-no-ppltr",
 		},
 		kubevirtScale,
 	)
-	allNodes := node.GetNodesByVoDriverNodeID()
 
 	// Verify the initial state of the VMs before making any changes to the cluster.
 	verifyInitialHyperconvergence(t, ctxs, allNodes)
+
+	// enable VPS fix job; it should not do anything since the volumes are already collocated
+	setFixVPSJobFrequency(t, allNodes, 1)
 
 	for _, appCtx := range ctxs {
 		testState := &kubevirtTestState{
@@ -276,7 +296,7 @@ func kubeVirtHypercVPSFixJob(t *testing.T) {
 	allNodes := node.GetNodesByVoDriverNodeID()
 
 	// set the cluster option to reduce the wait time
-	setFixVPSJobFrequency(t, allNodes)
+	setFixVPSJobFrequency(t, allNodes, 1)
 	for _, appCtx := range ctxs {
 		testState := &kubevirtTestState{
 			appCtx:   appCtx,
@@ -307,6 +327,11 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "ocp-upgrade"
 
+	allNodes := node.GetNodesByVoDriverNodeID()
+
+	// disable VPS fix job so that it does not interfere with the initial hyperconvergence verification
+	setFixVPSJobFrequency(t, allNodes, 0)
+
 	// Background watcher to capture events
 	startEventWatcher(t)
 	t.Cleanup(func() { logEventsOnFailure(t) })
@@ -315,16 +340,18 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 		t,
 		instanceID,
 		[]string{
-			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
-			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
-			"kubevirt-fedora-multiple-disks-datavol-only",
+			"kubevirt-fedora-wffc", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-fedora-wffc-no-ppltr", "kubevirt-fedora-multi-disks-wffc-no-ppltr",
+			"kubevirt-win-22k-wffc", "kubevirt-win-22k-wffc-no-ppltr",
 		},
 		kubevirtScale,
 	)
-	allNodes := node.GetNodesByVoDriverNodeID()
 
 	// Verify the initial state of the VMs before making any changes to the cluster.
 	verifyInitialHyperconvergence(t, ctxs, allNodes)
+
+	// enable VPS fix job; it should not do anything since the volumes are already collocated
+	setFixVPSJobFrequency(t, allNodes, 1)
 
 	nodeList := node.GetNodesByName()
 
@@ -341,7 +368,12 @@ func kubeVirtSimulateOCPUpgrade(t *testing.T) {
 			// start a live migration and wait for it to finish, to simulate node drain in OCP.
 			// vmPod changes after the live migration. The function below also verifies that the attachedNode
 			// has not changed.
-			startAndWaitForVMIMigration(t, testState, false /* expectReplicaNode */)
+			startAndWaitForVMIMigration(t, testState)
+			verifyVMProperties(t, testState,
+				false, /* expectAttachedNodeChanged (attached node should not change after live migration) */
+				false, /* expectBindMount (test always live-migrates a bind-mounted VM, so the new mount should be NFS) */
+				false /* expectReplicaNode */)
+
 		}
 
 		log.InfoD("Restarting volume driver on node %s", nodeName)
@@ -391,9 +423,9 @@ func kubeVirtUpdatePX(t *testing.T) {
 		t,
 		instanceID,
 		[]string{
-			"kubevirt-fedora", "kubevirt-fedora-wait-first-consumer", "kubevirt-fedora-multi-disks-wffc",
-			"kubevirt-windows-22k-server", "kubevirt-windows-22k-server-wait-first-consumer",
-			"kubevirt-fedora-multiple-disks-datavol-only",
+			"kubevirt-fedora-wffc", "kubevirt-fedora-multi-disks-wffc",
+			"kubevirt-fedora-wffc-no-ppltr", "kubevirt-fedora-multi-disks-wffc-no-ppltr",
+			"kubevirt-win-22k-wffc", "kubevirt-win-22k-wffc-no-ppltr",
 		},
 		kubevirtScale,
 	)
@@ -542,6 +574,10 @@ func kubeVirtUpdatePXBlocked(t *testing.T) {
 }
 
 func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
+	// Clear some state so that we can be called multiple times in the same test
+	testState.vmDisks = nil
+	testState.vmPod = nil
+
 	appCtx := testState.appCtx
 
 	err := schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
@@ -560,16 +596,26 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 		vmDisk.attachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
 		log.FailOnError(t, err, fmt.Sprintf("Failed to get node for volume %s of context %s", vol.ID, appCtx.App.Key))
 
-		vmDisk.pvcName = vmDisk.apiVol.Locator.VolumeLabels["pvc"]
-		Dash.VerifyFatal(t, vmDisk.pvcName != "", true, "PVC name found in volume labels")
+		// Don't rely on the PX volume labels to get the PVC because it could point to a template PVC in a
+		// different namespace in some abnormal cases e.g. when "clone" instead of "copy" is used to populate
+		// the volume. We avoid clones in our test specs but let's not create an unnecessary dependency.
+		pv, err := core.Instance().GetPersistentVolume(vol.ID)
+		log.FailOnError(t, err, "Failed to get PV %s of context %s", vol.ID, appCtx.App.Key)
 
-		pvc, err := core.Instance().GetPersistentVolumeClaim(vmDisk.pvcName, appCtx.App.NameSpace)
+		Dash.VerifyFatal(t, pv.Spec.ClaimRef != nil, true, fmt.Sprintf(
+			"PV %s of app %s has no claimRef", pv.Name, appCtx.App.Key))
+
+		pvc, err := core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
 		log.FailOnError(t, err, "Failed to get PVC %s/%s for volume %s of context %s",
-			appCtx.App.NameSpace, vmDisk.pvcName, vol.ID, appCtx.App.Key)
+			pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, vol.ID, appCtx.App.Key)
 
-		Dash.VerifyFatal(t, pvc.Spec.StorageClassName != nil, true, fmt.Sprintf("PVC %s/%s has no storageClassName", appCtx.App.NameSpace, vmDisk.pvcName))
+		vmDisk.pvcName = pvc.Name
 
-		Dash.VerifyFatal(t, pvc.Spec.VolumeName != "", true, fmt.Sprintf("PVC %s/%s has no volumeName", appCtx.App.NameSpace, vmDisk.pvcName))
+		Dash.VerifyFatal(t, pvc.Spec.StorageClassName != nil, true, fmt.Sprintf(
+			"PVC %s/%s has no storageClassName", appCtx.App.NameSpace, vmDisk.pvcName))
+
+		Dash.VerifyFatal(t, pvc.Spec.VolumeName != "", true, fmt.Sprintf(
+			"PVC %s/%s has no volumeName", appCtx.App.NameSpace, vmDisk.pvcName))
 		vmDisk.storageClassName = *pvc.Spec.StorageClassName
 
 		sc, err := core.Instance().GetStorageClassForPVC(pvc)
@@ -600,9 +646,6 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 		log.InfoD("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
 	}
 
-	testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
-	log.FailOnError(t, err, "Failed to get pods for context %s", testState.appCtx.App.Key)
-
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
 	log.FailOnError(t, err, "Failed to get VMI name for pod %s", testState.vmPod.Name)
 
@@ -617,8 +660,6 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
 	// verify all volumes are using the same set of replica nodes
 	Dash.VerifyFatal(t, checkVMDisksCollocation(testState), true, "vm disks are collocated")
-
-	verifyDisksAttachedOnSameNode(t, testState)
 
 	// VM should have a bind-mount initially
 	verifyBindMount(t, testState, true /*initialCheck*/)
@@ -797,14 +838,12 @@ func verifyHotPlugDisk(t *testing.T, testState *kubevirtTestState, hpDisk *hotPl
 		Dash.VerifyFatal(t, isHotplugDiskCollocated(testState, hpDisk), true, fmt.Sprintf("%s was collocated", hpDisk))
 		return
 	}
-	// set the cluster option to reduce the wait time
-	setFixVPSJobFrequency(t, testState.allNodes)
 	require.Eventuallyf(t, func() bool {
 		return isHotplugDiskCollocated(testState, hpDisk)
 	}, time.Hour, 5*time.Second, "%s was not collocated", hpDisk)
 }
 
-func setFixVPSJobFrequency(t *testing.T, allNodes map[string]node.Node) {
+func setFixVPSJobFrequency(t *testing.T, allNodes map[string]node.Node, frequencyInMinutes int) {
 	// var n node.Node
 	// for _, n = range allNodes {
 	// 	break
@@ -814,7 +853,7 @@ func setFixVPSJobFrequency(t *testing.T, allNodes map[string]node.Node) {
 
 	// TODO: above code fails with error "pxctl not found". Need to fix the test infra.
 	// Use our own function for now.
-	updateFixVPSJobFrequency(t)
+	updateFixVPSJobFrequency(t, frequencyInMinutes)
 }
 
 func isHotplugDiskCollocated(testState *kubevirtTestState, hpDisk *hotPlugDisk) bool {
@@ -850,7 +889,7 @@ func isHotplugDiskCollocated(testState *kubevirtTestState, hpDisk *hotPlugDisk) 
 	return true
 }
 
-func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, migrateToReplicaNode bool) {
+func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState) {
 	ctx := context.TODO()
 	vmiNamespace := testState.vmPod.Namespace
 	vmiName := testState.vmiName
@@ -884,11 +923,6 @@ func startAndWaitForVMIMigration(t *testing.T, testState *kubevirtTestState, mig
 
 	// verify that the migration was successful
 	Dash.VerifyFatal(t, migr.Phase, "Succeeded", "Migration succeeded")
-
-	verifyVMProperties(t, testState,
-		false, /* expectAttachedNodeChanged (attached node should not change after live migration) */
-		false, /* expectBindMount (test always live-migrates a bind-mounted VM, so the new mount should be NFS) */
-		migrateToReplicaNode /* expectReplicaNode */)
 }
 
 func restartVolumeDriverAndWaitForAttachmentToMove(t *testing.T, testState *kubevirtTestState) {
@@ -916,41 +950,89 @@ func verifyDisksAttachedOnSameNode(t *testing.T, testState *kubevirtTestState) {
 }
 
 func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bool) {
-	for _, vmDisk := range testState.vmDisks {
-		var err error
 
-		isBindMounted := func() bool {
-			testState.vmPod, err = getVMPod(testState.appCtx, vmDisk.volume)
-			if err != nil {
-				// this is expected while the live migration is running since there will be 2 VM pods
-				log.InfoD("Could not get VM pod for %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
-				return false
-			}
-			log.InfoD("Verifying bind mount for %s", vmDisk)
-			mountType, err := getVMDiskMountType(testState.vmPod, vmDisk)
-			if err != nil {
-				log.Warn("Failed to get mount type of %s for context %s: %v", vmDisk, testState.appCtx.App.Key, err)
-				return false
-			}
-			if mountType != mountTypeBind {
-				if !initialCheck {
-					log.Warn("Waiting for %s for context %s to switch to bind-mount from %q",
-						vmDisk, testState.appCtx.App.Key, mountType)
-				}
-				return false
-			}
-			return true
+	if initialCheck {
+		success, err := allVMDisksBindMounted(testState)
+		log.FailOnError(t, err, "Failed to verify bind mount for %s", testState.appCtx.App.Key)
+		if success {
+			return
 		}
-
-		if initialCheck {
-			// This is the first time after VM was provisioned. It should be bind-mounted immediately. No need to retry.
-			Dash.VerifyFatal(t, isBindMounted(), true, fmt.Sprintf("Initial check for %s", vmDisk))
-			continue
+		// if usePopulator is enabled, live-migrate (if single disk) or restart (multi-disk) the VM once and verify again
+		usePopulator := false
+		for _, vmDisk := range testState.vmDisks {
+			if vmDisk.apiVol.Locator.VolumeLabels[usePopulatorAnnotation] == "true" {
+				log.Info("%s is set on volume %s of app %s. "+
+					"Need to live-migrate the VM once before verifying hyperconvergence.",
+					usePopulatorAnnotation, vmDisk.apiVol.Id, testState.appCtx.App.Key)
+				usePopulator = true
+				break
+			}
 		}
-
-		// Wait for PX to perform additional live migration/s to return the VM to a bind-mounted state.
-		require.Eventuallyf(t, isBindMounted, 10*time.Minute, 30*time.Second, "%s did not switch to a bind-mount", vmDisk)
+		multiDisk := len(testState.vmDisks) > 1
+		Dash.VerifyFatal(t, usePopulator, true, "usePopulator is false but vm Disks are not bind-mounted initially")
+		if !multiDisk {
+			startAndWaitForVMIMigration(t, testState)
+			// refresh state after live migration
+			gatherInitialVMIInfo(t, testState)
+			success, err = allVMDisksBindMounted(testState)
+			log.FailOnError(t, err, "Failed to verify bind mount for %s", testState.appCtx.App.Key)
+			Dash.VerifyFatal(t, success, true, "usePopulator is true but vm Disks are not bind-mounted even after one live migration")
+			return
+		}
+		// for multiDisk VM we have to restart the VM since the volumes may be attached on different nodes and
+		// live-migration does not move the attachments
+		kvCli := kubevirt.Instance().GetKubevirtClient()
+		log.InfoD("Restarting a multi-disk VM %s/%s to make it bind-mounted", testState.vmPod.Namespace, testState.vmiName)
+		err = kvCli.VirtualMachine(testState.vmPod.Namespace).Restart(testState.vmiName, &kubevirtv1.RestartOptions{})
+		log.FailOnError(t, err, "Failed to restart VM %s/%s", testState.vmPod.Namespace, testState.vmiName)
+		waitForVMIReady(t, testState, 15*time.Minute)
+		// refresh state after VM restart
+		gatherInitialVMIInfo(t, testState)
+		success, err = allVMDisksBindMounted(testState)
+		log.FailOnError(t, err, "Failed to verify bind mount for %s", testState.appCtx.App.Key)
+		Dash.VerifyFatal(t, success, true, "usePopulator is true but multi-disk vm disks are not bind-mounted even after restart")
+		return
 	}
+
+	// Wait for PX to perform additional live migration/s to return the VM to a bind-mounted state.
+	require.Eventuallyf(t, func() bool {
+		success, err := allVMDisksBindMounted(testState)
+		if err != nil {
+			log.Warn("Failed to verify bind mount for %s: %v", testState.appCtx.App.Key, err)
+			return false
+		}
+		if !success {
+			log.Warn("Waiting for VM disks to switch to bind-mount for %s", testState.appCtx.App.Key)
+			return false
+		}
+		return true
+	}, 10*time.Minute, 30*time.Second, "VM disk/s did not switch to a bind-mount")
+}
+
+func allVMDisksBindMounted(testState *kubevirtTestState) (bool, error) {
+	var err error
+
+	// refresh VM pod
+	testState.vmPod, err = getVMPod(testState.appCtx, testState.vmDisks[0].volume)
+	if err != nil {
+		// this is expected while the live migration is running since there will be 2 VM pods
+		log.InfoD("Could not get VM pod for %s for context %s: %v", testState.vmDisks[0], testState.appCtx.App.Key, err)
+		return false, err
+	}
+
+	for _, vmDisk := range testState.vmDisks {
+		log.InfoD("Checking bind mount for %s", vmDisk)
+		mountType, err := getVMDiskMountType(testState.vmPod, vmDisk)
+		if err != nil {
+			log.Warn("Failed to get mount type of %s: %v", vmDisk, err)
+			return false, err
+		}
+		if mountType != mountTypeBind {
+			log.Warn("%s is not bind-mounted yet (mounType=%q)", vmDisk, mountType)
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func cordonNonReplicaNodes(t *testing.T, vol *api.Volume, allNodes map[string]node.Node) []*node.Node {
@@ -1157,6 +1239,20 @@ func verifyVMStayedUp(t *testing.T, testState *kubevirtTestState) {
 
 	// VMI ready condition seems to flip to "false" for a moment even if the VM is running.
 	// Give it some time to stabilize. We will verify the VMI UID to ensure that the VM did not restart.
+	waitForVMIReady(t, testState, time.Minute)
+
+	// If a VM is stopped and started again, a new VMI object gets created with the same name (i.e. the UID will change).
+	// We are using that fact here to ensure that the VM did not stop during our test.
+	ready, vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
+	log.FailOnError(t, err, "failed to get VMI details after the test")
+	Dash.VerifyFatal(t, ready, true, "VMI ready")
+	Dash.VerifyFatal(t, vmiPhaseAfter, "Running", "VMI phase running")
+	Dash.VerifyFatal(t, testState.vmiUID, vmiUIDAfter, "VMI UID")
+	Dash.VerifyFatal(t, testState.vmiPhaseTransitionTime, transitionTimeAfter, "transitionTimeAfter verified")
+}
+
+func waitForVMIReady(t *testing.T, testState *kubevirtTestState, timeout time.Duration) {
+
 	require.Eventuallyf(t, func() bool {
 		ready, _, _, _, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
 		if err != nil {
@@ -1169,16 +1265,7 @@ func verifyVMStayedUp(t *testing.T, testState *kubevirtTestState) {
 		}
 		log.InfoD("VMI %s/%s is ready", testState.vmPod.Namespace, testState.vmiName)
 		return true
-	}, 1*time.Minute, 5*time.Second, "VMI %s/%s did not become ready", testState.vmPod.Namespace, testState.vmiName)
-
-	// If a VM is stopped and started again, a new VMI object gets created with the same name (i.e. the UID will change).
-	// We are using that fact here to ensure that the VM did not stop during our test.
-	ready, vmiUIDAfter, vmiPhaseAfter, transitionTimeAfter, _, err := getVMIDetails(testState.vmPod.Namespace, testState.vmiName)
-	log.FailOnError(t, err, "failed to get VMI details after the test")
-	Dash.VerifyFatal(t, ready, true, "VMI ready")
-	Dash.VerifyFatal(t, vmiPhaseAfter, "Running", "VMI phase running")
-	Dash.VerifyFatal(t, testState.vmiUID, vmiUIDAfter, "VMI UID")
-	Dash.VerifyFatal(t, testState.vmiPhaseTransitionTime, transitionTimeAfter, "transitionTimeAfter verified")
+	}, timeout, 5*time.Second, "VMI %s/%s did not become ready in %v", testState.vmPod.Namespace, testState.vmiName, timeout)
 }
 
 // get VMI name from ownerRef of the virt-launcher pod
@@ -1408,7 +1495,22 @@ func startPodWatcher(t *testing.T) {
 			virtLauncherPodsByNode[pod.Spec.NodeName] = make(map[string]string)
 		}
 		if isVirtLauncherPod(pod) {
+			active := true
 			if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+				active = false
+			} else {
+				// check containerStatuses to see if the pod is in a terminal state
+				for _, containerStatus := range pod.Status.ContainerStatuses {
+					if containerStatus.Name != "compute" {
+						continue
+					}
+					if containerStatus.State.Terminated != nil {
+						active = false
+						break
+					}
+				}
+			}
+			if !active {
 				// terminal state; remove from the map
 				delete(virtLauncherPodsByNode[pod.Spec.NodeName], string(pod.UID))
 			} else {
@@ -1640,8 +1742,8 @@ func addRemoveTestLabelOnNodeHelper(nodeName string, add bool) error {
 	return nil
 }
 
-func updateFixVPSJobFrequency(t *testing.T) {
-	cmd := fmt.Sprintf("/opt/pwx/bin/pxctl cluster options update --fix-vps-frequency-in-minutes=1")
+func updateFixVPSJobFrequency(t *testing.T, frequencyInMinutes int) {
+	cmd := fmt.Sprintf("/opt/pwx/bin/pxctl cluster options update --fix-vps-frequency-in-minutes=%d", frequencyInMinutes)
 	_, err := runCommandInPxPod(cmd)
 	log.FailOnError(t, err, "Failed to update Fix VPS Job Frequency")
 }

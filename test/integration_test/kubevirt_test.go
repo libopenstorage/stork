@@ -117,7 +117,7 @@ func kubevirtDeployFedoraVMWithClonePVCWaitFirstConsumer(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKeys := []string{"kubevirt-fedora-wait-first-consumer"}
+	appKeys := []string{"kubevirt-fedora-wffc"}
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
@@ -135,7 +135,7 @@ func kubevirtDeployWindowsServerWithClonePVCWaitFirstConsumer(t *testing.T) {
 	defer updateTestRail(&testResult, testrailID, runID)
 	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "vm"
-	appKeys := []string{"kubevirt-windows-22k-server-wait-first-consumer"}
+	appKeys := []string{"kubevirt-win-22k-wffc"}
 
 	allCtxs := kubevirtVMScaledDeployAndValidate(t, instanceID, appKeys, kubevirtScale)
 
