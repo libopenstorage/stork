@@ -537,6 +537,8 @@ type StorageProvisionerType string
 const (
 	// DefaultStorageProvisioner default storage provisioner name
 	DefaultStorageProvisioner StorageProvisionerType = "portworx"
+	// CSIStorageProvisioner is the CSI (Container Storage Interface) storage provisioner name
+	CSIStorageProvisioner StorageProvisionerType = "csi"
 )
 
 var (
