@@ -236,7 +236,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		// Get UID and GID from the App which is controlling this PVC.
 		getUIDFromApp := true
-		podUserId, podGroupId, err := utils.GetPsaEnabledAppUID(pvc.Name, pvc.Namespace, backup, getUIDFromApp)
+		podUserId, podGroupId, err := utils.GetAppUidGid(pvc.Name, pvc.Namespace, backup, getUIDFromApp)
 		if err != nil {
 			logrus.Errorf("failed to get the UID and GID for pvc %s %v", pvc.Name, err)
 			return nil, err
@@ -256,11 +256,9 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.StorageClass = k8shelper.GetPersistentVolumeClaimClass(&pvc)
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = storkvolume.KDMPDriverName
-		// if psaIsenabled then set the a UID GID in the VolumeInfo and
+		// Set the a UID GID in the VolumeInfo and
 		// set annotation in dataexport CR for updating the JOB spec
-		logrus.Infof("Setting UID in VolumeInfo for PVC %s", pvc.Name)
 		volumeInfo.JobSecurityContext.RunAsUser = podUserId
-		logrus.Infof("Setting GID in VolumeInfo for PVC %s", pvc.Name)
 		volumeInfo.JobSecurityContext.RunAsGroup = podGroupId
 
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
@@ -808,7 +806,7 @@ func (k *kdmp) StartRestore(
 			return nil, fmt.Errorf(msg)
 		}
 		getUIDFromApp := false
-		podUserId, podGroupId, err := utils.GetPsaEnabledAppUID(pvc.Name, bkpvInfo.Namespace, backup, getUIDFromApp)
+		podUserId, podGroupId, err := utils.GetAppUidGid(pvc.Name, bkpvInfo.Namespace, backup, getUIDFromApp)
 		if err != nil {
 			logrus.Errorf("failed to get the UID and GID for pvc %s %v", pvc.Name, err)
 			return nil, err
