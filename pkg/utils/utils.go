@@ -582,9 +582,9 @@ func GetUIDGIDFromBackupCR(backup *stork_api.ApplicationBackup, pvcName string, 
 	return UndefinedId, UndefinedId, nil
 }
 
-// GetPsaEnabledAppUID - Get the UID/GID of the application pod which has psa enforcement in its namespace using the PVC
-func GetPsaEnabledAppUID(pvcName string, namespace string, backup *stork_api.ApplicationBackup, getUIDFromApp bool) (int64, int64, error) {
-	fn := "GetPsaEnabledAppUID"
+// GetAppUidGid - Get the UID/GID of the application pod which has psa enforcement in its namespace using the PVC
+func GetAppUidGid(pvcName string, namespace string, backup *stork_api.ApplicationBackup, getUIDFromApp bool) (int64, int64, error) {
+	fn := "GetAppUidGid"
 	uid := UndefinedId
 	gid := UndefinedId
 	var err error
@@ -598,10 +598,10 @@ func GetPsaEnabledAppUID(pvcName string, namespace string, backup *stork_api.App
 		// Get the pod which uses this PVC for backup scenario
 		pod, err = GetPodFromPVC(pvcName, namespace)
 		// Check if the error message returned is "no application pod found for PVC"
-		// that means this is astand alone PVC without any App so we don't need to look for UID/GID
+		// that means this is a stand alone PVC without any App so we don't need to look for UID/GID
 		// But other errors we must return to caller with failure
 		if err != nil && strings.Contains(err.Error(), "no application pod found for PVC") {
-			return UndefinedId, UndefinedId, err
+			return UndefinedId, UndefinedId, nil
 		} else if err != nil {
 			logrus.Errorf("%s: %v", fn, err)
 			return uid, gid, err
