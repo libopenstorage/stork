@@ -82,6 +82,13 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
+	// Check whether job has violated the pod security standard
+	psaViolated := utils.IsJobPodSecurityFailed(job, namespace)
+	if psaViolated {
+		utils.DisplayJobpodLogandEvents(job.Name, job.Namespace)
+		errMsg := fmt.Sprintf("job [%v/%v] failed to meet the pod security standard, please check job pod's description for more detail", namespace, name)
+		return utils.ToJobStatus(0, errMsg, batchv1.JobFailed), nil
+	}
 
 	// Check whether mount point failure
 	mountFailed := utils.IsJobPodMountFailed(job, namespace)
@@ -199,7 +206,6 @@ func jobForBackupResource(
 	}, " ")
 
 	labels := addJobLabels(jobOption)
-
 	nfsExecutorImage, imageRegistrySecret, err := utils.GetExecutorImageAndSecret(drivers.NfsExecutorImage,
 		jobOption.NfsImageExecutorSource,
 		jobOption.NfsImageExecutorSourceNs,
@@ -216,6 +222,7 @@ func jobForBackupResource(
 		logrus.Errorf("failed to get the toleration details: %v", err)
 		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobOption.RestoreExportName)
 	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobOption.RestoreExportName,
@@ -270,6 +277,15 @@ func jobForBackupResource(
 			},
 		},
 	}
+
+	// The Job is intended to backup resources to  NFS backuplocation
+	// and it doesn't need a specific JOB uid/gid since it will be sqaushed at NFS server
+	// hence used a global hardcoded UID/GID.
+	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, utils.KdmpJobGid)
+	if err != nil {
+		return nil, err
+	}
+
 	// Add the image secret in job spec only if it is present in the stork deployment.
 	if len(imageRegistrySecret) != 0 {
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.RestoreExportName))

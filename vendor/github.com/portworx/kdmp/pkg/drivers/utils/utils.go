@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -67,6 +68,13 @@ const (
 	IstioInjectLabel  = "sidecar.istio.io/inject"
 	// ProcessVMResourceSuccessMsg - vm resources processed successfully
 	ProcessVMResourceSuccessMsg = "vm resources processed successfully"
+	PsaUIDKey                   = "portworx.io/psa-uid"
+	PsaGIDKey                   = "portworx.io/psa-gid"
+	KdmpJobUid                  = "1013"
+	KdmpJobGid                  = "1013"
+	OcpUidRangeAnnotationKey    = "openshift.io/sa.scc.uid-range"
+	OcpGidRangeAnnotationKey    = "openshift.io/sa.scc.supplemental-groups"
+	kopiaBackupString           = "kopiaexecutor backup"
 )
 
 var (
@@ -881,6 +889,29 @@ func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 	return false
 }
 
+// Check if a job has failed because of podSecurity violation
+func IsJobPodSecurityFailed(job *batchv1.Job, namespace string) bool {
+	fn := "IsJobPodSecurityFailed"
+
+	opts := metav1.ListOptions{
+		FieldSelector: "involvedObject.name=" + string(job.Name),
+	}
+	events, err := core.Instance().ListEvents(namespace, opts)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to fetch events for job [%s/%s]: %v", namespace, job.Name, err)
+		logrus.Debugf("%s: %v", fn, errMsg)
+		return false
+	}
+	// if the job event reason is Failedcreate due to fobidden podSecurity violation
+	// then return true
+	for _, event := range events.Items {
+		if event.Reason == "FailedCreate" && strings.Contains(event.Message, "violates PodSecurity") {
+			return true
+		}
+	}
+	return false
+}
+
 // DisplayJobpodLogandEvents - Prints the Job pod description, log and events
 func DisplayJobpodLogandEvents(jobName string, namespace string) {
 	// Get job from the namespace
@@ -965,4 +996,92 @@ func GetShortUID(uid string) string {
 		return uid
 	}
 	return uid[:8]
+}
+
+// Add container security Context to job pod if the PSA is enabled.
+// If static uids like kdmpJobUid or kdmpJobGid is used that means
+// these are dummy UIDs used for backing up resources to backuplocation
+// which doesn't need specific UID specific permission.
+func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*batchv1.Job, error) {
+	if job == nil {
+		return job, fmt.Errorf("recieved a nil job object to add security context")
+	}
+	if job.Spec.Template.Spec.Containers[0].SecurityContext == nil {
+		job.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
+	}
+	// call GetOcpNsUidGid to get the UID and GID from the namespace annotation if it is an OCP cluster.
+	// In case of OCP we cannot run with hardcoded UID and GID or backup CR preserved UID and GID.
+	// We need to run with the UID and GID from the namespace annotation.
+	ocpUid, ocpGid, isOcp, err := GetOcpNsUidGid(job.Namespace, podUserId, podGroupId)
+	if err != nil {
+		return nil, err
+	}
+	// if the namespace is OCP, then overwrite the UID and GID from the namespace annotation
+	if isOcp {
+		podUserId = ocpUid
+		podGroupId = ocpGid
+	}
+
+	if podUserId != "" {
+		uid, err := strconv.ParseInt(podUserId, 10, 64)
+		if err != nil {
+			logrus.Errorf("failed to convert the UID to int: %v", err)
+			return nil, fmt.Errorf("failed to convert the UID to int: %v", err)
+		}
+		job.Spec.Template.Spec.Containers[0].SecurityContext.RunAsUser = &uid
+
+		// Add fsgroup in Pod security context with the same UID as RunAsUser
+		// But we shouldn't add fsgroup if it is a kopia backup because it will alter the permission
+		// of the backup pod filesystem.
+		if !strings.Contains(job.Spec.Template.Spec.Containers[0].Command[0], kopiaBackupString) {
+			job.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
+				FSGroup: &uid,
+			}
+		}
+	}
+	if podGroupId != "" {
+		gid, err := strconv.ParseInt(podGroupId, 10, 64)
+		if err != nil {
+			logrus.Errorf("failed to convert the GID to int: %v", err)
+			return nil, fmt.Errorf("failed to convert the GID to int: %v", err)
+		}
+		job.Spec.Template.Spec.Containers[0].SecurityContext.RunAsGroup = &gid
+	}
+	// Add RunAsNonRoot to true and drop all capabilities and seccomp profile and allowPrivilegeEscalation to false
+	job.Spec.Template.Spec.Containers[0].SecurityContext.RunAsNonRoot = ptr.To(true)
+	job.Spec.Template.Spec.Containers[0].SecurityContext.AllowPrivilegeEscalation = ptr.To(false)
+	job.Spec.Template.Spec.Containers[0].SecurityContext.SeccompProfile = &corev1.SeccompProfile{
+		Type: "RuntimeDefault",
+	}
+	job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
+		Drop: []corev1.Capability{
+			"ALL",
+		},
+	}
+	return job, nil
+}
+
+// read if destination namespace has annotion like openshift.io/sa.scc.uid-range or openshift.io/sa.scc.supplemental-groups
+// if yes then read the first value and pass it to the restore job for both uid and gid and use it as fsgroup too.
+func GetOcpNsUidGid(nsName string, psaJobUid string, psaJobGid string) (string, string, bool, error) {
+	isOcp := false
+	if nsName == "" {
+		return "", "", false, fmt.Errorf("namespace name is empty")
+	}
+
+	ns, err := core.Instance().GetNamespace(nsName)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to get namespace %s: %v", nsName, err)
+	}
+	if ns.Annotations != nil {
+		if ns.Annotations[OcpUidRangeAnnotationKey] != "" {
+			psaJobUid = strings.Split(ns.Annotations[OcpUidRangeAnnotationKey], "/")[0]
+			isOcp = true
+		}
+		if ns.Annotations[OcpGidRangeAnnotationKey] != "" {
+			psaJobGid = strings.Split(ns.Annotations[OcpGidRangeAnnotationKey], "/")[0]
+			isOcp = true
+		}
+	}
+	return psaJobUid, psaJobGid, isOcp, nil
 }
