@@ -59,6 +59,9 @@ type JobOpts struct {
 	ResoureBackupName          string
 	ResoureBackupNamespace     string
 	S3DisableSSL               bool
+	// psa specifc option to be used by job
+	PodUserId  string
+	PodGroupId string
 }
 
 // WithS3DisableSSL is job parameter
@@ -514,6 +517,22 @@ func WithJobConfigMapNs(jobConfigMapNs string) JobOption {
 func WithNodeAffinity(l map[string]string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.NodeAffinity = l
+		return nil
+	}
+}
+
+// WithPodUserId is job parameter.
+func WithPodUserId(podUserId string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.PodUserId = podUserId
+		return nil
+	}
+}
+
+// WithPodGroupId is job parameter.
+func WithPodGroupId(PodGroupId string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.PodGroupId = PodGroupId
 		return nil
 	}
 }
