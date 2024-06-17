@@ -110,8 +110,6 @@ const (
 	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName                         = "portworx-service"
 	VMRestoreIncludeResourceMapAnnotation = "stork.libopenstorage.org/vm-includeresource"
-	// podSecurityStandardEnforceMode - which PS standard to enforce while deploying the k8s workload Object
-	podSecurityStandardEnforceMode = "pod-security.kubernetes.io/enforce"
 	//undefined UID or GID
 	UndefinedId = int64(-1)
 	PsaUIDKey   = "portworx.io/psa-uid"
