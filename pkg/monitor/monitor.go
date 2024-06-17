@@ -395,7 +395,12 @@ func (m *Monitor) doesDriverOwnVolumeAttachment(va *storagev1.VolumeAttachment) 
 		return false, err
 	}
 
-	pvc, err := core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+	var pvc *v1.PersistentVolumeClaim
+	if storkcache.Instance() != nil {
+		pvc, err = storkcache.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+	} else {
+		pvc, err = core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+	}
 	if err != nil {
 		log.Errorf("Error getting persistent volume claim from volume attachment: %v", err)
 		return false, err

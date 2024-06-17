@@ -200,7 +200,13 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		if vol.PersistentVolumeClaim == nil {
 			continue
 		}
-		pvc, err := core.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+		var pvc *v1.PersistentVolumeClaim
+		var err error
+		if storkcache.Instance() != nil {
+			pvc, err = storkcache.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+		} else {
+			pvc, err = core.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+		}
 		if err != nil {
 			msg := fmt.Sprintf("Unable to find PVC %s, err: %v", vol.Name, err)
 			storklog.PodLog(pod).Warnf(msg)
@@ -883,7 +889,13 @@ func (e *Extender) getVMIInfo(refPod *v1.Pod) (string, types.UID) {
 
 // GetPVNameFromPVC returns PV name for a PVC
 func (e *Extender) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	var pvc *v1.PersistentVolumeClaim
+	var err error
+	if storkcache.Instance() != nil {
+		pvc, err = storkcache.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	} else {
+		pvc, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	}
 	if err != nil || pvc == nil {
 		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", namespace, pvcName, err)
 	}
