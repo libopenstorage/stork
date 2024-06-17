@@ -100,6 +100,18 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 			currPod.Status.HostIP = podResource.Status.HostIP
 			return &currPod, nil
 		},
+		&corev1.PersistentVolumeClaim{}: func(obj interface{}) (interface{}, error) {
+			pvc, ok := obj.(*corev1.PersistentVolumeClaim)
+			if !ok {
+				return nil, fmt.Errorf("unexpected object type: %T", obj)
+			}
+			currPVC := corev1.PersistentVolumeClaim{}
+			currPVC.Name = pvc.Name
+			currPVC.Namespace = pvc.Namespace
+			currPVC.Spec = pvc.Spec
+			currPVC.Status = pvc.Status
+			return &currPVC, nil 
+		},
 	}
 
 	sharedInformerCache := &cache{}
@@ -230,4 +242,15 @@ func (c *cache) WatchPods(fn func(object interface{})) error {
 	})
 
 	return nil
+}
+
+func (c *cache) GetPersistentVolumeClaim(pvcName, namespace string) (*corev1.PersistentVolumeClaim, error) {
+	if c == nil || c.controllerCache == nil {
+		return nil, fmt.Errorf(cacheNotInitializedErr)
+	}
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := c.controllerCache.Get(context.Background(), client.ObjectKey{Name: pvcName, Namespace: namespace}, pvc); err != nil {
+		return nil, err
+	}
+	return pvc, nil
 }
