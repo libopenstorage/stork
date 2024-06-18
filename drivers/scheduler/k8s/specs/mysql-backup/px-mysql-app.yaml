@@ -69,7 +69,7 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-data
+          claimName: mysql-data-db
       - name: mysql-persistent-storage-aggr
         persistentVolumeClaim:
           claimName: mysql-data-aggr

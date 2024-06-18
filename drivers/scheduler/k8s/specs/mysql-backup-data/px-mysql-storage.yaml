@@ -10,28 +10,28 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 2Gi
+      storage: 30Gi
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-   name: mysql-data-seq
+  name: mysql-data-seq
 spec:
-   storageClassName: mysql-sc-seq
-   accessModes:
-     - ReadWriteOnce
-   resources:
-     requests:
-       storage: 2Gi
+  storageClassName: mysql-sc-seq
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-   name: mysql-data-aggr
+  name: mysql-data-aggr
 spec:
-   storageClassName: mysql-sc-aggr
-   accessModes:
-     - ReadWriteOnce
-   resources:
-     requests:
-       storage: 2Gi
+  storageClassName: mysql-sc-aggr
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
