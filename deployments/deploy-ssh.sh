@@ -867,7 +867,7 @@ if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
 fi
 
 if [ -z "${ANTHOS_HOST_PATH}" ]; then
-  sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/d' torpedo.yaml
+  sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
 fi 
 
 # If these are passed, we will create a docker config secret to use to pull images
