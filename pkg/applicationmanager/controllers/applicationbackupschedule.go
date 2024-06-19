@@ -120,7 +120,7 @@ func (s *ApplicationBackupScheduleController) handle(_ context.Context, backupSc
 	// First update the status of any pending backups
 	err = s.updateApplicationBackupStatus(backupSchedule)
 	if err != nil {
-		msg := fmt.Sprintf("Error updating backup status: %v", err)
+		msg := fmt.Sprintf("Error updating backu p status: %v", err)
 		s.recorder.Event(backupSchedule,
 			v1.EventTypeWarning,
 			string(stork_api.ApplicationBackupStatusFailed),
@@ -143,7 +143,49 @@ func (s *ApplicationBackupScheduleController) handle(_ context.Context, backupSc
 		}
 		// Start a backup for a policy if required
 		if start {
-			err := s.startApplicationBackup(backupSchedule, policyType)
+			var incrCount int64
+			var bkpCount int64
+			var err error
+			// Get the incremental count
+			if val, ok := backupSchedule.Spec.Template.Spec.Options[utils.PXIncrementalCountAnnotation]; ok {
+				incrCount, err = strconv.ParseInt(val, 10, 64)
+				if err != nil {
+					return err
+				}
+			}
+
+			if val, ok := backupSchedule.Annotations[utils.BackupsDoneAnnotation]; ok {
+				bkpCount, err = strconv.ParseInt(val, 10, 64)
+
+				if err != nil {
+					return err
+				}
+			}
+			if bkpCount == 0 {
+				scheduleUID := utils.GetShortUID(backupSchedule.Annotations[utils.ScheduleUID])
+				// Path eg
+				// <short sched UID>-<epoch time>
+				backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%v-%v", scheduleUID, time.Now().Unix())
+			}
+			bkpCount++
+			if _, ok := backupSchedule.Annotations[utils.KdmpPath]; ok {
+				if bkpCount > incrCount {
+					// Change path to new one
+					backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%v", time.Now().Unix())
+					bkpCount = 0
+				}
+			} else {
+				// First backup of the schedule or after upgrade the first backup
+				backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%v", time.Now().Unix())
+			}
+			backupSchedule.Annotations[utils.BackupsDoneAnnotation] = fmt.Sprintf("%v", bkpCount)
+			logrus.Infof("bkpCount: %v", backupSchedule.Annotations[utils.BackupsDoneAnnotation])
+			logrus.Infof("kdmp path: %v", backupSchedule.Annotations[utils.KdmpPath])
+			err = s.client.Update(context.TODO(), backupSchedule)
+			if err != nil {
+				log.ApplicationBackupScheduleLog(backupSchedule).Errorf("failed to update backupcount in schedule %v: %v", backupSchedule.Name, err)
+			}
+			err = s.startApplicationBackup(backupSchedule, policyType)
 			if err != nil {
 				msg := fmt.Sprintf("Error triggering backup for schedule(%v): %v", policyType, err)
 				s.recorder.Event(backupSchedule,
@@ -358,6 +400,9 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	}
 	backup.Annotations[ApplicationBackupScheduleNameAnnotation] = backupSchedule.Name
 	backup.Annotations[ApplicationBackupSchedulePolicyTypeAnnotation] = string(policyType)
+	if _, ok := backupSchedule.Annotations[utils.KdmpPath]; ok {
+		backup.Annotations[utils.KdmpPath] = backupSchedule.Annotations[utils.KdmpPath]
+	}
 	if val, ok := backupSchedule.Annotations[backupTypeKey]; ok {
 		if val == genericBackupTypeValue {
 			backup.Spec.BackupType = genericBackupTypeValue

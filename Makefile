@@ -1,7 +1,7 @@
 DOCKER_HUB_REPO ?= openstorage
 
 DOCKER_HUB_STORK_IMAGE ?= stork
-DOCKER_HUB_STORK_TAG ?= dev
+DOCKER_HUB_STORK_TAG ?= kdmp-optimization
 
 DOCKER_HUB_CMD_EXECUTOR_IMAGE ?= cmdexecutor
 DOCKER_HUB_CMD_EXECUTOR_TAG ?= dev
