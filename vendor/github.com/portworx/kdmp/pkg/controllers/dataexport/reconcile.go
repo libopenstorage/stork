@@ -16,6 +16,7 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
+	stork_utils "github.com/libopenstorage/stork/pkg/utils"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/drivers"
@@ -2336,7 +2337,7 @@ func getRepoPVCName(de *kdmpapi.DataExport, pvcName string) string {
 		subStrings := strings.Split(pvcName, "-")
 		pvcName = strings.Join(subStrings[:len(subStrings)-1], "-")
 	}
-	return pvcName
+	return pvcName + "-" + de.Annotations[stork_utils.KdmpPath]
 }
 
 func getAnnotationValue(de *kdmpapi.DataExport, key string) string {
