@@ -10,6 +10,9 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	aws_pkg "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -37,6 +40,7 @@ type EKS struct {
 	config            aws.Config
 	eksClient         *eks.Client
 	ec2Client         *ec2.Client
+	svcSsm            *ssm.SSM
 	pxNodeGroupName   string
 	isConfigured      bool
 	instances         []ec2types.Instance
@@ -287,6 +291,10 @@ func (e *EKS) configureEKSClient() error {
 			}
 			e.isConfigured = true
 		}
+		sess := session.Must(session.NewSessionWithOptions(session.Options{
+			SharedConfigState: session.SharedConfigEnable,
+		}))
+		e.svcSsm = ssm.New(sess, aws_pkg.NewConfig().WithRegion(e.region))
 	} else {
 		log.Infof("EKS client already configured")
 	}
@@ -523,6 +531,129 @@ func (e *EKS) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 	}
 	log.Infof("Successfully scaled ASG [%s] to desired capacity [%d]", asgName, desiredCapacity)
 	return nil
+}
+
+// StopKubelet allows to stop kubelet on a give node
+func (e *EKS) StopKubelet(n node.Node, options node.SystemctlOpts) error {
+	var err error
+
+	instanceID, err := e.getInstanceIDByPrivateIpAddress(n)
+	if err != nil {
+		return err
+	}
+	log.Infof("Got Insatacne id:%v", instanceID)
+
+	command := "sudo systemctl stop kubelet"
+	param := make(map[string][]*string)
+	param["commands"] = []*string{
+		aws_pkg.String(command),
+	}
+	sendCommandInput := &ssm.SendCommandInput{
+		Comment:      aws_pkg.String(command),
+		DocumentName: aws_pkg.String("AWS-RunShellScript"),
+		Parameters:   param,
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	log.Infof("sendCommandInput:%+v", sendCommandInput)
+	sendCommandOutput, err := e.svcSsm.SendCommand(sendCommandInput)
+	log.Infof("sendCommandOutput:%+v", sendCommandOutput)
+	if err != nil {
+		log.Infof("sendCommandOutput Err:%+v", err)
+		return &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
+		}
+	}
+	if sendCommandOutput.Command == nil || sendCommandOutput.Command.CommandId == nil {
+		return fmt.Errorf("no command returned after sending command to %s", instanceID)
+	}
+	listCmdsInput := &ssm.ListCommandInvocationsInput{
+		CommandId: sendCommandOutput.Command.CommandId,
+	}
+	t := func() (interface{}, bool, error) {
+		return "", true, e.connect(n, listCmdsInput)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
+		return &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	return err
+}
+
+// StartKubelet allows to start kubelet on a give node
+func (e *EKS) StartKubelet(n node.Node, options node.SystemctlOpts) error {
+	var err error
+	instanceID, err := e.getInstanceIDByPrivateIpAddress(n)
+	if err != nil {
+		return err
+	}
+	log.Infof("Got Insatacne id:%v", instanceID)
+	if err != nil {
+		return &node.ErrFailedToTestConnection{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get instance ID for connection due to: %v", err),
+		}
+	}
+	command := "sudo systemctl start kubelet"
+	param := make(map[string][]*string)
+	param["commands"] = []*string{
+		aws_pkg.String(command),
+	}
+	sendCommandInput := &ssm.SendCommandInput{
+		Comment:      aws_pkg.String(command),
+		DocumentName: aws_pkg.String("AWS-RunShellScript"),
+		Parameters:   param,
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	log.Infof("sendCommandInput:%+v", sendCommandInput)
+	sendCommandOutput, err := e.svcSsm.SendCommand(sendCommandInput)
+	log.Infof("sendCommandOutput:%+v", sendCommandOutput)
+	if err != nil {
+		log.Infof("sendCommandOutput Err:%+v", err)
+		return &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
+		}
+	}
+	if sendCommandOutput.Command == nil || sendCommandOutput.Command.CommandId == nil {
+		return fmt.Errorf("no command returned after sending command to %s", instanceID)
+	}
+	listCmdsInput := &ssm.ListCommandInvocationsInput{
+		CommandId: sendCommandOutput.Command.CommandId,
+	}
+	t := func() (interface{}, bool, error) {
+		return "", true, e.connect(n, listCmdsInput)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
+		return &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	return err
+}
+
+func (e *EKS) connect(n node.Node, listCmdsInput *ssm.ListCommandInvocationsInput) error {
+	var status string
+	listCmdInvsOutput, _ := e.svcSsm.ListCommandInvocations(listCmdsInput)
+	for _, cmd := range listCmdInvsOutput.CommandInvocations {
+		status = strings.TrimSpace(*cmd.StatusDetails)
+		if status == "Success" {
+			return nil
+		}
+	}
+	return &node.ErrFailedToTestConnection{
+		Node:  n,
+		Cause: fmt.Sprintf("Failed to connect. Command status is %s", status),
+	}
 }
 
 func init() {

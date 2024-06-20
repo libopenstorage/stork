@@ -27,6 +27,12 @@ var _ = Describe("{DecommissionNode}", func() {
 	stepLog := "has to decommission a node and check if node was decommissioned successfully"
 	It(stepLog, func() {
 
+		currNode := node.GetStorageDriverNodes()[0]
+		err := Inst().V.SetClusterOpts(currNode, map[string]string{
+			"--auto-fstrim": "on",
+		})
+		log.FailOnError(err, "error enabling auto fstrim on cluster")
+
 		if Contains(Inst().AppList, "nginx-proxy-deployment") {
 			var masterNode node.Node
 			stepLog = "setup proxy server necessary for proxy volume"
@@ -86,6 +92,12 @@ var _ = Describe("{DecommissionNode}", func() {
 		// decommission nodes one at a time according to chaosLevel
 		for nodeIndex := range nodeIndexMap {
 			nodeToDecommission := storageDriverNodes[nodeIndex]
+
+			fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(nodeToDecommission.MgmtIp)
+			log.FailOnError(err, fmt.Sprintf("error autofstrim status node %v status", nodeToDecommission.Name))
+			for volId, fstrimStatus := range fsTrimStatuses {
+				log.Infof("Volume %s fstrim status %v on node [%s]", volId, fstrimStatus, nodeToDecommission.Name)
+			}
 
 			//checking node status before decommission
 			status, err := Inst().V.GetNodeStatus(nodeToDecommission)

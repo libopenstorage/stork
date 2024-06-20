@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"k8s.io/utils/strings/slices"
 	"math"
 
@@ -2487,6 +2488,128 @@ func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
 		})
 
 	})
+}
+
+// RestartKubelet stops kubelet service on given app nodes and waits till kubelet is back up
+func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
+	if Inst().S.String() == openshift.SchedName && len(os.Getenv("TORPEDO_SSH_KEY")) == 0 {
+		ginkgo.Skip("Cannot perform kubelet restart on openshift cluster without ssh key")
+	}
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	nodeList, err := core.Instance().GetNodes()
+	processError(err, errChan...)
+	nodeSchedulableStatus := make(map[string]corev1.ConditionStatus)
+	for _, k8sNode := range nodeList.Items {
+		for _, status := range k8sNode.Status.Conditions {
+			if status.Type == corev1.NodeReady {
+				nodeSchedulableStatus[k8sNode.Name] = status.Status
+			}
+		}
+	}
+
+	for _, appNode := range appNodes {
+
+		log.InfoD("Stopping kubelet service on node %s", appNode.Name)
+
+		err := Inst().S.StopKubelet(appNode, node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         1 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			}})
+		processError(err, errChan...)
+	}
+
+	log.InfoD("Waiting for kubelet service to stop on the give nodes %v", appNodes)
+
+	t := func() (interface{}, bool, error) {
+		nodeList, err = core.Instance().GetNodes()
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, appNode := range appNodes {
+			for _, k8sNode := range nodeList.Items {
+				if k8sNode.Name == appNode.Name {
+					log.InfoD("Waiting for node [%s] in Not Ready state", appNode.Name)
+					for _, status := range k8sNode.Status.Conditions {
+						if status.Type == corev1.NodeReady {
+							if status.Status == corev1.ConditionTrue {
+								return "", true, fmt.Errorf("node [%s] is in Ready state, waiting for node to go down", appNode.Name)
+							} else {
+								if nodeSchedulableStatus[k8sNode.Name] == corev1.ConditionTrue {
+									log.Infof("Node [%s] is in Not Ready state with status [%s]", appNode.Name, status.Status)
+									nodeSchedulableStatus[k8sNode.Name] = status.Status
+								}
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 3*time.Minute, 10*time.Second)
+	processError(err, errChan...)
+	log.Infof("waiting for 5 mins before starting kubelet")
+	time.Sleep(5 * time.Minute)
+
+	waitTime := 3 * time.Minute
+
+	if Inst().S.String() != aks.SchedName {
+		for _, appNode := range appNodes {
+
+			log.InfoD("Starting kubelet service on node %s", appNode.Name)
+			err := Inst().S.StartKubelet(appNode, node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			processError(err, errChan...)
+		}
+	} else {
+		waitTime = 20 * time.Minute
+	}
+
+	log.InfoD("Waiting for kubelet service to start on nodes %v", appNodes)
+	t = func() (interface{}, bool, error) {
+		nodeList, err = core.Instance().GetNodes()
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, appNode := range appNodes {
+			for _, k8sNode := range nodeList.Items {
+				if k8sNode.Name == appNode.Name {
+					log.InfoD("Waiting for node [%s] in Ready state", appNode.Name)
+					for _, status := range k8sNode.Status.Conditions {
+						if status.Type == corev1.NodeReady {
+							if status.Status != corev1.ConditionTrue {
+								return "", true, fmt.Errorf("node [%s] is in [%s] state, waiting for node to be Ready", appNode.Name, status.Status)
+							} else {
+								if nodeSchedulableStatus[k8sNode.Name] != corev1.ConditionTrue {
+									log.Infof("Node [%s] is in Ready state with status [%s]", appNode.Name, status.Status)
+									nodeSchedulableStatus[k8sNode.Name] = status.Status
+								}
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, waitTime, 10*time.Second)
+	processError(err, errChan...)
+
 }
 
 // ValidateAndDestroy validates application and then destroys them
@@ -8579,6 +8702,7 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 		return nil, err
 	}
 
+	log.Infof("Node [%s] has [%d] pools", stNode.Name, len(stNode.StoragePools))
 	for _, pool := range stNode.StoragePools {
 		eligibilityMap[pool.Uuid] = true
 
@@ -8618,8 +8742,9 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 						if stc.Spec.CloudStorage.KvdbDeviceSpec != nil || stc.Spec.CloudStorage.SystemMdDeviceSpec != nil {
 							expectedNodeDrivesAfterExpansion++
 						}
+						log.Infof("Expected node drives after pool [%s ] expansion for node [%s] is [%d], max cloud drives allowed [%d]", pool.Uuid, stNode.Name, expectedNodeDrivesAfterExpansion, maxCloudDrives)
 						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
-							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Id, pool.Uuid, targetSizeGiB)
+							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Name, pool.Uuid, targetSizeGiB)
 							eligibilityMap[pool.Uuid] = false
 							eligibilityMap[stNode.Id] = false
 						}
@@ -11785,6 +11910,7 @@ func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
 	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 		// Iterate through the objects in the bucket and delete them
 		var objects []*s3.ObjectIdentifier
+
 		for _, obj := range page.Contents {
 			objects = append(objects, &s3.ObjectIdentifier{
 				Key: obj.Key,
@@ -11799,7 +11925,7 @@ func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
 			},
 		})
 		if err != nil {
-			fmt.Printf("Failed to delete objects in bucket: %v\n", err)
+			log.Warnf("failed to delete objects in bucket: %v", err)
 			return false
 		}
 
@@ -11807,6 +11933,39 @@ func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to delete objects in bucket: %v", err)
+	}
+
+	// List the objects in the bucket
+	listObjectsInput := s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}
+
+	listObjectsOutput, err := client.ListObjectsV2(&listObjectsInput)
+	if err != nil {
+		return err
+	}
+	if len(listObjectsOutput.Contents) == 0 {
+		log.Debugf("Bucket [%s] is empty", bucketName)
+	} else {
+		// Delete the objects
+		deleteObjectsInput := &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &s3.Delete{
+				Objects: make([]*s3.ObjectIdentifier, len(listObjectsOutput.Contents)),
+				Quiet:   aws.Bool(true),
+			},
+		}
+
+		for i, object := range listObjectsOutput.Contents {
+			deleteObjectsInput.Delete.Objects[i] = &s3.ObjectIdentifier{
+				Key: aws.String(*object.Key),
+			}
+		}
+
+		_, err = client.DeleteObjects(deleteObjectsInput)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Delete the bucket
@@ -12169,7 +12328,12 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 
 	credCmd := "cred list -j | grep uuid"
 
-	output, err := Inst().V.GetPxctlCmdOutput(nodeToDecommission, credCmd)
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(nodeToDecommission, credCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: 5 * time.Second,
+		Timeout:         30 * time.Second,
+	}, false)
+
 	if err == nil && len(output) > 0 {
 		log.InfoD("Cloudsnap is enabled. Checking if backup is active on volumes")
 		for _, vol := range nodeVols {

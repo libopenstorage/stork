@@ -6988,6 +6988,22 @@ func (k *K8s) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	return err
 }
 
+// StopKubelet allows to stop kubelet on a give node
+func (k *K8s) StopKubelet(n node.Node, options node.SystemctlOpts) error {
+	systemctlCmd := fmt.Sprintf("sudo systemctl stop %s", "kubelet")
+	driver, _ := node.Get(k.NodeDriverName)
+	_, err := driver.RunCommand(n, systemctlCmd, options.ConnectionOpts)
+	return err
+}
+
+// StartKubelet allows to start kubelet on a give node
+func (k *K8s) StartKubelet(n node.Node, options node.SystemctlOpts) error {
+	systemctlCmd := fmt.Sprintf("sudo systemctl start %s", "kubelet")
+	driver, _ := node.Get(k.NodeDriverName)
+	_, err := driver.RunCommand(n, systemctlCmd, options.ConnectionOpts)
+	return err
+}
+
 func (k *K8s) addLabelsToPVC(pvc *corev1.PersistentVolumeClaim, labels map[string]string) {
 	if len(pvc.Labels) == 0 {
 		pvc.Labels = map[string]string{}

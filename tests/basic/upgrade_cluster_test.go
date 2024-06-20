@@ -237,20 +237,20 @@ func validateClusterNodes(stopSignal <-chan struct{}, mError *error) {
 				return
 			}
 
-			nodeNotReadyeCount := 0
+			nodeNotReadyCount := 0
 			for _, k8sNode := range nodeList.Items {
 				for _, status := range k8sNode.Status.Conditions {
 					if status.Type == corev1.NodeReady {
 						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
 						if status.Status != corev1.ConditionTrue && stNodeNames[k8sNode.Name] {
-							nodeNotReadyeCount += 1
+							nodeNotReadyCount += 1
 						}
 						break
 					}
 				}
 
 			}
-			if nodeNotReadyeCount > 1 {
+			if nodeNotReadyCount > 1 {
 				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
 					"node status:%#v", nodeSchedulableStatus)
 				log.Errorf("Got error : %s", err.Error())

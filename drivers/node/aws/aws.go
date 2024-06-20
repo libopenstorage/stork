@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -21,7 +22,7 @@ const (
 )
 
 type aws struct {
-	node.Driver
+	ssh.SSH
 	session     *session.Session
 	credentials *credentials.Credentials
 	config      *aws_pkg.Config
@@ -37,6 +38,7 @@ func (a *aws) String() string {
 
 func (a *aws) Init(nodeOpts node.InitOptions) error {
 	var err error
+	a.SSH.Init(nodeOpts)
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
@@ -57,6 +59,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 	if err != nil {
 		return err
 	}
+	log.Infof("Got instances:%+v", instances)
 	a.instances = instances
 	nodes := node.GetWorkerNodes()
 	for _, n := range nodes {
@@ -76,7 +79,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
-	log.Infof("Got Insatacne id:%v", instanceID)
+	log.Infof("Got Instance id:%v", instanceID)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
@@ -218,17 +221,18 @@ func (a *aws) DeleteNode(n node.Node, timeout time.Duration) error {
 	return nil
 }
 
-// TODO add AWS implementation for this
+// FindFiles TODO add AWS implementation for this
 func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	return "", nil
 }
 
-// TODO implement for AWS
+// Systemctl TODO implement for AWS
 func (a *aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
 	return nil
 }
 
 func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
+	log.Infof("getting all aws instances in %s", a.region)
 	instances := []*ec2.Instance{}
 	params := &ec2.DescribeInstancesInput{}
 	resp, err := a.svc.DescribeInstances(params)
@@ -257,7 +261,7 @@ func (a *aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
 
 func init() {
 	a := &aws{
-		Driver: node.NotSupportedDriver,
+		SSH: *ssh.New(),
 	}
 	node.Register(DriverName, a)
 }

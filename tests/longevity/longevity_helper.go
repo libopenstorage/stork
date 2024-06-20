@@ -221,6 +221,7 @@ func populateDisruptiveTriggers() {
 		OCPStorageNodeRecycle:           true,
 		CrashPXDaemon:                   true,
 		PowerOffAllVMs:                  true,
+		RestartKubeletService:           true,
 	}
 }
 
@@ -615,6 +616,7 @@ func populateIntervals() {
 	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ScaleFADAVolumeAttach] = map[int]time.Duration{}
 	triggerInterval[DeleteCloudsnaps] = make(map[int]time.Duration)
+	triggerInterval[RestartKubeletService] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -989,6 +991,17 @@ func populateIntervals() {
 	triggerInterval[CrashPXDaemon][3] = 21 * baseInterval
 	triggerInterval[CrashPXDaemon][2] = 24 * baseInterval
 	triggerInterval[CrashPXDaemon][1] = 27 * baseInterval
+
+	triggerInterval[RestartKubeletService][10] = 1 * baseInterval
+	triggerInterval[RestartKubeletService][9] = 3 * baseInterval
+	triggerInterval[RestartKubeletService][8] = 6 * baseInterval
+	triggerInterval[RestartKubeletService][7] = 9 * baseInterval
+	triggerInterval[RestartKubeletService][6] = 12 * baseInterval
+	triggerInterval[RestartKubeletService][5] = 15 * baseInterval
+	triggerInterval[RestartKubeletService][4] = 18 * baseInterval
+	triggerInterval[RestartKubeletService][3] = 21 * baseInterval
+	triggerInterval[RestartKubeletService][2] = 24 * baseInterval
+	triggerInterval[RestartKubeletService][1] = 27 * baseInterval
 
 	triggerInterval[PowerOffAllVMs][10] = 1 * baseInterval
 	triggerInterval[PowerOffAllVMs][9] = 3 * baseInterval
@@ -1748,6 +1761,8 @@ func populateIntervals() {
 	triggerInterval[SetDiscardMounts][0] = 0
 	triggerInterval[ResetDiscardMounts][0] = 0
 	triggerInterval[ScaleFADAVolumeAttach][0] = 0
+	triggerInterval[RestartKubeletService][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

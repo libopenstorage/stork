@@ -649,6 +649,9 @@ const (
 
 	// ScaleFADAVolumeAttach create and attach FADA volumes at scale
 	ScaleFADAVolumeAttach = "ScaleFADAVolumeAttach"
+
+	// RestartKubelet restarts kubelet on the nodes
+	RestartKubeletService = "restartKubeletService"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -1932,6 +1935,62 @@ func TriggerCrashPXDaemon(contexts *[]*scheduler.Context, recordChan *chan *Even
 					dashStats["node"] = appNode.Name
 					updateLongevityStats(CrashPXDaemon, stats.PXDaemonCrashEventName, dashStats)
 					CrashPXDaemonAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
+			validateContexts(event, contexts)
+		}
+		updateMetrics(*event)
+	})
+}
+
+// TriggerKubeletRestart restarts kubelet on the nodes
+func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartKubeletService)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartKubeletService,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "restart kubelet in all nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		for _, appNode := range node.GetStorageDriverNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
+				Inst().V.String(), appNode.Name)
+			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
+			UpdateOutcome(event, err)
+
+			Step(stepLog,
+				func() {
+					log.InfoD(stepLog)
+					taskStep := fmt.Sprintf("restart driver on node: %s",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(RestartKubeletService, stats.RestartKubeletEventName, dashStats)
+					RestartKubelet([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}

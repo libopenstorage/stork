@@ -1603,3 +1603,67 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+// Kubelet stopped on the nodes - and the client container should not be impacted.
+var _ = Describe("{StopKubeletOnNodes}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StopKubeletOnNodes", "Validate PX after kubelet is restarted", nil, 0)
+
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "has to schedule apps and stop kubelet app nodes"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kubeletrsrt-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		var pureCleanupFunction func()
+		if Inst().V.String() == portworx.PureDriverName {
+			pureCleanupFunction = StartPureBackgroundWriteRoutines()
+		}
+
+		stepLog = "restart kubelet on all storage driver nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appNode := range node.GetStorageDriverNodes() {
+				stepLog = fmt.Sprintf("restart kubelet %s on node: %v",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						RestartKubelet([]node.Node{appNode})
+					})
+			}
+		})
+
+		stepLog = "Validate PX on all nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range node.GetStorageDriverNodes() {
+				status, err := IsPxRunningOnNode(&node)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if PX is running on node [%s]", node.Name))
+				dash.VerifySafely(status, true, fmt.Sprintf("PX is not running on node [%s]", node.Name))
+			}
+		})
+
+		if pureCleanupFunction != nil {
+			pureCleanupFunction() // Checks for any errors during the background writes and fails the test if any occurred
+			return
+		}
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

@@ -758,9 +758,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
 						log.Infof("Updating node [%s] as storage node", n.Name)
-					}
-
-					if n.StoragePools == nil {
+						n.StoragePools = nil
 						for _, pxNodePool := range pxNode.Pools {
 							storagePool := node.StoragePool{
 								StoragePool:       pxNodePool,
@@ -768,15 +766,8 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 							}
 							n.StoragePools = append(n.StoragePools, storagePool)
 						}
-					} else {
-						for idx, nodeStoragePool := range n.StoragePools {
-							for _, pxNodePool := range pxNode.Pools {
-								if nodeStoragePool.Uuid == pxNodePool.Uuid {
-									n.StoragePools[idx].StoragePool = pxNodePool
-								}
-							}
-						}
 					}
+
 					if err = node.UpdateNode(*n); err != nil {
 						return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 					}

@@ -1166,6 +1166,22 @@ func (d *dcos) SetASGClusterSize(perZoneCount int64, timeout time.Duration) erro
 	}
 }
 
+func (d *dcos) StopKubelet(n node.Node, options node.SystemctlOpts) error {
+	// StopKubelet is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StopKubelet()",
+	}
+}
+
+func (d *dcos) StartKubelet(n node.Node, options node.SystemctlOpts) error {
+	// StartKubelet is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartKubelet()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

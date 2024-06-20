@@ -460,6 +460,11 @@ type Driver interface {
 
 	// SetASGClusterSize sets node count for an asg cluster
 	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
+
+	// StopKubelet stops kubelet on the given node
+	StopKubelet(appNode node.Node, opts node.SystemctlOpts) error
+	// StartKubelet starts kubelet on the given node
+	StartKubelet(appNode node.Node, opts node.SystemctlOpts) error
 }
 
 var (
