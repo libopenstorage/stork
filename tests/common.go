@@ -910,11 +910,13 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			if err != nil {
-				PrintDescribeContext(ctx)
-				processError(err, errChan...)
-				return
+			if !ctx.SkipPodValidation {
+				err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+				if err != nil {
+					PrintDescribeContext(ctx)
+					processError(err, errChan...)
+					return
+				}
 			}
 		})
 

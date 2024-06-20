@@ -125,6 +125,7 @@ const (
 	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTest                                                            TestCaseName = "KubevirtVMMigrationTest"
 	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
+	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
 )
 
 // Test case labels
@@ -248,6 +249,7 @@ const (
 	CloudSnapshotMissingValidationForNFSLocationLabel                                       TestCaseLabel = "CloudSnapshotMissingValidationForNFSLocation"
 	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
+	BackupCSIVolumesWithPartialSuccessLabel                                                 TestCaseLabel = "BackupCSIVolumesWithPartialSuccess"
 )
 
 // Common Labels
@@ -498,4 +500,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	CloudSnapshotMissingValidationForNFSLocation: {CloudSnapshotMissingValidationForNFSLocationLabel},
 	MultipleProvisionerCsiKdmpBackupAndRestore:   {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
 	KubevirtVMMigrationTest:                      {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
+	BackupCSIVolumesWithPartialSuccess:           {BackupCSIVolumesWithPartialSuccessLabel},
 }

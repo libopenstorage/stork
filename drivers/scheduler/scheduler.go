@@ -38,6 +38,8 @@ type Context struct {
 	ScheduleOptions ScheduleOptions
 	// SkipVolumeValidation for cases when use volume driver other than portworx
 	SkipVolumeValidation bool
+	// SkipPodValidation for cases when we expect the pods not be ready.
+	SkipPodValidation bool
 	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
 	SkipClusterScopedObject bool
 	// RefreshStorageEndpoint force refresh the storage driver endpoint
@@ -398,6 +400,9 @@ type Driver interface {
 
 	// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
 	CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// DeleteCsiSnapshotClass deletes csi snapshot class
+	DeleteCsiSnapshotClass(snapClassName string) error
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.

@@ -8169,6 +8169,16 @@ func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner stri
 	return volumeSnapClass, nil
 }
 
+// DeleteCsiSnapshotClass deletes csi snapshot class
+func (k *K8s) DeleteCsiSnapshotClass(snapClassName string) error {
+	log.Infof("Deleting volume snapshot class: %v", snapClassName)
+	err := k8sExternalsnap.DeleteSnapshotClass(snapClassName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
 func (k *K8s) CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error) {
 	var err error
