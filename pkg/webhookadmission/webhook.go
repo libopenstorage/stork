@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -182,9 +183,19 @@ func (c *Controller) checkVolumeOwner(volumes []v1.Volume, namespace string) (bo
 		if v.PersistentVolumeClaim == nil {
 			continue
 		}
-		pvc, err := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
-		if err != nil {
-			return false, err
+
+		var pvc *v1.PersistentVolumeClaim
+		var err error
+		if storkcache.Instance() != nil {
+			pvc, err = storkcache.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+			if err != nil {
+				log.Errorf("failed to watch pods with informer cache for health monitoring, err: %v", err)
+			}
+		} else {
+			pvc, err = core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+			if err != nil {
+				return false, err
+			}
 		}
 		if c.Driver.OwnsPVC(core.Instance(), pvc) {
 			return true, nil

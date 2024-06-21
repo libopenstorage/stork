@@ -41,6 +41,9 @@ type SharedInformerCache interface {
 
 	// WatchPods registers the pod event handlers with the informer cache
 	WatchPods(fn func(object interface{})) error
+
+	// GetPersistentVolumeClaim returns the PersistentVolumeClaim in a namespace from the cache after applying TransformFunc
+	GetPersistentVolumeClaim(pvcName string, namespace string) (*corev1.PersistentVolumeClaim, error)
 }
 
 type cache struct {
@@ -100,6 +103,7 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 			currPod.Status.HostIP = podResource.Status.HostIP
 			return &currPod, nil
 		},
+
 		&corev1.PersistentVolumeClaim{}: func(obj interface{}) (interface{}, error) {
 			pvc, ok := obj.(*corev1.PersistentVolumeClaim)
 			if !ok {
@@ -108,9 +112,12 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 			currPVC := corev1.PersistentVolumeClaim{}
 			currPVC.Name = pvc.Name
 			currPVC.Namespace = pvc.Namespace
+
+			currPVC.Annotations = pvc.Annotations
+
 			currPVC.Spec = pvc.Spec
 			currPVC.Status = pvc.Status
-			return &currPVC, nil 
+			return &currPVC, nil
 		},
 	}
 
@@ -244,7 +251,8 @@ func (c *cache) WatchPods(fn func(object interface{})) error {
 	return nil
 }
 
-func (c *cache) GetPersistentVolumeClaim(pvcName, namespace string) (*corev1.PersistentVolumeClaim, error) {
+// GetPersistentVolumeClaim returns the transformed PersistentVolumeClaim if present in the cache.
+func (c *cache) GetPersistentVolumeClaim(pvcName string, namespace string) (*corev1.PersistentVolumeClaim, error) {
 	if c == nil || c.controllerCache == nil {
 		return nil, fmt.Errorf(cacheNotInitializedErr)
 	}
