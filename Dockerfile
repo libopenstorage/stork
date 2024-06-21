@@ -3,6 +3,7 @@ LABEL maintainer="harsh@portworx.com"
 ARG MAKE_TARGET
 
 WORKDIR /go/src/github.com/portworx/torpedo
+ENV NEXUS_URL="https://nexus.pwx.dev.purestorage.com"
 
 # Install setup dependencies
 RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client coreutils python3
@@ -17,8 +18,8 @@ RUN mkdir bin && \
     mv aws-iam-authenticator bin
 
 # Install IBM Cloud SDK
-RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
-    ibmcloud plugin install -f vpc-infrastructure && \
+RUN curl -fskSL $NEXUS_URL/repository/store/ibmcloud/linux | bash && \
+    ibmcloud plugin install -v 11.3.0 -f vpc-infrastructure && \
     ibmcloud plugin install -f container-service
 
 # Install vCluster binary
