@@ -5683,3 +5683,55 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
+	/*
+		This test case assumes that it is being run on a setup with FACD topology enabled.
+		There are at least two different zones, each using a different flash array.
+		The nodes are labeled according to their respective zone labels.
+
+		https://purestorage.atlassian.net/browse/PTX-23978
+		1. Schedule application
+		2. Create a pool in few worker nodes and verify that the newly created pool is created in the nodes with specific zone
+		3. Destroy the applications
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyPoolCreateInProperZones", "Label Nodes and Verify Pool Creation", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	itLog := "VerifyPoolCreateInProperZones"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		selectedNodesForTopology := node.GetStorageNodes()[0 : len(node.GetStorageNodes())/2]
+
+		stepLog = "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("labelnodes-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Create a pool in the labelled nodes and verify if cloud drive is created on the nodes with specific zone"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := CreateNewPoolsOnMultipleNodesInParallel(selectedNodesForTopology)
+			log.FailOnError(err, "error adding cloud drives in parallel")
+
+			//Verify cloud drives are created on the nodes with specific zone
+			err = ValidatePureCloudDriveTopologies()
+			log.FailOnError(err, "Failed to validate cloud drives topologies")
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
