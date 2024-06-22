@@ -7,6 +7,8 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 
@@ -5005,6 +5007,119 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-37400
+	   1. Check if DMThin is enabled on the cluster , if not skip the test (Right now for FACD, delete pool option is not available on BTRFS)
+	   2. Check if the CSI topology is enabled in the STC , if not enabled then skip the test
+	   3. Deploy Applications and While Apps are Running, Toggle the CSI topology as false in stc and wait for px-csi pods to restart  and check if the pods are running
+	   4. While Apps are Running,Select a Random Node and Delete the pool in that node
+	   5. Check if the pool is deleted
+	   6. Add a Cloud Drive on the same node and check if it is added successfully
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("DisableCsiTopologyandDeletePool",
+			"Disable the topology for the pool and delete the pool", nil, 0)
+	})
+	itLog := "DisableCsiTopologyandDeletePool"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		log.InfoD("Check if the cluster is DMTHIN")
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		if !isDmthin {
+			Skip("Cluster is not DMTHIN so skipping the test")
+		}
+		log.InfoD("Get the Namespace in which portworx is Deployed")
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+		var nodeForPoolDelete []node.Node
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		nodeSelected := stNodes[randomIndex]
+		nodePool := nodeSelected.StoragePools[0]
+		nodePoolSize := nodePool.TotalSize
+		nodePoolSizeinGib := nodePoolSize / units.GiB
+		log.InfoD("Pool size is [%v] GiB", nodePoolSizeinGib)
+		log.InfoD("Get the stc spec from the cluster")
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Failed to get driver")
+		log.InfoD("Check if the topology is enabled in the stc")
+		if stc.Spec.CSI.Topology.Enabled == false {
+			Skip("Topology is Disabled so skipping the test")
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		checkPodIsDeleted := func() (interface{}, bool, error) {
+			csiLabels := make(map[string]string)
+			csiLabels["app"] = "px-csi-driver"
+			pods, err := k8sCore.GetPods(volDriverNamespace, csiLabels)
+			if err != nil {
+				return "", false, err
+			}
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("csi pods are still not deployed")
+			}
+			return "csi pods deployed", false, nil
+		}
+
+		stepLog := "Disable the csi topology in stc"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stc.Spec.CSI.Topology.Enabled = false
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			log.FailOnError(err, "Failed to update the storage cluster")
+			log.InfoD("Validating csi pods are deleted")
+
+			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
+		})
+		stepLog = "Delete the pool on a particular node and validate if it is Deleted Successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodeForPoolDelete = append(nodeForPoolDelete, stNodes[rand.Intn(len(stNodes))])
+			log.InfoD("Deleting the pool on the node [%v]", nodeForPoolDelete[0].Name)
+			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+		})
+		stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			spec := fmt.Sprintf("size=%d", nodePoolSizeinGib)
+			log.InfoD("Adding Cloud Drive on the node [%v]", nodeForPoolDelete[0].Name)
+			err := Inst().V.AddCloudDrive(&nodeSelected, spec, -1)
+			log.FailOnError(err, "Failed to add cloud drive on the node [%v]", nodeForPoolDelete[0].Name)
+		})
+		stepLog = "Toggle Back the csi topology in stc to true"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stc.Spec.CSI.Topology = &v12.CSITopologySpec{
+				Enabled: true,
+			}
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			log.FailOnError(err, "Failed to update the storage cluster")
+			log.InfoD("Validating csi pods are deployed")
+			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
+
+		})
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 
 
 var _ = Describe("{TrashcanRecovery}", func() {
