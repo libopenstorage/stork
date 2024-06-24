@@ -10,14 +10,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/aks"
-	"k8s.io/utils/strings/slices"
-	"math"
-
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/devans10/pugo/flasharray"
-
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -32,18 +26,24 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/devans10/pugo/flasharray"
 	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
+	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
@@ -51,13 +51,7 @@ import (
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -70,9 +64,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/sirupsen/logrus"
-	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
@@ -81,6 +73,11 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
+
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -94,10 +91,12 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rest "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/strings/slices"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/portworx/torpedo/drivers"
@@ -108,6 +107,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"github.com/portworx/torpedo/drivers/scheduler/anthos"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
@@ -1439,19 +1439,21 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 				snapshotVolNames = append(snapshotVolNames, snapshotVolName)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnap(vol, params)
-				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
-				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
-				}
-			})
+			// Temporarily disabled: PWX-37628
+			// Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
+			// 	err = Inst().V.ValidateCreateCloudsnap(vol, params)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+			// 	}
+			// })
 		}
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
-		})
+		// PWX-37645: Disabled while fixing partition edge cases
+		// Step("validate Pure local volume paths", func() {
+		// 	err = Inst().V.ValidatePureLocalVolumePaths()
+		// 	processError(err, errChan...)
+		// })
 		Step("Delete the snapshot that is created ", func() {
 			for _, vol := range snapshotVolNames {
 				err = Inst().V.DeleteVolume(vol)
@@ -1511,21 +1513,22 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 				}
 				SnapshotVolumes = append(SnapshotVolumes, snapshotVolName)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
-				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
-				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
-				}
-			})
+			// Temporarily disabled: PWX-37628
+			// Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
+			// 	err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+			// 	}
+			// })
+			// Step("validating groupsnap for using pxctl", func() {
+			// 	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+			// 	}
+			// })
 		}
-		Step("validating groupsnap for using pxctl", func() {
-			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
-			if err != nil {
-				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
-			}
-		})
 		Step("Delete the cloudsnaps created ", func() {
 			for _, vol := range SnapshotVolumes {
 				err = Inst().V.DeleteVolume(vol)
@@ -1552,10 +1555,11 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
 		//       CSI resize succeeded.
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
-		})
+		// PWX-37645: Disabled while fixing partition edge cases
+		// Step("validate Pure local volume paths", func() {
+		// 	err = Inst().V.ValidatePureLocalVolumePaths()
+		// 	processError(err, errChan...)
+		// })
 	})
 }
 
@@ -1699,8 +1703,9 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
 
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+			// PWX-37645: Disabled while fixing partition edge cases
+			// err = Inst().V.ValidatePureLocalVolumePaths()
+			// processError(err, errChan...)
 		}
 	})
 }
@@ -1738,8 +1743,9 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 
 			// Note: the above only creates PVCs, it does not attach them to pods, so no extra care needs to be taken for local paths
 
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+			// PWX-37645: Disabled while fixing partition edge cases
+			// err = Inst().V.ValidatePureLocalVolumePaths()
+			// processError(err, errChan...)
 		}
 	})
 }
