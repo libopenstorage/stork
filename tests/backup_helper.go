@@ -216,6 +216,7 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-backup-psa-restricted", "mysql-backup": "mysql-backup-psa-restricted"}
 )
 
 type UserRoleAccess struct {
@@ -8881,7 +8882,7 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 		go func(restoreName string, nsMapping map[string]string, scMapping map[string]string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			log.InfoD("Validating restore [%s] with custom resources %v", restoreName, resourceList)
+			log.InfoD(" [%s] with custom resources %v", restoreName, resourceList)
 			var expectedRestoredAppContextList []*scheduler.Context
 			for _, context := range contexts {
 				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(context, nsMapping, scMapping, true)

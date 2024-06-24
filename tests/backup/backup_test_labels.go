@@ -124,6 +124,7 @@ const (
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
 	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTest                                                            TestCaseName = "KubevirtVMMigrationTest"
+	EnableNsAndClusterLevelPSAWithBackupAndRestore                                     TestCaseName = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
 	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
 	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
 )
@@ -250,6 +251,7 @@ const (
 	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
 	BackupCSIVolumesWithPartialSuccessLabel                                                 TestCaseLabel = "BackupCSIVolumesWithPartialSuccess"
+	EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel                                     TestCaseLabel = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
 )
 
 // Common Labels
@@ -493,12 +495,12 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupNetworkErrorTest:                                           {BackupNetworkErrorTestLabel},
 	IssueMultipleBackupsAndRestoreInterleavedCopies:                  {IssueMultipleBackupsAndRestoreInterleavedCopiesLabel},
 	ValidateFiftyVolumeBackups:                                       {ValidateFiftyVolumeBackupsLabel},
-	BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies: {BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPoliciesLabel},
-	PXBackupClusterUpgradeTest:                   {PXBackupClusterUpgradeTestLabel},
-	BackupToLockedBucketWithSharedObjects:        {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
-	RemoveJSONFilesFromNFSBackupLocation:         {RemoveJSONFilesFromNFSBackupLocationLabel},
-	CloudSnapshotMissingValidationForNFSLocation: {CloudSnapshotMissingValidationForNFSLocationLabel},
-	MultipleProvisionerCsiKdmpBackupAndRestore:   {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
-	KubevirtVMMigrationTest:                      {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
-	BackupCSIVolumesWithPartialSuccess:           {BackupCSIVolumesWithPartialSuccessLabel},
+	PXBackupClusterUpgradeTest:                                       {PXBackupClusterUpgradeTestLabel},
+	BackupToLockedBucketWithSharedObjects:                            {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
+	RemoveJSONFilesFromNFSBackupLocation:                             {RemoveJSONFilesFromNFSBackupLocationLabel},
+	CloudSnapshotMissingValidationForNFSLocation:                     {CloudSnapshotMissingValidationForNFSLocationLabel},
+	MultipleProvisionerCsiKdmpBackupAndRestore:                       {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
+	KubevirtVMMigrationTest:                                          {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
+	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel},
+	EnableNsAndClusterLevelPSAWithBackupAndRestore:                   {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
 }

@@ -408,7 +408,9 @@ const (
 	addDriveUpTimeOut           = 15 * time.Minute
 	podDestroyTimeout           = 5 * time.Minute
 	kubeApiServerBringUpTimeout = 20 * time.Minute
-	KubeApiServerWait           = 2 * time.Minute
+	KubeApiServerWait           = 15 * time.Minute
+	NSWaitTimeout               = 10 * time.Minute
+	NSWaitTimeoutRetry          = 20 * time.Second
 )
 
 const (
@@ -13373,13 +13375,16 @@ func ConfigureClusterLevelPSA(psaProfile string, skipNamespace []string) error {
 	// Get the namespace where px-backup is present
 	pxBackupNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {
-		return err
+		log.InfoD("%s", err)
 	}
 
 	// Create a list of all the namespaces which need to be excluded
-	namespaces := []string{"default", "kube-system", pxBackupNamespace}
+	namespaces := []string{"default", "kube-system"}
 	if pxNs != "kube-system" {
 		namespaces = append(namespaces, pxNs)
+	}
+	if pxBackupNamespace != "" {
+		namespaces = append(namespaces, pxBackupNamespace)
 	}
 	namespaces = append(namespaces, skipNamespace...)
 	joined := "\"" + strings.Join(namespaces, "\",\"") + "\""
@@ -13533,5 +13538,31 @@ func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
 		return fmt.Errorf("Failed to delete objects from S3 bucket: [%v]", err)
 	}
 	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
+	return nil
+}
+
+// CreateNamespaceAndAssignLabels Creates a namespace and assigns labels to it
+func CreateNamespaceAndAssignLabels(namespace string, labels map[string]string) error {
+	t := func() (interface{}, bool, error) {
+		nsSpec := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   namespace,
+				Labels: labels,
+			},
+		}
+		ns, err := k8sCore.CreateNamespace(nsSpec)
+
+		if k8serrors.IsAlreadyExists(err) {
+			if ns, err = k8sCore.GetNamespace(namespace); err == nil {
+				return ns, false, nil
+			}
+		}
+		return ns, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, NSWaitTimeout, NSWaitTimeoutRetry)
+	if err != nil {
+		return err
+	}
 	return nil
 }
