@@ -574,14 +574,22 @@ var _ = Describe("{FADARemoteDetach}", func() {
 
 		//validate the state of new pod is ContainerCreating after rollout
 		validateNewPodState := func() {
-			appPods, err := core.Instance().GetPods(appNamespace, nil)
-			log.FailOnError(err, fmt.Sprintf("error getting pods in namespace %s", appNamespace))
-			for _, p := range appPods.Items {
-				if strings.Contains(p.Name, appPodName) && p.Name != appPod.Name {
-					newPod = &p
-					break
+
+			t := func() (interface{}, bool, error) {
+				appPods, err := core.Instance().GetPods(appNamespace, nil)
+				if err != nil {
+					return nil, true, err
 				}
+				for _, p := range appPods.Items {
+					log.Debugf("Checking pod [%s] if it is a new pod", p.Name)
+					if strings.Contains(p.Name, appPodName) && p.Name != appPod.Name {
+						newPod = &p
+						return nil, false, nil
+					}
+				}
+				return nil, true, fmt.Errorf("new pod with name [%s] is not available yet", appPodName)
 			}
+			_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if newPod == nil {
 				log.FailOnError(fmt.Errorf("new pod with name [%s] is not available", appPodName), "error getting new app pod")
 			}
