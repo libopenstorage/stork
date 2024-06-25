@@ -794,7 +794,7 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 }
 
 // CreateBackupWithPartialSuccessValidation creates backup, checks for partial success, and validates the partial backup
-func CreateBackupWithPartialSuccessValidation(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, failedVolumes []string) error {
+func CreateBackupWithPartialSuccessValidation(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, failedVolumes []*corev1.PersistentVolumeClaim) error {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -3031,7 +3031,8 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 }
 
 // ValidateBackupWithPartialSuccess validates a backup's spec's objects (resources) and volumes. resourceTypesFilter can be used to select specific types to validate (nil means all types). This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
-func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string, failedVolumes []string) error {
+func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	failedVolumeMap := make(map[string]bool, 0)
 	var backupInspectResponse *api.BackupInspectResponse
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
 	log.Infof("Obtaining backup info for backup [%s]", backupName)
@@ -3068,13 +3069,11 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 	}
 	Volumes := resp.GetBackup().GetVolumes()
 	if len(Volumes) > 0 {
-		// Create a map for failed volumes
-		failedVolumeMap := make(map[string]bool)
 		for _, failedVol := range failedVolumes {
-			failedVolumeMap[failedVol] = true
+			failedVolumeMap[failedVol.Spec.VolumeName] = true
 		}
 		for _, volume := range Volumes {
-			isFailedVolume := failedVolumeMap[volume.Pvc]
+			isFailedVolume := failedVolumeMap[volume.Name]
 
 			if isFailedVolume {
 				if volume.Status.Status != api.BackupInfo_StatusInfo_Failed {
@@ -3132,10 +3131,6 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 
 		var updatedSpec interface{}
 		var name, kind, ns string
-		failedVolumesMap := make(map[string]struct{}, len(failedVolumes))
-		for _, vol := range failedVolumes {
-			failedVolumesMap[vol] = struct{}{}
-		}
 	specloop:
 		for _, spec := range scheduledAppContext.App.SpecList {
 			if tektonspec, ok := spec.(*tektoncdv1.Task); ok {
@@ -3192,8 +3187,12 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 
 			// Skip PersistentVolumeClaim validation for failed volumes
 			if kind == "PersistentVolumeClaim" {
-				if _, exists := failedVolumesMap[name]; exists {
-					log.Infof("Skipping validation for failed PersistentVolumeClaim: [%s]", name)
+				claim, err := k8sCore.GetPersistentVolumeClaim(name, ns)
+				if err != nil {
+					return err
+				}
+				if failedVolumeMap[claim.Spec.VolumeName] {
+					log.Infof("Skipping validation for failed PersistentVolumeClaim [%s] in namespace [%s]", name, ns)
 					continue specloop
 				}
 			}
@@ -9210,6 +9209,21 @@ func GetPVCListForNamespace(namespace string) ([]string, error) {
 	return pvcNameList, nil
 }
 
+// GetVolumeNamesForNamespace retrieves the list of volumes in the specified namespace.
+func GetVolumeNamesForNamespace(namespace string) ([]string, error) {
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(namespace, make(map[string]string))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volumes in namespace %s: %w", namespace, err)
+	}
+	// Extract volume names from the list
+	var volumeNameList []string
+	for _, pvc := range pvcList.Items {
+		volumeNameList = append(volumeNameList, pvc.Spec.VolumeName)
+	}
+	return volumeNameList, nil
+}
+
 // ValidatePVCCleanup checks if there is a mismatch between the original PVC list and the current one.
 func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
 	pvcBeforeSet := make(map[string]bool)
@@ -9527,7 +9541,7 @@ func CreatePartialBackupWithVscMapping(backupName string, clusterName string, bL
 }
 
 // CreatePartialBackupWithValidationWithVscMapping creates partial backup, checks for partial success, and validates the backup
-func CreatePartialBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []string) error {
+func CreatePartialBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []*corev1.PersistentVolumeClaim) error {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -9553,7 +9567,7 @@ func CreatePartialBackupWithValidationWithVscMapping(ctx context1.Context, backu
 }
 
 // CreatePartialScheduleBackupWithValidationWithVscMapping creates a partial schedule backup, checks for partial success of first (immediately triggered) backup, validates that backup and returns the name of that first partial scheduled backup
-func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []string) (string, error) {
+func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []*corev1.PersistentVolumeClaim) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -9575,7 +9589,7 @@ func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Contex
 }
 
 // BackupWithPartialSuccessCheckWithValidation checks if backup is partial Success and then validates the backup
-func BackupWithPartialSuccessCheckWithValidation(ctx context1.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter []string, failedVolumes []string) error {
+func BackupWithPartialSuccessCheckWithValidation(ctx context1.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter []string, failedVolumes []*corev1.PersistentVolumeClaim) error {
 	err := BackupWithPartialSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 	if err != nil {
 		return err
@@ -9584,7 +9598,7 @@ func BackupWithPartialSuccessCheckWithValidation(ctx context1.Context, backupNam
 }
 
 // CreatePartialRestoreWithValidation creates partial restore, waits and checks for success and validates the backup
-func CreatePartialRestoreWithValidation(ctx context1.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context, failedVolumes []string) error {
+func CreatePartialRestoreWithValidation(ctx context1.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context, failedVolumes []*corev1.PersistentVolumeClaim) error {
 	startTime := time.Now()
 	err := CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
 	if err != nil {
@@ -9617,6 +9631,15 @@ func CreatePartialRestoreWithValidation(ctx context1.Context, restoreName, backu
 		}
 		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 	}
+
+	// Creating a list of failed PVC to skip during validation if namespace mapping is present
+	for _, failedVolume := range failedVolumes {
+		// Check if the failedVolume namespace exists in the namespaceMapping
+		if _, ok := namespaceMapping[failedVolume.Namespace]; ok {
+			log.Infof("Namespace mapping found for failed volume [%s]. [%s] -> [%s]", failedVolume.Name, failedVolume.Namespace, namespaceMapping[failedVolume.Namespace])
+			failedVolume.Namespace = namespaceMapping[failedVolume.Namespace]
+		}
+	}
 	err = ValidatePartialRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0), failedVolumes)
 	if err != nil {
 		return err
@@ -9630,7 +9653,7 @@ func CreatePartialRestoreWithValidation(ctx context1.Context, restoreName, backu
 
 // CreatePartialRestoreWithReplacePolicyWithValidation Creates in-place restore and waits for it to complete and then validates the restore
 func CreatePartialRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
-	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType, scheduledAppContexts []*scheduler.Context, failedVolumes []string) (err error) {
+	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType, scheduledAppContexts []*scheduler.Context, failedVolumes []*corev1.PersistentVolumeClaim) (err error) {
 	err = CreateRestoreWithReplacePolicy(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping, replacePolicy)
 	if err != nil {
 		return
@@ -9670,7 +9693,7 @@ func CreatePartialRestoreWithReplacePolicyWithValidation(restoreName string, bac
 }
 
 // ValidatePartialRestore validates a restore's spec's objects (resources) and volumes using expectedRestoredAppContexts (generated by transforming scheduledAppContexts using TransformAppContextWithMappings). This function must be called after switching to the context on which `expectedRestoredAppContexts` exists. Cluster level resources aren't validated.
-func ValidatePartialRestore(ctx context1.Context, restoreName string, orgID string, expectedRestoredAppContexts []*scheduler.Context, resourceTypesFilter []string, failedVolumes []string) error {
+func ValidatePartialRestore(ctx context1.Context, restoreName string, orgID string, expectedRestoredAppContexts []*scheduler.Context, resourceTypesFilter []string, failedVolumes []*corev1.PersistentVolumeClaim) error {
 	log.InfoD("Validating restore [%s] in org [%s]", restoreName, orgID)
 
 	log.Infof("Obtaining restore info for restore [%s]", restoreName)
@@ -9781,9 +9804,13 @@ func ValidatePartialRestore(ctx context1.Context, restoreName string, orgID stri
 					errors = append(errors, err)
 					continue specloop
 				}
-				if kind == "PersistentVolumeClaim" && IsPresent(failedVolumes, name) {
-					// we don't restore PersistentVolumeClaim which is in failed state.
-					continue specloop
+				if kind == "PersistentVolumeClaim" {
+					for _, failedVolume := range failedVolumes {
+						if failedVolume.Name == name && failedVolume.Namespace == ns {
+							// we don't restore PersistentVolumeClaim which is in failed state.
+							continue specloop
+						}
+					}
 				}
 
 				if kind == "StorageClass" || kind == "VolumeSnapshot" {
@@ -9948,6 +9975,7 @@ func ValidatePartialRestore(ctx context1.Context, restoreName string, orgID stri
 
 		// VALIDATE APPLICATIONS
 		log.InfoD("Validate applications in restored namespace [%s] due to restore [%s]", expectedRestoredAppContextNamespace, restoreName)
+		log.InfoD("Skip pod validation for namespace [%s]: [%v]", expectedRestoredAppContextNamespace, expectedRestoredAppContext.SkipPodValidation)
 		errorChan := make(chan error, errorChannelSize)
 		ValidateContext(expectedRestoredAppContext, &errorChan)
 		for err := range errorChan {

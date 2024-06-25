@@ -2,6 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
+	corev1 "k8s.io/api/core/v1"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -37,7 +40,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 		schedulePolicyInterval          = int64(15)
 		invalidVolumeSnapShotClassNames []string
 		providers                       []string
-		failedVolumes                   []string
+		failedVolumes                   []*corev1.PersistentVolumeClaim
 		backedUpNamespaces              []string
 		scheduleNames                   []string
 	)
@@ -140,7 +143,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of invalid snapshot class [%s] creation for provisioner [%s]", invalidVolumeSnapShotClassName, scProvisioner))
 					invalidVolumeSnapShotClassNames = append(invalidVolumeSnapShotClassNames, invalidVolumeSnapShotClassName)
 					provisionerInvalidVscMap[scProvisioner] = invalidVolumeSnapShotClassName
-					failedVolumes = append(failedVolumes, pvc.Name)
+					failedVolumes = append(failedVolumes, &pvc)
 				}
 				if len(failedVolumes) > 0 {
 					appCtx.SkipPodValidation = true
@@ -275,5 +278,196 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Volumesnapshot [%s]", invalidVolumeSnapShotClassName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase verified the partial backup success when few Px volumes snapshots are successful and few are failed
+var _ = Describe("{PartialBackupSuccessWithPxVolumes}", func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		labelSelectors       map[string]string
+		providers            []string
+		failedPvcs           []*corev1.PersistentVolumeClaim
+		backupName           string
+		namespaceMapping     map[string]string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("PartialBackupSuccessWithPxVolumes", "Verify partial backup success when some of the Px volume snapshot fails", nil, 299229, Mkoppal, Q2FY25)
+
+		backupLocationMap = make(map[string]string)
+		namespaceMapping = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = GetBackupProviders()
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"mysql-backup-data"}
+		for i := 0; i < 3; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+
+	})
+
+	It("Verify partial backup success when some of the Px volume snapshot fails", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+		})
+
+		Step("Taking backup of application from source cluster", func() {
+			var wg sync.WaitGroup
+			log.InfoD("taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			k8sCore := core.Instance()
+			backupName = fmt.Sprintf("%s-%s", "autogenerated-partial-backup", RandomString(4))
+
+			// Making a list of PVCs to fail
+			for _, appCtx := range scheduledAppContexts {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				pvcList, err := k8sCore.GetPersistentVolumeClaims(scheduledNamespace, make(map[string]string))
+				log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", scheduledNamespace))
+				pvcs := pvcList.Items
+				log.Infof("PVCs to fail in namespace %s:", scheduledNamespace)
+				for j := 0; j < len(pvcs)-1; j++ {
+					log.Infof("PVC Name: [%s], PVC Volume name: [%s], PVC Namespace: [%s]", pvcs[j].Name, pvcs[j].Spec.VolumeName, pvcs[j].Namespace)
+					failedPvcs = append(failedPvcs, &pvcs[j])
+				}
+				appCtx.SkipPodValidation = true
+			}
+
+			wg.Add(2)
+			// Go routine to stop backups for the PVCs
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				var wg1 sync.WaitGroup
+				wg1.Add(len(failedPvcs))
+				for _, pvc := range failedPvcs {
+					go func(pvc *corev1.PersistentVolumeClaim) {
+						defer GinkgoRecover()
+						defer wg1.Done()
+						log.Infof("Stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace)
+						err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
+						log.FailOnError(err, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
+					}(pvc)
+				}
+				wg1.Wait()
+			}()
+
+			// Go routine to create backup
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, backupLocationName)
+				err := CreateBackupWithPartialSuccessValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", failedPvcs)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of partial backup [%s]", backupName))
+			}()
+			wg.Wait()
+
+		})
+
+		Step("Restoring the partial backup with namespace mapping", func() {
+			log.InfoD("Restoring the partial backup with namespace mapping")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, appCtx := range scheduledAppContexts {
+				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + RandomString(4)
+			}
+			restoreName := fmt.Sprintf("%s-%s", "restore-partial-backup", RandomString(4))
+			log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", restoreName, namespaceMapping)
+			err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts, failedPvcs)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore with partial backup [%s]", restoreName))
+		})
+
+		Step("Restoring the partial backup with replace option", func() {
+			log.InfoD("Restoring the partial backup with replace option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName := fmt.Sprintf("%s-%s", "restore-partial-backup-replace", RandomString(4))
+			log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", restoreName, namespaceMapping)
+			err = CreatePartialRestoreWithReplacePolicyWithValidation(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, scheduledAppContexts, failedPvcs)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore with partial backup with replace option [%s]", restoreName))
+		})
+
+		Step("Restoring the partial backup with retain option", func() {
+			log.InfoD("Restoring the partial backup with retain option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreName := fmt.Sprintf("%s-%s", "restore-partial-backup-retain", RandomString(4))
+			log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", restoreName, namespaceMapping)
+			err = CreatePartialRestoreWithReplacePolicyWithValidation(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 1, scheduledAppContexts, failedPvcs)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore with partial backup with retain option [%s]", restoreName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
 	})
 })
