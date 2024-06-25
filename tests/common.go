@@ -13572,3 +13572,13 @@ func CreateNamespaceAndAssignLabels(namespace string, labels map[string]string) 
 	}
 	return nil
 }
+
+// GetClusterName method returns the cluster name whose kubeconfig is passed
+func GetClusterName(kubeConfigFile string) (string, error) {
+	cmd := fmt.Sprintf("kubectl config view  --kubeconfig=%v -o=json | jq -r '.clusters[].name'", kubeConfigFile)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return "", err
+	}
+	return output, nil
+}

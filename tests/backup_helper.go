@@ -5856,6 +5856,7 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
+		backupScheduleRequest.DirectKdmp = true
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
 	}
