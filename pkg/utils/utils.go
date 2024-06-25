@@ -488,6 +488,8 @@ func GetPodFromPVC(pvcName, namespace string) (*v1.Pod, error) {
 	return podList[0], nil
 }
 
+// This function will return the UID and GID from the security context of the pod or container
+// If the security context is not defined in the pod or container, it will return UndefinedId
 func getIdFromSecurityContext(securityContext interface{}) (int64, int64) {
 	uid := UndefinedId
 	gid := UndefinedId
@@ -527,39 +529,42 @@ func GetPodUserId(pod *v1.Pod) (int64, int64) {
 	uid := UndefinedId
 	gid := UndefinedId
 
+	// Let's get pod SecurityContext defined uid & gid if any
+	// These need to be overwritten if container defines any speific uid or gid, since container setting will take precedence
+	securityContext := pod.Spec.SecurityContext
+	uid, gid = getIdFromSecurityContext(securityContext)
+
 	//Get User ID or get Group-ID in the absence of User ID from container's security context
+	containerUid := UndefinedId
+	containerGid := UndefinedId
 	if len(pod.Spec.Containers) > 1 {
 		// Case-01: There can be more than one container present per application pod and each container could have
 		//          configured SecurityContext separately. On that case we need user intervention to pick the container,
-		//          in the absence of that for this release, we will pick first found UID logic as an best-effort approach.
+		//          in the absence of that for this release, we will pick the first-found UID logic as an best-effort approach.
 		// Case 02: If more than one container exist per pod but only one container has defined securityContext then
-		//          we can pick that though.
+		//          we will pick that though.
+		// Case 03: If more than one pod's container have defined securityContext and some have defined uid and other's have
+		//          defined gid, we will not support such a case for now. It is also a very rare & rogue case.
 		for _, container := range pod.Spec.Containers {
 			// No need to handle the case for the initContainers here
 			// since it is a different list in pod spec i.e. pod.Spec.InitContainers
 			securityContext := container.SecurityContext
-			uid, gid = getIdFromSecurityContext(securityContext)
-			if uid != UndefinedId || gid != UndefinedId {
-				return uid, gid
+			containerUid, containerGid = getIdFromSecurityContext(securityContext)
+			if containerUid != UndefinedId || containerGid != UndefinedId {
+				break
 			}
 		}
 	} else {
 		// Only one container for the pod is found, let's pick the UID or GID of it
 		securityContext := pod.Spec.Containers[0].SecurityContext
-		uid, gid = getIdFromSecurityContext(securityContext)
-		if uid != UndefinedId || gid != UndefinedId {
-			return uid, gid
-		}
+		containerUid, containerGid = getIdFromSecurityContext(securityContext)
 	}
-	// UID or GID is not found in any of the container spec, try Getting the UID/GID from the pod's security context
-	if uid == UndefinedId && gid == UndefinedId {
-		securityContext := pod.Spec.SecurityContext
-		uid, gid = getIdFromSecurityContext(securityContext)
-		if uid != UndefinedId || gid != UndefinedId {
-			return uid, gid
-		}
+	if containerUid != UndefinedId {
+		uid = containerUid
 	}
-	// Neither pod nor container has the securityContext defined with User Id or group Id, return error with undefined uids
+	if containerGid != UndefinedId {
+		gid = containerGid
+	}
 	return uid, gid
 }
 
@@ -613,6 +618,15 @@ func GetAppUidGid(pvcName string, namespace string, backup *stork_api.Applicatio
 			logrus.Errorf("%s: %v", fn, err)
 			return uid, gid, err
 		}
+
+	}
+	if uid == 0 {
+		// Intentionally gid == 0 check is not there since a user can set GID as 0 exclusively and run the app in restricted security context.
+		// hence in that case we should return the GID as 0 and uid with whatever set. so that security conext will be imposed on kdmp job pod.
+		logrus.Infof("%s: UID/GID either set as root or not present due to backup taken with older version wherein no psa support present [%v/%v]", fn, namespace, pvcName)
+		// If UID/GID is not set in the backup CR or pod is exclusively mentioned uid as 0, then return undefined UID/GID
+		// No need to add a security context for Job Pod in this case let it run with root privilege.
+		return UndefinedId, UndefinedId, nil
 	}
 	return uid, gid, nil
 }
