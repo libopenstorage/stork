@@ -301,14 +301,14 @@ func (s *SnapshotScheduleController) formatVolumeSnapshotName(snapshotSchedule *
 	return strings.Join([]string{scheduleName, snapSuffix}, "-")
 }
 
-func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) (*stork_api.VolumeSnapshotSchedule, error) {
-	vssKind := snapshotSchedule.GetObjectKind().GroupVersionKind().Kind
-	vssAPIVersion := snapshotSchedule.GetObjectKind().GroupVersionKind().GroupVersion().String()
+func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) (*stork_api.VolumeSnapshotSchedule, error) {
+	vssKind := inputSnapshotSchedule.GetObjectKind().GroupVersionKind().Kind
+	vssAPIVersion := inputSnapshotSchedule.GetObjectKind().GroupVersionKind().GroupVersion().String()
 
 	// Get the latest copy of snapshotschedule for updating
-	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(snapshotSchedule.Name, snapshotSchedule.Namespace)
+	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(inputSnapshotSchedule.Name, inputSnapshotSchedule.Namespace)
 	if err != nil {
-		return snapshotSchedule, fmt.Errorf("failed to get volumesnapshot schedule %s", snapshotSchedule.Name)
+		return inputSnapshotSchedule, fmt.Errorf("failed to get volumesnapshot schedule %s", inputSnapshotSchedule.Name)
 	}
 
 	// Set the default reclaim policy.
