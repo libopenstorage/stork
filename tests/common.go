@@ -2841,7 +2841,11 @@ func ToggleAutopilotInStc() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	if stc.Spec.Autopilot != nil {
+		log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	} else {
+		log.FailOnError(fmt.Errorf("Autopilot is not enabled in STC"), "Autopilot is not enabled in STC")
+	}
 	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(stc)
