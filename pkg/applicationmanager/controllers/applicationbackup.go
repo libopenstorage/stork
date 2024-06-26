@@ -2285,7 +2285,7 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 	// Only delete the backup from the backupLocation if the ReclaimPolicy is
 	// set to Delete or if it is not successful
 	if backup.Spec.ReclaimPolicy != stork_api.ApplicationBackupReclaimPolicyDelete &&
-		backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful {
+		(backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful || backup.Status.Status == stork_api.ApplicationBackupStatusPartialSuccess) {
 		return true, nil
 	}
 
