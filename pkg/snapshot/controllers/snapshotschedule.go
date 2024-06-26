@@ -134,7 +134,7 @@ func (s *SnapshotScheduleController) handle(ctx context.Context, snapshotSchedul
 
 		// Start a snapshot for a policy if required
 		if start {
-			err := s.startVolumeSnapshot(snapshotSchedule, policyType)
+			snapshotSchedule, err = s.startVolumeSnapshot(snapshotSchedule, policyType)
 			if err != nil {
 				msg := fmt.Sprintf("Error triggering snapshot for schedule(%v): %v", policyType, err)
 				s.recorder.Event(snapshotSchedule,
@@ -201,7 +201,7 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 					s.recorder.Event(snapshotSchedule,
 						v1.EventTypeWarning,
 						err.Error(),
-						fmt.Sprintf("Error updating snapshot (%s) status", snapshot.Name))
+						fmt.Sprintf("Error getting snapshot (%s) status", snapshot.Name))
 					if errors.IsNotFound(err) {
 						snapshot.Status = snapv1.VolumeSnapshotConditionError
 						updated = true
@@ -301,12 +301,16 @@ func (s *SnapshotScheduleController) formatVolumeSnapshotName(snapshotSchedule *
 	return strings.Join([]string{scheduleName, snapSuffix}, "-")
 }
 
-func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) error {
+func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *stork_api.VolumeSnapshotSchedule, policyType stork_api.SchedulePolicyType) (*stork_api.VolumeSnapshotSchedule, error) {
+	vssKind := inputSnapshotSchedule.GetObjectKind().GroupVersionKind().Kind
+	vssAPIVersion := inputSnapshotSchedule.GetObjectKind().GroupVersionKind().GroupVersion().String()
+
 	// Get the latest copy of snapshotschedule for updating
 	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(inputSnapshotSchedule.Name, inputSnapshotSchedule.Namespace)
 	if err != nil {
-		return fmt.Errorf("failed to get volumesnapshot schedule %s", inputSnapshotSchedule.Name)
+		return inputSnapshotSchedule, fmt.Errorf("failed to get volumesnapshot schedule %s", inputSnapshotSchedule.Name)
 	}
+
 	// Set the default reclaim policy.
 	s.setDefaults(snapshotSchedule)
 
@@ -325,7 +329,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *
 		})
 	err = s.client.Update(context.TODO(), snapshotSchedule)
 	if err != nil {
-		return err
+		return snapshotSchedule, err
 	}
 
 	snapshot := &snapv1.VolumeSnapshot{
@@ -355,7 +359,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *
 				string(snapv1.VolumeSnapshotConditionError),
 				msg)
 			log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
-			return err
+			return snapshotSchedule, err
 		}
 	}
 	snapshot.Metadata.Annotations[preSnapRuleAnnotationKey] = snapshotSchedule.Spec.PreExecRule
@@ -368,14 +372,14 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *
 				string(snapv1.VolumeSnapshotConditionError),
 				msg)
 			log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
-			return err
+			return snapshotSchedule, err
 		}
 	}
 	snapshot.Metadata.Annotations[postSnapRuleAnnotationKey] = snapshotSchedule.Spec.PostExecRule
 
 	options, err := schedule.GetOptions(snapshotSchedule.Spec.SchedulePolicyName, snapshotSchedule.Namespace, policyType)
 	if err != nil {
-		return err
+		return snapshotSchedule, err
 	}
 	for k, v := range options {
 		snapshot.Metadata.Annotations[k] = v
@@ -390,13 +394,14 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(inputSnapshotSchedule *
 				Name: snapshotSchedule.Name,
 				UID:  snapshotSchedule.UID,
 				// TODO: Kind of the fetched volumesnapshotschedule is empty, hence using the input one
-				Kind:       inputSnapshotSchedule.GetObjectKind().GroupVersionKind().Kind,
-				APIVersion: inputSnapshotSchedule.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+				Kind:       vssKind,
+				APIVersion: vssAPIVersion,
 			},
 		}
 	}
+
 	_, err = k8sextops.Instance().CreateSnapshot(snapshot)
-	return err
+	return snapshotSchedule, err
 }
 
 func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stork_api.VolumeSnapshotSchedule) error {
