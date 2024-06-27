@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: job-trigger-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-manager-role
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: job-manager-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: job-trigger-sa
+roleRef:
+  kind: Role
+  name: job-manager-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: job-config
+data:
+  job.yaml: |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      generateName: busybox-job-
+    spec:
+      template:
+        spec:
+          containers:
+          - name: busybox
+            image: busybox
+            command: ["sh", "-c"]
+            args:
+            - |
+              # Clean up the mount point
+              rm -rf /mnt/data/*
+              # Create a 20 MB file with random data
+              dd if=/dev/urandom of=/mnt/data/testfile bs=1M count=20
+            volumeMounts:
+            - name: mypvc
+              mountPath: /mnt/data
+          restartPolicy: Never
+          volumes:
+          - name: mypvc
+            persistentVolumeClaim:
+              claimName: job-pod-pvc
+      backoffLimit: 4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-trigger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: job-trigger
+  template:
+    metadata:
+      labels:
+        app: job-trigger
+    spec:
+      serviceAccountName: job-trigger-sa
+      containers:
+        - name: kubectl
+          image: bitnami/kubectl:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              while true; do
+                echo "Creating job pod..."
+                kubectl create -f /mnt/config/job.yaml
+                echo "Sleeping for 2 minutes..."
+                sleep 120
+              done
+          volumeMounts:
+            - name: config-volume
+              mountPath: /mnt/config
+      restartPolicy: Always
+      volumes:
+        - name: config-volume
+          configMap:
+            name: job-config
