@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/restutil"
 	"math"
 	"math/rand"
@@ -733,10 +734,10 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 	var testrailID = 0
 	/*  Try Volume resize to 5 GB every time
-	    Try HA Refactor of the volume
-	    Try one HA node Reboot
+	        Try HA Refactor of the volume
+	        Try one HA node Reboot
 
-		all the above 3 operations are done in parallel
+	    	all the above 3 operations are done in parallel
 	*/
 	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
 	var runID int
@@ -3651,5 +3652,81 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 
 		})
 
+	})
+})
+var _ = Describe("{RestartPxandRestartNode}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24483
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Restart Portworx service on few nodes
+	   4.once portworx is up on the node,immediately reboot the node
+	   5.Make sure Both portworx and node are up.
+	   6.Validate the Applications are running
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPxandRestartNode",
+			"Restart Portworx and Restart Node", nil, 0)
+	})
+	itLog := "RestartPxandRestartNode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNodes := node.GetStorageDriverNodes()
+		selectedNodesForReboot := pxNodes[:len(pxNodes)/2]
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartpxandrebootnode"
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog := "Restart Portworx Service on few nodes and once portworx is up, immediately reboot the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, nodeToReboot := range selectedNodesForReboot {
+				log.InfoD("Restarting portworx  Service on Node [%v]", nodeToReboot.Name)
+				err := Inst().V.RestartDriver(nodeToReboot, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to restart portworx on node [%v]", nodeToReboot.Name))
+				log.InfoD("Restarted portworx on  node %s", nodeToReboot.Name)
+				err = Inst().N.RebootNode(nodeToReboot,
+					node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         defaultCommandTimeout,
+							TimeBeforeRetry: defaultCommandRetry,
+						},
+					})
+				log.FailOnError(err, "Failed to reboot node %v", nodeToReboot.Name)
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(nodeToReboot)
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
+				}
+				log.InfoD("wait for node: %s to be back up", nodeToReboot.Name)
+				_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodeToReboot.Name))
+				err = Inst().V.WaitDriverUpOnNode(nodeToReboot, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot.Name))
+			}
+
+		})
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
