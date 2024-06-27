@@ -17,13 +17,12 @@ import (
 
 	"github.com/libopenstorage/cloudops"
 	oracleOps "github.com/libopenstorage/cloudops/oracle"
-	"github.com/oracle/oci-go-sdk/v65/core"
 	"github.com/portworx/torpedo/drivers/node"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 )
 
 const (
-	// Schedular is the name of the oke driver
+	// SchedName is the name of the oke driver
 	SchedName                = "oke"
 	okeConfigFile            = "/root/.oci/config"
 	ociCLI                   = "oci"
@@ -197,6 +196,140 @@ type responseWithListId struct {
 			K8SVersion string `json:"k8s_version"`
 		} `json:"freeform-tags,omitempty"`
 	} `json:"data"`
+}
+
+type AgentConfig struct {
+	AreAllPluginsDisabled bool `json:"are-all-plugins-disabled"`
+	IsManagementDisabled  bool `json:"is-management-disabled"`
+	IsMonitoringDisabled  bool `json:"is-monitoring-disabled"`
+	PluginsConfig         any  `json:"plugins-config"`
+}
+
+type AvailabilityConfig struct {
+	IsLiveMigrationPreferred any    `json:"is-live-migration-preferred"`
+	RecoveryAction           string `json:"recovery-action"`
+}
+
+type DefinedTags struct {
+	OracleTags struct {
+		CreatedBy string    `json:"CreatedBy"`
+		CreatedOn time.Time `json:"CreatedOn"`
+	} `json:"Oracle-Tags"`
+}
+
+type InstanceOptions struct {
+	AreLegacyImdsEndpointsDisabled bool `json:"are-legacy-imds-endpoints-disabled"`
+}
+
+type LaunchOptions struct {
+	BootVolumeType                  string `json:"boot-volume-type"`
+	Firmware                        string `json:"firmware"`
+	IsConsistentVolumeNamingEnabled bool   `json:"is-consistent-volume-naming-enabled"`
+	IsPvEncryptionInTransitEnabled  bool   `json:"is-pv-encryption-in-transit-enabled"`
+	NetworkType                     string `json:"network-type"`
+	RemoteDataVolumeType            string `json:"remote-data-volume-type"`
+}
+
+type Metadata struct {
+	AnsibleArgs           string `json:"ansible_args"`
+	BootstrapKubeletConf  string `json:"bootstrap-kubelet-conf"`
+	InventoryTmpl         string `json:"inventory_tmpl"`
+	OciTld                string `json:"oci_tld"`
+	OkeAd                 string `json:"oke-ad"`
+	OkeClusterDisplayName string `json:"oke-cluster-display-name"`
+	OkeClusterId          string `json:"oke-cluster-id"`
+	OkeClusterLabel       string `json:"oke-cluster-label"`
+	OkeCompartmentName    string `json:"oke-compartment-name"`
+	OkeImageName          string `json:"oke-image-name"`
+	OkeInitialNodeLabels  string `json:"oke-initial-node-labels"`
+	OkeIsCloudInit        string `json:"oke-is-cloud-init"`
+	OkeIsOnPrivateSubnet  string `json:"oke-is-on-private-subnet"`
+	OkeIsOnsr             string `json:"oke-is-onsr"`
+	OkeIsPreemptible      string `json:"oke-is-preemptible"`
+	OkeIsPrivateWorker    string `json:"oke-is-private-worker"`
+	OkeK8Version          string `json:"oke-k8version"`
+	OkePoolId             string `json:"oke-pool-id"`
+	OkePoolLabel          string `json:"oke-pool-label"`
+	OkeSlot               string `json:"oke-slot"`
+	OkeSubnetLabel        string `json:"oke-subnet-label"`
+	OkeTenancyId          string `json:"oke-tenancy-id"`
+	OkeTm                 string `json:"oke-tm"`
+	OkeArtifactSigningKey string `json:"oke_artifact_signing_key"`
+	OkeInitScript         string `json:"oke_init_script"`
+	OkeMaturity           string `json:"oke_maturity"`
+	OkeNamespace          string `json:"oke_namespace"`
+	Realm                 string `json:"realm"`
+	SshAuthorizedKeys     string `json:"ssh_authorized_keys"`
+	UserData              string `json:"user_data"`
+}
+
+type ShapeConfig struct {
+	BaselineOcpuUtilization   any     `json:"baseline-ocpu-utilization"`
+	GpuDescription            any     `json:"gpu-description"`
+	Gpus                      int     `json:"gpus"`
+	LocalDiskDescription      any     `json:"local-disk-description"`
+	LocalDisks                int     `json:"local-disks"`
+	LocalDisksTotalSizeInGbs  any     `json:"local-disks-total-size-in-gbs"`
+	MaxVnicAttachments        int     `json:"max-vnic-attachments"`
+	MemoryInGbs               float64 `json:"memory-in-gbs"`
+	NetworkingBandwidthInGbps float64 `json:"networking-bandwidth-in-gbps"`
+	Ocpus                     float64 `json:"ocpus"`
+	ProcessorDescription      string  `json:"processor-description"`
+	Vcpus                     int     `json:"vcpus"`
+}
+
+type SourceDetails struct {
+	BootVolumeSizeInGbs              any    `json:"boot-volume-size-in-gbs"`
+	BootVolumeVpusPerGb              any    `json:"boot-volume-vpus-per-gb"`
+	ImageId                          string `json:"image-id"`
+	InstanceSourceImageFilterDetails any    `json:"instance-source-image-filter-details"`
+	KmsKeyId                         any    `json:"kms-key-id"`
+	SourceType                       string `json:"source-type"`
+}
+
+type SystemTags struct {
+	OrclContainerengine struct {
+		Cluster  string `json:"Cluster"`
+		NodeType string `json:"NodeType"`
+	} `json:"orcl-containerengine"`
+}
+
+type Data struct {
+	AgentConfig               AgentConfig        `json:"agent-config"`
+	AvailabilityConfig        AvailabilityConfig `json:"availability-config"`
+	AvailabilityDomain        string             `json:"availability-domain"`
+	CapacityReservationId     any                `json:"capacity-reservation-id"`
+	ClusterPlacementGroupId   any                `json:"cluster-placement-group-id"`
+	CompartmentId             string             `json:"compartment-id"`
+	DedicatedVmHostId         any                `json:"dedicated-vm-host-id"`
+	DefinedTags               DefinedTags        `json:"defined-tags"`
+	DisplayName               string             `json:"display-name"`
+	ExtendedMetadata          map[string]any     `json:"extended-metadata"`
+	FaultDomain               string             `json:"fault-domain"`
+	FreeformTags              map[string]any     `json:"freeform-tags"`
+	Id                        string             `json:"id"`
+	ImageId                   string             `json:"image-id"`
+	InstanceConfigurationId   any                `json:"instance-configuration-id"`
+	InstanceOptions           InstanceOptions    `json:"instance-options"`
+	IpxeScript                any                `json:"ipxe-script"`
+	IsCrossNumaNode           bool               `json:"is-cross-numa-node"`
+	LaunchMode                string             `json:"launch-mode"`
+	LaunchOptions             LaunchOptions      `json:"launch-options"`
+	LifecycleState            string             `json:"lifecycle-state"`
+	Metadata                  Metadata           `json:"metadata"`
+	PlatformConfig            any                `json:"platform-config"`
+	PreemptibleInstanceConfig any                `json:"preemptible-instance-config"`
+	Region                    string             `json:"region"`
+	Shape                     string             `json:"shape"`
+	ShapeConfig               ShapeConfig        `json:"shape-config"`
+	SourceDetails             SourceDetails      `json:"source-details"`
+	SystemTags                SystemTags         `json:"system-tags"`
+	TimeCreated               time.Time          `json:"time-created"`
+	TimeMaintenanceRebootDue  any                `json:"time-maintenance-reboot-due"`
+}
+
+type Instance struct {
+	Data []Data `json:"data"`
 }
 
 func (o *oke) String() string {
@@ -374,6 +507,8 @@ func (o *oke) UpgradeScheduler(version string) error {
 
 	log.Infof("Starting OKE cluster upgrade to [%s]", version)
 
+	initialStorageDriverNodes := node.GetStorageDriverNodes()
+
 	err = o.setControlPlaneVersion(version)
 	if err != nil {
 		return err
@@ -382,12 +517,11 @@ func (o *oke) UpgradeScheduler(version string) error {
 	if err != nil {
 		return err
 	}
-	newPoolName := fmt.Sprintf("%s-%s", o.instanceGroupName, strings.Replace(version, ".", "-", -1))
-	err = o.addUpgradedNodePool(nodePool, newPoolName, version)
+
+	err = o.setNodePoolVersion(nodePool, version)
 	if err != nil {
 		return err
 	}
-	o.instanceGroupName = newPoolName // Update the instance group name to the new node pool name
 
 	log.Infof("waiting for 5 mins for the new node pool to be ready")
 	time.Sleep(5 * time.Minute)
@@ -397,28 +531,48 @@ func (o *oke) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	err = o.RefreshNodeRegistry()
-	if err != nil {
-		return fmt.Errorf("error updating node registry after creating node pool [%s], err:%v", newPoolName, err)
-	}
-	stNodes := node.GetStorageDriverNodes()
-	for _, stNode := range stNodes {
-		err = volDriver.WaitForPxPodsToBeUp(stNode)
+	for _, stNode := range initialStorageDriverNodes {
+		err = o.PrepareNodeToDecommission(stNode, "")
 		if err != nil {
 			return err
 		}
-		err = volDriver.WaitDriverUpOnNode(stNode, 15*time.Minute)
+		err = o.DeleteNode(stNode)
 		if err != nil {
 			return err
 		}
-	}
-	err = volDriver.RefreshDriverEndpoints()
-	if err != nil {
-		return fmt.Errorf("error refreshing driver endpoints after creating node pool [%s], err:%v", newPoolName, err)
-	}
-	err = o.deleteNodePool(nodePool)
-	if err != nil {
-		return err
+
+		log.Infof("Deleted node [%s] from the cluster", stNode.Hostname)
+		log.Infof("Wait for 5 mins.to node get replaced by autoscalling group")
+		time.Sleep(5 * time.Minute)
+
+		t := func() (interface{}, bool, error) {
+
+			err = o.RefreshNodeRegistry()
+			if err != nil {
+				return nil, true, fmt.Errorf("error updating node registry after deleting node [%s], err:%v", stNode.Name, err)
+			}
+			err = volDriver.RefreshDriverEndpoints()
+			if err != nil {
+				return nil, true, fmt.Errorf("error refreshing driver endpoints after delete node [%s], err:%v", stNode.Name, err)
+			}
+			return nil, false, nil
+		}
+		if _, err := task.DoRetryWithTimeout(t, 15*time.Minute, workerRetryTime); err != nil {
+			return err
+		}
+
+		stNodes := node.GetStorageDriverNodes()
+		for _, stNode := range stNodes {
+			err = volDriver.WaitForPxPodsToBeUp(stNode)
+			if err != nil {
+				return err
+			}
+			err = volDriver.WaitDriverUpOnNode(stNode, 15*time.Minute)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	log.Infof("Successfully upgraded OKE cluster to [%s]", version)
@@ -431,7 +585,7 @@ func (o *oke) setControlPlaneVersion(version string) error {
 	cmd := fmt.Sprintf("%s ce cluster update --cluster-id %s --kubernetes-version %s", ociCLI, o.clusterId, version)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to set controlplane version tio [%s] . stderr: %v, err: %v, stdout: %v", version, stderr, err, stdout)
+		return fmt.Errorf("failed to set controlplane version to [%s] . stderr: %v, err: %v, stdout: %v", version, stderr, err, stdout)
 	}
 	var setVersionResp WorkRequest
 	err = json.Unmarshal([]byte(stdout), &setVersionResp)
@@ -444,6 +598,43 @@ func (o *oke) setControlPlaneVersion(version string) error {
 		return fmt.Errorf("error in waiting for work request to be over, %v", err)
 	}
 	logrus.Infof("Controlplane upgrade to version %s successfully for cluster id: %s", version, clusterId)
+	return nil
+}
+
+func (o *oke) setNodePoolVersion(nodePool NodePool, version string) error {
+
+	log.Infof("Setting node-pool [%s] version to [%s]", nodePool.Name, version)
+	nodeImageId, err := o.getNodeImageIdToUpgrade(version)
+	if err != nil {
+		return fmt.Errorf("failed to get node image ID for version [%s], Err: %v", version, err)
+	}
+
+	jsonPayload := fmt.Sprintf(`{
+		"nodeSourceDetails": {
+			"sourceType": "IMAGE",
+			"imageId": "%s"
+		},
+		"nodeShape": "%s",
+		"name": "%s",
+		"kubernetesVersion": "%s"
+	}`, nodeImageId, nodePool.NodeShape, nodePool.Name, version)
+
+	cmd := fmt.Sprintf("%s ce node-pool update --node-pool-id %s --force --from-json '%s'", ociCLI, nodePool.ID, jsonPayload)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to set node pool version to [%s] . stderr: %v, err: %v, stdout: %v", version, stderr, err, stdout)
+	}
+	var setVersionResp WorkRequest
+	err = json.Unmarshal([]byte(stdout), &setVersionResp)
+	if err != nil {
+		return fmt.Errorf("error while parsing set controlplane version output, error %v %v", err, stderr)
+	}
+
+	clusterId, err := o.waitForWorkRequest(setVersionResp.OpcWorkRequestId, fmt.Sprintf("Set controlplane version [%s]", version))
+	if err != nil {
+		return fmt.Errorf("error in waiting for work request to be over, %v", err)
+	}
+	logrus.Infof("node pool [%s] upgrade to version %s successfully for cluster id: %s", nodePool.Name, version, clusterId)
 	return nil
 }
 
@@ -554,18 +745,14 @@ func (o *oke) DeleteNode(node node.Node) error {
 	}
 
 	log.Infof("Deleting node [%s]", node.Hostname)
-	instanceDetails, err := o.ops.GetInstance(node.Hostname)
+	instanceID, err := o.getInstanceId(node.Hostname)
 	if err != nil {
 		return err
 	}
 
-	oracleInstance, ok := instanceDetails.(core.Instance)
-	if !ok {
-		return fmt.Errorf("could not retrive oke instance details for %s", node.Hostname)
-	}
-	err = o.ops.DeleteInstance(*oracleInstance.Id, "", 10*time.Minute)
+	err = o.ops.DeleteInstance(instanceID, "", 30*time.Minute)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete instance [%s]. Error: %v", node.Hostname, err)
 	}
 	return nil
 }
@@ -575,6 +762,30 @@ func init() {
 		SSH: *ssh.New(),
 	}
 	scheduler.Register(SchedName, o)
+}
+
+func (o *oke) getInstanceId(nodeName string) (string, error) {
+	cmd := fmt.Sprintf("%s compute instance list --compartment-id %s  --display-name %s --output json", ociCLI, o.compartmentId, nodeName)
+
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get instance list. stderr: %v, err: %v,stdout: %v", stderr, err, stdout)
+	}
+
+	instances := &Instance{}
+	err = json.Unmarshal([]byte(stdout), instances)
+	if err != nil {
+		return "", fmt.Errorf("error while parsing instance list output: %v, error: %v", stdout, err)
+	}
+
+	for _, instance := range instances.Data {
+		if instance.DisplayName == nodeName && instance.LifecycleState == "RUNNING" {
+			log.Debugf("Node [%s] has instance id [%s]", nodeName, instance.Id)
+			return instance.Id, nil
+		}
+	}
+	return "", fmt.Errorf("failed to get instance id for node [%s]", nodeName)
+
 }
 
 func (o *oke) waitForWorkRequest(workRequestId string, taskName string) (string, error) {

@@ -89,6 +89,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 				}
 
 				err = Inst().S.UpgradeScheduler(version)
+				if err != nil {
+					PrintPxctlStatus()
+					PrintK8sClusterInfo()
+				}
 				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
@@ -121,10 +125,14 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				// Sleep needed for IKS/OKE cluster upgrades
 				if Inst().S.String() == iks.SchedName || Inst().S.String() == oke.SchedName {
+					waitTime := 30
+					if Inst().S.String() == oke.SchedName {
+						waitTime = 10
+					}
 					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, %s replaces all worker nodes. "+
 						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String(), strings.ToUpper(Inst().S.String()))
-					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
-					time.Sleep(30 * time.Minute)
+					log.Infof("Sleeping for %d minutes to let the cluster stabilize after the upgrade..", waitTime)
+					time.Sleep(time.Duration(waitTime) * time.Minute)
 				}
 
 				PrintK8sClusterInfo()
