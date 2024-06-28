@@ -128,6 +128,7 @@ const (
 	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
 	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
 	RestoreFromHigherPrivilegedNamespaceToLower                                        TestCaseName = "RestoreFromHigherPrivilegedNamespaceToLower"
+	BackupStateTransitionForScheduledBackups                                           TestCaseName = "BackupStateTransitionForScheduledBackups"
 )
 
 // Test case labels
@@ -252,6 +253,7 @@ const (
 	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
 	BackupCSIVolumesWithPartialSuccessLabel                                                 TestCaseLabel = "BackupCSIVolumesWithPartialSuccess"
+	BackupStateTransitionForScheduledBackupsLabel                                           TestCaseLabel = "BackupStateTransitionForScheduledBackups"
 	EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel                                     TestCaseLabel = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
 	RestoreFromHigherPrivilegedNamespaceToLowerLabel                                        TestCaseLabel = "RestoreFromHigherPrivilegedNamespaceToLower"
 )
@@ -505,6 +507,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	MultipleProvisionerCsiKdmpBackupAndRestore:                       {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
 	KubevirtVMMigrationTest:                                          {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
 	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel},
+	BackupStateTransitionForScheduledBackups:                         {BackupStateTransitionForScheduledBackupsLabel},
 	EnableNsAndClusterLevelPSAWithBackupAndRestore:                   {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
 	RestoreFromHigherPrivilegedNamespaceToLower:                      {RestoreFromHigherPrivilegedNamespaceToLowerLabel, rkePipelineNightly},
 }
