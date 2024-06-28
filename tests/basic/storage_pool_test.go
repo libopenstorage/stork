@@ -1379,7 +1379,9 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 			err = AddCloudDrive(stNode, -1)
 			if err != nil {
 				errStr := err.Error()
-				res := strings.Contains(errStr, "node in maintenance mode") || strings.Contains(errStr, "couldn't get: /adddrive")
+				res := strings.Contains(errStr, "node in maintenance mode") ||
+					strings.Contains(errStr, "couldn't get: /adddrive") ||
+					strings.Contains(errStr, "Failed to get /adddrive: Requires pool maintenance mode")
 				dash.VerifySafely(res, true, fmt.Sprintf("Add drive failed when node [%s] is in maintenance mode. Error: %s", stNode.Name, errStr))
 			} else {
 				dash.VerifyFatal(err == nil, false, fmt.Sprintf("Add drive succeeded whien node [%s] is in maintenance mode", stNode.Name))
@@ -5398,7 +5400,18 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
 			for _, vol := range Volumes {
-				volIds = append(volIds, vol.ID)
+				volDetails, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, "Failed while inspecting Volume [%v]", volDetails)
+
+				if !volDetails.Spec.IsPureVolume() {
+					volIds = append(volIds, vol.ID)
+				}
+			}
+
+			// Some times if context has FADA Volume pool UUIDs willnot be fetched from volumes ,
+			// In that case we skip the context and go to next context
+			if len(volIds) == 0 {
+				continue
 			}
 
 			// Select Random Volumes for pool Expand
