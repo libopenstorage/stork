@@ -5,6 +5,7 @@ import (
 	context1 "context"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/watch"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -9429,6 +9430,100 @@ func DeleteAllDataExportCRs(namespace string) error {
 	}
 	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 	return err
+}
+
+// DeleteDataExportCRForVolume deletes the data export CR for the provided PVC
+func DeleteDataExportCRForVolume(pvc *corev1.PersistentVolumeClaim) error {
+	var found bool
+	var filterOptions = metav1.ListOptions{}
+	namespace := pvc.Namespace
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			if dataExportCr.Spec.Source.Namespace == namespace && dataExportCr.Spec.Source.Name == pvc.Name {
+				found = true
+				log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+				err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+				}
+			}
+		}
+		if !found {
+			return "", true, fmt.Errorf("no data export CR found for PVC [%s] in namespace [%s]", pvc.Name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// WatchAndKillDataExportCR watches for the data export CRs in the provided namespaces and deletes them as soon as they are created
+func WatchAndKillDataExportCR(namespaces []string) error {
+	kdmpClient := kdmp.Instance()
+	// Map of namespace and watcher
+	var namespaceWatcherMap = make(map[string]watch.Interface)
+	for _, namespace := range namespaces {
+		watcher, err := kdmpClient.WatchDataExport(namespace, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		namespaceWatcherMap[namespace] = watcher
+		log.Infof("Watcher created for namespace [%s]", namespace)
+	}
+
+	for namespace, watcher := range namespaceWatcherMap {
+		go func(namespace string, watcher watch.Interface) {
+			defer GinkgoRecover()
+			defer func() {
+				watcher.Stop()
+				log.InfoD("Watcher stopped for namespace [%s]", namespace)
+			}()
+			ch := watcher.ResultChan()
+			noMatchTimeout := time.NewTimer(30 * time.Minute)
+			twoHourTimeout := time.After(2 * time.Hour)
+			defer noMatchTimeout.Stop()
+			log.InfoD("Watcher started for namespace [%s]", namespace)
+			for {
+				select {
+				case event, ok := <-ch:
+					if !ok {
+						log.InfoD("Watcher channel closed")
+						return
+					}
+					log.InfoD("Received event: %v", event)
+					if event.Type == watch.Added {
+						log.InfoD("DataExport CR added. Initiating delete.")
+						err := DeleteAllDataExportCRs(namespace)
+						if err != nil {
+							log.Infof("Error deleting DataExport CR: %v", err)
+						} else {
+							log.InfoD("DataExport CR deleted successfully.")
+						}
+						// Reset noMatchTimeout after processing an event
+						if !noMatchTimeout.Stop() {
+							<-noMatchTimeout.C
+						}
+						noMatchTimeout.Reset(30 * time.Minute)
+					}
+				case <-noMatchTimeout.C:
+					log.InfoD("No DataExport CR was found within 30 minutes, resetting counter")
+					noMatchTimeout.Reset(30 * time.Minute)
+				case <-twoHourTimeout:
+					log.InfoD("Watcher timed out after two hours")
+					return
+				}
+			}
+		}(namespace, watcher)
+	}
+	return nil
 }
 
 // StopCloudsnapBackup stops the cloudsnap for the provided pvc name and namespace
