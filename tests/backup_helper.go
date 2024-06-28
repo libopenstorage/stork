@@ -217,7 +217,10 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
-	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-backup-psa-restricted", "mysql-backup": "mysql-backup-psa-restricted"}
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 )
 
 type UserRoleAccess struct {

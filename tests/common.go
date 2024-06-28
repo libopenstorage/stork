@@ -13587,6 +13587,21 @@ func GetClusterName(kubeConfigFile string) (string, error) {
 	return output, nil
 }
 
+// GetUniqueElementsFromList gets unique elements from a list
+func GetUniqueElementsFromList(input []string) []string {
+	uniqueMap := make(map[string]bool)
+	uniqueSlice := make([]string, 0)
+
+	for _, element := range input {
+		if !uniqueMap[element] {
+			uniqueMap[element] = true
+			uniqueSlice = append(uniqueSlice, element)
+		}
+	}
+
+	return uniqueSlice
+}
+
 func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 	var pvclist []string
 	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)

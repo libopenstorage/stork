@@ -127,6 +127,7 @@ const (
 	EnableNsAndClusterLevelPSAWithBackupAndRestore                                     TestCaseName = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
 	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
 	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
+	RestoreFromHigherPrivilegedNamespaceToLower                                        TestCaseName = "RestoreFromHigherPrivilegedNamespaceToLower"
 )
 
 // Test case labels
@@ -252,6 +253,7 @@ const (
 	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
 	BackupCSIVolumesWithPartialSuccessLabel                                                 TestCaseLabel = "BackupCSIVolumesWithPartialSuccess"
 	EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel                                     TestCaseLabel = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
+	RestoreFromHigherPrivilegedNamespaceToLowerLabel                                        TestCaseLabel = "RestoreFromHigherPrivilegedNamespaceToLower"
 )
 
 // Common Labels
@@ -310,6 +312,7 @@ const (
 	ocpPxPipelineS3Upgrade                     = "ocp-px-pipeline-s3-upgrade"
 	ibmNonPxRoksPipelineS3Upgrade              = "ibm-nonpx-roks-pipeline-s3-upgrade"
 	VanillaPipelineS3StorkUpgrade              = "vanilla-pipeline-s3-stork-upgrade"
+	rkePipelineNightly                         = "rke-pipeline-nightly"
 )
 
 // Aetos lN labels
@@ -503,4 +506,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	KubevirtVMMigrationTest:                                          {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
 	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel},
 	EnableNsAndClusterLevelPSAWithBackupAndRestore:                   {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
+	RestoreFromHigherPrivilegedNamespaceToLower:                      {RestoreFromHigherPrivilegedNamespaceToLowerLabel, rkePipelineNightly},
 }
