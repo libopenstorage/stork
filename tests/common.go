@@ -13586,3 +13586,17 @@ func GetClusterName(kubeConfigFile string) (string, error) {
 	}
 	return output, nil
 }
+
+func GetVolumeNamefromPVC(namespace string) ([]string, error) {
+	var pvclist []string
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.InfoD("error getting pvcs from namespace [%s]", namespace)
+		return nil, err
+	}
+	for _, p := range allPvcList.Items {
+		pvclist = append(pvclist, p.Spec.VolumeName)
+		return pvclist, nil
+	}
+	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
+}

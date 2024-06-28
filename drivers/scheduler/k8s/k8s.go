@@ -1961,6 +1961,14 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 					obj.Parameters["pure_fa_pod_name"] = k.PureFADAPod
 				}
 			}
+			// We can Directly Set Pure fa pod name during runtime in storage class
+			if options.PureFAPodName != "" {
+				if backend, ok := obj.Parameters["backend"]; ok && backend == "pure_block" {
+					log.InfoD("Setting Pure FA Pod Name in Storage Class %s", options.PureFAPodName)
+					obj.Parameters["pure_fa_pod_name"] = options.PureFAPodName
+				}
+			}
+
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
