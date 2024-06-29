@@ -5736,7 +5736,8 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	   2. Create a pod inside the Realm which we got from first step
 	   3. Create a volume using the same pod name that is created in the FA ,The pod name should be mentioned as pure_fa_pod_name in the storage class
 	   4. Validate Application and Check if the pod name in the volume is same as the pod name in the storage class
-	   5. Delete the Application and the pod created in the FA (Right now we only destroy the pod , as delete pod will not happen because eradication is blocked by SafeMode in FA)
+	   5. Validate the volume name in FA , which should be in format <realm_name>::<pod_name>::px_<cluster_uuid_1st_segment>-<pvc_name>
+	   6. Delete the Application and the pod created in the FA (Right now we only destroy the pod , as delete pod will not happen because eradication is blocked by SafeMode in FA)
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidatePodNameinVolume", "Validate the pod name in the volume", nil, 0)
@@ -5745,7 +5746,6 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	itLog := "ValidatePodNameinVolume"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var origCustomAppConfigs map[string]scheduler.AppConfig
 		var RealmName string
 		var faClient *newFlashArray.Client
 		var isFAaccessible bool
@@ -5791,27 +5791,11 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		stepLog = "Assign the pod name to pure_fa_pod_name in the storage class"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
-
-			// save the original custom app configs
-			origCustomAppConfigs = make(map[string]scheduler.AppConfig)
-			for appName, customAppConfig := range Inst().CustomAppConfig {
-				origCustomAppConfigs[appName] = customAppConfig
-			}
-
-			// update the custom app config with pod name
-			Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
-				PureFaPodName: podNameinSC,
-			}
-
-			log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
-			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-			log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
-
 			context, err := Inst().S.Schedule(testName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				Namespace:          testName,
+				PureFAPodName:      podNameinSC,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", testName)
 			contexts = append(contexts, context...)
@@ -5831,6 +5815,45 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 					dash.VerifyFatal(PodName, podNameinSC, "verify pod name in volume same as pod name in storage class")
 					log.InfoD("Pod Name [%v] in the volume is same as Pod Name [%v] in the storage class", PodName, podNameinSC)
 				}
+			}
+
+		})
+		stepLog = "Validate the volume name in the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageNodes()
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+				Sudo:            true,
+			}
+			cmd := "cat /etc/pwx/cluster_uuid"
+			clusterUUID, err := Inst().N.RunCommand(storageNodes[0], cmd, opts)
+			log.FailOnError(err, "Failed to get cluster UUID")
+			log.InfoD("Cluster UUID [%v]", clusterUUID)
+			parts := strings.Split(clusterUUID, "-")
+			clusterUUIDfirstPart := parts[0]
+			getVolumeNamesFromPVCs := func(contexts []*scheduler.Context) []string {
+				var volumeNames []string
+				for _, ctx := range contexts {
+					pvcs, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+					log.FailOnError(err, "error getting pvcs from namespace [%s]", ctx.App.NameSpace)
+
+					for _, pvc := range pvcs.Items {
+						volumeNames = append(volumeNames, pvc.Spec.VolumeName)
+					}
+				}
+				return volumeNames
+			}
+			listofPvcNames := getVolumeNamesFromPVCs(contexts)
+			for _, pvcName := range listofPvcNames {
+				expectedVolName := RealmName + "::" + podNameinSC + "::" + "px_" + clusterUUIDfirstPart + "-" + pvcName
+				log.InfoD("Expected Volume Name [%v]", expectedVolName)
+				isFAVolumeExists, err := pureutils.IsVolumeExistsonFA(faClient, expectedVolName)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if volume [%v] exists in FA", expectedVolName))
+				dash.VerifyFatal(isFAVolumeExists, true, fmt.Sprintf("verify  volume exists in FA same "))
+				log.InfoD("Validated Volume [%v] in FA", expectedVolName)
 			}
 
 		})

@@ -4,7 +4,7 @@ type VolumeServices struct {
 	client *Client
 }
 
-func (vols *VolumeServices) ListAllAvailableVolumes(params map[string]string, data interface{}) ([]VolResponse, error) {
+func (vols *VolumeServices) ListFAVolumes(params map[string]string, data interface{}) ([]VolResponse, error) {
 	req, err := vols.client.NewRequest("GET", "volumes", params, data)
 	if err != nil {
 		return nil, err

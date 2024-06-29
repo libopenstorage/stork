@@ -24,7 +24,7 @@ func PureCreateClientAndConnectRest2_x(faMgmtEndpoint string, apiToken string) (
 func ListAllVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
-	volumes, err := faClient.Volumes.ListAllAvailableVolumes(params, nil)
+	volumes, err := faClient.Volumes.ListFAVolumes(params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -35,11 +35,30 @@ func ListAllVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse
 func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "true"
-	volumes, err := faClient.Volumes.ListAllAvailableVolumes(params, nil)
+	volumes, err := faClient.Volumes.ListFAVolumes(params, nil)
 	if err != nil {
 		return nil, err
 	}
 	return volumes, nil
+}
+
+// IsVolumeExistsonFA checks if volume exists in FA
+func IsVolumeExistsonFA(faClient *flasharray.Client, volumeName string) (bool, error) {
+	params := make(map[string]string)
+	params["names"] = volumeName
+	params["destroyed"] = "false"
+	vols, err := faClient.Volumes.ListFAVolumes(params, nil)
+	if err != nil {
+		return false, err
+	}
+	for _, eachVolItems := range vols {
+		for _, eachVol := range eachVolItems.Items {
+			if strings.Contains(eachVol.Name, volumeName) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // ListAllRealmsFromFA returns list of all Available Realms present in FA
@@ -62,6 +81,24 @@ func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, e
 		return nil, err
 	}
 	return pods, nil
+}
+
+// GetCompleteVolumeNameFromFA returns complete volume name from FA
+func GetCompleteVolumeNameFromFA(faClient *flasharray.Client, volumeName string) (string, error) {
+	vols, err := ListAllVolumesFromFA(faClient)
+	if err != nil {
+		return "", err
+
+	}
+	for _, eachVolItems := range vols {
+		for _, eachVol := range eachVolItems.Items {
+			if strings.Contains(eachVol.Name, volumeName) {
+				return eachVol.Name, nil
+			}
+		}
+
+	}
+	return "", nil
 }
 
 // CreatePodinFA creates Pod in FA
