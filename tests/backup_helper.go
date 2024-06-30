@@ -143,8 +143,8 @@ const (
 	BackupLocationDeleteRetryTime             = 30 * time.Second
 	RebootNodeTimeout                         = 1 * time.Minute
 	RebootNodeTimeBeforeRetry                 = 5 * time.Second
-	LatestPxBackupVersion                     = "2.7.0"
-	defaultPxBackupHelmBranch                 = "2.7.0"
+	LatestPxBackupVersion                     = "2.7.2"
+	defaultPxBackupHelmBranch                 = "2.7.2"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
