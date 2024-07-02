@@ -10,14 +10,15 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var dash *aetosutil.Dashboard
@@ -573,6 +574,7 @@ func populateIntervals() {
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[MetroDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRPXRestartSource] = make(map[int]time.Duration)
+	triggerInterval[StorkctlMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRPXRestartDest] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRPXRestartKvdb] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
@@ -770,6 +772,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][3] = 21 * baseInterval
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[StorkctlMigrationSchedule][10] = 1 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][9] = 3 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][8] = 6 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][7] = 9 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][6] = 12 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][5] = 15 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][4] = 18 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][3] = 21 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][2] = 24 * baseInterval
+	triggerInterval[StorkctlMigrationSchedule][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRPXRestartSource][10] = 1 * baseInterval
 	triggerInterval[AsyncDRPXRestartSource][9] = 3 * baseInterval
@@ -1715,6 +1728,7 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
 	triggerInterval[AsyncDRPXRestartSource][0] = 0
+	triggerInterval[StorkctlMigrationSchedule][0] = 0
 	triggerInterval[AsyncDRPXRestartDest][0] = 0
 	triggerInterval[AsyncDRPXRestartKvdb][0] = 0
 	triggerInterval[MetroDR][0] = 0

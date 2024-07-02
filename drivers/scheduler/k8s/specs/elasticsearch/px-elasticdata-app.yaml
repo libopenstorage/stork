@@ -44,7 +44,7 @@ metadata:
   name: esnode
 spec:
   serviceName: elasticsearch-api
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: es-cluster

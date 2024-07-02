@@ -9,13 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/scheduler/iks"
-
-	"github.com/portworx/torpedo/pkg/log"
-
 	. "github.com/onsi/ginkgo/v2"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -72,6 +71,7 @@ var _ = Describe("{Longevity}", func() {
 		ConfluentAsyncDR:                  TriggerConfluentAsyncDR,
 		KafkaAsyncDR:                      TriggerKafkaAsyncDR,
 		MongoAsyncDR:                      TriggerMongoAsyncDR,
+		StorkctlMigrationSchedule:		   TriggerStorkctlMigrationSchedule,
 		AsyncDRVolumeOnly:                 TriggerAsyncDRVolumeOnly,
 		AutoFsTrimAsyncDR:                 TriggerAutoFsTrimAsyncDR,
 		DetachDrives:                      TriggerDetachDrives,

@@ -20,13 +20,7 @@ import (
 
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
-	"github.com/portworx/torpedo/drivers/scheduler/aks"
-	"github.com/portworx/torpedo/drivers/scheduler/eks"
-	"github.com/portworx/torpedo/drivers/scheduler/gke"
-	"github.com/portworx/torpedo/drivers/scheduler/iks"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"golang.org/x/exp/slices"
-
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apios "github.com/libopenstorage/openstorage/api"
@@ -51,6 +45,11 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
@@ -543,6 +542,8 @@ const (
 	AsyncDRPXRestartKvdb = "asyncdrpxrestartkvdb"
 	// AsyncDRMigrationSchedule runs AsyncDR Migrationschedule between two clusters
 	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
+	// AsyncDRMigrationSchedule runs AsyncDR Migrationschedule between two clusters using storkctl
+	StorkctlMigrationSchedule = "storkctlmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
 	ConfluentAsyncDR = "confluentasyncdr"
 	// KafkaAsyncDR runs Async DR between two clusters for kafka CRD
@@ -10082,6 +10083,90 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				UpdateOutcome(event, fmt.Errorf("couldn't suspend migration %v due to error %v", migrationSchedule.Name, err))
 			} else {
 				log.InfoD("migrationSchedule %v, suspended successfully", migrationSchedule.Name)
+			}
+		}
+	})
+}
+
+func TriggerStorkctlMigrationSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkctlMigrationSchedule)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Async DR Migrationschedule using storkctl triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkctlMigrationSchedule,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "storkctl-mig-sched"
+		err                   error
+		cpName                = "remoteclusterpair" + time.Now().Format("15h03m05s")
+	)
+	const (
+		defaultBackupLocation     = "s3"
+		defaultSecret             = "s3secret"
+	)
+	chaosLevel := ChaosMap[StorkctlMigrationSchedule]
+
+	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
+	log.FailOnError(err, "Failed to get source configPath: %v", err)
+	// kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
+	// log.FailOnError(err, "Failed to get destination configPath: %v", err)
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+		err = asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to write kubeconfig: %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to Set source kubeconfig: %v", err))
+			return
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, "")
+				err = ScheduleBidirectionalClusterPair(cpName, namespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("clusterpair creation failed: %v", err))
+			        return
+				}
+			}
+			ValidateApplications(appContexts)
+		}
+		log.InfoD("Migration Namespaces: %v", migrationNamespaces)
+	})
+
+	Step("Create Migration Schedule", func() {
+		for i, currMigNamespace := range migrationNamespaces {
+			extraMigArgs := map[string]string{
+				"namespaces": currMigNamespace,
+				"kubeconfig": kubeConfigPathSrc,
+			}
+			migrationScheduleName := migrationKey + "schedule-" + fmt.Sprintf("%d", i)
+			err = asyncdr.CreateMigSchdAndValidateMigration(migrationScheduleName, cpName, currMigNamespace, kubeConfigPathSrc, extraMigArgs)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("Migration schedule failed with error: %v", err))
+			    return
 			}
 		}
 	})
