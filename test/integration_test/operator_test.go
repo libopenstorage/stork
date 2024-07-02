@@ -18,9 +18,7 @@ import (
 var (
 	kubeconfigDirectory   = "/tmp"
 	backupLocation        = "s3"
-	backupLocationNFS     = "nfs"
 	backupSecret          = "s3secret"
-	backupSecretNFS       = "nfssecret"
 	clusterPairName       = "bid-pair"
 	migNamePref           = "operator-"
 	includeVolumesFlag    = true
