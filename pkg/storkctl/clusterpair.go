@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -554,12 +553,9 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						return
 					}
 
-					nfsPath := ""
-					if nfsSubPath != "" {
-						nfsPath = path.Join(nfsExportPath, nfsSubPath)
-					}
+					credentialData["path"] = []byte(nfsSubPath)
 					credentialData["serverAddr"] = []byte(nfsServer)
-					credentialData["subPath"] = []byte(nfsPath)
+					credentialData["subPath"] = []byte(nfsExportPath)
 					credentialData["mountOptions"] = []byte(nfsMountOpts)
 					credentialData["nfsIOTimeoutInSecs"] = []byte(strconv.Itoa(nfsTimeoutSeconds))
 					backupLocation.Location.Type = storkv1.BackupLocationNFS
