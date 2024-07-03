@@ -13,7 +13,9 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/stork"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 func TestStorkCtlClusterPair(t *testing.T) {
@@ -81,14 +83,8 @@ func testStorkCtlClusterPairNFSBidirectional(t *testing.T) {
 	}
 
 	// Cleanup created resource.
-	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
-		Dash.Fatal("failed to delete cluster pair,error=", err)
-	}
-	err = setSourceKubeConfig()
-	log.FailOnError(t, err, "Error resetting source config")
-	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
-		Dash.Fatal("failed to delete cluster pair,error=", err)
-	}
+	cleanUpClusterPairTestResources(cpName, defaultAdminNamespace)
+
 }
 
 // testStorkCtlClusterPairNFSUnidirectional tests the unidirectional clusterpair creation workflow.
@@ -140,12 +136,32 @@ func testStorkCtlClusterPairNFSUnidirectional(t *testing.T) {
 	}
 
 	// Cleanup created resource.
-	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
-		Dash.Fatal("failed to delete cluster pair,error=", err)
+	cleanUpClusterPairTestResources(cpName, defaultAdminNamespace)
+}
+
+// cleanUpClusterPairTestResources cleans up the resources that get created during the cluster pair integration
+// test execution across both the source and destination cluster.
+func cleanUpClusterPairTestResources(name, namespace string) (err error) {
+	for i := 0; i < 2; i++ {
+		switch i {
+		case 0:
+			if err = setSourceKubeConfig(); err != nil {
+				return err
+			}
+		case 1:
+			if err = setDestinationKubeConfig(); err != nil {
+				return err
+			}
+		}
+		if err = stork.Instance().DeleteClusterPair(name, namespace); err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete cluster pair,error=%s", err)
+		}
+		if err = stork.Instance().DeleteBackupLocation(name, namespace); err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete backuplocation,error=%s", err)
+		}
+		if err = core.Instance().DeleteSecret(name, namespace); err != nil && !k8s_errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete secret,error=%s", err)
+		}
 	}
-	err = setSourceKubeConfig()
-	log.FailOnError(t, err, "Error resetting source config")
-	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
-		Dash.Fatal("failed to delete cluster pair,error=", err)
-	}
+	return
 }
