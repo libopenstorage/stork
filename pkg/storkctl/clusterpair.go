@@ -553,9 +553,11 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						return
 					}
 
+					// Note: Store the export path of NFS server in `subPath` field
+					// and the subpath of NFS server in `path` field.
+					credentialData["subPath"] = []byte(nfsExportPath)
 					credentialData["path"] = []byte(nfsSubPath)
 					credentialData["serverAddr"] = []byte(nfsServer)
-					credentialData["subPath"] = []byte(nfsExportPath)
 					credentialData["mountOptions"] = []byte(nfsMountOpts)
 					credentialData["nfsIOTimeoutInSecs"] = []byte(strconv.Itoa(nfsTimeoutSeconds))
 					backupLocation.Location.Type = storkv1.BackupLocationNFS

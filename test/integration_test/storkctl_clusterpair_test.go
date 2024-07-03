@@ -76,14 +76,14 @@ func testStorkCtlClusterPairNFSBidirectional(t *testing.T) {
 
 	// Get the captured output as a string.
 	actualOutput := outputBuffer.String()
-	log.InfoD("Actual output is: %s", actualOutput)
-	// expectedOutput := fmt.Sprintf("MigrationSchedule %v created successfully\n", migrationScheduleName)
-	if !strings.Contains(actualOutput, "Cluster pair test created successfully. Direction Destination -> Source") {
-		t.Errorf("cluster pair creation failed, expected success got=%s", actualOutput)
+	if !strings.Contains(actualOutput, fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", cpName)) {
+		Dash.Fatal("cluster pair creation failed, expected success got=%s", actualOutput)
 	}
 
 	// Cleanup created resource.
-	err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace)
+	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("failed to delete cluster pair,error=", err)
+	}
 }
 
 // testStorkCtlClusterPairNFSUnidirectional tests the unidirectional clusterpair creation workflow.
@@ -130,12 +130,12 @@ func testStorkCtlClusterPairNFSUnidirectional(t *testing.T) {
 
 	// Get the captured output as a string.
 	actualOutput := outputBuffer.String()
-	log.InfoD("Actual output is: %s", actualOutput)
-	// expectedOutput := fmt.Sprintf("MigrationSchedule %v created successfully\n", migrationScheduleName)
-	if !strings.Contains(actualOutput, "Cluster pair test created successfully. Direction Source -> Destination") {
-		t.Errorf("cluster pair creation failed, expected success got=%s", actualOutput)
+	if !strings.Contains(actualOutput, fmt.Sprintf("ClusterPair %s created successfully. Direction Source -> Destination", cpName)) {
+		Dash.Fatal("cluster pair creation failed, expected success got=%s", actualOutput)
 	}
 
 	// Cleanup created resource.
-	err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace)
+	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("failed to delete cluster pair,error=", err)
+	}
 }
