@@ -1267,7 +1267,8 @@ func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName s
 		objectStoreArgs = append(objectStoreArgs,
 			[]string{"--provider", "nfs",
 				"--nfs-server", string(secretData.Data["serverAddr"]),
-				"--nfs-sub-path", string(secretData.Data["subPath"]),
+				"--nfs-export-path", string(secretData.Data["subPath"]),
+				"--nfs-sub-path", string(secretData.Data["path"]),
 				"--nfs-mount-ops", string(secretData.Data["mountOptions"]),
 				"--nfs-timeout-seconds", string(secretData.Data["nfsIOTimeoutInSecs"])}...)
 	}

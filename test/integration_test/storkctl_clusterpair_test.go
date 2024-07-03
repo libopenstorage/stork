@@ -84,6 +84,11 @@ func testStorkCtlClusterPairNFSBidirectional(t *testing.T) {
 	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
 		Dash.Fatal("failed to delete cluster pair,error=", err)
 	}
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "Error resetting source config")
+	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("failed to delete cluster pair,error=", err)
+	}
 }
 
 // testStorkCtlClusterPairNFSUnidirectional tests the unidirectional clusterpair creation workflow.
@@ -135,6 +140,11 @@ func testStorkCtlClusterPairNFSUnidirectional(t *testing.T) {
 	}
 
 	// Cleanup created resource.
+	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("failed to delete cluster pair,error=", err)
+	}
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "Error resetting source config")
 	if err = stork.Instance().DeleteClusterPair(cpName, defaultAdminNamespace); err != nil {
 		Dash.Fatal("failed to delete cluster pair,error=", err)
 	}
