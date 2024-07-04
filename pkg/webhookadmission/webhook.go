@@ -122,10 +122,22 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		schedPath = podSpecSchedPath
 	}
 
+	// KUBEVIRT_SKIP_LD_PRELOAD_STATFS environment variable can be configured
+	// by the user as per their need through which stork can get to know if to
+	// actually create the configmap and mount the ld.so.preload and px_statfs.so
+	// files onto the virt-launcher container.
+	skipPreloadStatFS := os.Getenv("KUBEVIRT_SKIP_LD_PRELOAD_STATFS")
 	if !isStorkResource {
 		admissionResponse = &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{
 				Message: "Ignoring backends which are not supported by stork ",
+			},
+			Allowed: true,
+		}
+	} else if skipPreloadStatFS == "true" {
+		admissionResponse = &v1beta1.AdmissionResponse{
+			Result: &metav1.Status{
+				Message: "Successful",
 			},
 			Allowed: true,
 		}
