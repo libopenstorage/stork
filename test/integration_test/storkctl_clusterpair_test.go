@@ -33,6 +33,7 @@ func TestStorkCtlClusterPair(t *testing.T) {
 
 	t.Run("testStorkCtlClusterPairNFSBidirectional", testStorkCtlClusterPairNFSBidirectional)
 	t.Run("testStorkCtlClusterPairNFSUnidirectional", testStorkCtlClusterPairNFSUnidirectional)
+	t.Run("testStorkCtlClusterPairNFSTimeout", testStorkCtlClusterPairNFSTimeout)
 }
 
 // testClusterPairNFSBidirectional tests the bidirectional clusterpair creation workflow.
@@ -83,7 +84,9 @@ func testStorkCtlClusterPairNFSBidirectional(t *testing.T) {
 	}
 
 	// Cleanup created resource.
-	cleanUpClusterPairTestResources(cpName, defaultAdminNamespace)
+	if err = cleanUpClusterPairTestResources(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("cluster pair resources cleanup failed, error=", err)
+	}
 
 }
 
@@ -136,7 +139,79 @@ func testStorkCtlClusterPairNFSUnidirectional(t *testing.T) {
 	}
 
 	// Cleanup created resource.
-	cleanUpClusterPairTestResources(cpName, defaultAdminNamespace)
+	if err = cleanUpClusterPairTestResources(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("cluster pair resources cleanup failed, error=", err)
+	}
+}
+
+// testStorkCtlClusterPairNFSTimeout tests the --nfs-timeout-seconds flag for the NFS based clusterpair creation workflow.
+func testStorkCtlClusterPairNFSTimeout(t *testing.T) {
+	var err error
+	// Reset config in case of error
+	defer func() {
+		err = setSourceKubeConfig()
+		log.FailOnError(t, err, "Error resetting source config")
+	}()
+	cpName := fmt.Sprintf("testclusterpair-%s", uuid.New())
+	cmdFlags := map[string]string{
+		"namespace":           defaultAdminNamespace,
+		"src-kube-file":       srcKubeConfigPath,
+		"dest-kube-file":      destinationKubeConfigPath,
+		"provider":            "nfs",
+		"nfs-server":          nfsSrvAddr,
+		"nfs-export-path":     nfsSrvExpPath,
+		"nfs-sub-path":        fmt.Sprintf("test-%s", uuid.New()),
+		"nfs-timeout-seconds": "10",
+	}
+
+	// Execute the storkctl command.
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", cpName}
+
+	// Add the custom flags to the command arguments.
+	for key, value := range cmdFlags {
+		cmdArgs = append(cmdArgs, "--"+key)
+		if value != "" {
+			cmdArgs = append(cmdArgs, value)
+		}
+	}
+	cmd.SetArgs(cmdArgs)
+
+	// Execute the command.
+	log.InfoD("The storkctl command being executed is %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		log.Error("Storkctl execution failed: %v", err)
+		return
+	}
+
+	// Get the captured output as a string.
+	actualOutput := outputBuffer.String()
+	if !strings.Contains(actualOutput, fmt.Sprintf("Cluster pair %s created successfully. Direction: Destination -> Source", cpName)) {
+		Dash.Fatal("cluster pair creation failed, expected success got=%s", actualOutput)
+	}
+
+	// Create a migrationschedule and migration. Wait for migration.
+	instanceID := "nfs-timeout-mysql-migration"
+	appKey := "mysql-1-pvc"
+
+	triggerMigrationTest(
+		t,
+		instanceID,
+		appKey,
+		nil,
+		instanceID,
+		true,
+		true,
+		true,
+		false,
+	)
+
+	// Cleanup created resource.
+	if err = cleanUpClusterPairTestResources(cpName, defaultAdminNamespace); err != nil {
+		Dash.Fatal("cluster pair resources cleanup failed, error=", err)
+	}
 }
 
 // cleanUpClusterPairTestResources cleans up the resources that get created during the cluster pair integration
@@ -145,11 +220,11 @@ func cleanUpClusterPairTestResources(name, namespace string) (err error) {
 	for i := 0; i < 2; i++ {
 		switch i {
 		case 0:
-			if err = setSourceKubeConfig(); err != nil {
+			if err = setDestinationKubeConfig(); err != nil {
 				return err
 			}
 		case 1:
-			if err = setDestinationKubeConfig(); err != nil {
+			if err = setSourceKubeConfig(); err != nil {
 				return err
 			}
 		}
