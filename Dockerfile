@@ -17,7 +17,7 @@ RUN microdnf clean all && microdnf install -y python3.9 ca-certificates tar gzip
 RUN python3 -m pip install awscli && python3 -m pip install oci-cli && python3 -m pip install rsa --upgrade
 
 
-RUN curl -Lo /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.14/aws-iam-authenticator_0.6.14_linux_amd64 && \
+RUN curl -Lo /usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.21/aws-iam-authenticator_0.6.21_linux_amd64 && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
 #Install asdf
@@ -33,11 +33,11 @@ RUN asdf install kubelogin latest
 RUN asdf global kubelogin latest
 
 #Install Google Cloud SDK
-ARG GCLOUD_SDK=google-cloud-cli-455.0.0-linux-x86_64.tar.gz
+ARG GCLOUD_SDK=google-cloud-cli-483.0.0-linux-x86_64.tar.gz
 ARG GCLOUD_INSTALL_DIR="/usr/lib"
 ENV PATH "${PATH}:$GCLOUD_INSTALL_DIR/google-cloud-sdk/bin"
-# Download GCLOUD_SDK tar bundle, untar it , install gke-gcloud-auth-plugin 
-# and remove the tar bundle and all directory contents except bin directory  
+# Download GCLOUD_SDK tar bundle, untar it , install gke-gcloud-auth-plugin
+# and remove the tar bundle and all directory contents except bin directory
 RUN curl -q -o $GCLOUD_SDK https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK && \
     tar xf $GCLOUD_SDK -C $GCLOUD_INSTALL_DIR && rm -rf $GCLOUD_SDK && \
     rm -rf $GCLOUD_INSTALL_DIR/google-cloud-sdk/platform/gsutil \
