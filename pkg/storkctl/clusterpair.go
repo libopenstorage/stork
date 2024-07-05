@@ -552,6 +552,9 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						util.CheckErr(getMissingParameterError("nfs-export-path", "Export Path to be mounted missing for NFS"))
 						return
 					}
+					if nfsTimeoutSeconds < 1 || nfsTimeoutSeconds > 30 {
+						util.CheckErr(fmt.Errorf("--nfs-timeout-seconds valid range is [1 30]"))
+					}
 
 					// Note: Store the export path of NFS server in `subPath` field
 					// and the subpath of NFS server in `path` field.
@@ -712,7 +715,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
 	createClusterPairCommand.Flags().StringVarP(&backupLocationName, "use-existing-objectstorelocation", "", "", "(Optional) Objectstorelocation with the provided name should be present in both source and destination cluster")
 	// New parameters for creating backuplocation secret
-	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [nfs, s3, azure, google]")
+	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google, nfs]")
 	createClusterPairCommand.Flags().StringVar(&bucket, "bucket", "", "Bucket name")
 	createClusterPairCommand.Flags().StringVar(&encryptionKey, "encryption-key", "", "Encryption key for encrypting the data stored in the objectstore.")
 	// AWS
@@ -733,7 +736,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().StringVar(&nfsExportPath, "nfs-export-path", "", "mount path exported by the NFS server")
 	createClusterPairCommand.Flags().StringVar(&nfsSubPath, "nfs-sub-path", "", "sub-path to use in mount")
 	createClusterPairCommand.Flags().StringVar(&nfsMountOpts, "nfs-mount-opts", "", "optional NFS mount options")
-	createClusterPairCommand.Flags().IntVar(&nfsTimeoutSeconds, "nfs-timeout-seconds", 5, "optional nfs IO timeout in seconds")
+	createClusterPairCommand.Flags().IntVar(&nfsTimeoutSeconds, "nfs-timeout-seconds", 5, "optional nfs IO timeout in seconds (Valid Range: [1 30]) (default 5)")
 
 	return createClusterPairCommand
 }
