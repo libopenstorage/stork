@@ -594,11 +594,20 @@ func (ac *ActionController) remoteClusterDomainUpdate(activate bool, action *sto
 	if err != nil {
 		return fmt.Errorf("failed to get cluster domain info: %v", err)
 	}
+	domainToNodesMap, err := ac.volDriver.GetClusterDomainNodes()
+	if err != nil {
+		return fmt.Errorf("failed to get cluster domain nodes info: %v", err)
+	}
+
 	log.ActionLog(action).Infof("Count of cluster domains: %v ; Current cluster domains: %v", len(currentClusterDomains.ClusterDomainInfos), currentClusterDomains)
 
 	var remoteDomainName string
 	for _, apiDomainInfo := range currentClusterDomains.ClusterDomainInfos {
 		if apiDomainInfo.Name == currentClusterDomains.LocalDomain {
+			continue
+		}
+		if domainToNodesMap[apiDomainInfo.Name] != nil && len(domainToNodesMap[apiDomainInfo.Name]) == 1 {
+			log.ActionLog(action).Debugf("Skipping activation/deactivation of cluster domain: %v as it is the witness node", apiDomainInfo.Name)
 			continue
 		}
 		remoteDomainName = apiDomainInfo.Name
