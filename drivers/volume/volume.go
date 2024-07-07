@@ -206,6 +206,8 @@ type ClusterDomainsPluginInterface interface {
 	ActivateClusterDomain(*storkapi.ClusterDomainUpdate) error
 	// DeactivateClusterDomain deactivates a cluster domain
 	DeactivateClusterDomain(*storkapi.ClusterDomainUpdate) error
+	// GetClusterDomainNodes returns all the cluster domains with their nodes
+	GetClusterDomainNodes() (map[string][]*api.Node, error)
 }
 
 // BackupRestorePluginInterface Interface to backup and restore volumes
@@ -510,6 +512,11 @@ func (c *ClusterDomainsNotSupported) ActivateClusterDomain(*storkapi.ClusterDoma
 // DeactivateClusterDomain deactivates a cluster domain
 func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(*storkapi.ClusterDomainUpdate) error {
 	return &errors.ErrNotSupported{}
+}
+
+// DeactivateClusterDomain deactivates a cluster domain
+func (c *ClusterDomainsNotSupported) GetClusterDomainNodes() (map[string][]*api.Node, error) {
+	return nil, &errors.ErrNotSupported{}
 }
 
 // BackupRestoreNotSupported to be used by drivers that don't support backup
