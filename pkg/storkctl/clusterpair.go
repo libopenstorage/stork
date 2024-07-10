@@ -554,6 +554,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 					}
 					if nfsTimeoutSeconds < 1 || nfsTimeoutSeconds > 30 {
 						util.CheckErr(fmt.Errorf("--nfs-timeout-seconds valid range is [1 30]"))
+						return
 					}
 
 					// Note: Store the export path of NFS server in `subPath` field
