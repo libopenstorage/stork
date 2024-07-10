@@ -111,7 +111,7 @@ const (
 	zoneScore   = 25
 	regionScore = 10
 
-	defaultWaitTimeout       time.Duration = 10 * time.Minute
+	defaultWaitTimeout       time.Duration = 15 * time.Minute
 	clusterDomainWaitTimeout time.Duration = 10 * time.Minute
 	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
