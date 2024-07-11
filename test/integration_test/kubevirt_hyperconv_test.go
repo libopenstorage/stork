@@ -607,20 +607,20 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 
 		pvc, err := core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
 		log.FailOnError(t, err, "Failed to get PVC %s/%s for volume %s of context %s",
-			pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, vol.ID, appCtx.App.Key)
+			pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name, vol.ID, appCtx.App.Key)
 
 		vmDisk.pvcName = pvc.Name
 
 		Dash.VerifyFatal(t, pvc.Spec.StorageClassName != nil, true, fmt.Sprintf(
-			"PVC %s/%s has no storageClassName", appCtx.App.NameSpace, vmDisk.pvcName))
+			"PVC %s/%s has no storageClassName", pvc.Namespace, pvc.Name))
 
 		Dash.VerifyFatal(t, pvc.Spec.VolumeName != "", true, fmt.Sprintf(
-			"PVC %s/%s has no volumeName", appCtx.App.NameSpace, vmDisk.pvcName))
+			"PVC %s/%s has no volumeName", pvc.Namespace, pvc.Name))
 		vmDisk.storageClassName = *pvc.Spec.StorageClassName
 
 		sc, err := core.Instance().GetStorageClassForPVC(pvc)
 		log.FailOnError(t, err, "Failed to get storageClass for PVC %s/%s for volume %s of context %s",
-			appCtx.App.NameSpace, vmDisk.pvcName, vol.ID, appCtx.App.Key)
+			pvc.Namespace, pvc.Name, vol.ID, appCtx.App.Key)
 
 		if sc.VolumeBindingMode != nil && *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer {
 			vmDisk.waitForFirstConsumer = true
@@ -642,7 +642,8 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 				break
 			}
 		}
-		Dash.VerifyFatal(t, vmDisk.diskName != "", true, fmt.Sprintf("Failed to find disk name for PVC %s", vmDisk.pvcName))
+		Dash.VerifyFatal(t, vmDisk.diskName != "", true, fmt.Sprintf(
+			"Failed to find disk name for PVC %s/%s", pvc.Namespace, pvc.Name))
 		log.InfoD("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
 	}
 
@@ -968,15 +969,19 @@ func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bo
 				break
 			}
 		}
-		multiDisk := len(testState.vmDisks) > 1
-		Dash.VerifyFatal(t, usePopulator, true, "usePopulator is false but vm Disks are not bind-mounted initially")
-		if !multiDisk {
+		Dash.VerifyFatal(t, usePopulator, true, fmt.Sprintf(
+			"usePopulator is false but vm Disks are not bind-mounted initially for %s", testState.appCtx.App.Key))
+
+		// usePopulator is true. For a single-disk VM, live-migrate the VM once and verify bind-mount again (PWX-36842).
+		if len(testState.vmDisks) == 1 {
 			startAndWaitForVMIMigration(t, testState)
 			// refresh state after live migration
 			gatherInitialVMIInfo(t, testState)
 			success, err = allVMDisksBindMounted(testState)
 			log.FailOnError(t, err, "Failed to verify bind mount for %s", testState.appCtx.App.Key)
-			Dash.VerifyFatal(t, success, true, "usePopulator is true but vm Disks are not bind-mounted even after one live migration")
+			Dash.VerifyFatal(t, success, true,
+				fmt.Sprintf("usePopulator is true but vm disk is not bind-mounted even after one live migration for %s",
+					testState.appCtx.App.Key))
 			return
 		}
 		// for multiDisk VM we have to restart the VM since the volumes may be attached on different nodes and
@@ -990,7 +995,9 @@ func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bo
 		gatherInitialVMIInfo(t, testState)
 		success, err = allVMDisksBindMounted(testState)
 		log.FailOnError(t, err, "Failed to verify bind mount for %s", testState.appCtx.App.Key)
-		Dash.VerifyFatal(t, success, true, "usePopulator is true but multi-disk vm disks are not bind-mounted even after restart")
+		Dash.VerifyFatal(t, success, true, fmt.Sprintf(
+			"usePopulator is true but multi-disk vm disks are not bind-mounted even after restart for %s",
+			testState.appCtx.App.Key))
 		return
 	}
 
@@ -1006,7 +1013,8 @@ func verifyBindMount(t *testing.T, testState *kubevirtTestState, initialCheck bo
 			return false
 		}
 		return true
-	}, 10*time.Minute, 30*time.Second, "VM disk/s did not switch to a bind-mount")
+	}, 10*time.Minute, 30*time.Second, fmt.Sprintf(
+		"VM disk/s did not switch to a bind-mount for %s", testState.appCtx.App.Key))
 }
 
 func allVMDisksBindMounted(testState *kubevirtTestState) (bool, error) {
@@ -1024,11 +1032,11 @@ func allVMDisksBindMounted(testState *kubevirtTestState) (bool, error) {
 		log.InfoD("Checking bind mount for %s", vmDisk)
 		mountType, err := getVMDiskMountType(testState.vmPod, vmDisk)
 		if err != nil {
-			log.Warn("Failed to get mount type of %s: %v", vmDisk, err)
+			log.Warn("%s: Failed to get mount type of %s: %v", testState.appCtx.App.Key, vmDisk, err)
 			return false, err
 		}
 		if mountType != mountTypeBind {
-			log.Warn("%s is not bind-mounted yet (mounType=%q)", vmDisk, mountType)
+			log.Warn("%s: %s is not bind-mounted yet (mountType=%q)", testState.appCtx.App.Key, vmDisk, mountType)
 			return false, nil
 		}
 	}
@@ -1506,8 +1514,8 @@ func startPodWatcher(t *testing.T) {
 					}
 					if containerStatus.State.Terminated != nil {
 						active = false
-						break
 					}
+					break
 				}
 			}
 			if !active {

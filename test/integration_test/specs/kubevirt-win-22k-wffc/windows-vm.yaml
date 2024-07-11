@@ -92,5 +92,5 @@ spec:
           resources:
             requests:
               storage: 50Gi
-          storageClassName: sc-sharedv4svc-wffc
+          storageClassName: sc-sharedv4svc-wffc-no-clone
           volumeMode: Filesystem
