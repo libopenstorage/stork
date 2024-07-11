@@ -590,6 +590,13 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 		}
 	}
 
+	if c.Bool("webhook-controller") {
+		log.Infof("Creating mutating webhook after leader election")
+		if err := webhookadmission.CreateMutateWebhookRuntime(); err != nil {
+			log.Fatalf("Error creating webhook: %v", err)
+		}
+	}
+
 	if c.Bool("application-controller") {
 		appManager := applicationmanager.ApplicationManager{
 			Driver:            d,
@@ -653,7 +660,7 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 			}
 			if c.Bool("webhook-controller") {
 				if err := webhook.Stop(); err != nil {
-					log.Warnf("error stopping webhook controller %v", err)
+					log.Warnf("Error stopping webhook controller %v", err)
 				}
 			}
 			ctx.Done()
