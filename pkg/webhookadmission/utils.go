@@ -9,7 +9,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/version"
@@ -86,11 +88,30 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 	}
 	req.ResourceVersion = resp.ResourceVersion
 	if _, err := admissionregistration.Instance().UpdateMutatingWebhookConfigurationV1beta1(req); err != nil {
-		log.Errorf("unable to update webhook configuration: %v", err)
+		log.Errorf("Unable to update v1beta1 webhook configuration: %v", err)
 		return err
 	}
-	log.Debugf("stork webhook v1beta1 configured: %v", webhookName)
+	log.Debugf("Stork webhook v1beta1 configured: %v", webhookName)
 	return nil
+}
+
+func CreateMutateWebhookRuntime() error {
+	ns := os.Getenv(storkNamespaceEnv)
+	if ns == "" {
+		ns = defaultNamespace
+	}
+
+	// In runtime, the webhook secret should be present
+	webhookSecret, err := core.Instance().GetSecret(secretName, ns)
+	if err != nil {
+		log.Errorf("Unable to retrieve %v secret for creating mutating webhook: %v", secretName, err)
+		return err
+	}
+	if _, ok := webhookSecret.Data[privCert]; !ok {
+		return fmt.Errorf("invalid secret certificate data in %v secret", secretName)
+	}
+
+	return CreateMutateWebhook(webhookSecret.Data[privCert], ns)
 }
 
 // GenerateCertificate Self Signed certificate using given CN, returns x509 cert
@@ -205,15 +226,23 @@ func createWebhookV1(caBundle []byte, ns string) error {
 		Webhooks: []admissionv1.MutatingWebhook{webhook},
 	}
 
-	// recreate webhook
-	err := admissionregistration.Instance().DeleteMutatingWebhookConfiguration(storkAdmissionController)
-	if err != nil && !k8serr.IsNotFound(err) {
+	// UpdateOrCreate v1 webhook
+	resp, err := admissionregistration.Instance().GetMutatingWebhookConfiguration(storkAdmissionController)
+	if err != nil {
+		if k8serr.IsNotFound(err) {
+			_, err = admissionregistration.Instance().CreateMutatingWebhookConfiguration(req)
+			if err != nil {
+				log.Errorf("Unable to create webhook configuration: %v", err)
+			}
+		}
 		return err
 	}
-	if _, err := admissionregistration.Instance().CreateMutatingWebhookConfiguration(req); err != nil {
-		log.Errorf("unable to create webhook configuration: %v", err)
+	req.ResourceVersion = resp.ResourceVersion
+	if _, err := admissionregistration.Instance().UpdateMutatingWebhookConfiguration(req); err != nil {
+		log.Errorf("Unable to update webhook configuration: %v", err)
 		return err
 	}
-	log.Debugf("stork webhook v1 configured: %v", webhookName)
+
+	log.Debugf("Stork webhook v1 configured: %v", webhookName)
 	return nil
 }
