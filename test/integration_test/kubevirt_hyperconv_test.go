@@ -591,7 +591,7 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 		testState.vmDisks = append(testState.vmDisks, vmDisk)
 
 		vmDisk.apiVol, err = volumeDriver.InspectVolume(vol.ID)
-		log.FailOnError(t, err, "Failed to inspect PV %s", vol.ID)
+		log.FailOnError(t, err, "%s: Failed to inspect PV %s", appCtx.App.Key, vol.ID)
 
 		vmDisk.attachedNode, err = volumeDriver.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
 		log.FailOnError(t, err, fmt.Sprintf("Failed to get node for volume %s of context %s", vol.ID, appCtx.App.Key))
@@ -603,19 +603,19 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 		log.FailOnError(t, err, "Failed to get PV %s of context %s", vol.ID, appCtx.App.Key)
 
 		Dash.VerifyFatal(t, pv.Spec.ClaimRef != nil, true, fmt.Sprintf(
-			"PV %s of app %s has no claimRef", pv.Name, appCtx.App.Key))
+			"PV %s (%s) of app %s has no claimRef", pv.Name, vmDisk.apiVol.Id, appCtx.App.Key))
 
 		pvc, err := core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
-		log.FailOnError(t, err, "Failed to get PVC %s/%s for volume %s of context %s",
-			pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name, vol.ID, appCtx.App.Key)
+		log.FailOnError(t, err, "Failed to get PVC %s/%s for volume %s (%s) of context %s",
+			pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name, vol.ID, vmDisk.apiVol.Id, appCtx.App.Key)
 
 		vmDisk.pvcName = pvc.Name
 
 		Dash.VerifyFatal(t, pvc.Spec.StorageClassName != nil, true, fmt.Sprintf(
-			"PVC %s/%s has no storageClassName", pvc.Namespace, pvc.Name))
+			"%s: PVC %s/%s has no storageClassName", appCtx.App.Key, pvc.Namespace, pvc.Name))
 
 		Dash.VerifyFatal(t, pvc.Spec.VolumeName != "", true, fmt.Sprintf(
-			"PVC %s/%s has no volumeName", pvc.Namespace, pvc.Name))
+			"%s: PVC %s/%s has no volumeName", appCtx.App.Key, pvc.Namespace, pvc.Name))
 		vmDisk.storageClassName = *pvc.Spec.StorageClassName
 
 		sc, err := core.Instance().GetStorageClassForPVC(pvc)
@@ -643,19 +643,19 @@ func gatherInitialVMIInfo(t *testing.T, testState *kubevirtTestState) {
 			}
 		}
 		Dash.VerifyFatal(t, vmDisk.diskName != "", true, fmt.Sprintf(
-			"Failed to find disk name for PVC %s/%s", pvc.Namespace, pvc.Name))
-		log.InfoD("%s attached to node %s", vmDisk, vmDisk.attachedNode.Name)
+			"%s: Failed to find disk name for PVC %s/%s", appCtx.App.Key, pvc.Namespace, pvc.Name))
+		log.InfoD("%s: %s attached to node %s", appCtx.App.Key, vmDisk, vmDisk.attachedNode.Name)
 	}
 
 	testState.vmiName, err = getVMINameFromVMPod(testState.vmPod)
-	log.FailOnError(t, err, "Failed to get VMI name for pod %s", testState.vmPod.Name)
+	log.FailOnError(t, err, "%s: Failed to get VMI name for pod %s", appCtx.App.Key, testState.vmPod.Name)
 
 	var ready bool
 	ready, testState.vmiUID, testState.vmiPhase, testState.vmiPhaseTransitionTime, testState.vmUID, err = getVMIDetails(
 		testState.vmPod.Namespace, testState.vmiName)
-	log.FailOnError(t, err, "Failed to get VMI details for pod %s", testState.vmPod.Name)
-	Dash.VerifyFatal(t, testState.vmiPhase, "Running", fmt.Sprintf("VMI %s is not in Running state", testState.vmiName))
-	Dash.VerifyFatal(t, ready, true, fmt.Sprintf("VMI %s is not ready", testState.vmiName))
+	log.FailOnError(t, err, "%s: Failed to get VMI details for pod %s", appCtx.App.Key, testState.vmPod.Name)
+	Dash.VerifyFatal(t, testState.vmiPhase, "Running", fmt.Sprintf("%s: VMI %s is not in Running state", appCtx.App.Key, testState.vmiName))
+	Dash.VerifyFatal(t, ready, true, fmt.Sprintf("%s: VMI %s is not ready", appCtx.App.Key, testState.vmiName))
 }
 
 func verifyInitialVMI(t *testing.T, testState *kubevirtTestState) {
