@@ -279,6 +279,7 @@ func (c *Controller) Stop() error {
 		log.Errorf("unable to delete webhook configuration, %v", err)
 		return err
 	}
+	log.Infof("Successfully deleted webhook configuration %s", storkAdmissionController)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

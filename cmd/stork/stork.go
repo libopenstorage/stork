@@ -588,12 +588,12 @@ func runStork(mgr manager.Manager, ctx context.Context, d volume.Driver, recorde
 				log.Fatalf("Error initializing cluster domain controllers: %v", err)
 			}
 		}
-	}
 
-	if c.Bool("webhook-controller") {
-		log.Infof("Creating mutating webhook after leader election")
-		if err := webhookadmission.CreateMutateWebhookRuntime(); err != nil {
-			log.Fatalf("Error creating webhook: %v", err)
+		if c.Bool("webhook-controller") {
+			log.Infof("Creating mutating webhook after leader election")
+			if err := webhookadmission.CreateMutateWebhookRuntime(); err != nil {
+				log.Fatalf("Error creating webhook: %v", err)
+			}
 		}
 	}
 
