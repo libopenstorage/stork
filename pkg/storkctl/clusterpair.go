@@ -259,6 +259,8 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	var disableSSL bool
 	var azureAccountName, azureAccountKey string
 	var googleProjectID, googleJSONKey string
+	var nfsServer, nfsExportPath, nfsSubPath, nfsMountOpts string
+	var nfsTimeoutSeconds int
 	var syncDR bool
 	var pxAuthTokenSrc, pxAuthSecretNamespaceSrc string
 	var pxAuthTokenDest, pxAuthSecretNamespaceDest string
@@ -502,6 +504,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						util.CheckErr(getMissingParameterError("s3-region", "Region missing for S3"))
 						return
 					}
+					credentialData["path"] = []byte(bucket)
 					credentialData["endpoint"] = []byte(s3EndPoint)
 					credentialData["accessKeyID"] = []byte(s3AccessKey)
 					credentialData["secretAccessKey"] = []byte(s3SecretKey)
@@ -517,6 +520,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						util.CheckErr(getMissingParameterError("azure-account-key", "Account Key missing for Azure"))
 						return
 					}
+					credentialData["path"] = []byte(bucket)
 					credentialData["storageAccountName"] = []byte(azureAccountName)
 					credentialData["storageAccountKey"] = []byte(azureAccountKey)
 					backupLocation.Location.Type = storkv1.BackupLocationAzure
@@ -535,15 +539,36 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 						util.CheckErr(fmt.Errorf("failed to read json key file: %v", err))
 						return
 					}
+					credentialData["path"] = []byte(bucket)
 					credentialData["accountKey"] = keyData
 					credentialData["projectID"] = []byte(googleProjectID)
 					backupLocation.Location.Type = storkv1.BackupLocationGoogle
+				case "nfs":
+					if len(nfsServer) == 0 {
+						util.CheckErr(getMissingParameterError("nfs-server", "Server address missing for NFS"))
+						return
+					}
+					if len(nfsExportPath) == 0 {
+						util.CheckErr(getMissingParameterError("nfs-export-path", "Export Path to be mounted missing for NFS"))
+						return
+					}
+					if nfsTimeoutSeconds < 1 || nfsTimeoutSeconds > 30 {
+						util.CheckErr(fmt.Errorf("--nfs-timeout-seconds valid range is [1 30]"))
+						return
+					}
+
+					// Note: Store the export path of NFS server in `subPath` field
+					// and the subpath of NFS server in `path` field.
+					credentialData["subPath"] = []byte(nfsExportPath)
+					credentialData["path"] = []byte(nfsSubPath)
+					credentialData["serverAddr"] = []byte(nfsServer)
+					credentialData["mountOptions"] = []byte(nfsMountOpts)
+					credentialData["nfsIOTimeoutInSecs"] = []byte(strconv.Itoa(nfsTimeoutSeconds))
+					backupLocation.Location.Type = storkv1.BackupLocationNFS
 				default:
-					util.CheckErr(getMissingParameterError("provider", "External objectstore provider needs to be either of azure, google, s3"))
+					util.CheckErr(getMissingParameterError("provider", "External objectstore provider needs to be either of azure, google, s3, nfs"))
 					return
 				}
-
-				credentialData["path"] = []byte(bucket)
 				credentialData["type"] = []byte(provider)
 				credentialData["encryptionKey"] = []byte(encryptionKey)
 				backupLocationName = backupLocation.Name
@@ -691,7 +716,7 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	createClusterPairCommand.Flags().BoolVarP(&unidirectional, "unidirectional", "u", false, "(Optional) to create Clusterpair from source -> dest only")
 	createClusterPairCommand.Flags().StringVarP(&backupLocationName, "use-existing-objectstorelocation", "", "", "(Optional) Objectstorelocation with the provided name should be present in both source and destination cluster")
 	// New parameters for creating backuplocation secret
-	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google]")
+	createClusterPairCommand.Flags().StringVarP(&provider, "provider", "p", "", "External objectstore provider name. [s3, azure, google, nfs]")
 	createClusterPairCommand.Flags().StringVar(&bucket, "bucket", "", "Bucket name")
 	createClusterPairCommand.Flags().StringVar(&encryptionKey, "encryption-key", "", "Encryption key for encrypting the data stored in the objectstore.")
 	// AWS
@@ -707,6 +732,12 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	// Google
 	createClusterPairCommand.Flags().StringVar(&googleProjectID, "google-project-id", "", "Project ID for Google")
 	createClusterPairCommand.Flags().StringVar(&googleJSONKey, "google-key-file-path", "", "Json key file path for Google")
+	// NFS
+	createClusterPairCommand.Flags().StringVar(&nfsServer, "nfs-server", "", "NFS server address")
+	createClusterPairCommand.Flags().StringVar(&nfsExportPath, "nfs-export-path", "", "mount path exported by the NFS server")
+	createClusterPairCommand.Flags().StringVar(&nfsSubPath, "nfs-sub-path", "", "sub-path to use in mount")
+	createClusterPairCommand.Flags().StringVar(&nfsMountOpts, "nfs-mount-opts", "", "optional NFS mount options")
+	createClusterPairCommand.Flags().IntVar(&nfsTimeoutSeconds, "nfs-timeout-seconds", 5, "optional nfs IO timeout in seconds (Valid Range: [1 30]) (default 5)")
 
 	return createClusterPairCommand
 }
