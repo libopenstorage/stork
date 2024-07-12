@@ -741,7 +741,7 @@ func (c *csiDriver) RestoreStatus(pvcName, namespace string) (RestoreInfo, error
 	}
 	// Lets use SNAPSHOT_TIMEOUT for restoreTimeout as well.
 	restoreTimeout, err := getSnapshotTimeout()
-	if err == nil {
+	if err != nil {
 		logrus.Warnf("failed to obtain timeout value for snapshot %s: %v, falling back on default snapshot timeout value %s", vsName, err, defaultSnapshotTimeout.String())
 		restoreTimeout = defaultSnapshotTimeout
 	}
