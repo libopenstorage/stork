@@ -1455,6 +1455,13 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		// No cleanup needed for rsync
 		return nil
 	}
+	// DBG - Dumping of VB CR
+	vb, err := kdmpopts.Instance().GetVolumeBackup(context.Background(),
+				de.Spec.Source.Name, de.Spec.Source.Namespace)
+	if err != nil {
+		return err
+	}
+	logrus.Infof("VB CR: %+v", vb)
 	if hasLocalRestoreStage(de) {
 		err := c.cleanupLocalRestoredSnapshotResources(de, true)
 		if err != nil {

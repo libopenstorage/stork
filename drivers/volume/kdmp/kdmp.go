@@ -387,6 +387,9 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			dataExport.Status.Stage == kdmpapi.DataExportStageFinal {
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Backup failed at stage %v for volume: %v", dataExport.Status.Stage, dataExport.Status.Reason)
+			logrus.Infof("volInfo: %+v", vInfo)
+			logrus.Infof("DE CR: %+v", dataExport)
+
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
