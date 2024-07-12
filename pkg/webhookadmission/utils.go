@@ -234,6 +234,7 @@ func createWebhookV1(caBundle []byte, ns string) error {
 			if err != nil {
 				log.Errorf("Unable to create webhook configuration: %v", err)
 			}
+			log.Debugf("Stork webhook v1 created: %v", webhookName)
 		}
 		return err
 	}
