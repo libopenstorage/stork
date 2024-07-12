@@ -116,7 +116,7 @@ const (
 	regionScore = 10
 
 	defaultWaitTimeout       time.Duration = 15 * time.Minute
-	clusterDomainWaitTimeout time.Duration = 15 * time.Minute
+	clusterDomainWaitTimeout time.Duration = 10 * time.Minute
 	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
 	backupWaitInterval       time.Duration = 2 * time.Second
@@ -131,6 +131,10 @@ const (
 	internalLBAws                = "INTERNAL_AWS_LB"
 	portworxNamespace            = "PX_NAMESPACE"
 	enableDashStats              = "ENABLE_DASH"
+	nfsServerAddressEnv          = "NFS_SERVER_ADDRESS"
+	nfsServerExportPathEnv       = "NFS_EXPORT_PATH"
+	defaultNFSServerAddress      = "10.13.248.14"
+	defaultNFSServerExportPath   = "stork-nfs"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -186,6 +190,9 @@ var bidirectionalClusterpair bool
 var unidirectionalClusterpair bool
 var currentTestSuite string
 var kubevirtScale int
+
+// NFS location config variables.
+var nfsSrvAddr, nfsSrvExpPath string
 
 func TestSnapshot(t *testing.T) {
 	currentTestSuite = t.Name()
@@ -411,6 +418,15 @@ func setup() error {
 			return fmt.Errorf("failed to change PX service to LoadBalancer on source cluster: %v", err)
 		}
 	}
+
+	set := false
+	if nfsSrvAddr, set = os.LookupEnv(nfsServerAddressEnv); !set {
+		nfsSrvAddr = defaultNFSServerAddress
+	}
+	if nfsSrvExpPath, set = os.LookupEnv(nfsServerExportPathEnv); !set {
+		nfsSrvExpPath = defaultNFSServerExportPath
+	}
+
 	err = setDestinationKubeConfig()
 	if err != nil {
 		return fmt.Errorf("while PX service to LoadBalancer, setting kubeconfig to destination failed %v", err)
@@ -1261,7 +1277,8 @@ func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName s
 	if err != nil {
 		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
 	}
-	if objectStoreType == storkv1.BackupLocationS3 {
+	switch objectStoreType {
+	case storkv1.BackupLocationS3:
 		objectStoreArgs = append(objectStoreArgs,
 			[]string{"--provider", "s3",
 				"--s3-access-key", string(secretData.Data["accessKeyID"]),
@@ -1272,25 +1289,27 @@ func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName s
 		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
 			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
 		}
-		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
-			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
-			objectStoreArgs = append(objectStoreArgs, string(val))
-		}
-	} else if objectStoreType == storkv1.BackupLocationAzure {
+	case storkv1.BackupLocationAzure:
 		objectStoreArgs = append(objectStoreArgs,
 			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
 				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
-		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
-			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
-			objectStoreArgs = append(objectStoreArgs, string(val))
-		}
-	} else if objectStoreType == storkv1.BackupLocationGoogle {
+	case storkv1.BackupLocationGoogle:
 		objectStoreArgs = append(objectStoreArgs,
 			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
-		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
-			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
-			objectStoreArgs = append(objectStoreArgs, string(val))
-		}
+	case storkv1.BackupLocationNFS:
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "nfs",
+				"--nfs-server", string(secretData.Data["serverAddr"]),
+				"--nfs-export-path", string(secretData.Data["subPath"]),
+				"--nfs-sub-path", string(secretData.Data["path"]),
+				"--nfs-mount-ops", string(secretData.Data["mountOptions"]),
+				"--nfs-timeout-seconds", string(secretData.Data["nfsIOTimeoutInSecs"])}...)
+	}
+
+	// Handle the encryption case.
+	if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+		objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+		objectStoreArgs = append(objectStoreArgs, string(val))
 	}
 
 	return objectStoreArgs, nil
