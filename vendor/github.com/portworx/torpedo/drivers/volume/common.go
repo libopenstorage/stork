@@ -336,8 +336,8 @@ func (d *DefaultDriver) ValidateCreateVolume(name string, params map[string]stri
 
 // ValidateCreateSnapshot validates whether a volume has been created properly.
 // params are the custom volume options passed when creating the volume.
-func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]string) error {
-	return &errors.ErrNotSupported{
+func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]string) (string, error) {
+	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateSnapshot()",
 	}
@@ -345,8 +345,8 @@ func (d *DefaultDriver) ValidateCreateSnapshot(name string, params map[string]st
 
 // ValidateCreateSnapshotUsingPxctl validates whether a volume snapshot has been created properly.
 // params are the custom volume options passed when creating the volume.
-func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) error {
-	return &errors.ErrNotSupported{
+func (d *DefaultDriver) ValidateCreateSnapshotUsingPxctl(name string) (string, error) {
+	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateSnapshotUsingPxctl()",
 	}
@@ -358,6 +358,15 @@ func (d *DefaultDriver) GetCloudsnaps(name string, params map[string]string) ([]
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Getloudsnaps()",
+	}
+}
+
+// GetCloudsnapsOfGivenVolume returns cloudsnap backups of given volume.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) GetCloudsnapsOfGivenVolume(name string, volumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetCloudsnapsOfGivenVolume()",
 	}
 }
 
@@ -1087,7 +1096,7 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 }
 
 // GetPoolDrives returns the map of poolID and drive name
-func (d *DefaultDriver) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+func (d *DefaultDriver) GetPoolDrives(n *node.Node) (map[string][]DiskResource, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPoolDrives()",
@@ -1224,5 +1233,61 @@ func (d *DefaultDriver) UpdateSkinnySnapReplNum(repl string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpdateSkinnySnapReplNum()",
+	}
+}
+
+// CreateDefragSchedule create defrag schedule for provided defrag job
+func (d *DefaultDriver) CreateDefragSchedule(startTime string, defragJob *api.DefragJob) (*api.SdkCreateDefragScheduleResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateDefragSchedule()",
+	}
+}
+
+// GetDefragNodeStatus  get defrag schedule status on a given node
+func (d *DefaultDriver) GetDefragNodeStatus(n node.Node) (*api.SdkGetDefragNodeStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDefragNodeStatus()",
+	}
+}
+
+// GetDefragClusterStatus get defrag schedule status for whole cluster
+func (d *DefaultDriver) GetDefragClusterStatus() (*api.SdkEnumerateDefragStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDefragClusterStatus()",
+	}
+}
+
+// CleanUpDefragSchedules cleans up all defrag schedules and stop all defrag operations
+func (d *DefaultDriver) CleanUpDefragSchedules() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CleanUpDefragSchedules()",
+	}
+}
+
+// DeleteDefragSchedule deletes provided defrag schedule
+func (d *DefaultDriver) DeleteDefragSchedule(defragSchedId string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteDefragSchedule()",
+	}
+}
+
+// GetAllDefragSchedules return all defrag schedules in a cluster
+func (d *DefaultDriver) GetAllDefragSchedules() (*api.SdkEnumerateSchedulesResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAllDefragSchedules()",
+	}
+}
+
+// InspectDefragSchedules return information about provided schedule id
+func (d *DefaultDriver) InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InspectDefragSchedules()",
 	}
 }

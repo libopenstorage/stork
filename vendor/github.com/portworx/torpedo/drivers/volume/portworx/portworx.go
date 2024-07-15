@@ -3,6 +3,7 @@ package portworx
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -215,6 +216,8 @@ type portworx struct {
 	licenseFeatureManager pxapi.PortworxLicensedFeatureClient
 	autoFsTrimManager     api.OpenStorageFilesystemTrimClient
 	portworxServiceClient pxapi.PortworxServiceClient
+	defragManager         api.OpenStorageFilesystemDefragClient
+	openStorageSchedule   api.OpenStorageScheduleClient
 	schedOps              schedops.Driver
 	nodeDriver            node.Driver
 	namespace             string
@@ -236,7 +239,6 @@ type statusJSON struct {
 // ExpandPool resizes a pool of a given ID
 func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
 	log.Infof("Initiating pool %v resize by %v with operation type %v", poolUUID, size, operation.String())
-
 	// start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
 		jobListResp, err := d.storagePoolManager.Resize(d.getContext(), &api.SdkStoragePoolResizeRequest{
@@ -489,6 +491,16 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 func (d *portworx) RefreshDriverEndpoints() error {
 
+	secretConfigMap := flag.Lookup("config-map").Value.(flag.Getter).Get().(string)
+	if secretConfigMap != "" {
+		log.Infof("Fetching token from configmap: %s", secretConfigMap)
+		token, err := d.schedOps.GetTokenFromConfigMap(secretConfigMap)
+		if err != nil {
+			return err
+		}
+		d.token = token
+	}
+
 	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
 	namespace, err := d.GetVolumeDriverNamespace()
 	if err != nil {
@@ -651,16 +663,9 @@ func (d *portworx) comparePoolsAndDisks(srcNode *api.StorageNode,
 	srcDisks := srcNode.Disks
 	dstDisks := dstNode.Disks
 
-	for disk, value := range srcDisks {
-		if !srcDisks[disk].Metadata && !dstDisks[disk].Metadata {
-			if value.Id != dstDisks[disk].Id {
-				return false
-			}
-		} else if srcDisks[disk].Metadata && dstDisks[disk].Metadata {
-			if value.Id != dstDisks[disk].Id {
-				return false
-			}
-		}
+	if len(srcDisks) != len(dstDisks) {
+		log.Errorf("Source disks: [%v] not macthing with Destination disks: [%v]", srcDisks, dstDisks)
+		return false
 	}
 	return true
 }
@@ -754,9 +759,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
 						log.Infof("Updating node [%s] as storage node", n.Name)
-					}
-
-					if n.StoragePools == nil {
+						n.StoragePools = nil
 						for _, pxNodePool := range pxNode.Pools {
 							storagePool := node.StoragePool{
 								StoragePool:       pxNodePool,
@@ -764,15 +767,8 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 							}
 							n.StoragePools = append(n.StoragePools, storagePool)
 						}
-					} else {
-						for idx, nodeStoragePool := range n.StoragePools {
-							for _, pxNodePool := range pxNode.Pools {
-								if nodeStoragePool.Uuid == pxNodePool.Uuid {
-									n.StoragePools[idx].StoragePool = pxNodePool
-								}
-							}
-						}
 					}
+
 					if err = node.UpdateNode(*n); err != nil {
 						return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 					}
@@ -794,7 +790,7 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 		return false, fmt.Errorf("failed to get metadata nodes, Err: %v", err)
 	}
 
-	ipRegex := regexp.MustCompile(`http://(?P<address>.*):d+`)
+	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>[\d\.]+):(?P<port>\d+)`)
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
@@ -1506,10 +1502,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 			/* Ignore shared setting.
-			case api.SpecShared:
-				if requestedSpec.Shared != vol.Spec.Shared {
-					return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-				}
+			   case api.SpecShared:
+			   	if requestedSpec.Shared != vol.Spec.Shared {
+			   		return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
+			   	}
 			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
@@ -1576,8 +1572,13 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecSize:
-			if requestedSpec.Size != vol.Spec.Size {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Size, vol.Spec.Size)
+			pv, err := k8sCore.GetPersistentVolume(volumeName)
+			if err != nil {
+				return fmt.Errorf("failed to get PV [%s], Err: %v", volumeName, err)
+			}
+
+			if uint64(pv.Spec.Capacity.Storage().Value()) != vol.Spec.Size {
+				return fmt.Errorf("failed to validate volume [%s] size, expected: %d, actual: %d", volumeName, pv.Spec.Capacity.Storage().Value(), vol.Spec.Size)
 			}
 		default:
 		}
@@ -1607,7 +1608,7 @@ func (d *portworx) ValidateVolumeTopology(vol *api.Volume, params map[string]str
 	}
 }
 
-func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) error {
+func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]string) (string, error) {
 	// TODO: this should be refactored so we apply snapshot specs from the app specs instead
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1617,23 +1618,25 @@ func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]s
 	}
 
 	volDriver := d.getVolDriver()
-	if _, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"}); err != nil {
-		return fmt.Errorf("failed to create local snapshot, Err: %v", err)
+	volName := volumeName + "_snapshot"
+	if _, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volName}); err != nil {
+		return "", fmt.Errorf("failed to create local snapshot, Err: %v", err)
 	}
-	return nil
+	return volName, nil
 }
 
-func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
+func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) (string, error) {
 	// TODO: this should be refactored so we apply snapshot specs from the app specs instead
 	nodes := node.GetStorageDriverNodes()
-	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlLocalSnapshotCreate, volumeName, constructSnapshotName(volumeName)), node.ConnectionOpts{
+	volName := constructSnapshotName(volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(nodes[0], fmt.Sprintf(formattingCommandPxctlLocalSnapshotCreate, volumeName, volName), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create local snapshot using PXCTL, Err: %v", err)
+		return "", fmt.Errorf("failed to create local snapshot using PXCTL, Err: %v", err)
 	}
-	return nil
+	return volName, nil
 }
 
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
@@ -1800,7 +1803,7 @@ func constructSnapshotName(volumeName string) string {
 	return volumeName + "-snapshot"
 }
 
-// GetCloudsnaps returns all the cloud snaps of the given volume
+// GetCloudsnaps returns all the cloud snaps of all volumes
 func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1816,6 +1819,21 @@ func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([
 	}
 	return cloudSnapResponse.GetBackups(), nil
 
+}
+
+// GetCloudsnaps returns all the cloud snaps of the given volume
+func (d *portworx) GetCloudsnapsOfGivenVolume(volumeName string, sourceVolumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	cloudSnapResponse, err := d.csbackupManager.EnumerateWithFilters(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupEnumerateWithFiltersRequest{SrcVolumeId: sourceVolumeID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloudsnap, Err: %v", err)
+	}
+	return cloudSnapResponse.GetBackups(), nil
 }
 
 // DeleteAllCloudsnaps delete all cloud snaps for a given volume
@@ -1968,23 +1986,23 @@ func GetSerialFromWWID(wwid string) (string, error) {
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 	/* Parses output like this
-	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
-	sdd                               137438953472
-	sdb                                34359738368
-	3624a9370ea876434795b4b54000a4128   6442450944
-	|-sdf                               6442450944
-	|-sdi                               6442450944
-	|-sdg                               6442450944
-	`-sdh                               6442450944
-	sde2                              134217728000
-	`-sde                             137438953472
-	sde1                                3219128320
-	`-sde                             137438953472
-	sdc                               137438953472
-	sda2                              133438636032
-	`-sda                             137438953472
-	sda1                                3999268864
-	`-sda                             137438953472
+	   [root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
+	   sdd                               137438953472
+	   sdb                                34359738368
+	   3624a9370ea876434795b4b54000a4128   6442450944
+	   |-sdf                               6442450944
+	   |-sdi                               6442450944
+	   |-sdg                               6442450944
+	   `-sdh                               6442450944
+	   sde2                              134217728000
+	   `-sde                             137438953472
+	   sde1                                3219128320
+	   `-sde                             137438953472
+	   sdc                               137438953472
+	   sda2                              133438636032
+	   `-sda                             137438953472
+	   sda1                                3999268864
+	   `-sda                             137438953472
 	*/
 
 	foundDevices := map[string]pureLocalPathEntry{}
@@ -1997,6 +2015,11 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			continue
 		}
 
+		// Ignore partitions, skip straight to the parent mapper device
+		if strings.Contains(line, "p") && !strings.Contains(line, "sd") { // "p" covers both "<serial>p<number>" and "<serial>-part<number>", but we don't want to skip "sd*p" devices
+			continue
+		}
+
 		// If we see a WWID, we are starting a new entry
 		if strings.Contains(line, schedops.PureVolumeOUI) {
 			if currentEntry != nil {
@@ -2004,6 +2027,11 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			}
 			parts := strings.Fields(line)
 			wwid := parts[0]
+			// If we see a pipe or a tick, we are trimming WWID
+			for _, spChar := range []string{"-", "`"} {
+				wwid = strings.Replace(wwid, spChar, "", -1)
+			}
+
 			sizeStr := parts[1]
 			size, err := strconv.ParseUint(sizeStr, 10, 64)
 			if err != nil {
@@ -2034,6 +2062,8 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 		foundDevices[currentEntry.WWID] = *currentEntry
 	}
 
+	log.Infof("Found devices [%v]", foundDevices)
+
 	return foundDevices, nil
 }
 
@@ -2053,7 +2083,15 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 		if !strings.Contains(line, schedops.PureVolumeOUI) {
 			continue
 		}
+
+		// If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
 		mapperName := strings.Split(line, "\t")[0]
+		if strings.Contains(mapperName, schedops.PureVolumeOUI) {
+			if len(mapperName) > 34 || strings.Contains(line, "p") {
+				continue
+			}
+		}
+
 		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
 	}
 
@@ -2075,6 +2113,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse lsblk output on node %s, Err: %v", n.MgmtIp, err)
 	}
+	log.Infof("lsblk output [%v]", lsblkParsed)
 
 	if len(lsblkParsed) != len(dmsetupFoundMappers) {
 		return nil, fmt.Errorf("found %d mappers in dmsetup but %d devices in lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", len(dmsetupFoundMappers), len(lsblkParsed), n.MgmtIp)
@@ -2876,7 +2915,7 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
-	log.InfoD("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+	log.InfoD("Initiating pool %v resize by %v with operation-type %v", poolUUID, percentage, e.String())
 
 	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -3967,6 +4006,7 @@ func (d *portworx) UpgradeStork(specGenUrl string) error {
 }
 
 func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	log.Infof(fmt.Sprintf("Restarting volume driver on node [%s]", n.Name))
 	return driver_api.PerformTask(
 		func() error {
 			return d.schedOps.RestartPxOnNode(n)
@@ -4943,7 +4983,7 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 					}
 				}
 			} else {
-				return calculatedTotalSize, nil
+				return calculatedTotalSize - (calculatedTotalSize % units.GiB), nil
 			}
 		}
 	}
@@ -5793,9 +5833,9 @@ func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error)
 }
 
 // GetPoolDrives returns the map of poolID and drive name
-func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskResource, error) {
 
-	poolDrives := make(map[string][]string, 0)
+	poolDrives := make(map[string][]torpedovolume.DiskResource, 0)
 
 	connectionOps := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -5811,25 +5851,38 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
 	re := regexp.MustCompile(`\b\d+:\d+\b.*`)
 	matches := re.FindAllString(output, -1)
 
+	nodePoolResources := make([]torpedovolume.DiskResource, 0)
+
 	for _, match := range matches {
 		log.Debugf("Extracting pool details from [%s]", match)
-		pVals := make([]string, 0)
+		poolDiskResource := torpedovolume.DiskResource{}
 		tempVals := strings.Fields(match)
+		tempSizeVal := uint64(0)
+
 		for _, tv := range tempVals {
-			if strings.Contains(tv, ":") || strings.Contains(tv, "/") {
-				pVals = append(pVals, tv)
+			if poolDiskResource.PoolId == "" && strings.Contains(tv, ":") {
+				poolDiskResource.PoolId = strings.Split(tv, ":")[0]
+			} else if strings.Contains(tv, "/") {
+				poolDiskResource.Device = tv
+			} else if strings.Contains(tv, "_") {
+				poolDiskResource.MediaType = tv
+			} else if val, err := strconv.ParseUint(tv, 10, 64); err == nil {
+				if tempSizeVal == 0 {
+					tempSizeVal = val
+				}
+			} else if strings.Contains(tv, "GiB") || strings.Contains(tv, "TiB") {
+				if strings.Contains(tv, "TiB") {
+					tempSizeVal = tempSizeVal * 1024
+				}
+				poolDiskResource.SizeInGib = tempSizeVal
 			}
 		}
-
-		if len(pVals) >= 2 {
-			tempPoolId := pVals[0]
-			poolId := strings.Split(tempPoolId, ":")[0]
-			drvPath := pVals[1]
-
-			poolDrives[poolId] = append(poolDrives[poolId], drvPath)
-		}
-
+		nodePoolResources = append(nodePoolResources, poolDiskResource)
 	}
+	for _, res := range nodePoolResources {
+		poolDrives[res.PoolId] = append(poolDrives[res.PoolId], res)
+	}
+	log.Debugf("Pool drives for node [%s]: %#v", n.Name, poolDrives)
 	return poolDrives, nil
 }
 
@@ -6088,9 +6141,9 @@ func (d *portworx) DeleteSnapshotsForVolumes(volumeNames []string, clusterProvid
 // GetPoolLabelValue returns values of labels
 func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, error) {
 	/* e.x
-	1) d.GetPoolLabelValue(poolUUID, "iopriority")
-	2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
-	3) d.GetPoolLabelValue(poolUUID, "medium")
+	   1) d.GetPoolLabelValue(poolUUID, "iopriority")
+	   2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
+	   3) d.GetPoolLabelValue(poolUUID, "medium")
 	*/
 	var PropertyMatch string
 	PropertyMatch = ""
@@ -6264,4 +6317,66 @@ func (d *portworx) UpdateSkinnySnapReplNum(repl string) error {
 		break
 	}
 	return nil
+}
+
+// CreateDefragSchedule create defrag schedule for provided defrag job
+func (d *portworx) CreateDefragSchedule(startTime string, defragJob *api.DefragJob) (*api.SdkCreateDefragScheduleResponse, error) {
+
+	schedReq := api.SdkCreateDefragScheduleRequest{
+		DefragTask: defragJob,
+		StartTime:  startTime,
+	}
+	return d.defragManager.CreateSchedule(d.getContext(), &schedReq)
+}
+
+// GetDefragNodeStatus  get defrag schedule status on a given node
+func (d *portworx) GetDefragNodeStatus(n node.Node) (*api.SdkGetDefragNodeStatusResponse, error) {
+	nodeStatusReq := api.SdkGetDefragNodeStatusRequest{
+		NodeId: n.Id,
+	}
+	return d.defragManager.GetNodeStatus(d.getContext(), &nodeStatusReq)
+}
+
+// GetDefragClusterStatus get defrag schedule status for whole cluster
+func (d *portworx) GetDefragClusterStatus() (*api.SdkEnumerateDefragStatusResponse, error) {
+	defragSchedReq := api.SdkEnumerateDefragStatusRequest{}
+	return d.defragManager.EnumerateNodeStatus(d.getContext(), &defragSchedReq)
+}
+
+// CleanUpDefragSchedules cleans up all defrag schedules and stop all defrag operations
+func (d *portworx) CleanUpDefragSchedules() error {
+	defragCleanupReq := api.SdkCleanUpDefragSchedulesRequest{}
+	if _, err := d.defragManager.CleanUpSchedules(d.getContext(), &defragCleanupReq); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteDefragSchedule deletes provided defrag schedule
+func (d *portworx) DeleteDefragSchedule(defragSchedId string) error {
+	defragDeleteReq := api.SdkDeleteScheduleRequest{
+		Id:   defragSchedId,
+		Type: api.Job_DEFRAG,
+	}
+	if _, err := d.openStorageSchedule.Delete(d.getContext(), &defragDeleteReq); err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllDefragSchedules return all defrag schedules in a cluster
+func (d *portworx) GetAllDefragSchedules() (*api.SdkEnumerateSchedulesResponse, error) {
+	defragSchedReq := api.SdkEnumerateSchedulesRequest{
+		Type: api.Job_DEFRAG,
+	}
+	return d.openStorageSchedule.Enumerate(d.getContext(), &defragSchedReq)
+}
+
+// InspectDefragSchedules return information about provided schedule id
+func (d *portworx) InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error) {
+	inspectSchedReq := api.SdkInspectScheduleRequest{
+		Id:   defragSchedId,
+		Type: api.Job_DEFRAG,
+	}
+	return d.openStorageSchedule.Inspect(d.getContext(), &inspectSchedReq)
 }

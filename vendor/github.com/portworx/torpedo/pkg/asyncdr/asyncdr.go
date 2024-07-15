@@ -514,21 +514,24 @@ func DeleteCRAndUninstallCRD(helm_release_name string, app_yaml_url string, name
 }
 
 func WaitForPodToBeRunning(pods *v1.PodList) error {
-	checkPods := func() (interface{}, bool, error) {
-		isRunning := true
-		for _, p := range pods.Items {
-			if p.Status.Phase != v1.PodRunning {
-				log.Infof("Pod %s in namespace %s is pending", p.Name, p.Namespace)
-				isRunning = false
+	for _, p := range pods.Items {
+		checkPods := func() (interface{}, bool, error) {
+			pod, err := core.Instance().GetPodByName(p.Name, p.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get pod: %v", p.Name)
 			}
+			if pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodSucceeded {
+				log.Infof("Pod %s in namespace %s is not yet running or succeeded. Current phase: %s", p.Name, p.Namespace, pod.Status.Phase)
+				return nil, true, fmt.Errorf("pod %s is still pending", p.Name)
+			}
+			return nil, false, nil
 		}
-		if isRunning {
-			return "", false, nil
+
+		if _, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval); err != nil {
+			return err
 		}
-		return "", true, fmt.Errorf("some pods are still pending...")
 	}
-	_, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
-	return err
+	return nil
 }
 
 func CollectNsForDeletion(label map[string]string, createdBeforeTime time.Duration) []string {

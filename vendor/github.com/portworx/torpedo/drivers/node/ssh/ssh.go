@@ -753,7 +753,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node: n,
 				Cause: fmt.Sprintf("failed to run command in pod. command: %v , err: %v, pod: %v",
-					cmds, err, debugPod),
+					cmds, err, debugPod.Name),
 			}
 		}
 		return output, false, nil

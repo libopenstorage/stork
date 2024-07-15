@@ -83,6 +83,10 @@ const (
 	StoragePartitioningEnvKey = "ENABLE_ASG_STORAGE_PARTITIONING"
 	// DefaultStorageClusterUniqueLabelKey is the controller revision hash of storage cluster
 	DefaultStorageClusterUniqueLabelKey = apps.ControllerRevisionHashLabelKey
+	// InvalidMinAvailable is added to an event when minAvailable value for PodDisruptionBudget provided by the user is invalid
+	InvalidMinAvailable = "InvalidMinAvailable"
+	// ValidMinAvailable is added to an event when minAvailable value for PodDisruptionBudget is valid
+	ValidMinAvailable = "ValidMinAvailable"
 )
 
 var (

@@ -22,14 +22,14 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240515003928-7476f1d896fc
+	github.com/libopenstorage/operator v0.0.0-20240523172951-e085c3099bd7
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240514213912-ff0ae32b859a
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240625095951-0b38bc239d01
 	github.com/portworx/torpedo v0.20.4-rc1.0.20240520065758-b58a5dd88529
 	github.com/prometheus/client_golang v1.17.0
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
@@ -216,7 +216,7 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/libopenstorage/autopilot-api v1.3.0 // indirect
-	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413 // indirect
+	github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
 	github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
@@ -258,7 +258,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b // indirect
+	github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd // indirect
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0 // indirect
@@ -356,7 +356,7 @@ replace (
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20240617095111-226fca7875c8
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240514213912-ff0ae32b859a
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240520065758-b58a5dd88529
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240715060558-fea1e8016a74
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 

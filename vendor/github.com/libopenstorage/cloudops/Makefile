@@ -29,7 +29,7 @@ endif
 .DEFAULT_GOAL=all
 .PHONY: test clean vendor vendor-update container deploy
 
-all: build vet lint
+all: build vet
 
 vendor-update:
 	go mod download

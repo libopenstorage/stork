@@ -65,6 +65,8 @@ const (
 	k8sRoleNodeInfraLabelKey = "node-role.kubernetes.io/infra"
 	// k8sRoleNodeComputeLabelKey is the label used to check whether node has compute=true label on OpenShift Enterprise environment
 	k8sRoleNodeComputeLabelKey = "node-role.kubernetes.io/compute"
+	secretNameKey              = "secret_name"
+	secretNamespaceKey         = "secret_namespace"
 
 	// nodeType is label used to check kubernetes node-type
 	dcosNodeType                = "kubernetes.dcos.io/node-type"
@@ -1080,6 +1082,22 @@ func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
 	}
 	return ns, nil
 
+}
+
+func (k *k8sSchedOps) GetTokenFromConfigMap(configMapName string) (string, error) {
+	var token string
+	var err error
+	var configMap *corev1.ConfigMap
+	k8sOps := k8sCore
+	if configMap, err = k8sOps.GetConfigMap(configMapName, "default"); err == nil {
+		if secret, err := k8sOps.GetSecret(configMap.Data[secretNameKey], configMap.Data[secretNamespaceKey]); err == nil {
+			if tk, ok := secret.Data["auth-token"]; ok {
+				token = string(tk)
+			}
+		}
+	}
+	log.Infof("Token from secret: %s", token)
+	return token, err
 }
 
 func printStatus(k *k8sSchedOps, pods ...corev1.Pod) {

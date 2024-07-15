@@ -12,6 +12,10 @@ import (
 type dcosSchedOps struct {
 }
 
+func (d *dcosSchedOps) GetTokenFromConfigMap(configMapName string) (string, error) {
+	return "", nil
+}
+
 func (d *dcosSchedOps) GetKubernetesVersion() (*version.Info, error) {
 	return nil, nil
 }

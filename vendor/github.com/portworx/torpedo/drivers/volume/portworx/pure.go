@@ -27,7 +27,7 @@ func (p *pure) String() string {
 	return PureDriverName
 }
 
-func (p *pure) ValidateCreateSnapshot(volumeName string, params map[string]string) error {
+func (p *pure) ValidateCreateSnapshot(volumeName string, params map[string]string) (string, error) {
 	var token string
 	token = p.getTokenForVolume(volumeName, params)
 	if val, hasKey := params[refreshEndpointParam]; hasKey {
@@ -37,10 +37,11 @@ func (p *pure) ValidateCreateSnapshot(volumeName string, params map[string]strin
 
 	volDriver := p.getVolDriver()
 	// This is the only difference: we have to name snapshots with hyphens, not underscores
-	_, err := volDriver.SnapshotCreate(p.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "-snapshot"})
+	volName := volumeName + "-snapshot"
+	_, err := volDriver.SnapshotCreate(p.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volName})
 	if err != nil {
 		log.Errorf(fmt.Sprintf("error when creating local snapshot, Err: %v", err))
-		return err
+		return "", err
 	}
-	return nil
+	return volName, nil
 }

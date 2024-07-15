@@ -45,6 +45,7 @@ const (
 	AsyncDREventName                        = "Async DR"
 	MetroDREventName                        = "Metro DR"
 	StorkApplicationBackupEventName         = "Stork App Backup"
+	RestartKubeletEventName                 = "Restart Kubelet on the node"
 )
 
 // Add more fields here if required
