@@ -2134,6 +2134,22 @@ func getSourceKubeConfigFile() (string, error) {
 	return srcKubeConfigPath, err
 }
 
+func getBackupLocationForVolumeDriverMigrationTest(volumeDriver string) (storkv1.BackupLocationType, error) {
+	switch volumeDriver {
+	case "pxd", "aws":
+		if provider == "nfs" {
+			return nfsSecretName, nil
+		}
+		return storkv1.BackupLocationS3, nil
+	case "azure":
+		return storkv1.BackupLocationAzure, nil
+	case "gce":
+		return storkv1.BackupLocationGoogle, nil
+	default:
+		return storkv1.BackupLocationType(""), fmt.Errorf("Invalid volume driver provided: %s", volumeDriver)
+	}
+}
+
 func getSecretForVolumeDriverMigrationTest(volumeDriver string) (string, error) {
 	switch volumeDriver {
 	case "pxd", "aws":
@@ -2158,7 +2174,7 @@ func setDefaultsForMigration(t *testing.T) {
 	allConfigMap = configMap.Data
 
 	// Default backup location
-	defaultBackupLocation, err = getBackupLocationForVolumeDriver(volumeDriverName)
+	defaultBackupLocation, err = getBackupLocationForVolumeDriverMigrationTest(volumeDriverName)
 	log.FailOnError(t, err, "Failed to get default backuplocation for %s: %v", volumeDriverName, err)
 	defaultSecretName, err = getSecretForVolumeDriverMigrationTest(volumeDriverName)
 	log.FailOnError(t, err, "Failed to get default secret name for %s: %v", volumeDriverName, err)
