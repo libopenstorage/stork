@@ -35,7 +35,7 @@ import (
 
 const (
 	migrationRetryInterval = 10 * time.Second
-	migrationRetryTimeout  = 5 * time.Minute
+	migrationRetryTimeout  = 10 * time.Minute
 	rabbitmqNamespace      = "rabbitmq-operator-migration"
 )
 
