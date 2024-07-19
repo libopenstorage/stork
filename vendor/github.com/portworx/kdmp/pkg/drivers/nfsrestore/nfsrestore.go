@@ -321,7 +321,9 @@ func jobForRestoreResource(
 			},
 		},
 	}
-	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, utils.KdmpJobGid)
+	// Not passing the groupId as we do not want to set the RunAsGroup field in the securityContext
+	// This helps us in setting the primaryGroup ID to root for the user ID.
+	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, "")
 	if err != nil {
 		return nil, err
 	}

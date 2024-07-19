@@ -1019,7 +1019,10 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 	// if the namespace is OCP, then overwrite the UID and GID from the namespace annotation
 	if isOcp {
 		podUserId = ocpUid
-		podGroupId = ocpGid
+		// In the case of the OCP, we will not update the groupId.
+		if podGroupId != "" {
+			podGroupId = ocpGid
+		}
 	}
 
 	if podUserId != "" {

@@ -281,7 +281,9 @@ func jobForBackupResource(
 	// The Job is intended to backup resources to  NFS backuplocation
 	// and it doesn't need a specific JOB uid/gid since it will be sqaushed at NFS server
 	// hence used a global hardcoded UID/GID.
-	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, utils.KdmpJobGid)
+	// Not passing the groupId as we do not want to set the RunAsGroup field in the securityContext
+	// This helps us in setting the primaryGroup ID to root for the user ID.
+	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, "")
 	if err != nil {
 		return nil, err
 	}
