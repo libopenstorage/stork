@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1338,6 +1339,12 @@ func (p *portworx) SnapshotCreate(
 
 		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
+			if isCloudBackupServerBusyError(err) {
+				// Add a jitter along with 1 minute sleep to avoid a case of lot many snapshots getting triggered at same time
+				log.SnapshotLog(snap).Warnf("Cloudsnap backup failed for volume %s due to: %v. Retrying after a minute", volumeID, err)
+				time.Sleep(1*time.Minute + time.Duration(rand.Intn(5))*time.Second)
+				return nil, nil, err
+			}
 			if _, ok := err.(*ost_errors.ErrExists); !ok {
 				return nil, getErrorSnapshotConditions(err), err
 			}
