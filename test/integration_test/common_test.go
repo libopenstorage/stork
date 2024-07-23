@@ -117,23 +117,22 @@ const (
 	defaultWaitInterval      time.Duration = 10 * time.Second
 	backupWaitInterval       time.Duration = 2 * time.Second
 
-	enableClusterDomainTests   = "ENABLE_CLUSTER_DOMAIN_TESTS"
-	storageProvisioner         = "STORAGE_PROVISIONER"
-	authSecretConfigMap        = "AUTH_SECRET_CONFIGMAP"
-	backupPathVar              = "BACKUP_LOCATION_PATH"
-	externalTestCluster        = "EXTERNAL_TEST_CLUSTER"
-	cloudDeletionValidation    = "CLOUD_DELETION_VALIDATION"
-	internalLBAws              = "INTERNAL_AWS_LB"
-	portworxNamespace          = "PX_NAMESPACE"
-	enableDashStats            = "ENABLE_DASH"
-	nfsServerAddressEnv        = "NFS_SERVER_ADDRESS"
-	nfsServerExportPathEnv     = "NFS_EXPORT_PATH"
-	defaultNFSServerAddress    = "10.13.248.14"
-	defaultNFSServerExportPath = "stork-nfs"
-	s3SecretName               = "s3secret"
-	azureSecretName            = "azuresecret"
-	googleSecretName           = "googlesecret"
-	nfsSecretName              = "nfssecret"
+	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
+	storageProvisioner       = "STORAGE_PROVISIONER"
+	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
+	backupPathVar            = "BACKUP_LOCATION_PATH"
+	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
+	cloudDeletionValidation  = "CLOUD_DELETION_VALIDATION"
+	internalLBAws            = "INTERNAL_AWS_LB"
+	portworxNamespace        = "PX_NAMESPACE"
+	enableDashStats          = "ENABLE_DASH"
+	providerEnv              = "PROVIDER"
+	nfsServerAddressEnv      = "NFS_SERVER_ADDRESS"
+	nfsServerExportPathEnv   = "NFS_EXPORT_PATH"
+	s3SecretName             = "s3secret"
+	azureSecretName          = "azuresecret"
+	googleSecretName         = "googlesecret"
+	nfsSecretName            = "nfssecret"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -298,6 +297,12 @@ func setup() error {
 	if err == nil {
 		log.InfoD("Three cluster config mode has been activated for test: %t", externalTest)
 	}
+	// Fetch the object store provider.
+	provider = os.Getenv(providerEnv)
+
+	// Fetch NFS credentials if supplied.
+	nfsSrvAddr = os.Getenv(nfsServerAddressEnv)
+	nfsSrvExpPath = os.Getenv(nfsServerExportPathEnv)
 
 	err = setSourceKubeConfig()
 	if err != nil {
@@ -396,17 +401,6 @@ func setup() error {
 			return fmt.Errorf("failed to change PX service to LoadBalancer on source cluster: %v", err)
 		}
 	}
-
-	set := false
-	if nfsSrvAddr, set = os.LookupEnv(nfsServerAddressEnv); !set {
-		nfsSrvAddr = defaultNFSServerAddress
-	}
-	if nfsSrvExpPath, set = os.LookupEnv(nfsServerExportPathEnv); !set {
-		nfsSrvExpPath = defaultNFSServerExportPath
-	}
-
-	// Fetch the object store provider.
-	provider = os.Getenv("PROVIDER")
 
 	err = setDestinationKubeConfig()
 	if err != nil {
@@ -2138,7 +2132,7 @@ func getBackupLocationForVolumeDriverMigrationTest(volumeDriver string) (storkv1
 	switch volumeDriver {
 	case "pxd", "aws":
 		if provider == "nfs" {
-			return nfsSecretName, nil
+			return storkv1.BackupLocationNFS, nil
 		}
 		return storkv1.BackupLocationS3, nil
 	case "azure":
@@ -2174,11 +2168,12 @@ func setDefaultsForMigration(t *testing.T) {
 	allConfigMap = configMap.Data
 
 	// Default backup location
+	log.InfoD("Provider is %s", provider)
 	defaultBackupLocation, err = getBackupLocationForVolumeDriverMigrationTest(volumeDriverName)
 	log.FailOnError(t, err, "Failed to get default backuplocation for %s: %v", volumeDriverName, err)
 	defaultSecretName, err = getSecretForVolumeDriverMigrationTest(volumeDriverName)
 	log.FailOnError(t, err, "Failed to get default secret name for %s: %v", volumeDriverName, err)
-	log.InfoD("Default backup location set to %v", defaultBackupLocation)
+	log.InfoD("Default backup location set to %v, secret to %s", defaultBackupLocation, defaultSecretName)
 	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
 
 	// If running pxd driver backup to all locations
