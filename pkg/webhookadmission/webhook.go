@@ -43,12 +43,13 @@ const (
 // with stork as scheduler, if given resources are using driver supported
 // by stork
 type Controller struct {
-	Recorder     record.EventRecorder
-	Driver       volume.Driver
-	server       *http.Server
-	lock         sync.Mutex
-	started      bool
-	SkipResource string
+	Recorder                  record.EventRecorder
+	Driver                    volume.Driver
+	server                    *http.Server
+	lock                      sync.Mutex
+	started                   bool
+	SkipResource              string
+	KubevirtSkipPreloadStatFS bool
 }
 
 // Serve method for webhook server
@@ -126,7 +127,6 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	// by the user as per their need through which stork can get to know if to
 	// actually create the configmap and mount the ld.so.preload and px_statfs.so
 	// files onto the virt-launcher container.
-	skipPreloadStatFS := os.Getenv("KUBEVIRT_SKIP_LD_PRELOAD_STATFS")
 	if !isStorkResource {
 		admissionResponse = &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{
@@ -134,7 +134,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			},
 			Allowed: true,
 		}
-	} else if skipPreloadStatFS == "true" {
+	} else if c.KubevirtSkipPreloadStatFS {
 		admissionResponse = &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{
 				Message: "Successful",

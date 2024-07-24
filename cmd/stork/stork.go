@@ -183,6 +183,10 @@ func main() {
 			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
 		},
 		cli.BoolTFlag{
+			Name:  "kubevirt-skip-preload-statfs",
+			Usage: "Skip preloading statfs shared library for kubevirt vm live migration",
+		},
+		cli.BoolTFlag{
 			Name:  "enable-metrics",
 			Usage: "Enable stork metrics collection for stork resources (default: true)",
 		},
@@ -426,9 +430,10 @@ func run(c *cli.Context) {
 		}
 		if c.Bool("webhook-controller") {
 			webhook = &webhookadmission.Controller{
-				Driver:       d,
-				Recorder:     recorder,
-				SkipResource: c.String("webhook-skip-resources-annotation"),
+				Driver:                    d,
+				Recorder:                  recorder,
+				SkipResource:              c.String("webhook-skip-resources-annotation"),
+				KubevirtSkipPreloadStatFS: c.Bool("kubevirt-skip-preload-statfs"),
 			}
 			if err := webhook.Start(); err != nil {
 				log.Fatalf("error starting webhook controller: %v", err)
