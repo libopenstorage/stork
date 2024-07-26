@@ -36,7 +36,7 @@ func TestDRActions(t *testing.T) {
 
 	log.InfoD("Using stork volume driver: %s", volumeDriverName)
 	log.InfoD("Backup path being used: %s", backupLocationPath)
-	setDefaultsForBackup(t)
+	setDefaultsForMigration(t)
 
 	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
 	// since both the dr cli commands run in destination cluster

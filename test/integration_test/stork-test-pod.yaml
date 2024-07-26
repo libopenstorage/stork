@@ -130,6 +130,12 @@ spec:
       value: test_tag
     - name: TEST_DESCRIPTION
       value: test_description
+    - name: PROVIDER
+      value: provider
+    - name: NFS_SERVER_ADDRESS
+      value: nfs_server_address
+    - name: NFS_EXPORT_PATH
+      value: nfs_export_path
   hostNetwork: false
   hostNetwork: false
   hostPID: false
