@@ -28,9 +28,6 @@ const (
 	restoreName          = "mysql-restore"
 	backupSyncAnnotation = "backupsync"
 	configMapName        = "secret-config"
-	s3SecretName         = "s3secret"
-	azureSecretName      = "azuresecret"
-	googleSecretName     = "googlesecret"
 	prepare              = "prepare"
 	fio                  = "fio"
 	verify               = "verify"
@@ -1596,8 +1593,8 @@ func setDefaultsForBackup(t *testing.T) {
 	if !defaultsBackupSet {
 		defaultsBackupSet = true
 	}
-
 }
+
 func getSyncedBackupWithAnnotation(appBackup *storkv1.ApplicationBackup, lookUpAnnotation string) (*storkv1.ApplicationBackup, error) {
 	// Check periodically to see if the backup from this test is synced on second cluster
 	var allAppBackups *storkv1.ApplicationBackupList
