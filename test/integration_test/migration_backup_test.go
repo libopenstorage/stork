@@ -19,7 +19,7 @@ func TestMigrationBackup(t *testing.T) {
 	err := setMockTime(nil)
 	log.FailOnError(t, err, "Error resetting mock time")
 
-	setDefaultsForBackup(t)
+	setDefaultsForMigration(t)
 	currentTestSuite = t.Name()
 
 	log.InfoD("Using stork volume driver: %s", volumeDriverName)

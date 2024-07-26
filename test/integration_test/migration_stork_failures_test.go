@@ -33,7 +33,7 @@ func TestMigrationStorkFailures(t *testing.T) {
 
 	log.InfoD("Using stork volume driver: %s", volumeDriverName)
 	log.InfoD("Backup path being used: %s", backupLocationPath)
-	setDefaultsForBackup(t)
+	setDefaultsForMigration(t)
 
 	t.Run("deleteStorkPodsSourceDuringMigrationTest", deleteStorkPodsSourceDuringMigrationTest)
 	t.Run("deleteStorkPodsDestDuringMigrationTest", deleteStorkPodsDestDuringMigrationTest)
