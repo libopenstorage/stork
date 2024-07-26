@@ -451,6 +451,9 @@ sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
 sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'provider'/'"$PROVIDER"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'nfs_server_address'/'"$NFS_SERVER_ADDRESS"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'nfs_export_path'/'"$NFS_SERVER_ADDRESS"'/g' /testspecs/stork-test-pod.yaml
 
 # testrail params
 sed -i 's/testrail_run_name/'"$TESTRAIL_RUN_NAME"'/g' /testspecs/stork-test-pod.yaml
