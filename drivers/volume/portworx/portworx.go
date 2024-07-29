@@ -912,7 +912,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string, includeP
 		}
 		// If a volume is pending and WFFC, it doesn't exist in Portworx.
 		// No need of querying it.
-		if !isPendingWFFC {
+		if volumeName != "" && !isPendingWFFC {
 			volumeNameList = append(volumeNameList, volumeName)
 		}
 	}
