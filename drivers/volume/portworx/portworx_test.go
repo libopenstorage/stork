@@ -335,6 +335,145 @@ func TestGetPodVolumesPendingPVCs(t *testing.T) {
 	require.Len(t, volumesWFFC, 0, "volumesWFFC should not be found")
 }
 
+func TestGetPodVolumesProjectedVolumes(t *testing.T) {
+	// Setup
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockDriver := mockosd.NewMockVolumeDriver(mockCtrl)
+	mockCache := mockcache.NewMockSharedInformerCache(mockCtrl)
+	p := setup(mockDriver, mockCache)
+
+	// Create a sample pod with volumes
+	pod := &v1.Pod{
+		Spec: v1.PodSpec{
+			Volumes: []v1.Volume{
+				{
+					Name: "volume1",
+					VolumeSource: v1.VolumeSource{
+						PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+							ClaimName: "claim1",
+						},
+					},
+				},
+				{
+					Name: "projected",
+					VolumeSource: v1.VolumeSource{
+						Projected: &v1.ProjectedVolumeSource{
+							Sources: []v1.VolumeProjection{
+								{
+									ServiceAccountToken: &v1.ServiceAccountTokenProjection{
+										Audience: "aud1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	createPVAndPVC("claim1", "ns1", "pv1", v1.ClaimBound)
+
+	bindingMode := storagev1.VolumeBindingImmediate
+	mockCache.EXPECT().GetStorageClass(scName).Return(&storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: scName,
+		},
+		VolumeBindingMode: &bindingMode,
+	}, nil).Times(1)
+
+	mockDriver.EXPECT().Enumerate(
+		&api.VolumeLocator{
+			VolumeIds: []string{"pv1"},
+		}, nil).Return([]*api.Volume{
+		{
+			Id: "id1",
+			Locator: &api.VolumeLocator{
+				Name: "pv1",
+			},
+			Spec: &api.VolumeSpec{},
+		},
+	}, nil)
+
+	// Call the GetPodVolumes function
+	volumes, volumesWFFC, err := p.GetPodVolumes(&pod.Spec, "ns1", true)
+	require.NoError(t, err, "failed to get pod volumes")
+	require.Len(t, volumes, 1, "incorrect volume count")
+	require.Len(t, volumesWFFC, 0, "volumesWFFC should not be found")
+}
+
+func TestGetPodVolumesEphemeralVolumes(t *testing.T) {
+	// Setup
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockDriver := mockosd.NewMockVolumeDriver(mockCtrl)
+	mockCache := mockcache.NewMockSharedInformerCache(mockCtrl)
+	p := setup(mockDriver, mockCache)
+
+	ephemeralScName := "sc1"
+	// Create a sample pod with volumes
+	pod := &v1.Pod{
+		Spec: v1.PodSpec{
+			Volumes: []v1.Volume{
+				{
+					Name: "volume1",
+					VolumeSource: v1.VolumeSource{
+						PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+							ClaimName: "claim1",
+						},
+					},
+				},
+				{
+					Name: "ephemeral",
+					VolumeSource: v1.VolumeSource{
+						Ephemeral: &v1.EphemeralVolumeSource{
+							VolumeClaimTemplate: &v1.PersistentVolumeClaimTemplate{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "claim2",
+								},
+								Spec: v1.PersistentVolumeClaimSpec{
+									StorageClassName: &ephemeralScName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	createPVAndPVC("claim1", "ns1", "pv1", v1.ClaimBound)
+	createPVAndPVC("claim2", "ns1", "pv2", v1.ClaimBound)
+
+	bindingMode := storagev1.VolumeBindingImmediate
+	mockCache.EXPECT().GetStorageClass(scName).Return(&storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: scName,
+		},
+		VolumeBindingMode: &bindingMode,
+	}, nil).Times(1)
+
+	mockDriver.EXPECT().Enumerate(
+		&api.VolumeLocator{
+			VolumeIds: []string{"pv1"},
+		}, nil).Return([]*api.Volume{
+		{
+			Id: "id1",
+			Locator: &api.VolumeLocator{
+				Name: "pv1",
+			},
+			Spec: &api.VolumeSpec{},
+		},
+	}, nil)
+
+	// Call the GetPodVolumes function
+	volumes, volumesWFFC, err := p.GetPodVolumes(&pod.Spec, "ns1", true)
+	require.NoError(t, err, "failed to get pod volumes")
+	require.Len(t, volumes, 1, "incorrect volume count")
+	require.Len(t, volumesWFFC, 0, "volumesWFFC should not be found")
+}
+
 func createPVAndPVC(name, namespace, pvName string, status v1.PersistentVolumeClaimPhase) {
 	sc := scName
 	core.Instance().CreatePersistentVolumeClaim(&v1.PersistentVolumeClaim{
