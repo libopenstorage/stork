@@ -278,14 +278,32 @@ func jobForBackupResource(
 		},
 	}
 
+	uid := utils.KdmpJobUid
+	// For GCP based clusters the NFS PVC mounted with a anomalous GID permissions( i.e. sans GID write permission)
+	// hence avoiding passing any specific UID or GID so that Job pod will always run as ROOT user.
+	// This makes the job pod to fail in GCP based cluster with PSA enabled environment.
+
+	// check the cluster is GCP based or not
+	isGcpBasedCluster, err := utils.IsGcpHostedCluster()
+	if err != nil {
+		logrus.Errorf("failed to check the cluster is GCP based or not: %v", err)
+		return nil, fmt.Errorf("failed to check the cluster is GCP based or not for job [%s/%s]", jobOption.Namespace, jobOption.RestoreExportName)
+	}
+	if isGcpBasedCluster {
+		logrus.Debugf("Found a GCP based cluster hence not adding any specific UID/GID to the job, it will run with root user")
+		uid = ""
+	}
+
 	// The Job is intended to backup resources to  NFS backuplocation
 	// and it doesn't need a specific JOB uid/gid since it will be sqaushed at NFS server
 	// hence used a global hardcoded UID/GID.
 	// Not passing the groupId as we do not want to set the RunAsGroup field in the securityContext
 	// This helps us in setting the primaryGroup ID to root for the user ID.
-	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, "")
-	if err != nil {
-		return nil, err
+	if uid != "" {
+		job, err = utils.AddSecurityContextToJob(job, uid, "")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Add the image secret in job spec only if it is present in the stork deployment.
