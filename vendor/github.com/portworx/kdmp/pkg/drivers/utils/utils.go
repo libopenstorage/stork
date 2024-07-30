@@ -75,6 +75,8 @@ const (
 	OcpUidRangeAnnotationKey    = "openshift.io/sa.scc.uid-range"
 	OcpGidRangeAnnotationKey    = "openshift.io/sa.scc.supplemental-groups"
 	kopiaBackupString           = "kopiaexecutor backup"
+	// if providerType in node spec has this string then it is GCP hosted cluster
+	GCPBasedClusterString = "gce://"
 )
 
 var (
@@ -1087,4 +1089,22 @@ func GetOcpNsUidGid(nsName string, psaJobUid string, psaJobGid string) (string, 
 		}
 	}
 	return psaJobUid, psaJobGid, isOcp, nil
+}
+
+// Checks if the cluster is GCP hosted cluster.
+func IsGcpHostedCluster() (bool, error) {
+	// Any GCP hosted cluster be it vanilla , OCP or GKE
+	// it is expected to have a ProviderId in its spec with a prefix of "gce"
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		return false, fmt.Errorf("failed to get nodes: %v", err)
+	}
+
+	for _, node := range nodes.Items {
+		providerID := node.Spec.ProviderID
+		if strings.HasPrefix(providerID, GCPBasedClusterString) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
