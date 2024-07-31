@@ -65,7 +65,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	var admissionResponse *v1beta1.AdmissionResponse
 	var err error
 	var schedPath string
-	patches := []k8sutils.JSONPatchOp{}
+	var patches []k8sutils.JSONPatchOp
 	admissionReview := v1beta1.AdmissionReview{}
 	isStorkResource := false
 	skipHookAnnotation := defaultSkipAnnotation
@@ -131,23 +131,17 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			Allowed: true,
 		}
 	} else {
-		// `kubevirt-skip-preload-statfs=true` stork argument can be configured
-		// by the user as per their need through which stork can get to know if to
-		// actually create the configmap and mount the ld.so.preload and px_statfs.so
-		// shared lib onto the virt-launcher container.
-		if c.KubevirtSkipPreloadStatFS {
-			log.Debugf("Skipping the statfs patch formation step since kubevirt-skip-preload-statfs arg is set")
-		} else {
-			// pod object does not have name and namespace populated, so we pass them separately. Also,
-			// if the pod is using generateName, arReq.Name is empty.
-			patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
-			if err != nil {
-				log.Errorf("Failed to get pod patches for pod %s/%s: %v", arReq.Namespace, resourceName, err)
-				c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not get pod patches", err.Error())
-				http.Error(w, "Could not get pod patches", http.StatusInternalServerError)
-				return
-			}
+		volume.SkipKubevirtPreloadStatfs = c.KubevirtSkipPreloadStatFS
+		// pod object does not have name and namespace populated, so we pass them separately. Also,
+		// if the pod is using generateName, arReq.Name is empty.
+		patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
+		if err != nil {
+			log.Errorf("Failed to get pod patches for pod %s/%s: %v", arReq.Namespace, resourceName, err)
+			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not get pod patches", err.Error())
+			http.Error(w, "Could not get pod patches", http.StatusInternalServerError)
+			return
 		}
+
 		// create patch
 		log.Debugf("Updating scheduler to stork for Resource:%s, Name: %s, Namespace:%s",
 			arReq.Kind.Kind, resourceName, arReq.Namespace)
