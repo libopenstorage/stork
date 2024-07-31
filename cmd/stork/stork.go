@@ -127,11 +127,11 @@ func main() {
 			Name:  "snapshotter",
 			Usage: "Enable snapshotter (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "extender",
 			Usage: "Enable scheduler extender for hyperconvergence (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "health-monitor",
 			Usage: "Enable health monitoring of the storage driver (default: true)",
 		},
@@ -140,15 +140,15 @@ func main() {
 			Value: 120,
 			Usage: "The interval in seconds to monitor the health of the storage driver (min: 30)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "action-controller",
 			Usage: "Start the Action controller (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "migration-controller",
 			Usage: "Start the migration controller (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "application-controller",
 			Usage: "Start the controllers for managing applications (default: true)",
 		},
@@ -166,7 +166,7 @@ func main() {
 			Value: defaultAdminNamespace,
 			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (Deprecated, please use admin-namespace)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "cluster-domain-controllers",
 			Usage: "Start the cluster domain controllers (default: true)",
 		},
@@ -174,7 +174,7 @@ func main() {
 			Name:  "pvc-watcher",
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "webhook-controller",
 			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
 		},
@@ -182,7 +182,7 @@ func main() {
 			Name:  "webhook-skip-resources-annotation",
 			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "enable-metrics",
 			Usage: "Enable stork metrics collection for stork resources (default: true)",
 		},
@@ -201,7 +201,7 @@ func main() {
 			Value: 2000,
 			Usage: "Restrict number of k8s API requests from stork (default: 2000 Burst)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "kdmp-controller",
 			Usage: "Start the kdmp controller (default: true)",
 		},
@@ -210,7 +210,7 @@ func main() {
 			Value: 4,
 			Usage: "Max threads for apply resources during migration (default: 4)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  controllers.ResourceTransformationControllerName,
 			Usage: "Start the resource transformation controller (default: true)",
 		},
@@ -424,16 +424,16 @@ func run(c *cli.Context) {
 				log.Fatalf("Error starting scheduler extender: %v", err)
 			}
 		}
-		if c.Bool("webhook-controller") {
-			webhook = &webhookadmission.Controller{
-				Driver:       d,
-				Recorder:     recorder,
-				SkipResource: c.String("webhook-skip-resources-annotation"),
-			}
-			if err := webhook.Start(); err != nil {
-				log.Fatalf("error starting webhook controller: %v", err)
-			}
-		}
+		// if c.Bool("webhook-controller") {
+		// 	webhook = &webhookadmission.Controller{
+		// 		Driver:       d,
+		// 		Recorder:     recorder,
+		// 		SkipResource: c.String("webhook-skip-resources-annotation"),
+		// 	}
+		// 	if err := webhook.Start(); err != nil {
+		// 		log.Fatalf("error starting webhook controller: %v", err)
+		// 	}
+		// }
 	}
 
 	runFunc := func(context.Context) {
