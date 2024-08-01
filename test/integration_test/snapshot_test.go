@@ -6,6 +6,7 @@ package integrationtest
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/externalstorage"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -460,6 +462,7 @@ func snapshotScheduleTests(t *testing.T) {
 	t.Run("weeklyTest", weeklySnapshotScheduleTest)
 	t.Run("monthlyTest", monthlySnapshotScheduleTest)
 	t.Run("invalidPolicyTest", invalidPolicySnapshotScheduleTest)
+	t.Run("updateRetainValueTest", updateRetainValueTest)
 }
 
 func cloudSnapshotScaleTest(t *testing.T) {
@@ -1010,6 +1013,165 @@ func invalidPolicySnapshotScheduleTest(t *testing.T) {
 		snapshotScheduleRetryInterval)
 	log.FailOnNoError(t, err, fmt.Sprintf("No snapshots should have been created for %v in namespace %v",
 		scheduleName, namespace))
+	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
+	destroyAndWait(t, []*scheduler.Context{ctx})
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// updateRetainValueTest tests the creation/pruning of volumesnapshots while we modify the
+// `Retain` field's value in the schedulepolicy.
+func updateRetainValueTest(t *testing.T) {
+	var testrailID, testResult = 300004, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// Deploy a dummy application for taking snapshots.
+	ctx := createApp(t, "retain-value-modify-test")
+
+	////////////////////////////////////////////////////
+	// Create schedulepolicy and snapshot schedule.
+	////////////////////////////////////////////////////
+	policyName := "intervalpolicy"
+	scheduleName := "snapshotretainvaluetest"
+	retain := 2
+	interval := 1
+	schedPolicy := &storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				Retain:          storkv1.Retain(retain),
+				IntervalMinutes: interval,
+			},
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	log.FailOnError(t, err, "Error creating interval schedule policy")
+	log.InfoD("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
+
+	namespace := ctx.GetID()
+	snapSched := &storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
+	log.FailOnError(t, err, "Error creating interval snapshot schedule")
+
+	//////////////////////////////////////////////////////////
+	// Wait for creation of two volumesnapshots and validate
+	// the count to match the retain value.
+	/////////////////////////////////////////////////////////
+	sleepTime := time.Duration((retain+1)*interval) * time.Minute
+	log.InfoD("Created snapshotschedule %v in namespace %v, sleeping for %v for schedule to trigger",
+		scheduleName, namespace, sleepTime)
+	time.Sleep(sleepTime)
+
+	snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	log.FailOnError(t, err, "Error validating snapshot schedule")
+	Dash.VerifyFatal(t, len(snapStatuses), 1, "Should have snapshots for only one policy type")
+	Dash.VerifyFatal(t, retain, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
+	log.InfoD("Validated snapshotschedule %s to have two volumesnapshots", scheduleName)
+
+	// Verify from the cluster if there are expected number of snapshots.
+	snapCount := 0
+	snapshots, err := externalstorage.Instance().ListSnapshots(namespace)
+	log.FailOnError(t, err, "Error listing snapshots")
+	for _, snap := range snapshots.Items {
+		if strings.Contains(snap.Metadata.Name, scheduleName) {
+			snapCount++
+		}
+	}
+	Dash.VerifyFatal(t, retain, snapCount, fmt.Sprintf("Should have only %v snapshots in the cluster", retain))
+
+	////////////////////////////////////////////////////////
+	// Increase the retain value to 3 and wait for another
+	// snapshot to get created. Post this, wait for two three
+	// cycles of snapshot creation and validate if three
+	// snapshots are present.
+	////////////////////////////////////////////////////////
+	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+	log.FailOnError(t, err, "Failed to fetch the schedulepolicy")
+	schedulePolicy.Policy.Interval.Retain = storkv1.Retain(3)
+	_, err = storkops.Instance().UpdateSchedulePolicy(schedulePolicy)
+	log.FailOnError(t, err, "Failed to update the schedulepolicy with retain value 3")
+
+	// Wait for creation of one more snapshot.
+	sleepTime = time.Duration(interval*3) * time.Minute
+	time.Sleep(sleepTime)
+
+	// Validate that three snapshots are present.
+	snapStatuses, err = storkops.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	log.FailOnError(t, err, "Error validating snapshot schedule")
+	Dash.VerifyFatal(t, len(snapStatuses), 1, "Should have snapshots for only one policy type")
+	Dash.VerifyFatal(t, 3, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
+	log.InfoD("Validated snapshotschedule %s to have three volumesnapshots", scheduleName)
+
+	////////////////////////////////////////////////////////
+	// Reduce the retain value to 2 and validate if only
+	// two snapshots remain post this change.
+	////////////////////////////////////////////////////////
+	schedulePolicy, err = storkops.Instance().GetSchedulePolicy(policyName)
+	log.FailOnError(t, err, "Failed to fetch the schedulepolicy")
+	schedulePolicy.Policy.Interval.Retain = storkv1.Retain(2)
+	_, err = storkops.Instance().UpdateSchedulePolicy(schedulePolicy)
+	log.FailOnError(t, err, "Failed to update the schedulepolicy with retain value 2")
+
+	// Wait for pruning of one snapshot.
+	sleepTime = time.Duration(interval*2) * time.Minute
+	time.Sleep(sleepTime)
+
+	// Validate that two snapshots are present since now the retain value of
+	// the schedulepolicy is 2.
+	snapStatuses, err = storkops.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	log.FailOnError(t, err, "Error validating snapshot schedule")
+	Dash.VerifyFatal(t, len(snapStatuses), 1, "Should have snapshots for only one policy type")
+	Dash.VerifyFatal(t, 2, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
+	log.InfoD("Validated snapshotschedule %s to have three volumesnapshots", scheduleName)
+	// Verify from the cluster if there are expected number of snapshots.
+	snapCount = 0
+	snapshots, err = externalstorage.Instance().ListSnapshots(namespace)
+	log.FailOnError(t, err, "Error listing snapshots")
+	for _, snap := range snapshots.Items {
+		if strings.Contains(snap.Metadata.Name, scheduleName) {
+			snapCount++
+		}
+	}
+	Dash.VerifyFatal(t, retain, snapCount, fmt.Sprintf("Should have only %v snapshots in the cluster", retain))
+
 	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
 	destroyAndWait(t, []*scheduler.Context{ctx})
 
