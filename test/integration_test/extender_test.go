@@ -46,6 +46,8 @@ func TestExtender(t *testing.T) {
 	t.Run("preferRemoteNodeFalseHyperconvergenceTest", preferRemoteNodeFalseHyperconvergenceTest)
 	t.Run("antihyperconvergenceAfterVolumeLabelUpdate", antihyperconvergenceAfterVolumeLabelUpdate)
 	t.Run("equalPodSpreadTest", equalPodSpreadTest)
+	t.Run("stronghypeconvergenceTest", stronghypeconvergenceSingleVolumeTest)
+	t.Run("stronghypeconvergenceTest", stronghypeconvergenceMultiVolumesTest)
 
 	err = setRemoteConfig("")
 	log.FailOnError(t, err, "setting kubeconfig to default failed")
@@ -365,6 +367,101 @@ func pvcOwnershipTest(t *testing.T) {
 	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
+func stronghypeconvergenceSingleVolumeTest(t *testing.T) {
+	var testrailID, testResult = 300006, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	ctxs, err := schedulerDriver.Schedule("sh-test",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"test-mysql-1-pvc-strong-hyperconvergence"},
+		})
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+
+	log.InfoD("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	log.FailOnError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	log.FailOnError(t, err, "Error getting node for app")
+	Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on 1 nodes")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	Dash.VerifyFatal(t, 1, len(volumeNames), "Should have only one volume")
+
+	log.InfoD("Verifying Pods scheduling favors strong hyperconvergence")
+	verifyStronghyperconvergence(t, scheduledNodes[0], volumeNames)
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func stronghypeconvergenceMultiVolumesTest(t *testing.T) {
+	var testrailID, testResult = 300007, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// TODO: Modify this test to use the volume placement strategy
+
+	// Till then only run this test in a set up where maximum 5 px nodes are there
+	// We should have only 3 nodes for volume creation for this test
+	// Rest of the nodes will be put in maintenance mode so that no volume replica gets created there.
+
+	maintenanceNodes := make([]node.Node, 0)
+	storageDriverNodes := node.GetStorageNodes()
+	Dash.VerifyFatal(t, len(storageDriverNodes) >= 3, true, "Need at least 3 nodes to run this test")
+
+	if len(storageDriverNodes) > 3 {
+		for _, sNode := range storageDriverNodes[3:] {
+			err := volumeDriver.EnterMaintenance(sNode)
+			log.FailOnError(t, err, fmt.Sprintf("Error entering pool maintenance mode on node %s", sNode.Name))
+			maintenanceNodes = append(maintenanceNodes, sNode)
+		}
+	}
+	ctxs, err := schedulerDriver.Schedule("sh-test",
+		scheduler.ScheduleOptions{
+			AppKeys: []string{"test-mysql-2-pvc-strong-hyperconvergence"},
+		})
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+
+	log.InfoD("Waiting for all Pods to come online")
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	log.FailOnError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	log.FailOnError(t, err, "Error getting node for app")
+	Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on 3 nodes")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	Dash.VerifyFatal(t, 2, len(volumeNames), "Should have only one volume")
+
+	log.InfoD("Verifying Pods scheduling favors antihyperconvergence")
+	verifyStronghyperconvergence(t, scheduledNodes[0], volumeNames)
+
+	for _, mNode := range maintenanceNodes {
+		err := volumeDriver.ExitMaintenance(mNode)
+		log.FailOnError(t, err, fmt.Sprintf("Error exiting pool maintenance mode on node %s", mNode.Name))
+	}
+
+	for _, mNode := range maintenanceNodes {
+		err := volumeDriver.WaitDriverUpOnNode(mNode, defaultWaitTimeout)
+		log.FailOnError(t, err, fmt.Sprintf("Error waiting for Node to start %s", mNode.Name))
+	}
+
+	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
 func antihyperconvergenceTest(t *testing.T) {
 	var testrailID, testResult = 85859, testResultFail
 	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
@@ -616,6 +713,39 @@ func verifyAntihyperconvergence(t *testing.T, appNodes []node.Node, volumes []st
 	for _, appNode := range appNodes {
 		Dash.VerifyFatal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
 	}
+}
+
+func verifyStronghyperconvergence(t *testing.T, appNode node.Node, volumes []string) {
+	driverNodes, err := storkVolumeDriver.GetNodes()
+	log.FailOnError(t, err, "Unable to get driver nodes from stork volume driver")
+
+	scores := make(map[string]int)
+	idMap := make(map[string]*storkdriver.NodeInfo)
+	for _, dNode := range driverNodes {
+		scores[dNode.Hostname] = 0
+		idMap[dNode.StorageID] = dNode
+	}
+
+	// Assign zero score to non-replica nodes for antihyperconvergence
+	// Assign non zero score to replica nodes for antihyperconvergence
+	// Not considering rack/zone for these test scores
+	for _, vol := range volumes {
+		volInfo, err := storkVolumeDriver.InspectVolume(vol)
+		log.FailOnError(t, err, "Unable to inspect volume driver")
+		for _, dataNode := range volInfo.DataNodes {
+			hostname := idMap[dataNode].Hostname
+			scores[hostname] += 100
+		}
+	}
+
+	highScore := 0
+	for _, score := range scores {
+		if score > highScore {
+			highScore = score
+		}
+	}
+
+	Dash.VerifyFatal(t, highScore, scores[appNode.Name], fmt.Sprintf("Scheduled node %s does not have the highest score", appNode.Name))
 }
 
 func equalPodSpreadTest(t *testing.T) {
