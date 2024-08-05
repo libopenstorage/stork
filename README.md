@@ -21,14 +21,12 @@ You can either configure the default kubernetes scheduler to communicate with
 stork or launch another instance of kube-scheduler.
 
 ### Initializer (Experimental)
-If you are not able to update the schedulerName for you applications to use
-stork, you can enable the app-initializer feature. This uses the Kubernetes
-[AdmissionController Initializer](https://kubernetes.io/docs/admin/extensible-admission-controllers/#initializers)
+If you are not able to update the schedulerName for you applications to use stork, you can enable the app-initializer feature. This uses the Kubernetes AdmissionController Initializer
 feature to automatically update the scheduler to stork if your application
 (deployment or statefulset) is using volumes backed by the configured driver.
 
 To enable the Initializer you need to:
-* [Enable the Intializer feature in your Kubernetes cluster](https://kubernetes.io/docs/admin/extensible-admission-controllers/#enable-initializers-alpha-feature)
+* [Enable the Intializer feature in your Kubernetes cluster](https://github.com/kelseyhightower/kubernetes-initializer-tutorial)
 since it is an alpha feature.
 * Add "--app-initializer=true" option to stork (in either the deployment or daemonset spec file)
 * Add the [stork-initializer spec](specs/stork-initializer.yaml) to you Kubernetes cluster using `kubectl create -f stork-initializer.yaml`
