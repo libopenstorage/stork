@@ -118,6 +118,7 @@ const (
 	backupWaitInterval       time.Duration = 2 * time.Second
 
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
+	storkTestClusterDomain   = "STORK_TEST_CLUSTER_DOMAIN"
 	storageProvisioner       = "STORAGE_PROVISIONER"
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
 	backupPathVar            = "BACKUP_LOCATION_PATH"

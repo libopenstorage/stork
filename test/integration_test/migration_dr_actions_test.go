@@ -19,6 +19,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	testClusterDomain, sourceClusterDomain, destClusterDomain string
+)
+
 func TestDRActions(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
@@ -46,6 +50,10 @@ func TestDRActions(t *testing.T) {
 }
 
 func testSyncDR(t *testing.T) {
+	testClusterDomain = os.Getenv(storkTestClusterDomain)
+	sourceClusterDomain = fmt.Sprintf("%s1", testClusterDomain)
+	destClusterDomain = fmt.Sprintf("%s2", testClusterDomain)
+
 	t.Run("testDRActionMetroFailover", testDRActionMetroFailover)
 	t.Run("testDRActionMetroFailback", testDRActionMetroFailback)
 }
@@ -1324,15 +1332,26 @@ func testDRActionMetroFailover(t *testing.T) {
 
 	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
 	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
-	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in source: %v", remotePairName, defaultAdminNamespace, err)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+
+	// Validate if the clusterdomain is active on destination cluster and not on the source cluster.
+	clusterDomainStatus, err := storkops.Instance().GetClusterDomainsStatus(destClusterDomain)
+	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in destination: %v", destClusterDomain, defaultAdminNamespace, err)
+	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainActive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainActive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Verify the application is not running on the source cluster
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Validate if the clusterdomain is active on destination cluster and not on the source cluster.
+	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(sourceClusterDomain)
+	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in source: %v", sourceClusterDomain, defaultAdminNamespace, err)
+	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainInactive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainInactive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
 
 	// Activate the clusterdomain again on source cluster in order to make it work for next test.
 	cmdArgs = []string{"activate", "clusterdomain", "--all", "--kubeconfig", srcKubeConfigPath, "-n", defaultAdminNamespace}
 	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 
-	// Verify the application is not running on the source cluster
-	err = setSourceKubeConfig()
-	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	sourceDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
 	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
@@ -1495,13 +1514,25 @@ func testDRActionMetroFailback(t *testing.T) {
 	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
 	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
 
+	// Validate if the clusterdomain is active on destination cluster and not on the source cluster.
+	clusterDomainStatus, err := storkops.Instance().GetClusterDomainsStatus(destClusterDomain)
+	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in destination: %v", destClusterDomain, defaultAdminNamespace, err)
+	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainActive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainActive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Verify the application is not running on the source cluster
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Validate if the clusterdomain is active on destination cluster and not on the source cluster.
+	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(sourceClusterDomain)
+	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in source: %v", sourceClusterDomain, defaultAdminNamespace, err)
+	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainInactive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainInactive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
 	// Activate the clusterdomain again on source cluster in order to make it work for next test.
 	cmdArgs = []string{"activate", "clusterdomain", "--all", "--kubeconfig", srcKubeConfigPath, "-n", defaultAdminNamespace}
 	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
 
 	// Verify the application is not running on the source cluster
-	err = setSourceKubeConfig()
-	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	sourceDeployments, err = apps.Instance().ListDeployments(mysqlNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving deployments from %s namespace", mysqlNamespace)
 	Dash.VerifyFatal(t, len(sourceDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in source in %s namespace", mysqlNamespace))
@@ -1579,9 +1610,21 @@ func testDRActionMetroFailback(t *testing.T) {
 	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
 	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in destination in deployment in %s namespace", mysqlNamespace))
 
-	// Verify the elasticsearch application is running on the source cluster.
+	// Validate if the clusterdomain is active on destination cluster and not on the source cluster.
+	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(destClusterDomain)
+	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in destination: %v", destClusterDomain, defaultAdminNamespace, err)
+	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainInactive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainInactive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Verify the application is not running on the source cluster
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Validate if the clusterdomain is active on destination cluster and not on the source cluster.
+	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(sourceClusterDomain)
+	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in source: %v", sourceClusterDomain, defaultAdminNamespace, err)
+	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainActive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainActive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Verify the elasticsearch application is running on the source cluster.
 	expectedReplicas := int32(3)
 	sourceStatefulsets, err = apps.Instance().ListStatefulSets(elasticsearchNamespace, metav1.ListOptions{})
 	log.FailOnError(t, err, "error retrieving statefulsets from %s namespace", elasticsearchNamespace)
@@ -1606,6 +1649,7 @@ func testDRActionMetroFailback(t *testing.T) {
 		log.FailOnError(t, err, "Failed: %v", suspendErr)
 	}
 	log.InfoD("Successfully verified suspend migration in destination cluster")
+	// Activate the clusterdomain again on destination cluster in order to make it work for next test.
 
 	//////////////
 	// Cleanup //
