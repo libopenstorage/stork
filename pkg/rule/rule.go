@@ -256,6 +256,10 @@ func ExecuteRule(
 				logrus.Infof("Ignoring completed pod for running rule %v", pod.Name)
 				continue
 			}
+			if !core.Instance().IsPodRunning(pod) {
+				logrus.Debugf("skipping executing rule on pod %v: Pod not in running state", pod.GetName())
+				continue
+			}
 			logrus.Debugf("Including pod to run rule %v", pod.Name)
 			pods = append(pods, pod)
 		}
