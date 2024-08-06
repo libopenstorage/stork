@@ -5,6 +5,7 @@ package integrationtest
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -20,8 +21,35 @@ import (
 )
 
 var (
-	testClusterDomain, sourceClusterDomain, destClusterDomain string
+	testClusterDomain, sourceClusterDomain, destClusterDomain, witnessNodeDomainStatus string
 )
+
+type ClusterDomainStatusOutput struct {
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+	Metadata   struct {
+		ResourceVersion string `json:"resourceVersion"`
+	} `json:"metadata"`
+	Items []struct {
+		Kind       string `json:"kind"`
+		APIVersion string `json:"apiVersion"`
+		Metadata   struct {
+			Name              string    `json:"name"`
+			UID               string    `json:"uid"`
+			ResourceVersion   string    `json:"resourceVersion"`
+			Generation        int       `json:"generation"`
+			CreationTimestamp time.Time `json:"creationTimestamp"`
+		} `json:"metadata"`
+		Status struct {
+			LocalDomain        string `json:"localDomain"`
+			ClusterDomainInfos []struct {
+				Name       string `json:"name"`
+				State      string `json:"state"`
+				SyncStatus string `json:"syncStatus"`
+			} `json:"clusterDomainInfos"`
+		} `json:"status"`
+	} `json:"items"`
+}
 
 func TestDRActions(t *testing.T) {
 	// reset mock time before running any tests
@@ -1334,17 +1362,33 @@ func testDRActionMetroFailover(t *testing.T) {
 	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
 	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
 
-	// Validate if the clusterdomain is active on destination cluster.
+	// Validate if the clusterdomain is ACTIVE on DESTINATION cluster.
 	clusterDomainStatus, err := storkops.Instance().GetClusterDomainsStatus(destClusterDomain)
 	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in destination: %v", destClusterDomain, defaultAdminNamespace, err)
 	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainActive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainActive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
 
-	// Validate if the clusterdomain is inactive on the source cluster.
+	// Validate if the clusterdomain is INACTIVE on the SOURCE cluster.
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(sourceClusterDomain)
 	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in source: %v", sourceClusterDomain, defaultAdminNamespace, err)
 	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainInactive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainInactive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Validate if the WITNESS node is ACTIVE.
+	cmdArgs = []string{"get", "clusterdomainsstatus", "-o", "json"}
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
+	actualOutput := outputBuffer.String()
+	log.InfoD("Actual output is: %s\n", actualOutput)
+
+	// Parse the JSON output to check the status of the witness node.
+	domainStatus := ClusterDomainStatusOutput{}
+	json.Unmarshal([]byte(actualOutput), &domainStatus)
+	for _, info := range domainStatus.Items[0].Status.ClusterDomainInfos {
+		if info.Name == "witness" {
+			witnessNodeDomainStatus = info.State
+		}
+	}
+	Dash.VerifyFatal(t, "Active", witnessNodeDomainStatus, "Error validating the status of witness node domain")
 
 	// Activate the clusterdomain again on source cluster in order to make it work for next test.
 	cmdArgs = []string{"activate", "clusterdomain", "--all", "--kubeconfig", srcKubeConfigPath, "-n", defaultAdminNamespace}
@@ -1513,19 +1557,35 @@ func testDRActionMetroFailback(t *testing.T) {
 	Dash.VerifyFatal(t, len(destStatefulsets.Items), 1, fmt.Sprintf("Expected 1 statefulset in destination in %s namespace", elasticsearchNamespace))
 	Dash.VerifyFatal(t, *destStatefulsets.Items[0].Spec.Replicas, sourceStatefulsetReplicas, fmt.Sprintf("Expected %d replica in destination in %s namespace", sourceStatefulsetReplicas, elasticsearchNamespace))
 
-	// Validate if the clusterdomain is active on destination cluster.
+	// Validate if the clusterdomain is ACTIVE on DESTINATION cluster.
 	clusterDomainStatus, err := storkops.Instance().GetClusterDomainsStatus(destClusterDomain)
 	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in destination: %v", destClusterDomain, defaultAdminNamespace, err)
 	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainActive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainActive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
 
 	// Verify the application is not running on the source cluster
-	// Validate if the clusterdomain is inactive on the source cluster.
+	// Validate if the clusterdomain is INACTIVE on the SOURCE cluster.
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(sourceClusterDomain)
 	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in source: %v", sourceClusterDomain, defaultAdminNamespace, err)
 	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainInactive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainInactive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Validate if the WITNESS node is ACTIVE.
+	cmdArgs = []string{"get", "clusterdomainsstatus", "-o", "json"}
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
+	actualOutput := outputBuffer.String()
+	log.InfoD("Actual output is: %s\n", actualOutput)
+
+	// Parse the JSON output to check the status of the witness node.
+	domainStatus := ClusterDomainStatusOutput{}
+	json.Unmarshal([]byte(actualOutput), &domainStatus)
+	for _, info := range domainStatus.Items[0].Status.ClusterDomainInfos {
+		if info.Name == "witness" {
+			witnessNodeDomainStatus = info.State
+		}
+	}
+	Dash.VerifyFatal(t, "Active", witnessNodeDomainStatus, "Error validating the status of witness node domain")
 
 	// Activate the clusterdomain again on source cluster in order to make it work for next test.
 	cmdArgs = []string{"activate", "clusterdomain", "--all", "--kubeconfig", srcKubeConfigPath, "-n", defaultAdminNamespace}
@@ -1610,17 +1670,33 @@ func testDRActionMetroFailback(t *testing.T) {
 	Dash.VerifyFatal(t, len(destDeployments.Items), 1, fmt.Sprintf("Expected 1 deployment in destination in %s namespace", mysqlNamespace))
 	Dash.VerifyFatal(t, *destDeployments.Items[0].Spec.Replicas, 0, fmt.Sprintf("Expected 0 replica in destination in deployment in %s namespace", mysqlNamespace))
 
-	// Validate if the clusterdomain is inactive on destination cluster.
+	// Validate if the clusterdomain is INACTIVE on DESTINATION cluster.
 	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(destClusterDomain)
 	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in destination: %v", destClusterDomain, defaultAdminNamespace, err)
 	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainInactive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainInactive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
 
-	// Validate if the clusterdomain is active on source cluster.
+	// Validate if the clusterdomain is ACTIVE on SOURCE cluster.
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 	clusterDomainStatus, err = storkops.Instance().GetClusterDomainsStatus(sourceClusterDomain)
 	log.FailOnError(t, err, "failed to get status for cluster domain %s in namespace %s in source: %v", sourceClusterDomain, defaultAdminNamespace, err)
 	Dash.VerifyFatal(t, clusterDomainStatus.Status.ClusterDomainInfos[0].State, storkv1.ClusterDomainActive, fmt.Sprintf("Expected %s state, got %s", storkv1.ClusterDomainActive, clusterDomainStatus.Status.ClusterDomainInfos[0].State))
+
+	// Validate if the WITNESS node is ACTIVE.
+	cmdArgs = []string{"get", "clusterdomainsstatus", "-o", "json"}
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
+	actualOutput = outputBuffer.String()
+	log.InfoD("Actual output is: %s\n", actualOutput)
+
+	// Parse the JSON output to check the status of the witness node.
+	domainStatus = ClusterDomainStatusOutput{}
+	json.Unmarshal([]byte(actualOutput), &domainStatus)
+	for _, info := range domainStatus.Items[0].Status.ClusterDomainInfos {
+		if info.Name == "witness" {
+			witnessNodeDomainStatus = info.State
+		}
+	}
+	Dash.VerifyFatal(t, "Active", witnessNodeDomainStatus, "Error validating the status of witness node domain")
 
 	// Verify the elasticsearch application is running on the source cluster.
 	expectedReplicas := int32(3)
