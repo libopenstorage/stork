@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ const (
 	// PXIncrementalCountAnnotation is the annotation used to set cloud backup incremental count
 	// for volume
 	PXIncrementalCountAnnotation = "portworx.io/cloudsnap-incremental-count"
+	// kdmpRestorePvcSizePercentageKey - KDMP restore PVC size increase percentage
+	kdmpRestorePvcSizePercentageKey = "KDMP_RESTORE_PVC_SIZE_PERCENTAGE"
 	// trimCRDGroupNameKey - groups name containing the string from this configmap field will be trimmed
 	trimCRDGroupNameKey = "TRIM_CRD_GROUP_NAME"
 	// QuitRestoreCrTimestampUpdate is sent in the channel to informs the go routine to stop any further update
@@ -168,6 +171,27 @@ func GetTrimmedGroupName(group string) string {
 		}
 	}
 	return group
+}
+
+// GetRestorePvcSizePercentage - get the percentage of size that need to increased during the kdmp restore PVC creation.
+// In the case failure, returning zero to assume default 10% value.
+func GetRestorePvcSizePercentage() int {
+	fn := "GetRestorePvcSizePercentage"
+	kdmpData, err := core.Instance().GetConfigMap(drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+	if err != nil {
+		logrus.Debugf("%v: error in reading configMap [%v/%v]",
+			fn, drivers.KdmpConfigmapName, drivers.KdmpConfigmapNamespace)
+		return 0
+	}
+	if len(kdmpData.Data[kdmpRestorePvcSizePercentageKey]) != 0 {
+		sizePercentage, err := strconv.Atoi(kdmpData.Data[kdmpRestorePvcSizePercentageKey])
+		if err != nil {
+			logrus.Debugf("%v: error in converting kdmpRestorePvcSizePercentage to integer: %v", fn, err)
+			return 0
+		}
+		return sizePercentage
+	}
+	return 0
 }
 
 // GetStorageClassNameForPVC - Get the storageClass name from the PVC spec
