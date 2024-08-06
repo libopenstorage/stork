@@ -77,6 +77,12 @@ var (
 		CSIDriverName,
 		KDMPDriverName,
 	}
+
+	// `kubevirt-skip-preload-statfs=true` stork argument can be configured
+	// by the user as per their need through which stork can get to know if to
+	// actually create the configmap and mount the ld.so.preload and px_statfs.so
+	// shared lib onto the virt-launcher container.
+	SkipKubevirtPreloadStatfs bool
 )
 
 // Driver defines an external volume driver interface.

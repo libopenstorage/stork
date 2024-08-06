@@ -44,12 +44,13 @@ const (
 // with stork as scheduler, if given resources are using driver supported
 // by stork
 type Controller struct {
-	Recorder     record.EventRecorder
-	Driver       volume.Driver
-	server       *http.Server
-	lock         sync.Mutex
-	started      bool
-	SkipResource string
+	Recorder                  record.EventRecorder
+	Driver                    volume.Driver
+	server                    *http.Server
+	lock                      sync.Mutex
+	started                   bool
+	SkipResource              string
+	KubevirtSkipPreloadStatFS bool
 }
 
 // Serve method for webhook server
@@ -131,6 +132,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			Allowed: true,
 		}
 	} else {
+		volume.SkipKubevirtPreloadStatfs = c.KubevirtSkipPreloadStatFS
 		// pod object does not have name and namespace populated, so we pass them separately. Also,
 		// if the pod is using generateName, arReq.Name is empty.
 		patches, err = c.Driver.GetPodPatches(arReq.Namespace, &pod)
