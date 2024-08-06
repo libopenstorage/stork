@@ -4385,7 +4385,7 @@ func (p *portworx) IsVirtualMachineSupported() bool {
 }
 
 func (p *portworx) getVirtLauncherPatches(podNamespace string, pod *v1.Pod) ([]k8sutils.JSONPatchOp, error) {
-	if pod.Labels["kubevirt.io"] != "virt-launcher" {
+	if pod.Labels["kubevirt.io"] != "virt-launcher" || storkvolume.SkipKubevirtPreloadStatfs {
 		return nil, nil
 	}
 
