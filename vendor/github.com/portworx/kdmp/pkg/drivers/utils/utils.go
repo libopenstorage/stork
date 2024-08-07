@@ -859,6 +859,20 @@ func GetNodeAffinityFromDeployment(name, namespace string) (*corev1.NodeAffinity
 	return deploy.Spec.Template.Spec.Affinity.NodeAffinity, nil
 }
 
+// GetNodeLabelFromDeployment gets node label from deployment
+func GetNodeLabelFromDeployment(name, namespace, key string) (map[string]string, error) {
+	nodeLabel := make(map[string]string)
+	deploy, err := core.Instance().GetConfigMap(name, namespace)
+	if err != nil {
+		return nil, err
+	}
+	value, ok := deploy.Data[key]
+	if ok && value != "" {
+		nodeLabel[key] = value
+	}
+	return nodeLabel, nil
+}
+
 // IsJobPodMountFailed - checks for mount failure in a Job pod
 func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 	fn := "IsJobPodMountFailed"
@@ -1126,4 +1140,31 @@ func PauseCleanupResource() (time.Duration, error) {
 		}
 	}
 	return pauseCleanupVal, nil
+}
+
+// AddNodeAffinityToJob adds node affinity to the job spec
+func AddNodeAffinityToJob(job *batchv1.Job, jobOption drivers.JobOpts) (*batchv1.Job, error) {
+	if len(jobOption.NodeAffinity) > 0 {
+		matchExpressions := []corev1.NodeSelectorRequirement{}
+		for key, val := range jobOption.NodeAffinity {
+			expression := corev1.NodeSelectorRequirement{
+				Key:      key,
+				Operator: corev1.NodeSelectorOpIn,
+				Values:   []string{val},
+			}
+			matchExpressions = append(matchExpressions, expression)
+		}
+		job.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: matchExpressions,
+						},
+					},
+				},
+			},
+		}
+	}
+	return job, nil
 }

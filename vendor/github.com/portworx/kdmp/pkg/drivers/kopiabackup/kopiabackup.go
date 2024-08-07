@@ -273,6 +273,7 @@ func jobFor(
 	jobName string,
 	resources corev1.ResourceRequirements,
 	nodeName string,
+	live bool,
 ) (*batchv1.Job, error) {
 	backupName := jobName
 
@@ -410,6 +411,14 @@ func jobFor(
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
 
+	// Add node affinity to the job spec
+	if !live {
+		job, err = utils.AddNodeAffinityToJob(job, jobOption)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if len(jobOption.NfsServer) != 0 {
 		volumeMount := corev1.VolumeMount{
 			Name:      utils.NfsVolumeName,
@@ -493,8 +502,8 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 		return nil, fmt.Errorf(errMsg)
 	}
 	var resourceNamespace string
-	var live bool
 	var nodeName string
+	var live bool
 	// filter out the pods that are create by us
 	for _, pod := range pods {
 		labels := pod.ObjectMeta.Labels
@@ -505,11 +514,12 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 			// get the nodeName, if the pods is in Running state, So that we can schedule
 			// kopia job on the same node.
 			nodeName = pod.Spec.NodeName
+			live = true
 			break
 		}
 	}
 	resourceNamespace = jobOptions.Namespace
-	if err := utils.SetupServiceAccount(jobName, resourceNamespace, roleFor(live)); err != nil {
+	if err := utils.SetupServiceAccount(jobName, resourceNamespace, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", resourceNamespace, jobName, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
@@ -519,10 +529,11 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 		jobName,
 		resources,
 		nodeName,
+		live,
 	)
 }
 
-func roleFor(live bool) *rbacv1.Role {
+func roleFor() *rbacv1.Role {
 	role := &rbacv1.Role{
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -531,23 +542,6 @@ func roleFor(live bool) *rbacv1.Role {
 				Verbs:     []string{rbacv1.VerbAll},
 			},
 		},
-	}
-	// Only live backup, we will add the hostaccess and privilege option.
-	if live {
-		hostAccessRule := rbacv1.PolicyRule{
-			APIGroups:     []string{"security.openshift.io"},
-			Resources:     []string{"securitycontextconstraints"},
-			ResourceNames: []string{"hostaccess"},
-			Verbs:         []string{"use"},
-		}
-		role.Rules = append(role.Rules, hostAccessRule)
-		PrivilegedRule := rbacv1.PolicyRule{
-			APIGroups:     []string{"security.openshift.io"},
-			Resources:     []string{"securitycontextconstraints"},
-			ResourceNames: []string{"privileged"},
-			Verbs:         []string{"use"},
-		}
-		role.Rules = append(role.Rules, PrivilegedRule)
 	}
 	return role
 }
