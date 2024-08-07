@@ -112,18 +112,18 @@ func (mr *MockSharedInformerCacheMockRecorder) ListStorageClasses() *gomock.Call
 }
 
 // ListTransformedPods mocks base method.
-func (m *MockSharedInformerCache) ListTransformedPods() (*v1.PodList, error) {
+func (m *MockSharedInformerCache) ListTransformedPods(arg0 string) (*v1.PodList, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListTransformedPods")
+	ret := m.ctrl.Call(m, "ListTransformedPods", arg0)
 	ret0, _ := ret[0].(*v1.PodList)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListTransformedPods indicates an expected call of ListTransformedPods.
-func (mr *MockSharedInformerCacheMockRecorder) ListTransformedPods() *gomock.Call {
+func (mr *MockSharedInformerCacheMockRecorder) ListTransformedPods(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTransformedPods", reflect.TypeOf((*MockSharedInformerCache)(nil).ListTransformedPods))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTransformedPods", reflect.TypeOf((*MockSharedInformerCache)(nil).ListTransformedPods), arg0)
 }
 
 // WatchPods mocks base method.
