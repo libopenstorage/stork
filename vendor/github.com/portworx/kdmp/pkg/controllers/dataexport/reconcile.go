@@ -1903,6 +1903,11 @@ func startTransferJob(
 		psaJobUid = getAnnotationValue(dataExport, utils.PsaUIDKey)
 		psaJobGid = getAnnotationValue(dataExport, utils.PsaGIDKey)
 	}
+	nodeLabel, err := utils.GetNodeLabelFromDeployment(jobConfigMap, jobConfigMapNs, drivers.PxbJobNodeLabelKey)
+	if err != nil {
+		return "", err
+	}
+
 	switch drv.Name() {
 	case drivers.Rsync:
 		return drv.StartJob(
@@ -1947,6 +1952,7 @@ func startTransferJob(
 			drivers.WithExcludeFileList(excludeFileList),
 			drivers.WithPodDatapathType(podDataPath),
 			drivers.WithJobConfigMap(jobConfigMap),
+			drivers.WithNodeAffinity(nodeLabel),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
 			drivers.WithNfsServer(nfsServerAddr),
 			drivers.WithNfsExportDir(nfsExportPath),
@@ -1969,6 +1975,7 @@ func startTransferJob(
 			drivers.WithCertSecretNamespace(dataExport.Spec.Destination.Namespace),
 			drivers.WithJobConfigMap(jobConfigMap),
 			drivers.WithJobConfigMapNs(jobConfigMapNs),
+			drivers.WithNodeAffinity(nodeLabel),
 			drivers.WithNfsServer(nfsServerAddr),
 			drivers.WithNfsExportDir(nfsExportPath),
 			drivers.WithPodUserId(psaJobUid),
@@ -2396,6 +2403,11 @@ func startNfsCSIRestoreVolumeJob(
 		logrus.Errorf("failed to create NFS cred secret: %v", err)
 		return "", fmt.Errorf("failed to create NFS cred secret: %v", err)
 	}
+	nodeLabel, err := utils.GetNodeLabelFromDeployment(jobConfigMap, jobConfigMapNs, drivers.PxbJobNodeLabelKey)
+	if err != nil {
+		return "", err
+	}
+
 	switch drv.Name() {
 	case drivers.NFSCSIRestore:
 		return drv.StartJob(
@@ -2410,6 +2422,7 @@ func startNfsCSIRestoreVolumeJob(
 			drivers.WithNfsSubPath(bl.Location.Path),
 			drivers.WithPodUserId(psaJobUid),
 			drivers.WithPodGroupId(psaJobGid),
+			drivers.WithNodeAffinity(nodeLabel),
 		)
 	}
 	return "", fmt.Errorf("unknown driver for nfs csi volume restore: %s", drv.Name())

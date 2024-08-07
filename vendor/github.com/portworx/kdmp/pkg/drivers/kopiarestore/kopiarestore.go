@@ -307,6 +307,12 @@ func jobFor(
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
 
+	// Add node affinity to the job spec
+	job, err = utils.AddNodeAffinityToJob(job, jobOption)
+	if err != nil {
+		return nil, err
+	}
+
 	if drivers.CertFilePath != "" {
 		volumeMount := corev1.VolumeMount{
 			Name:      utils.TLSCertMountVol,
