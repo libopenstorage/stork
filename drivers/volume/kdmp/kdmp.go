@@ -44,6 +44,8 @@ const (
 	volumeinitialDelay = 2 * time.Second
 	volumeFactor       = 1.5
 	volumeSteps        = 20
+	// By default, will increase the pvc size by 10% of snapshot size, if snapshot size is greater than pvc size
+	defaultPvcSizeIncreasePercentage = 10
 	// StorkAPIVersion current api version supported by stork
 	StorkAPIVersion = "stork.libopenstorage.org/v1alpha1"
 	// KdmpAPIVersion current api version supported by KDMP
@@ -749,12 +751,26 @@ func (k *kdmp) StartRestore(
 			pvc.Name = bkpvInfo.PersistentVolumeClaim
 			pvc.Namespace = restoreNamespace
 		}
-		// Check if the snapshot size is larger than the pvc size.
-		// Update the pvc size to that of the snapshot size if so.
+		// Below two cases, we will change the PVC original size.
+		// case1: If the snapshot size is greater than the PVC size. In some of the filesystem
+		// provisioned PVC, the content of the PVC is allowed to grow beyond the PVC size.
+		// case2: If the snapshot size + 10% of the snapshot size goes beyind the PVC size.
+		// We also allow the customer to configure the sizePercentage to configured, if the 10% does not
+		// satisfy their storage provisioner.
+		// KDMP_RESTORE_PVC_SIZE_PERCENTAGE parameter need to be added to the kdmp-config configmap in kube-system namespace.
+		sizePercentage := utils.GetRestorePvcSizePercentage()
+		if sizePercentage == 0 {
+			sizePercentage = defaultPvcSizeIncreasePercentage
+		}
+		logrus.Infof("StartRestore: sizePercentage is - %v", sizePercentage)
+		totalSize := int64(bkpvInfo.TotalSize)
+		newPvcQuantity := resource.NewQuantity(
+			totalSize+((int64(sizePercentage)*int64(bkpvInfo.TotalSize))/int64(100)),
+			resource.BinarySI,
+		)
 		pvcQuantity := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-		if pvcQuantity.CmpInt64(int64(bkpvInfo.TotalSize)) == -1 {
-			newPvcQuantity := resource.NewQuantity(int64(bkpvInfo.TotalSize), resource.BinarySI)
-			logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, newPvcQuantity.String())
+		if (pvcQuantity.Cmp(*newPvcQuantity)) == -1 {
+			logrus.Debugf("StartRestore: setting size of pvc %s/%s to accommodate snapshot size with buffer %s", pvc.Namespace, pvc.Name, newPvcQuantity.String())
 			pvc.Spec.Resources.Requests[v1.ResourceStorage] = *newPvcQuantity
 		}
 		volumeInfo.PersistentVolumeClaim = bkpvInfo.PersistentVolumeClaim
