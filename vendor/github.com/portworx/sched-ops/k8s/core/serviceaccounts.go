@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -19,6 +20,8 @@ type ServiceAccountOps interface {
 	DeleteServiceAccount(accountName, namespace string) error
 	// ListServiceAccount in given namespace
 	ListServiceAccount(namespace string, opts metav1.ListOptions) (*corev1.ServiceAccountList, error)
+	// CreateToken creates a token associated with a serviceaccount through a tokenRequest
+	CreateToken(name, namespace string, tokenRequest *authenticationv1.TokenRequest) (*authenticationv1.TokenRequest, error)
 }
 
 // CreateServiceAccount creates the given service account
@@ -66,4 +69,13 @@ func (c *Client) DeleteServiceAccount(accountName, namespace string) error {
 	return c.kubernetes.CoreV1().ServiceAccounts(namespace).Delete(context.TODO(), accountName, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+// CreateToken creates the server's representation of the tokenRequest associated with a service account
+func (c *Client) CreateToken(name, namespace string, tokenRequest *authenticationv1.TokenRequest) (*authenticationv1.TokenRequest, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubernetes.CoreV1().ServiceAccounts(namespace).CreateToken(context.TODO(), name, tokenRequest, metav1.CreateOptions{})
 }

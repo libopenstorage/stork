@@ -3,6 +3,7 @@ package kdmp
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/watch"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/errors"
@@ -26,6 +27,8 @@ type DataExportOps interface {
 	DeleteDataExport(string, string) error
 	// ValidateDataExport validates the DataExport CR
 	ValidateDataExport(string, string, time.Duration, time.Duration) error
+	// WatchDataExport sends a watcher for DataExport CR
+	WatchDataExport(string, metav1.ListOptions) (watch.Interface, error)
 }
 
 // CreateDataExport creates the DataExport CR
@@ -105,4 +108,16 @@ func (c *Client) ValidateDataExport(name string, namespace string, timeout, retr
 	}
 
 	return nil
+}
+
+// WatchDataExport sends a watcher for DataExport CR
+func (c *Client) WatchDataExport(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	watcher, err := c.kdmp.KdmpV1alpha1().DataExports(namespace).Watch(context.TODO(), opts)
+	if err != nil {
+		return nil, err
+	}
+	return watcher, nil
 }
