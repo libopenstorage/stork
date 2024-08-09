@@ -449,7 +449,8 @@ sed -i 's/- -backup-scale-count=10/- -backup-scale-count='"$backup_scale"'/g' /t
 sed -i 's/- -kubevirt-scale-count=1/- -kubevirt-scale-count='"$kubevirt_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
-sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
+sed -i 's/'cluster_domain_prefix'/'"$CLUSTER_DOMAIN_PREFIX"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
 sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'provider'/'"$PROVIDER"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'nfs_server_address'/'"$NFS_SERVER_ADDRESS"'/g' /testspecs/stork-test-pod.yaml

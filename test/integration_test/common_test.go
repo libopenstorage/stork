@@ -5,6 +5,8 @@ package integrationtest
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -117,23 +119,23 @@ const (
 	defaultWaitInterval      time.Duration = 10 * time.Second
 	backupWaitInterval       time.Duration = 2 * time.Second
 
-	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
-	storkTestClusterDomain   = "STORK_TEST_CLUSTER_DOMAIN"
-	storageProvisioner       = "STORAGE_PROVISIONER"
-	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
-	backupPathVar            = "BACKUP_LOCATION_PATH"
-	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
-	cloudDeletionValidation  = "CLOUD_DELETION_VALIDATION"
-	internalLBAws            = "INTERNAL_AWS_LB"
-	portworxNamespace        = "PX_NAMESPACE"
-	enableDashStats          = "ENABLE_DASH"
-	providerEnv              = "PROVIDER"
-	nfsServerAddressEnv      = "NFS_SERVER_ADDRESS"
-	nfsServerExportPathEnv   = "NFS_EXPORT_PATH"
-	s3SecretName             = "s3secret"
-	azureSecretName          = "azuresecret"
-	googleSecretName         = "googlesecret"
-	nfsSecretName            = "nfssecret"
+	enableClusterDomainTests     = "ENABLE_CLUSTER_DOMAIN_TESTS"
+	storkTestClusterDomainPrefix = "CLUSTER_DOMAIN_PREFIX"
+	storageProvisioner           = "STORAGE_PROVISIONER"
+	authSecretConfigMap          = "AUTH_SECRET_CONFIGMAP"
+	backupPathVar                = "BACKUP_LOCATION_PATH"
+	externalTestCluster          = "EXTERNAL_TEST_CLUSTER"
+	cloudDeletionValidation      = "CLOUD_DELETION_VALIDATION"
+	internalLBAws                = "INTERNAL_AWS_LB"
+	portworxNamespace            = "PX_NAMESPACE"
+	enableDashStats              = "ENABLE_DASH"
+	providerEnv                  = "PROVIDER"
+	nfsServerAddressEnv          = "NFS_SERVER_ADDRESS"
+	nfsServerExportPathEnv       = "NFS_EXPORT_PATH"
+	s3SecretName                 = "s3secret"
+	azureSecretName              = "azuresecret"
+	googleSecretName             = "googlesecret"
+	nfsSecretName                = "nfssecret"
 
 	tokenKey    = "token"
 	clusterIP   = "ip"
@@ -2184,4 +2186,72 @@ func setDefaultsForMigration(t *testing.T) {
 	if !defaultsBackupSet {
 		defaultsBackupSet = true
 	}
+}
+
+// validateClusterDomainStatus validates the cluster domain status for the source, destination and witness clusters.
+func validateClusterDomainStatus(t *testing.T, activeSource, activeDest bool) {
+	var actualSrcDomainStatus, actualDestDomainStatus, witnessNodeDomainStatus string
+	var expectedSrcDomainStatus, expectedDestDomainStatus = "Active", "Active"
+
+	type ClusterDomainStatusOutput struct {
+		Kind       string `json:"kind"`
+		APIVersion string `json:"apiVersion"`
+		Metadata   struct {
+			ResourceVersion string `json:"resourceVersion"`
+		} `json:"metadata"`
+		Items []struct {
+			Kind       string `json:"kind"`
+			APIVersion string `json:"apiVersion"`
+			Metadata   struct {
+				Name              string    `json:"name"`
+				UID               string    `json:"uid"`
+				ResourceVersion   string    `json:"resourceVersion"`
+				Generation        int       `json:"generation"`
+				CreationTimestamp time.Time `json:"creationTimestamp"`
+			} `json:"metadata"`
+			Status struct {
+				LocalDomain        string `json:"localDomain"`
+				ClusterDomainInfos []struct {
+					Name       string `json:"name"`
+					State      string `json:"state"`
+					SyncStatus string `json:"syncStatus"`
+				} `json:"clusterDomainInfos"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+
+	// Set the expected values of cluster domain status.
+	if !activeSource {
+		expectedSrcDomainStatus = "Inactive"
+	}
+	if !activeDest {
+		expectedDestDomainStatus = "Inactive"
+	}
+
+	// Get the actual clusterdomain status.
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	cmdArgs := []string{"get", "clusterdomainsstatus", "-o", "json"}
+	executeStorkCtlCommand(t, cmd, cmdArgs, nil)
+	actualOutput := outputBuffer.String()
+	log.InfoD("Actual output is: %s\n", actualOutput)
+
+	// Parse the JSON output to check the status of the witness node.
+	domainStatus := ClusterDomainStatusOutput{}
+	json.Unmarshal([]byte(actualOutput), &domainStatus)
+	for _, info := range domainStatus.Items[0].Status.ClusterDomainInfos {
+		switch info.Name {
+		case "witness":
+			witnessNodeDomainStatus = info.State
+		case sourceClusterDomain:
+			actualSrcDomainStatus = info.State
+		case destClusterDomain:
+			actualDestDomainStatus = info.State
+		}
+	}
+
+	Dash.VerifyFatal(t, witnessNodeDomainStatus, "Active", "Error validating the status of witness node domain")
+	Dash.VerifyFatal(t, actualSrcDomainStatus, expectedSrcDomainStatus, "Error validating the status of source cluster domain")
+	Dash.VerifyFatal(t, actualDestDomainStatus, expectedDestDomainStatus, "Error validating the status of destination cluster domain")
 }
