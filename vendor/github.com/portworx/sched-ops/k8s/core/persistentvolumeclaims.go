@@ -312,16 +312,18 @@ func (c *Client) GetPVCsUsingStorageClass(scName string) ([]corev1.PersistentVol
 // GetStorageProvisionerForPVC returns storage provisioner for given PVC if it exists
 func (c *Client) GetStorageProvisionerForPVC(pvc *corev1.PersistentVolumeClaim) (string, error) {
 	// first try to get the provisioner directly from the annotations
-	provisionerName, present := pvc.Annotations[pvcStorageProvisionerKey]
-	if present {
+	provisionerName := pvc.Annotations[pvcStorageProvisionerKey]
+	if provisionerName != "" {
 		return provisionerName, nil
 	}
-
+	provisionerName = pvc.Annotations[pvcStorageProvisionerKeyDeprecated]
+	if provisionerName != "" {
+		return provisionerName, nil
+	}
 	sc, err := c.GetStorageClassForPVC(pvc)
 	if err != nil {
 		return "", err
 	}
-
 	return sc.Provisioner, nil
 }
 

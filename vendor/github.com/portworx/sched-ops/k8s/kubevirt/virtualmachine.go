@@ -3,6 +3,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
@@ -145,7 +146,12 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 	if runStrategy != kubevirtv1.RunStrategyAlways && (vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopped ||
 		vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopping) {
 		if err = c.StartVirtualMachine(vm); err != nil {
-			return fmt.Errorf("failed to start VirtualMachine %s/%s: %w", namespace, name, err)
+			if strings.Contains(err.Error(), "VM is already running") {
+				// Proceed if the VM is already running
+				fmt.Printf("VM [%s] in namespace [%s] is already running, proceeding with validation", vm.Name, vm.Namespace)
+			} else {
+				return fmt.Errorf("failed to start VirtualMachine: %v", err)
+			}
 		}
 	}
 
