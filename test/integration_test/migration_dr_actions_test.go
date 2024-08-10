@@ -1597,7 +1597,6 @@ func testDRActionMetroFailback(t *testing.T) {
 	// Validate cluster domain status of source, destination and witness node.
 	validateClusterDomainStatus(t, true, true)
 
-	// Validate if the clusterdomain is ACTIVE on SOURCE cluster.
 	err = setSourceKubeConfig()
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
