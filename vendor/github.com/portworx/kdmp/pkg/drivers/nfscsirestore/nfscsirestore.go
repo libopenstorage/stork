@@ -286,6 +286,13 @@ func jobForRestoreCSISnapshot(
 	if len(imageRegistrySecret) != 0 {
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))
 	}
+
+	// Add node affinity to the job spec
+	job, err = utils.AddNodeAffinityToJob(job, jobOption)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(jobOption.NfsServer) != 0 {
 		volumeMount := corev1.VolumeMount{
 			Name:      utils.NfsVolumeName,
