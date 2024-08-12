@@ -62,6 +62,13 @@ type DriveConfig struct {
 	Labels map[string]string
 }
 
+type DiskResource struct {
+	PoolId    string
+	Device    string
+	MediaType string
+	SizeInGib uint64
+}
+
 // Options to pass to APIs
 type Options struct {
 	ValidateReplicationUpdateTimeout time.Duration
@@ -129,10 +136,10 @@ type Driver interface {
 
 	// ValidateCreateSnapshot validates whether a snapshot has been created properly.
 	// params are the custom volume options passed
-	ValidateCreateSnapshot(name string, params map[string]string) error
+	ValidateCreateSnapshot(name string, params map[string]string) (string, error)
 
 	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
-	ValidateCreateSnapshotUsingPxctl(name string) error
+	ValidateCreateSnapshotUsingPxctl(name string) (string, error)
 
 	// GetCloudsnaps returns cloudsnap backups
 	// params are the custom backup options passed
@@ -141,6 +148,10 @@ type Driver interface {
 	// DeleteAllCloudsnaps deletes all  cloudsnap backups
 	// params are the custom backup options passed
 	DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error
+
+	// GetCloudsnapsOfGivenVolume returns cloudsnap backups of given volume
+	// params are the custom backup options passed
+	GetCloudsnapsOfGivenVolume(volumeName string, sourceVolumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error)
 
 	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
 	// params are the custom backup options passed
@@ -460,7 +471,7 @@ type Driver interface {
 	AddBlockDrives(n *node.Node, drivePath []string) error
 
 	// GetPoolDrives returns the map of poolID and drive name
-	GetPoolDrives(n *node.Node) (map[string][]string, error)
+	GetPoolDrives(n *node.Node) (map[string][]DiskResource, error)
 
 	// AddCloudDrive add cloud drives to the node using PXCTL
 	AddCloudDrive(n *node.Node, devcieSpec string, poolID int32) error
@@ -518,6 +529,27 @@ type Driver interface {
 
 	// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
 	ValidatePureFBDAMountSource(nodes []node.Node, vols []*Volume, expectedIP string) error
+
+	// CreateDefragSchedule create defrag schedule
+	CreateDefragSchedule(startTime string, defragJob *api.DefragJob) (*api.SdkCreateDefragScheduleResponse, error)
+
+	// GetDefragNodeStatus  get defrag schedule status on a given node
+	GetDefragNodeStatus(n node.Node) (*api.SdkGetDefragNodeStatusResponse, error)
+
+	// GetDefragClusterStatus get defrag schedule status for whole cluster
+	GetDefragClusterStatus() (*api.SdkEnumerateDefragStatusResponse, error)
+
+	// CleanUpDefragSchedules cleans up all defrag schedules and stop all defrag operations
+	CleanUpDefragSchedules() error
+
+	// DeleteDefragSchedule delete specificed defrag schedule
+	DeleteDefragSchedule(defragSchedId string) error
+
+	// GetAllDefragSchedules return all defrag schedules in a cluster
+	GetAllDefragSchedules() (*api.SdkEnumerateSchedulesResponse, error)
+
+	// InspectDefragSchedules return information about provided schedule id
+	InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
@@ -526,6 +558,8 @@ type StorageProvisionerType string
 const (
 	// DefaultStorageProvisioner default storage provisioner name
 	DefaultStorageProvisioner StorageProvisionerType = "portworx"
+	// CSIStorageProvisioner is the CSI (Container Storage Interface) storage provisioner name
+	CSIStorageProvisioner StorageProvisionerType = "csi"
 )
 
 var (

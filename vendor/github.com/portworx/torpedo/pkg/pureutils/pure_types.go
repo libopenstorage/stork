@@ -33,6 +33,7 @@ type FlashArrayEntry struct {
 	APIToken     string            `json:"APIToken"`
 	MgmtEndPoint string            `json:"MgmtEndPoint"`
 	Labels       map[string]string `json:"Labels"`
+	Realm        string            `json:"Realm"`
 }
 
 type FlashBladeEntry struct {
