@@ -2152,7 +2152,8 @@ func validateClusterDomainStatus(t *testing.T, activeSource, activeDest bool) {
 
 	// Parse the JSON output to check the status of the witness node.
 	domainStatus := ClusterDomainStatusOutput{}
-	json.Unmarshal([]byte(actualOutput), &domainStatus)
+	err := json.Unmarshal([]byte(actualOutput), &domainStatus)
+	log.FailOnError(t, err, "failed to unmarshal clusterdomain status json output")
 	for _, info := range domainStatus.Items[0].Status.ClusterDomainInfos {
 		switch info.Name {
 		case "witness":
