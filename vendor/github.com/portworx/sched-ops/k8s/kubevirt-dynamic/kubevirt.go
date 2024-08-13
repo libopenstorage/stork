@@ -241,6 +241,27 @@ func (c *Client) unstructuredFindKeyValInt64(
 	return nil, nil
 }
 
+// unstructuredGetStringValuesForKey scans the specified slice of maps and returns string values
+// for the specified key.
+// The input slice members are expected to be of type map[string]interface{}.
+func (c *Client) unstructuredGetStringValuesForKey(data []interface{}, key string) ([]string, error) {
+	var ret []string
+	for _, rawMap := range data {
+		typedMap, ok := rawMap.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("wrong type of element in slice: expected map[string]interface{}, actual %T", rawMap)
+		}
+		mapVal, found, err := c.unstructuredGetValString(typedMap, key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get key %q in map in the slice", key)
+		} else if !found {
+			continue
+		}
+		ret = append(ret, mapVal)
+	}
+	return ret, nil
+}
+
 func (c *Client) unstructuredGetStringAsBool(obj map[string]interface{}, fields ...string) (bool, bool, error) {
 	ret := false
 	val, found, err := unstructured.NestedString(obj, fields...)
