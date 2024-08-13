@@ -88,8 +88,19 @@ func TestDataExportRsync(t *testing.T) {
 			destPVC = pvc.Name
 			destPVCObj = pvc
 			var err error
-			destPV, err = core.Instance().GetVolumeForPersistentVolumeClaim(pvc)
-			log.FailOnError(t, err, "failed to get dest PV")
+
+			for i := 0; i < 10; i++ {
+				destPV, err = core.Instance().GetVolumeForPersistentVolumeClaim(pvc)
+				log.FailOnError(t, err, "failed to get dest PV")
+
+				if destPV != "" {
+					break
+				}
+				time.Sleep(6 * time.Second)
+			}
+			if destPV == "" {
+				Dash.Fatal("failed to get destination volume, expected a volume id got blank", destPV)
+			}
 		}
 	}
 	Dash.VerifyFatal(t, namespace != "", true, "Find namespace")
