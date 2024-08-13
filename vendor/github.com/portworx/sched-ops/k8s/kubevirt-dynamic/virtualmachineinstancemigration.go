@@ -13,6 +13,8 @@ import (
 const (
 	// migrationPhaseFailed is the phase when the migration has failed
 	migrationPhaseFailed = "Failed"
+	// migrationPhaseSucceeded is the phase when the migration has succeeded
+	migrationPhaseSucceeded = "Succeeded"
 )
 
 var (
@@ -224,8 +226,8 @@ func (c *Client) unstructuredGetVMIMigration(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get 'completed' from the vmi migration status: %w", err)
 	}
-	// migrationState is not present if the pod fails to get scheduled; we need to look at the Phase
-	if !found && ret.Phase == migrationPhaseFailed {
+	// sometimes migrationState is not present; we need to look at the Phase
+	if !found && (ret.Phase == migrationPhaseFailed || ret.Phase == migrationPhaseSucceeded) {
 		ret.Completed = true
 	}
 	// failed
