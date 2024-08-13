@@ -30,6 +30,7 @@ const (
 	initialNodeWaitDelay = 10 * time.Second
 	nodeWaitFactor       = 2
 	nodeWaitSteps        = 5
+	podDeleteBatchSize   = 5
 
 	storageDriverOfflineReason = "StorageDriverOffline"
 )
@@ -298,30 +299,60 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo, k8sNode *v1.Node)
 		log.Errorf("Error cleaning up volume attachments: %v", err)
 	}
 
+	podsSelectedForDeletion := make([]v1.Pod, 0)
+	csiPodsSelectedForDeletion := make([]v1.Pod, 0)
 	for _, pod := range pods.Items {
-		var msg string
 		csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
 		if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
-			msg = fmt.Sprintf("Deleting csi pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			csiPodsSelectedForDeletion = append(csiPodsSelectedForDeletion, pod)
 		} else {
 			if len(pod.Spec.Volumes) == 0 {
 				// Pod does not have any volumes. So, no need to check further
 				continue
 			}
-			msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 			owns, err := m.doesDriverOwnPodVolumes(&pod)
 			if err != nil || !owns {
 				continue
 			}
+			podsSelectedForDeletion = append(podsSelectedForDeletion, pod)
 		}
-		storklog.PodLog(&pod).Infof(msg)
-		m.Recorder.Event(&pod, v1.EventTypeWarning, storageDriverOfflineReason, msg)
-		err = core.Instance().DeletePods([]v1.Pod{pod}, true)
+	}
+
+	// Delete CSI pods first
+	m.batchDeleteOfPodsFromOfflineNodes(csiPodsSelectedForDeletion, node, true)
+
+	// Do batch deletes of rest of the pods
+	m.batchDeleteOfPodsFromOfflineNodes(podsSelectedForDeletion, node, false)
+}
+
+// batchDeleteOfPodsFromOfflineNodes deletes the pods in batches of batchSize
+// and increments the HealthCounter by the number of pods deleted
+func (m *Monitor) batchDeleteOfPodsFromOfflineNodes(
+	pods []v1.Pod,
+	node *volume.NodeInfo,
+	csiPods bool) {
+	for i := 0; i < len(pods); i += podDeleteBatchSize {
+		end := i + podDeleteBatchSize
+		if end > len(pods) {
+			end = len(pods)
+		}
+		counterIncrement := end - i
+		for _, pod := range pods[i:end] {
+			var msg string
+			if csiPods {
+				msg = fmt.Sprintf("Deleting CSI Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			} else {
+				msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			}
+			storklog.PodLog(&pod).Infof(msg)
+			m.Recorder.Event(&pod, v1.EventTypeWarning, storageDriverOfflineReason, msg)
+		}
+
+		err := core.Instance().DeletePods(pods[i:end], true)
 		if err != nil {
-			storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
-			continue
+			log.Errorf("Error deleting pods: %v", err)
 		}
-		HealthCounter.Inc()
+		HealthCounter.Add(float64(counterIncrement))
 	}
 }
 
