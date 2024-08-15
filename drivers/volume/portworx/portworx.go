@@ -3206,9 +3206,6 @@ func (p *portworx) getDomainToNodesMap(nodes []*api.Node) (map[string][]*api.Nod
 		if nodeConfig.ClusterDomain == "" {
 			continue
 		}
-		if _, ok := domainToNodeMap[nodeConfig.ClusterDomain]; !ok {
-			domainToNodeMap[nodeConfig.ClusterDomain] = []*api.Node{}
-		}
 		domainToNodeMap[nodeConfig.ClusterDomain] = append(domainToNodeMap[nodeConfig.ClusterDomain], node)
 	}
 	return domainToNodeMap, nil

@@ -514,7 +514,7 @@ func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(*storkapi.ClusterDo
 	return &errors.ErrNotSupported{}
 }
 
-// DeactivateClusterDomain deactivates a cluster domain
+// GetClusterDomainNodes returns all the cluster domains with their nodes
 func (c *ClusterDomainsNotSupported) GetClusterDomainNodes() (map[string][]*api.Node, error) {
 	return nil, &errors.ErrNotSupported{}
 }
