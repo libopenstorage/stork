@@ -100,6 +100,7 @@ mockgen:
 	mockgen -destination=pkg/mock/kubevirtdynamic/kubevirt-dynamic.vmiops.mock.go -package=kubevirtdynamic github.com/portworx/sched-ops/k8s/kubevirt-dynamic VirtualMachineInstanceOps
 	mockgen -destination=pkg/mock/kubevirt/kubevirt.ops.mock.go -package=kubevirt github.com/portworx/sched-ops/k8s/kubevirt Ops
 	mockgen -destination=pkg/mock/osd/driver.mock.go -package=osd github.com/libopenstorage/openstorage/volume VolumeDriver
+	mockgen -destination=drivers/volume/mock/volume/driver.mock.go -package=drivervolume github.com/libopenstorage/stork/drivers/volume Driver
 
 errcheck:
 	  docker run --rm  $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \

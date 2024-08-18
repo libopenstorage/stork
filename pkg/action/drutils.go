@@ -2,10 +2,12 @@ package action
 
 import (
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/stork/pkg/resourceutils"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
@@ -601,19 +603,7 @@ func (ac *ActionController) remoteClusterDomainUpdate(activate bool, action *sto
 
 	log.ActionLog(action).Infof("Count of cluster domains: %v ; Current cluster domains: %v", len(currentClusterDomains.ClusterDomainInfos), currentClusterDomains)
 
-	var remoteDomainName string
-	for _, apiDomainInfo := range currentClusterDomains.ClusterDomainInfos {
-		if apiDomainInfo.Name == currentClusterDomains.LocalDomain {
-			continue
-		}
-		if domainToNodesMap[apiDomainInfo.Name] != nil && len(domainToNodesMap[apiDomainInfo.Name]) == 1 {
-			log.ActionLog(action).Debugf("Skipping activation/deactivation of cluster domain: %v as it is the witness node", apiDomainInfo.Name)
-			continue
-		}
-		remoteDomainName = apiDomainInfo.Name
-		break
-	}
-
+	remoteDomainName := ac.getRemoteNodeName(action, currentClusterDomains, domainToNodesMap)
 	if remoteDomainName != "" {
 		cduName := uuid.New()
 		clusterDomainUpdate := &storkv1.ClusterDomainUpdate{
@@ -821,4 +811,20 @@ func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*r
 		&clientcmd.ConfigOverrides{},
 		clientcmd.NewDefaultClientConfigLoadingRules())
 	return remoteClientConfig.ClientConfig()
+}
+
+func (ac *ActionController) getRemoteNodeName(action *storkv1.Action, clusterDomains *storkv1.ClusterDomains, domainToNodesMap map[string][]*api.Node) string {
+	var remoteDomainName string
+	for _, apiDomainInfo := range clusterDomains.ClusterDomainInfos {
+		if apiDomainInfo.Name == clusterDomains.LocalDomain {
+			continue
+		}
+		if domainToNodesMap[apiDomainInfo.Name] != nil && len(domainToNodesMap[apiDomainInfo.Name]) == 1 {
+			log.ActionLog(action).Debugf("Skipping activation/deactivation of cluster domain: %v as it is the witness node", apiDomainInfo.Name)
+			continue
+		}
+		remoteDomainName = apiDomainInfo.Name
+		break
+	}
+	return remoteDomainName
 }
