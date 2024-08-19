@@ -286,7 +286,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo, k8sNode *v1.Node)
 		pods, err = storkcache.Instance().ListTransformedPods(k8sNode.Name)
 	} else {
 		log.Warnf("shared informer cache has not been initialized.")
-		pods, err = core.Instance().GetPods("", nil)
+		pods, err = core.Instance().GetPodsByNode(k8sNode.Name, "")
 	}
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
@@ -466,7 +466,7 @@ func (m *Monitor) getVolumeDriverNodesToK8sNodeMap(driverNodes []*volume.NodeInf
 	for _, k8sNode := range k8sNodes.Items {
 		for _, driverNode := range driverNodes {
 			if m.isSameK8sNode(&k8sNode, driverNode) {
-				nodeMap[driverNode.StorageID] = &k8sNode
+				nodeMap[driverNode.StorageID] = k8sNode.DeepCopy()
 			}
 		}
 	}
