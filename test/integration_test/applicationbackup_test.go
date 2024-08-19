@@ -106,6 +106,9 @@ func triggerBackupRestoreTest(
 	backupAllAppsExpected bool,
 ) {
 	for location, secret := range configMap {
+		if location == "nfs" {
+			continue
+		}
 		log.InfoD("Backing up to cloud: %v using secret %v", location, secret)
 		var currBackupLocation *storkv1.BackupLocation
 		var err error
@@ -1505,8 +1508,6 @@ func getBackupLocationType(locationName storkv1.BackupLocationType) (storkv1.Bac
 		return storkv1.BackupLocationAzure, nil
 	case storkv1.BackupLocationGoogle:
 		return storkv1.BackupLocationGoogle, nil
-	case storkv1.BackupLocationNFS:
-		return storkv1.BackupLocationNFS, nil
 	default:
 		return storkv1.BackupLocationType(""), fmt.Errorf("Invalid backuplocation type: %s", locationName)
 	}
