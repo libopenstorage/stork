@@ -3168,6 +3168,49 @@ func (p *portworx) DeactivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) er
 	return err
 }
 
+func (p *portworx) GetClusterDomainNodes() (map[string][]*api.Node, error) {
+	domainToNodesMap := make(map[string][]*api.Node)
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return domainToNodesMap, err
+		}
+	}
+
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return domainToNodesMap, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	// get the cluster details
+	cluster, err := clusterManager.Enumerate()
+	if err != nil {
+		return domainToNodesMap, err
+	}
+
+	// get the node to domain-name map
+	return p.getDomainToNodesMap(cluster.Nodes)
+}
+
+func (p *portworx) getDomainToNodesMap(nodes []*api.Node) (map[string][]*api.Node, error) {
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	domainToNodeMap := make(map[string][]*api.Node)
+	for _, node := range nodes {
+		nodeConfig, err := clusterManager.GetNodeConf(node.Id)
+		if err != nil {
+			return nil, err
+		}
+		if nodeConfig.ClusterDomain == "" {
+			continue
+		}
+		domainToNodeMap[nodeConfig.ClusterDomain] = append(domainToNodeMap[nodeConfig.ClusterDomain], node)
+	}
+	return domainToNodeMap, nil
+}
+
 func (p *portworx) getNodesToDomainMap(nodes []*api.Node) (map[string]string, error) {
 	clusterManager, err := p.getClusterManagerClient()
 	if err != nil {
