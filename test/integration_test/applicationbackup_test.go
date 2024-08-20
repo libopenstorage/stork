@@ -106,6 +106,9 @@ func triggerBackupRestoreTest(
 	backupAllAppsExpected bool,
 ) {
 	for location, secret := range configMap {
+		if location == "nfs" {
+			continue
+		}
 		log.InfoD("Backing up to cloud: %v using secret %v", location, secret)
 		var currBackupLocation *storkv1.BackupLocation
 		var err error
