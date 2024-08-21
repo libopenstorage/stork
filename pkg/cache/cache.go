@@ -111,6 +111,19 @@ func CreateSharedInformerCache(mgr manager.Manager) error {
 		TransformByObject: transformMap,
 	})
 	if err != nil {
+		logrus.Errorf("error creating shared informer cache: %v", err)
+		return err
+	}
+	// indexing pods by nodeName so that we can list all pods running on a node
+	err = sharedInformerCache.controllerCache.IndexField(context.Background(), &corev1.Pod{}, "spec.nodeName", func(obj client.Object) []string {
+		podObject, ok := obj.(*corev1.Pod)
+		if !ok {
+			return []string{}
+		}
+		return []string{podObject.Spec.NodeName}
+	})
+	if err != nil {
+		logrus.Errorf("error indexing field spec.nodeName for pods: %v", err)
 		return err
 	}
 	go sharedInformerCache.controllerCache.Start(context.Background())

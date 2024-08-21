@@ -238,10 +238,9 @@ func (m *Monitor) driverMonitor() {
 				// Degraded nodes are not considered offline and pods are not deleted from them.
 				if node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded {
 					// Only initialize the map when it is absolutely necessary
-					if len(driverNodeToK8sNodeMap) > 0 {
+					if len(driverNodeToK8sNodeMap) == 0 {
 						driverNodeToK8sNodeMap = m.getVolumeDriverNodesToK8sNodeMap(nodes)
 					}
-
 					if _, ok := driverNodeToK8sNodeMap[node.StorageID]; !ok {
 						log.Errorf("Node with scheduler Name %v and storage ID %v is not found in k8s cluster", node.SchedulerID, node.StorageID)
 						continue
@@ -319,10 +318,14 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo, k8sNode *v1.Node)
 	}
 
 	// Delete CSI pods first
-	m.batchDeleteOfPodsFromOfflineNodes(csiPodsSelectedForDeletion, node, true)
+	if len(csiPodsSelectedForDeletion) > 0 {
+		m.batchDeleteOfPodsFromOfflineNodes(csiPodsSelectedForDeletion, node, true)
+	}
 
 	// Do batch deletes of rest of the pods
-	m.batchDeleteOfPodsFromOfflineNodes(podsSelectedForDeletion, node, false)
+	if len(podsSelectedForDeletion) > 0 {
+		m.batchDeleteOfPodsFromOfflineNodes(podsSelectedForDeletion, node, false)
+	}
 }
 
 // batchDeleteOfPodsFromOfflineNodes deletes the pods in batches of batchSize
@@ -342,6 +345,7 @@ func (m *Monitor) batchDeleteOfPodsFromOfflineNodes(
 		log.Infof("Volume driver on node %v (%v) is still offline (%v) in batch deletion of pods", node.Hostname, node.StorageID, n.RawStatus)
 		return
 	}
+	log.Infof("Going to delete %d number of pods from node %v in batch", len(pods), node.Hostname)
 	for i := 0; i < len(pods); i += podDeleteBatchSize {
 		end := i + podDeleteBatchSize
 		if end > len(pods) {
