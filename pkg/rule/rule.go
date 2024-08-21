@@ -683,7 +683,8 @@ func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecut
 	if err != nil {
 		return err
 	}
-
+	logrus.Infof("line 686 cmdexecutor sleep")
+	time.Sleep(1 * time.Minute)
 	defer func() {
 		if createdPod != nil {
 			err := core.Instance().DeletePods([]v1.Pod{*createdPod}, false)

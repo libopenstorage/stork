@@ -1904,6 +1904,8 @@ func (a *ApplicationBackupController) backupResources(
 				incResNsBatch = append(incResNsBatch, ns)
 			}
 		}
+		// DBG
+		logrus.Infof("line 1908 Start of GetResources: %+v", time.Now().UTC())
 		if len(incResNsBatch) != 0 {
 			objects, _, err := a.resourceCollector.GetResources(
 				incResNsBatch,
@@ -1920,7 +1922,7 @@ func (a *ApplicationBackupController) backupResources(
 			}
 			allObjects = append(allObjects, objects...)
 		}
-
+		logrus.Infof("line 1927 End  of GetResources: %+v", time.Now().UTC())
 		if len(resourceTypeNsBatch) != 0 {
 			for _, backupResourceType := range backup.Spec.ResourceTypes {
 				for _, resource := range resourceTypes {

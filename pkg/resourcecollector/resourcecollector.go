@@ -3,6 +3,7 @@ package resourcecollector
 import (
 	"context"
 	"fmt"
+	r "runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -487,6 +488,26 @@ func (r *ResourceCollector) GetResourcesExcludingTypes(
 	return allObjects, pvcsWithOwnerReference, nil
 }
 
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+func PrintMemoryUsage() {
+	var memStats r.MemStats
+	r.ReadMemStats(&memStats)
+	logrus.Infof("line 498: Memory Usage: Alloc = %v MiB, TotalAlloc = %v MiB\n",
+		bToMb(memStats.Alloc),
+		bToMb(memStats.TotalAlloc))
+
+	logrus.Infof("HeapAlloc = %v MiB, HeapSys = %v  HeapIdle = %v HeapReleased = %v HeapObjects = %v HeapInuse = %v \n",
+		bToMb(memStats.HeapAlloc),
+		bToMb(memStats.HeapSys),
+		bToMb(memStats.HeapIdle),
+		bToMb(memStats.HeapReleased),
+		bToMb(memStats.HeapObjects),
+		bToMb(memStats.HeapInuse))
+}
+
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
 // and all PVCs which have an owner reference set
 func (r *ResourceCollector) GetResources(
@@ -498,6 +519,8 @@ func (r *ResourceCollector) GetResources(
 	allDrivers bool,
 	opts Options,
 ) ([]runtime.Unstructured, []v1.PersistentVolumeClaim, error) {
+	logrus.Infof("line 516 start of GetResources mem consumption, len  of ns: %v", len(namespaces))
+	PrintMemoryUsage()
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, nil, err
@@ -584,7 +607,8 @@ func (r *ResourceCollector) GetResources(
 	if err != nil {
 		return nil, nil, err
 	}
-
+	logrus.Infof("line 605 End of GetResources mem consumption")
+	PrintMemoryUsage()
 	return allObjects, pvcsWithOwnerReference, nil
 }
 
