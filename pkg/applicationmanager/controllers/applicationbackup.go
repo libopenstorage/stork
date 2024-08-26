@@ -1826,8 +1826,11 @@ func (a *ApplicationBackupController) backupResources(
 	// GetResources takes more time, if we have more number of namespaces
 	// So, submitting it in batches and in between each batch,
 	// updating the LastUpdateTimestamp to show that backup is progressing
-	allObjects := make([]runtime.Unstructured, 0)
+	maxCount := len(namespacelist)/backupResourcesBatchCount + 1
+	allObjectsList := make([][]runtime.Unstructured, maxCount)
+	var count int
 	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
+		count = count + 1
 		batch := namespacelist[i:min(i+backupResourcesBatchCount, len(namespacelist))]
 		var incResNsBatch []string
 		var resourceTypeNsBatch []string
@@ -1864,7 +1867,10 @@ func (a *ApplicationBackupController) backupResources(
 				log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 				return err
 			}
-			allObjects = append(allObjects, objects...)
+			//allObjects = append(allObjects, objects...)
+
+			allObjectsList[count] = objects
+			logrus.Infof("sivakumar -- count %v", count)
 		}
 
 		if len(resourceTypeNsBatch) != 0 {
@@ -1872,12 +1878,12 @@ func (a *ApplicationBackupController) backupResources(
 				for _, resource := range resourceTypes {
 					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
 						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
-						objects, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, nil, true, resourceCollectorOpts)
+						_, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, nil, true, resourceCollectorOpts)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 							return err
 						}
-						allObjects = append(allObjects, objects.Items...)
+						// allObjects = append(allObjects, objects.Items...)
 					}
 				}
 			}
@@ -1906,6 +1912,25 @@ func (a *ApplicationBackupController) backupResources(
 			}
 		}
 	}
+
+	size := 0
+	for _, objects := range allObjectsList {
+		size += len(objects)
+	}
+	logrus.Infof("sivakumar --- size %v", size)
+	allObjects := make([]runtime.Unstructured, 0, size)
+	currentIndex := 0
+	for _, objects := range allObjectsList {
+		copy(allObjects[currentIndex:], objects)
+		currentIndex += len(objects)
+		//allObjects = append(allObjects, objects...)
+	}
+
+	//allObjectsList = make([][]runtime.Unstructured, 0)
+	for i := range allObjectsList {
+		allObjectsList[i] = nil // Clear each slice
+	}
+	allObjectsList = nil // Clear the outer slice
 	if backup.Status.Resources == nil {
 		// Save the collected resources infos in the status
 		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
@@ -1967,7 +1992,6 @@ func (a *ApplicationBackupController) backupResources(
 		if err != nil {
 			return err
 		}
-		return nil
 	}
 	// Do any additional preparation for the resources if required
 	if err = a.prepareResources(backup, allObjects); err != nil {
