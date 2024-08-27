@@ -33,7 +33,7 @@ RUN asdf install kubelogin latest
 RUN asdf global kubelogin latest
 
 #Install Google Cloud SDK
-ARG GCLOUD_SDK=google-cloud-cli-483.0.0-linux-x86_64.tar.gz
+ARG GCLOUD_SDK=google-cloud-cli-489.0.0-linux-x86_64.tar.gz
 ARG GCLOUD_INSTALL_DIR="/usr/lib"
 ENV PATH "${PATH}:$GCLOUD_INSTALL_DIR/google-cloud-sdk/bin"
 # Download GCLOUD_SDK tar bundle, untar it , install gke-gcloud-auth-plugin
