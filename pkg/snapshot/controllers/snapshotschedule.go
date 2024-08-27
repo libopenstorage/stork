@@ -36,6 +36,11 @@ const (
 	validateCRDInterval  time.Duration = 5 * time.Second
 	validateCRDTimeout   time.Duration = 1 * time.Minute
 
+	// errorSnapshotCleanupCutoffTime is the cutoff time for a snapshot in
+	// Error state to be deleted.
+	errorSnapshotCleanupCutoffTime time.Duration = 5 * time.Minute
+	errorSnapshotDeletionMessage   string        = "snapshot deleted due to being in error state for more than cutoff period"
+
 	// SnapshotScheduleNameAnnotation Annotation used to specify the name of schedule that
 	// created the snapshot
 	SnapshotScheduleNameAnnotation = "stork.libopenstorage.org/snapshotScheduleName"
@@ -160,6 +165,18 @@ func (s *SnapshotScheduleController) handle(ctx context.Context, snapshotSchedul
 		return err
 	}
 
+	// Delete the volumesnapshot CRs of the volumesnapshots that are in Error state.
+	err = s.cleanupErroredSnapshots(snapshotSchedule)
+	if err != nil {
+		msg := fmt.Sprintf("Error deleting errored out snapshots: %v", err)
+		s.recorder.Event(snapshotSchedule,
+			v1.EventTypeWarning,
+			string(snapv1.VolumeSnapshotConditionError),
+			msg)
+		log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
+		return err
+	}
+
 	return nil
 }
 
@@ -169,6 +186,7 @@ func (s *SnapshotScheduleController) setDefaults(snapshotSchedule *stork_api.Vol
 	}
 }
 
+// getVolumeSnapshotStatus returns the status of the volumesnapshot passed in the parameter.
 func getVolumeSnapshotStatus(name string, namespace string) (snapv1.VolumeSnapshotConditionType, error) {
 	snapshot, err := k8sextops.Instance().GetSnapshot(name, namespace)
 	if err != nil {
@@ -244,6 +262,45 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 		}
 	}
 	return nil
+}
+
+// cleanupErroredSnapshots cleans any volumesnapshot CRs that are in Error state. It doesn't remove them
+// from the volumesnapshotschedule items list though.
+func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *stork_api.VolumeSnapshotSchedule) (err error) {
+	// Filter out the errored out snapshots that are older than the cleanup cutoff period.
+	for policy, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
+		for idx, snapshot := range policyVolumeSnapshot {
+			if snapshot.Status == snapv1.VolumeSnapshotConditionError {
+				// Fetch the latest status as well in order to mitigate any late volumesnapshot updates.
+				snapshotStatus, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
+				if err != nil {
+					log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error getting status of snapshot %s: %s", snapshot.Name, err.Error())
+					continue
+				}
+
+				// Filter out the volumesnapshots that are older than the cutoff period and delete them.
+				snapshotCreationTime := snapshot.CreationTimestamp.Time
+				if snapshotStatus == snapv1.VolumeSnapshotConditionError && time.Since(snapshotCreationTime) > errorSnapshotCleanupCutoffTime {
+					log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v", snapshot.Name)
+					err := k8sextops.Instance().DeleteSnapshot(snapshot.Name, snapshotSchedule.Namespace)
+					if err != nil {
+						log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting errored out snapshot %v: %v", snapshot.Name, err)
+						continue
+					}
+
+					// Update the volumesnapshotschedule object with the deletion message and setting `deleted` to `true`.
+					snapshotSchedule.Status.Items[policy][idx].Deleted = true
+					snapshotSchedule.Status.Items[policy][idx].Message = errorSnapshotDeletionMessage
+				}
+			}
+		}
+	}
+
+	// Update the snapshotschedule with the latest updates w.r.t snapshots.
+	if _, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule); err != nil {
+		return err
+	}
+	return
 }
 
 func (s *SnapshotScheduleController) isVolumeSnapshotComplete(status snapv1.VolumeSnapshotConditionType) bool {
