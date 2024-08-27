@@ -642,12 +642,17 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	case stork_api.ApplicationBackupStageApplications:
 		err := a.backupResources(backup)
 		if err != nil {
+			isLargeResourceError, err := utils.ReorganizeLargeResourceError(err)
 			message := fmt.Sprintf("Error backing up resources: %v", err)
 			log.ApplicationBackupLog(backup).Errorf(message)
 			a.recorder.Event(backup,
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
+			// Check if the error is due to a large resource issue
+			if isLargeResourceError {
+				handleLargeResourceError(a, backup, message)
+			}
 			return nil
 		}
 
@@ -1233,13 +1238,17 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// only a particular resource fetching fails and rest passes.
 		err = a.backupResources(backup)
 		if err != nil {
+			isLargeResourceError, err := utils.ReorganizeLargeResourceError(err)
 			message := fmt.Sprintf("Error backing up resources: %v", err)
 			log.ApplicationBackupLog(backup).Errorf(message)
 			a.recorder.Event(backup,
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
-
+			// Check if the error is due to a large resource issue
+			if isLargeResourceError {
+				handleLargeResourceError(a, backup, message)
+			}
 			return err
 		}
 	}
@@ -2061,6 +2070,7 @@ func (a *ApplicationBackupController) backupResources(
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 	// Do any additional preparation for the resources if required
 	if err = a.prepareResources(backup, allObjects); err != nil {
@@ -2734,4 +2744,38 @@ func handleCSINametoCSIMapMigration(spec *stork_api.ApplicationBackupSpec) error
 
 func isPartialBackup(backup *stork_api.ApplicationBackup) bool {
 	return backup.Status.FailedVolCount > 0 && backup.Status.FailedVolCount < len(backup.Status.Volumes)
+}
+
+func handleLargeResourceError(a *ApplicationBackupController, backup *stork_api.ApplicationBackup, message string) {
+	// Create a NamespacedName object with the backup's namespace and name
+	namespacedName := types.NamespacedName{Namespace: backup.Namespace, Name: backup.Name}
+
+	// Retry the operation up to 'maxRetry' times
+	for i := 0; i < maxRetry; i++ {
+		// Attempt to get the latest state of the backup object
+		err := a.client.Get(context.TODO(), namespacedName, backup)
+		if err != nil {
+			// If the get operation fails, wait for 'retrySleep' duration and retry
+			time.Sleep(retrySleep)
+			continue
+		}
+
+		// Update the backup status to 'Failed' and set relevant fields
+		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+		backup.Status.Reason = message
+		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+		backup.Status.FinishTimestamp = metav1.Now()
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+
+		// Attempt to update the backup object with the new status
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			// If the update operation fails, wait for 'retrySleep' duration and retry
+			time.Sleep(retrySleep)
+			continue
+		} else {
+			// If the update is successful, exit the loop
+			break
+		}
+	}
 }
