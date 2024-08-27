@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"io/ioutil"
 	"reflect"
 	"strconv"
 	"strings"
@@ -27,8 +28,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/libopenstorage/stork/pkg/version"
-	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
-	kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
+	// kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
+	// kdmputils "github.com/portworx/kdmp/pkg/drivers/utils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
@@ -66,8 +67,8 @@ const (
 
 	allNamespacesSpecifier          = "*"
 	backupVolumeBatchCountEnvVar    = "BACKUP-VOLUME-BATCH-COUNT"
-	defaultBackupVolumeBatchCount   = 3
-	backupResourcesBatchCount       = 15
+	defaultBackupVolumeBatchCount   = 15
+	backupResourcesBatchCount       = 2
 	maxRetry                        = 10
 	retrySleep                      = 10 * time.Second
 	genericBackupKey                = "BACKUP_TYPE"
@@ -1562,6 +1563,7 @@ func (a *ApplicationBackupController) uploadObject(
 	objectName string,
 	data []byte,
 ) error {
+	logrus.Infof("sivakumar --- uploadObject -- objectName %v", objectName)
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
 		return err
@@ -1616,8 +1618,10 @@ func (a *ApplicationBackupController) uploadObject(
 // Convert the list of objects to json and upload to the backup location
 func (a *ApplicationBackupController) uploadResources(
 	backup *stork_api.ApplicationBackup,
-	objects []runtime.Unstructured,
+	// objects []runtime.Unstructured,
+	jsonBytes []byte,
 ) error {
+	/*
 	resKinds := make(map[string]string)
 	for _, obj := range objects {
 		gvk := obj.GetObjectKind().GroupVersionKind()
@@ -1630,13 +1634,17 @@ func (a *ApplicationBackupController) uploadResources(
 	if err := a.uploadCRDResources(backup, resKinds); err != nil {
 		return err
 	}
+	*/
+	/*
 	jsonBytes, err := json.MarshalIndent(objects, "", " ")
 	if err != nil {
 		return err
 	}
+	*/
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
 }
+
 func (a *ApplicationBackupController) uploadNamespaces(backup *stork_api.ApplicationBackup) error {
 	var namespaces []*v1.Namespace
 	for _, namespace := range backup.Spec.Namespaces {
@@ -1767,12 +1775,54 @@ func getResourceExportCRName(opsPrefix, crUID, ns string) string {
 	return name
 }
 
+// Function to append objects to a JSON file
+func (a *ApplicationBackupController) appendObjectsToFile(
+    filePath string,
+    objects []runtime.Unstructured,
+) error {
+    // Open the file in append mode, create it if it doesn't exist
+    file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    // Convert objects to JSON
+    jsonBytes, err := json.Marshal(objects)
+    if err != nil {
+        return err
+    }
+
+    // Write JSON bytes to file with a new line
+    _, err = file.Write(append(jsonBytes, '\n'))
+    return err
+}
+
+// Function to read the content of a file into a byte array
+func readFileToByteArray(filePath string) ([]byte, error) {
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// Read the entire file content into a byte array
+	fileContent, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return fileContent, nil
+}
+
+
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
 	var err error
 	var resourceTypes []metav1.APIResource
-	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
+	_, err = utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type: %v", err)
 		return err
@@ -1826,8 +1876,12 @@ func (a *ApplicationBackupController) backupResources(
 	// GetResources takes more time, if we have more number of namespaces
 	// So, submitting it in batches and in between each batch,
 	// updating the LastUpdateTimestamp to show that backup is progressing
+	// allObjects := make([]runtime.Unstructured, 0)
+	var count int
 	allObjects := make([]runtime.Unstructured, 0)
 	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
+		allObjects = make([]runtime.Unstructured, 0)
+		count = count + 1
 		batch := namespacelist[i:min(i+backupResourcesBatchCount, len(namespacelist))]
 		var incResNsBatch []string
 		var resourceTypeNsBatch []string
@@ -1864,6 +1918,7 @@ func (a *ApplicationBackupController) backupResources(
 				log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 				return err
 			}
+			logrus.Infof("sivakumar -- a.resourceCollector.GetResources -- controller -- objects %v", objects)
 			allObjects = append(allObjects, objects...)
 		}
 
@@ -1905,93 +1960,71 @@ func (a *ApplicationBackupController) backupResources(
 				break
 			}
 		}
-	}
-	if backup.Status.Resources == nil {
-		// Save the collected resources infos in the status
-		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
-		for _, obj := range allObjects {
-			metadata, err := meta.Accessor(obj)
+		if backup.Status.Resources == nil {
+			// Save the collected resources infos in the status
+			resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
+			for _, obj := range allObjects {
+				metadata, err := meta.Accessor(obj)
+				if err != nil {
+					return err
+				}
+
+				resourceInfo := &stork_api.ApplicationBackupResourceInfo{
+					ObjectInfo: stork_api.ObjectInfo{
+						Name:      metadata.GetName(),
+						Namespace: metadata.GetNamespace(),
+					},
+				}
+				gvk := obj.GetObjectKind().GroupVersionKind()
+				resourceInfo.Kind = gvk.Kind
+				resourceInfo.Group = gvk.Group
+				// core Group doesn't have a name, so override it
+				if resourceInfo.Group == "" {
+					resourceInfo.Group = "core"
+				}
+				resourceInfo.Version = gvk.Version
+				resourceInfos = append(resourceInfos, resourceInfo)
+			}
+			backup.Status.Resources = resourceInfos
+			backup.Status.ResourceCount = len(resourceInfos)
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			backupCrSize, err := utils.GetSizeOfObject(backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Failed to calculate size of resource info array for backup %v", backup.GetName())
+				return err
+			}
+			var largeResourceSizeLimit int64
+			largeResourceSizeLimit = k8sutils.LargeResourceSizeLimitDefault
+			configData, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, coreapi.NamespaceSystem)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("failed to read config map %v for large resource size limit", k8sutils.StorkControllerConfigMapName)
+			}
+			if configData.Data[k8sutils.LargeResourceSizeLimitName] != "" {
+				largeResourceSizeLimit, err = strconv.ParseInt(configData.Data[k8sutils.LargeResourceSizeLimitName], 0, 64)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf("failed to read config map %v's key %v, setting default value of 1MB", k8sutils.StorkControllerConfigMapName,
+						k8sutils.LargeResourceSizeLimitName)
+					largeResourceSizeLimit = k8sutils.LargeResourceSizeLimitDefault
+				}
+			}
+
+			log.ApplicationBackupLog(backup).Infof("The size of application backup CR obtained %v bytes - largeResourceSizeLimit: %v", backupCrSize, largeResourceSizeLimit)
+			if backupCrSize > int(largeResourceSizeLimit) {
+				log.ApplicationBackupLog(backup).Infof("Stripping all the resource info from Application backup-cr %v in namespace %v", backup.GetName(), backup.GetNamespace())
+				// update the flag and resource-count.
+				// Strip off the resource info it contributes to bigger size of AB CR in case of large number of resource
+				backup.Status.Resources = make([]*stork_api.ApplicationBackupResourceInfo, 0)
+				backup.Status.LargeResourceEnabled = true
+			}
+			// Store the new status
+			err = a.client.Update(context.TODO(), backup)
 			if err != nil {
 				return err
 			}
-
-			resourceInfo := &stork_api.ApplicationBackupResourceInfo{
-				ObjectInfo: stork_api.ObjectInfo{
-					Name:      metadata.GetName(),
-					Namespace: metadata.GetNamespace(),
-				},
-			}
-			gvk := obj.GetObjectKind().GroupVersionKind()
-			resourceInfo.Kind = gvk.Kind
-			resourceInfo.Group = gvk.Group
-			// core Group doesn't have a name, so override it
-			if resourceInfo.Group == "" {
-				resourceInfo.Group = "core"
-			}
-			resourceInfo.Version = gvk.Version
-			resourceInfos = append(resourceInfos, resourceInfo)
 		}
-		backup.Status.Resources = resourceInfos
-		backup.Status.ResourceCount = len(resourceInfos)
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		backupCrSize, err := utils.GetSizeOfObject(backup)
-		if err != nil {
-			log.ApplicationBackupLog(backup).Errorf("Failed to calculate size of resource info array for backup %v", backup.GetName())
-			return err
-		}
-		var largeResourceSizeLimit int64
-		largeResourceSizeLimit = k8sutils.LargeResourceSizeLimitDefault
-		configData, err := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, coreapi.NamespaceSystem)
-		if err != nil {
-			log.ApplicationBackupLog(backup).Errorf("failed to read config map %v for large resource size limit", k8sutils.StorkControllerConfigMapName)
-		}
-		if configData.Data[k8sutils.LargeResourceSizeLimitName] != "" {
-			largeResourceSizeLimit, err = strconv.ParseInt(configData.Data[k8sutils.LargeResourceSizeLimitName], 0, 64)
-			if err != nil {
-				log.ApplicationBackupLog(backup).Errorf("failed to read config map %v's key %v, setting default value of 1MB", k8sutils.StorkControllerConfigMapName,
-					k8sutils.LargeResourceSizeLimitName)
-				largeResourceSizeLimit = k8sutils.LargeResourceSizeLimitDefault
-			}
-		}
-
-		log.ApplicationBackupLog(backup).Infof("The size of application backup CR obtained %v bytes - largeResourceSizeLimit: %v", backupCrSize, largeResourceSizeLimit)
-		if backupCrSize > int(largeResourceSizeLimit) {
-			log.ApplicationBackupLog(backup).Infof("Stripping all the resource info from Application backup-cr %v in namespace %v", backup.GetName(), backup.GetNamespace())
-			// update the flag and resource-count.
-			// Strip off the resource info it contributes to bigger size of AB CR in case of large number of resource
-			backup.Status.Resources = make([]*stork_api.ApplicationBackupResourceInfo, 0)
-			backup.Status.LargeResourceEnabled = true
-		}
-		// Store the new status
-		err = a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	// Do any additional preparation for the resources if required
-	if err = a.prepareResources(backup, allObjects); err != nil {
-		message := fmt.Sprintf("Error preparing resources for backup: %v", err)
-		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-		backup.Status.Reason = message
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		err = a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return err
-		}
-		a.recorder.Event(backup,
-			v1.EventTypeWarning,
-			string(stork_api.ApplicationBackupStatusFailed),
-			message)
-		log.ApplicationBackupLog(backup).Errorf(message)
-		return err
-	}
-
-	// get and update rancher project details
-	if len(backup.Spec.PlatformCredential) != 0 {
-		if err = UpdateRancherProjectDetails(backup, allObjects); err != nil {
-			message := fmt.Sprintf("Error updating rancher project details for backup: %v", err)
+		// Do any additional preparation for the resources if required
+		if err = a.prepareResources(backup, allObjects); err != nil {
+			message := fmt.Sprintf("Error preparing resources for backup: %v", err)
 			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 			backup.Status.Reason = message
@@ -2007,84 +2040,15 @@ func (a *ApplicationBackupController) backupResources(
 			log.ApplicationBackupLog(backup).Errorf(message)
 			return err
 		}
-	}
 
-	if nfs {
-		// Check whether ResourceExport is present or not
-		crName := getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
-		resourceExport, err := kdmpShedOps.Instance().GetResourceExport(crName, backup.Namespace)
-		if err != nil {
-			if k8s_errors.IsNotFound(err) {
-				// create resource export CR
-				resourceExport := &kdmpapi.ResourceExport{}
-				// Adding required label for debugging
-				labels := make(map[string]string)
-				labels[utils.ApplicationBackupCRNameKey] = utils.GetValidLabel(backup.Name)
-				labels[utils.ApplicationBackupCRUIDKey] = utils.GetValidLabel(utils.GetShortUID(string(backup.UID)))
-				// If backup from px-backup, update the backup object details in the label
-				if val, ok := backup.Annotations[utils.PxbackupAnnotationCreateByKey]; ok {
-					if val == utils.PxbackupAnnotationCreateByValue {
-						labels[utils.BackupObjectNameKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectNameKey])
-						labels[utils.BackupObjectUIDKey] = utils.GetValidLabel(backup.Annotations[utils.PxbackupObjectUIDKey])
-					}
-				}
-				resourceExport.Labels = labels
-				resourceExport.Annotations = make(map[string]string)
-				resourceExport.Annotations[utils.SkipResourceAnnotation] = "true"
-				resourceExport.Name = getResourceExportCRName(utils.PrefixNFSBackup, string(backup.UID), backup.Namespace)
-				resourceExport.Namespace = backup.Namespace
-				resourceExport.Spec.Type = kdmpapi.ResourceExportBackup
-				source := &kdmpapi.ResourceExportObjectReference{
-					APIVersion: backup.APIVersion,
-					Kind:       backup.Kind,
-					Namespace:  backup.Namespace,
-					Name:       backup.Name,
-				}
-				backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
-				if err != nil {
-					return fmt.Errorf("error getting backup location path: %v", err)
-				}
-				destination := &kdmpapi.ResourceExportObjectReference{
-					// TODO: .GetBackupLocation is not returning APIVersion and kind.
-					// Hardcoding for now.
-					// APIVersion: backupLocation.APIVersion,
-					// Kind:       backupLocation.Kind,
-					APIVersion: utils.StorkAPIVersion,
-					Kind:       utils.BackupLocationKind,
-					Namespace:  backupLocation.Namespace,
-					Name:       backupLocation.Name,
-				}
-				resourceExport.Spec.TriggeredFrom = kdmputils.TriggeredFromStork
-				storkPodNs, err := k8sutils.GetStorkPodNamespace()
-				if err != nil {
-					logrus.Errorf("error in getting stork pod namespace: %v", err)
-					return err
-				}
-				resourceExport.Spec.TriggeredFromNs = storkPodNs
-				resourceExport.Spec.Source = *source
-				resourceExport.Spec.Destination = *destination
-
-				_, err = kdmpShedOps.Instance().CreateResourceExport(resourceExport)
-				if err != nil {
-					logrus.Errorf("failed to create ResourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
-					return err
-				}
-				return nil
-			}
-			logrus.Errorf("failed to get backup resourceExport CR[%v/%v]: %v", resourceExport.Namespace, resourceExport.Name, err)
-			// Will retry in the next cycle of reconciler.
-			return nil
-		} else {
-			var message string
-			// Check the status of the resourceExport CR and update it to the applicationBackup CR
-			switch resourceExport.Status.Status {
-			case kdmpapi.ResourceExportStatusFailed:
-				message = fmt.Sprintf("Error uploading resources: %v, namespace: %s", resourceExport.Status.Reason, resourceExport.Namespace)
+		// get and update rancher project details
+		if len(backup.Spec.PlatformCredential) != 0 {
+			if err = UpdateRancherProjectDetails(backup, allObjects); err != nil {
+				message := fmt.Sprintf("Error updating rancher project details for backup: %v", err)
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.Reason = message
 				backup.Status.LastUpdateTimestamp = metav1.Now()
-				backup.Status.FinishTimestamp = metav1.Now()
 				err = a.client.Update(context.TODO(), backup)
 				if err != nil {
 					return err
@@ -2095,30 +2059,23 @@ func (a *ApplicationBackupController) backupResources(
 					message)
 				log.ApplicationBackupLog(backup).Errorf(message)
 				return err
-			case kdmpapi.ResourceExportStatusSuccessful:
-				backup.Status.BackupPath = GetObjectPath(backup)
-				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-				backup.Status.FinishTimestamp = metav1.Now()
-				backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
-				backup.Status.Reason = "Volumes and resources were backed up successfully"
-				// Only on success compute the total backup size
-				for _, vInfo := range backup.Status.Volumes {
-					backup.Status.TotalSize += vInfo.TotalSize
-				}
-			case kdmpapi.ResourceExportStatusInitial:
-			case kdmpapi.ResourceExportStatusPending:
-			case kdmpapi.ResourceExportStatusInProgress:
-				backup.Status.LastUpdateTimestamp = metav1.Now()
 			}
-			err = a.client.Update(context.TODO(), backup)
-			if err != nil {
-				return err
-			}
-			return nil
 		}
+
+		// Append the retrieved objects to the JSON file
+		if err := a.appendObjectsToFile("/tmp/siva.json", allObjects); err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error writing resources to file: %v", err)
+			return err
+		}
+
+
+	}
+	jsonBytes, err := readFileToByteArray("/tmp/siva.json")
+	if err != nil {
+		log.ApplicationBackupLog(backup).Errorf("Error reading resources to file: %v", err)
 	}
 	// Upload the resources to the backup location
-	if err = a.uploadResources(backup, allObjects); err != nil {
+	if err = a.uploadResources(backup, jsonBytes); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v, namespace: %s", err, backup.Namespace)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
