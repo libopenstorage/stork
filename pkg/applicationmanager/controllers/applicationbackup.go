@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/libopenstorage/stork/drivers"
@@ -67,7 +68,7 @@ const (
 	allNamespacesSpecifier          = "*"
 	backupVolumeBatchCountEnvVar    = "BACKUP-VOLUME-BATCH-COUNT"
 	defaultBackupVolumeBatchCount   = 3
-	backupResourcesBatchCount       = 15
+	backupResourcesBatchCount       = 1
 	maxRetry                        = 10
 	retrySleep                      = 10 * time.Second
 	genericBackupKey                = "BACKUP_TYPE"
@@ -137,6 +138,7 @@ type ApplicationBackupController struct {
 	vmNsListMap          map[string]map[string]bool
 }
 
+
 // Init Initialize the application backup controller
 func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNamespace string, syncTime int64) error {
 	err := a.createCRD()
@@ -157,6 +159,75 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 	a.vmNsListMap = make(map[string]map[string]bool)
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
+
+// EstimateMemoryUsage estimates the memory usage of a slice of runtime.Unstructured
+func EstimateMemoryUsage1(objects []runtime.Unstructured) uintptr {
+        // Size of the slice itself (3 words: pointer, length, capacity)
+        sliceHeaderSize := unsafe.Sizeof(objects)
+
+        // Size of the elements in the slice
+        // Each element in the slice is an interface{}, which is 2 words (type + data pointer)
+        elementSize := unsafe.Sizeof(objects[0])
+
+        // Total size of slice header and elements
+        totalSize := sliceHeaderSize + uintptr(len(objects))*elementSize
+
+        // Estimate size of each concrete element
+        for _, obj := range objects {
+                if obj != nil {
+                        // Use reflection to get the type and then the size of the underlying concrete object
+                        v := reflect.ValueOf(obj)
+                        if v.Kind() == reflect.Ptr {
+                                // If obj is a pointer, get the size of the element it points to
+                                totalSize += v.Elem().Type().Size()
+                        } else {
+                                // Otherwise, get the size of the object itself
+                                totalSize += v.Type().Size()
+                        }
+                }
+        }
+
+        return totalSize
+}
+
+// EstimateMemoryUsage estimates the memory usage of a 2D slice of runtime.Unstructured
+func EstimateMemoryUsage(allObjects [][]runtime.Unstructured) uintptr {
+    // Size of the outer slice itself (3 words: pointer, length, capacity)
+    outerSliceHeaderSize := unsafe.Sizeof(allObjects)
+
+    // Start with the size of the outer slice
+    totalSize := outerSliceHeaderSize
+
+    // Iterate over each inner slice to calculate its memory usage
+    for _, objects := range allObjects {
+        // Size of the inner slice itself (3 words: pointer, length, capacity)
+        innerSliceHeaderSize := unsafe.Sizeof(objects)
+        totalSize += innerSliceHeaderSize
+
+        // Size of the elements in the inner slice
+        // Each element in the slice is an interface{}, which is 2 words (type + data pointer)
+        elementSize := unsafe.Sizeof(objects[0])
+        totalSize += uintptr(len(objects)) * elementSize
+
+        // Estimate size of each concrete element in the inner slice
+        for _, obj := range objects {
+            if obj != nil {
+                // Use reflection to get the type and then the size of the underlying concrete object
+                v := reflect.ValueOf(obj)
+                if v.Kind() == reflect.Ptr {
+                    // If obj is a pointer, get the size of the element it points to
+                    totalSize += v.Elem().Type().Size()
+                } else {
+                    // Otherwise, get the size of the object itself
+                    totalSize += v.Type().Size()
+                }
+            }
+        }
+    }
+
+    return totalSize
+}
+
 
 // Reconcile updates for ApplicationBackup objects.
 func (a *ApplicationBackupController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -1634,6 +1705,7 @@ func (a *ApplicationBackupController) uploadResources(
 	if err != nil {
 		return err
 	}
+	logrus.Infof("sivakumar --->>>>>>>> uploadResources jsonBytes %v - objects %v", len(jsonBytes), EstimateMemoryUsage1(objects))
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
 }
@@ -1826,11 +1898,11 @@ func (a *ApplicationBackupController) backupResources(
 	// GetResources takes more time, if we have more number of namespaces
 	// So, submitting it in batches and in between each batch,
 	// updating the LastUpdateTimestamp to show that backup is progressing
-	maxCount := len(namespacelist)/backupResourcesBatchCount + 1
+	//maxCount := len(namespacelist)/backupResourcesBatchCount + 1
+	maxCount := (len(namespacelist) + backupResourcesBatchCount - 1) / backupResourcesBatchCount
 	allObjectsList := make([][]runtime.Unstructured, maxCount)
 	var count int
 	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
-		count = count + 1
 		batch := namespacelist[i:min(i+backupResourcesBatchCount, len(namespacelist))]
 		var incResNsBatch []string
 		var resourceTypeNsBatch []string
@@ -1867,10 +1939,15 @@ func (a *ApplicationBackupController) backupResources(
 				log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 				return err
 			}
+			// logrus.Infof("sivakumar -- objects %v", objects)
 			//allObjects = append(allObjects, objects...)
 
+			logrus.Infof("sivakumar >>>>>>  before slice size is %v", EstimateMemoryUsage(allObjectsList))
+			logrus.Infof("sivakumar >>>>>>  return value of getresources - slice size is %v", EstimateMemoryUsage1(objects))
 			allObjectsList[count] = objects
-			logrus.Infof("sivakumar -- count %v", count)
+			logrus.Infof("sivakumar >>>>> count %v", count)
+			logrus.Infof("sivakumar >>>>>>  after slice size is %v", EstimateMemoryUsage(allObjectsList))
+			count++
 		}
 
 		if len(resourceTypeNsBatch) != 0 {
@@ -1918,14 +1995,19 @@ func (a *ApplicationBackupController) backupResources(
 		size += len(objects)
 	}
 	logrus.Infof("sivakumar --- size %v", size)
-	allObjects := make([]runtime.Unstructured, 0, size)
+	allObjects := make([]runtime.Unstructured, size)
 	currentIndex := 0
 	for _, objects := range allObjectsList {
-		copy(allObjects[currentIndex:], objects)
-		currentIndex += len(objects)
+		for _, obj := range objects {
+			allObjects[currentIndex] = obj
+			currentIndex++
+		}
+		//copy(allObjects[currentIndex:], objects)
+		//currentIndex += len(objects)
 		//allObjects = append(allObjects, objects...)
 	}
 
+	logrus.Infof("sivakumar --- 1 slice size is %v", EstimateMemoryUsage1(allObjects))
 	//allObjectsList = make([][]runtime.Unstructured, 0)
 	for i := range allObjectsList {
 		allObjectsList[i] = nil // Clear each slice
@@ -2142,6 +2224,7 @@ func (a *ApplicationBackupController) backupResources(
 		}
 	}
 	// Upload the resources to the backup location
+	logrus.Infof("sivakumar --- 2 slice size is %v", EstimateMemoryUsage1(allObjects))
 	if err = a.uploadResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v, namespace: %s", err, backup.Namespace)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
