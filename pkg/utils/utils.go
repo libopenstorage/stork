@@ -654,3 +654,23 @@ func GetAppUidGid(pvcName string, namespace string, backup *stork_api.Applicatio
 	}
 	return uid, gid, nil
 }
+
+// ReorganizeLargeResourceError - Check the error message and if large resource error found, reorganize the error message and return true and error
+func ReorganizeLargeResourceError(err error) (bool, error) {
+	// List of expected error messages from large resources
+	expectedMsgs := []string{
+		"request is too large",
+		"trying to send message larger than max",
+		"Request entity too large",
+	}
+
+	for _, msg := range expectedMsgs {
+		if strings.Contains(err.Error(), msg) {
+			// Reorganize the error as per the requirement
+			return true, fmt.Errorf("%v: Refer doc https://docs.portworx.com/portworx-backup-on-prem/reference/large-res-config", err)
+		}
+	}
+
+	// Return the original error if none of the expected errors were found
+	return false, err
+}
