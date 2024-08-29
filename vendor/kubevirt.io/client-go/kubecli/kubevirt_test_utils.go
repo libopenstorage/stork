@@ -1,3 +1,6 @@
+//go:build skipcompile
+// +build skipcompile
+
 package kubecli
 
 import (
