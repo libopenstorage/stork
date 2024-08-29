@@ -108,18 +108,6 @@ func (m *Monitor) Stop() error {
 	return nil
 }
 
-func (m *Monitor) isSameNode(k8sNodeName string, driverNode *volume.NodeInfo) bool {
-	if k8sNodeName == driverNode.Hostname {
-		return true
-	}
-	node, err := core.Instance().GetNodeByName(k8sNodeName)
-	if err != nil {
-		log.Errorf("Error getting node %v: %v", k8sNodeName, err)
-		return false
-	}
-	return volume.IsNodeMatch(node, driverNode)
-}
-
 func (m *Monitor) isSameK8sNode(k8sNode *v1.Node, driverNode *volume.NodeInfo) bool {
 	if k8sNode.Name == driverNode.Hostname {
 		return true
@@ -224,6 +212,7 @@ func (m *Monitor) driverMonitor() {
 	for {
 		select {
 		default:
+			k8sNodeNameToNodeMap := make(map[string]*v1.Node)
 			driverNodeToK8sNodeMap := make(map[string]*v1.Node)
 			log.Debugf("Monitoring storage nodes")
 			nodes, err := m.Driver.GetNodes()
@@ -238,6 +227,14 @@ func (m *Monitor) driverMonitor() {
 				// For any Running pod on that node using volume by the driver, kill the pod
 				// Degraded nodes are not considered offline and pods are not deleted from them.
 				if node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded {
+					// Only ini
+					if len(k8sNodeNameToNodeMap) == 0 {
+						k8sNodeNameToNodeMap, err = m.getK8sNodeNameToNodeMap()
+						if err != nil {
+							log.Errorf("Error getting k8s node name to node map: %v", err)
+							continue
+						}
+					}
 					// Only initialize the map when it is absolutely necessary
 					if len(driverNodeToK8sNodeMap) == 0 {
 						driverNodeToK8sNodeMap = m.getVolumeDriverNodesToK8sNodeMap(nodes)
@@ -249,7 +246,7 @@ func (m *Monitor) driverMonitor() {
 					k8sNode := driverNodeToK8sNodeMap[node.StorageID]
 					m.wg.Add(1)
 					// wait for 1 min if node is upgrading
-					go m.cleanupDriverNodePods(node, k8sNode)
+					go m.cleanupDriverNodePods(node, k8sNode, k8sNodeNameToNodeMap)
 				}
 			}
 			// lets all node to finish processing and then start sleep
@@ -264,7 +261,7 @@ func (m *Monitor) driverMonitor() {
 	}
 }
 
-func (m *Monitor) cleanupDriverNodePods(driverNode *volume.NodeInfo, k8sNode *v1.Node) {
+func (m *Monitor) cleanupDriverNodePods(driverNode *volume.NodeInfo, k8sNode *v1.Node, k8sNodeNameToNodeMap map[string]*v1.Node) {
 	defer m.wg.Done()
 	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
 		n, err := m.Driver.InspectNode(driverNode.StorageID)
@@ -294,7 +291,7 @@ func (m *Monitor) cleanupDriverNodePods(driverNode *volume.NodeInfo, k8sNode *v1
 	}
 
 	// delete volume attachments if the node is down for this pod
-	err = m.cleanupVolumeAttachmentsByNode(driverNode)
+	err = m.cleanupVolumeAttachmentsByNode(driverNode, k8sNodeNameToNodeMap)
 	if err != nil {
 		log.Errorf("Error cleaning up volume attachments: %v", err)
 	}
@@ -433,7 +430,7 @@ func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {
 	return nil
 }
 
-func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
+func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo, k8sNodeNameToNodeMap map[string]*v1.Node) error {
 	log.Infof("Cleaning up volume attachments for node %s", node.StorageID)
 
 	// Get all vol attachments
@@ -450,7 +447,12 @@ func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
 			}
 
 			// Delete attachments for this pod
-			if m.isSameNode(va.Spec.NodeName, node) {
+			k8sNode, ok := k8sNodeNameToNodeMap[va.Spec.NodeName]
+			if !ok {
+				log.Warnf("Node with name %v not found in k8s node map", va.Spec.NodeName)
+				continue
+			}
+			if m.isSameK8sNode(k8sNode, node) {
 				err := storage.Instance().DeleteVolumeAttachment(va.Name)
 				if err != nil {
 					return err
@@ -484,4 +486,18 @@ func (m *Monitor) getVolumeDriverNodesToK8sNodeMap(driverNodes []*volume.NodeInf
 
 func (m *Monitor) isNodeOffline(node *volume.NodeInfo) bool {
 	return node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded
+}
+
+func (m *Monitor) getK8sNodeNameToNodeMap() (map[string]*v1.Node, error) {
+	nodeMap := make(map[string]*v1.Node)
+
+	k8sNodes, err := core.Instance().GetNodes()
+	if err != nil {
+		log.Errorf("Error getting nodes in monitor: %v", err)
+		return nodeMap, fmt.Errorf("error listing k8s nodes: %v", err)
+	}
+	for _, k8sNode := range k8sNodes.Items {
+		nodeMap[k8sNode.Name] = k8sNode.DeepCopy()
+	}
+	return nodeMap, nil
 }
