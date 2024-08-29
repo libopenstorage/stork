@@ -281,7 +281,7 @@ func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *s
 				// Filter out the volumesnapshots that are older than the cutoff period and delete them.
 				snapshotCreationTime := snapshot.CreationTimestamp.Time
 				if snapshotStatus == snapv1.VolumeSnapshotConditionError && time.Since(snapshotCreationTime) > errorSnapshotCleanupCutoffTime {
-					log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v", snapshot.Name)
+					log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v, age: %v", snapshot.Name, time.Since(snapshotCreationTime))
 					err := k8sextops.Instance().DeleteSnapshot(snapshot.Name, snapshotSchedule.Namespace)
 					if err != nil {
 						log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting errored out snapshot %v: %v", snapshot.Name, err)
