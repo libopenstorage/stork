@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"io/ioutil"
 	"reflect"
 	"strconv"
 	"strings"
@@ -41,7 +41,7 @@ import (
 	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
 	v1networking "k8s.io/api/networking/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	// apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -1622,24 +1622,26 @@ func (a *ApplicationBackupController) uploadResources(
 	jsonBytes []byte,
 ) error {
 	/*
-	resKinds := make(map[string]string)
-	for _, obj := range objects {
-		gvk := obj.GetObjectKind().GroupVersionKind()
-		resKinds[gvk.Kind] = gvk.Version
-	}
+		resKinds := make(map[string]string)
+		for _, obj := range objects {
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			resKinds[gvk.Kind] = gvk.Version
+		}
+	*/
 	if err := a.uploadNamespaces(backup); err != nil {
 		return err
 	}
-	// upload CRD to backuplocation
-	if err := a.uploadCRDResources(backup, resKinds); err != nil {
-		return err
-	}
+	/*
+		// upload CRD to backuplocation
+		if err := a.uploadCRDResources(backup, resKinds); err != nil {
+			return err
+		}
 	*/
 	/*
-	jsonBytes, err := json.MarshalIndent(objects, "", " ")
-	if err != nil {
-		return err
-	}
+		jsonBytes, err := json.MarshalIndent(objects, "", " ")
+		if err != nil {
+			return err
+		}
 	*/
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
@@ -1665,6 +1667,7 @@ func (a *ApplicationBackupController) uploadNamespaces(backup *stork_api.Applica
 	return nil
 }
 
+/*
 func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup, resKinds map[string]string) error {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
@@ -1756,7 +1759,7 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	}
 	return nil
 }
-
+*/
 // Upload the backup object which should have all the required metadata
 func (a *ApplicationBackupController) uploadMetadata(
 	backup *stork_api.ApplicationBackup,
@@ -1777,25 +1780,25 @@ func getResourceExportCRName(opsPrefix, crUID, ns string) string {
 
 // Function to append objects to a JSON file
 func (a *ApplicationBackupController) appendObjectsToFile(
-    filePath string,
-    objects []runtime.Unstructured,
+	filePath string,
+	objects []runtime.Unstructured,
 ) error {
-    // Open the file in append mode, create it if it doesn't exist
-    file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        return err
-    }
-    defer file.Close()
+	// Open the file in append mode, create it if it doesn't exist
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-    // Convert objects to JSON
-    jsonBytes, err := json.Marshal(objects)
-    if err != nil {
-        return err
-    }
+	// Convert objects to JSON
+	jsonBytes, err := json.Marshal(objects)
+	if err != nil {
+		return err
+	}
 
-    // Write JSON bytes to file with a new line
-    _, err = file.Write(append(jsonBytes, '\n'))
-    return err
+	// Write JSON bytes to file with a new line
+	_, err = file.Write(append(jsonBytes, '\n'))
+	return err
 }
 
 // Function to read the content of a file into a byte array
@@ -1808,14 +1811,13 @@ func readFileToByteArray(filePath string) ([]byte, error) {
 	defer file.Close()
 
 	// Read the entire file content into a byte array
-	fileContent, err := ioutil.ReadAll(file)
+	fileContent, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
 
 	return fileContent, nil
 }
-
 
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
@@ -1878,7 +1880,7 @@ func (a *ApplicationBackupController) backupResources(
 	// updating the LastUpdateTimestamp to show that backup is progressing
 	// allObjects := make([]runtime.Unstructured, 0)
 	var count int
-	allObjects := make([]runtime.Unstructured, 0)
+	var allObjects []runtime.Unstructured
 	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
 		allObjects = make([]runtime.Unstructured, 0)
 		count = count + 1
@@ -2068,12 +2070,12 @@ func (a *ApplicationBackupController) backupResources(
 			return err
 		}
 
-
 	}
 	jsonBytes, err := readFileToByteArray("/tmp/siva.json")
 	if err != nil {
 		log.ApplicationBackupLog(backup).Errorf("Error reading resources to file: %v", err)
 	}
+	logrus.Infof("sivakumar -- read jsonBytes %v", len(jsonBytes))
 	// Upload the resources to the backup location
 	if err = a.uploadResources(backup, jsonBytes); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v, namespace: %s", err, backup.Namespace)
