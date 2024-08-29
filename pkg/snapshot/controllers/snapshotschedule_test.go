@@ -6,6 +6,7 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/assert"
@@ -118,7 +119,23 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot1"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot3"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot4"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
-	mockSched.EXPECT().UpdateSnapshotSchedule(gomock.Eq(snapshotSchedule)).Return(updatedSchedule, nil).AnyTimes()
+	mockSched.EXPECT().UpdateSnapshotSchedule(gomock.Cond(func(snapshotschedule any) bool {
+		// Fields for the deleted volumesnapshots should be updated in the snapshotschedule object.
+		schedule := snapshotschedule.(*v1alpha1.VolumeSnapshotSchedule)
+		assert.Equal(t, schedule.Status.Items["policy1"][0].Deleted, true)
+		assert.Equal(t, schedule.Status.Items["policy1"][0].Message, errorSnapshotDeletionMessage)
+		assert.Equal(t, schedule.Status.Items["policy1"][2].Deleted, true)
+		assert.Equal(t, schedule.Status.Items["policy1"][2].Message, errorSnapshotDeletionMessage)
+		assert.Equal(t, schedule.Status.Items["policy1"][3].Deleted, true)
+		assert.Equal(t, schedule.Status.Items["policy1"][3].Message, errorSnapshotDeletionMessage)
+
+		// Fields for the undeleted volumesnapshots should not be updated in the snapshotschedule object.
+		assert.Empty(t, schedule.Status.Items["policy1"][1].Deleted)
+		assert.Empty(t, schedule.Status.Items["policy1"][1].Message)
+		assert.Empty(t, schedule.Status.Items["policy1"][4].Deleted)
+		assert.Empty(t, schedule.Status.Items["policy1"][4].Message)
+		return true
+	})).Return(updatedSchedule, nil).AnyTimes()
 
 	k8sextops.SetInstance(mockSnap)
 	storkops.SetInstance(mockSched)
