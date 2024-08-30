@@ -67,34 +67,36 @@ const (
 	nsObjectName       = "namespaces.json"
 	metadataObjectName = "metadata.json"
 
-	allNamespacesSpecifier          = "*"
-	backupVolumeBatchCountEnvVar    = "BACKUP-VOLUME-BATCH-COUNT"
-	defaultBackupVolumeBatchCount   = 3
-	backupResourcesBatchCount       = 15
-	maxRetry                        = 10
-	retrySleep                      = 10 * time.Second
-	genericBackupKey                = "BACKUP_TYPE"
-	kdmpDriverOnly                  = "kdmp"
-	nonKdmpDriverOnly               = "nonkdmp"
-	mixedDriver                     = "mixed"
-	oneMBSizeBytes                  = 1 << (10 * 2)
-	prefixBackup                    = "backup"
-	prefixRestore                   = "restore"
-	applicationBackupCRNameKey      = kdmpAnnotationPrefix + "applicationbackup-cr-name"
-	applicationRestoreCRNameKey     = kdmpAnnotationPrefix + "applicationrestore-cr-name"
-	applicationBackupCRUIDKey       = kdmpAnnotationPrefix + "applicationbackup-cr-uid"
-	applicationRestoreCRUIDKey      = kdmpAnnotationPrefix + "applicationrestore-cr-uid"
-	kdmpAnnotationPrefix            = "kdmp.portworx.com/"
-	pxbackupAnnotationCreateByKey   = pxbackupAnnotationPrefix + "created-by"
-	pxbackupAnnotationCreateByValue = "px-backup"
-	backupObjectNameKey             = kdmpAnnotationPrefix + "backupobject-name"
-	restoreObjectNameKey            = kdmpAnnotationPrefix + "restoreobject-name"
-	pxbackupObjectUIDKey            = pxbackupAnnotationPrefix + "backup-uid"
-	pxbackupAnnotationPrefix        = "portworx.io/"
-	pxbackupObjectNameKey           = pxbackupAnnotationPrefix + "backup-name"
-	backupObjectUIDKey              = kdmpAnnotationPrefix + "backupobject-uid"
-	restoreObjectUIDKey             = kdmpAnnotationPrefix + "restoreobject-uid"
-	skipResourceAnnotation          = "stork.libopenstorage.org/skip-resource"
+	allNamespacesSpecifier           = "*"
+	backupVolumeBatchCountEnvVar     = "BACKUP-VOLUME-BATCH-COUNT"
+	getBackupStatusBatchCountEnvVar  = "GET-BACKUP-STATUS-BATCH-COUNT"
+	defaultBackupVolumeBatchCount    = 3
+	defaultGetBackupStatusBatchCount = 100
+	backupResourcesBatchCount        = 15
+	maxRetry                         = 10
+	retrySleep                       = 10 * time.Second
+	genericBackupKey                 = "BACKUP_TYPE"
+	kdmpDriverOnly                   = "kdmp"
+	nonKdmpDriverOnly                = "nonkdmp"
+	mixedDriver                      = "mixed"
+	oneMBSizeBytes                   = 1 << (10 * 2)
+	prefixBackup                     = "backup"
+	prefixRestore                    = "restore"
+	applicationBackupCRNameKey       = kdmpAnnotationPrefix + "applicationbackup-cr-name"
+	applicationRestoreCRNameKey      = kdmpAnnotationPrefix + "applicationrestore-cr-name"
+	applicationBackupCRUIDKey        = kdmpAnnotationPrefix + "applicationbackup-cr-uid"
+	applicationRestoreCRUIDKey       = kdmpAnnotationPrefix + "applicationrestore-cr-uid"
+	kdmpAnnotationPrefix             = "kdmp.portworx.com/"
+	pxbackupAnnotationCreateByKey    = pxbackupAnnotationPrefix + "created-by"
+	pxbackupAnnotationCreateByValue  = "px-backup"
+	backupObjectNameKey              = kdmpAnnotationPrefix + "backupobject-name"
+	restoreObjectNameKey             = kdmpAnnotationPrefix + "restoreobject-name"
+	pxbackupObjectUIDKey             = pxbackupAnnotationPrefix + "backup-uid"
+	pxbackupAnnotationPrefix         = "portworx.io/"
+	pxbackupObjectNameKey            = pxbackupAnnotationPrefix + "backup-name"
+	backupObjectUIDKey               = kdmpAnnotationPrefix + "backupobject-uid"
+	restoreObjectUIDKey              = kdmpAnnotationPrefix + "restoreobject-uid"
+	skipResourceAnnotation           = "stork.libopenstorage.org/skip-resource"
 	//VmFreezePrefix prefix for freeze rule action
 	vmFreezePrefix = "vm-freeze-pre-rule"
 	//VmUnFreezePrefix prefix for freeze rule action
@@ -976,9 +978,15 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				return fmt.Errorf("error getting volume driver name: %v", err)
 			}
 			if driverName == volume.PortworxDriverName {
-				volumeInfos, err := driver.GetBackupStatus(backup)
+				batchCount := getBatchCountForGetBackupStatus()
+				volumeInfos, err := a.getAndUpdateBackupStatusInBatches(backup, driver, driverName, batchCount)
 				if err != nil {
-					logrus.Errorf("error getting backup status: %v", err)
+					return err
+				}
+				backup.Status.Volumes = volumeInfos
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
 					return err
 				}
 				for _, volInfo := range volumeInfos {
@@ -1047,6 +1055,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		if len(backup.Status.Volumes) != 0 {
 			drivers := a.getDriversForBackup(backup)
 			volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+			batchCount := getBatchCountForGetBackupStatus()
 			for driverName := range drivers {
 				driver, err := volume.Get(driverName)
 				if err != nil {
@@ -1057,9 +1066,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					logrus.Debugf("skipping driver %v for status check", driverName)
 					continue
 				}
-				status, err := driver.GetBackupStatus(backup)
+				status, err := a.getAndUpdateBackupStatusInBatches(backup, driver, driverName, batchCount)
 				if err != nil {
-					log.ApplicationBackupLog(backup).Errorf("failed to get vol status fro driver %v: %v", driverName, err)
 					return err
 				}
 				volumeInfos = append(volumeInfos, status...)
@@ -2778,4 +2786,46 @@ func handleLargeResourceError(a *ApplicationBackupController, backup *stork_api.
 			break
 		}
 	}
+}
+
+func getBatchCountForGetBackupStatus() int {
+	if envValue := os.Getenv(getBackupStatusBatchCountEnvVar); len(envValue) != 0 {
+		batchCount, err := strconv.Atoi(envValue)
+		if err != nil {
+			return defaultBackupVolumeBatchCount
+		}
+		return batchCount
+	}
+	return defaultBackupVolumeBatchCount
+}
+
+// getAndUpdateBackupStatusInBatches - fetches the backup status of volumes in batches.
+// Additionally, it updates the last update timestamp of the backup CR for each batch to prevent backup timeouts in px-backup
+func (a *ApplicationBackupController) getAndUpdateBackupStatusInBatches(
+	backup *stork_api.ApplicationBackup,
+	driver volume.Driver,
+	driverName string,
+	batchCount int,
+) ([]*stork_api.ApplicationBackupVolumeInfo, error) {
+	volumes := backup.Status.Volumes
+	volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+	// Fetch the status of the volumes in batches
+	for i := 0; i < len(volumes); i += batchCount {
+		end := min(i+batchCount, len(volumes))
+		batchVolumes := volumes[i:end]
+		backup.Status.Volumes = batchVolumes
+		batchVolumeInfos, err := driver.GetBackupStatus(backup)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("failed to get volume status for driver %v: %v", driverName, err)
+			return nil, err
+		}
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		backup.Status.Volumes = volumes
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			return nil, err
+		}
+		volumeInfos = append(volumeInfos, batchVolumeInfos...)
+	}
+	return volumeInfos, nil
 }
