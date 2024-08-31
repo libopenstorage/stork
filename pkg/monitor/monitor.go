@@ -227,7 +227,7 @@ func (m *Monitor) driverMonitor() {
 				// For any Running pod on that node using volume by the driver, kill the pod
 				// Degraded nodes are not considered offline and pods are not deleted from them.
 				if node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded {
-					// Only ini
+					// Only initialize the map when it is absolutely necessary
 					if len(k8sNodeNameToNodeMap) == 0 {
 						k8sNodeNameToNodeMap, err = m.getK8sNodeNameToNodeMap()
 						if err != nil {
