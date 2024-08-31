@@ -27,9 +27,11 @@ const (
 	defaultIntervalSec = 120
 	minimumIntervalSec = 30
 	// This will result into a total 2.5 minutes of backoff
-	initialNodeWaitDelay = 10 * time.Second
-	nodeWaitFactor       = 2
-	nodeWaitSteps        = 5
+	initialNodeWaitDelay      = 10 * time.Second
+	nodeWaitFactor            = 2
+	nodeWaitSteps             = 5
+	podDeleteBatchSize        = 5
+	podBatchDeleteIntervalSec = 30
 
 	storageDriverOfflineReason = "StorageDriverOffline"
 )
@@ -106,16 +108,11 @@ func (m *Monitor) Stop() error {
 	return nil
 }
 
-func (m *Monitor) isSameNode(k8sNodeName string, driverNode *volume.NodeInfo) bool {
-	if k8sNodeName == driverNode.Hostname {
+func (m *Monitor) isSameK8sNode(k8sNode *v1.Node, driverNode *volume.NodeInfo) bool {
+	if k8sNode.Name == driverNode.Hostname {
 		return true
 	}
-	node, err := core.Instance().GetNodeByName(k8sNodeName)
-	if err != nil {
-		log.Errorf("Error getting node %v: %v", k8sNodeName, err)
-		return false
-	}
-	return volume.IsNodeMatch(node, driverNode)
+	return volume.IsNodeMatch(k8sNode, driverNode)
 }
 
 func (m *Monitor) podMonitor() error {
@@ -215,6 +212,8 @@ func (m *Monitor) driverMonitor() {
 	for {
 		select {
 		default:
+			k8sNodeNameToNodeMap := make(map[string]*v1.Node)
+			driverNodeToK8sNodeMap := make(map[string]*v1.Node)
 			log.Debugf("Monitoring storage nodes")
 			nodes, err := m.Driver.GetNodes()
 			if err != nil {
@@ -228,9 +227,26 @@ func (m *Monitor) driverMonitor() {
 				// For any Running pod on that node using volume by the driver, kill the pod
 				// Degraded nodes are not considered offline and pods are not deleted from them.
 				if node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded {
+					// Only initialize the map when it is absolutely necessary
+					if len(k8sNodeNameToNodeMap) == 0 {
+						k8sNodeNameToNodeMap, err = m.getK8sNodeNameToNodeMap()
+						if err != nil {
+							log.Errorf("Error getting k8s node name to node map: %v", err)
+							continue
+						}
+					}
+					// Only initialize the map when it is absolutely necessary
+					if len(driverNodeToK8sNodeMap) == 0 {
+						driverNodeToK8sNodeMap = m.getVolumeDriverNodesToK8sNodeMap(nodes)
+					}
+					if _, ok := driverNodeToK8sNodeMap[node.StorageID]; !ok {
+						log.Errorf("Node with scheduler name %v and storage ID %v is not found in k8s cluster", node.SchedulerID, node.StorageID)
+						continue
+					}
+					k8sNode := driverNodeToK8sNodeMap[node.StorageID]
 					m.wg.Add(1)
 					// wait for 1 min if node is upgrading
-					go m.cleanupDriverNodePods(node)
+					go m.cleanupDriverNodePods(node, k8sNode, k8sNodeNameToNodeMap)
 				}
 			}
 			// lets all node to finish processing and then start sleep
@@ -245,15 +261,15 @@ func (m *Monitor) driverMonitor() {
 	}
 }
 
-func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
+func (m *Monitor) cleanupDriverNodePods(driverNode *volume.NodeInfo, k8sNode *v1.Node, k8sNodeNameToNodeMap map[string]*v1.Node) {
 	defer m.wg.Done()
 	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
-		n, err := m.Driver.InspectNode(node.StorageID)
+		n, err := m.Driver.InspectNode(driverNode.StorageID)
 		if err != nil {
 			return false, nil
 		}
-		if n.Status == volume.NodeOffline || n.Status == volume.NodeDegraded {
-			log.Infof("Volume driver on node %v (%v) is still offline (%v)", node.Hostname, node.StorageID, n.RawStatus)
+		if m.isNodeOffline(n) {
+			log.Infof("Volume driver on node %v (%v) is still offline (%v)", driverNode.Hostname, driverNode.StorageID, n.RawStatus)
 			return false, nil
 		}
 		return true, nil
@@ -264,10 +280,10 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 
 	var pods *v1.PodList
 	if storkcache.Instance() != nil {
-		pods, err = storkcache.Instance().ListTransformedPods()
+		pods, err = storkcache.Instance().ListTransformedPods(k8sNode.Name)
 	} else {
 		log.Warnf("shared informer cache has not been initialized.")
-		pods, err = core.Instance().GetPods("", nil)
+		pods, err = core.Instance().GetPodsByNode(k8sNode.Name, "")
 	}
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
@@ -275,37 +291,85 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	}
 
 	// delete volume attachments if the node is down for this pod
-	err = m.cleanupVolumeAttachmentsByNode(node)
+	err = m.cleanupVolumeAttachmentsByNode(driverNode, k8sNodeNameToNodeMap)
 	if err != nil {
 		log.Errorf("Error cleaning up volume attachments: %v", err)
 	}
 
+	podsSelectedForDeletion := make([]v1.Pod, 0)
+	csiPodsSelectedForDeletion := make([]v1.Pod, 0)
 	for _, pod := range pods.Items {
-		var msg string
 		csiPodPrefix, err := m.Driver.GetCSIPodPrefix()
 		if err == nil && strings.HasPrefix(pod.Name, csiPodPrefix) {
-			msg = fmt.Sprintf("Deleting csi pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			csiPodsSelectedForDeletion = append(csiPodsSelectedForDeletion, pod)
 		} else {
 			if len(pod.Spec.Volumes) == 0 {
 				// Pod does not have any volumes. So, no need to check further
 				continue
 			}
-			msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
 			owns, err := m.doesDriverOwnPodVolumes(&pod)
 			if err != nil || !owns {
 				continue
 			}
+			podsSelectedForDeletion = append(podsSelectedForDeletion, pod)
 		}
-		if m.isSameNode(pod.Spec.NodeName, node) {
+	}
+
+	// Delete CSI pods first
+	if len(csiPodsSelectedForDeletion) > 0 {
+		m.batchDeletePodsFromOfflineNodes(csiPodsSelectedForDeletion, driverNode, true)
+	}
+
+	// Do batch deletes of rest of the pods
+	if len(podsSelectedForDeletion) > 0 {
+		m.batchDeletePodsFromOfflineNodes(podsSelectedForDeletion, driverNode, false)
+	}
+}
+
+// batchDeletePodsFromOfflineNodes deletes the pods in batches of batchSize
+// and increments the HealthCounter by the number of pods deleted
+func (m *Monitor) batchDeletePodsFromOfflineNodes(
+	pods []v1.Pod,
+	node *volume.NodeInfo,
+	csiPods bool) {
+
+	log.Infof("Going to delete %d pods from node %v in batch of %d", len(pods), node.Hostname, podDeleteBatchSize)
+	for i := 0; i < len(pods); i += podDeleteBatchSize {
+
+		// Do a fresh node status check before deleting pods
+		n, err := m.Driver.InspectNode(node.StorageID)
+		if err != nil {
+			log.Errorf("Error inspecting node %v in batch deletion of pods: %v", node.StorageID, err)
+			return
+		}
+		if !m.isNodeOffline(n) {
+			log.Infof("Volume driver on node %v with storage ID (%v) is now %v in batch deletion of pods, hence ignoring pod deletions from this node", node.Hostname, node.StorageID, n.Status)
+			return
+		}
+
+		end := i + podDeleteBatchSize
+		if end > len(pods) {
+			end = len(pods)
+		}
+		counterIncrement := end - i
+		for _, pod := range pods[i:end] {
+			var msg string
+			if csiPods {
+				msg = fmt.Sprintf("Deleting CSI Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			} else {
+				msg = fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			}
 			storklog.PodLog(&pod).Infof(msg)
 			m.Recorder.Event(&pod, v1.EventTypeWarning, storageDriverOfflineReason, msg)
-			err := core.Instance().DeletePods([]v1.Pod{pod}, true)
-			if err != nil {
-				storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
-				continue
-			}
-			HealthCounter.Inc()
 		}
+
+		err = core.Instance().DeletePods(pods[i:end], true)
+		if err != nil {
+			log.Errorf("Error deleting pods: %v", err)
+		}
+		HealthCounter.Add(float64(counterIncrement))
+		// Delaying between batch deletes to avoid overwhelming the extender
+		time.Sleep(podBatchDeleteIntervalSec * time.Second)
 	}
 }
 
@@ -366,7 +430,7 @@ func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {
 	return nil
 }
 
-func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
+func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo, k8sNodeNameToNodeMap map[string]*v1.Node) error {
 	log.Infof("Cleaning up volume attachments for node %s", node.StorageID)
 
 	// Get all vol attachments
@@ -383,7 +447,12 @@ func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
 			}
 
 			// Delete attachments for this pod
-			if m.isSameNode(va.Spec.NodeName, node) {
+			k8sNode, ok := k8sNodeNameToNodeMap[va.Spec.NodeName]
+			if !ok {
+				log.Warnf("Node with name %v not found in k8s node map", va.Spec.NodeName)
+				continue
+			}
+			if m.isSameK8sNode(k8sNode, node) {
 				err := storage.Instance().DeleteVolumeAttachment(va.Name)
 				if err != nil {
 					return err
@@ -395,4 +464,40 @@ func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
 	}
 
 	return nil
+}
+
+func (m *Monitor) getVolumeDriverNodesToK8sNodeMap(driverNodes []*volume.NodeInfo) map[string]*v1.Node {
+	nodeMap := make(map[string]*v1.Node)
+
+	k8sNodes, err := core.Instance().GetNodes()
+	if err != nil {
+		log.Errorf("Error getting nodes in monitor: %v", err)
+		return nodeMap
+	}
+	for _, k8sNode := range k8sNodes.Items {
+		for _, driverNode := range driverNodes {
+			if m.isSameK8sNode(&k8sNode, driverNode) {
+				nodeMap[driverNode.StorageID] = k8sNode.DeepCopy()
+			}
+		}
+	}
+	return nodeMap
+}
+
+func (m *Monitor) isNodeOffline(node *volume.NodeInfo) bool {
+	return node.Status == volume.NodeOffline || node.Status == volume.NodeDegraded
+}
+
+func (m *Monitor) getK8sNodeNameToNodeMap() (map[string]*v1.Node, error) {
+	nodeMap := make(map[string]*v1.Node)
+
+	k8sNodes, err := core.Instance().GetNodes()
+	if err != nil {
+		log.Errorf("Error getting nodes in monitor: %v", err)
+		return nodeMap, fmt.Errorf("error listing k8s nodes: %v", err)
+	}
+	for _, k8sNode := range k8sNodes.Items {
+		nodeMap[k8sNode.Name] = k8sNode.DeepCopy()
+	}
+	return nodeMap, nil
 }

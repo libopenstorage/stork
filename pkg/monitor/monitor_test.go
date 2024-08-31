@@ -4,21 +4,26 @@
 package monitor
 
 import (
+	"fmt"
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
+	mockVolumeDriver "github.com/libopenstorage/stork/drivers/volume/mock/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	storagev1 "k8s.io/api/storage/v1"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -45,6 +50,8 @@ var (
 	monitor                *Monitor
 	nodes                  *v1.NodeList
 	testNodeOfflineTimeout time.Duration
+	volumeDriver           *mockVolumeDriver.MockDriver
+	mockCtrl               *gomock.Controller
 )
 
 func TestMonitor(t *testing.T) {
@@ -54,12 +61,19 @@ func TestMonitor(t *testing.T) {
 	t.Run("testEvictedDriverPod", testEvictedDriverPod)
 	t.Run("testEvictedOtherDriverPod", testEvictedOtherDriverPod)
 	t.Run("testTempOfflineStorageNode", testTempOfflineStorageNode)
-	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
-	t.Run("testVolumeAttachmentCleanup", testVolumeAttachmentCleanup)
-	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
 	t.Run("testStorageDownNode", testStorageDownNode)
 	t.Run("teardown", teardown)
+}
+
+func TestMonitorOfflineNodes(t *testing.T) {
+	t.Run("testOfflineStorageNode", testOfflineStorageNode)
+	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
+}
+
+func TestMonitorMethods(t *testing.T) {
+	t.Run("testGetVolumeDriverNodesToK8sNodeMap", testGetVolumeDriverNodesToK8sNodeMap)
+	t.Run("testBatchDeletePodsFromOfflineNodes", testBatchDeletePodsFromOfflineNodes)
 }
 
 func setup(t *testing.T) {
@@ -143,6 +157,101 @@ func setup(t *testing.T) {
 func teardown(t *testing.T) {
 	err := monitor.Stop()
 	require.NoError(t, err, "Error stopping monitor")
+	prometheus.Unregister(HealthCounter)
+}
+
+func setupWithNewMockDriver(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	scheme := runtime.NewScheme()
+	err := stork_api.AddToScheme(scheme)
+	require.NoError(t, err, "Error adding stork scheme")
+
+	fakeStorkClient = fakeclient.NewSimpleClientset()
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+	core.SetInstance(core.New(fakeKubeClient))
+	storage.SetInstance(storage.New(fakeKubeClient.StorageV1()))
+	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
+
+	storkdriver, err := volume.Get(mockDriverName)
+	require.NoError(t, err, "Error getting mock volume driver")
+
+	var ok bool
+	driver, ok = storkdriver.(*mock.Driver)
+	require.True(t, ok, "Error casting mockdriver")
+
+	err = storkdriver.Init(nil)
+	require.NoError(t, err, "Error initializing mock volume driver")
+
+	nodes = &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode(nodeForPod, nodeForPod, "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "node5.domain", "192.168.0.5", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node6.domain", "node6.domain", "192.168.0.1", "rack1", "", ""))
+
+	for _, n := range nodes.Items {
+		node, err := core.Instance().CreateNode(&n)
+		require.NoError(t, err, "failed to create fake node")
+		require.NotNil(t, node, "got nil node from create node api")
+	}
+
+	provNodes := []int{0, 1}
+	err = driver.CreateCluster(6, nodes)
+	require.NoError(t, err, "Error creating cluster")
+
+	err = driver.UpdateNodeIP(5, "192.168.0.1")
+	require.NoError(t, err, "Error updating node IP")
+	err = driver.UpdateNodeStatus(5, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
+
+	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1, nil, false, false, "")
+	require.NoError(t, err, "Error provisioning volume")
+
+	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2, nil, false, false, "")
+	require.NoError(t, err, "Error provisioning volume")
+
+	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3, nil, false, false, "")
+	require.NoError(t, err, "Error provisioning volume")
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
+	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
+
+	monitor = &Monitor{
+		Driver:      storkdriver,
+		IntervalSec: 30,
+		Recorder:    recorder,
+	}
+
+	mockCtrl = gomock.NewController(t)
+	volumeDriver = mockVolumeDriver.NewMockDriver(mockCtrl)
+
+	driverNodes := getDriverNodes(len(nodes.Items))
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).Times(1)
+
+	monitor.Driver = volumeDriver
+
+	// overwrite the backoff timers to speed up the tests
+	// this accounts to a backoff of 1 min
+	nodeWaitCallBackoff = wait.Backoff{
+		Duration: initialNodeWaitDelay,
+		Factor:   1,
+		Steps:    nodeWaitSteps,
+	}
+	// 30 (interval)  + 60 (backoff) + 5 (buffer)
+	testNodeOfflineTimeout = 95 * time.Second
+
+	err = monitor.Start()
+	require.NoError(t, err, "failed to start monitor")
+}
+
+func teardownWithNewMockDriver(t *testing.T) {
+	mockCtrl.Finish()
+	err := monitor.Stop()
+	require.NoError(t, err, "Error stopping monitor")
+	//monitor = nil
+	prometheus.Unregister(HealthCounter)
 }
 
 func testUnknownDriverPod(t *testing.T) {
@@ -286,6 +395,11 @@ func newNode(name, hostname, ip, rack, zone, region string) *v1.Node {
 }
 
 func testOfflineStorageNode(t *testing.T) {
+
+	setupWithNewMockDriver(t)
+
+	defer teardownWithNewMockDriver(t)
+
 	pod := newPod("driverPod", []string{driverVolumeName})
 	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
@@ -294,13 +408,24 @@ func testOfflineStorageNode(t *testing.T) {
 	_, err = core.Instance().CreatePod(noStoragePod)
 	require.NoError(t, err, "failed to create pod")
 
-	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
-	require.NoError(t, err, "Error setting node status to Offline")
-	defer func() {
-		err = driver.UpdateNodeStatus(0, volume.NodeOnline)
-		require.NoError(t, err, "Error setting node status to Online")
-	}()
+	driverNodes := getDriverNodes(len(nodes.Items))
+	driverNodes[0].Status = volume.NodeOffline
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
+	volumes := []*volume.Info{
+		{
+			VolumeName: "volume1",
+			DataNodes:  []string{driverNodes[0].StorageID},
+		},
+	}
 
+	wffcVolumes := make([]*volume.Info, 0)
+
+	volumeDriver.EXPECT().InspectNode("node1").Return(driverNodes[0], nil).AnyTimes()
+	volumeDriver.EXPECT().GetCSIPodPrefix().Return("px-csi-ext-", nil).AnyTimes()
+	volumeDriver.EXPECT().GetPodVolumes(&pod.Spec, pod.Namespace, false).Return(volumes, wffcVolumes, nil).AnyTimes()
+	volumeDriver.EXPECT().GetPodVolumes(&noStoragePod.Spec, noStoragePod.Namespace, false).Return(wffcVolumes, wffcVolumes, nil).AnyTimes()
+
+	testNodeOfflineTimeout = 95 * time.Second
 	time.Sleep(testNodeOfflineTimeout)
 	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
@@ -362,172 +487,276 @@ func testOfflineStorageNodeDuplicateIP(t *testing.T) {
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
 
-func testVolumeAttachmentCleanup(t *testing.T) {
-	onlineNodeID := 1
-	offlineNodeID := 2
-	podsUnknownNodeID := 3
-	nodeToKeepOnline := nodes.Items[onlineNodeID].Name
-	nodeToTakeOffline := nodes.Items[offlineNodeID].Name
-	nodeToPutUnknownPodsOn := nodes.Items[podsUnknownNodeID].Name
-
-	// Create PVC and PV for all test volumes.
-	for _, volumeName := range []string{driverVolumeName, attachmentVolumeName, unknownPodsVolumeName} {
-		_, err := core.Instance().CreatePersistentVolumeClaim(&v1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      volumeName,
-				Namespace: defaultNamespace,
-			},
-		})
-		require.NoError(t, err, "failed to create pv for %s", volumeName)
-		_, err = core.Instance().CreatePersistentVolume(&v1.PersistentVolume{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      volumeName,
-				Namespace: "",
-			},
-			Spec: v1.PersistentVolumeSpec{
-				ClaimRef: &v1.ObjectReference{
-					Name:      volumeName,
-					Namespace: defaultNamespace,
-				},
-			},
-		})
-		require.NoError(t, err, "failed to create pvc for %s", volumeName)
-	}
-
-	// Create multiple pods on different nodes, some with volumeattachments, some without.
-	// Stop the driver on the node with the attachment and make sure only that pod and volumeattachment are deleted.
-
-	// Create two pods on node N1 that will remain healthy. One attached, one not.
-	healthyPodAttached := newPod("testVolumeAttachmentCleanupHealtyAttached", []string{driverVolumeName})
-	healthyPodAttached.Spec.NodeName = nodeToKeepOnline
-	_, err := core.Instance().CreatePod(healthyPodAttached)
-	require.NoError(t, err, "failed to create healthy attached pod")
-	_, err = storage.Instance().CreateVolumeAttachment(&storagev1.VolumeAttachment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "va-healthy",
-		},
-		Spec: storagev1.VolumeAttachmentSpec{
-			NodeName: nodeToKeepOnline,
-			Source: storagev1.VolumeAttachmentSource{
-				PersistentVolumeName: &driverVolumeName,
-			},
-		},
-	})
-	require.NoError(t, err, "failed to create healthy pod volume attachment")
-
-	healthyPodDetached := newPod("testVolumeAttachmentCleanupHealthyDetached", []string{driverVolumeName})
-	healthyPodDetached.Spec.NodeName = nodeToKeepOnline
-	_, err = core.Instance().CreatePod(healthyPodDetached)
-	require.NoError(t, err, "failed to create healthy detached pod")
-
-	// Create two pods on node N2 that will be taken offline temporarily. One attached, one not.
-	unhealthyPodAttached := newPod("testVolumeAttachmentCleanupUnheathyAttached", []string{attachmentVolumeName})
-	unhealthyPodAttached.Spec.NodeName = nodeToTakeOffline
-	_, err = core.Instance().CreatePod(unhealthyPodAttached)
-	require.NoError(t, err, "failed to create pod")
-	_, err = storage.Instance().CreateVolumeAttachment(&storagev1.VolumeAttachment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "va-unhealthy",
-		},
-		Spec: storagev1.VolumeAttachmentSpec{
-			NodeName: nodeToTakeOffline,
-			Source: storagev1.VolumeAttachmentSource{
-				PersistentVolumeName: &attachmentVolumeName,
-			},
-		},
-	})
-	require.NoError(t, err, "failed to create unhealthy pod volume attachment")
-
-	unhealthyPodDetached := newPod("testVolumeAttachmentCleanupUnheathyDetached", []string{attachmentVolumeName})
-	unhealthyPodDetached.Spec.NodeName = nodeToTakeOffline
-	_, err = core.Instance().CreatePod(unhealthyPodDetached)
-	require.NoError(t, err, "failed to create pod")
-
-	// Create two pods on node N3 that will have unknown state. One attached, one not.
-	unknownPodAttached := newPod("testVolumeAttachmentCleanupUnknownPodAttached", []string{unknownPodsVolumeName})
-	unknownPodAttached.Spec.NodeName = nodeToPutUnknownPodsOn
-	unknownPodAttached.Status = v1.PodStatus{
-		Reason: node.NodeUnreachablePodReason,
-	}
-	_, err = core.Instance().CreatePod(unknownPodAttached)
-	require.NoError(t, err, "failed to create pod")
-	_, err = storage.Instance().CreateVolumeAttachment(&storagev1.VolumeAttachment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "va-unknown",
-		},
-		Spec: storagev1.VolumeAttachmentSpec{
-			NodeName: nodeToPutUnknownPodsOn,
-			Source: storagev1.VolumeAttachmentSource{
-				PersistentVolumeName: &unknownPodsVolumeName,
-			},
-		},
-	})
-	require.NoError(t, err, "failed to create unknown pod volume attachment")
-
-	unknownPodDetached := newPod("testVolumeAttachmentCleanupUnknownPodDetached", []string{unknownPodsVolumeName})
-	unknownPodDetached.Spec.NodeName = nodeToPutUnknownPodsOn
-	unknownPodDetached.Status = v1.PodStatus{
-		Reason: node.NodeUnreachablePodReason,
-	}
-	_, err = core.Instance().CreatePod(unknownPodDetached)
-	require.NoError(t, err, "failed to create unknown detached pod")
-
-	// Kill N2
-	err = driver.UpdateNodeStatus(offlineNodeID, volume.NodeOffline)
-	require.NoError(t, err, "Error setting node status to Offline")
-	defer func() {
-		err = driver.UpdateNodeStatus(offlineNodeID, volume.NodeOnline)
-		require.NoError(t, err, "Error setting node status to Online")
-	}()
-
-	// VolumeAttachments (VA) for N2 and N3 should be deleted, but VA for N1 should remain.
-	time.Sleep(testNodeOfflineTimeout)
-
-	vaList, err := storage.Instance().ListVolumeAttachments()
-	require.NoError(t, err, "expected no error from list vol attachments")
-
-	// There should be exactly one attachment left - the healthy one.
-	require.Equal(t, 1, len(vaList.Items))
-	require.Equal(t, "va-healthy", vaList.Items[0].Name)
-
-	// Healthy pods should remain
-	_, err = core.Instance().GetPodByName(healthyPodAttached.Name, "")
-	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
-
-	_, err = core.Instance().GetPodByName(healthyPodDetached.Name, "")
-	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
-
-	// Unhealthy pods should be deleted.
-	_, err = core.Instance().GetPodByName(unhealthyPodAttached.Name, "")
-	require.Error(t, err, "expected error from get pod as pod should be deleted")
-
-	_, err = core.Instance().GetPodByName(unhealthyPodDetached.Name, "")
-	require.Error(t, err, "expected error from get pod as pod should be deleted")
-
-	// Unknown pods should be deleted.
-	_, err = core.Instance().GetPodByName(unknownPodAttached.Name, "")
-	require.Error(t, err, "expected error from get pod as pod should be deleted")
-
-	_, err = core.Instance().GetPodByName(unknownPodDetached.Name, "")
-	require.Error(t, err, "expected error from get pod as pod should be deleted")
-
-	// total pods rescheduled during UT's
-	require.Equal(t, testutil.ToFloat64(HealthCounter), float64(8), "pods_reschduled_total not matched")
-}
-
 func testOfflineStorageNodeForCSIExtPod(t *testing.T) {
+	setupWithNewMockDriver(t)
+
+	defer teardownWithNewMockDriver(t)
+
 	pod := newPod("px-csi-ext-foo", nil)
 	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
-	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
-	require.NoError(t, err, "Error setting node status to Offline")
-	defer func() {
-		err = driver.UpdateNodeStatus(0, volume.NodeOnline)
-		require.NoError(t, err, "Error setting node status to Online")
-	}()
+	driverNodes := getDriverNodes(len(nodes.Items))
+	driverNodes[0].Status = volume.NodeOffline
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
+	volumeDriver.EXPECT().InspectNode("node1").Return(driverNodes[0], nil).AnyTimes()
+	volumeDriver.EXPECT().GetCSIPodPrefix().Return("px-csi-ext-", nil).AnyTimes()
 
+	testNodeOfflineTimeout = 95 * time.Second
 	time.Sleep(testNodeOfflineTimeout)
 	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
+}
+
+func testGetVolumeDriverNodesToK8sNodeMap(t *testing.T) {
+
+	monitor := &Monitor{}
+
+	core.SetInstance(core.New(kubernetes.NewSimpleClientset()))
+
+	// Test when k8s nodes are more than driver nodes
+	nodes = &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "node5.domain", "192.168.0.5", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node6.domain", "node6.domain", "192.168.0.1", "rack1", "", ""))
+
+	for _, n := range nodes.Items {
+		node, err := core.Instance().CreateNode(&n)
+		require.NoError(t, err, "failed to create fake node")
+		require.NotNil(t, node, "got nil node from create node api")
+	}
+
+	driverNodes := []*volume.NodeInfo{
+		{
+			StorageID:   "node1",
+			SchedulerID: "node1.domain",
+			Hostname:    "node1.domain",
+		},
+		{
+			StorageID:   "node3",
+			SchedulerID: "node3.domain",
+			Hostname:    "node3.domain",
+		},
+		{
+			StorageID:   "node2",
+			SchedulerID: "node2.domain",
+			Hostname:    "node2.domain",
+		},
+	}
+
+	nodeMap := monitor.getVolumeDriverNodesToK8sNodeMap(driverNodes)
+	require.Equal(t, 3, len(nodeMap), "Expected nodeMap length to be 3, got %d", len(nodeMap))
+
+	for _, driverNode := range driverNodes {
+		require.Contains(t, nodeMap, driverNode.StorageID, "Expected driver node %s to be present in nodeMap", driverNode.StorageID)
+		require.Equal(t, nodeMap[driverNode.StorageID].Name, driverNode.SchedulerID, "Expected driver node %s to be equal to nodeMap entry", driverNode.StorageID)
+	}
+
+	// Test when driver nodes are more than k8s nodes
+	for _, node := range nodes.Items[3:] {
+		err := core.Instance().DeleteNode(node.Name)
+		require.NoError(t, err, "failed to delete fake node")
+	}
+	nodes.Items = nodes.Items[0:3]
+
+	driverNodes = append(driverNodes, &volume.NodeInfo{StorageID: "node7", SchedulerID: "node7.domain", Hostname: "node7.domain"})
+	driverNodes = append(driverNodes, &volume.NodeInfo{StorageID: "node8", SchedulerID: "node8.domain", Hostname: "node8.domain"})
+	driverNodes = append(driverNodes, &volume.NodeInfo{StorageID: "node9", SchedulerID: "node9.domain", Hostname: "node9.domain"})
+	nodeMap = monitor.getVolumeDriverNodesToK8sNodeMap(driverNodes)
+
+	require.Equal(t, 3, len(nodeMap), "Expected nodeMap length to be 3, got %d", len(nodeMap))
+	for _, driverNode := range driverNodes[0:3] {
+		require.Contains(t, nodeMap, driverNode.StorageID, "Expected driver node %s to be present in nodeMap", driverNode.StorageID)
+		require.Equal(t, nodeMap[driverNode.StorageID].Name, driverNode.SchedulerID, "Expected driver node %s to be equal to nodeMap entry", driverNode.StorageID)
+	}
+	for _, drdriverNode := range driverNodes[3:] {
+		require.NotContains(t, nodeMap, drdriverNode.StorageID, "Expected driver node %s to not be present in nodeMap", drdriverNode.StorageID)
+	}
+}
+
+func testBatchDeletePodsFromOfflineNodes(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	scheme := runtime.NewScheme()
+	err := stork_api.AddToScheme(scheme)
+	require.NoError(t, err, "Error adding stork scheme")
+
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+	core.SetInstance(core.New(fakeKubeClient))
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockVolumeDriver := mockVolumeDriver.NewMockDriver(mockCtrl)
+	monitor := &Monitor{
+		Driver: mockVolumeDriver,
+	}
+
+	storkdriver, err := volume.Get(mockDriverName)
+	require.NoError(t, err, "Error getting mock volume driver")
+
+	var ok bool
+	driver, ok = storkdriver.(*mock.Driver)
+	require.True(t, ok, "Error casting mockdriver")
+
+	err = storkdriver.Init(nil)
+	require.NoError(t, err, "Error initializing mock volume driver")
+
+	nodes = &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5.domain", "192.168.0.5", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node6", "node6.domain", "192.168.0.1", "rack1", "", ""))
+
+	for _, n := range nodes.Items {
+		node, err := core.Instance().CreateNode(&n)
+		require.NoError(t, err, "failed to create fake node")
+		require.NotNil(t, node, "got nil node from create node api")
+	}
+
+	// Test the batchDeletePodsFromOfflineNodes function for different number of pods per node
+	node := &volume.NodeInfo{
+		Hostname:    "node1.domain",
+		SchedulerID: "node1",
+		StorageID:   "storage1",
+		Status:      volume.NodeOffline,
+		RawStatus:   "offline",
+	}
+	for _, podsPerNode := range []int{podDeleteBatchSize - 1, podDeleteBatchSize, podDeleteBatchSize + 1, 2 * podDeleteBatchSize} {
+		for i := 1; i <= podsPerNode; i++ {
+			namespace := v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("ns-%d", i),
+				},
+			}
+			_, err := core.Instance().CreateNamespace(&namespace)
+			require.NoError(t, err, "failed to create namespace %s", namespace.Name)
+		}
+
+		nodeToPodsMap := createPodsOnNodes(t, []string{"node1", "node2", "node3", "node4", "node5", "node6"}, podsPerNode)
+
+		// Create a fake recorder
+		eventBroadcaster := record.NewBroadcaster()
+		eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
+		recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
+		monitor.Recorder = recorder
+
+		mockVolumeDriver.EXPECT().InspectNode("storage1").Return(node, nil).Times(int(math.Ceil(float64(podsPerNode) / float64(podDeleteBatchSize))))
+
+		// Call the batchDeletePodsFromOfflineNodes function
+		monitor.batchDeletePodsFromOfflineNodes(nodeToPodsMap["node1"], node, false)
+
+		// Check that all the pods running in node1 which is the offline node have been deleted
+		// Since FakeClient does not support FieldSelector (it's a limitation of fake client), better to get all pods
+		// and check no pod is running on the offline node
+		curPods, err := core.Instance().GetPods("", nil)
+		require.NoError(t, err, "failed to get pods from fake API")
+		require.Equal(t, podsPerNode*(len(nodes.Items)-1), len(curPods.Items), "expected no pods in offline node")
+		for _, pod := range curPods.Items {
+			require.NotEqual(t, "node1", pod.Spec.NodeName, "expected no pod to be running on offline node")
+		}
+
+		err = core.Instance().DeletePods(curPods.Items, true)
+		require.NoError(t, err, "failed to delete pods")
+		for i := 1; i <= podsPerNode; i++ {
+			ns := fmt.Sprintf("ns-%d", i)
+			err := core.Instance().DeleteNamespace(ns)
+			require.NoError(t, err, "failed to delete namespace %s", ns)
+		}
+
+	}
+
+	// Test the batchDeletePodsFromOfflineNodes function when node status is not offline anymore
+	node = &volume.NodeInfo{
+		Hostname:    "node1.domain",
+		SchedulerID: "node1",
+		StorageID:   "storage1",
+		Status:      volume.NodeOnline,
+		RawStatus:   "online",
+	}
+	podsPerNode := 7
+	for i := 1; i <= podsPerNode; i++ {
+		namespace := v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("ns-%d", i),
+			},
+		}
+		_, err := core.Instance().CreateNamespace(&namespace)
+		require.NoError(t, err, "failed to create namespace %s", namespace.Name)
+	}
+
+	nodeToPodsMap := createPodsOnNodes(t, []string{"node1", "node2", "node3", "node4", "node5", "node6"}, podsPerNode)
+	// Create a fake recorder
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
+	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
+	monitor.Recorder = recorder
+
+	//mockVolumeDriver.EXPECT().InspectNode("storage1").Return(node, nil).Times(int(math.Ceil(float64(podsPerNode)/float64(podDeleteBatchSize))))
+	mockVolumeDriver.EXPECT().InspectNode("storage1").Return(node, nil).Times(1)
+
+	// Call the batchDeletePodsFromOfflineNodes function
+	monitor.batchDeletePodsFromOfflineNodes(nodeToPodsMap["node1"], node, false)
+
+	// Check that all the pods running in node1 which is the offline node have been deleted
+	// Since FakeClient does not support FieldSelector (it's a limitation of fake client), better to get all pods
+	// and check no pod is running on the offline node
+	curPods, err := core.Instance().GetPods("", nil)
+	require.NoError(t, err, "failed to get pods from fake API")
+	require.Equal(t, podsPerNode*(len(nodes.Items)), len(curPods.Items), "expected no pods to have been deleted")
+	podsInConcerenedNode := 0
+	for _, pod := range curPods.Items {
+		if pod.Spec.NodeName == "node1" {
+			podsInConcerenedNode++
+		}
+	}
+	require.Equal(t, podsPerNode, podsInConcerenedNode, "expected no pod to have been deleted from node1")
+
+	err = core.Instance().DeletePods(curPods.Items, true)
+	require.NoError(t, err, "failed to delete pods")
+	for i := 1; i <= podsPerNode; i++ {
+		ns := fmt.Sprintf("ns-%d", i)
+		err := core.Instance().DeleteNamespace(ns)
+		require.NoError(t, err, "failed to delete namespace %s", ns)
+	}
+}
+
+func createPodsOnNodes(t *testing.T, nodes []string, podCountPerNode int) map[string][]v1.Pod {
+	pods := make(map[string][]v1.Pod)
+	for _, nodeName := range nodes {
+		for i := 1; i <= podCountPerNode; i++ {
+			pod := v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("pod-%s-%d", nodeName, i),
+					Namespace: fmt.Sprintf("ns-%d", i),
+				},
+				Spec: v1.PodSpec{
+					NodeName: nodeName,
+				},
+			}
+			_, err := core.Instance().CreatePod(&pod)
+			if !k8serror.IsAlreadyExists(err) {
+				require.NoError(t, err, "failed to create pod %s", pod.Name)
+			}
+			pods[nodeName] = append(pods[nodeName], pod)
+		}
+	}
+	return pods
+}
+
+func getDriverNodes(numNodes int) []*volume.NodeInfo {
+	driverNodes := make([]*volume.NodeInfo, 0)
+	for i := 0; i < numNodes; i++ {
+		driverNodes = append(driverNodes, &volume.NodeInfo{
+			Hostname:    "node" + strconv.Itoa(i+1),
+			SchedulerID: "node" + strconv.Itoa(i+1),
+			StorageID:   "node" + strconv.Itoa(i+1),
+			Status:      volume.NodeOnline,
+			RawStatus:   "Ready",
+		})
+	}
+	return driverNodes
 }
