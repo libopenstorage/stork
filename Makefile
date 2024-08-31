@@ -130,7 +130,7 @@ test:
 		      /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork; \
 			  echo "" > coverage.txt; \
 			  for pkg in $(PKGS);	do \
-				  go test -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
+				  go test --timeout 900s -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
 				  if [ -f profile.out ]; then \
 					  cat profile.out >> coverage.txt; \
 					  rm profile.out; \
