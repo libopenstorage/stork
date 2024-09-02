@@ -217,7 +217,7 @@ type BackupRestorePluginInterface interface {
 	StartBackup(*storkapi.ApplicationBackup, []v1.PersistentVolumeClaim) ([]*storkapi.ApplicationBackupVolumeInfo, error)
 	// GetBackupStatus Get the status of backup of the volumes specified in the status
 	// for the backup spec
-	GetBackupStatus(*storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error)
+	GetBackupStatus(*storkapi.ApplicationBackup) error
 	// CancelBackup Cancel the backup of volumes specified in the status
 	CancelBackup(*storkapi.ApplicationBackup) error
 	// CleanupBackupResources the backup of resource specified backup
@@ -531,8 +531,8 @@ func (b *BackupRestoreNotSupported) StartBackup(
 }
 
 // GetBackupStatus returns ErrNotSupported
-func (b *BackupRestoreNotSupported) GetBackupStatus(*storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	return nil, &errors.ErrNotSupported{}
+func (b *BackupRestoreNotSupported) GetBackupStatus(*storkapi.ApplicationBackup) error {
+	return nil
 }
 
 // CancelBackup returns ErrNotSupported
