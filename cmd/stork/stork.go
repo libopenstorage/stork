@@ -63,6 +63,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -81,6 +82,10 @@ const (
 
 var ext *extender.Extender
 var webhook *webhookadmission.Controller
+
+// Custom controller cache sync timeout since we faced cache sync timeouts in one case.
+// Ref: https://purestorage.atlassian.net/browse/PWX-38383
+var customCacheSyncTimeout time.Duration = 4 * time.Minute
 
 func main() {
 	// Parse empty flags to suppress warnings from the snapshotter which uses
@@ -355,7 +360,11 @@ func run(c *cli.Context) {
 
 	// Create operator-sdk manager that will manage all controllers.
 	// Setup the controller manager before starting any watches / other controllers
-	mgr, err := manager.New(config, manager.Options{})
+	mgr, err := manager.New(config, manager.Options{
+		Controller: v1alpha1.ControllerConfigurationSpec{
+			CacheSyncTimeout: &customCacheSyncTimeout,
+		},
+	})
 	if err != nil {
 		log.Fatalf("Setup controller manager: %v", err)
 	}
