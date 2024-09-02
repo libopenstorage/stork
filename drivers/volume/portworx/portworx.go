@@ -3479,12 +3479,11 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 	return volumeInfos, nil
 }
 
-func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) error {
 
 	if !p.initDone {
 		if err := p.initPortworxClients(); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -3496,32 +3495,31 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		// Skip for volumes which are in failed state as there is no need to proceed
 		// further and we have to return the orginal volInfo back to caller
 		if vInfo.Status == storkapi.ApplicationBackupStatusFailed {
-			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch portworx user token: %v", err)
+			return fmt.Errorf("failed to fetch portworx user token: %v", err)
 		}
 		volDriver, ok := driverMap[token]
 		if !ok {
 			volDriver, _, err = p.getUserVolDriverFromToken(token)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			driverMap[token] = volDriver
 		}
 
 		cloudBackupClient, err := p.getCloudBackupClient()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), cloudBackupTimeout)
 		defer cancel()
 		if len(token) > 0 {
 			ctx, err = p.addTokenToContext(ctx, token)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 
@@ -3567,10 +3565,9 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 				}
 			}
 		}
-		volumeInfos = append(volumeInfos, vInfo)
 	}
 
-	return volumeInfos, nil
+	return nil
 }
 
 func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) (bool, error) {

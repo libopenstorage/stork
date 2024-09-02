@@ -292,15 +292,13 @@ func (g *gcp) getZoneURLs(zones []string, service *compute.Service, projectID st
 	return zoneURLs, nil
 }
 
-func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) error {
 	gcpSession, err := g.getGCPSession(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	service := gcpSession.service
 	projectID := gcpSession.projectID
-
-	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.GCEDriverName {
@@ -308,7 +306,7 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		}
 		snapshot, err := service.Snapshots.Get(projectID, vInfo.BackupID).Do()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		switch snapshot.Status {
 		case "CREATING", "UPLOADING":
@@ -323,10 +321,9 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			vInfo.TotalSize = uint64(snapshot.StorageBytes)
 			vInfo.ActualSize = uint64(snapshot.StorageBytes)
 		}
-		volumeInfos = append(volumeInfos, vInfo)
 	}
 
-	return volumeInfos, nil
+	return nil
 
 }
 
