@@ -718,15 +718,14 @@ func (c *csi) cleanupSnapshots(
 	return nil
 }
 
-func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) error {
 	funct := "csi GetBackupStatus"
 	if c.snapshotClient == nil {
 		if err := c.Init(nil); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	var anyInProgress bool
 	var anyFailed bool
 
@@ -750,7 +749,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		// Get PVC we're checking the backup for
 		pvc, err := core.Instance().GetPersistentVolumeClaim(vInfo.PersistentVolumeClaim, vInfo.Namespace)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// Not in cleanup state. From here on, we're checking if the PVC snapshot has finished.
@@ -764,7 +763,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			vInfo.Reason = snapshotInfo.Reason
 			vInfo.Status = mapSnapshotInfoStatus(snapshotInfo.Status)
 			anyFailed = true
-			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		if c.v1SnapshotRequired {
@@ -773,7 +771,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 				vInfo.Reason = "failed to map volumesnapshot object"
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				anyFailed = true
-				volumeInfos = append(volumeInfos, vInfo)
 				continue
 			}
 			vsMap.(map[string]*kSnapshotv1.VolumeSnapshot)[vInfo.BackupID] = snapshot
@@ -783,7 +780,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 				vInfo.Reason = "failed to map volumesnapshot object"
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				anyFailed = true
-				volumeInfos = append(volumeInfos, vInfo)
 				continue
 			}
 			vsMap.(map[string]*kSnapshotv1beta1.VolumeSnapshot)[vInfo.BackupID] = snapshot
@@ -796,7 +792,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 					vInfo.Reason = "failed to map volumesnapshotcontent object"
 					vInfo.Status = storkapi.ApplicationBackupStatusFailed
 					anyFailed = true
-					volumeInfos = append(volumeInfos, vInfo)
 					continue
 				}
 				vsContentMap.(map[string]*kSnapshotv1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
@@ -807,7 +802,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 					vInfo.Reason = "failed to map volumesnapshotcontent object"
 					vInfo.Status = storkapi.ApplicationBackupStatusFailed
 					anyFailed = true
-					volumeInfos = append(volumeInfos, vInfo)
 					continue
 				}
 				vsContentMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)[vInfo.BackupID] = snapshotContent
@@ -819,7 +813,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 					vInfo.Reason = "failed to map volumesnapshotcontent object"
 					vInfo.Status = storkapi.ApplicationBackupStatusFailed
 					anyFailed = true
-					volumeInfos = append(volumeInfos, vInfo)
 					continue
 				}
 				vsClassMap.(map[string]*kSnapshotv1.VolumeSnapshotClass)[snapshotClass.Name] = snapshotClass
@@ -829,7 +822,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 					vInfo.Reason = "failed to map volumesnapshotcontent object"
 					vInfo.Status = storkapi.ApplicationBackupStatusFailed
 					anyFailed = true
-					volumeInfos = append(volumeInfos, vInfo)
 					continue
 				}
 				vsClassMap.(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)[snapshotClass.Name] = snapshotClass
@@ -843,7 +835,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		}
 		vInfo.Reason = snapshotInfo.Reason
 		vInfo.Status = mapSnapshotInfoStatus(snapshotInfo.Status)
-		volumeInfos = append(volumeInfos, vInfo)
 	}
 
 	// if a failure occurred with any snapshot, make sure to clean up all snapshots
@@ -851,11 +842,11 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		// Delete all snapshots after a failure
 		err := c.CancelBackup(backup)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		log.ApplicationBackupLog(backup).Debugf("cleaned up all snapshots after a backup failure")
 
-		return volumeInfos, nil
+		return nil
 	}
 
 	if c.v1SnapshotRequired {
@@ -869,7 +860,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("%v error in checking backuplocation type: %v", funct, err)
-		return nil, err
+		return err
 	}
 	// In the case of nfs backuplocation type, uploading of snapshot.json will
 	// happen as part of resource exexutor job as part of resource stage.
@@ -878,12 +869,12 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		if !anyInProgress && vsContentMapLen > 0 && vsMapLen > 0 {
 			err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", vsMapLen, vsContentMapLen)
 		}
 	}
-	return volumeInfos, nil
+	return nil
 }
 
 func (c *csi) recreateSnapshotForDeletion(

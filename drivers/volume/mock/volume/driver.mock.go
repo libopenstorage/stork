@@ -270,12 +270,11 @@ func (mr *MockDriverMockRecorder) Failover(arg0 interface{}) *gomock.Call {
 }
 
 // GetBackupStatus mocks base method.
-func (m *MockDriver) GetBackupStatus(arg0 *v1alpha1.ApplicationBackup) ([]*v1alpha1.ApplicationBackupVolumeInfo, error) {
+func (m *MockDriver) GetBackupStatus(arg0 *v1alpha1.ApplicationBackup) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBackupStatus", arg0)
-	ret0, _ := ret[0].([]*v1alpha1.ApplicationBackupVolumeInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // GetBackupStatus indicates an expected call of GetBackupStatus.
