@@ -38,7 +38,8 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	creationTime2 := metav1.NewTime(time.Now().Add(-25 * time.Minute))
 	creationTime3 := metav1.NewTime(time.Now().Add(-10 * time.Minute))
 	creationTime4 := metav1.NewTime(time.Now().Add(-5 * time.Minute))
-	creationTime5 := metav1.NewTime(time.Now().Add(-1 * time.Minute))
+	creationTime5 := metav1.NewTime(time.Now().Add(-2 * time.Minute))
+	creationTime6 := metav1.NewTime(time.Now().Add(-1 * time.Minute))
 	snapshotSchedule := &stork_api.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-schedule",
@@ -71,6 +72,11 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 						Name:              "snapshot5",
 						Status:            snapv1.VolumeSnapshotConditionPending,
 						CreationTimestamp: creationTime5,
+					},
+					{
+						Name:              "snapshot6",
+						Status:            snapv1.VolumeSnapshotConditionError,
+						CreationTimestamp: creationTime6,
 					},
 				},
 			},
@@ -110,6 +116,8 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	assert.Empty(t, schedule.Status.Items["policy1"][1].Message)
 	assert.Empty(t, schedule.Status.Items["policy1"][4].Deleted)
 	assert.Empty(t, schedule.Status.Items["policy1"][4].Message)
+	assert.Empty(t, schedule.Status.Items["policy1"][5].Deleted)
+	assert.Empty(t, schedule.Status.Items["policy1"][5].Message)
 }
 
 // getSnapshotObject is a helper function to frame the snapshot object and return it based on the parameters provided.
