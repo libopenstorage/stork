@@ -6,12 +6,17 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/assert"
 	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/resource"
+	kubernetes "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest/fake"
 )
 
 // TestCleanupErroredSnapshots tests the `cleanupErroredSnapshots` function that
@@ -19,7 +24,14 @@ import (
 func TestCleanupErroredSnapshots(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockSnap := NewMockOps(ctrl)
-	mockSched := NewMockSnapshotScheduleOps(ctrl)
+	fakeStorkClient := fakeclient.NewSimpleClientset()
+	var unstructuredSerializer = resource.UnstructuredPlusDefaultContentConfig().NegotiatedSerializer
+	fakeRestClient := &fake.RESTClient{
+		NegotiatedSerializer: unstructuredSerializer,
+	}
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+	core.SetInstance(core.New(fakeKubeClient))
+	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, fakeRestClient))
 
 	// Creating a dummy snapshotschedule object.
 	creationTime1 := metav1.NewTime(time.Now().Add(-30 * time.Minute))
@@ -65,48 +77,9 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 		},
 	}
 
-	// Expected updated schedule at the end.
-	updatedSchedule := &stork_api.VolumeSnapshotSchedule{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-schedule",
-			Namespace: "test-ns",
-		},
-		Status: stork_api.VolumeSnapshotScheduleStatus{
-			Items: map[stork_api.SchedulePolicyType][]*stork_api.ScheduledVolumeSnapshotStatus{
-				"policy1": {
-					{
-						Name:              "snapshot1",
-						Status:            snapv1.VolumeSnapshotConditionError,
-						CreationTimestamp: creationTime1,
-					},
-					{
-						Name:              "snapshot2",
-						Status:            snapv1.VolumeSnapshotConditionReady,
-						CreationTimestamp: creationTime2,
-					},
-					{
-						Name:              "snapshot3",
-						Status:            snapv1.VolumeSnapshotConditionError,
-						CreationTimestamp: creationTime3,
-						Message:           "snapshot deleted due to being in error state for more than cutoff period",
-						Deleted:           true,
-					},
-					{
-						Name:              "snapshot4",
-						Status:            snapv1.VolumeSnapshotConditionError,
-						CreationTimestamp: creationTime4,
-						Message:           "snapshot deleted due to being in error state for more than cutoff period",
-						Deleted:           true,
-					},
-					{
-						Name:              "snapshot5",
-						Status:            snapv1.VolumeSnapshotConditionPending,
-						CreationTimestamp: creationTime5,
-					},
-				},
-			},
-		},
-	}
+	// Apply the snapshotschedule.
+	snapshotSchedule, err := storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
+	assert.NoError(t, err)
 
 	// Mock and assert the snapshot and snapshotschedule calls.
 	mockSnap.EXPECT().GetSnapshot(gomock.Eq("snapshot1"), gomock.Eq("test-ns")).Return(
@@ -118,29 +91,25 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot1"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot3"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot4"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
-	mockSched.EXPECT().UpdateSnapshotSchedule(gomock.Cond(func(snapshotschedule any) bool {
-		// Fields for the deleted volumesnapshots should be updated in the snapshotschedule object.
-		schedule := snapshotschedule.(*stork_api.VolumeSnapshotSchedule)
-		assert.Equal(t, schedule.Status.Items["policy1"][0].Deleted, true)
-		assert.Equal(t, schedule.Status.Items["policy1"][0].Message, errorSnapshotDeletionMessage)
-		assert.Equal(t, schedule.Status.Items["policy1"][2].Deleted, true)
-		assert.Equal(t, schedule.Status.Items["policy1"][2].Message, errorSnapshotDeletionMessage)
-		assert.Equal(t, schedule.Status.Items["policy1"][3].Deleted, true)
-		assert.Equal(t, schedule.Status.Items["policy1"][3].Message, errorSnapshotDeletionMessage)
-
-		// Fields for the undeleted volumesnapshots should not be updated in the snapshotschedule object.
-		assert.Empty(t, schedule.Status.Items["policy1"][1].Deleted)
-		assert.Empty(t, schedule.Status.Items["policy1"][1].Message)
-		assert.Empty(t, schedule.Status.Items["policy1"][4].Deleted)
-		assert.Empty(t, schedule.Status.Items["policy1"][4].Message)
-		return true
-	})).Return(updatedSchedule, nil).AnyTimes()
 
 	k8sextops.SetInstance(mockSnap)
-	storkops.SetInstance(mockSched)
 	s := SnapshotScheduleController{}
-	err := s.cleanupErroredSnapshots(snapshotSchedule)
+	err = s.cleanupErroredSnapshots(snapshotSchedule)
 	assert.NoError(t, err)
+	schedule, err := storkops.Instance().GetSnapshotSchedule(snapshotSchedule.Name, snapshotSchedule.Namespace)
+	assert.NoError(t, err)
+	assert.Equal(t, schedule.Status.Items["policy1"][0].Deleted, true)
+	assert.Equal(t, schedule.Status.Items["policy1"][0].Message, errorSnapshotDeletionMessage)
+	assert.Equal(t, schedule.Status.Items["policy1"][2].Deleted, true)
+	assert.Equal(t, schedule.Status.Items["policy1"][2].Message, errorSnapshotDeletionMessage)
+	assert.Equal(t, schedule.Status.Items["policy1"][3].Deleted, true)
+	assert.Equal(t, schedule.Status.Items["policy1"][3].Message, errorSnapshotDeletionMessage)
+
+	// Fields for the undeleted volumesnapshots should not be updated in the snapshotschedule object.
+	assert.Empty(t, schedule.Status.Items["policy1"][1].Deleted)
+	assert.Empty(t, schedule.Status.Items["policy1"][1].Message)
+	assert.Empty(t, schedule.Status.Items["policy1"][4].Deleted)
+	assert.Empty(t, schedule.Status.Items["policy1"][4].Message)
 }
 
 // getSnapshotObject is a helper function to frame the snapshot object and return it based on the parameters provided.

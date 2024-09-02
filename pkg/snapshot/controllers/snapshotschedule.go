@@ -296,6 +296,12 @@ func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *s
 		}
 	}
 
+	// Get the latest copy of snapshotschedule for updating.
+	currentSnapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(snapshotSchedule.Name, snapshotSchedule.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get volumesnapshot schedule %s", snapshotSchedule.Name)
+	}
+	currentSnapshotSchedule.Status = snapshotSchedule.Status
 	// Update the snapshotschedule with the latest updates w.r.t snapshots.
 	if _, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule); err != nil {
 		return err
