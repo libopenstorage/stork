@@ -364,8 +364,7 @@ func (k *kdmp) StartBackup(backup *storkapi.ApplicationBackup,
 	return volumeInfos, nil
 }
 
-func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
-	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) error {
 
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.KDMPDriverName {
@@ -377,19 +376,17 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 			if k8serror.IsNotFound(err) {
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				vInfo.Reason = fmt.Sprintf("%v", err)
-				volumeInfos = append(volumeInfos, vInfo)
 				logrus.Errorf("failed to get backup DataExport CR: %v", err)
 				continue
 			}
 			logrus.Errorf("failed to get backup DataExport CR: %v", err)
-			return volumeInfos, err
+			return err
 		}
 
 		if dataExport.Status.Status == kdmpapi.DataExportStatusFailed &&
 			dataExport.Status.Stage == kdmpapi.DataExportStageFinal {
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Backup failed at stage %v for volume: %v", dataExport.Status.Stage, dataExport.Status.Reason)
-			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 
@@ -415,10 +412,9 @@ func (k *kdmp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.
 				}
 			}
 		}
-		volumeInfos = append(volumeInfos, vInfo)
 	}
 
-	return volumeInfos, nil
+	return nil
 }
 func isDataExportActive(status kdmpapi.ExportStatus) bool {
 	if status.Stage == kdmpapi.DataExportStageTransferInProgress ||
