@@ -266,29 +266,34 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 // cleanupErroredSnapshots cleans any volumesnapshot CRs that are in Error state. It doesn't remove them
 // from the volumesnapshotschedule items list though.
 func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *stork_api.VolumeSnapshotSchedule) (err error) {
-	// Filter out the errored out snapshots that are older than the cleanup cutoff period.
 	for policy, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		for idx, snapshot := range policyVolumeSnapshot {
-			if !snapshot.Deleted && snapshot.Status == snapv1.VolumeSnapshotConditionError && time.Since(snapshot.CreationTimestamp.Time) > errorSnapshotCleanupCutoffTime {
-				// Fetch the latest status as well in order to mitigate any late volumesnapshot updates.
-				snapshotStatus, snapshotError, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
-				if err != nil {
-					log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error getting status of snapshot %s: %s", snapshot.Name, err.Error())
+			// Move to the next snapshot if the current one doesn't meet criteria to be deleted.
+			if snapshot.Deleted ||
+				snapshot.Status != snapv1.VolumeSnapshotConditionError ||
+				time.Since(snapshot.CreationTimestamp.Time) < errorSnapshotCleanupCutoffTime {
+				continue
+			}
+
+			// Filter out the errored out snapshots that are older than the cleanup cutoff period.
+			// Fetch the latest status as well in order to mitigate any late volumesnapshot updates.
+			snapshotStatus, snapshotError, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
+			if err != nil {
+				log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error getting status of snapshot %s: %s", snapshot.Name, err.Error())
+				continue
+			}
+
+			if snapshotStatus == snapv1.VolumeSnapshotConditionError {
+				log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v,createdAt: %v,error: %v", snapshot.Name, snapshot.CreationTimestamp.Time, snapshotError)
+				err := k8sextops.Instance().DeleteSnapshot(snapshot.Name, snapshotSchedule.Namespace)
+				if err != nil && !errors.IsNotFound(err) {
+					log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting errored out snapshot %v: %v", snapshot.Name, err)
 					continue
 				}
 
-				if snapshotStatus == snapv1.VolumeSnapshotConditionError {
-					log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v, age: %v, error: %v", snapshot.Name, time.Since(snapshot.CreationTimestamp.Time), snapshotError)
-					err := k8sextops.Instance().DeleteSnapshot(snapshot.Name, snapshotSchedule.Namespace)
-					if err != nil && !errors.IsNotFound(err) {
-						log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting errored out snapshot %v: %v", snapshot.Name, err)
-						continue
-					}
-
-					// Update the volumesnapshotschedule object with the deletion message and setting `deleted` to `true`.
-					snapshotSchedule.Status.Items[policy][idx].Deleted = true
-					snapshotSchedule.Status.Items[policy][idx].Message = snapshotError
-				}
+				// Update the volumesnapshotschedule object with the deletion message and setting `deleted` to `true`.
+				snapshotSchedule.Status.Items[policy][idx].Deleted = true
+				snapshotSchedule.Status.Items[policy][idx].Message = snapshotError
 			}
 		}
 	}
