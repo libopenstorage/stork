@@ -342,14 +342,12 @@ func (a *azure) StartBackup(
 	return volumeInfos, nil
 }
 
-func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) error {
 	azureSession, err := a.getAzureSession(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	snapshotClient := azureSession.snapshotClient
-
-	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != storkvolume.AzureDriverName {
@@ -357,7 +355,7 @@ func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi
 		}
 		snapshot, err := snapshotClient.Get(context.TODO(), a.resourceGroup, vInfo.BackupID)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		switch *snapshot.ProvisioningState {
 		case "Failed":
@@ -372,10 +370,9 @@ func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi
 			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
 			vInfo.Reason = fmt.Sprintf("Volume backup in progress: %v", snapshot.ProvisioningState)
 		}
-		volumeInfos = append(volumeInfos, vInfo)
 	}
 
-	return volumeInfos, nil
+	return nil
 
 }
 
