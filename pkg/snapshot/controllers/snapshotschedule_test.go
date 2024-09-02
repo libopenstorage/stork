@@ -40,6 +40,7 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	creationTime4 := metav1.NewTime(time.Now().Add(-90 * time.Second))
 	creationTime5 := metav1.NewTime(time.Now().Add(-45 * time.Second))
 	creationTime6 := metav1.NewTime(time.Now().Add(-30 * time.Second))
+	creationTime7 := metav1.NewTime(time.Now().Add(-3 * time.Minute))
 	snapshotSchedule := &stork_api.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-schedule",
@@ -78,6 +79,13 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 						Status:            snapv1.VolumeSnapshotConditionError,
 						CreationTimestamp: creationTime6,
 					},
+					{
+						Name:              "snapshot7",
+						Status:            snapv1.VolumeSnapshotConditionError,
+						CreationTimestamp: creationTime7,
+						Deleted:           true,
+						Message:           "Node on which volume is attached is not online",
+					},
 				},
 			},
 		},
@@ -89,11 +97,11 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 
 	// Mock and assert the snapshot and snapshotschedule calls.
 	mockSnap.EXPECT().GetSnapshot(gomock.Eq("snapshot1"), gomock.Eq("test-ns")).Return(
-		getSnapshotObject("snapshot1", "test-ns", creationTime1, snapv1.VolumeSnapshotConditionError), nil).AnyTimes()
+		getSnapshotObject("snapshot1", "test-ns", creationTime1, snapv1.VolumeSnapshotConditionError, "Node on which volume is attached is not online"), nil).AnyTimes()
 	mockSnap.EXPECT().GetSnapshot(gomock.Eq("snapshot3"), gomock.Eq("test-ns")).Return(
-		getSnapshotObject("snapshot3", "test-ns", creationTime3, snapv1.VolumeSnapshotConditionError), nil).AnyTimes()
+		getSnapshotObject("snapshot3", "test-ns", creationTime3, snapv1.VolumeSnapshotConditionError, "Couldn't find the pvc to snapshot"), nil).AnyTimes()
 	mockSnap.EXPECT().GetSnapshot(gomock.Eq("snapshot4"), gomock.Eq("test-ns")).Return(
-		getSnapshotObject("snapshot4", "test-ns", creationTime4, snapv1.VolumeSnapshotConditionError), nil).AnyTimes()
+		getSnapshotObject("snapshot4", "test-ns", creationTime4, snapv1.VolumeSnapshotConditionError, "Network failure"), nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot1"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot3"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
 	mockSnap.EXPECT().DeleteSnapshot(gomock.Eq("snapshot4"), gomock.Eq("test-ns")).Return(nil).AnyTimes()
@@ -105,11 +113,11 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	schedule, err := storkops.Instance().GetSnapshotSchedule(snapshotSchedule.Name, snapshotSchedule.Namespace)
 	assert.NoError(t, err)
 	assert.Equal(t, schedule.Status.Items["policy1"][0].Deleted, true)
-	assert.Equal(t, schedule.Status.Items["policy1"][0].Message, errorSnapshotDeletionMessage)
+	assert.Equal(t, schedule.Status.Items["policy1"][0].Message, "Node on which volume is attached is not online")
 	assert.Equal(t, schedule.Status.Items["policy1"][2].Deleted, true)
-	assert.Equal(t, schedule.Status.Items["policy1"][2].Message, errorSnapshotDeletionMessage)
+	assert.Equal(t, schedule.Status.Items["policy1"][2].Message, "Couldn't find the pvc to snapshot")
 	assert.Equal(t, schedule.Status.Items["policy1"][3].Deleted, true)
-	assert.Equal(t, schedule.Status.Items["policy1"][3].Message, errorSnapshotDeletionMessage)
+	assert.Equal(t, schedule.Status.Items["policy1"][3].Message, "Network failure")
 
 	// Fields for the undeleted volumesnapshots should not be updated in the snapshotschedule object.
 	assert.Empty(t, schedule.Status.Items["policy1"][1].Deleted)
@@ -121,7 +129,7 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 }
 
 // getSnapshotObject is a helper function to frame the snapshot object and return it based on the parameters provided.
-func getSnapshotObject(name, namespace string, creationTime metav1.Time, status snapv1.VolumeSnapshotConditionType) *snapv1.VolumeSnapshot {
+func getSnapshotObject(name, namespace string, creationTime metav1.Time, status snapv1.VolumeSnapshotConditionType, errorMessage string) *snapv1.VolumeSnapshot {
 	return &snapv1.VolumeSnapshot{
 		Metadata: metav1.ObjectMeta{
 			Name:              name,
@@ -132,8 +140,9 @@ func getSnapshotObject(name, namespace string, creationTime metav1.Time, status 
 			CreationTimestamp: creationTime,
 			Conditions: []snapv1.VolumeSnapshotCondition{
 				{
-					Type:   status,
-					Status: v1.ConditionTrue,
+					Type:    status,
+					Status:  v1.ConditionTrue,
+					Message: errorMessage,
 				},
 			},
 		},
