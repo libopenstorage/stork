@@ -38,7 +38,7 @@ const (
 
 	// errorSnapshotCleanupCutoffTime is the cutoff time for a snapshot in
 	// Error state to be deleted.
-	errorSnapshotCleanupCutoffTime time.Duration = 5 * time.Minute
+	errorSnapshotCleanupCutoffTime time.Duration = 90 * time.Second
 	errorSnapshotDeletionMessage   string        = "snapshot deleted due to being in error state for more than cutoff period"
 
 	// SnapshotScheduleNameAnnotation Annotation used to specify the name of schedule that
@@ -301,7 +301,7 @@ func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *s
 	}
 	currentSnapshotSchedule.Status = snapshotSchedule.Status
 	// Update the snapshotschedule with the latest updates w.r.t snapshots.
-	if _, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule); err != nil {
+	if _, err = storkops.Instance().UpdateSnapshotSchedule(currentSnapshotSchedule); err != nil {
 		return err
 	}
 	return

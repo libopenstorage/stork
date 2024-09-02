@@ -34,12 +34,12 @@ func TestCleanupErroredSnapshots(t *testing.T) {
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, fakeRestClient))
 
 	// Creating a dummy snapshotschedule object.
-	creationTime1 := metav1.NewTime(time.Now().Add(-30 * time.Minute))
-	creationTime2 := metav1.NewTime(time.Now().Add(-25 * time.Minute))
-	creationTime3 := metav1.NewTime(time.Now().Add(-10 * time.Minute))
-	creationTime4 := metav1.NewTime(time.Now().Add(-5 * time.Minute))
-	creationTime5 := metav1.NewTime(time.Now().Add(-2 * time.Minute))
-	creationTime6 := metav1.NewTime(time.Now().Add(-1 * time.Minute))
+	creationTime1 := metav1.NewTime(time.Now().Add(-10 * time.Minute))
+	creationTime2 := metav1.NewTime(time.Now().Add(-7 * time.Minute))
+	creationTime3 := metav1.NewTime(time.Now().Add(-5 * time.Minute))
+	creationTime4 := metav1.NewTime(time.Now().Add(-90 * time.Second))
+	creationTime5 := metav1.NewTime(time.Now().Add(-45 * time.Second))
+	creationTime6 := metav1.NewTime(time.Now().Add(-30 * time.Second))
 	snapshotSchedule := &stork_api.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-schedule",
