@@ -189,7 +189,8 @@ func (c *Controller) checkVolumeOwner(volumes []v1.Volume, namespace string) (bo
 		if storkcache.Instance() != nil {
 			pvc, err = storkcache.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
 			if err != nil {
-				log.Errorf("failed to watch pods with informer cache for health monitoring, err: %v", err)
+				log.Errorf("failed to get pvc %s/%s from informer cache in webhook handler, err: %v", namespace, v.PersistentVolumeClaim.ClaimName, err)
+				return false, err
 			}
 		} else {
 			pvc, err = core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
