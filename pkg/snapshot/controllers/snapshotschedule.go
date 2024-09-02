@@ -22,6 +22,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -283,7 +284,7 @@ func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *s
 				if snapshotStatus == snapv1.VolumeSnapshotConditionError && time.Since(snapshotCreationTime) > errorSnapshotCleanupCutoffTime {
 					log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v, age: %v", snapshot.Name, time.Since(snapshotCreationTime))
 					err := k8sextops.Instance().DeleteSnapshot(snapshot.Name, snapshotSchedule.Namespace)
-					if err != nil {
+					if err != nil && !k8s_errors.IsNotFound(err) {
 						log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting errored out snapshot %v: %v", snapshot.Name, err)
 						continue
 					}
