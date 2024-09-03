@@ -52,6 +52,8 @@ type ScheduledVolumeSnapshotStatus struct {
 	CreationTimestamp meta.Time                          `json:"creationTimestamp"`
 	FinishTimestamp   meta.Time                          `json:"finishTimestamp"`
 	Status            snapv1.VolumeSnapshotConditionType `json:"status"`
+	Message           string                             `json:"message"`
+	Deleted           bool                               `json:"deleted"`
 }
 
 // +genclient
