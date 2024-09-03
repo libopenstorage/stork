@@ -363,7 +363,7 @@ func run(c *cli.Context) {
 
 	managerOpts := manager.Options{}
 	// Configure the passed custom controller cache sync timeout in the manager.
-	if c.Int64("controller-cache-sync-timeout") != 0 {
+	if c.Int64("controller-cache-sync-timeout") > 0 {
 		ctrlCacheSyncTimeout = time.Duration(c.Int64("controller-cache-sync-timeout")) * time.Minute
 		managerOpts.Controller.CacheSyncTimeout = &ctrlCacheSyncTimeout
 	}
