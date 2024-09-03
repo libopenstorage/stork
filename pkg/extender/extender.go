@@ -200,9 +200,17 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		if vol.PersistentVolumeClaim == nil {
 			continue
 		}
-		pvc, err := core.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+		var pvc *v1.PersistentVolumeClaim
+		var err error
+		var msg string
+		if storkcache.Instance() != nil {
+			pvc, err = storkcache.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+			msg = fmt.Sprintf("Unable to find PVC %s in informer cache, err: %v", vol.Name, err)
+		} else {
+			pvc, err = core.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+			msg = fmt.Sprintf("Unable to find PVC %s, err: %v", vol.Name, err)
+		}
 		if err != nil {
-			msg := fmt.Sprintf("Unable to find PVC %s, err: %v", vol.Name, err)
 			storklog.PodLog(pod).Warnf(msg)
 			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
 			http.Error(w, msg, http.StatusBadRequest)
@@ -499,7 +507,6 @@ func (e *Extender) collectExtenderMetrics() error {
 		if err != nil {
 			log.Errorf("failed to watch pods with informer cache for health monitoring, err: %v", err)
 		}
-		log.Errorf("failed to watch pods with informer cache for metrics, err: %v", err)
 	} else {
 		log.Warnf("Shared informer cache has not been initialized, using watch for extender metrics.")
 		if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
@@ -883,7 +890,16 @@ func (e *Extender) getVMIInfo(refPod *v1.Pod) (string, types.UID) {
 
 // GetPVNameFromPVC returns PV name for a PVC
 func (e *Extender) GetPVNameFromPVC(pvcName string, namespace string) (string, error) {
-	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	var pvc *v1.PersistentVolumeClaim
+	var err error
+	if storkcache.Instance() != nil {
+		pvc, err = storkcache.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil {
+			log.Debugf("Error getting PVC %s from informer cache: %v", pvcName, err)
+		}
+	} else {
+		pvc, err = core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	}
 	if err != nil || pvc == nil {
 		return "", fmt.Errorf("error getting PV name for PVC (%v/%v): %w", namespace, pvcName, err)
 	}
