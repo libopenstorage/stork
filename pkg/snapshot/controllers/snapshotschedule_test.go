@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
@@ -11,7 +12,6 @@ import (
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/assert"
-	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/resource"

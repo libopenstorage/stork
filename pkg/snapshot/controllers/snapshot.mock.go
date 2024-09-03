@@ -14,7 +14,7 @@ import (
 	time "time"
 
 	v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	gomock "go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 	rest "k8s.io/client-go/rest"
 )
 
