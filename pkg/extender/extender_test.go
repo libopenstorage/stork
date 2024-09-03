@@ -16,8 +16,10 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
+	"github.com/libopenstorage/stork/pkg/cache"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	"github.com/libopenstorage/stork/pkg/client/clientset/versioned/scheme"
+	mockcache "github.com/libopenstorage/stork/pkg/mock/cache"
 
 	kvmock "github.com/libopenstorage/stork/pkg/mock/kubevirt"
 	kvdmock "github.com/libopenstorage/stork/pkg/mock/kubevirtdynamic"
@@ -41,9 +43,12 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
-const (
+var (
 	mockDriverName   = "MockDriver"
 	defaultNamespace = "default"
+
+	mockCtrl          *gomock.Controller
+	mockCacheInstance *mockcache.MockSharedInformerCache
 )
 
 var driver *mock.Driver
@@ -115,6 +120,13 @@ func teardown(t *testing.T) {
 	if err := extender.Stop(); err != nil {
 		t.Fatalf("Error stopping scheduler extender: %v", err)
 	}
+}
+
+func setCacheInstance(t *testing.T) {
+	mockCtrl = gomock.NewController(t)
+	mockCacheInstance = mockcache.NewMockSharedInformerCache(mockCtrl)
+	mockCacheInstance.EXPECT().WatchPods(gomock.Any()).Return(nil).AnyTimes()
+	cache.SetTestInstance(mockCacheInstance)
 }
 
 func newPod(podName string, namespace string, volumes map[string]bool) *v1.Pod {
@@ -372,6 +384,9 @@ func TestExtender(t *testing.T) {
 	t.Run("kubevirtPodSchedulingNonHyperconvergence", kubevirtPodSchedulingNonHyperconvergence)
 	t.Run("nodeMarkedUnschedulableTest", nodeMarkedUnschedulableTest)
 	t.Run("nodeMarkedUnschedulableWFFCVolTest", nodeMarkedUnschedulableWFFCVolTest)
+	// From here onwards, the tests with cache enabled should be added
+	t.Run("setCacheInstance", setCacheInstance)
+	t.Run("multipleVolumeTestWithCache", multipleVolumeTestWithCache)
 	t.Run("teardown", teardown)
 }
 
@@ -926,6 +941,78 @@ func multipleVolumeTest(t *testing.T) {
 	if err := driver.ProvisionVolume("volume2", provNodes, 1, nil, false, false, ""); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]float64{nodePriorityScore,
+			2 * nodePriorityScore,
+			nodePriorityScore,
+			rackPriorityScore,
+			2 * rackPriorityScore},
+		prioritizeResponse)
+
+	// No events should be raised
+	require.Len(t, recorder.Events, 0)
+}
+
+func multipleVolumeTestWithCache(t *testing.T) {
+	// Reset the event recorder
+	recorder := record.NewFakeRecorder(100)
+	extender.Recorder = recorder
+
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	pod := newPod("doubleVolumePod", defaultNamespace, map[string]bool{"cvolume1": false, "cvolume2": false})
+
+	provNodes := []int{0, 1}
+	if err := driver.ProvisionVolume("cvolume1", provNodes, 1, nil, false, false, ""); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	provNodes = []int{1, 2}
+	if err := driver.ProvisionVolume("cvolume2", provNodes, 1, nil, false, false, ""); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	pvc1 := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cvolume1",
+			Namespace: defaultNamespace,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			VolumeName: "cvolume1",
+		},
+	}
+	pvc2 := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cvolume2",
+			Namespace: defaultNamespace,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			VolumeName: "cvolume2",
+		},
+	}
+	mockCacheInstance.EXPECT().GetPersistentVolumeClaim("cvolume1", defaultNamespace).Return(pvc1, nil).Times(1)
+	mockCacheInstance.EXPECT().GetPersistentVolumeClaim("cvolume2", defaultNamespace).Return(pvc2, nil).Times(1)
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
