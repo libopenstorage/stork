@@ -5,11 +5,12 @@ package storkctl
 
 import (
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"maps"
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
