@@ -245,7 +245,6 @@ func (m *Monitor) driverMonitor() {
 					}
 					k8sNode := driverNodeToK8sNodeMap[node.StorageID]
 					m.wg.Add(1)
-					// wait for 1 min if node is upgrading
 					go m.cleanupDriverNodePods(node, k8sNode, k8sNodeNameToNodeMap)
 				}
 			}
@@ -396,13 +395,16 @@ func (m *Monitor) doesDriverOwnVolumeAttachment(va *storagev1.VolumeAttachment) 
 	}
 
 	var pvc *v1.PersistentVolumeClaim
+	var msg string
 	if storkcache.Instance() != nil {
 		pvc, err = storkcache.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+		msg = fmt.Sprintf("Error getting persistent volume claim from volume attachment from informer cache: %v", err)
 	} else {
 		pvc, err = core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+		msg = fmt.Sprintf("Error getting persistent volume claim from volume attachment: %v", err)
 	}
 	if err != nil {
-		log.Errorf("Error getting persistent volume claim from volume attachment: %v", err)
+		log.Errorf(msg)
 		return false, err
 	}
 
