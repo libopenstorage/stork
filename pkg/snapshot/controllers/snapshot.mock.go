@@ -13,8 +13,9 @@ import (
 	reflect "reflect"
 	time "time"
 
+	gomock "github.com/golang/mock/gomock"
+
 	v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/golang/mock/gomock"
 	rest "k8s.io/client-go/rest"
 )
 
