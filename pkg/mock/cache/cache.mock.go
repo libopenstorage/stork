@@ -51,6 +51,21 @@ func (mr *MockSharedInformerCacheMockRecorder) GetApplicationRegistration(arg0 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetApplicationRegistration", reflect.TypeOf((*MockSharedInformerCache)(nil).GetApplicationRegistration), arg0)
 }
 
+// GetPersistentVolumeClaim mocks base method.
+func (m *MockSharedInformerCache) GetPersistentVolumeClaim(arg0, arg1 string) (*v1.PersistentVolumeClaim, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPersistentVolumeClaim", arg0, arg1)
+	ret0, _ := ret[0].(*v1.PersistentVolumeClaim)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPersistentVolumeClaim indicates an expected call of GetPersistentVolumeClaim.
+func (mr *MockSharedInformerCacheMockRecorder) GetPersistentVolumeClaim(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPersistentVolumeClaim", reflect.TypeOf((*MockSharedInformerCache)(nil).GetPersistentVolumeClaim), arg0, arg1)
+}
+
 // GetStorageClass mocks base method.
 func (m *MockSharedInformerCache) GetStorageClass(arg0 string) (*v10.StorageClass, error) {
 	m.ctrl.T.Helper()
