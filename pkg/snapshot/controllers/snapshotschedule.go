@@ -36,6 +36,10 @@ const (
 	validateCRDInterval  time.Duration = 5 * time.Second
 	validateCRDTimeout   time.Duration = 1 * time.Minute
 
+	// errorSnapshotCleanupCutoffTime is the cutoff time for a snapshot in
+	// Error state to be deleted.
+	errorSnapshotCleanupCutoffTime time.Duration = 90 * time.Second
+
 	// SnapshotScheduleNameAnnotation Annotation used to specify the name of schedule that
 	// created the snapshot
 	SnapshotScheduleNameAnnotation = "stork.libopenstorage.org/snapshotScheduleName"
@@ -160,6 +164,18 @@ func (s *SnapshotScheduleController) handle(ctx context.Context, snapshotSchedul
 		return err
 	}
 
+	// Delete the volumesnapshot CRs of the volumesnapshots that are in Error state.
+	err = s.cleanupErroredSnapshots(snapshotSchedule)
+	if err != nil {
+		msg := fmt.Sprintf("Error deleting errored out snapshots: %v", err)
+		s.recorder.Event(snapshotSchedule,
+			v1.EventTypeWarning,
+			string(snapv1.VolumeSnapshotConditionError),
+			msg)
+		log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
+		return err
+	}
+
 	return nil
 }
 
@@ -169,24 +185,25 @@ func (s *SnapshotScheduleController) setDefaults(snapshotSchedule *stork_api.Vol
 	}
 }
 
-func getVolumeSnapshotStatus(name string, namespace string) (snapv1.VolumeSnapshotConditionType, error) {
+// getVolumeSnapshotStatus returns the status of the volumesnapshot passed in the parameter.
+func getVolumeSnapshotStatus(name string, namespace string) (snapv1.VolumeSnapshotConditionType, string, error) {
 	snapshot, err := k8sextops.Instance().GetSnapshot(name, namespace)
 	if err != nil {
-		return snapv1.VolumeSnapshotConditionError, err
+		return snapv1.VolumeSnapshotConditionError, "", err
 	}
 	if snapshot.Status.Conditions == nil || len(snapshot.Status.Conditions) == 0 {
-		return snapv1.VolumeSnapshotConditionPending, nil
+		return snapv1.VolumeSnapshotConditionPending, "", nil
 	}
 	lastCondition := snapshot.Status.Conditions[len(snapshot.Status.Conditions)-1]
 	if lastCondition.Type == snapv1.VolumeSnapshotConditionReady && lastCondition.Status == v1.ConditionTrue {
-		return snapv1.VolumeSnapshotConditionReady, nil
+		return snapv1.VolumeSnapshotConditionReady, "", nil
 	} else if lastCondition.Type == snapv1.VolumeSnapshotConditionError && lastCondition.Status == v1.ConditionTrue {
-		return snapv1.VolumeSnapshotConditionError, nil
+		return snapv1.VolumeSnapshotConditionError, lastCondition.Message, nil
 	} else if lastCondition.Type == snapv1.VolumeSnapshotConditionPending &&
 		(lastCondition.Status == v1.ConditionTrue || lastCondition.Status == v1.ConditionUnknown) {
-		return snapv1.VolumeSnapshotConditionPending, nil
+		return snapv1.VolumeSnapshotConditionPending, "", nil
 	}
-	return snapv1.VolumeSnapshotConditionPending, nil
+	return snapv1.VolumeSnapshotConditionPending, "", nil
 
 }
 
@@ -196,7 +213,7 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 	for _, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		for _, snapshot := range policyVolumeSnapshot {
 			if snapshot.Status != snapv1.VolumeSnapshotConditionReady {
-				pendingVolumeSnapshotStatus, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
+				pendingVolumeSnapshotStatus, _, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
 				if err != nil {
 					s.recorder.Event(snapshotSchedule,
 						v1.EventTypeWarning,
@@ -244,6 +261,54 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 		}
 	}
 	return nil
+}
+
+// cleanupErroredSnapshots cleans any volumesnapshot CRs that are in Error state. It doesn't remove them
+// from the volumesnapshotschedule items list though.
+func (s *SnapshotScheduleController) cleanupErroredSnapshots(snapshotSchedule *stork_api.VolumeSnapshotSchedule) (err error) {
+	for policy, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
+		for idx, snapshot := range policyVolumeSnapshot {
+			// Move to the next snapshot if the current one doesn't meet criteria to be deleted.
+			if snapshot.Deleted ||
+				snapshot.Status != snapv1.VolumeSnapshotConditionError ||
+				time.Since(snapshot.CreationTimestamp.Time) < errorSnapshotCleanupCutoffTime {
+				continue
+			}
+
+			// Filter out the errored out snapshots that are older than the cleanup cutoff period.
+			// Fetch the latest status as well in order to mitigate any late volumesnapshot updates.
+			snapshotStatus, snapshotError, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
+			if err != nil {
+				log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error getting status of snapshot %s: %s", snapshot.Name, err.Error())
+				continue
+			}
+
+			if snapshotStatus == snapv1.VolumeSnapshotConditionError {
+				log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Going to delete the errored out snapshot: %v,createdAt: %v,error: %v", snapshot.Name, snapshot.CreationTimestamp.Time, snapshotError)
+				err := k8sextops.Instance().DeleteSnapshot(snapshot.Name, snapshotSchedule.Namespace)
+				if err != nil && !errors.IsNotFound(err) {
+					log.VolumeSnapshotScheduleLog(snapshotSchedule).Warnf("Error deleting errored out snapshot %v: %v", snapshot.Name, err)
+					continue
+				}
+
+				// Update the volumesnapshotschedule object with the deletion message and setting `deleted` to `true`.
+				snapshotSchedule.Status.Items[policy][idx].Deleted = true
+				snapshotSchedule.Status.Items[policy][idx].Message = snapshotError
+			}
+		}
+	}
+
+	// Get the latest copy of snapshotschedule for updating.
+	currentSnapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(snapshotSchedule.Name, snapshotSchedule.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get volumesnapshot schedule %s", snapshotSchedule.Name)
+	}
+	currentSnapshotSchedule.Status = snapshotSchedule.Status
+	// Update the snapshotschedule with the latest updates w.r.t snapshots.
+	if _, err = storkops.Instance().UpdateSnapshotSchedule(currentSnapshotSchedule); err != nil {
+		return err
+	}
+	return
 }
 
 func (s *SnapshotScheduleController) isVolumeSnapshotComplete(status snapv1.VolumeSnapshotConditionType) bool {
