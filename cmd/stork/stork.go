@@ -366,6 +366,7 @@ func run(c *cli.Context) {
 	if c.Int64("controller-cache-sync-timeout") > 0 {
 		ctrlCacheSyncTimeout = time.Duration(c.Int64("controller-cache-sync-timeout")) * time.Minute
 		managerOpts.Controller.CacheSyncTimeout = &ctrlCacheSyncTimeout
+		log.Infof("Setting the controller cache sync-timeout as %d mins.", c.Int64("controller-cache-sync-timeout"))
 	}
 	// Create operator-sdk manager that will manage all controllers.
 	// Setup the controller manager before starting any watches / other controllers
