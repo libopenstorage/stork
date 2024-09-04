@@ -82,6 +82,9 @@ const (
 var ext *extender.Extender
 var webhook *webhookadmission.Controller
 
+// Custom controller cache sync timeout.
+var ctrlCacheSyncTimeout time.Duration
+
 func main() {
 	// Parse empty flags to suppress warnings from the snapshotter which uses
 	// glog
@@ -185,6 +188,11 @@ func main() {
 		cli.BoolTFlag{
 			Name:  "enable-metrics",
 			Usage: "Enable stork metrics collection for stork resources (default: true)",
+		},
+		cli.Int64Flag{
+			Name:  "controller-cache-sync-timeout",
+			Usage: "The duration in minutes for controller cache sync timeout (default: 2 minutes)",
+			Value: 2,
 		},
 		cli.Int64Flag{
 			Name:  "application-backup-sync-interval",
@@ -353,9 +361,16 @@ func run(c *cli.Context) {
 	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: k8sClient.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: eventComponentName})
 
+	managerOpts := manager.Options{}
+	// Configure the passed custom controller cache sync timeout in the manager.
+	if c.Int64("controller-cache-sync-timeout") > 0 {
+		ctrlCacheSyncTimeout = time.Duration(c.Int64("controller-cache-sync-timeout")) * time.Minute
+		managerOpts.Controller.CacheSyncTimeout = &ctrlCacheSyncTimeout
+		log.Infof("Setting the controller cache sync-timeout as %d mins.", c.Int64("controller-cache-sync-timeout"))
+	}
 	// Create operator-sdk manager that will manage all controllers.
 	// Setup the controller manager before starting any watches / other controllers
-	mgr, err := manager.New(config, manager.Options{})
+	mgr, err := manager.New(config, managerOpts)
 	if err != nil {
 		log.Fatalf("Setup controller manager: %v", err)
 	}
