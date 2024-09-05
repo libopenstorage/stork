@@ -15,7 +15,9 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume/mock"
 	mockVolumeDriver "github.com/libopenstorage/stork/drivers/volume/mock/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/cache"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	mockcache "github.com/libopenstorage/stork/pkg/mock/cache"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -52,6 +54,7 @@ var (
 	testNodeOfflineTimeout time.Duration
 	volumeDriver           *mockVolumeDriver.MockDriver
 	mockCtrl               *gomock.Controller
+	mockCacheInstance      *mockcache.MockSharedInformerCache
 )
 
 func TestMonitor(t *testing.T) {
@@ -69,6 +72,7 @@ func TestMonitor(t *testing.T) {
 func TestMonitorOfflineNodes(t *testing.T) {
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
+	t.Run("testOfflineStorageNodesBatchTest", testOfflineStorageNodesBatchTest)
 }
 
 func TestMonitorMethods(t *testing.T) {
@@ -246,6 +250,85 @@ func setupWithNewMockDriver(t *testing.T) {
 	require.NoError(t, err, "failed to start monitor")
 }
 
+func setupWithNewMockDriverScale(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	scheme := runtime.NewScheme()
+	err := stork_api.AddToScheme(scheme)
+	require.NoError(t, err, "Error adding stork scheme")
+
+	numNodes := 50
+
+	fakeStorkClient = fakeclient.NewSimpleClientset()
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+	core.SetInstance(core.New(fakeKubeClient))
+	storage.SetInstance(storage.New(fakeKubeClient.StorageV1()))
+	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
+
+	mockCtrl = gomock.NewController(t)
+	mockCacheInstance = mockcache.NewMockSharedInformerCache(mockCtrl)
+	mockCacheInstance.EXPECT().WatchPods(gomock.Any()).Return(nil).AnyTimes()
+	cache.SetTestInstance(mockCacheInstance)
+
+	storkdriver, err := volume.Get(mockDriverName)
+	require.NoError(t, err, "Error getting mock volume driver")
+
+	var ok bool
+	driver, ok = storkdriver.(*mock.Driver)
+	require.True(t, ok, "Error casting mockdriver")
+
+	err = storkdriver.Init(nil)
+	require.NoError(t, err, "Error initializing mock volume driver")
+
+	nodes = &v1.NodeList{}
+	for i := 0; i < numNodes; i++ {
+		nodes.Items = append(nodes.Items, *newNode(fmt.Sprintf("node%d.domain", i), fmt.Sprintf("node%d.domain", i), fmt.Sprintf("192.168.0.%d", i), "rack1", "", ""))
+	}
+
+	for _, n := range nodes.Items {
+		node, err := core.Instance().CreateNode(&n)
+		require.NoError(t, err, "failed to create fake node")
+		require.NotNil(t, node, "got nil node from create node api")
+	}
+
+	err = driver.CreateCluster(numNodes, nodes)
+	require.NoError(t, err, "Error creating cluster")
+
+	for i := 0; i < numNodes; i++ {
+		provNodes := []int{i, (i + 1) % numNodes}
+		err = driver.ProvisionVolume(fmt.Sprintf("%s%d", driverVolumeName, i), provNodes, 1, nil, false, false, "")
+		require.NoError(t, err, "Error provisioning volume")
+	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
+	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
+
+	monitor = &Monitor{
+		Driver:      storkdriver,
+		IntervalSec: 30,
+		Recorder:    recorder,
+	}
+
+	mockCtrl = gomock.NewController(t)
+	volumeDriver = mockVolumeDriver.NewMockDriver(mockCtrl)
+
+	driverNodes := getDriverNodes(len(nodes.Items))
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).Times(1)
+
+	monitor.Driver = volumeDriver
+
+	// overwrite the backoff timers to speed up the tests
+	// this accounts to a backoff of 1 min
+	nodeWaitCallBackoff = wait.Backoff{
+		Duration: initialNodeWaitDelay,
+		Factor:   1,
+		Steps:    nodeWaitSteps,
+	}
+
+	err = monitor.Start()
+	require.NoError(t, err, "failed to start monitor")
+}
+
 func teardownWithNewMockDriver(t *testing.T) {
 	mockCtrl.Finish()
 	err := monitor.Stop()
@@ -255,12 +338,12 @@ func teardownWithNewMockDriver(t *testing.T) {
 }
 
 func testUnknownDriverPod(t *testing.T) {
-	pod := newPod("driverPod", []string{driverVolumeName})
+	pod := newPod("driverPod", []string{driverVolumeName}, nodeForPod)
 	testLostPod(t, pod, true, true, false)
 }
 
 func testUnknownOtherDriverPod(t *testing.T) {
-	pod := newPod("otherDriverPod", nil)
+	pod := newPod("otherDriverPod", nil, nodeForPod)
 	podVolume := v1.Volume{}
 	podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
 		ClaimName: "noDriverPVC",
@@ -271,7 +354,7 @@ func testUnknownOtherDriverPod(t *testing.T) {
 }
 
 func testEvictedOtherDriverPod(t *testing.T) {
-	pod := newPod("otherDriverPod", nil)
+	pod := newPod("otherDriverPod", nil, nodeForPod)
 	podVolume := v1.Volume{}
 	podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
 		ClaimName: "noDriverPVC",
@@ -282,7 +365,7 @@ func testEvictedOtherDriverPod(t *testing.T) {
 }
 
 func testEvictedDriverPod(t *testing.T) {
-	pod := newPod("driverPod", []string{driverVolumeName})
+	pod := newPod("driverPod", []string{driverVolumeName}, nodeForPod)
 	testLostPod(t, pod, true, false, true)
 }
 
@@ -354,7 +437,7 @@ func testLostPod(
 	}
 }
 
-func newPod(podName string, volumes []string) *v1.Pod {
+func newPod(podName string, volumes []string, nodeName string) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: podName},
 	}
@@ -367,7 +450,7 @@ func newPod(podName string, volumes []string) *v1.Pod {
 		pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
 	}
 
-	pod.Spec.NodeName = nodeForPod
+	pod.Spec.NodeName = nodeName
 	return pod
 }
 
@@ -400,11 +483,11 @@ func testOfflineStorageNode(t *testing.T) {
 
 	defer teardownWithNewMockDriver(t)
 
-	pod := newPod("driverPod", []string{driverVolumeName})
+	pod := newPod("driverPod", []string{driverVolumeName}, nodeForPod)
 	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
-	noStoragePod := newPod("noStoragePod", nil)
+	noStoragePod := newPod("noStoragePod", nil, nodeForPod)
 	_, err = core.Instance().CreatePod(noStoragePod)
 	require.NoError(t, err, "failed to create pod")
 
@@ -433,8 +516,75 @@ func testOfflineStorageNode(t *testing.T) {
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
 
+func testOfflineStorageNodesBatchTest(t *testing.T) {
+
+	setupWithNewMockDriverScale(t)
+
+	defer teardownWithNewMockDriver(t)
+	numNodes := 50
+	offlineNodes := 12
+	// The test creates the following pods with 1 pod in each node
+	pods := make([]*v1.Pod, 0)
+	for i := 0; i < numNodes; i++ {
+		pod := newPod(fmt.Sprintf("driverPod%d", i), []string{fmt.Sprintf("%s%d", driverVolumeName, i)}, fmt.Sprintf("node%d.domain", i))
+		_, err := core.Instance().CreatePod(pod)
+		require.NoError(t, err, "failed to create pod %s for node %d", pod.Name, i)
+		pods = append(pods, pod)
+	}
+
+	for i := 0; i < numNodes; i++ {
+		podList := v1.PodList{}
+		podList.Items = append(podList.Items, *pods[i])
+		mockCacheInstance.EXPECT().ListTransformedPods(fmt.Sprintf("node%d.domain", i)).Return(&podList, nil).AnyTimes()
+		//mockCacheInstance.EXPECT().GetPersistentVolumeClaim("cvolume1", defaultNamespace).Return(pvc1, nil).Times(1)
+	}
+
+	driverNodes := getDriverNodes(len(nodes.Items))
+	// Mark offlineNodes number of nodes as offline
+	for i := 0; i <= offlineNodes; i++ {
+		driverNodes[i].Status = volume.NodeOffline
+	}
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
+	volumeDriver.EXPECT().GetCSIPodPrefix().Return("px-csi-ext-", nil).AnyTimes()
+
+	for i := 0; i < numNodes; i++ {
+		volumes := []*volume.Info{
+			{
+				VolumeName: fmt.Sprintf("volume%d", i),
+				DataNodes:  []string{driverNodes[0].StorageID},
+			},
+		}
+		wffcVolumes := make([]*volume.Info, 0)
+		volumeDriver.EXPECT().InspectNode(fmt.Sprintf("node%d", i)).Return(driverNodes[i], nil).AnyTimes()
+		volumeDriver.EXPECT().GetPodVolumes(&pods[i].Spec, pods[i].Namespace, false).Return(volumes, wffcVolumes, nil).AnyTimes()
+	}
+
+	// Since the monitor runs every 30 seconds and to ensure with certainilt one batch of pod deletes, waiting for a mx of 95 seconds
+	// However sometimes there can be already be another batch which might have started
+	// So need to check if rate limiting of offline nodes processing is working fine
+	// by checking if a batch number of pods
+
+	time.Sleep(95 * time.Second)
+	// Check if only 5 pods have been deleted
+	// Not relying on from which nodes pods have been deleted as the nodes may get picked up in random order
+	podList, err := core.Instance().ListPods(nil)
+	require.NoError(t, err, "failed to get pods")
+	require.Equal(t, numNodes-nodeBatchSizeForPodDeletion, len(podList.Items), "only batch number of pods should have been deleted")
+
+	time.Sleep(65 * time.Second)
+	podList, err = core.Instance().ListPods(nil)
+	require.NoError(t, err, "failed to get pods")
+	require.Equal(t, numNodes-(2*nodeBatchSizeForPodDeletion), len(podList.Items), " Another batch number of pods should have been deleted")
+
+	// Last iterations
+	time.Sleep(65 * time.Second)
+	podList, err = core.Instance().ListPods(nil)
+	require.NoError(t, err, "failed to get pods")
+	require.Equal(t, numNodes-offlineNodes, len(podList.Items), "All pods in offlines nodes should have been deleted")
+}
+
 func testStorageDownNode(t *testing.T) {
-	storageDownPod := newPod("storageDownPod", []string{driverVolumeName})
+	storageDownPod := newPod("storageDownPod", []string{driverVolumeName}, nodeForPod)
 	storageDownPod.Spec.NodeName = "node2.domain"
 	node2Index := 1
 	_, err := core.Instance().CreatePod(storageDownPod)
@@ -453,11 +603,11 @@ func testStorageDownNode(t *testing.T) {
 }
 
 func testTempOfflineStorageNode(t *testing.T) {
-	pod := newPod("driverPodTemp", []string{driverVolumeName})
+	pod := newPod("driverPodTemp", []string{driverVolumeName}, nodeForPod)
 	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
-	noStoragePod := newPod("noStoragePodTemp", nil)
+	noStoragePod := newPod("noStoragePodTemp", nil, nodeForPod)
 	_, err = core.Instance().CreatePod(noStoragePod)
 	require.NoError(t, err, "failed to create pod")
 
@@ -478,7 +628,7 @@ func testTempOfflineStorageNode(t *testing.T) {
 }
 
 func testOfflineStorageNodeDuplicateIP(t *testing.T) {
-	pod := newPod("driverPodDuplicateIPTest", []string{driverVolumeName})
+	pod := newPod("driverPodDuplicateIPTest", []string{driverVolumeName}, nodeForPod)
 	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
@@ -492,7 +642,7 @@ func testOfflineStorageNodeForCSIExtPod(t *testing.T) {
 
 	defer teardownWithNewMockDriver(t)
 
-	pod := newPod("px-csi-ext-foo", nil)
+	pod := newPod("px-csi-ext-foo", nil, nodeForPod)
 	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
