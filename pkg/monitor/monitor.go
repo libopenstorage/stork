@@ -27,11 +27,12 @@ const (
 	defaultIntervalSec = 120
 	minimumIntervalSec = 30
 	// This will result into a total 2.5 minutes of backoff
-	initialNodeWaitDelay      = 10 * time.Second
-	nodeWaitFactor            = 2
-	nodeWaitSteps             = 5
-	podDeleteBatchSize        = 5
-	podBatchDeleteIntervalSec = 30
+	initialNodeWaitDelay        = 10 * time.Second
+	nodeWaitFactor              = 2
+	nodeWaitSteps               = 5
+	podDeleteBatchSize          = 5
+	podBatchDeleteIntervalSec   = 30
+	nodeBatchSizeForPodDeletion = 5
 
 	storageDriverOfflineReason = "StorageDriverOffline"
 )
@@ -60,10 +61,13 @@ type Monitor struct {
 	started     bool
 	stopChannel chan int
 	done        chan int
+	// This is used to rate limit the number of offline nodes being processed at a time for cleanup of pods
+	batchChannel chan struct{}
 }
 
 // Start Starts the monitor
 func (m *Monitor) Start() error {
+	m.batchChannel = make(chan struct{}, nodeBatchSizeForPodDeletion)
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -244,7 +248,9 @@ func (m *Monitor) driverMonitor() {
 						continue
 					}
 					k8sNode := driverNodeToK8sNodeMap[node.StorageID]
+					m.batchChannel <- struct{}{} // Acquire a slot
 					m.wg.Add(1)
+					log.Debugf("Going to cleanup pods on node %v as node status is %s", k8sNode.Name, node.Status)
 					go m.cleanupDriverNodePods(node, k8sNode, k8sNodeNameToNodeMap)
 				}
 			}
@@ -262,6 +268,7 @@ func (m *Monitor) driverMonitor() {
 
 func (m *Monitor) cleanupDriverNodePods(driverNode *volume.NodeInfo, k8sNode *v1.Node, k8sNodeNameToNodeMap map[string]*v1.Node) {
 	defer m.wg.Done()
+	defer func() { <-m.batchChannel }() // Release the slot when done
 	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
 		n, err := m.Driver.InspectNode(driverNode.StorageID)
 		if err != nil {
@@ -323,6 +330,7 @@ func (m *Monitor) cleanupDriverNodePods(driverNode *volume.NodeInfo, k8sNode *v1
 	if len(podsSelectedForDeletion) > 0 {
 		m.batchDeletePodsFromOfflineNodes(podsSelectedForDeletion, driverNode, false)
 	}
+	log.Infof("Finished cleaning up pods on node %v", k8sNode.Name)
 }
 
 // batchDeletePodsFromOfflineNodes deletes the pods in batches of batchSize
