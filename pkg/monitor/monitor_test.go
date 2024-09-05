@@ -536,7 +536,6 @@ func testOfflineStorageNodesBatchTest(t *testing.T) {
 		podList := v1.PodList{}
 		podList.Items = append(podList.Items, *pods[i])
 		mockCacheInstance.EXPECT().ListTransformedPods(fmt.Sprintf("node%d.domain", i)).Return(&podList, nil).AnyTimes()
-		//mockCacheInstance.EXPECT().GetPersistentVolumeClaim("cvolume1", defaultNamespace).Return(pvc1, nil).Times(1)
 	}
 
 	driverNodes := getDriverNodes(len(nodes.Items))
@@ -559,11 +558,7 @@ func testOfflineStorageNodesBatchTest(t *testing.T) {
 		volumeDriver.EXPECT().GetPodVolumes(&pods[i].Spec, pods[i].Namespace, false).Return(volumes, wffcVolumes, nil).AnyTimes()
 	}
 
-	// Since the monitor runs every 30 seconds and to ensure with certainilt one batch of pod deletes, waiting for a mx of 95 seconds
-	// However sometimes there can be already be another batch which might have started
-	// So need to check if rate limiting of offline nodes processing is working fine
-	// by checking if a batch number of pods
-
+	// 30 (interval)  + 60 (backoff) + 5 (buffer)
 	time.Sleep(95 * time.Second)
 	// Check if only 5 pods have been deleted
 	// Not relying on from which nodes pods have been deleted as the nodes may get picked up in random order
@@ -571,12 +566,14 @@ func testOfflineStorageNodesBatchTest(t *testing.T) {
 	require.NoError(t, err, "failed to get pods")
 	require.Equal(t, numNodes-nodeBatchSizeForPodDeletion, len(podList.Items), "only batch number of pods should have been deleted")
 
+	// 60 (backoff) + 5 (buffer)
 	time.Sleep(65 * time.Second)
 	podList, err = core.Instance().ListPods(nil)
 	require.NoError(t, err, "failed to get pods")
 	require.Equal(t, numNodes-(2*nodeBatchSizeForPodDeletion), len(podList.Items), " Another batch number of pods should have been deleted")
 
 	// Last iterations
+	// 60 (backoff) + 5 (buffer)
 	time.Sleep(65 * time.Second)
 	podList, err = core.Instance().ListPods(nil)
 	require.NoError(t, err, "failed to get pods")
