@@ -5,6 +5,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -20,7 +21,9 @@ import (
 const (
 	// node offline timeout just above 4.5 minutes
 	// which is the max time stork could take to delete a app pod.
-	nodeOfflineTimeout = 295 * time.Second
+	nodeOfflineTimeout        = 295 * time.Second
+	podDeleteBatchSize        = 5
+	podBatchDeleteIntervalSec = 30
 )
 
 func TestHealthMonitor(t *testing.T) {
@@ -33,6 +36,7 @@ func TestHealthMonitor(t *testing.T) {
 	t.Run("poolMaintenanceHealthTest", poolMaintenanceHealthTest)
 	t.Run("healthCheckFixTest", healthCheckFixTest)
 	t.Run("stopDriverCsiPodFailoverTest", stopDriverCsiPodFailoverTest)
+	t.Run("stopDriverTestScale", stopDriverTestScale)
 
 	err = setRemoteConfig("")
 	log.FailOnError(t, err, "setting kubeconfig to default failed")
@@ -91,6 +95,95 @@ func stopDriverTest(t *testing.T) {
 	log.FailOnError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+func stopDriverTestScale(t *testing.T) {
+
+	log.InfoD("stop driver test")
+	var testrailID, testResult = 301327, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	totalApps := 40
+	ctxList := make([]*scheduler.Context, 0)
+	for i := 0; i < totalApps; i++ {
+		ctxs, err := schedulerDriver.Schedule(generateShortInstanceID(t, "stopdrivertestscale"),
+			scheduler.ScheduleOptions{AppKeys: []string{"busybox-1-pvc"}})
+		log.FailOnError(t, err, "Error scheduling task")
+		Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+		ctxList = append(ctxList, ctxs[0])
+	}
+	Dash.VerifyFatal(t, totalApps, len(ctxList), "All apps should have been scheduled")
+
+	for _, ctx := range ctxList {
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		log.FailOnError(t, err, "Error waiting for pod to get to running state")
+	}
+
+	// Lets get all the scheduled nodes for the apps as a map
+	scheduledNodesAppCount := make(map[string]int)
+	nodeNametoNodeMap := make(map[string]node.Node)
+	for _, ctx := range ctxList {
+		scheduledNodes, err := schedulerDriver.GetNodesForApp(ctx)
+		log.FailOnError(t, err, "Error getting node for app")
+		Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+		nodeName := scheduledNodes[0].Name
+		if _, ok := scheduledNodesAppCount[nodeName]; !ok {
+			scheduledNodesAppCount[nodeName] = 0
+			nodeNametoNodeMap[nodeName] = scheduledNodes[0]
+		}
+		scheduledNodesAppCount[nodeName]++
+	}
+
+	time.Sleep(1 * time.Minute)
+
+	// Stop the driver and verify that it moved to another node
+	var nodeToStopDriver string
+	for nodeName, count := range scheduledNodesAppCount {
+		if count > podDeleteBatchSize {
+			nodeToStopDriver = nodeName
+			break
+		}
+	}
+
+	err := volumeDriver.StopDriver([]node.Node{nodeNametoNodeMap[nodeToStopDriver]}, false, nil)
+	log.FailOnError(t, err, "Error stopping driver on scheduled Node %+v", nodeNametoNodeMap[nodeToStopDriver])
+
+	// Add extra timeout as there is a delay in each pod deletion batches
+	// Extra time to add is podBatchDeleteIntervalSec * (totalAppsScheduled on that node/podDeleteBatchSize)
+	numberOfPodsInOfflineNode := scheduledNodesAppCount[nodeToStopDriver]
+	additionalWait := int(math.Ceil(float64(numberOfPodsInOfflineNode)/float64(podDeleteBatchSize))) * podBatchDeleteIntervalSec
+
+	log.InfoD("Waiting for %v seconds for all pods to get evicted from node %s", nodeOfflineTimeout.Seconds()+float64(additionalWait), nodeToStopDriver)
+
+	time.Sleep(nodeOfflineTimeout + time.Duration(additionalWait)*time.Second)
+
+	log.InfoD("Checking if all pods got rescheduled to online driver nodes")
+	scheduledNodesAppCountAfter := make(map[string]int)
+	for _, ctx := range ctxList {
+		scheduledNodes, err := schedulerDriver.GetNodesForApp(ctx)
+		log.FailOnError(t, err, "Error getting node for app")
+		Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+		nodeName := scheduledNodes[0].Name
+		scheduledNodesAppCountAfter[nodeName]++
+	}
+
+	// Check that no app pods are running in offline node and all are evicted
+	Dash.VerifyFatal(t, 0, scheduledNodesAppCountAfter[nodeToStopDriver], "App should not be scheduled on node with driver stopped")
+
+	// Start the driver
+	err = volumeDriver.StartDriver(nodeNametoNodeMap[nodeToStopDriver])
+	log.FailOnError(t, err, "Error starting driver on Node %+v", nodeNametoNodeMap[nodeToStopDriver])
+
+	err = volumeDriver.WaitDriverUpOnNode(nodeNametoNodeMap[nodeToStopDriver], defaultWaitTimeout)
+	log.FailOnError(t, err, "Error waiting for Node to start %+v", nodeNametoNodeMap[nodeToStopDriver])
+
+	destroyAndWait(t, ctxList)
 
 	// If we are here then the test has passed
 	testResult = testResultPass
