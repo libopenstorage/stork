@@ -424,6 +424,12 @@ func generateInstanceID(t *testing.T, testName string) string {
 	return testName + "-" + id.String()
 }
 
+func generateShortInstanceID(t *testing.T, testName string) string {
+	id, err := uuid.New()
+	log.FailOnError(t, err, "Error generating uuid for task")
+	return testName + "-" + id.String()[:7]
+}
+
 func destroyAndWait(t *testing.T, ctxs []*scheduler.Context) {
 	for _, ctx := range ctxs {
 		err := schedulerDriver.Destroy(ctx, nil)
