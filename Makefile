@@ -108,7 +108,7 @@ mockgen:
 errcheck:
 	  docker run --rm  $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		      /bin/bash -c "cd /go/src/github.com/libopenstorage/stork; \
-	          GO111MODULE=off go get -u github.com/kisielk/errcheck; \
+                  go install github.com/kisielk/errcheck@v1.7.0; \
 		  git config --global --add safe.directory /go/src/github.com/libopenstorage/stork; \
 	          errcheck -verbose -blank $(PKGS); \
 	          errcheck -verbose -blank -tags unittest $(PKGS); \
