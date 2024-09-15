@@ -19,8 +19,6 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -401,7 +399,7 @@ func verifySnapshot(t *testing.T,
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 }
 
-func verifyCloudSnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
+func verifyCloudSnapshot(t *testing.T, ctxs []*scheduler.Context) {
 	err := schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	log.FailOnError(t, err, "Error waiting for pod to get to running state")
 
@@ -490,7 +488,7 @@ func cloudSnapshotScaleTest(t *testing.T) {
 	}
 
 	for i := 0; i < snapshotScaleCount; i++ {
-		verifyCloudSnapshot(t, ctxs[i], "mysql-data", timeout)
+		verifyCloudSnapshot(t, ctxs[i])
 	}
 
 	for i := 0; i < snapshotScaleCount; i++ {
@@ -1287,108 +1285,21 @@ func deleteErrorSnapshotCRTest(t *testing.T) {
 	/////////////////////////////////////////////////////////
 	podLabel := make(map[string]string, 0)
 	podLabel["app"] = "mysql"
-	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, podLabel)
-	log.FailOnError(t, err, "Error getting pvcList")
-	log.InfoD("pvcs: %v", pvcList.Items[0].Name)
 
-	pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvcList.Items[0])
-	log.FailOnError(t, err, "Error getting volume for pvc")
-	log.InfoD("pvName for first PVC: %v", pvName)
-
-	volume1, err := volumeDriver.InspectVolume(pvName)
-	log.FailOnError(t, err, "Error getting inspect volume for %v", pvName)
-	vol1Node := volume1.AttachedOn
-	log.InfoD("node where volumes are attached: %s", vol1Node)
-
-	nodeList, err := core.Instance().GetNodes()
-	log.FailOnError(t, err, "Error getting list of nodes")
-
-	for _, item := range nodeList.Items {
-		for _, address := range item.Status.Addresses {
-			if address.Type == "InternalIP" {
-				if address.Address == vol1Node {
-					vol1Node = item.Status.Addresses[1].Address
-				}
-			}
+	pvcNodesList, err := stopPXOnNode(podLabel, namespace)
+	log.FailOnError(t, err, "Failed to stop PX on PVC attached node")
+	defer func() {
+		err := startPXOnNode(pvcNodesList)
+		if err != nil {
+			log.FailOnError(t, err, "Failed to start PX")
 		}
-	}
-
-	log.InfoD("node name where volume is attached: %ss", vol1Node)
-	// Bring down portworx on the node where the PVC is attached.
-	err = core.Instance().AddLabelOnNode(vol1Node, schedops.PXServiceLabelKey, k8sServiceOperationStop)
-	log.FailOnError(t, err, "Error bringing down node")
-	defer func(node1 string) {
-		// Bring portworx backup up on the node where the PVC is attached.
-		err = core.Instance().AddLabelOnNode(node1, schedops.PXServiceLabelKey, k8sServiceOperationStart)
-		log.FailOnError(t, err, "Error starting PX on node")
-	}(vol1Node)
+	}()
 
 	// Wait for some snapshots to go into `Error` state.
 	log.Info("Waiting for 2 minutes to make sure some snapshots get errored out")
 	time.Sleep(2 * time.Minute)
-
-	// Verify that the snapshots are in `Error` state.
-	snapshots, err := k8sextops.Instance().ListSnapshots(namespace)
-	log.FailOnError(t, err, "Error listing snapshots after bringing down the node")
-	errorCount := 0
-	errorSnapshots := make([]string, 0)
-
-	for _, snap := range snapshots.Items {
-		if snap.Status.Conditions[0].Type == crdv1.VolumeSnapshotConditionError {
-			errorCount++
-			errorSnapshots = append(errorSnapshots, snap.Metadata.Name)
-		}
-	}
-	log.Info("Number of errorsnapshots:%d", errorCount)
-	log.Info("Error snapshots list:%v", errorSnapshots)
-	if errorCount == 0 {
-		Dash.Fatal("should have more than one snapshots in Error state")
-	}
-
-	// Wait for 90 seconds more.
-	log.Info("Waiting for 90 seconds more to prevent any transient error")
-	time.Sleep(90 * time.Second)
-
-	// Verify that some of snapshots have been cleaned up.
-	snapshots, err = k8sextops.Instance().ListSnapshots(namespace)
-	log.FailOnError(t, err, "Error listing snapshots after cleanup")
-
-	// Verify if the previous Errored out snapshots do not exist now.
-	snapshotDeleted := true
-	for _, errorSnap := range errorSnapshots {
-		snapshotDeleted = true
-		for _, snap := range snapshots.Items {
-			if errorSnap == snap.Metadata.Name {
-				snapshotDeleted = false
-				break
-			}
-		}
-		if snapshotDeleted {
-			break
-		}
-	}
-	Dash.VerifyFatal(t, snapshotDeleted, true, "Snapshots earlier in error state should get cleaned up")
-
-	// Check if the snapshotschedule object gets updated for the deleted snapshot entries.
-	snapSched, err = storkops.Instance().GetSnapshotSchedule(scheduleName, namespace)
-	log.FailOnError(t, err, "Error getting snapshot schedule")
-
-	for _, errorSnap := range errorSnapshots {
-		for _, item := range snapSched.Status.Items["Interval"] {
-			if item.Name != errorSnap {
-				continue
-			}
-			Dash.VerifyFatal(t, item.Deleted, true, "Deleted key should be set to true for cleaned up snapshot")
-			assert.NotEmpty(t, item.Message)
-		}
-		for _, item := range snapSched.Status.Items["Interval"] {
-			if item.Name != errorSnap {
-				continue
-			}
-			Dash.VerifyFatal(t, item.Deleted, true, "Deleted key should be set to true for cleaned up snapshot")
-			assert.NotEmpty(t, item.Message)
-		}
-	}
+	err = validateSnapshotCleanup(scheduleName, namespace)
+	log.FailOnError(t, err, "Failed to validate snapshot cleanup")
 
 	destroyAndWait(t, []*scheduler.Context{ctx})
 	// If we are here then the test has passed
@@ -1536,84 +1447,58 @@ func deleteErrorSnapshotCRMultiPVCTest(t *testing.T) {
 	/////////////////////////////////////////////////////////
 	podLabel := make(map[string]string, 0)
 	podLabel["app"] = "mysql"
-	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, podLabel)
-	log.FailOnError(t, err, "Error getting pvcList")
-	log.InfoD("pvcs: %v\t%v", pvcList.Items[0].Name, pvcList.Items[1].Name)
-
-	pvName1, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvcList.Items[0])
-	log.FailOnError(t, err, "Error getting volume for pvc")
-	log.InfoD("pvName for first PVC: %v", pvName1)
-
-	pvName2, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvcList.Items[1])
-	log.FailOnError(t, err, "Error getting volume for pvc")
-	log.InfoD("pvName for second PVC: %v", pvName2)
-
-	volume1, err := volumeDriver.InspectVolume(pvName1)
-	log.FailOnError(t, err, "Error getting inspect volume for %v", pvName1)
-	volume2, err := volumeDriver.InspectVolume(pvName2)
-	log.FailOnError(t, err, "Error getting inspect volume for %v", pvName2)
-	vol1Node, vol2Node := volume1.AttachedOn, volume2.AttachedOn
-	log.InfoD("nodes where volumes are attached: %s and %s", vol1Node, vol2Node)
-
-	nodeList, err := core.Instance().GetNodes()
-	log.FailOnError(t, err, "Error getting list of nodes")
-
-	for _, item := range nodeList.Items {
-		for _, address := range item.Status.Addresses {
-			if address.Type == "InternalIP" {
-				if address.Address == vol1Node {
-					vol1Node = item.Status.Addresses[1].Address
-				}
-				if address.Address == vol2Node {
-					vol2Node = item.Status.Addresses[1].Address
-				}
-			}
+	pvcNodesList, err := stopPXOnNode(podLabel, namespace)
+	log.FailOnError(t, err, "Failed to stop PX on PVC attached node")
+	defer func() {
+		err := startPXOnNode(pvcNodesList)
+		if err != nil {
+			log.FailOnError(t, err, "Failed to start PX")
 		}
-	}
-
-	log.InfoD("node names where volumes are attached: %s and %s", vol1Node, vol2Node)
-	// Bring down portworx on the node where the PVC is attached.
-	err = core.Instance().AddLabelOnNode(vol1Node, schedops.PXServiceLabelKey, k8sServiceOperationStop)
-	log.FailOnError(t, err, "Error bringing down node")
-	err = core.Instance().AddLabelOnNode(vol2Node, schedops.PXServiceLabelKey, k8sServiceOperationStop)
-	log.FailOnError(t, err, "Error bringing down node")
-	defer func(node1, node2 string) {
-		// Bring portworx backup up on the node where the PVC is attached.
-		err = core.Instance().AddLabelOnNode(node1, schedops.PXServiceLabelKey, k8sServiceOperationStart)
-		log.FailOnError(t, err, "Error starting PX on node")
-		err = core.Instance().AddLabelOnNode(node2, schedops.PXServiceLabelKey, k8sServiceOperationStop)
-		log.FailOnError(t, err, "Error bringing down node")
-	}(vol1Node, vol2Node)
+	}()
 
 	// Wait for some snapshots to go into `Error` state.
 	log.Info("Waiting for 2 minutes to make sure some snapshots get errored out")
 	time.Sleep(2 * time.Minute)
+	err = validateSnapshotCleanup(scheduleName, namespace)
+	log.FailOnError(t, err, "Failed to validate snapshot cleanup")
 
+	destroyAndWait(t, []*scheduler.Context{ctx})
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// validateSnapshotCleanup validates the errored out snapshot cleanup and schedule update workflow.
+func validateSnapshotCleanup(scheduleName, namespace string) (err error) {
 	// Verify that the snapshots are in `Error` state.
 	snapshots, err := k8sextops.Instance().ListSnapshots(namespace)
-	log.FailOnError(t, err, "Error listing snapshots after bringing down the node")
+	if err != nil {
+		return fmt.Errorf("error listing snapshots: %s", err)
+	}
+
 	errorCount := 0
 	errorSnapshots := make([]string, 0)
-
 	for _, snap := range snapshots.Items {
-		if snap.Status.Conditions[0].Type == crdv1.VolumeSnapshotConditionError {
+		if snap.Status.Conditions != nil && snap.Status.Conditions[0].Type == crdv1.VolumeSnapshotConditionError {
 			errorCount++
 			errorSnapshots = append(errorSnapshots, snap.Metadata.Name)
 		}
 	}
-	log.Info("Number of errorsnapshots:%d", errorCount)
-	log.Info("Error snapshots list:%v", errorSnapshots)
+	log.InfoD("Number of snapshots in error state: %d", errorCount)
+	log.InfoD("Error snapshots list: %v", errorSnapshots)
 	if errorCount == 0 {
-		Dash.Fatal("should have more than one snapshots in Error state")
+		return fmt.Errorf("should have more than one snapshots in Error state")
 	}
 
 	// Wait for 90 seconds more.
-	log.Info("Waiting for 90 seconds more to prevent any transient error")
+	log.Info("Waiting for 90 seconds to prevent any transient error")
 	time.Sleep(90 * time.Second)
 
 	// Verify that some of snapshots have been cleaned up.
 	snapshots, err = k8sextops.Instance().ListSnapshots(namespace)
-	log.FailOnError(t, err, "Error listing snapshots after cleanup")
+	if err != nil {
+		return fmt.Errorf("error listing snapshots after cleanup: %s", err)
+	}
 
 	// Verify if the previous Errored out snapshots do not exist now.
 	snapshotDeleted := true
@@ -1629,35 +1514,30 @@ func deleteErrorSnapshotCRMultiPVCTest(t *testing.T) {
 			break
 		}
 	}
-	Dash.VerifyFatal(t, snapshotDeleted, true, "snapshots earlier in error state should get cleaned up")
+	if snapshotDeleted == false {
+		return fmt.Errorf("snapshots earlier in error state should get cleaned up")
+	}
 
 	// Check if the snapshotschedule object gets updated for the deleted snapshot entries.
-	snapSched, err = storkops.Instance().GetSnapshotSchedule(scheduleName, namespace)
-	log.FailOnError(t, err, "Error getting snapshot schedule")
-	snapSched1, err = storkops.Instance().GetSnapshotSchedule(scheduleNameTemp, namespace)
-	log.FailOnError(t, err, "Error getting snapshot schedule")
+	snapSched, err := storkops.Instance().GetSnapshotSchedule(scheduleName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get snapshotschedule: %s", err)
+	}
 
 	for _, errorSnap := range errorSnapshots {
 		for _, item := range snapSched.Status.Items["Interval"] {
 			if item.Name != errorSnap {
 				continue
 			}
-			Dash.VerifyFatal(t, item.Deleted, true, "Deleted key should be set to true for cleaned up snapshot")
-			assert.NotEmpty(t, item.Message)
-		}
-		for _, item := range snapSched1.Status.Items["Interval"] {
-			if item.Name != errorSnap {
-				continue
+			if item.Deleted == false {
+				return fmt.Errorf("deleted key should be set to true for cleaned up snapshot %s", item.Name)
 			}
-			Dash.VerifyFatal(t, item.Deleted, true, "Deleted key should be set to true for cleaned up snapshot")
-			assert.NotEmpty(t, item.Message)
+			if item.Message == "" {
+				return fmt.Errorf("message key should not be empty for cleaned up snapshot %s", item.Name)
+			}
 		}
 	}
-
-	destroyAndWait(t, []*scheduler.Context{ctx})
-	// If we are here then the test has passed
-	testResult = testResultPass
-	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+	return
 }
 
 func storageclassTests(t *testing.T) {
