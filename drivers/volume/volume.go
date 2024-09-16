@@ -650,23 +650,26 @@ func IsNodeMatch(k8sNode *v1.Node, driverNode *NodeInfo) bool {
 }
 
 // RemoveDuplicateOfflineNodes Removes duplicate offline nodes from the list which have
-// the same IP as an online node
+// the same IP or same scheduler name as an online node
 func RemoveDuplicateOfflineNodes(nodes []*NodeInfo) []*NodeInfo {
 	updatedNodes := make([]*NodeInfo, 0)
 	offlineNodes := make([]*NodeInfo, 0)
 	onlineIPs := make([]string, 0)
+	onlineSchedulerIDs := make([]string, 0)
 	// First add the online nodes to the list
 	for _, node := range nodes {
 		if node.Status == NodeOnline {
 			updatedNodes = append(updatedNodes, node)
 			onlineIPs = append(onlineIPs, node.IPs...)
+			onlineSchedulerIDs = append(onlineSchedulerIDs, node.SchedulerID)
 		} else {
 			offlineNodes = append(offlineNodes, node)
 		}
 	}
 
 	// Then go through the offline nodes and ignore any which have
-	// the same IP as an online node
+	// the same IP as an online node and also ignore any which have the
+	// same scheduler ID as an online node
 	for _, offlineNode := range offlineNodes {
 		found := false
 		for _, offlineIP := range offlineNode.IPs {
@@ -675,6 +678,12 @@ func RemoveDuplicateOfflineNodes(nodes []*NodeInfo) []*NodeInfo {
 					found = true
 					break
 				}
+			}
+		}
+		for _, onlineSchedulerID := range onlineSchedulerIDs {
+			if offlineNode.SchedulerID == onlineSchedulerID {
+				found = true
+				break
 			}
 		}
 		if !found {
