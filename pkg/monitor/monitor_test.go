@@ -71,6 +71,8 @@ func TestMonitor(t *testing.T) {
 
 func TestMonitorOfflineNodes(t *testing.T) {
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
+	t.Run("testDuplicateOfflineWithSameSchedulerID", testDuplicateOfflineWithSameSchedulerID)
+	t.Run("testDuplicateOfflineWithSameIPAddress", testDuplicateOfflineWithSameIPAddress)
 	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
 	t.Run("testOfflineStorageNodesBatchTest", testOfflineStorageNodesBatchTest)
 }
@@ -516,6 +518,76 @@ func testOfflineStorageNode(t *testing.T) {
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
 
+func testDuplicateOfflineWithSameSchedulerID(test *testing.T) {
+	setupWithNewMockDriver(test)
+
+	defer teardownWithNewMockDriver(test)
+
+	driverNodes := getDriverNodes(len(nodes.Items))
+	driverNodes[0].Status = volume.NodeOffline
+	// Mark the last node as same scheduler ID as nodeForPod but the status should be online
+	duplicateOnlineNodeIndex := len(driverNodes) - 1
+	driverNodes[duplicateOnlineNodeIndex].Status = volume.NodeOnline
+	driverNodes[duplicateOnlineNodeIndex].SchedulerID = driverNodes[0].SchedulerID
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
+	volumes := []*volume.Info{
+		{
+			VolumeName: "volume1",
+			DataNodes:  []string{driverNodes[0].StorageID},
+		},
+	}
+
+	pod := newPod("driverPod", []string{driverVolumeName}, nodeForPod)
+	_, err := core.Instance().CreatePod(pod)
+	require.NoError(test, err, "failed to create pod")
+
+	wffcVolumes := make([]*volume.Info, 0)
+
+	volumeDriver.EXPECT().InspectNode("node1").Return(driverNodes[0], nil).AnyTimes()
+	volumeDriver.EXPECT().GetCSIPodPrefix().Return("px-csi-ext-", nil).AnyTimes()
+	volumeDriver.EXPECT().GetPodVolumes(&pod.Spec, pod.Namespace, false).Return(volumes, wffcVolumes, nil).AnyTimes()
+
+	testNodeOfflineTimeout = 95 * time.Second
+	time.Sleep(testNodeOfflineTimeout)
+	_, err = core.Instance().GetPodByName(pod.Name, "")
+	require.NoError(test, err, "pod should not get deleted as there is another node with same scheduler ID which is online")
+}
+
+func testDuplicateOfflineWithSameIPAddress(test *testing.T) {
+	setupWithNewMockDriver(test)
+
+	defer teardownWithNewMockDriver(test)
+
+	driverNodes := getDriverNodes(len(nodes.Items))
+	driverNodes[0].Status = volume.NodeOffline
+	// Mark the last node as same IP as nodeForPod but the status should be online
+	duplicateOnlineNodeIndex := len(driverNodes) - 1
+	driverNodes[duplicateOnlineNodeIndex].Status = volume.NodeOnline
+	driverNodes[duplicateOnlineNodeIndex].IPs = driverNodes[0].IPs
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
+	volumes := []*volume.Info{
+		{
+			VolumeName: "volume1",
+			DataNodes:  []string{driverNodes[0].StorageID},
+		},
+	}
+
+	pod := newPod("driverPod", []string{driverVolumeName}, nodeForPod)
+	_, err := core.Instance().CreatePod(pod)
+	require.NoError(test, err, "failed to create pod")
+
+	wffcVolumes := make([]*volume.Info, 0)
+
+	volumeDriver.EXPECT().InspectNode("node1").Return(driverNodes[0], nil).AnyTimes()
+	volumeDriver.EXPECT().GetCSIPodPrefix().Return("px-csi-ext-", nil).AnyTimes()
+	volumeDriver.EXPECT().GetPodVolumes(&pod.Spec, pod.Namespace, false).Return(volumes, wffcVolumes, nil).AnyTimes()
+
+	testNodeOfflineTimeout = 95 * time.Second
+	time.Sleep(testNodeOfflineTimeout)
+	_, err = core.Instance().GetPodByName(pod.Name, "")
+	require.NoError(test, err, "pod should not get deleted as there is another node with same IP which is online")
+}
+
 func testOfflineStorageNodesBatchTest(t *testing.T) {
 
 	setupWithNewMockDriverScale(t)
@@ -903,6 +975,7 @@ func getDriverNodes(numNodes int) []*volume.NodeInfo {
 			StorageID:   "node" + strconv.Itoa(i+1),
 			Status:      volume.NodeOnline,
 			RawStatus:   "Ready",
+			IPs:         []string{"192.168.0." + strconv.Itoa(i+1)},
 		})
 	}
 	return driverNodes
