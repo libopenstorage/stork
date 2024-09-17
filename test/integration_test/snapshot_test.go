@@ -46,6 +46,7 @@ func testSnapshot(t *testing.T) {
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
 	t.Run("cloudSnapshotScaleTest", cloudSnapshotScaleTest)
+	t.Run("customCacheSyncTimeoutSnapshotTest", customCacheSyncTimeoutSnapshotTest)
 
 	if !testing.Short() {
 		t.Run("groupSnapshotTest", groupSnapshotTest)
@@ -499,6 +500,35 @@ func cloudSnapshotScaleTest(t *testing.T) {
 	testResult = testResultPass
 	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
+
+func customCacheSyncTimeoutSnapshotTest(t *testing.T) {
+	var testrailID, testResult = 301438, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// Update stork with the argument.
+	err := addStorkArgument("controller-cache-sync-timeout", "10")
+	log.FailOnError(t, err, "Error adding stork argument")
+	defer func() {
+		err := removeStorkArgument("controller-cache-sync-timeout")
+		log.FailOnError(t, err, "Error removing stork argument")
+		err = waitForStorkDeployment()
+		log.FailOnError(t, err, "Error waiting for new stork pods to come up")
+	}()
+
+	err = waitForStorkDeployment()
+	log.FailOnError(t, err, "Error waiting for new stork pods to come up")
+
+	ctx := createSnapshot(t, []string{"mysql-snap-restore"}, "simple-snap-restore")
+	verifySnapshot(t, ctx, "mysql-data", 3, 2, true, defaultWaitTimeout)
+	destroyAndWait(t, ctx)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
 func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName string, snapshotScheduleName string) {
 	err := storkops.Instance().DeleteSchedulePolicy(policyName)
 	log.FailOnError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))

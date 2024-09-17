@@ -79,6 +79,7 @@ const (
 	nodeDriverName               = "ssh"
 	cmName                       = "stork-version"
 	defaultAdminNamespace        = "kube-system"
+	storkDeployment              = "stork"
 	schedulerDriverName          = "k8s"
 	remotePairName               = "remoteclusterpair"
 	srcConfig                    = "sourceconfigmap"
@@ -1749,6 +1750,65 @@ func addTestModeEnvironmentVar() error {
 		log.InfoD("Successfully added TEST_MODE environment variable to stork spec in storage cluster")
 	}
 	return nil
+}
+
+// addStorkArgument adds the passed argument to the stork configuration in the storagecluster.
+func addStorkArgument(key, value string) (err error) {
+	stc, err := operator.Instance().ListStorageClusters(pxNamespace)
+	if err != nil {
+		log.InfoD("failed to list PX storage cluster: %v", err)
+		return nil
+	}
+	if len(stc.Items) > 0 {
+		pxStc := (*stc).Items[0]
+		pxStc.Spec.Stork.Args[fmt.Sprintf("--%s", key)] = value
+		_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+		if err != nil {
+			return fmt.Errorf("failed to update PX storagecluster: %v", err)
+		}
+		log.InfoD("Successfully added argument [--%s:%s] to stork spec in storage cluster", key, value)
+	}
+	return nil
+}
+
+// removeStorkArgument removes the argument with the passed key from the stork configuration in the storagecluster.
+func removeStorkArgument(key string) (err error) {
+	stc, err := operator.Instance().ListStorageClusters(pxNamespace)
+	if err != nil {
+		log.InfoD("failed to list PX storage cluster: %v", err)
+		return nil
+	}
+	if len(stc.Items) > 0 {
+		pxStc := (*stc).Items[0]
+		delete(pxStc.Spec.Stork.Args, pxStc.Spec.Stork.Args[key])
+		_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+		if err != nil {
+			return fmt.Errorf("failed to update PX storagecluster: %v", err)
+		}
+		log.InfoD("Successfully removed argument with key %s from stork spec in storage cluster", key)
+	}
+	return nil
+}
+
+// waitForStorkDeployment checks if all the stork pods are healthy until a certain timeout.
+func waitForStorkDeployment() (err error) {
+	// Wait for the new stork pods to come up.
+	log.Info("Waiting for new stork pods to come up")
+	f := func() (interface{}, bool, error) {
+		// Get the stork deployment and check the ready replicas.
+		deployment, err := apps.Instance().GetDeployment(storkDeployment, storkNamespace)
+		if err != nil {
+			return nil, true, err
+		}
+		if deployment.Status.Replicas == 3 && deployment.Status.ReadyReplicas == 3 {
+			return deployment, false, nil
+		}
+		return nil, true, fmt.Errorf("stork pods not ready,expected: 3 got: %d", deployment.Status.ReadyReplicas)
+	}
+	if _, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval); err != nil {
+		return err
+	}
+	return
 }
 
 func IsCloud() bool {
