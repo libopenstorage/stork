@@ -47,6 +47,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	aetosutil "github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/stats"
 	testrailutils "github.com/portworx/torpedo/pkg/testrailuttils"
@@ -2174,4 +2175,70 @@ func validateClusterDomainStatus(t *testing.T, activeSource, activeDest bool) {
 	Dash.VerifyFatal(t, witnessNodeDomainStatus, "Active", "Error validating the status of witness node domain")
 	Dash.VerifyFatal(t, actualSrcDomainStatus, expectedSrcDomainStatus, "Error validating the status of source cluster domain")
 	Dash.VerifyFatal(t, actualDestDomainStatus, expectedDestDomainStatus, "Error validating the status of destination cluster domain")
+}
+
+// stopPXOnNode stops the portworx on the node on which PVC with the provided labels is attached.
+func stopPXOnNode(podLabel map[string]string, namespace string) (*[]string, error) {
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, podLabel)
+	if err != nil {
+		return nil, fmt.Errorf("error getting PVC list: %s", err)
+	}
+
+	nodeIPs := []string{}
+	for _, pvc := range pvcList.Items {
+		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, fmt.Errorf("error getting volume for pvc: %s", err)
+		}
+		volume, err := volumeDriver.InspectVolume(pvName)
+		if err != nil {
+			return nil, fmt.Errorf("error getting inspect volume for %v", pvName)
+		}
+		nodeIPs = append(nodeIPs, volume.AttachedOn)
+		log.InfoD("node where volumes are attached: %s", volume.AttachedOn)
+	}
+
+	// Get the name of the nodes from the IPs.
+	nodeNames := []string{}
+	nodeList, err := core.Instance().GetNodes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nodes list: %s", err)
+	}
+	for _, ip := range nodeIPs {
+		for _, item := range nodeList.Items {
+			for _, address := range item.Status.Addresses {
+				if address.Type == "InternalIP" {
+					if address.Address == ip {
+						nodeNames = append(nodeNames, item.Status.Addresses[1].Address)
+					}
+				}
+			}
+		}
+
+	}
+
+	log.InfoD("node name(s): %v", nodeNames)
+	// Bring down portworx on the node where the PVC is attached.
+	for _, node := range nodeNames {
+		err = core.Instance().AddLabelOnNode(node, schedops.PXServiceLabelKey, k8sServiceOperationStop)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add label on node: %s", err)
+		}
+	}
+	log.InfoD("Successfully stopped PX on node(s) : %v", nodeNames)
+	return &nodeNames, nil
+}
+
+// startPXOnNode starts the portworx on the node on which PVC with the provided labels is attached.
+func startPXOnNode(nodes *[]string) (err error) {
+	log.InfoD("Starting PX on node(s): %v", *nodes)
+	// Bring down portworx on the node where the PVC is attached.
+	for _, node := range *nodes {
+		err = core.Instance().AddLabelOnNode(node, schedops.PXServiceLabelKey, k8sServiceOperationStart)
+		if err != nil {
+			return fmt.Errorf("Failed to add label on node %s: %s", node, err)
+		}
+	}
+	log.InfoD("Successfully started PX on node(s) : %v", *nodes)
+	return
 }

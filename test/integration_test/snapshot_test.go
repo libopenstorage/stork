@@ -15,7 +15,6 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/externalstorage"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -33,6 +32,10 @@ const (
 
 	snapshotScheduleRetryInterval = 10 * time.Second
 	snapshotScheduleRetryTimeout  = 3 * time.Minute
+	// k8sServiceOperationStart is label value for starting Portworx service
+	k8sServiceOperationStart = "start"
+	// k8sServiceOperationStop is label value for stopping Portworx service
+	k8sServiceOperationStop = "stop"
 )
 
 func testSnapshot(t *testing.T) {
@@ -396,7 +399,7 @@ func verifySnapshot(t *testing.T,
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 }
 
-func verifyCloudSnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
+func verifyCloudSnapshot(t *testing.T, ctxs []*scheduler.Context) {
 	err := schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	log.FailOnError(t, err, "Error waiting for pod to get to running state")
 
@@ -463,6 +466,8 @@ func snapshotScheduleTests(t *testing.T) {
 	t.Run("monthlyTest", monthlySnapshotScheduleTest)
 	t.Run("invalidPolicyTest", invalidPolicySnapshotScheduleTest)
 	t.Run("updateRetainValueTest", updateRetainValueTest)
+	t.Run("deleteErrorSnapshotCRTest", deleteErrorSnapshotCRTest)
+	t.Run("deleteErrorSnapshotCRMultiPVCTest", deleteErrorSnapshotCRMultiPVCTest)
 }
 
 func cloudSnapshotScaleTest(t *testing.T) {
@@ -483,7 +488,7 @@ func cloudSnapshotScaleTest(t *testing.T) {
 	}
 
 	for i := 0; i < snapshotScaleCount; i++ {
-		verifyCloudSnapshot(t, ctxs[i], "mysql-data", timeout)
+		verifyCloudSnapshot(t, ctxs[i])
 	}
 
 	for i := 0; i < snapshotScaleCount; i++ {
@@ -1102,7 +1107,7 @@ func updateRetainValueTest(t *testing.T) {
 
 	// Verify from the cluster if there are expected number of snapshots.
 	snapCount := 0
-	snapshots, err := externalstorage.Instance().ListSnapshots(namespace)
+	snapshots, err := k8sextops.Instance().ListSnapshots(namespace)
 	log.FailOnError(t, err, "Error listing snapshots")
 	for _, snap := range snapshots.Items {
 		if strings.Contains(snap.Metadata.Name, scheduleName) {
@@ -1163,7 +1168,7 @@ func updateRetainValueTest(t *testing.T) {
 	log.InfoD("Validated snapshotschedule %s to have three volumesnapshots", scheduleName)
 	// Verify from the cluster if there are expected number of snapshots.
 	snapCount = 0
-	snapshots, err = externalstorage.Instance().ListSnapshots(namespace)
+	snapshots, err = k8sextops.Instance().ListSnapshots(namespace)
 	log.FailOnError(t, err, "Error listing snapshots")
 	for _, snap := range snapshots.Items {
 		if strings.Contains(snap.Metadata.Name, scheduleName) {
@@ -1178,6 +1183,361 @@ func updateRetainValueTest(t *testing.T) {
 	// If we are here then the test has passed
 	testResult = testResultPass
 	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// deleteErrorSnapshotCRTest tests the workflow in which stork deletes the
+// snapshot CRs of snapshots that are in Error state and older than a certain
+// defined time period.
+// 1. Start a volumesnapshot and take one successful snapshot.
+// 2. Bring down the node where the PVC is attached.
+// 3. Wait for couple of snapshots to go into `Error` state.
+// 4. Check if they get cleaned up after 90 seconds.
+// 5. Check if the snapshotschedule object gets updated for the deleted snapshot entries.
+func deleteErrorSnapshotCRTest(t *testing.T) {
+	var testrailID, testResult = 301162, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// Deploy a dummy application for taking snapshots.
+	ctx := createApp(t, "delete-error-snapshot-cr-test")
+
+	////////////////////////////////////////////////////
+	// Create schedulepolicy and snapshot schedule.
+	////////////////////////////////////////////////////
+	policyName := "intervalpolicy"
+	scheduleName := "errsnap-schedule"
+	retain := 5
+	interval := 1
+	schedPolicy := &storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				Retain:          storkv1.Retain(retain),
+				IntervalMinutes: interval,
+			},
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	log.FailOnError(t, err, "Error creating interval schedule policy")
+	log.InfoD("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
+	defer func(sp storkv1.SchedulePolicy) {
+		err := storkops.Instance().DeleteSchedulePolicy(sp.Name)
+		log.FailOnError(t, err, "Error creating interval schedule policy")
+
+	}(*schedPolicy)
+
+	namespace := ctx.GetID()
+	snapSched := &storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
+	log.FailOnError(t, err, "Error creating interval snapshot schedule")
+	defer func(schedule storkv1.VolumeSnapshotSchedule, ns string) {
+		err := storkops.Instance().DeleteSnapshotSchedule(schedule.Name, ns)
+		log.FailOnError(t, err, "Error creating interval schedule policy")
+
+	}(*snapSched, namespace)
+
+	//////////////////////////////////////////////////////////
+	// Wait for creation of one volumesnapshot and validate
+	// the count to match the retain value.
+	/////////////////////////////////////////////////////////
+	sleepTime := time.Duration(1 * time.Minute)
+	log.InfoD("Created snapshotschedule %v in namespace %v, sleeping for %v for schedule to trigger",
+		scheduleName, namespace, sleepTime)
+	time.Sleep(sleepTime)
+
+	snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	log.FailOnError(t, err, "Error validating snapshot schedule")
+	Dash.VerifyFatal(t, len(snapStatuses), 1, "Should have snapshots for only one policy type")
+	log.InfoD("Validated snapshotschedule %s to have two volumesnapshots", scheduleName)
+
+	//////////////////////////////////////////////////////////
+	// Find the pods using the PVC to determine the node.
+	// Post determining, stop portworx service on the node.
+	/////////////////////////////////////////////////////////
+	podLabel := make(map[string]string, 0)
+	podLabel["app"] = "mysql"
+
+	pvcNodesList, err := stopPXOnNode(podLabel, namespace)
+	log.FailOnError(t, err, "Failed to stop PX on PVC attached node")
+	defer func() {
+		err := startPXOnNode(pvcNodesList)
+		if err != nil {
+			log.FailOnError(t, err, "Failed to start PX")
+		}
+	}()
+
+	// Wait for some snapshots to go into `Error` state.
+	log.Info("Waiting for 2 minutes to make sure some snapshots get errored out")
+	time.Sleep(2 * time.Minute)
+	err = validateSnapshotCleanup(scheduleName, namespace)
+	log.FailOnError(t, err, "Failed to validate snapshot cleanup")
+
+	destroyAndWait(t, []*scheduler.Context{ctx})
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// deleteErrorSnapshotCRMultiPVCTest tests the workflow in which stork deletes the
+// snapshot CRs of snapshots that are in Error state and older than a certain
+// defined time period for multiple PVCs.
+func deleteErrorSnapshotCRMultiPVCTest(t *testing.T) {
+	var testrailID, testResult = 301163, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	// Deploy a dummy application for taking snapshots.
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "errorsnapclean"),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	log.FailOnError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	log.FailOnError(t, err, "Error getting node for app")
+	Dash.VerifyFatal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	Dash.VerifyFatal(t, 2, len(volumeNames), "Should have two volumes")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+	ctx := ctxs[0]
+
+	////////////////////////////////////////////////////
+	// Create schedulepolicy and snapshot schedule.
+	////////////////////////////////////////////////////
+	policyName := "intervalpolicy"
+	scheduleName := "errsnap-schedule"
+	scheduleNameTemp := "errsnap-schedule-temp"
+	retain := 5
+	interval := 1
+	schedPolicy := &storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				Retain:          storkv1.Retain(retain),
+				IntervalMinutes: interval,
+			},
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	log.FailOnError(t, err, "Error creating interval schedule policy")
+	log.InfoD("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
+	defer func(sp storkv1.SchedulePolicy) {
+		err := storkops.Instance().DeleteSchedulePolicy(sp.Name)
+		log.FailOnError(t, err, "Error creating interval schedule policy")
+
+	}(*schedPolicy)
+
+	namespace := ctx.GetID()
+	snapSched := &storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	}
+
+	snapSched1 := &storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleNameTemp,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-temp"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+		err = addSecurityAnnotation(snapSched1)
+		log.FailOnError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
+	log.FailOnError(t, err, "Error creating interval snapshot schedule")
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched1)
+	log.FailOnError(t, err, "Error creating interval snapshot schedule")
+	defer func(schedule, schedule1 storkv1.VolumeSnapshotSchedule, ns string) {
+		err := storkops.Instance().DeleteSnapshotSchedule(schedule.Name, ns)
+		log.FailOnError(t, err, "Error creating interval schedule policy")
+		err = storkops.Instance().DeleteSnapshotSchedule(schedule1.Name, ns)
+		log.FailOnError(t, err, "Error creating interval schedule policy")
+
+	}(*snapSched, *snapSched1, namespace)
+
+	//////////////////////////////////////////////////////////
+	// Wait for creation of one volumesnapshot and validate
+	// the count to match the retain value.
+	/////////////////////////////////////////////////////////
+	sleepTime := time.Duration(1 * time.Minute)
+	log.InfoD("Created snapshotschedules %v and %v in namespace %v, sleeping for %v for schedule to trigger",
+		scheduleName, scheduleNameTemp, namespace, sleepTime)
+	time.Sleep(sleepTime)
+
+	snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	log.FailOnError(t, err, "Error validating snapshot schedule")
+	Dash.VerifyFatal(t, len(snapStatuses), 1, "Should have snapshots for only one policy type")
+	log.InfoD("Validated snapshotschedule %s to have two volumesnapshots", scheduleName)
+
+	snapStatus, err := storkops.Instance().ValidateSnapshotSchedule(scheduleNameTemp,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	log.FailOnError(t, err, "Error validating snapshot schedule")
+	Dash.VerifyFatal(t, len(snapStatus), 1, "Should have snapshots for only one policy type")
+	log.InfoD("Validated snapshotschedule %s to have two volumesnapshots", scheduleNameTemp)
+
+	//////////////////////////////////////////////////////////
+	// Find the pods using the PVC to determine the node.
+	// Post determining, stop portworx service on the node.
+	/////////////////////////////////////////////////////////
+	podLabel := make(map[string]string, 0)
+	podLabel["app"] = "mysql"
+	pvcNodesList, err := stopPXOnNode(podLabel, namespace)
+	log.FailOnError(t, err, "Failed to stop PX on PVC attached node")
+	defer func() {
+		err := startPXOnNode(pvcNodesList)
+		if err != nil {
+			log.FailOnError(t, err, "Failed to start PX")
+		}
+	}()
+
+	// Wait for some snapshots to go into `Error` state.
+	log.Info("Waiting for 2 minutes to make sure some snapshots get errored out")
+	time.Sleep(2 * time.Minute)
+	err = validateSnapshotCleanup(scheduleName, namespace)
+	log.FailOnError(t, err, "Failed to validate snapshot cleanup")
+
+	destroyAndWait(t, []*scheduler.Context{ctx})
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// validateSnapshotCleanup validates the errored out snapshot cleanup and schedule update workflow.
+func validateSnapshotCleanup(scheduleName, namespace string) (err error) {
+	// Verify that the snapshots are in `Error` state.
+	snapshots, err := k8sextops.Instance().ListSnapshots(namespace)
+	if err != nil {
+		return fmt.Errorf("error listing snapshots: %s", err)
+	}
+
+	errorCount := 0
+	errorSnapshots := make([]string, 0)
+	for _, snap := range snapshots.Items {
+		if snap.Status.Conditions != nil && snap.Status.Conditions[0].Type == crdv1.VolumeSnapshotConditionError {
+			errorCount++
+			errorSnapshots = append(errorSnapshots, snap.Metadata.Name)
+		}
+	}
+	log.InfoD("Number of snapshots in error state: %d", errorCount)
+	log.InfoD("Error snapshots list: %v", errorSnapshots)
+	if errorCount == 0 {
+		return fmt.Errorf("should have more than one snapshots in Error state")
+	}
+
+	// Wait for 90 seconds more.
+	log.Info("Waiting for 90 seconds to prevent any transient error")
+	time.Sleep(90 * time.Second)
+
+	// Verify that some of snapshots have been cleaned up.
+	snapshots, err = k8sextops.Instance().ListSnapshots(namespace)
+	if err != nil {
+		return fmt.Errorf("error listing snapshots after cleanup: %s", err)
+	}
+
+	// Verify if the previous Errored out snapshots do not exist now.
+	snapshotDeleted := true
+	for _, errorSnap := range errorSnapshots {
+		snapshotDeleted = true
+		for _, snap := range snapshots.Items {
+			if errorSnap == snap.Metadata.Name {
+				snapshotDeleted = false
+				break
+			}
+		}
+		if snapshotDeleted {
+			break
+		}
+	}
+	if snapshotDeleted == false {
+		return fmt.Errorf("snapshots earlier in error state should get cleaned up")
+	}
+
+	// Check if the snapshotschedule object gets updated for the deleted snapshot entries.
+	snapSched, err := storkops.Instance().GetSnapshotSchedule(scheduleName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get snapshotschedule: %s", err)
+	}
+
+	for _, errorSnap := range errorSnapshots {
+		for _, item := range snapSched.Status.Items["Interval"] {
+			if item.Name != errorSnap {
+				continue
+			}
+			if item.Deleted == false {
+				return fmt.Errorf("deleted key should be set to true for cleaned up snapshot %s", item.Name)
+			}
+			if item.Message == "" {
+				return fmt.Errorf("message key should not be empty for cleaned up snapshot %s", item.Name)
+			}
+		}
+	}
+	return
 }
 
 func storageclassTests(t *testing.T) {
