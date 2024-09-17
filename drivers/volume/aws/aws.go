@@ -672,6 +672,8 @@ func (a *aws) IsVirtualMachineSupported() bool {
 }
 
 func init() {
+	logrus.Infof("Not initializing AWS driver")
+	/*
 	a := &aws{}
 	err := a.Init(nil)
 	if err != nil {
@@ -680,6 +682,7 @@ func init() {
 	if err := storkvolume.Register(storkvolume.AWSDriverName, a); err != nil {
 		logrus.Panicf("Error registering aws volume driver: %v", err)
 	}
+	*/
 }
 
 func isExponentialError(err error) bool {

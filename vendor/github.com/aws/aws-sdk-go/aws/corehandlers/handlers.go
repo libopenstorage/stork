@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/sirupsen/logrus"
 )
 
 // Interface for matching types which also have a Len method.
@@ -63,6 +64,7 @@ var ValidateReqSigHandler = request.NamedHandler{
 	Name: "core.ValidateReqSigHandler",
 	Fn: func(r *request.Request) {
 		// Unsigned requests are not signed
+		logrus.Info("Debugging - in ValidateReqSigHandler")
 		if r.Config.Credentials == credentials.AnonymousCredentials {
 			return
 		}
