@@ -2,6 +2,7 @@ package aws
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	aws_sdk "github.com/aws/aws-sdk-go/aws"
@@ -672,13 +673,17 @@ func (a *aws) IsVirtualMachineSupported() bool {
 }
 
 func init() {
-	a := &aws{}
-	err := a.Init(nil)
-	if err != nil {
-		logrus.Debugf("Error init'ing aws driver: %v", err)
-	}
-	if err := storkvolume.Register(storkvolume.AWSDriverName, a); err != nil {
-		logrus.Panicf("Error registering aws volume driver: %v", err)
+	if os.Getenv("SKIP_AWS_DRIVER_INIT") == "true" {
+		logrus.Infof("Skipping aws driver init")
+	} else {
+		a := &aws{}
+		err := a.Init(nil)
+		if err != nil {
+			logrus.Debugf("Error init'ing aws driver: %v", err)
+		}
+		if err := storkvolume.Register(storkvolume.AWSDriverName, a); err != nil {
+			logrus.Panicf("Error registering aws volume driver: %v", err)
+		}
 	}
 }
 
