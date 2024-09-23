@@ -700,6 +700,8 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 	stage stork_api.ApplicationBackupStageType,
 	reason string,
 	volumeInfos []*stork_api.ApplicationBackupVolumeInfo,
+	failedVolCount int,
+	appendBackupVols bool,
 ) (*stork_api.ApplicationBackup, error) {
 	backup := &stork_api.ApplicationBackup{}
 	var err error
@@ -725,9 +727,17 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 		backup.Status.Status = status
 		backup.Status.Stage = stage
 		backup.Status.Reason = reason
+		backup.Status.FailedVolCount = failedVolCount
 		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// Proceed with volume handling only if volumeInfos is not nil
 		if volumeInfos != nil {
-			backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
+			if appendBackupVols {
+				// Append new volumes to existing ones
+				backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
+			} else {
+				// Overwrite with the new volumes
+				backup.Status.Volumes = volumeInfos
+			}
 		}
 		err = a.client.Update(context.TODO(), backup)
 		if err != nil {
@@ -762,6 +772,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		backup.Status.Stage,
 		"Starting the Volume backups",
 		nil,
+		backup.Status.FailedVolCount,
+		true,
 	)
 	if err != nil {
 		logrus.Errorf("Error while updateBackupCRInVolumeStage: %v", err)
@@ -921,6 +933,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 								backup.Status.Stage,
 								inProgressMsg,
 								volumeInfos,
+								backup.Status.FailedVolCount,
+								true,
 							)
 							if updateErr != nil {
 								log.ApplicationBackupLog(backup).Errorf("failed to update backup object: %v", updateErr)
@@ -939,6 +953,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 							backup.Status.Stage,
 							"Volume backups are in progress",
 							volumeInfos,
+							backup.Status.FailedVolCount,
+							true,
 						)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("failed to update backup object: %v", err)
@@ -953,6 +969,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						backup.Status.Stage,
 						"Volume backups are in progress",
 						volumeInfos,
+						backup.Status.FailedVolCount,
+						true,
 					)
 					if err != nil {
 						return err
@@ -1169,6 +1187,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}
 	// append skipped volumes
 	backup.Status.Volumes = append(backup.Status.Volumes, skipVolInfo...)
+	backup.Status.FailedVolCount = 0
 	for _, vol := range backup.Status.Volumes {
 		if vol.Status == stork_api.ApplicationBackupStatusFailed {
 			backup.Status.FailedVolCount++
@@ -1195,37 +1214,18 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		backup.Status.LastUpdateTimestamp = metav1.Now()
 		// temporarily store the volume status, So that it will be used during retry.
 		volumeInfos := backup.Status.Volumes
-		// Update the current state and then move on to backing up resources
-		err := a.client.Update(context.TODO(), backup)
+		backup, err = a.updateBackupCRInVolumeStage(
+			namespacedName,
+			stork_api.ApplicationBackupStatusInProgress,
+			backup.Status.Stage,
+			"Application resources backup is in progress",
+			volumeInfos,
+			backup.Status.FailedVolCount,
+			false,
+		)
 		if err != nil {
-			for i := 0; i < maxRetry; i++ {
-				err = a.client.Get(context.TODO(), namespacedName, backup)
-				if err != nil {
-					time.Sleep(retrySleep)
-					continue
-				}
-				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
-					backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
-					log.ApplicationBackupLog(backup).Infof("Returning from ApplicationBackupStageVolumes since the CR is in %v stage", backup.Status.Stage)
-					log.ApplicationBackupLog(backup).Warnf("post-exec rule can get called more than once in case of kdmp & mixed driver scenario, please check logs for the same")
-					return nil
-				}
-				backup.Status.Stage = stork_api.ApplicationBackupStageApplications
-				backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
-				backup.Status.Reason = "Application resources backup is in progress"
-				backup.Status.LastUpdateTimestamp = metav1.Now()
-				backup.Status.Volumes = volumeInfos
-				err = a.client.Update(context.TODO(), backup)
-				if err != nil {
-					time.Sleep(retrySleep)
-					continue
-				} else {
-					break
-				}
-			}
-			if err != nil {
-				return err
-			}
+			log.ApplicationBackupLog(backup).Errorf("failed to update backup object: %v", err)
+			return err
 		}
 
 		// We will not handle individual failure of resources as GetResources() being generic package
