@@ -2,10 +2,15 @@ package storkctl
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/pkg/auth/secrets"
+	operator_util "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/portworx/sched-ops/k8s/operator"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -58,7 +63,22 @@ func newCreateSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericcliop
 			}
 			snapshotSchedule.Name = snapshotScheduleName
 			snapshotSchedule.Namespace = cmdFactory.GetNamespace()
-			_, err := storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
+			stc, err := operator.Instance().ListStorageClusters(os.Getenv(k8sutils.PxNamespaceEnvName))
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+			if len(stc.Items) > 0 {
+				pxStc := (*stc).Items[0]
+				// Add the `auth-secret-name` and `auth-secret-namespace` annotations
+				// if in auth enabled cluster.
+				if operator_util.AuthEnabled(&pxStc.Spec) {
+					snapshotSchedule.Annotations = make(map[string]string)
+					snapshotSchedule.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+					snapshotSchedule.Annotations[secrets.SecretNamespaceKey] = pxStc.Namespace
+				}
+			}
+			_, err = storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
 			if err != nil {
 				util.CheckErr(err)
 				return

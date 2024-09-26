@@ -3,15 +3,20 @@ package pvcwatcher
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/pkg/auth/secrets"
+	operator_util "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"github.com/libopenstorage/stork/drivers/volume"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/libopenstorage/stork/pkg/cache"
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -169,6 +174,22 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *corev1.PersistentVolumeC
 				ReclaimPolicy:      policy.ReclaimPolicy,
 			},
 		}
+
+		stc, err := operator.Instance().ListStorageClusters(os.Getenv(k8sutils.PxNamespaceEnvName))
+		if err != nil {
+			return fmt.Errorf("failed to list PX storage cluster: %v", err)
+		}
+		if len(stc.Items) > 0 {
+			pxStc := (*stc).Items[0]
+			// Add the `auth-secret-name` and `auth-secret-namespace` annotations
+			// if in auth enabled cluster.
+			if operator_util.AuthEnabled(&pxStc.Spec) {
+				logrus.Debugf("Adding annotation to the snapshotschedule")
+				snapshotSchedule.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+				snapshotSchedule.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
+			}
+		}
+		logrus.Debugf("Skipping adding annotation to the snapshotschedule since non auth cluster")
 		_, err = storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
 		if err != nil {
 			p.recorder.Event(pvc,
