@@ -12,10 +12,10 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/resourceutils"
 	"github.com/portworx/sched-ops/k8s/core"
 	dynamicops "github.com/portworx/sched-ops/k8s/dynamic"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"

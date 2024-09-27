@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot/controllers"
 	"github.com/libopenstorage/stork/pkg/rule"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"

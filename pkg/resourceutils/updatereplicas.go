@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -14,7 +15,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/openshift"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

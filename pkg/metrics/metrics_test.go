@@ -18,8 +18,8 @@ import (
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/cli-runtime/pkg/resource"

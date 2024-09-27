@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/validation"
 )

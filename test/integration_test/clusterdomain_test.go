@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/pborman/uuid"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"

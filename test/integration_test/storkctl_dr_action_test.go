@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 )
 
 const (

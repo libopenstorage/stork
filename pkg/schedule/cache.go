@@ -6,7 +6,7 @@ import (
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
