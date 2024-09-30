@@ -960,7 +960,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 				return fmt.Errorf("error preparing ClusterRoleBindings resource %v: %v", metadata.GetName(), err)
 			}
 		case "Job":
-			err := r.prepareJobForCollection(o, namespaces)
+			err := r.prepareJobForCollection(o)
 			if err != nil {
 				return fmt.Errorf("error preparing job resource %v: %v", metadata.GetName(), err)
 			}

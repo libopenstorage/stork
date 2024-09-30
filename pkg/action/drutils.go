@@ -554,6 +554,13 @@ func GetPVtoPVCMap(coreClient *core.Client, namespace string) map[string]string 
 // terminated: true if all pods using PVC are terminated
 // terminationInProgress: true if any pod using PVC is not terminated
 // error: error if any error occurs
+//
+// It also checks only the pods that are NOT in succeeded state.
+// Reason: In some cases, the pod created by the job was in Completed state and was not deleted due
+// to which the PVC was still in Bound state with the pod.
+// This made stork wait for the pod to get terminated so that the volume can be freed and
+// thus, failover can be completed but instead it timed out waiting for this.
+// As a fix, we should skip considering the pods in Completed state for waiting for source deactivation in failover.
 func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, config *rest.Config) (bool, bool, error) {
 	coreClient, err := core.NewForConfig(config)
 	if err != nil {
@@ -570,14 +577,21 @@ func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, 
 				if err != nil {
 					return false, false, err
 				}
-				if len(pods) == 0 {
+				activePods := []v1.Pod{}
+				for _, pod := range pods {
+					if pod.Status.Phase != v1.PodSucceeded {
+						logrus.Debugf("Skipping checking the PVC status of pod [%s/%s] since it has succeeded", pod.Namespace, pod.Name)
+						activePods = append(activePods, pod)
+					}
+				}
+				if len(activePods) == 0 {
 					// All pods terminated for atlease one pvc
 					terminationInProgress = true
 				} else {
 					// Atleast one pvc has not been freed up
 					terminated = false
 				}
-				nsToPVCToNumberOfPods[ns][pvcName] = len(pods)
+				nsToPVCToNumberOfPods[ns][pvcName] = len(activePods)
 			}
 		}
 	}

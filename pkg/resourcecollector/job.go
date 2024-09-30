@@ -5,27 +5,30 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-const (
-	controllerUIDLabel = "controller-uid"
+var (
+	controllerUIDLabels = []string{"controller-uid", "batch.kubernetes.io/controller-uid"}
 )
 
-func (r *ResourceCollector) prepareJobForCollection(
-	object runtime.Unstructured,
-	namespaces []string,
-) error {
+func (r *ResourceCollector) prepareJobForCollection(object runtime.Unstructured) error {
 	var job batchv1.Job
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &job); err != nil {
 		return err
 	}
 
 	if job.Labels != nil {
-		delete(job.Labels, controllerUIDLabel)
+		for _, label := range controllerUIDLabels {
+			delete(job.Labels, label)
+		}
 	}
 	if job.Spec.Selector != nil && job.Spec.Selector.MatchLabels != nil {
-		delete(job.Spec.Selector.MatchLabels, controllerUIDLabel)
+		for _, label := range controllerUIDLabels {
+			delete(job.Spec.Selector.MatchLabels, label)
+		}
 	}
 	if job.Spec.Template.Labels != nil {
-		delete(job.Spec.Template.Labels, controllerUIDLabel)
+		for _, label := range controllerUIDLabels {
+			delete(job.Spec.Template.Labels, label)
+		}
 	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&job)
 	if err != nil {
