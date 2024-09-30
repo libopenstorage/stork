@@ -110,7 +110,8 @@ func GetObjLockInfo(backupLocation *stork_api.BackupLocation) (*common.ObjLockIn
 				awsErr.Code() == "ObjectLockConfigurationNotFound" ||
 				awsErr.Code() == "NotImplemented" ||
 				awsErr.Code() == "NoSuchBucket" ||
-				awsErr.Code() == "NoSuchBucketObjectLockConfiguration" {
+				awsErr.Code() == "NoSuchBucketObjectLockConfiguration" ||
+				awsErr.Code() == "UnsupportedOperation" {
 				// for a non-objectlocked bucket we needn't throw error
 				return objLockInfo, nil
 			}
