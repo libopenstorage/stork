@@ -184,12 +184,10 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *corev1.PersistentVolumeC
 			// Add the `auth-secret-name` and `auth-secret-namespace` annotations
 			// if in auth enabled cluster.
 			if operator_util.AuthEnabled(&pxStc.Spec) {
-				logrus.Debugf("Adding annotation to the snapshotschedule")
 				snapshotSchedule.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
 				snapshotSchedule.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
 			}
 		}
-		logrus.Debugf("Skipping adding annotation to the snapshotschedule since non auth cluster")
 		_, err = storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
 		if err != nil {
 			p.recorder.Event(pvc,
