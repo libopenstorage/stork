@@ -1190,7 +1190,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}
 	// append skipped volumes
 	backup.Status.Volumes = append(backup.Status.Volumes, skipVolInfo...)
-	backup.Status.FailedVolCount = 0
 	for _, vol := range backup.Status.Volumes {
 		if vol.Status == stork_api.ApplicationBackupStatusFailed {
 			backup.Status.FailedVolCount++
