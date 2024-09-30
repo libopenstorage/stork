@@ -184,6 +184,9 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *corev1.PersistentVolumeC
 			// Add the `auth-secret-name` and `auth-secret-namespace` annotations
 			// if in auth enabled cluster.
 			if operator_util.AuthEnabled(&pxStc.Spec) {
+				if snapshotSchedule.Annotations == nil {
+					snapshotSchedule.Annotations = make(map[string]string)
+				}
 				snapshotSchedule.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
 				snapshotSchedule.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
 			}

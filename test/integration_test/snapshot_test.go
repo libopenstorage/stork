@@ -5,6 +5,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,14 +13,21 @@ import (
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	"github.com/libopenstorage/openstorage/pkg/auth/secrets"
+	operator_util "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -53,10 +61,7 @@ func testSnapshot(t *testing.T) {
 		t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
 	}
 	t.Run("scheduleTests", snapshotScheduleTests)
-	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
-	if authTokenConfigMap == "" {
-		t.Run("storageclassTests", storageclassTests)
-	}
+	t.Run("storageclassTests", storageclassTests)
 
 	err = setRemoteConfig("")
 	log.FailOnError(t, err, "setting kubeconfig to default failed")
@@ -1571,30 +1576,133 @@ func validateSnapshotCleanup(scheduleName, namespace string) (err error) {
 }
 
 func storageclassTests(t *testing.T) {
-	ctxs, err := schedulerDriver.Schedule("autosnaptest",
-		scheduler.ScheduleOptions{AppKeys: []string{"snapshot-storageclass"}})
-	log.FailOnError(t, err, "Error scheduling task")
-	Dash.VerifyFatal(t, len(ctxs), 1, "Only one task should have started")
+	namespace := "interval-autosnapsched-test"
+	ns := v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	_, err := core.Instance().CreateNamespace(&ns)
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
+		log.FailOnError(t, err, "Error creating namespace")
+	}
+	defer func() {
+		err = core.Instance().DeleteNamespace(namespace)
+		log.FailOnError(t, err, fmt.Sprintf("Namespace %v not deleted", namespace))
+	}()
 
-	namespace := ctxs[0].GetID()
+	///////////////////////////////
+	// Create and deploy policy //
+	/////////////////////////////
+	policyName := "interval"
+	policyInterval := 2
+	schedPolicy := &storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				IntervalMinutes: policyInterval,
+			},
+		}}
+
+	if authTokenConfigMap != "" {
+		if schedPolicy.Annotations == nil {
+			schedPolicy.Annotations = make(map[string]string)
+		}
+		schedPolicy.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+		schedPolicy.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	log.FailOnError(t, err, "Error creating interval schedule policy")
+	defer func() {
+		err = storkops.Instance().DeleteSchedulePolicy(schedPolicy.Name)
+		log.FailOnError(t, err, fmt.Sprintf("Schedule policy %v not deleted", schedPolicy.Name))
+	}()
+	log.InfoD("Created schedulepolicy %v with %v minute interval", policyName, policyInterval)
+
+	/////////////////////////////////////
+	// Create and deploy storage class //
+	/////////////////////////////////////
+	storageClassName := "autosnap-sc"
+	sc := &storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: storageClassName,
+		},
+		Provisioner: "kubernetes.io/portworx-volume",
+		Parameters: map[string]string{
+			"repl": "2",
+			"snapshotschedule.stork.libopenstorage.org/test-schedule": `
+schedulePolicyName: interval
+reclaimPolicy: Delete`,
+		},
+	}
+	if authTokenConfigMap != "" {
+		if sc.Annotations == nil {
+			sc.Annotations = make(map[string]string)
+		}
+		sc.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+		sc.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
+	}
+
+	_, err = storage.Instance().CreateStorageClass(sc)
+	log.FailOnError(t, err, "Error creating storage class")
+	defer func() {
+		err = storage.Instance().DeleteStorageClass(sc.Name)
+		log.FailOnError(t, err, fmt.Sprintf("Storage class %v not deleted", sc.Name))
+	}()
+	log.InfoD("Create storageclass autosnap-sc")
+
+	////////////////////////////
+	// Create and deploy PVC //
+	//////////////////////////
+
 	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "autosnap",
 			Namespace: namespace,
 		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			StorageClassName: &storageClassName,
+			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			Resources: v1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("2Gi"),
+				},
+			},
+		},
 	}
+	if authTokenConfigMap != "" {
+		if pvc.Annotations == nil {
+			pvc.Annotations = make(map[string]string)
+		}
+		pvc.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+		pvc.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
+	}
+	_, err = core.Instance().CreatePersistentVolumeClaim(pvc)
+	log.FailOnError(t, err, fmt.Sprintf("PVC %v not bound.", pvc.Name))
 	err = core.Instance().ValidatePersistentVolumeClaim(pvc, waitPvcBound, waitPvcRetryInterval)
 	log.FailOnError(t, err, fmt.Sprintf("PVC %v not bound.", pvc.Name))
 
+	//////////////////////////////////////////////
+	// Validate snapshots and snapshotschedule //
+	////////////////////////////////////////////
 	snapshotScheduleName := "autosnap-test-schedule"
 	// Make sure snapshots get triggered
 	_, err = storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
 		namespace,
 		3*time.Minute,
 		snapshotScheduleRetryInterval)
-	log.FailOnError(t, err, "Error validating snapshot schedule")
-	// Destroy the PVC
-	destroyAndWait(t, ctxs)
+	if err != nil {
+		// Destroy the PVC and delete the policy as well as storageclass.
+		err = core.Instance().DeletePersistentVolumeClaim(pvc.Name, namespace)
+		log.FailOnError(t, err, fmt.Sprintf("PVC %v not deleted", pvc.Name))
+		Dash.VerifyFatal(t, "Error", "NoError", fmt.Sprintf("Error validating snapshot schedule. Err: %v", err))
+	}
+	// Destroy the PVC and delete the policy as well as storageclass.
+	err = core.Instance().DeletePersistentVolumeClaim(pvc.Name, namespace)
+	log.FailOnError(t, err, fmt.Sprintf("PVC %v not deleted", pvc.Name))
 
 	// Make sure the snapshot schedule and snapshots are also deleted
 	time.Sleep(10 * time.Second)
