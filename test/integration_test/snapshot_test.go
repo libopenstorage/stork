@@ -24,7 +24,6 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
@@ -444,6 +443,10 @@ func verifyCloudSnapshot(t *testing.T, ctxs []*scheduler.Context) {
 }
 
 func snapshotScaleTest(t *testing.T) {
+	var testrailID, testResult = 50794, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	ctxs := make([][]*scheduler.Context, snapshotScaleCount)
 	for i := 0; i < snapshotScaleCount; i++ {
 		ctxs[i] = createSnapshot(t, []string{"mysql-snap-restore"}, "snap-scale-"+strconv.Itoa(i))
@@ -460,6 +463,9 @@ func snapshotScaleTest(t *testing.T) {
 	for i := 0; i < snapshotScaleCount; i++ {
 		destroyAndWait(t, ctxs[i])
 	}
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func snapshotScheduleTests(t *testing.T) {
@@ -1576,6 +1582,11 @@ func validateSnapshotCleanup(scheduleName, namespace string) (err error) {
 }
 
 func storageclassTests(t *testing.T) {
+	var testrailID, testResult = 50798, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
 	namespace := "interval-autosnapsched-test"
 	ns := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1667,8 +1678,8 @@ reclaimPolicy: Delete`,
 			StorageClassName: &storageClassName,
 			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 			Resources: v1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("2Gi"),
+				Requests: v1.ResourceList{
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse("2Gi"),
 				},
 			},
 		},
@@ -1712,4 +1723,8 @@ reclaimPolicy: Delete`,
 	snapshotList, err := k8sextops.Instance().ListSnapshots(namespace)
 	log.FailOnError(t, err, fmt.Sprintf("Error getting list of snapshots for namespace: %v", namespace))
 	Dash.VerifyFatal(t, len(snapshotList.Items), 0, fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }

@@ -199,7 +199,7 @@ func inPlaceSnapshotRestoreDataTest(t *testing.T) {
 	}
 	if authTokenConfigMap != "" {
 		snapObj.Metadata.Annotations = make(map[string]string)
-		snapObj.Metadata.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+		snapObj.Metadata.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXAdminTokenSecretName
 		snapObj.Metadata.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
 	}
 	vdbenchSnap, err := k8sextops.Instance().CreateSnapshot(snapObj)
@@ -225,7 +225,7 @@ func inPlaceSnapshotRestoreDataTest(t *testing.T) {
 	restoreObj.Namespace = fmt.Sprintf("vdbench-repl-2-app-%s", testnamespacePostfix)
 	if authTokenConfigMap != "" {
 		restoreObj.Annotations = make(map[string]string)
-		restoreObj.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXUserTokenSecretName
+		restoreObj.Annotations[secrets.SecretNameKey] = operator_util.SecurityPXAdminTokenSecretName
 		restoreObj.Annotations[secrets.SecretNamespaceKey] = os.Getenv(k8sutils.PxNamespaceEnvName)
 	}
 	vdbenchRestore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreObj)
