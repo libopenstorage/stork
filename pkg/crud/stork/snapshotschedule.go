@@ -95,7 +95,7 @@ func (c *Client) ValidateSnapshotSchedule(name string, namespace string, timeout
 		if len(resp.Status.Items) == 0 {
 			return nil, true, &errors.ErrFailedToValidateCustomSpec{
 				Name:  name,
-				Cause: fmt.Sprintf("0 snapshots have yet run for the snapshot schedule"),
+				Cause: "0 snapshots have yet run for the snapshot schedule",
 				Type:  resp,
 			}
 		}

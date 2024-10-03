@@ -86,7 +86,7 @@ func (c *Client) ValidateGroupSnapshot(name, namespace string, retry bool, timeo
 		if len(snap.Status.VolumeSnapshots) == 0 {
 			return "", true, schederrors.ErrSnapshotNotReady{
 				ID:    name,
-				Cause: fmt.Sprintf("group snapshot has 0 child snapshots yet"),
+				Cause: "group snapshot has 0 child snapshots yet",
 			}
 		}
 
@@ -122,7 +122,7 @@ func (c *Client) ValidateGroupSnapshot(name, namespace string, retry bool, timeo
 			if snap.Status.Status == storkv1alpha1.GroupSnapshotFailed {
 				return "", false, schederrors.ErrSnapshotFailed{
 					ID:    name,
-					Cause: fmt.Sprintf("group snapshot is in failed state"),
+					Cause: "group snapshot is in failed state",
 				}
 			}
 		}

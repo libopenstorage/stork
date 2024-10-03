@@ -267,7 +267,7 @@ func (c *Client) ValidateApplicationBackupSchedule(name string, namespace string
 		if len(resp.Status.Items) == 0 {
 			return nil, true, &errors.ErrFailedToValidateCustomSpec{
 				Name:  name,
-				Cause: fmt.Sprintf("0 backups have yet run for the backup schedule"),
+				Cause: "0 backups have yet run for the backup schedule",
 				Type:  resp,
 			}
 		}

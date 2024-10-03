@@ -185,7 +185,7 @@ func (c *Client) ValidateMigrationSchedule(name string, namespace string, timeou
 		if len(resp.Status.Items) == 0 {
 			return nil, true, &errors.ErrFailedToValidateCustomSpec{
 				Name:  name,
-				Cause: fmt.Sprintf("0 migrations have yet run for the migration schedule"),
+				Cause: "0 migrations have yet run for the migration schedule",
 				Type:  resp,
 			}
 		}

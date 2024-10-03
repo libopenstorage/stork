@@ -85,7 +85,7 @@ func (c *Client) ValidateClusterDomainsStatus(name string, domainMap map[string]
 		}
 
 		for _, domainInfo := range cds.Status.ClusterDomainInfos {
-			isActive, _ := domainMap[domainInfo.Name]
+			isActive := domainMap[domainInfo.Name]
 			if isActive {
 				if domainInfo.State != storkv1alpha1.ClusterDomainActive {
 					return "", true, &errors.ErrFailedToValidateCustomSpec{

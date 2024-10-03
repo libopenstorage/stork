@@ -255,44 +255,42 @@ func (c *Client) handleWatch(
 	listOptions metav1.ListOptions) {
 	defer watchInterface.Stop()
 	for {
-		select {
-		case event, more := <-watchInterface.ResultChan():
-			if !more {
-				logrus.Debug("Kubernetes watch closed (attempting to re-establish)")
+		event, more := <-watchInterface.ResultChan()
+		if !more {
+			logrus.Debug("Kubernetes watch closed (attempting to re-establish)")
 
-				t := func() (interface{}, bool, error) {
-					var err error
-					if _, ok := object.(*storkv1.ApplicationBackup); ok {
-						err = c.WatchApplicationBackup(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.ApplicationRestore); ok {
-						err = c.WatchApplicationRestore(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.ApplicationBackupSchedule); ok {
-						err = c.WatchApplicationBackupSchedule(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.ApplicationClone); ok {
-						err = c.WatchApplicationClone(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.ClusterPair); ok {
-						err = c.WatchClusterPair(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.Migration); ok {
-						err = c.WatchMigration(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.MigrationSchedule); ok {
-						err = c.WatchMigrationSchedule(namespace, fn, listOptions)
-					} else if _, ok := object.(*storkv1.VolumeSnapshotSchedule); ok {
-						err = c.WatchVolumeSnapshotSchedule(namespace, fn, listOptions)
-					} else {
-						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
-					}
-					return "", true, err
-				}
-
-				if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
-					logrus.WithError(err).Error("Could not re-establish the watch")
+			t := func() (interface{}, bool, error) {
+				var err error
+				if _, ok := object.(*storkv1.ApplicationBackup); ok {
+					err = c.WatchApplicationBackup(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.ApplicationRestore); ok {
+					err = c.WatchApplicationRestore(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.ApplicationBackupSchedule); ok {
+					err = c.WatchApplicationBackupSchedule(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.ApplicationClone); ok {
+					err = c.WatchApplicationClone(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.ClusterPair); ok {
+					err = c.WatchClusterPair(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.Migration); ok {
+					err = c.WatchMigration(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.MigrationSchedule); ok {
+					err = c.WatchMigrationSchedule(namespace, fn, listOptions)
+				} else if _, ok := object.(*storkv1.VolumeSnapshotSchedule); ok {
+					err = c.WatchVolumeSnapshotSchedule(namespace, fn, listOptions)
 				} else {
-					logrus.Debug("watch re-established")
+					return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 				}
-				return
+				return "", true, err
 			}
 
-			fn(event.Object)
+			if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+				logrus.WithError(err).Error("Could not re-establish the watch")
+			} else {
+				logrus.Debug("watch re-established")
+			}
+			return
 		}
+
+		fn(event.Object)
 	}
 }
