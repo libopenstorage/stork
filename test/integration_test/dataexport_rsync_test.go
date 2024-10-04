@@ -30,11 +30,12 @@ const (
 )
 
 func TestDataExportRsync(t *testing.T) {
-	var testResult = testResultFail
+	var testrailID, testResult = 301900, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
 	instanceID := "dataexport-test"
 	appKey := "fio-dataexport"
-	currentTestSuite = t.Name()
-	defer updateDashStats(t.Name(), &testResult)
 
 	// Check if default storage class is set. This allows us to run this
 	// test on all platforms such as AWS, AKS where a default storage class
@@ -205,6 +206,10 @@ func TestDataExportRsync(t *testing.T) {
 
 	_, err = task.DoRetryWithTimeout(compareVolSizes, dataExportSuccessWaitTimeout, defaultWaitInterval)
 	log.FailOnError(t, err, "size comparison failed after DataExport rsync job completion")
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
 }
 
 func validateAndCleanupDataExport(
