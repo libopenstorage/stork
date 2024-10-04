@@ -83,10 +83,7 @@ spec:
     - name: PX_JWT_ISSUER
       value: apps.portworx.io
     - name: PX_SHARED_SECRET
-      valueFrom:
-        secretKeyRef:
-          key: apps-secret
-          name: px-system-secrets
+      value: px_shared_secret
     - name: BACKUP_LOCATION_PATH
       value: backup_location_path
     - name: AWS_ACCESS_KEY_ID
