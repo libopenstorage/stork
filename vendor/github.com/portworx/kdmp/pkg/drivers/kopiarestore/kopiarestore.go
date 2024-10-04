@@ -3,6 +3,7 @@ package kopiarestore
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -32,6 +33,7 @@ func (d Driver) Name() string {
 
 // StartJob creates a job for data transfer between volumes.
 func (d Driver) StartJob(opts ...drivers.JobOption) (id string, err error) {
+	fmt.Printf("restore kopia trace>>> %s\n", string(debug.Stack()))
 	restoreJobLock.Lock()
 	defer restoreJobLock.Unlock()
 
