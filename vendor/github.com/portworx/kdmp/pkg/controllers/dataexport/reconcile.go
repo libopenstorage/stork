@@ -16,13 +16,13 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/snapshotter"
+	stork_utils "github.com/libopenstorage/stork/pkg/utils"
 	kdmpapi "github.com/portworx/kdmp/pkg/apis/kdmp/v1alpha1"
 	kdmpcontroller "github.com/portworx/kdmp/pkg/controllers"
 	"github.com/portworx/kdmp/pkg/drivers"
 	"github.com/portworx/kdmp/pkg/drivers/driversinstance"
 	"github.com/portworx/kdmp/pkg/drivers/utils"
 	kdmpopts "github.com/portworx/kdmp/pkg/util/ops"
-	stork_utils "github.com/libopenstorage/stork/pkg/utils"
 
 	"github.com/portworx/kdmp/pkg/version"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -227,6 +227,17 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 					reason: msg,
 				}
 				return false, c.updateStatus(dataExport, data)
+			}
+
+			// Find if backup is kdmp optimized, if so change repo path to ns-pvcName-snapshotID-timestamp
+			// from the snapshotID
+			if strings.Contains(vb.Status.SnapshotID, "/") {
+				// Set the repository to the new path
+				vb.Spec.Repository = fmt.Sprintf("%s-%s/",
+					strings.TrimRight(vb.Spec.Repository, "/"),
+					strings.Split(vb.Status.SnapshotID, "/")[0])
+				// Reset the snapshotID
+				vb.Status.SnapshotID = strings.Split(vb.Status.SnapshotID, "/")[1]
 			}
 
 			// Create the pvc from the spec provided in the dataexport CR
@@ -495,8 +506,9 @@ func (c *Controller) sync(ctx context.Context, in *kdmpapi.DataExport) (bool, er
 					return false, c.updateStatus(dataExport, data)
 				}
 				data = updateDataExportDetail{
-					status:     kdmpapi.DataExportStatusSuccessful,
-					snapshotID: volumeBackupCR.Status.SnapshotID,
+					status: kdmpapi.DataExportStatusSuccessful,
+					// SnapshotID is prepended with the kdmp path to uniquely identify the folder location
+					snapshotID: fmt.Sprintf("%v/%v", dataExport.Annotations[stork_utils.KdmpPath], volumeBackupCR.Status.SnapshotID),
 					size:       volumeBackupCR.Status.TotalBytes,
 				}
 			} else {
@@ -2326,7 +2338,7 @@ func getRepoPVCName(de *kdmpapi.DataExport, pvcName string) string {
 		subStrings := strings.Split(pvcName, "-")
 		pvcName = strings.Join(subStrings[:len(subStrings)-1], "-")
 	}
-	logrus.Infof("line 2329 reconciler - path: %v", pvcName + de.Annotations[stork_utils.KdmpPath])
+	logrus.Infof("line 2329 reconciler - path: %v", pvcName+de.Annotations[stork_utils.KdmpPath])
 	return pvcName + "-" + de.Annotations[stork_utils.KdmpPath]
 }
 

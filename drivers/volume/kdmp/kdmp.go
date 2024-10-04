@@ -766,7 +766,30 @@ func (k *kdmp) StartRestore(
 			Namespace:  restore.Namespace, // since this can be kube-system in case of multple namespace restore
 			APIVersion: StorkAPIVersion,
 		}
-		volBackup.Spec.Repository = fmt.Sprintf("%s/%s-%s/", prefixRepo, volumeInfo.SourceNamespace, bkpvInfo.PersistentVolumeClaim)
+
+		// Find if backup is kdmp optimized, if so change repo path to ns-pvcName-snapshotID-timestamp
+		// from the snapshotID
+		if strings.Contains(bkpvInfo.BackupID, "/") {
+			// Set the repository to the new path
+			volBackup.Spec.Repository = fmt.Sprintf(
+				"%s/%s-%s-%s/",
+				prefixRepo,
+				volumeInfo.SourceNamespace,
+				bkpvInfo.PersistentVolumeClaim,
+				strings.Split(bkpvInfo.BackupID, "/")[0],
+			)
+			// Reset the BackupID
+			bkpvInfo.BackupID = strings.Split(bkpvInfo.BackupID, "/")[1]
+		} else {
+			// existing kdmp backup repo path
+			volBackup.Spec.Repository = fmt.Sprintf(
+				"%s/%s-%s/",
+				prefixRepo,
+				volumeInfo.SourceNamespace,
+				bkpvInfo.PersistentVolumeClaim,
+			)
+		}
+
 		volBackup.Status.SnapshotID = bkpvInfo.BackupID
 		if _, err := kdmpShedOps.Instance().CreateVolumeBackup(volBackup); err != nil {
 			logrus.Errorf("unable to create volumebackup CR: %v", err)

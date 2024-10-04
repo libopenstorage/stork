@@ -138,6 +138,7 @@ func (s *ApplicationBackupScheduleController) handle(ctx context.Context, backup
 			var err error
 			// Get the incremental count
 			if val, ok := backupSchedule.Spec.Template.Spec.Options[utils.PXIncrementalCountAnnotation]; ok {
+				logrus.Infof("CR value: %s", val)
 				incrCount, err = strconv.ParseInt(val, 10, 64)
 				logrus.Infof("line 142 incrCount: %v", incrCount)
 				if err != nil {
@@ -156,19 +157,19 @@ func (s *ApplicationBackupScheduleController) handle(ctx context.Context, backup
 			}
 			if bkpCount == 0 {
 				logrus.Infof("line 157")
-				backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%v", time.Now().Unix())
+				backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%s-%v", utils.GetShortUID(string(backupSchedule.GetUID())), time.Now().Unix())
 			}
 			bkpCount++
 			if _, ok := backupSchedule.Annotations[utils.KdmpPath]; ok {
 				if bkpCount > incrCount {
 					// Change path to new one
-					backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%v", time.Now().Unix())
+					backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%s-%v", utils.GetShortUID(string(backupSchedule.GetUID())), time.Now().Unix())
 					logrus.Infof("line 166")
-					bkpCount = 0
+					bkpCount = 1
 				}
 			} else {
 				// First backup of the schedule or after upgrade the first backup
-				backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%v", time.Now().Unix())
+				backupSchedule.Annotations[utils.KdmpPath] = fmt.Sprintf("%s-%v", utils.GetShortUID(string(backupSchedule.GetUID())), time.Now().Unix())
 				logrus.Infof("line 171")
 			}
 			backupSchedule.Annotations[utils.BackupsDoneAnnotation] = fmt.Sprintf("%v", bkpCount)

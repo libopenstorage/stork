@@ -5,10 +5,11 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 
 	"github.com/aquilax/truncate"
 	patch "github.com/evanphx/json-patch"
@@ -95,6 +96,8 @@ const (
 	// PxbackupAnnotationCreateByValue - annotation key value for create-by key for px-backup
 	PxbackupAnnotationCreateByValue = "px-backup"
 
+	// PxbackupScheduleUIDKey - key name to store applicationbackupschedule UID with px-backup prefix
+	PxbackupScheduleUIDKey = "backupschedule-uid"
 	// PxbackupObjectUIDKey -annotation key name for backup object UID with px-backup prefix
 	PxbackupObjectUIDKey = PxbackupAnnotationPrefix + "backup-uid"
 	// PxbackupObjectNameKey - annotation key name for backup object name with px-backup prefix
