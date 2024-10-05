@@ -327,6 +327,13 @@ func jobForRestoreResource(
 	if err != nil {
 		return nil, err
 	}
+
+	// Add node affinity to the job spec
+	job, err = utils.AddNodeAffinityToJob(job, jobOption)
+	if err != nil {
+		return nil, err
+	}
+
 	// Add the image secret in job spec only if it is present in the stork deployment.
 	if len(imageRegistrySecret) != 0 {
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobOption.RestoreExportName))
