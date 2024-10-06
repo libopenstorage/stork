@@ -370,9 +370,9 @@ sed -i 's/'SHORT_FLAG'/'"$short_test"'/g' /testspecs/stork-test-pod.yaml
 #  * Pass config map to containing px secret stork-test pod so tests can pick up auth-token
 if [ "$auth_secret_configmap" != "" ] ; then
     sed -i 's/'auth_secret_configmap'/'"$auth_secret_configmap"'/g' /testspecs/stork-test-pod.yaml
-    px_shared_secret=$(kubectl get secret px-system-secrets -n ${px_namespace} -o jsonpath='{.data.apps-secret}' | base64 --decode)
-    sed -i 's/'px_shared_secret'/'"$px_shared_secret"'/g' /testspecs/stork-test-pod.yaml
-    kubectl set env deploy/stork -n kube-system PX_SHARED_SECRET="${px_shared_secret}"
+    # px_shared_secret=$(kubectl get secret px-system-secrets -n ${px_namespace} -o jsonpath='{.data.apps-secret}' | base64 --decode)
+    # sed -i 's/'px_shared_secret'/'"$px_shared_secret"'/g' /testspecs/stork-test-pod.yaml
+    kubectl set env pod/stork-test -n $px_namespace PX_SHARED_SECRET=$(kubectl get secret px-system-secrets -o jsonpath='{.data.apps-secret}' -n ${px_namespace} | base64 --decode)
 else
 	sed -i 's/'auth_secret_configmap'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
