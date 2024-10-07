@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fio-job
+spec:
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      containers:
+      - name: fio
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - apk add --no-cache fio &&
+          fio --name=mytest-write --directory=/data --filename=testnew --ioengine=libaio --rw=write --bs=4k --size=1G --numjobs=1 --output=/data/fio-write.log &&
+          chmod +r /data/testnew &&
+          touch /data/ingest_complete
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+      - name: ingest-checker
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          while [ ! -f /data/ingest_complete ]; do
+            echo "Waiting for fio to complete...";
+            sleep 10;
+          done;
+          if grep -q 'err= 0' /data/fio-write.log; then
+            echo "Ingest complete and no errors detected!";
+          else
+            echo "Errors detected in fio log!";
+            exit 1;
+          fi
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: fio-pvc
+      restartPolicy: Never
+  backoffLimit: 4
