@@ -124,7 +124,7 @@ const (
 var (
 	// ErrJobFailed is a know error for a data transfer job failure.
 	ErrJobFailed       = fmt.Errorf("data transfer job failed")
-	PxbJobNodeLabelKey = "PXB_JOB_NODE_AFFINITY_LABEL"
+	PxbJobNodeLabelKey = "pxb_job_node_affinity_label"
 )
 
 // Interface defines a data export driver behaviour.
