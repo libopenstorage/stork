@@ -68,6 +68,7 @@ func testMigration(t *testing.T) {
 	t.Run("statefulsetTest", statefulsetMigrationTest)
 	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
 	t.Run("statefulsetRuleTest", statefulsetMigrationRuleTest)
+	t.Run("jobMigrationTest", jobMigrationTest)
 	t.Run("preExecRuleMissingTest", statefulsetMigrationRulePreExecMissingTest)
 	t.Run("postExecRuleMissingTest", statefulsetMigrationRulePostExecMissingTest)
 	t.Run("disallowedNamespaceTest", migrationDisallowedNamespaceTest)
@@ -540,6 +541,32 @@ func statefulsetMigrationRuleTest(t *testing.T) {
 		appKey,
 		nil,
 		"cassandra-migration-rule",
+		true,
+		true,
+		true,
+		false,
+	)
+
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// jobMigrationTest tests the migration of Job kubernetes resource.
+func jobMigrationTest(t *testing.T) {
+	var testrailID, testResult = 301906, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+	instanceID := "resource-migration-test"
+	appKey := "busybox-job"
+
+	triggerMigrationTest(
+		t,
+		instanceID,
+		appKey,
+		nil,
+		"job-migration-template",
 		true,
 		true,
 		true,
