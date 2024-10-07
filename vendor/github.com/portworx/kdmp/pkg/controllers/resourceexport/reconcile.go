@@ -412,6 +412,12 @@ func startNfsResourceJob(
 		logrus.Errorf("failed to create NFS cred secret: %v", err)
 		return "", fmt.Errorf("failed to create NFS cred secret: %v", err)
 	}
+
+	nodeLabel, err := utils.GetNodeLabelFromDeployment(jobConfigMap, jobConfigMapNs, drivers.PxbJobNodeLabelKey)
+	if err != nil {
+		return "", err
+	}
+
 	switch drv.Name() {
 	case drivers.NFSBackup:
 		return drv.StartJob(
@@ -427,6 +433,7 @@ func startNfsResourceJob(
 			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
 			drivers.WithNamespace(re.Namespace),
 			drivers.WithResoureBackupName(re.Name),
+			drivers.WithNodeAffinity(nodeLabel),
 			drivers.WithResoureBackupNamespace(re.Namespace),
 			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
 			drivers.WithNfsExportDir(bl.Location.NFSConfig.SubPath),
@@ -445,6 +452,7 @@ func startNfsResourceJob(
 			drivers.WithAppCRNamespace(re.Spec.Source.Namespace),
 			drivers.WithNamespace(re.Namespace),
 			drivers.WithResoureBackupName(re.Name),
+			drivers.WithNodeAffinity(nodeLabel),
 			drivers.WithResoureBackupNamespace(re.Namespace),
 			drivers.WithNfsMountOption(bl.Location.NFSConfig.MountOptions),
 			drivers.WithNfsExportDir(bl.Location.NFSConfig.SubPath),
