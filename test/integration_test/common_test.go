@@ -197,11 +197,12 @@ func TestSnapshot(t *testing.T) {
 func TestStorkCbt(t *testing.T) {
 	t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("dataExportTest", TestDataExportRsync)
-	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
+	t.Run("testDRActionFailbackIntervalScheduleTest", testDRActionFailbackIntervalScheduleTest)
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("cmdExecutorTest", cmdExecutorTest)
+	t.Run("statefulsetTest", statefulsetApplicationCloneTest)
 }
 
 func TestStorkCbtBackup(t *testing.T) {
