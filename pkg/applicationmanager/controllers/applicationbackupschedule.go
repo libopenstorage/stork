@@ -23,6 +23,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -237,6 +238,35 @@ func (s *ApplicationBackupScheduleController) updateApplicationBackupStatus(back
 	return nil
 }
 
+func (s *ApplicationBackupScheduleController) canScheduleBackupBeTriggered(backup *stork_api.ScheduledApplicationBackupStatus, namespace string) bool {
+	switch backup.Status {
+	case stork_api.ApplicationBackupStatusInProgress:
+		logrus.Infof("sivakumar -- isApplicationBackupComplete - stork_api.ApplicationBackupStatusInProgress case")
+		// Get the applicationbackup CR to check the volume status
+		backupCR := &stork_api.ApplicationBackup{}
+		err := s.client.Get(context.TODO(), types.NamespacedName{
+			Namespace: namespace,
+			Name:      backup.Name,
+		}, backupCR)
+		if err != nil {
+			logrus.Infof("sivakumar - error in getting applicationbackup CR {%v/%v]: err %v", namespace, backup.Name, err)
+		}
+		// Check whether all volumes completed local snapshot by checking the presence of backupID in the volumeInfo
+		for _, vInfo := range backupCR.Status.Volumes {
+			if vInfo.BackupID == "" {
+				logrus.Infof("sivakumar -- isApplicationBackupInprogress -- applicationbackup CR: %v/%v - volume[%v} volInfo.BackupID  is empty", backup.Name, vInfo.Volume)
+				return false
+			}
+		}
+		return true
+	case stork_api.ApplicationBackupStatusFailed, stork_api.ApplicationBackupStatusPartialSuccess, stork_api.ApplicationBackupStatusSuccessful:
+		return true
+	default:
+		return false
+
+	}
+
+}
 func (s *ApplicationBackupScheduleController) isApplicationBackupComplete(status stork_api.ApplicationBackupStatusType) bool {
 	return status == stork_api.ApplicationBackupStatusFailed ||
 		status == stork_api.ApplicationBackupStatusPartialSuccess ||
@@ -249,7 +279,7 @@ func (s *ApplicationBackupScheduleController) shouldStartApplicationBackup(backu
 		policyApplicationBackup, present := backupSchedule.Status.Items[policyType]
 		if present {
 			for _, backup := range policyApplicationBackup {
-				if !s.isApplicationBackupComplete(backup.Status) {
+				if !s.canScheduleBackupBeTriggered(backup, backupSchedule.Namespace) {
 					return stork_api.SchedulePolicyTypeInvalid, false, nil
 				}
 			}
