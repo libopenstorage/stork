@@ -195,13 +195,35 @@ func TestSnapshot(t *testing.T) {
 }
 
 func TestStorkCbt(t *testing.T) {
+	// reset mock time before running any tests
+	err := setMockTime(nil)
+	log.FailOnError(t, err, "Error resetting mock time")
+	currentTestSuite = t.Name()
+
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	log.InfoD("Using stork volume driver: %s", volumeDriverName)
+	log.InfoD("Backup path being used: %s", backupLocationPath)
+	setDefaultsForBackup(t)
+
+	// get the destination kubeconfig from configmap in source cluster so that it can be passed to storkctl commands
+	// since both the dr cli commands run in destination cluster
+	destinationKubeConfigPath, err = getDestinationKubeConfigFile()
+	log.FailOnError(t, err, "Error getting destination kubeconfig file")
+
+	// Get the source kubeconfig from configmap.
+	srcKubeConfigPath, err = getSourceKubeConfigFile()
+	log.FailOnError(t, err, "Error getting source kubeconfig file")
+
 	t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("dataExportTest", TestDataExportRsync)
-	t.Run("testMigrationFailoverFailback", testMigrationFailoverFailback)
+	t.Run("testDRActionFailbackIntervalScheduleTest", testDRActionFailbackIntervalScheduleTest)
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("cmdExecutorTest", cmdExecutorTest)
+	t.Run("statefulsetTest", statefulsetApplicationCloneTest)
 }
 
 func TestStorkCbtBackup(t *testing.T) {

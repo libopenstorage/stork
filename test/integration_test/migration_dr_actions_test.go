@@ -42,8 +42,8 @@ func TestDRActions(t *testing.T) {
 	log.FailOnError(t, err, "Error getting destination kubeconfig file")
 
 	// Get the source kubeconfig from configmap.
-	srcKubeConfigPath, err = getDestinationKubeConfigFile()
-	log.FailOnError(t, err, "Error getting destination kubeconfig file")
+	srcKubeConfigPath, err = getSourceKubeConfigFile()
+	log.FailOnError(t, err, "Error getting source kubeconfig file")
 
 	t.Run("testSyncDR", testSyncDR)
 	t.Run("testAsyncDR", testAsyncDR)
