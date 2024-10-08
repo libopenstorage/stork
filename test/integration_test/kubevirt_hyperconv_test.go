@@ -1590,7 +1590,7 @@ func unblockPXUpdate(t *testing.T, unblockerData *unblockPXUpdateData) {
 func stopVMsOfFailedMigrations(t *testing.T, seen map[string]*failedMigration, testStartTime time.Time) {
 	// stop VMs for the failed migrations after some time
 	for _, migr := range seen {
-		if !migr.vmStopped && time.Since(migr.firstSeen) > 2*time.Minute {
+		if !migr.vmStopped && time.Since(migr.firstSeen) > 5*time.Minute {
 			stopVMForMigration(t, migr.migration)
 			migr.vmStopped = true
 		}
