@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"

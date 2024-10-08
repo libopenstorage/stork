@@ -10,9 +10,9 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	k8sextops "github.com/libopenstorage/stork/pkg/crud/externalstorage"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/log"
-	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

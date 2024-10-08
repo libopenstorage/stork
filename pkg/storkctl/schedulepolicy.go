@@ -3,8 +3,8 @@ package storkctl
 import (
 	"fmt"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/k8s/core"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

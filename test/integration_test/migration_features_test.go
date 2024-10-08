@@ -11,10 +11,10 @@ import (
 	"time"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/portworx/sched-ops/k8s/core"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

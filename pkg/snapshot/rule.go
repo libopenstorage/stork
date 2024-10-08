@@ -2,9 +2,9 @@ package snapshot
 
 import (
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	k8sextops "github.com/libopenstorage/stork/pkg/crud/externalstorage"
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/rule"
-	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 )

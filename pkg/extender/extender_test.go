@@ -29,8 +29,8 @@ import (
 	kv "github.com/portworx/sched-ops/k8s/kubevirt"
 	kvd "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 
+	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/k8s/openshift"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
