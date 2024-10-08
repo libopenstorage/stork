@@ -500,7 +500,7 @@ func (ac *ActionController) waitForVolumesBecomeFree(action *storkv1.Action, mig
 		// Check if there are any pods using the volumes in a loop
 		terminationInprogressIncurrentIteration := false
 		for iter := 0; iter < maxInnerLoopCounter; iter++ {
-			terminated, terminationInProgress, err := checkForPodStatusUsingPVC(nsToPVCToNumberOfPods, config)
+			terminated, terminationInProgress, err := getPodsStatusUsingPVC(nsToPVCToNumberOfPods, config)
 			if err != nil {
 				return err
 			}
@@ -550,6 +550,15 @@ func GetPVtoPVCMap(coreClient *core.Client, namespace string) map[string]string 
 	return pvToPVCMap
 }
 
+func getPodsStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, config *rest.Config) (bool, bool, error) {
+	coreClient, err := core.NewForConfig(config)
+	if err != nil {
+		return false, false, err
+	}
+
+	return checkForPodStatusUsingPVC(nsToPVCToNumberOfPods, coreClient)
+}
+
 // checkForPodStatusUsingPVC returns terminated, terminationInProgress, error
 // terminated: true if all pods using PVC are terminated
 // terminationInProgress: true if any pod using PVC is not terminated
@@ -561,12 +570,7 @@ func GetPVtoPVCMap(coreClient *core.Client, namespace string) map[string]string 
 // This made stork wait for the pod to get terminated so that the volume can be freed and
 // thus, failover can be completed but instead it timed out waiting for this.
 // As a fix, we should skip considering the pods in Completed state for waiting for source deactivation in failover.
-func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, config *rest.Config) (bool, bool, error) {
-	coreClient, err := core.NewForConfig(config)
-	if err != nil {
-		return false, false, err
-	}
-
+func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, coreClient *core.Client) (bool, bool, error) {
 	terminationInProgress := false
 	terminated := true
 	for ns, pvcToNumberOfPods := range nsToPVCToNumberOfPods {
@@ -580,7 +584,6 @@ func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, 
 				activePods := []v1.Pod{}
 				for _, pod := range pods {
 					if pod.Status.Phase != v1.PodSucceeded {
-						logrus.Debugf("Skipping checking the PVC status of pod [%s/%s] since it has succeeded", pod.Namespace, pod.Name)
 						activePods = append(activePods, pod)
 					}
 				}
