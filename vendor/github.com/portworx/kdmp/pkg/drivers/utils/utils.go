@@ -54,6 +54,8 @@ const (
 	ResourceCleanupKey = "RESOURCE_CLEANUP"
 	// ResourceCleanupDefaultValue is true as resource cleanup process is enabled by default for debugging user can set to false.
 	ResourceCleanupDefaultValue = "true"
+	// PauseResourceCleanupKey - this key pauses the resource cleanup process.
+	PauseResourceCleanupKey = "PAUSE_RESOURCE_CLEANUP"
 	volumeinitialDelay          = 2 * time.Second
 	volumeFactor                = 1.5
 	volumeSteps                 = 15
@@ -965,4 +967,22 @@ func GetShortUID(uid string) string {
 		return uid
 	}
 	return uid[:8]
+}
+
+
+// PauseCleanupResource returns whether to pause the cleanup of the CRs & other resources.
+func PauseCleanupResource() (time.Duration, error) {
+	pauseCleanupVal := time.Duration(0)
+	pauseCleanupValStr, err := k8sutils.GetConfigValue(KdmpConfig, defaultPXNamespace, PauseResourceCleanupKey)
+	if err != nil {
+		logrus.Errorf("Failed to get %s key from kdmp-config-map: %v", PauseResourceCleanupKey, err)
+		return pauseCleanupVal, err
+	}
+	if pauseCleanupValStr != "" {
+		pauseCleanupVal, err = time.ParseDuration(pauseCleanupValStr)
+		if err != nil {
+			return pauseCleanupVal, err
+		}
+	}
+	return pauseCleanupVal, nil
 }

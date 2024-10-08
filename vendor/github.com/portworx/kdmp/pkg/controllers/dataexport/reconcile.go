@@ -1131,7 +1131,13 @@ func (c *Controller) stageLocalSnapshotRestore(ctx context.Context, dataExport *
 		}
 		return true, c.updateStatus(dataExport, data)
 	} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-		err := c.cleanupLocalRestoredSnapshotResources(dataExport, false)
+		val, err := utils.PauseCleanupResource()
+		if err == nil && val != 0 {
+			logrus.Debugf("Starting to wait for %v before cleanup of local restored snapshot resources for dataexport:%v", val, dataExport.Name)
+			time.Sleep(val)
+		}
+		logrus.Debugf("Starting the cleanup of local restored snapshot resources for dataexport:%v", dataExport.Name)
+		err = c.cleanupLocalRestoredSnapshotResources(dataExport, false)
 		if err != nil {
 			logrus.Errorf("cleaning up temporary resources for restoring from snapshot failed for data export %s/%s: %v", dataExport.Namespace, dataExport.Name, err)
 		}
@@ -1284,7 +1290,13 @@ func (c *Controller) stageLocalSnapshotRestoreInProgress(ctx context.Context, da
 		}
 		return true, c.updateStatus(dataExport, data)
 	} else if dataExport.Status.Status == kdmpapi.DataExportStatusFailed {
-		err := c.cleanupLocalRestoredSnapshotResources(dataExport, false)
+		val, err := utils.PauseCleanupResource()
+		if err == nil && val != 0 {
+			logrus.Debugf("Starting to wait for %v before cleanup of local restored snapshots for dataexport:%v", val, dataExport.Name)
+			time.Sleep(val)
+		}
+		logrus.Debugf("Starting the cleanup of local restored snapshot resources for dataexport:%v", dataExport.Name)
+		err = c.cleanupLocalRestoredSnapshotResources(dataExport, false)
 		// Already done with max retries, so moving to kdmp restore anyway
 		if err != nil {
 			logrus.Errorf("cleaning up temporary resources for restoring from snapshot failed for data export %s/%s: %v", dataExport.Namespace, dataExport.Name, err)
@@ -1455,6 +1467,12 @@ func (c *Controller) cleanUp(driver drivers.Interface, de *kdmpapi.DataExport) e
 		// No cleanup needed for rsync
 		return nil
 	}
+	val, err := utils.PauseCleanupResource()
+	if err == nil && val != 0 {
+		logrus.Infof("Starting to wait for %v before cleanup of dataexport:%v", val, de.Name)
+		time.Sleep(val)
+	}
+	logrus.Debugf("Starting the cleanup for dataexport:%v", de.Name)
 	if hasLocalRestoreStage(de) {
 		err := c.cleanupLocalRestoredSnapshotResources(de, true)
 		if err != nil {

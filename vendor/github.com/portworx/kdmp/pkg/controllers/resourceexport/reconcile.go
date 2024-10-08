@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
@@ -245,6 +246,12 @@ func (c *Controller) process(ctx context.Context, in *kdmpapi.ResourceExport) (b
 }
 
 func (c *Controller) cleanupResources(resourceExport *kdmpapi.ResourceExport) error {
+	val, err := utils.PauseCleanupResource()
+	if err == nil && val != 0 {
+		logrus.Debugf("Starting to wait for %v before cleanup of resourceExport:%v", val, resourceExport.Name)
+		time.Sleep(val)
+	}
+	logrus.Debugf("Starting the cleanup of resourceExport:%v", resourceExport.Name)
 	// clean up resources
 	rbNamespace, rbName, err := utils.ParseJobID(resourceExport.Status.TransferID)
 	if err != nil {
