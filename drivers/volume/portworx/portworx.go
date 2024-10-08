@@ -3494,7 +3494,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) error {
 		}
 		// Skip for volumes which are in failed state as there is no need to proceed
 		// further and we have to return the orginal volInfo back to caller
-		if vInfo.Status == storkapi.ApplicationBackupStatusFailed {
+		if vInfo.Status == storkapi.ApplicationBackupStatusFailed || vInfo.Status == storkapi.ApplicationBackupStatusSuccessful {
 			continue
 		}
 		token, err := p.getUserToken(vInfo.Options, vInfo.Namespace)
