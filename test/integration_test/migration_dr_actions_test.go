@@ -15,6 +15,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -63,6 +65,7 @@ func testAsyncDR(t *testing.T) {
 	t.Run("testDRActionFailoverMultipleNamespacesTest", testDRActionFailoverMultipleNamespacesTest)
 	t.Run("testDRActionFailoverSubsetNamespacesTest", testDRActionFailoverSubsetNamespacesTest)
 	t.Run("testDRActionFailoverWithMigrationRunningTest", testDRActionFailoverWithMigrationRunningTest)
+	t.Run("testDRActionFailoverCompletedPodTest", testDRActionFailoverCompletedPodTest)
 	t.Run("testDRActionFailbackIntervalScheduleTest", testDRActionFailbackIntervalScheduleTest)
 	t.Run("testDRActionFailbackDailyScheduleTest", testDRActionFailbackDailyScheduleTest)
 	t.Run("testDRActionFailbackWeeklyScheduleTest", testDRActionFailbackWeeklyScheduleTest)
@@ -561,6 +564,162 @@ func testDRActionFailoverWithMigrationRunningTest(t *testing.T) {
 	// cleanup
 	destroyAndWait(t, ctxs)
 	blowNamespaceForTest(t, mysqlNamespace, false)
+	// If we are here then the test has passed
+	testResult = testResultPass
+	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
+}
+
+// testDRActionFailoverCompletedPodTest tests the scenario in which the failover should not wait for a pod in
+// Completed/Succeeded state to terminate in order to mark the failover as succeeded.
+func testDRActionFailoverCompletedPodTest(t *testing.T) {
+	var testrailID, testResult = 301907, testResultFail
+	runID := testrailSetupForTest(testrailID, &testResult, t.Name())
+	defer updateTestRail(&testResult, testrailID, runID)
+	defer updateDashStats(t.Name(), &testResult)
+
+	///////////////////////////
+	// Schedule application //
+	/////////////////////////
+
+	instanceID := "completed-pod-failover-test"
+	appKey := "fio-job"
+	namespace := fmt.Sprintf("%s-%s", appKey, instanceID)
+	var err error
+	// Reset config in case of error.
+	defer func() {
+		err = setSourceKubeConfig()
+		log.FailOnError(t, err, "Error resetting remote config")
+	}()
+
+	var preMigrationCtx *scheduler.Context
+	ctxs, err := schedulerDriver.Schedule(instanceID,
+		scheduler.ScheduleOptions{
+			AppKeys: []string{appKey},
+			Labels:  nil,
+		})
+	log.FailOnError(t, err, "Error scheduling task")
+	Dash.VerifyFatal(t, 1, len(ctxs), "Only one task should have started")
+	preMigrationCtx = ctxs[0]
+	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
+	log.FailOnError(t, err, "Error waiting for app to get to running state")
+
+	//////////////////////////////////////////
+	// Setup clusterpair and schedulepolicy //
+	//////////////////////////////////////////
+
+	// Create the clusterpair.
+	clusterPairNamespace := defaultAdminNamespace
+	log.Info("Creating bidirectional cluster pair:")
+	log.InfoD("Name: %s", remotePairName)
+	log.InfoD("Namespace: %s", clusterPairNamespace)
+	log.InfoD("Backuplocation: %s", defaultBackupLocation)
+	log.InfoD("Secret name: %s", defaultSecretName)
+	err = scheduleBidirectionalClusterPair(remotePairName, clusterPairNamespace, projectIDMappings, defaultBackupLocation, defaultSecretName, false)
+	log.FailOnError(t, err, "failed to set bidirectional cluster pair: %v", err)
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	// Create the migration schedule.
+	schedulePolicyArgs := make(map[string]map[string]string)
+	schedulePolicyArgs["migrate-every-5m"] = map[string]string{"policy-type": "Interval", "interval-minutes": "5"}
+
+	// migrationScheduleArgs is a map of migrationScheduleName : {{flag1:value1,flag2:value2,....}}
+	migrationScheduleArgs := make(map[string]map[string]string)
+	migrationScheduleArgs[instanceID] = map[string]string{
+		"purge-deleted-resources": "",
+		"schedule-policy-name":    "migrate-every-5m",
+	}
+
+	//Create schedulePolicies using storkCtl if any required
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	for schedulePolicyName, customArgs := range schedulePolicyArgs {
+		cmdArgs := []string{"create", "schedulepolicy", schedulePolicyName}
+		executeStorkCtlCommand(t, cmd, cmdArgs, customArgs)
+	}
+
+	//////////////////////////////////////////
+	// Setup and validate migrationschedule //
+	//////////////////////////////////////////
+
+	//Create migrationSchedules using storkctl.
+	migrationScheduleName := "forward-migration-schedule-fio-job"
+	cmdArgs := []string{"create", "migrationschedule", migrationScheduleName, "-c", remotePairName,
+		"--namespaces", namespace, "-n", defaultAdminNamespace, "--include-jobs"}
+	executeStorkCtlCommand(t, cmd, cmdArgs, migrationScheduleArgs[instanceID])
+
+	// bump time of the world by 6 minutes
+	mockNow := time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	log.FailOnError(t, err, "Error setting mock time")
+	defer func() {
+		// Reset mocktime.
+		err = setMockTime(nil)
+		log.FailOnError(t, err, "Error resetting mock time")
+	}()
+
+	// Need to Validate the migrationSchedules separately because they are created using storkctl
+	// and not a part of the torpedo scheduler context
+	_, err = storkops.Instance().ValidateMigrationSchedule(migrationScheduleName, defaultAdminNamespace, defaultWaitTimeout, defaultWaitInterval)
+
+	//////////////////////////////
+	// Failover to destination //
+	/////////////////////////////
+
+	// Failover the application
+	err = setDestinationKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	failoverCmdArgs := map[string]string{
+		"migration-reference": migrationScheduleName,
+		"include-namespaces":  namespace,
+		"namespace":           defaultAdminNamespace,
+	}
+	drActionName, _ := createDRAction(t, defaultAdminNamespace, storkv1.ActionTypeFailover, migrationScheduleName, failoverCmdArgs)
+
+	// Wait for failover action to complete
+	waitTillActionComplete(t, storkv1.ActionTypeFailover, drActionName, defaultAdminNamespace)
+
+	//////////////////////////////
+	// Validate failover action //
+	//////////////////////////////
+
+	// Verify the application is running on the destination cluster
+	destJobs, err := batch.Instance().ListAllJobs(namespace, metav1.ListOptions{})
+	log.FailOnError(t, err, "error retrieving jobs from %s namespace", namespace)
+	Dash.VerifyFatal(t, len(destJobs.Items), 1, fmt.Sprintf("Expected 1 job in destination in %s namespace", namespace))
+	destPods, err := core.Instance().ListPods(map[string]string{})
+	log.FailOnError(t, err, "error retrieving pods from %s namespace", namespace)
+	if len(destPods.Items) < 1 {
+		Dash.Fatal(fmt.Sprintf("Expected 1 job in destination in %s namespace", namespace))
+
+	}
+
+	////////////////////////
+	// Cleanup resources //
+	//////////////////////
+
+	// Cleanup resources from DESTINATION.
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in destination: %v", remotePairName, defaultAdminNamespace, err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
+
+	// Cleanup resources from SOURCE.
+	err = setSourceKubeConfig()
+	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+	DeleteAndWaitForMigrationScheduleDeletion(t, migrationScheduleName, defaultAdminNamespace)
+	for schedulePolicyName := range schedulePolicyArgs {
+		cmdArgs := []string{"delete", "schedulepolicy", schedulePolicyName}
+		executeStorkCtlCommand(t, cmd, cmdArgs, nil)
+	}
+	err = storkops.Instance().DeleteClusterPair(remotePairName, defaultAdminNamespace)
+	log.FailOnError(t, err, "failed to delete clusterpair %s in namespace %s in source: %v", remotePairName, defaultAdminNamespace, err)
+
+	// cleanup
+	destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+	blowNamespaceForTest(t, namespace, false)
+
 	// If we are here then the test has passed
 	testResult = testResultPass
 	log.InfoD("Test status at end of %s test: %s", t.Name(), testResult)
