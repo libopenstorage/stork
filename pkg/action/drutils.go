@@ -500,7 +500,7 @@ func (ac *ActionController) waitForVolumesBecomeFree(action *storkv1.Action, mig
 		// Check if there are any pods using the volumes in a loop
 		terminationInprogressIncurrentIteration := false
 		for iter := 0; iter < maxInnerLoopCounter; iter++ {
-			terminated, terminationInProgress, err := checkForPodStatusUsingPVC(nsToPVCToNumberOfPods, config)
+			terminated, terminationInProgress, err := getPodsStatusUsingPVC(nsToPVCToNumberOfPods, config)
 			if err != nil {
 				return err
 			}
@@ -550,16 +550,27 @@ func GetPVtoPVCMap(coreClient *core.Client, namespace string) map[string]string 
 	return pvToPVCMap
 }
 
-// checkForPodStatusUsingPVC returns terminated, terminationInProgress, error
-// terminated: true if all pods using PVC are terminated
-// terminationInProgress: true if any pod using PVC is not terminated
-// error: error if any error occurs
-func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, config *rest.Config) (bool, bool, error) {
+func getPodsStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, config *rest.Config) (bool, bool, error) {
 	coreClient, err := core.NewForConfig(config)
 	if err != nil {
 		return false, false, err
 	}
 
+	return checkForPodStatusUsingPVC(nsToPVCToNumberOfPods, coreClient)
+}
+
+// checkForPodStatusUsingPVC returns terminated, terminationInProgress, error
+// terminated: true if all pods using PVC are terminated
+// terminationInProgress: true if any pod using PVC is not terminated
+// error: error if any error occurs
+//
+// It also checks only the pods that are NOT in succeeded state.
+// Reason: In some cases, the pod created by the job was in Completed state and was not deleted due
+// to which the PVC was still in Bound state with the pod.
+// This made stork wait for the pod to get terminated so that the volume can be freed and
+// thus, failover can be completed but instead it timed out waiting for this.
+// As a fix, we should skip considering the pods in Completed state for waiting for source deactivation in failover.
+func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, coreClient *core.Client) (bool, bool, error) {
 	terminationInProgress := false
 	terminated := true
 	for ns, pvcToNumberOfPods := range nsToPVCToNumberOfPods {
@@ -570,14 +581,20 @@ func checkForPodStatusUsingPVC(nsToPVCToNumberOfPods map[string]map[string]int, 
 				if err != nil {
 					return false, false, err
 				}
-				if len(pods) == 0 {
+				activePods := []v1.Pod{}
+				for _, pod := range pods {
+					if pod.Status.Phase != v1.PodSucceeded {
+						activePods = append(activePods, pod)
+					}
+				}
+				if len(activePods) == 0 {
 					// All pods terminated for atlease one pvc
 					terminationInProgress = true
 				} else {
 					// Atleast one pvc has not been freed up
 					terminated = false
 				}
-				nsToPVCToNumberOfPods[ns][pvcName] = len(pods)
+				nsToPVCToNumberOfPods[ns][pvcName] = len(activePods)
 			}
 		}
 	}
