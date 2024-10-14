@@ -853,6 +853,11 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		return err
 	}
 
+	err = schedulerDriver.SetConfig(remoteFilePath)
+	if err != nil {
+		log.Error("Failed to set config in torpedo: %v", err)
+		return err
+	}
 	err = schedulerDriver.AddTasks(ctx,
 		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
 	if err != nil {
