@@ -11,7 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

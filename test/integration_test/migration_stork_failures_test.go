@@ -13,7 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 )
 
 const (

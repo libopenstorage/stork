@@ -4,10 +4,11 @@
 package integrationtest
 
 import (
-	"github.com/libopenstorage/stork/pkg/log"
 	"testing"
 
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/libopenstorage/stork/pkg/log"
+
+	"github.com/pure-px/torpedo/drivers/scheduler"
 )
 
 func testWebhook(t *testing.T) {

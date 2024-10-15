@@ -1,7 +1,6 @@
 .idea
 coverage.txt
 profile.out
-vendor
 zookeeper/zookeeper.out
 consul/kvdb_audit.log
 etcd/v2/kvdb_audit.log

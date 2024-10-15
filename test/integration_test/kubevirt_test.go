@@ -14,7 +14,7 @@ import (
 	kubevirt "github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"

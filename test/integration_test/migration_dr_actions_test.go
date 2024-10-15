@@ -17,7 +17,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

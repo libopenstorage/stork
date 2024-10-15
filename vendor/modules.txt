@@ -1,4 +1,4 @@
-# cloud.google.com/go v0.111.0
+# cloud.google.com/go v0.112.0
 ## explicit; go 1.19
 cloud.google.com/go/internal
 cloud.google.com/go/internal/optional
@@ -17,12 +17,12 @@ cloud.google.com/go/iam/apiv1/iampb
 cloud.google.com/go/iam/credentials/apiv1
 cloud.google.com/go/iam/credentials/apiv1/credentialspb
 cloud.google.com/go/iam/internal
-# cloud.google.com/go/storage v1.30.1
+# cloud.google.com/go/storage v1.36.0
 ## explicit; go 1.19
 cloud.google.com/go/storage
 cloud.google.com/go/storage/internal
 cloud.google.com/go/storage/internal/apiv2
-cloud.google.com/go/storage/internal/apiv2/stubs
+cloud.google.com/go/storage/internal/apiv2/storagepb
 # contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d
 ## explicit; go 1.13
 contrib.go.opencensus.io/exporter/ocagent
@@ -465,11 +465,10 @@ github.com/go-kit/log/level
 # github.com/go-logfmt/logfmt v0.6.0
 ## explicit; go 1.17
 github.com/go-logfmt/logfmt
-# github.com/go-logr/logr v1.3.0
+# github.com/go-logr/logr v1.4.1
 ## explicit; go 1.18
 github.com/go-logr/logr
 github.com/go-logr/logr/funcr
-github.com/go-logr/logr/slogr
 # github.com/go-logr/stdr v1.2.2
 ## explicit; go 1.16
 github.com/go-logr/stdr
@@ -525,7 +524,7 @@ github.com/golang-jwt/jwt/v4
 # github.com/golang-jwt/jwt/v5 v5.0.0
 ## explicit; go 1.18
 github.com/golang-jwt/jwt/v5
-# github.com/golang/glog v1.1.2
+# github.com/golang/glog v1.2.0
 ## explicit; go 1.19
 github.com/golang/glog
 github.com/golang/glog/internal/logsink
@@ -820,8 +819,8 @@ github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
-# github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
-## explicit; go 1.13
+# github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40
+## explicit; go 1.17
 github.com/libopenstorage/cloudops
 # github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e
 ## explicit
@@ -830,7 +829,7 @@ github.com/libopenstorage/gossip/pkg/probation
 github.com/libopenstorage/gossip/proto
 github.com/libopenstorage/gossip/proto/state
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
+# github.com/libopenstorage/openstorage v9.4.47+incompatible => github.com/libopenstorage/openstorage v1.0.1-0.20240920215521-2478442d0147
 ## explicit; go 1.17
 github.com/libopenstorage/openstorage/alerts
 github.com/libopenstorage/openstorage/api
@@ -885,7 +884,7 @@ github.com/libopenstorage/openstorage/volume/drivers/fake
 github.com/libopenstorage/openstorage/volume/drivers/nfs
 github.com/libopenstorage/openstorage/volume/drivers/pwx
 github.com/libopenstorage/openstorage/volume/drivers/vfs
-# github.com/libopenstorage/operator v0.0.0-20240515003928-7476f1d896fc
+# github.com/libopenstorage/operator v0.0.0-20240812060935-09fcd70d5bcc
 ## explicit; go 1.21
 github.com/libopenstorage/operator/api/px
 github.com/libopenstorage/operator/drivers/storage
@@ -1128,8 +1127,8 @@ github.com/portworx/kdmp/pkg/jobratelimit
 github.com/portworx/kdmp/pkg/util/ops
 github.com/portworx/kdmp/pkg/utils
 github.com/portworx/kdmp/pkg/version
-# github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b
-## explicit
+# github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd
+## explicit; go 1.17
 github.com/portworx/kvdb
 github.com/portworx/kvdb/api/bootstrap
 github.com/portworx/kvdb/common
@@ -1177,37 +1176,6 @@ github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/k8s/tektoncd
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.20.4-rc1.0.20240520065758-b58a5dd88529 => github.com/portworx/torpedo v0.0.0-20240520065758-b58a5dd88529
-## explicit; go 1.21
-github.com/portworx/torpedo/drivers/api
-github.com/portworx/torpedo/drivers/node
-github.com/portworx/torpedo/drivers/node/ssh
-github.com/portworx/torpedo/drivers/objectstore
-github.com/portworx/torpedo/drivers/pure/flashblade
-github.com/portworx/torpedo/drivers/scheduler
-github.com/portworx/torpedo/drivers/scheduler/k8s
-github.com/portworx/torpedo/drivers/scheduler/spec
-github.com/portworx/torpedo/drivers/volume
-github.com/portworx/torpedo/drivers/volume/aws
-github.com/portworx/torpedo/drivers/volume/azure
-github.com/portworx/torpedo/drivers/volume/gce
-github.com/portworx/torpedo/drivers/volume/generic_csi
-github.com/portworx/torpedo/drivers/volume/linstor
-github.com/portworx/torpedo/drivers/volume/portworx
-github.com/portworx/torpedo/drivers/volume/portworx/schedops
-github.com/portworx/torpedo/pkg/aetosutil
-github.com/portworx/torpedo/pkg/asyncdr
-github.com/portworx/torpedo/pkg/aututils
-github.com/portworx/torpedo/pkg/errors
-github.com/portworx/torpedo/pkg/log
-github.com/portworx/torpedo/pkg/netutil
-github.com/portworx/torpedo/pkg/osutils
-github.com/portworx/torpedo/pkg/pureutils
-github.com/portworx/torpedo/pkg/restutil
-github.com/portworx/torpedo/pkg/s3utils
-github.com/portworx/torpedo/pkg/stats
-github.com/portworx/torpedo/pkg/testrailuttils
-github.com/portworx/torpedo/pkg/units
 # github.com/pquerna/cachecontrol v0.1.0
 ## explicit; go 1.16
 github.com/pquerna/cachecontrol
@@ -1248,6 +1216,39 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
+# github.com/pure-px/torpedo v0.0.0-20241023070534-06238143a17a
+## explicit; go 1.21.4
+github.com/pure-px/torpedo/drivers/api
+github.com/pure-px/torpedo/drivers/node
+github.com/pure-px/torpedo/drivers/node/ssh
+github.com/pure-px/torpedo/drivers/objectstore
+github.com/pure-px/torpedo/drivers/pure/flasharray
+github.com/pure-px/torpedo/drivers/pure/flashblade
+github.com/pure-px/torpedo/drivers/scheduler
+github.com/pure-px/torpedo/drivers/scheduler/k8s
+github.com/pure-px/torpedo/drivers/scheduler/spec
+github.com/pure-px/torpedo/drivers/volume
+github.com/pure-px/torpedo/drivers/volume/aws
+github.com/pure-px/torpedo/drivers/volume/azure
+github.com/pure-px/torpedo/drivers/volume/gce
+github.com/pure-px/torpedo/drivers/volume/generic_csi
+github.com/pure-px/torpedo/drivers/volume/linstor
+github.com/pure-px/torpedo/drivers/volume/portworx
+github.com/pure-px/torpedo/drivers/volume/portworx/schedops
+github.com/pure-px/torpedo/pkg/aetosutil
+github.com/pure-px/torpedo/pkg/asyncdr
+github.com/pure-px/torpedo/pkg/aututils
+github.com/pure-px/torpedo/pkg/errors
+github.com/pure-px/torpedo/pkg/log
+github.com/pure-px/torpedo/pkg/netutil
+github.com/pure-px/torpedo/pkg/osutils
+github.com/pure-px/torpedo/pkg/pureutils
+github.com/pure-px/torpedo/pkg/restutil
+github.com/pure-px/torpedo/pkg/s3utils
+github.com/pure-px/torpedo/pkg/stats
+github.com/pure-px/torpedo/pkg/task
+github.com/pure-px/torpedo/pkg/testrailuttils
+github.com/pure-px/torpedo/pkg/units
 # github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 ## explicit; go 1.19
 github.com/rancher/norman/clientbase
@@ -1351,6 +1352,27 @@ github.com/urfave/cli
 # github.com/vbatts/tar-split v0.11.3
 ## explicit; go 1.15
 github.com/vbatts/tar-split/tar/storage
+# github.com/vmware/govmomi v0.30.4
+## explicit; go 1.17
+github.com/vmware/govmomi/history
+github.com/vmware/govmomi/internal
+github.com/vmware/govmomi/internal/version
+github.com/vmware/govmomi/nfc
+github.com/vmware/govmomi/object
+github.com/vmware/govmomi/property
+github.com/vmware/govmomi/session
+github.com/vmware/govmomi/session/keepalive
+github.com/vmware/govmomi/task
+github.com/vmware/govmomi/vapi/internal
+github.com/vmware/govmomi/vapi/rest
+github.com/vmware/govmomi/vim25
+github.com/vmware/govmomi/vim25/debug
+github.com/vmware/govmomi/vim25/methods
+github.com/vmware/govmomi/vim25/mo
+github.com/vmware/govmomi/vim25/progress
+github.com/vmware/govmomi/vim25/soap
+github.com/vmware/govmomi/vim25/types
+github.com/vmware/govmomi/vim25/xml
 # github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb
 ## explicit
 github.com/xeipuuv/gojsonpointer
@@ -1639,25 +1661,24 @@ google.golang.org/appengine/internal/modules
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20231212172506-995d672761c0
+# google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/iam/credentials/v1
 google.golang.org/genproto/googleapis/type/date
 google.golang.org/genproto/googleapis/type/expr
-google.golang.org/genproto/internal
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/genproto/googleapis/api v0.0.0-20231212172506-995d672761c0
+# google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/expr/v1alpha1
 google.golang.org/genproto/googleapis/api/httpbody
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20240304212257-790db918fca8
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/errdetails
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.60.1
+# google.golang.org/grpc v1.62.1
 ## explicit; go 1.19
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -1752,6 +1773,7 @@ google.golang.org/protobuf/internal/set
 google.golang.org/protobuf/internal/strs
 google.golang.org/protobuf/internal/version
 google.golang.org/protobuf/proto
+google.golang.org/protobuf/protoadapt
 google.golang.org/protobuf/reflect/protodesc
 google.golang.org/protobuf/reflect/protoreflect
 google.golang.org/protobuf/reflect/protoregistry
@@ -2326,8 +2348,8 @@ k8s.io/gengo/types
 # k8s.io/klog v1.0.0
 ## explicit; go 1.12
 k8s.io/klog
-# k8s.io/klog/v2 v2.110.1
-## explicit; go 1.13
+# k8s.io/klog/v2 v2.120.1
+## explicit; go 1.18
 k8s.io/klog/v2
 k8s.io/klog/v2/internal/buffer
 k8s.io/klog/v2/internal/clock
@@ -2387,7 +2409,16 @@ k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff
 k8s.io/kubernetes/pkg/util/node
 k8s.io/kubernetes/pkg/util/parsers
 k8s.io/kubernetes/pkg/util/slice
-# k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+# k8s.io/metrics v0.25.1 => k8s.io/metrics v0.25.0
+## explicit; go 1.19
+k8s.io/metrics/pkg/apis/metrics
+k8s.io/metrics/pkg/apis/metrics/v1alpha1
+k8s.io/metrics/pkg/apis/metrics/v1beta1
+k8s.io/metrics/pkg/client/clientset/versioned
+k8s.io/metrics/pkg/client/clientset/versioned/scheme
+k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1alpha1
+k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1
+# k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock
@@ -2645,11 +2676,11 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
+# github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240920215521-2478442d0147
 # github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 # github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20241005051921-7cde58b55260
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2
-# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240520065758-b58a5dd88529
+# github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240826143100-e17f2d78c2e1
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.0

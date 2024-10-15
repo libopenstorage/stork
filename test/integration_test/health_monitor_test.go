@@ -13,8 +13,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	appsapi "k8s.io/api/apps/v1"
 )
 

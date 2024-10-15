@@ -5,12 +5,13 @@ package integrationtest
 
 import (
 	"fmt"
-	"github.com/libopenstorage/stork/pkg/log"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/libopenstorage/stork/pkg/log"
+
+	"github.com/pure-px/torpedo/drivers/scheduler"
 )
 
 type configTestAppWithNearSync struct {

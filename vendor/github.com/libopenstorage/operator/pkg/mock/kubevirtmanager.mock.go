@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	v1 "k8s.io/api/core/v1"
+	util "github.com/libopenstorage/operator/pkg/util"
 )
 
 // MockKubevirtManager is a mock of KubevirtManager interface.
@@ -50,22 +50,22 @@ func (mr *MockKubevirtManagerMockRecorder) ClusterHasVMPods() *gomock.Call {
 }
 
 // GetVMPodsToEvictByNode mocks base method.
-func (m *MockKubevirtManager) GetVMPodsToEvictByNode() (map[string][]v1.Pod, error) {
+func (m *MockKubevirtManager) GetVMPodsToEvictByNode(arg0 map[string]bool) (map[string][]*util.VMPodEviction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVMPodsToEvictByNode")
-	ret0, _ := ret[0].(map[string][]v1.Pod)
+	ret := m.ctrl.Call(m, "GetVMPodsToEvictByNode", arg0)
+	ret0, _ := ret[0].(map[string][]*util.VMPodEviction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVMPodsToEvictByNode indicates an expected call of GetVMPodsToEvictByNode.
-func (mr *MockKubevirtManagerMockRecorder) GetVMPodsToEvictByNode() *gomock.Call {
+func (mr *MockKubevirtManagerMockRecorder) GetVMPodsToEvictByNode(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMPodsToEvictByNode", reflect.TypeOf((*MockKubevirtManager)(nil).GetVMPodsToEvictByNode))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMPodsToEvictByNode", reflect.TypeOf((*MockKubevirtManager)(nil).GetVMPodsToEvictByNode), arg0)
 }
 
 // StartEvictingVMPods mocks base method.
-func (m *MockKubevirtManager) StartEvictingVMPods(arg0 []v1.Pod, arg1 string, arg2 func(string)) {
+func (m *MockKubevirtManager) StartEvictingVMPods(arg0 []*util.VMPodEviction, arg1 string, arg2 func(string)) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "StartEvictingVMPods", arg0, arg1, arg2)
 }
