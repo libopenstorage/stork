@@ -118,6 +118,11 @@ type Compute interface {
 	SetInstanceGroupVersion(instanceGroupID string,
 		version string,
 		timeout time.Duration) error
+	// SetInstanceUpgradeStrategy sets desired Upgrade strategy & respective parameters for the node group
+	SetInstanceUpgradeStrategy(instanceGroupID string,
+		upgradeStrategy string,
+		timeout time.Duration,
+		surgeSetting string) error
 }
 
 // Storage interface to manage storage operations.
@@ -150,7 +155,7 @@ type Storage interface {
 	// FreeDevices returns free block devices on the instance.
 	// blockDeviceMappings is a data structure that contains all block devices on
 	// the instance and where they are mapped to
-	FreeDevices(blockDeviceMappings []interface{}, rootDeviceName string) ([]string, error)
+	FreeDevices() ([]string, error)
 	// Inspect volumes specified by volumeID
 	Inspect(volumeIds []*string, options map[string]string) ([]interface{}, error)
 	// DeviceMappings returns map[local_attached_volume_path]->volume ID/NAME

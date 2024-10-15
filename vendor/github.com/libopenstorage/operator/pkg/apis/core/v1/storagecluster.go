@@ -309,6 +309,17 @@ type RollingUpdateStorageCluster struct {
 	// Defaults to 0 (pod will be considered available as soon as it is ready)
 	// +optional
 	MinReadySeconds int32 `json:"minReadySeconds,omitempty"`
+
+	// The default behavior is non-disruptive upgrades. This setting disables the default
+	// non-disruptive upgrades and reverts to the previous behavior of upgrading nodes in
+	// parallel without worrying about disruption.
+	Disruption Disruption `json:"disruption,omitempty"`
+}
+
+// Disruption contains configuration for disruption
+type Disruption struct {
+	// Flag indicates whether updates are non-disruptive or disruptive.
+	Allow *bool `json:"allow,omitempty"`
 }
 
 // StorageClusterDeleteStrategyType is enum for storage cluster delete strategies

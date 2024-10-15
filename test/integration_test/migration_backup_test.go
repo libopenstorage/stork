@@ -11,7 +11,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 )
 
 func TestMigrationBackup(t *testing.T) {

@@ -92,10 +92,10 @@ type ClusterManager struct {
 	clusterDomainManager clusterdomain.ClusterDomainProvider
 	storagePoolProvider  api.OpenStoragePoolServer
 	jobProvider          job.Provider
-	scheduleProvider 	 schedule.Provider
+	scheduleProvider     schedule.Provider
 	nodeDrainProvider    nodedrain.Provider
 	diagsProvider        diags.Provider
-	defragProvider 		 defrag.Provider
+	defragProvider       defrag.Provider
 	snapshotPrefixes     []string
 	selfClusterDomain    string
 	// kvdbWatchIndex stores the kvdb index to start the watch
@@ -1448,7 +1448,8 @@ func (c *ClusterManager) Start(
 		gossipPort,
 		[]string{ClusterDBKey},
 		selfClusterDomain,
-		&cluster.ClusterServerConfiguration{})
+		&cluster.ClusterServerConfiguration{},
+		"")
 }
 
 func (c *ClusterManager) StartWithConfiguration(
@@ -1457,6 +1458,7 @@ func (c *ClusterManager) StartWithConfiguration(
 	snapshotPrefixes []string,
 	selfClusterDomain string,
 	config *cluster.ClusterServerConfiguration,
+	gobRegisterName string,
 ) error {
 	var err error
 
@@ -1509,7 +1511,9 @@ func (c *ClusterManager) StartWithConfiguration(
 	c.system = systemutils.New()
 
 	// Start the gossip protocol.
-	gob.Register(api.Node{})
+	// Replacing gob.Register with gob.RegisterName to avoid any issue caused due to the movement from portworx to pure-px
+	// gossip: Error in unmarshalling peer's local data. Error : gob: name not registered for interface.
+	gob.RegisterName(gobRegisterName+"api.Node", api.Node{})
 	quorumTimeout := types.DEFAULT_QUORUM_TIMEOUT
 	if c.config.QuorumTimeoutInSeconds > 0 {
 		quorumTimeout = time.Duration(c.config.QuorumTimeoutInSeconds) * time.Second
@@ -1921,7 +1925,8 @@ func (c *ClusterManager) NodeRemoveDone(nodeID string, result error) error {
 	logrus.Infof("Cluster manager node remove done: node ID %s", nodeID)
 
 	// Remove osdconfig data from etcd
-	if err := c.configManager.DeleteNodeConf(nodeID); err != nil {
+	err := c.configManager.DeleteNodeConf(nodeID)
+	if err != nil && !strings.Contains(err.Error(), "Key not found") {
 		logrus.Warn("error removing node from osdconfig:", err)
 		return err
 	}

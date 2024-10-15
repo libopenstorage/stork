@@ -15,7 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/pure-px/torpedo/pkg/asyncdr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/clientcmd"

@@ -13,7 +13,7 @@ import (
 	k8sextops "github.com/libopenstorage/stork/pkg/crud/externalstorage"
 	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

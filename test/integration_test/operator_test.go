@@ -12,7 +12,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/pure-px/torpedo/pkg/asyncdr"
 )
 
 var (

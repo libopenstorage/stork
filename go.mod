@@ -1,10 +1,12 @@
 module github.com/libopenstorage/stork
 
-go 1.21
+go 1.21.4
+
+toolchain go1.21.6
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
-	cloud.google.com/go/storage v1.30.1
+	cloud.google.com/go/storage v1.36.0
 	github.com/Azure/azure-pipeline-go v0.2.3
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -22,7 +24,7 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240515003928-7476f1d896fc
+	github.com/libopenstorage/operator v0.0.0-20240812060935-09fcd70d5bcc
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
@@ -30,8 +32,8 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2
-	github.com/portworx/torpedo v0.20.4-rc1.0.20240520065758-b58a5dd88529
 	github.com/prometheus/client_golang v1.17.0
+	github.com/pure-px/torpedo v0.0.0-20241023070534-06238143a17a
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 	github.com/sirupsen/logrus v1.9.3
@@ -44,7 +46,7 @@ require (
 	gocloud.dev v0.22.0
 	golang.org/x/oauth2 v0.16.0
 	google.golang.org/api v0.156.0
-	google.golang.org/grpc v1.60.1
+	google.golang.org/grpc v1.62.1
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.29.3
 	k8s.io/apiextensions-apiserver v0.28.4
@@ -68,14 +70,14 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/portworx/kdmp v0.4.1-0.20241005051921-7cde58b55260
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	kubevirt.io/api v1.0.0
 	kubevirt.io/client-go v0.59.2
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1
 )
 
 require (
-	cloud.google.com/go v0.111.0 // indirect
+	cloud.google.com/go v0.112.0 // indirect
 	cloud.google.com/go/compute v1.23.3 // indirect
 	cloud.google.com/go/iam v1.1.5 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
@@ -146,7 +148,7 @@ require (
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/go-logr/logr v1.3.0 // indirect
+	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
@@ -161,7 +163,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
-	github.com/golang/glog v1.1.2 // indirect
+	github.com/golang/glog v1.2.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.2 // indirect
@@ -216,7 +218,7 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/libopenstorage/autopilot-api v1.3.0 // indirect
-	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413 // indirect
+	github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
 	github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
@@ -258,7 +260,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b // indirect
+	github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd // indirect
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0 // indirect
@@ -283,6 +285,7 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/tektoncd/pipeline v0.56.0 // indirect
 	github.com/vbatts/tar-split v0.11.3 // indirect
+	github.com/vmware/govmomi v0.30.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
@@ -311,9 +314,9 @@ require (
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto v0.0.0-20231212172506-995d672761c0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20231212172506-995d672761c0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917 // indirect
+	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240304212257-790db918fca8 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/freddierice/go-losetup.v1 v1.0.0-20170407175016-fc9adea44124 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -324,8 +327,9 @@ require (
 	k8s.io/component-base v0.26.2 // indirect
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
 	k8s.io/klog v1.0.0 // indirect
-	k8s.io/klog/v2 v2.110.1 // indirect
+	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
+	k8s.io/metrics v0.25.1 // indirect
 	knative.dev/pkg v0.0.0-20231023150739-56bfe0dd9626 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 	oras.land/oras-go v1.2.0 // indirect
@@ -352,11 +356,11 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240920215521-2478442d0147
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20241005051921-7cde58b55260
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240520065758-b58a5dd88529
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240826143100-e17f2d78c2e1
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
