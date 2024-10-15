@@ -57,9 +57,9 @@ const (
 	tempDir                = "/tmp"
 	portworxProvisioner    = "kubernetes.io/portworx-volume"
 	DefaultScName          = "async-sc"
-	FirstCluster = 0
-	SecondCluster = 1
-	ThirdCluster = 2
+	FirstCluster           = 0
+	SecondCluster          = 1
+	ThirdCluster           = 2
 )
 
 var (
@@ -471,13 +471,7 @@ func HelmRepoAddandCrInstall(helm_repo_name string, helm_repo_url string, namesp
 			return nil, err
 		}
 		// Sleeping here, as apps deploys one by one, which takes time to collect all pods
-		time.Sleep(5 * time.Minute)
-		podList, err := core.Instance().GetPods(namespace, nil)
-		if err != nil {
-			log.Errorf("Error getting podlist: %v and err is: %v", cmd, err)
-			return nil, err
-		}
-		err = WaitForPodToBeRunning(podList)
+		podList, err := WaitForPodToBeRunning(namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -513,10 +507,17 @@ func DeleteCRAndUninstallCRD(helm_release_name string, app_yaml_url string, name
 	_, _, _ = osutils.ExecShell(cmd)
 }
 
-func WaitForPodToBeRunning(pods *v1.PodList) error {
+func WaitForPodToBeRunning(namespace string) (*v1.PodList, error) {
+	var err error
+	podList := &v1.PodList{}
 	checkPods := func() (interface{}, bool, error) {
 		isRunning := true
-		for _, p := range pods.Items {
+		podList, err = core.Instance().GetPods(namespace, nil)
+		if err != nil {
+			log.Errorf("Error getting podlist, err: %v", err)
+			return "", false, err
+		}
+		for _, p := range podList.Items {
 			if p.Status.Phase != v1.PodRunning {
 				log.Infof("Pod %s in namespace %s is pending", p.Name, p.Namespace)
 				isRunning = false
@@ -527,8 +528,8 @@ func WaitForPodToBeRunning(pods *v1.PodList) error {
 		}
 		return "", true, fmt.Errorf("some pods are still pending...")
 	}
-	_, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
-	return err
+	_, err = task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
+	return podList, nil
 }
 
 func CollectNsForDeletion(label map[string]string, createdBeforeTime time.Duration) []string {
