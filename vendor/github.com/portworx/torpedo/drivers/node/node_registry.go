@@ -11,6 +11,11 @@ var (
 	lock         sync.RWMutex
 )
 
+// GetNodeRegistry returns the node registry map
+func GetNodeRegistry() map[string]Node {
+	return nodeRegistry
+}
+
 // AddNode adds a node to the node collection
 func AddNode(n Node) error {
 	if n.uuid != "" {

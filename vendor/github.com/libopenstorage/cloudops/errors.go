@@ -21,6 +21,8 @@ const (
 	// ErrDiskGreaterOrEqualToExpandSize is code when a volume/disk expansion call fails
 	// as the given disk is already at a size greater than or equal to requested size
 	ErrDiskGreaterOrEqualToExpandSize
+	// ErrVolumeAttachedOnMultipleNodes is code when a volume is attached to multiple nodes
+	ErrVolumeAttachedOnMultipleNodes
 )
 
 // ErrNotFound is error type when an object of Type with ID is not found
@@ -115,12 +117,40 @@ func (e *ErrCurrentCapacityHigherThanDesired) Error() string {
 
 // ErrCloudProviderRequestFailure is returned when an unknown API request failure occurred.
 type ErrCloudProviderRequestFailure struct {
-    // Request is the API function name
+	// Request is the API function name
 	Request string
-    // Message is the error message returned by the cloud provider
+	// Message is the error message returned by the cloud provider
 	Message string
 }
 
 func (e *ErrCloudProviderRequestFailure) Error() string {
 	return fmt.Sprintf("Request %s returns %s", e.Request, e.Message)
+}
+
+// ErrInvalidMaxDriveSizeRequest is returned when an unsupported or invalid request
+// is sent to get the max drive size
+type ErrInvalidMaxDriveSizeRequest struct {
+	// Request is the request that caused the invalid error
+	Request *MaxDriveSizeRequest
+	// Reason is the reason why the request was invalid
+	Reason string
+}
+
+func (e *ErrInvalidMaxDriveSizeRequest) Error() string {
+	return fmt.Sprintf("Invalid request to get the max drive size: %s Request: %v",
+		e.Reason, e.Request)
+}
+
+// ErrMaxDriveSizeCandidateNotFound is returned when an unsupported or invalid request
+// is sent to get the max drive size
+type ErrMaxDriveSizeCandidateNotFound struct {
+	// Request is the request that caused the error
+	Request *MaxDriveSizeRequest
+	// Reason is the reason why the request caused an error
+	Reason string
+}
+
+func (e *ErrMaxDriveSizeCandidateNotFound) Error() string {
+	return fmt.Sprintf("could not find a suitable max drive size candidate: %s Request: %v",
+		e.Reason, e.Request)
 }

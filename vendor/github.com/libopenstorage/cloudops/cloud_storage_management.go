@@ -155,6 +155,17 @@ type StoragePoolUpdateResponse struct {
 	ResizeOperationType api.SdkStoragePool_ResizeOperationType
 }
 
+type MaxDriveSizeRequest struct {
+	// DriveType is the type of drive specified in terms of cloud provided names.
+	DriveType string `json:"drive_type" yaml:"drive_type"`
+}
+
+type MaxDriveSizeResponse struct {
+	// MaxSize is the maximum size of the drive that can be provisioned
+	// for input drive type.
+	MaxSize uint64 `json:"max_size" yaml:"max_size"`
+}
+
 // StorageManager interface provides a set of APIs to manage cloud storage drives
 // across multiple nodes in the cluster.
 type StorageManager interface {
@@ -163,6 +174,8 @@ type StorageManager interface {
 	// RecommendStoragePoolUpdate returns the recommended storage configuration on
 	// the instance based on the given request
 	RecommendStoragePoolUpdate(request *StoragePoolUpdateRequest) (*StoragePoolUpdateResponse, error)
+	// GetMaxDriveSize returns the maximum size a drive can expand to for given cloud drive type
+	GetMaxDriveSize(request *MaxDriveSizeRequest) (*MaxDriveSizeResponse, error)
 }
 
 var (
@@ -308,5 +321,12 @@ func (dm *StorageDecisionMatrix) SortByIOPS() *StorageDecisionMatrix {
 func (dm *StorageDecisionMatrix) SortByPriority() {
 	sort.SliceStable(dm.Rows, func(l, r int) bool {
 		return dm.Rows[l].Priority < dm.Rows[r].Priority
+	})
+}
+
+// SortByMaxSize sorts the rows of the decision matrix in descending order by MaxSize supported by that row.
+func (dm *StorageDecisionMatrix) SortByMaxSize() {
+	sort.SliceStable(dm.Rows, func(l, r int) bool {
+		return dm.Rows[l].MaxSize > dm.Rows[r].MaxSize
 	})
 }

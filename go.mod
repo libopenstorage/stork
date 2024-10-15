@@ -22,7 +22,7 @@ require (
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240515003928-7476f1d896fc
+	github.com/libopenstorage/operator v0.0.0-20240812060935-09fcd70d5bcc
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
@@ -216,7 +216,7 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/libopenstorage/autopilot-api v1.3.0 // indirect
-	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413 // indirect
+	github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
 	github.com/libopenstorage/systemutils v0.0.0-20160208220149-44ac83be3ce1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
@@ -258,7 +258,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b // indirect
+	github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd // indirect
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0 // indirect
@@ -283,6 +283,7 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/tektoncd/pipeline v0.56.0 // indirect
 	github.com/vbatts/tar-split v0.11.3 // indirect
+	github.com/vmware/govmomi v0.30.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
@@ -352,11 +353,11 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240920215521-2478442d0147
 	github.com/libopenstorage/secrets => github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/portworx/kdmp => github.com/portworx/kdmp v0.4.1-0.20241005051921-7cde58b55260
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2
-	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240520065758-b58a5dd88529
+	github.com/portworx/torpedo => github.com/portworx/torpedo v0.0.0-20240826143100-e17f2d78c2e1
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
