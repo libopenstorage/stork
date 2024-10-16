@@ -1,12 +1,13 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
-	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/vmware/govmomi/object"
 )
 
 // Type identifies the type of the cluster node
@@ -127,6 +128,64 @@ type InitOptions struct {
 	SpecDir string
 }
 
+type DriveSet struct {
+	// Configs describes the configuration of the drives present in this set
+	// The key is the volumeID
+	Configs map[string]DriveConfig
+	// NodeID is the id of the node where the drive set is being used/last
+	// used
+	NodeID string
+	// ReservedInstanceID if set is the instance ID of the node that's attempting to transfer the driveset to itself
+	ReservedInstanceID string
+	// SchedulerNodeName is the name of the node in scheduler context
+	SchedulerNodeName string
+	// NodeIndex is the index of the node where the drive set is being
+	// used/last used
+	NodeIndex int
+	// CreateTimestamp is the timestamp when the drive set was created
+	CreateTimestamp time.Time
+	// InstanceID is the cloud provider id of the instance using this drive set
+	InstanceID string
+	// Zone defines the zone in which the node exists
+	Zone string
+	// State state of the drive set from the well defined states
+	State string
+	// Labels associated with this drive set
+	Labels *map[string]string `json:"labels"`
+}
+
+// DriveConfig defines the configuration for a cloud drive
+type DriveConfig struct {
+	// Type defines the type of cloud drive
+	Type string
+	// Size defines the size of the cloud drive in Gi
+	Size int64
+	// ID is the cloud drive id
+	ID string
+	// Path is the path where the drive is attached
+	Path string
+	// Iops is the iops that the drive supports
+	Iops int64
+	// Vpus provide a measure of disk resources available for
+	// performance (IOPS/GBs) of Oracle drives.
+	// Oracle uses VPU in lieu of disk types.
+	Vpus int64
+	// PXType indicates how this drive is being used by PX
+	PXType string
+	// State state of the drive config from the well defined states
+	State string
+	// Labels associated with this drive config
+	Labels map[string]string `json:"labels"`
+	// AttachOptions for cloud drives to be attached
+	AttachOptions map[string]string
+	// Provisioner is a name of provisioner which was used to create a drive
+	Provisioner string
+	// Encryption Key string to be passed in device specs
+	EncryptionKeyInfo string
+	// UUID of VMDK
+	DiskUUID string
+}
+
 // Driver provides the node driver interface
 type Driver interface {
 	// Init initializes the node driver under the given scheduler
@@ -215,7 +274,13 @@ type Driver interface {
 	AddMachine(machineName string) error
 
 	// DetachDisk vdisk from node.
-	DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error
+	DetachDrivesFromVM(nodeName string, configData map[string]DriveSet) error
+
+	//GetCompatibleDatastores
+	GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error)
+
+	//Get All datastores
+	GetDatastoresFromDatacenter() ([]*object.Datastore, error)
 
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
@@ -247,6 +312,18 @@ type Driver interface {
 	GetNodeState(n Node) (string, error)
 	// GetSupportedDriveTypes returns the types of drives supported by the provider
 	GetSupportedDriveTypes() ([]string, error)
+
+	// StorageVmotion selectively relocates specific disks of a virtual machine to a new datastore
+	StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) (*object.Datastore, error)
+
+	// GetUUIDFromVMDKPath returns the UUID of the VMDK file
+	GetUUIDFromVMDKPath(ctx context.Context, node Node, vmdkPath string) (string, error)
+
+	// findVMByName finds a virtual machine by its name
+	FindVMByName(vmName string) (*object.VirtualMachine, error)
+
+	// findDatastoreByName finds a datastore by its name
+	FindDatastoreByName(dsName string) (*object.Datastore, error)
 }
 
 // Register registers the given node driver
@@ -294,10 +371,24 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	}
 }
 
-func (d *notSupportedDriver) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
+func (d *notSupportedDriver) DetachDrivesFromVM(nodeName string, configData map[string]DriveSet) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DetachDrivesFromVM()",
+	}
+}
+
+func (d *notSupportedDriver) GetDatastoresFromDatacenter() ([]*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDatastoresFromDatacenter()",
+	}
+}
+
+func (d *notSupportedDriver) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDatastoresFromDatacenter()",
 	}
 }
 
@@ -547,5 +638,33 @@ func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RemoveNonRootDisks()",
+	}
+}
+
+func (d *notSupportedDriver) StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) (*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StorageVmotion()",
+	}
+}
+
+func (d *notSupportedDriver) GetUUIDFromVMDKPath(ctx context.Context, node Node, vmdkPath string) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetUUIDFromVMDKPath()",
+	}
+}
+
+func (d *notSupportedDriver) FindVMByName(vmName string) (*object.VirtualMachine, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "FindVMByName()",
+	}
+}
+
+func (d *notSupportedDriver) FindDatastoreByName(dsName string) (*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "FindDatastoreByName()",
 	}
 }

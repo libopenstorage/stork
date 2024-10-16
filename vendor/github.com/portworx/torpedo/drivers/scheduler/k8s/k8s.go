@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
+	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -36,6 +37,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -122,8 +124,12 @@ const (
 	PureBlock = "pure_block"
 	// PortworxStrict provisioner for using same provisioner as provided in the spec
 	PortworxStrict = "strict"
+	// Stork Snapshot Provisioner
+	StorkSnapshot = "stork-snapshot"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
+	// PortworxVolumeProvisioner is a provisioner for portworx volumes
+	PortworxVolumeProvisioner = "kubernetes.io/portworx-volume"
 	//NodeType for enabling specific features
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
@@ -267,6 +273,7 @@ type K8s struct {
 	VaultToken                       string
 	PureVolumes                      bool
 	PureSANType                      string
+	PureFADAPod                      string
 	RunCSISnapshotAndRestoreManyTest bool
 	helmValuesConfigMapName          string
 	secureApps                       []string
@@ -308,6 +315,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
 	k.PureSANType = schedOpts.PureSANType
+	k.PureFADAPod = schedOpts.PureFADAPod
 	k.RunCSISnapshotAndRestoreManyTest = schedOpts.RunCSISnapshotAndRestoreManyTest
 	k.secureApps = schedOpts.SecureApps
 
@@ -1924,12 +1932,20 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if volume.GetStorageProvisioner() != PortworxStrict {
-			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == CsiProvisioner {
-				if app.IsCSI {
-					obj.Provisioner = CsiProvisioner
-				} else {
-					obj.Provisioner = volume.GetStorageProvisioner()
+		// volume.GetStorageProvisioner() returns the corresponding value from the portworx.provisioners map
+		// based on the --provisioner flag, such as "kubernetes.io/portworx-volume", "pxd.portworx.com", or "strict".
+		if obj.Provisioner == StorkSnapshot {
+			log.Infof("Provisioner is set to stork-snapshot")
+		} else {
+			if volume.GetStorageProvisioner() != PortworxStrict {
+				// options.StorageProvisioner corresponds to the --provisioner flag (portworx or csi).
+				if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == string(volume.CSIStorageProvisioner) {
+					// app.IsCSI is true if the app is in CSI_APP_LIST.
+					if app.IsCSI {
+						obj.Provisioner = CsiProvisioner
+					} else {
+						obj.Provisioner = volume.GetStorageProvisioner()
+					}
 				}
 			}
 		}
@@ -1947,6 +1963,20 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				obj.VolumeBindingMode = &immediate
 				log.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
 			}
+			// If we specified a pod name, we need to set the Pure FA pod name in the storage class
+			if k.PureFADAPod != "" {
+				if backend, ok := obj.Parameters["backend"]; ok && backend == "pure_block" {
+					obj.Parameters["pure_fa_pod_name"] = k.PureFADAPod
+				}
+			}
+			// We can Directly Set Pure fa pod name during runtime in storage class
+			if options.PureFAPodName != "" {
+				if backend, ok := obj.Parameters["backend"]; ok && backend == "pure_block" {
+					log.InfoD("Setting Pure FA Pod Name in Storage Class %s", options.PureFAPodName)
+					obj.Parameters["pure_fa_pod_name"] = options.PureFAPodName
+				}
+			}
+
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
@@ -3925,7 +3955,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			} else {
-				log.Warnf("[%v] Autopilot is not enabled, PVC: %v size validation is not possible", ctx.App.Key, obj.Name)
+				log.Debugf("[%v] Autopilot is not enabled, Skipping PVC: %v size validation with autopilot rules", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -4125,6 +4155,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				Namespace: obj.Namespace,
 				Shared:    k.isPVCShared(obj),
 			})
+			log.Infof("[%v] Deleting PVC: %v", ctx.App.Key, obj.Name)
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
@@ -4136,7 +4167,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 					Cause: fmt.Sprintf("[%s] Failed to destroy PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
-
 			log.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
@@ -4737,24 +4767,62 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 		}
 	}
 
-	log.Infof("[%v] Deleted Snapshot: %v", ctx.App.Key, snapshotName)
+	log.Infof("[%v] Deleted Snapshot: %v on namespace [%v]", ctx.App.Key, snapshotName, snapshotNameSpace)
 
 	return nil
 
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error) {
 
 	time.Sleep(10 * time.Second)
-	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
-
+	snapshotList, err := k8sExternalsnap.ListSnapshots(snapshotNameSpace)
 	if err != nil {
 		log.Infof("Snapshotsnot for app [%v] not found in namespace: %v", ctx.App.Key, snapshotNameSpace)
 		return nil, err
 	}
 
 	return snapshotList, nil
+}
+
+// IsCsiSnapshotExists checks if snapshot exists in namespace
+func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots for the app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return false, err
+	}
+	if len(snaplist.Items) == 0 {
+		log.InfoD("No Snapshots found ")
+		return false, nil
+	}
+	for _, snap := range snaplist.Items {
+		if snap.ObjectMeta.Name == snapshotName {
+			log.InfoD("Snapshot [%v] exists in namespace [%v]", snapshotName, namespace)
+			return true, nil
+		}
+	}
+	return false, nil
+
+}
+
+// DeleteCsiSnapshotsFromNamespace delete the snapshots from the namespace
+func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots for app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return err
+	}
+	for _, snap := range snaplist.Items {
+		err = k.DeleteCsiSnapshot(ctx, snap.ObjectMeta.Name, namespace)
+		if err != nil {
+			log.InfoD("Failed to delete snapshot [%v] in namespace [%v]", snap.ObjectMeta.Name, namespace)
+			return err
+		}
+	}
+	return nil
+
 }
 
 // GetNodesForApp get the node for the app
@@ -5527,10 +5595,17 @@ func (k *K8s) createVirtualMachineObjects(
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
 			}
-			// Check if the VM is in 'Running' phase.
-			if !vm.Status.Ready {
-				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
+			t := func() (interface{}, bool, error) {
+				vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				if vm.Status.Ready {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("waiting for VM [%s] in namespace [%s] to be ready", obj.Name, obj.Namespace)
 			}
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			return vm, nil
 		}
 	}
@@ -6936,6 +7011,22 @@ func (k *K8s) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	return err
 }
 
+// StopKubelet allows to stop kubelet on a give node
+func (k *K8s) StopKubelet(n node.Node, options node.SystemctlOpts) error {
+	systemctlCmd := fmt.Sprintf("sudo systemctl stop %s", "kubelet")
+	driver, _ := node.Get(k.NodeDriverName)
+	_, err := driver.RunCommand(n, systemctlCmd, options.ConnectionOpts)
+	return err
+}
+
+// StartKubelet allows to start kubelet on a give node
+func (k *K8s) StartKubelet(n node.Node, options node.SystemctlOpts) error {
+	systemctlCmd := fmt.Sprintf("sudo systemctl start %s", "kubelet")
+	driver, _ := node.Get(k.NodeDriverName)
+	_, err := driver.RunCommand(n, systemctlCmd, options.ConnectionOpts)
+	return err
+}
+
 func (k *K8s) addLabelsToPVC(pvc *corev1.PersistentVolumeClaim, labels map[string]string) {
 	if len(pvc.Labels) == 0 {
 		pvc.Labels = map[string]string{}
@@ -8101,6 +8192,51 @@ func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner stri
 	return volumeSnapClass, nil
 }
 
+// DeleteCsiSnapshotClass deletes csi snapshot class
+func (k *K8s) DeleteCsiSnapshotClass(snapClassName string) error {
+	log.Infof("Deleting volume snapshot class: %v", snapClassName)
+	err := k8sExternalsnap.DeleteSnapshotClass(snapClassName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+func (k *K8s) CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error) {
+	var err error
+	var annotation = make(map[string]string)
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
+	if isDefault {
+		annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+	} else {
+		annotation = make(map[string]string)
+	}
+
+	v1obj := metav1.ObjectMeta{
+		Name:        snapClassName,
+		Annotations: annotation,
+	}
+	if len(deletePolicy) == 0 {
+		deletePolicy = "Delete"
+	}
+	snapClass := volsnapv1.VolumeSnapshotClass{
+		ObjectMeta:     v1obj,
+		Driver:         provisioner,
+		DeletionPolicy: volsnapv1.DeletionPolicy(deletePolicy),
+		Parameters:     parameters,
+	}
+
+	log.Infof("Creating volume snapshot class: %v with provisioner %v", snapClassName, provisioner)
+	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
+			Name:  snapClassName,
+			Cause: err,
+		}
+	}
+	return volumeSnapClass, nil
+}
+
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
 func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 	var snap *volsnapv1.VolumeSnapshot
@@ -8621,6 +8757,18 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 		arr = append(arr, firstElem)
 		options.TopologyLabels = arr
 	}
+}
+
+// GetPXCloudDriveConfigMap retruns px cloud derive config map data
+func (k *K8s) GetPXCloudDriveConfigMap(cluster *operatorcorev1.StorageCluster) (map[string]node.DriveSet, error) {
+	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
+	cloudDriveConfifmap, _ := k8sCore.GetConfigMap(cloudDriveConfigmapName, cluster.Namespace)
+	var configData map[string]node.DriveSet
+	err := json.Unmarshal([]byte(cloudDriveConfifmap.Data["cloud-drive"]), &configData)
+	if err != nil {
+		return nil, err
+	}
+	return configData, nil
 }
 
 func init() {

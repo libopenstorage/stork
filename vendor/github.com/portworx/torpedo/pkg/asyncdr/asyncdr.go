@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -281,6 +282,117 @@ func CreateMigrationSchedule(
 	return migSched, err
 }
 
+func CreateSnapshotSchedule(
+	namespace string,
+	pvcName string,
+	scheduleName string,
+	policyName string,
+	snapshotType string,) (*storkapi.VolumeSnapshotSchedule, error) {
+
+	snapSched := &storkapi.VolumeSnapshotSchedule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				"portworx/snapshot-type": snapshotType,
+			},
+		},
+		Spec: storkapi.VolumeSnapshotScheduleSpec{
+			Template: storkapi.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: pvcName},
+			},
+			SchedulePolicyName: policyName,
+		},
+	}
+	snapSchedule, err := storkops.Instance().CreateSnapshotSchedule(snapSched)
+	return snapSchedule, err
+}
+
+func CreateSchedulePolicyWithRetain(policyName string, interval int, retain storkapi.Retain) (pol *storkapi.SchedulePolicy, err error) {
+	schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+	if err != nil {
+		log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+		schedPolicy = &storkapi.SchedulePolicy{
+			ObjectMeta: meta_v1.ObjectMeta{
+				Name: policyName,
+			},
+			Policy: storkapi.SchedulePolicyItem{
+				Interval: &storkapi.IntervalPolicy{
+					IntervalMinutes: interval,
+					Retain: retain,
+				},
+			}}
+		schedPolicy, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+	} else {
+		log.Infof("schedPolicy %v already exists", schedPolicy.Name)
+	}
+	return schedPolicy, err
+}
+
+func ValidateSnapshotScheduleCount(pvcs []string, schedNs, schedPol, snapshotType string, snapInterval int, retain storkapi.Retain) error {
+	for _, pvcName := range pvcs {
+		scheduleName := "snap-schedule-" + time.Now().Format("15h03m05s")
+		snapSchedule, err := CreateSnapshotSchedule(schedNs, pvcName, scheduleName, schedPol, snapshotType)
+		if err != nil {
+			return fmt.Errorf("Error creating snapshot schedule: %v", err)
+		}
+		log.InfoD("SnapSchedule is %v", snapSchedule)
+		time.Sleep(30*time.Second)
+		err = WaitForRetainSnapshotsSuccessful(scheduleName, schedNs, int(retain), snapInterval)
+		if err != nil {
+			return fmt.Errorf("Error waiting for retain snapshots: %v", err)
+		}
+		time.Sleep(30*time.Second)
+		schedule, err := storkops.Instance().GetSnapshotSchedule(scheduleName, schedNs)
+		if err != nil {
+			return fmt.Errorf("Failed to get snapshot schedule")
+		}
+		scheduleCount := len(schedule.Status.Items["Interval"])
+		if scheduleCount != int(retain) {
+			return fmt.Errorf("Error matching snapshot count, actual %v, expected %v", scheduleCount, int(retain))
+		}
+	}
+	return nil
+}
+
+// WaitForRetainSnapshotsSuccessful waits for a certain number of snapshots to complete.
+func WaitForRetainSnapshotsSuccessful(snapSchedName string, schedNs string, retain int, snapInterval int) error {
+    for i := 0; i < retain + 1; i++ {
+        checkSuccessfulSnapshots := func() (interface{}, bool, error) {
+            snapSchedule, err := storkops.Instance().GetSnapshotSchedule(snapSchedName, schedNs)
+            if err != nil {
+                return nil, true, fmt.Errorf("failed to get snapshot schedule: %v", snapSchedName)
+            }
+			currentIndex := i
+            if currentIndex >= len(snapSchedule.Status.Items["Interval"]) {
+                currentIndex = len(snapSchedule.Status.Items["Interval"]) - 1
+            }
+            if snapSchedule.Status.Items["Interval"][currentIndex].Status != crdv1.VolumeSnapshotConditionReady {
+                return nil, true, fmt.Errorf("snapshot %v failed with status: %v", snapSchedule.Status.Items["Interval"][currentIndex].Name, snapSchedule.Status.Items["Interval"][currentIndex].Status)
+            }
+            return nil, false, nil
+        }
+
+        snapStartTime := time.Now()
+        _, err := task.DoRetryWithTimeout(checkSuccessfulSnapshots, time.Minute*time.Duration(snapInterval*2), time.Second*10)
+        if err != nil {
+            return err
+        }
+        snapEndTime := time.Now()
+        snapTimeTaken := snapEndTime.Sub(snapStartTime)
+        snapIntervalMins := time.Minute * time.Duration(snapInterval)
+
+		if i == retain {
+			break
+		}
+
+        log.Infof("Waiting for next snapshot interval to start. Time pending to start next snap trigger: %v", snapIntervalMins-snapTimeTaken)
+        time.Sleep(snapIntervalMins - snapTimeTaken + 10*time.Second)
+    }
+    return nil
+}
+
 func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.SchedulePolicy, err error) {
 	schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 	if err != nil {
@@ -514,21 +626,24 @@ func DeleteCRAndUninstallCRD(helm_release_name string, app_yaml_url string, name
 }
 
 func WaitForPodToBeRunning(pods *v1.PodList) error {
-	checkPods := func() (interface{}, bool, error) {
-		isRunning := true
-		for _, p := range pods.Items {
-			if p.Status.Phase != v1.PodRunning {
-				log.Infof("Pod %s in namespace %s is pending", p.Name, p.Namespace)
-				isRunning = false
+	for _, p := range pods.Items {
+		checkPods := func() (interface{}, bool, error) {
+			pod, err := core.Instance().GetPodByName(p.Name, p.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get pod: %v", p.Name)
 			}
+			if pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodSucceeded {
+				log.Infof("Pod %s in namespace %s is not yet running or succeeded. Current phase: %s", p.Name, p.Namespace, pod.Status.Phase)
+				return nil, true, fmt.Errorf("pod %s is still pending", p.Name)
+			}
+			return nil, false, nil
 		}
-		if isRunning {
-			return "", false, nil
+
+		if _, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval); err != nil {
+			return err
 		}
-		return "", true, fmt.Errorf("some pods are still pending...")
 	}
-	_, err := task.DoRetryWithTimeout(checkPods, migrationRetryTimeout, migrationRetryInterval)
-	return err
+	return nil
 }
 
 func CollectNsForDeletion(label map[string]string, createdBeforeTime time.Duration) []string {

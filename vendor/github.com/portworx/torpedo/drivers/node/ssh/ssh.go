@@ -4,9 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	docker_types "github.com/docker/docker/api/types"
 	"io/ioutil"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"net"
 	"os"
 	"regexp"
@@ -14,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	docker_types "github.com/docker/docker/api/types"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -27,6 +26,7 @@ import (
 	ssh_pkg "golang.org/x/crypto/ssh"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -363,7 +363,6 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 
 // RebootNode reboots given node
 func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	log.Infof("Rebooting node %s", n.SchedulerNodeName)
 	rebootCmd := "sudo reboot"
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"
@@ -608,7 +607,32 @@ func (s *SSH) RunCommandWithNoRetry(n node.Node, command string, options node.Co
 	if s.IsUsingSSH() {
 		return s.doCmdSSH(n, options, command, options.IgnoreError)
 	}
-	return s.doCmdUsingPodWithoutRetry(n, command)
+
+	token := os.Getenv("PXCTL_AUTH_TOKEN")
+	if len(token) > 0 && strings.Contains(command, "pxctl") && !strings.Contains(command, "which") {
+		createCtxCmd := fmt.Sprintf("%s context create admin --token=%s", "sudo /opt/pwx/bin/pxctl", token)
+		_, err := s.doCmdUsingPod(n, options, createCtxCmd, false)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Execute Command, but return error after deleting admin security context
+	out, cmdErr := s.doCmdUsingPodWithoutRetry(n, command)
+
+	if len(token) > 0 && strings.Contains(command, "pxctl") && !strings.Contains(command, "which") {
+		deleteCtxCmd := fmt.Sprintf("%s context delete admin", "sudo /opt/pwx/bin/pxctl")
+		_, err := s.doCmdUsingPod(n, options, deleteCtxCmd, false)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Want to return this error after deleting admin security context
+	if cmdErr != nil {
+		return "", cmdErr
+	}
+	return out, nil
 }
 
 // FindFiles finds files from give path on given node
@@ -696,7 +720,30 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 	if s.IsUsingSSH() {
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
-	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
+	token := os.Getenv("PXCTL_AUTH_TOKEN")
+	if len(token) > 0 && strings.Contains(cmd, "pxctl") && !strings.Contains(cmd, "which") && !strings.Contains(cmd, "context") {
+		log.Infof("PX secure is enabled, creating admin context for pxctl in node [%s]", n.Name)
+		createCtxCmd := fmt.Sprintf("%s context create admin --token=%s", "sudo /opt/pwx/bin/pxctl", token)
+		_, err := s.doCmdUsingPod(n, options, createCtxCmd, ignoreErr)
+		if err != nil {
+			return "", err
+		}
+	}
+	out, err := s.doCmdUsingPod(n, options, cmd, ignoreErr)
+	if err != nil {
+		return "", err
+	}
+
+	if len(token) > 0 && strings.Contains(cmd, "pxctl") && !strings.Contains(cmd, "which") && !strings.Contains(cmd, "context") {
+		log.Infof("Deleting admin context in node [%s]", n.Name)
+		deleteCtxCmd := fmt.Sprintf("%s context delete admin", "sudo /opt/pwx/bin/pxctl")
+		_, err = s.doCmdUsingPod(n, options, deleteCtxCmd, ignoreErr)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return out, nil
 }
 
 func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error) {
@@ -753,7 +800,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node: n,
 				Cause: fmt.Sprintf("failed to run command in pod. command: %v , err: %v, pod: %v",
-					cmds, err, debugPod),
+					cmds, err, debugPod.Name),
 			}
 		}
 		return output, false, nil
@@ -801,9 +848,15 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	if err != nil {
 		return "", fmt.Errorf("fail to setup stdout, err: %v", err)
 	}
+
+	token := os.Getenv("PXCTL_AUTH_TOKEN")
+	if strings.Contains(cmd, "pxctl") && len(token) > 0 {
+		cmd = fmt.Sprintf("PXCTL_AUTH_TOKEN=%s %s", token, cmd)
+	}
 	if options.Sudo {
 		cmd = fmt.Sprintf("sudo su -c '%s' -", cmd) // Hyphen necessary to preserve PATH for commands like "which pxctl"
 	}
+	log.Debugf("Running command on node %s [%s]", n.Name, cmd)
 	session.Start(cmd)
 	err = session.Wait()
 	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
@@ -821,7 +874,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 		log.Infof("SSH ERR: %v", err)
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.Name,
-			Cause: fmt.Sprintf("failed to run command. sterr: %v, err: %v", sterr, err),
+			Cause: fmt.Sprintf("failed to run command [%s] . sterr: %v, err: %v", cmd, sterr, err),
 		}
 	}
 	return out, nil
