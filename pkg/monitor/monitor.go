@@ -387,7 +387,15 @@ func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
 		return false, err
 	}
 
-	if len(volumes) == 0 {
+	// DirectAttached Volumes are not considered if pods use those
+	volumeCount := 0
+	for _, volume := range volumes {
+		if !volume.DirectAttached {
+			volumeCount++
+		}
+	}
+
+	if volumeCount == 0 {
 		storklog.PodLog(pod).Debugf("Pod doesn't have any volumes by driver")
 		return false, nil
 	}

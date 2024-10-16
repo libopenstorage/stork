@@ -731,7 +731,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 					}
 				}
 
-				if skipVolumeScoring || volume.WindowsVolume {
+				if skipVolumeScoring || volume.WindowsVolume || volume.DirectAttached {
 					storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
 					continue
 				}
