@@ -26,9 +26,19 @@ const (
 	//VMUnFreezeCmd is the template for VM unfreeze command
 	VMUnFreezeCmd = "/usr/bin/virt-freezer --unfreeze --name %s --namespace %s"
 	// VMContainerName is the name of the container to use for freeze/thaw
-	VMContainerName             = "compute"
-	VMPodSelectorCreatedByLabel = "kubevirt.io/created-by"
+	VMContainerName              = "compute"
+	VMPodSelectorCreatedByLabel  = "kubevirt.io/created-by"
+	VMInstancetypeDefaultGroup   = "instancetype.kubevirt.io"
+	VMInstancetypeDefaultVersion = "v1beta1"
 )
+
+var VMResourceProcessMap = map[string]func(kubevirtv1.VirtualMachine) []storkapi.ObjectInfo{
+	"PersistentVolumeClaim":      GetVMPersistentVolumeClaims,
+	"ConfigMap":                  GetVMConfigMaps,
+	"Secret":                     GetVMSecrets,
+	"VirtualMachinePreference":   GetVMPreference,
+	"VirtualMachineInstancetype": GetVMInstanceType,
+}
 
 // IsVirtualMachineRunning returns true if virtualMachine is in running state
 func IsVirtualMachineRunning(vm kubevirtv1.VirtualMachine) bool {
@@ -50,58 +60,121 @@ func GetVMDataVolumes(vm kubevirtv1.VirtualMachine) []string {
 }
 
 // GetVMPersistentVolumeClaims returns persistentVolumeClaim names used by the VMs
-func GetVMPersistentVolumeClaims(vm kubevirtv1.VirtualMachine) []string {
+func GetVMPersistentVolumeClaims(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
 
 	volList := vm.Spec.Template.Spec.Volumes
-	PVCList := make([]string, 0)
+	getobjectinfo := func(secretName string) storkapi.ObjectInfo {
+		return storkapi.ObjectInfo{
+			Name:      secretName,
+			Namespace: vm.Namespace,
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "core",
+				Version: "v1",
+				Kind:    "PersistentVolumeClaim",
+			},
+		}
+	}
+	PVCList := make([]storkapi.ObjectInfo, 0)
 	for _, vol := range volList {
 		if vol.VolumeSource.PersistentVolumeClaim != nil {
-			PVCList = append(PVCList, vol.VolumeSource.PersistentVolumeClaim.ClaimName)
+
+			PVCList = append(PVCList, getobjectinfo(vol.PersistentVolumeClaim.ClaimName))
 		}
 		// Add DataVolume name to the PVC list
 		if vol.VolumeSource.DataVolume != nil {
-			PVCList = append(PVCList, vol.VolumeSource.DataVolume.Name)
+			PVCList = append(PVCList, getobjectinfo(vol.VolumeSource.DataVolume.Name))
 		}
 	}
 	return PVCList
 }
 
-// GetVMSecrets returns references to secrets in all supported formats of VM configs
-func GetVMSecrets(vm kubevirtv1.VirtualMachine) []string {
+func GetVMInstanceType(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
+	instanceType := vm.Spec.Instancetype
+	objectInfos := make([]storkapi.ObjectInfo, 0)
+	if instanceType != nil {
+		// Skip if instanceType is VirtualMachineClusterInstancetype as this is not namespace scoped
+		if instanceType.Kind != "" && instanceType.Kind != "VirtualMachineClusterInstancetype" {
+			objectInfos = append(objectInfos, storkapi.ObjectInfo{
+				Name:      instanceType.GetName(),
+				Namespace: vm.Namespace,
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   VMInstancetypeDefaultGroup,
+					Version: VMInstancetypeDefaultVersion,
+					Kind:    "VirtualMachineInstancetype",
+				},
+			})
+		}
+	}
+	return objectInfos
+}
 
+func GetVMPreference(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
+	vmPrefs := vm.Spec.Preference
+	objectInfos := make([]storkapi.ObjectInfo, 0)
+	if vmPrefs != nil {
+		// skip if kind is VirtualMachineClusterPreference as this is not namespace scoped
+		if vmPrefs.Kind != "" && vmPrefs.Kind != "VirtualMachineClusterPreference" {
+			objectInfos = append(objectInfos, storkapi.ObjectInfo{
+				Name:      vmPrefs.GetName(),
+				Namespace: vm.Namespace,
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   VMInstancetypeDefaultGroup,
+					Version: VMInstancetypeDefaultVersion,
+					Kind:    "VirtualMachinePreference",
+				},
+			})
+		}
+	}
+	return objectInfos
+}
+
+// GetVMSecrets returns references to secrets in all supported formats of VM configs
+func GetVMSecrets(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
+
+	getobjectinfo := func(secretName string) storkapi.ObjectInfo {
+		return storkapi.ObjectInfo{
+			Name:      secretName,
+			Namespace: vm.Namespace,
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "core",
+				Version: "v1",
+				Kind:    "Secret",
+			},
+		}
+	}
 	volList := vm.Spec.Template.Spec.Volumes
-	secretList := make([]string, 0)
+	secretList := make([]storkapi.ObjectInfo, 0)
 	for _, vol := range volList {
 		// secret as VolumeType
 		if vol.VolumeSource.Secret != nil {
-			secretList = append(secretList, vol.Secret.SecretName)
+			secretList = append(secretList, getobjectinfo(vol.Secret.SecretName))
 		}
 		// Secret reference as sysprep
 		if vol.VolumeSource.Sysprep != nil {
 			if vol.VolumeSource.Sysprep.Secret != nil {
-				secretList = append(secretList, vol.VolumeSource.Sysprep.Secret.Name)
+				secretList = append(secretList, getobjectinfo(vol.VolumeSource.Sysprep.Secret.Name))
 			}
 		}
 		if vol.VolumeSource.CloudInitNoCloud != nil {
 			cloudInitNoCloud := vol.VolumeSource.CloudInitNoCloud
 			// secret as NetworkDataSecretRef
 			if cloudInitNoCloud.NetworkDataSecretRef != nil {
-				secretList = append(secretList, cloudInitNoCloud.NetworkDataSecretRef.Name)
+				secretList = append(secretList, getobjectinfo(cloudInitNoCloud.NetworkDataSecretRef.Name))
 			}
 			// secret as UserDataSecretRef
 			if cloudInitNoCloud.UserDataSecretRef != nil {
-				secretList = append(secretList, cloudInitNoCloud.UserDataSecretRef.Name)
+				secretList = append(secretList, getobjectinfo(cloudInitNoCloud.UserDataSecretRef.Name))
 			}
 		}
 		if vol.VolumeSource.CloudInitConfigDrive != nil {
 			cloudInitConfigDrive := vol.VolumeSource.CloudInitConfigDrive
 			// Secret from configDrive for NetworkData
 			if cloudInitConfigDrive.NetworkDataSecretRef != nil {
-				secretList = append(secretList, cloudInitConfigDrive.NetworkDataSecretRef.Name)
+				secretList = append(secretList, getobjectinfo(cloudInitConfigDrive.NetworkDataSecretRef.Name))
 			}
 			// Secret from configDrive aka Ignition
 			if cloudInitConfigDrive.UserDataSecretRef != nil {
-				secretList = append(secretList, cloudInitConfigDrive.UserDataSecretRef.Name)
+				secretList = append(secretList, getobjectinfo(cloudInitConfigDrive.UserDataSecretRef.Name))
 			}
 
 		}
@@ -110,22 +183,33 @@ func GetVMSecrets(vm kubevirtv1.VirtualMachine) []string {
 }
 
 // GetVMConfigMaps returns ConfigMaps referenced in the VirtualMachine.
-func GetVMConfigMaps(vm kubevirtv1.VirtualMachine) []string {
+func GetVMConfigMaps(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
+
+	getobjectinfo := func(configMapName string) storkapi.ObjectInfo {
+		return storkapi.ObjectInfo{
+			Name:      configMapName,
+			Namespace: vm.Namespace,
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "core",
+				Version: "v1",
+				Kind:    "ConfigMap",
+			},
+		}
+	}
 
 	volList := vm.Spec.Template.Spec.Volumes
-	configMaps := make([]string, 0)
+	configMaps := make([]storkapi.ObjectInfo, 0)
 	for _, vol := range volList {
 		// ConfigMap as volumeType
 		if vol.ConfigMap != nil {
-			configMaps = append(configMaps, vol.ConfigMap.Name)
+			configMaps = append(configMaps, getobjectinfo(vol.ConfigMap.Name))
 		}
 		// configMap reference in sysprep
 		if vol.VolumeSource.Sysprep != nil {
 			if vol.VolumeSource.Sysprep.ConfigMap != nil {
-				configMaps = append(configMaps, vol.VolumeSource.Sysprep.ConfigMap.Name)
+				configMaps = append(configMaps, getobjectinfo(vol.VolumeSource.Sysprep.ConfigMap.Name))
 			}
 		}
-
 	}
 	return configMaps
 }
@@ -255,9 +339,19 @@ func (r *ResourceCollector) prepareVirtualMachineForApply(
 
 	// Transform dataVolume to associated PVC for dataVolumeTemplate configurations
 	path = "spec.template.spec.volumes"
-	err := transformPath(object, strings.Split(path, "."))
+	if err := transformPath(object, strings.Split(path, ".")); err != nil {
+		return err
+	}
 
-	return err
+	// remove revisionName from preference and instancetype
+	content := object.UnstructuredContent()
+	pathD := []string{"spec", "preference", "revisionName"}
+	unstructured.RemoveNestedField(content, pathD...)
+
+	pathD = []string{"spec", "instancetype", "revisionName"}
+	unstructured.RemoveNestedField(content, pathD...)
+
+	return nil
 
 }
 
@@ -279,6 +373,7 @@ func (r *ResourceCollector) prepareVirtualMachineForCollection(
 	// is not necessary
 	path = []string{"spec", "dataVolumeTemplates"}
 	unstructured.RemoveNestedField(content, path...)
+
 	return nil
 }
 
@@ -333,39 +428,15 @@ func GetVMResourcesFromResourceObject(objects []runtime.Unstructured,
 func GetObjectInfoFromVMResources(vm kubevirtv1.VirtualMachine) []storkapi.ObjectInfo {
 
 	vmResourceInfoList := make([]storkapi.ObjectInfo, 0)
-
-	// get PVCs of the VM
-	volumeObjectInfoList := getObjectInfo(GetVMPersistentVolumeClaims(vm), vm.Namespace, "PersistentVolumeClaim")
-	vmResourceInfoList = append(vmResourceInfoList, volumeObjectInfoList...)
-
-	// get configMaps of the VM
-	configMapObjectInfoList := getObjectInfo(GetVMConfigMaps(vm), vm.Namespace, "ConfigMap")
-	vmResourceInfoList = append(vmResourceInfoList, configMapObjectInfoList...)
-
-	// getSecret references of the VM
-	secretObjectInfoList := getObjectInfo(GetVMSecrets(vm), vm.Namespace, "Secret")
-	vmResourceInfoList = append(vmResourceInfoList, secretObjectInfoList...)
+	for vmResource := range VMResourceProcessMap {
+		if processFunc, ok := VMResourceProcessMap[vmResource]; ok {
+			logrus.Debugf("fetching %v resources for vm %v", vmResource, vm.Name)
+			resourceInfoList := processFunc(vm)
+			vmResourceInfoList = append(vmResourceInfoList, resourceInfoList...)
+		}
+	}
 
 	return vmResourceInfoList
-
-}
-
-// getObjectInfo helper function that returns ObjectInfo object from resourcesName and namespace
-func getObjectInfo(resourceNames []string, namespace string, objectKind string) []storkapi.ObjectInfo {
-	objectInfoList := make([]storkapi.ObjectInfo, 0)
-	for _, resource := range resourceNames {
-		info := storkapi.ObjectInfo{
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   "core",
-				Version: "v1",
-				Kind:    objectKind,
-			},
-			Name:      resource,
-			Namespace: namespace,
-		}
-		objectInfoList = append(objectInfoList, info)
-	}
-	return objectInfoList
 
 }
 
@@ -577,4 +648,25 @@ func IsVmPresentInNS(ns string) bool {
 		return true
 	}
 	return false
+}
+
+// For VMs dependent resources should be applied first before applying VM object. This function
+// moves VM object to last in the list of objects.
+func MoveVMObjectToLast(objects []runtime.Unstructured) []runtime.Unstructured {
+
+	if len(objects) == 0 {
+		return objects
+	}
+	newObject := make([]runtime.Unstructured, 0)
+	vmObject := make([]runtime.Unstructured, 0)
+	for _, o := range objects {
+		if o.GetObjectKind().GroupVersionKind().Kind == "VirtualMachine" {
+			vmObject = append(vmObject, o)
+			continue
+		}
+		newObject = append(newObject, o)
+	}
+	newObject = append(newObject, vmObject...)
+	return newObject
+
 }
