@@ -161,6 +161,7 @@ func (m *Driver) ProvisionVolume(
 	labels map[string]string,
 	needsAntiHyperconvergence bool,
 	windowsVolume bool,
+	directAccessVolume bool,
 	attachedOn string,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
@@ -174,6 +175,7 @@ func (m *Driver) ProvisionVolume(
 		Labels:                    labels,
 		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
 		WindowsVolume:             windowsVolume,
+		DirectAttached:            directAccessVolume,
 		AttachedOn:                attachedOn,
 	}
 
