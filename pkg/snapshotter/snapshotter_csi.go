@@ -578,7 +578,7 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 				errMsg := fmt.Sprintf("failed to get volumesnapshot [%v/%v]", snapshot.Namespace, snapshot.Name)
 				return "", true, fmt.Errorf("%v", errMsg)
 			}
-			if snapshot.Status == nil || snapshot.Status.RestoreSize == nil {
+			if snapshot.Status == nil {
 				errMsg := fmt.Sprintf("volumesnapshot [%v/%v] status is not updated", snapshot.Namespace, snapshot.Name)
 				return "", true, fmt.Errorf("%v", errMsg)
 			}
@@ -601,7 +601,22 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 				logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, quantity.String())
 				pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
 			}
-
+		}
+		// PB-8482 if restore size is nil then set the pvc size to annotation restoreSize
+		if snapshot.Status.RestoreSize == nil {
+			restoreSizeStr, ok := snapshot.Annotations["px-backup/restoreSize"]
+			if !ok {
+				return nil, fmt.Errorf("restoreSize not found either in status or in annotation")
+			}
+			restoreSize, err := resource.ParseQuantity(restoreSizeStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse restoreSize quantity provided in annotation px-backup/restoreSize: %v", err)
+			}
+			// Update the pvc size only when the volumesnapshot size is greater than PVC size
+			if restoreSize.Cmp(pvc.Spec.Resources.Requests[v1.ResourceStorage]) == 1 {
+				logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, restoreSizeStr)
+				pvc.Spec.Resources.Requests[v1.ResourceStorage] = restoreSize
+			}
 		}
 	} else {
 		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(o.RestoreNamespace).Get(context.TODO(), o.RestoreSnapshotName, metav1.GetOptions{})
@@ -615,7 +630,7 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 				errMsg := fmt.Sprintf("failed to get volumesnapshot [%v/%v]", snapshot.Namespace, snapshot.Name)
 				return "", true, fmt.Errorf("%v", errMsg)
 			}
-			if snapshot.Status == nil || snapshot.Status.RestoreSize == nil {
+			if snapshot.Status == nil {
 				errMsg := fmt.Sprintf("volumesnapshot [%v/%v] status is not updated", snapshot.Namespace, snapshot.Name)
 				return "", true, fmt.Errorf("%v", errMsg)
 			}
@@ -639,6 +654,22 @@ func (c *csiDriver) RestoreVolumeClaim(opts ...Option) (*v1.PersistentVolumeClai
 				pvc.Spec.Resources.Requests[v1.ResourceStorage] = quantity
 			}
 
+		}
+		// PB-8482 if restore size is nil then set the pvc size to annotation restoreSize
+		if snapshot.Status.RestoreSize == nil {
+			restoreSizeStr, ok := snapshot.Annotations["px-backup/restoreSize"]
+			if !ok {
+				return nil, fmt.Errorf("restoreSize not found either in status or in annotation")
+			}
+			restoreSize, err := resource.ParseQuantity(restoreSizeStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse restoreSize quantity provided in annotation px-backup/restoreSize: %v", err)
+			}
+			// Update the pvc size only when the volumesnapshot size is greater than PVC size
+			if restoreSize.Cmp(pvc.Spec.Resources.Requests[v1.ResourceStorage]) == 1 {
+				logrus.Debugf("setting size of pvc %s/%s same as snapshot size %s", pvc.Namespace, pvc.Name, restoreSizeStr)
+				pvc.Spec.Resources.Requests[v1.ResourceStorage] = restoreSize
+			}
 		}
 	}
 
@@ -1259,6 +1290,15 @@ func (c *csiDriver) restoreVolumeSnapshot(
 		vs.(*kSnapshotv1.VolumeSnapshot).Spec.Source.PersistentVolumeClaimName = nil
 		vs.(*kSnapshotv1.VolumeSnapshot).Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1.VolumeSnapshotContent).Name
 		vs.(*kSnapshotv1.VolumeSnapshot).Namespace = namespace
+		// PB-8482 Add restoreSize to annotations
+		// Convert RestoreSize to string and store it in restoreSizeStr
+		restoreSizeStr := vs.(*kSnapshotv1.VolumeSnapshot).Status.RestoreSize.String()
+		// Initialize Annotations map if it is nil
+		if vs.(*kSnapshotv1.VolumeSnapshot).Annotations == nil {
+			vs.(*kSnapshotv1.VolumeSnapshot).Annotations = make(map[string]string)
+		}
+		// Add the restoreSize annotation to the VolumeSnapshot object
+		vs.(*kSnapshotv1.VolumeSnapshot).Annotations["px-backup/restoreSize"] = restoreSizeStr
 		newVS, err = c.snapshotClient.SnapshotV1().VolumeSnapshots(namespace).Create(context.TODO(), vs.(*kSnapshotv1.VolumeSnapshot), metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
@@ -1271,6 +1311,15 @@ func (c *csiDriver) restoreVolumeSnapshot(
 		vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.Source.PersistentVolumeClaimName = nil
 		vs.(*kSnapshotv1beta1.VolumeSnapshot).Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name
 		vs.(*kSnapshotv1beta1.VolumeSnapshot).Namespace = namespace
+		// PB-8482 Add restoreSize to annotations
+		// Convert RestoreSize to string and store it in restoreSizeStr
+		restoreSizeStr := vs.(*kSnapshotv1.VolumeSnapshot).Status.RestoreSize.String()
+		// Initialize Annotations map if it is nil
+		if vs.(*kSnapshotv1.VolumeSnapshot).Annotations == nil {
+			vs.(*kSnapshotv1.VolumeSnapshot).Annotations = make(map[string]string)
+		}
+		// Add the restoreSize annotation to the VolumeSnapshot object
+		vs.(*kSnapshotv1.VolumeSnapshot).Annotations["px-backup/restoreSize"] = restoreSizeStr
 		newVS, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vs.(*kSnapshotv1beta1.VolumeSnapshot), metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {

@@ -354,8 +354,15 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 
 		if backup.GetFinalizers() != nil {
+			// Fetch the latest backup object as we need to update after removing the finalizer
+			key := runtimeclient.ObjectKeyFromObject(backup)
+			err := a.client.Get(context.TODO(), key, backup)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error while getting applicationbackup [%v/%v]: %v", backup.Namespace, backup.Name, err)
+				return err
+			}
 			controllers.RemoveFinalizer(backup, controllers.FinalizerCleanup)
-			err := a.client.Update(ctx, backup)
+			err = a.client.Update(ctx, backup)
 			if err != nil {
 				log.ApplicationBackupLog(backup).Errorf("Error while updating applicationbackup [%v/%v]: %v", backup.Namespace, backup.Name, err)
 				return err

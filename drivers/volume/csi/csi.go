@@ -1343,6 +1343,15 @@ func (c *csi) restoreVolumeSnapshot(
 		vsObj.Spec.Source.PersistentVolumeClaimName = nil
 		vsObj.Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1.VolumeSnapshotContent).Name
 		vsObj.Namespace = namespace
+		// PB-8482 Add restoreSize to annotations
+		// Convert RestoreSize to string and store it in restoreSizeStr
+		restoreSizeStr := vsObj.Status.RestoreSize.String()
+		// Initialize Annotations map if it is nil
+		if vsObj.Annotations == nil {
+			vsObj.Annotations = make(map[string]string)
+		}
+		// Add the restoreSize annotation to the VolumeSnapshot object
+		vsObj.Annotations["px-backup/restoreSize"] = restoreSizeStr
 		vs, err = c.snapshotClient.SnapshotV1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
@@ -1363,6 +1372,15 @@ func (c *csi) restoreVolumeSnapshot(
 		vsObj.Spec.Source.PersistentVolumeClaimName = nil
 		vsObj.Spec.Source.VolumeSnapshotContentName = &vsc.(*kSnapshotv1beta1.VolumeSnapshotContent).Name
 		vsObj.Namespace = namespace
+		// PB-8482 Add restoreSize to annotations
+		// Convert RestoreSize to string and store it in restoreSizeStr
+		restoreSizeStr := vsObj.Status.RestoreSize.String()
+		// Initialize Annotations map if it is nil
+		if vsObj.Annotations == nil {
+			vsObj.Annotations = make(map[string]string)
+		}
+		// Add the restoreSize annotation to the VolumeSnapshot object
+		vsObj.Annotations["px-backup/restoreSize"] = restoreSizeStr
 		vs, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Create(context.TODO(), vsObj, metav1.CreateOptions{})
 		if err != nil {
 			if k8s_errors.IsAlreadyExists(err) {
