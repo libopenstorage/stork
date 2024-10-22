@@ -37,6 +37,8 @@ type SnapshotOps interface {
 	DeleteSnapshotData(name string) error
 	// ValidateSnapshotData validates the given snapshot data object
 	ValidateSnapshotData(name string, retry bool, timeout, retryInterval time.Duration) error
+	// ListSnapshotData returns all volumesnapshotdatas
+	ListSnapshotDatas() (*snapv1.VolumeSnapshotDataList, error)
 }
 
 // CreateSnapshot creates the given snapshot
@@ -235,6 +237,22 @@ func (c *Client) GetSnapshotData(name string) (*snapv1.VolumeSnapshotData, error
 	var result snapv1.VolumeSnapshotData
 	if err := c.snap.Get().
 		Name(name).
+		Resource(snapv1.VolumeSnapshotDataResourcePlural).
+		Do(context.TODO()).Into(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// ListSnapshotDatas returns the list of snapshotdatas
+func (c *Client) ListSnapshotDatas() (*snapv1.VolumeSnapshotDataList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	var result snapv1.VolumeSnapshotDataList
+	if err := c.snap.Get().
 		Resource(snapv1.VolumeSnapshotDataResourcePlural).
 		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err

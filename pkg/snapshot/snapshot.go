@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
+	k8sextops "github.com/libopenstorage/stork/pkg/crud/externalstorage"
 	"github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
@@ -123,6 +125,8 @@ func (s *Snapshot) Start(mgr manager.Manager) error {
 		return fmt.Errorf("error initializing snapshot restore controller: %v", err)
 	}
 	s.started = true
+
+	go s.PruneDanglingVolumeSnapshotDatas()
 	return nil
 }
 
@@ -140,4 +144,42 @@ func (s *Snapshot) Stop() error {
 
 	s.started = false
 	return nil
+}
+
+// PruneDanglingVolumeSnapshotDatas prunes the dangling VolumeSnapshotDatas
+func (s *Snapshot) PruneDanglingVolumeSnapshotDatas() {
+	ticker := time.NewTicker(30 * time.Minute)
+	for range ticker.C {
+		deleteDanglingVolumeSnapshotDatas()
+	}
+}
+
+func deleteDanglingVolumeSnapshotDatas() {
+	// Get all the volumesnapshotdatas
+	volumeSnapshotDatas, err := k8sextops.Instance().ListSnapshotDatas()
+	if err != nil {
+		log.Errorf("Failed to list VolumeSnapshotDatas: %v", err)
+		return
+	}
+
+	// Get all volumesnapshots
+	vsMap := make(map[string]bool)
+	volumeSnapshots, err := k8sextops.Instance().ListSnapshots("")
+	if err != nil {
+		log.Errorf("Failed to list VolumeSnapshots: %v", err)
+		return
+	}
+	for _, vs := range volumeSnapshots.Items {
+		vsMap[vs.Metadata.Name] = true
+	}
+
+	// Prune the dangling VolumeSnapshotDatas
+	for _, vsd := range volumeSnapshotDatas.Items {
+		if _, ok := vsMap[vsd.Spec.VolumeSnapshotRef.Name]; !ok {
+			log.Infof("Pruning VolumeSnapshotData: %s", vsd.Metadata.Name)
+			if err := k8sextops.Instance().DeleteSnapshotData(vsd.Metadata.Name); err != nil {
+				log.Errorf("Failed to prune VolumeSnapshotData: %s", vsd.Metadata.Name)
+			}
+		}
+	}
 }
