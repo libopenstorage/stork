@@ -2618,7 +2618,7 @@ func skipScoringForWindowsPods(t *testing.T) {
 		prioritizeResponse)
 }
 
-// Verify scoring is skipped entirely if Pod uses a volume with winshare "true"
+// Verify scoring is skipped entirely if Pod uses direct access volumes
 func skipScoringForDirectAccessPods(t *testing.T) {
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "zone1"))
@@ -2646,7 +2646,8 @@ func skipScoringForDirectAccessPods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error sending filter request: %v", err)
 	}
-	// All nodes exluding the offline nodes will be returned as scheduler is disabled for Windows Pods
+	// All nodes exluding the offline nodes will be returned
+	// as during schedule time filterResponse should not include offline nodes even if the pod uses direct access volumes
 	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
 
 	nodes.Items = nodes.Items[0:5]

@@ -387,10 +387,10 @@ func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
 		return false, err
 	}
 
-	// DirectAttached Volumes are not considered if pods use those
+	// DirectAccess Volumes are not considered if pods use those
 	volumeCount := 0
 	for _, volume := range volumes {
-		if !volume.DirectAttached {
+		if !volume.DirectAccess {
 			volumeCount++
 		}
 	}

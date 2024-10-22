@@ -175,7 +175,7 @@ func (m *Driver) ProvisionVolume(
 		Labels:                    labels,
 		NeedsAntiHyperconvergence: needsAntiHyperconvergence,
 		WindowsVolume:             windowsVolume,
-		DirectAttached:            directAccessVolume,
+		DirectAccess:              directAccessVolume,
 		AttachedOn:                attachedOn,
 	}
 

@@ -608,9 +608,9 @@ func testDirectAccessVolume(t *testing.T) {
 	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
 	volumes := []*volume.Info{
 		{
-			VolumeName:     "volume1",
-			DataNodes:      []string{driverNodes[0].StorageID},
-			DirectAttached: true,
+			VolumeName:   "volume1",
+			DataNodes:    []string{driverNodes[0].StorageID},
+			DirectAccess: true,
 		},
 	}
 
@@ -624,7 +624,7 @@ func testDirectAccessVolume(t *testing.T) {
 	testNodeOfflineTimeout = 95 * time.Second
 	time.Sleep(testNodeOfflineTimeout)
 	_, err = core.Instance().GetPodByName(pod.Name, "")
-	require.NoError(t, err, "pod should not get deleted as there is another node with same IP which is online")
+	require.NoError(t, err, "pod should not get deleted as it has direct access volume")
 }
 
 func testOfflineStorageNodesBatchTest(t *testing.T) {
