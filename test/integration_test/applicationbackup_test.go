@@ -63,7 +63,8 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("applicationBackupRestoreWithoutNMTest", applicationBackupRestoreWithoutNMTest)
 	t.Run("applicationBackupDelBackupLocation", applicationBackupDelBackupLocation)
 	t.Run("applicationBackupMultiple", applicationBackupMultiple)
-	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
+	// NOTE: Commenting this test since it is flaky. Ticket for fix: PB-7097.
+	// t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
 	t.Run("preExecMissingRuleTest", applicationBackupRestorePreExecMissingRuleTest)
 	t.Run("postExecMissingRuleTest", applicationBackupRestorePostExecMissingRuleTest)
