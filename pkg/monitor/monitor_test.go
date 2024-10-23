@@ -73,6 +73,7 @@ func TestMonitorOfflineNodes(t *testing.T) {
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testDuplicateOfflineWithSameSchedulerID", testDuplicateOfflineWithSameSchedulerID)
 	t.Run("testDuplicateOfflineWithSameIPAddress", testDuplicateOfflineWithSameIPAddress)
+	t.Run("testDirectAccessVolume", testDirectAccessVolume)
 	t.Run("testOfflineStorageNodeForCSIExtPod", testOfflineStorageNodeForCSIExtPod)
 	t.Run("testOfflineStorageNodesBatchTest", testOfflineStorageNodesBatchTest)
 }
@@ -127,13 +128,13 @@ func setup(t *testing.T) {
 	err = driver.UpdateNodeStatus(5, volume.NodeOffline)
 	require.NoError(t, err, "Error setting node status to Offline")
 
-	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1, nil, false, false, "")
+	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1, nil, false, false, false, "")
 	require.NoError(t, err, "Error provisioning volume")
 
-	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2, nil, false, false, "")
+	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2, nil, false, false, false, "")
 	require.NoError(t, err, "Error provisioning volume")
 
-	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3, nil, false, false, "")
+	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3, nil, false, false, false, "")
 	require.NoError(t, err, "Error provisioning volume")
 
 	eventBroadcaster := record.NewBroadcaster()
@@ -211,13 +212,13 @@ func setupWithNewMockDriver(t *testing.T) {
 	err = driver.UpdateNodeStatus(5, volume.NodeOffline)
 	require.NoError(t, err, "Error setting node status to Offline")
 
-	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1, nil, false, false, "")
+	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1, nil, false, false, false, "")
 	require.NoError(t, err, "Error provisioning volume")
 
-	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2, nil, false, false, "")
+	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2, nil, false, false, false, "")
 	require.NoError(t, err, "Error provisioning volume")
 
-	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3, nil, false, false, "")
+	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3, nil, false, false, false, "")
 	require.NoError(t, err, "Error provisioning volume")
 
 	eventBroadcaster := record.NewBroadcaster()
@@ -297,7 +298,7 @@ func setupWithNewMockDriverScale(t *testing.T) {
 
 	for i := 0; i < numNodes; i++ {
 		provNodes := []int{i, (i + 1) % numNodes}
-		err = driver.ProvisionVolume(fmt.Sprintf("%s%d", driverVolumeName, i), provNodes, 1, nil, false, false, "")
+		err = driver.ProvisionVolume(fmt.Sprintf("%s%d", driverVolumeName, i), provNodes, 1, nil, false, false, false, "")
 		require.NoError(t, err, "Error provisioning volume")
 	}
 
@@ -586,6 +587,44 @@ func testDuplicateOfflineWithSameIPAddress(test *testing.T) {
 	time.Sleep(testNodeOfflineTimeout)
 	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.NoError(test, err, "pod should not get deleted as there is another node with same IP which is online")
+}
+
+func testDirectAccessVolume(t *testing.T) {
+
+	setupWithNewMockDriver(t)
+
+	defer teardownWithNewMockDriver(t)
+
+	pod := newPod("driverPod", []string{driverVolumeName}, nodeForPod)
+	_, err := core.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	noStoragePod := newPod("noStoragePod", nil, nodeForPod)
+	_, err = core.Instance().CreatePod(noStoragePod)
+	require.NoError(t, err, "failed to create pod")
+
+	driverNodes := getDriverNodes(len(nodes.Items))
+	driverNodes[0].Status = volume.NodeOffline
+	volumeDriver.EXPECT().GetNodes().Return(driverNodes, nil).AnyTimes()
+	volumes := []*volume.Info{
+		{
+			VolumeName:   "volume1",
+			DataNodes:    []string{driverNodes[0].StorageID},
+			DirectAccess: true,
+		},
+	}
+
+	wffcVolumes := make([]*volume.Info, 0)
+
+	volumeDriver.EXPECT().InspectNode("node1").Return(driverNodes[0], nil).AnyTimes()
+	volumeDriver.EXPECT().GetCSIPodPrefix().Return("px-csi-ext-", nil).AnyTimes()
+	volumeDriver.EXPECT().GetPodVolumes(&pod.Spec, pod.Namespace, false).Return(volumes, wffcVolumes, nil).AnyTimes()
+	volumeDriver.EXPECT().GetPodVolumes(&noStoragePod.Spec, noStoragePod.Namespace, false).Return(wffcVolumes, wffcVolumes, nil).AnyTimes()
+
+	testNodeOfflineTimeout = 95 * time.Second
+	time.Sleep(testNodeOfflineTimeout)
+	_, err = core.Instance().GetPodByName(pod.Name, "")
+	require.NoError(t, err, "pod should not get deleted as it has direct access volume")
 }
 
 func testOfflineStorageNodesBatchTest(t *testing.T) {

@@ -537,6 +537,8 @@ func (p *portworx) constructStorkVolume(vol *api.Volume) *storkvolume.Info {
 
 	info.AttachedOn = vol.AttachedOn
 
+	info.DirectAccess = p.volumeIsDirectAccess(info)
+
 	return info
 
 }
@@ -593,6 +595,16 @@ func (p *portworx) volumePrefersWindowsNodes(volumeInfo *storkvolume.Info) bool 
 			if preferWindowsNodesExists, err := strconv.ParseBool(value); err == nil {
 				return preferWindowsNodesExists
 			}
+		}
+	}
+	return false
+}
+
+// volumeIsDirectAccess checks if volume is directly attached
+func (p *portworx) volumeIsDirectAccess(volumeInfo *storkvolume.Info) bool {
+	if volumeInfo.Labels != nil {
+		if value, ok := volumeInfo.Labels[pureBackendParam]; ok {
+			return value == pureBlockParam || value == pureFileParam
 		}
 	}
 	return false

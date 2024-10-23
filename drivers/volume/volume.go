@@ -287,6 +287,8 @@ type Info struct {
 	WindowsVolume bool
 	// AttachedOn is the node instance identifier for clustered systems.
 	AttachedOn string
+	// DirectAccess flag indicates if the volume is not managed by the underlying storage
+	DirectAccess bool
 }
 
 // NodeStatus Status of driver on a node
