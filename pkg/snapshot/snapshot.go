@@ -6,13 +6,16 @@ import (
 	"sync"
 	"time"
 
+	v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
+	jobsched "github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/libopenstorage/stork/drivers/volume"
 	k8sextops "github.com/libopenstorage/stork/pkg/crud/externalstorage"
 	"github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -21,8 +24,14 @@ import (
 )
 
 const (
-	snapshotProvisionerName = "stork-snapshot"
-	snapshotProvisionerID   = "stork"
+	snapshotProvisionerName     = "stork-snapshot"
+	snapshotProvisionerID       = "stork"
+	danglingSnapshotGCFrequency = 30 * time.Minute
+	pxVolumeType                = "pxd"
+)
+
+var (
+	cleanupDanglingVolumeSnapshotDatasTaskID jobsched.TaskID
 )
 
 // Snapshot snapshot
@@ -142,19 +151,44 @@ func (s *Snapshot) Stop() error {
 	close(s.stopChannel)
 	s.stopContext.Done()
 
+	err := jobsched.Instance().Cancel(cleanupDanglingVolumeSnapshotDatasTaskID)
+	if err != nil {
+		log.Fatalf("Metering: Cannot stop billing: %v", err)
+	}
+
 	s.started = false
 	return nil
 }
 
 // PruneDanglingVolumeSnapshotDatas prunes the dangling VolumeSnapshotDatas
 func (s *Snapshot) PruneDanglingVolumeSnapshotDatas() {
-	ticker := time.NewTicker(30 * time.Minute)
-	for range ticker.C {
-		deleteDanglingVolumeSnapshotDatas()
+	var err error
+	jobPeriod := jobsched.Periodic(danglingSnapshotGCFrequency)
+
+	cleanupFunc := func(interval jobsched.Interval) {
+		s.deleteDanglingVolumeSnapshotDatas()
 	}
+
+	cleanupDanglingVolumeSnapshotDatasTaskID, err = jobsched.Instance().Schedule(cleanupFunc, jobPeriod, time.Now(), false)
+	if err != nil {
+		log.Errorf("Failed to schedule job for pruning dangling VolumeSnapshotDatas: %v", err)
+	}
+
+	/*
+		// Run the pruning function immediately
+		s.deleteDanglingVolumeSnapshotDatas()
+
+		ticker := time.NewTicker(danglingSnapshotGCFrequency)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			s.deleteDanglingVolumeSnapshotDatas()
+		}
+	*/
 }
 
-func deleteDanglingVolumeSnapshotDatas() {
+func (s *Snapshot) deleteDanglingVolumeSnapshotDatas() {
+	log.Infof("Checking for dangling VolumeSnapshotDatas")
 	// Get all the volumesnapshotdatas
 	volumeSnapshotDatas, err := k8sextops.Instance().ListSnapshotDatas()
 	if err != nil {
@@ -173,13 +207,41 @@ func deleteDanglingVolumeSnapshotDatas() {
 		vsMap[vs.Metadata.Name] = true
 	}
 
-	// Prune the dangling VolumeSnapshotDatas
 	for _, vsd := range volumeSnapshotDatas.Items {
 		if _, ok := vsMap[vsd.Spec.VolumeSnapshotRef.Name]; !ok {
-			log.Infof("Pruning VolumeSnapshotData: %s", vsd.Metadata.Name)
+			log.Infof("Pruning the dangling VolumeSnapshotData: %s", vsd.Metadata.Name)
+
+			// Delete the driver snapshot
+			err := s.deleteDriverSnapshot(vsd)
+			if err != nil {
+				log.Errorf("Failed to delete driver snapshot referenced in volumesnapshotdate %s: %v", vsd.Metadata.Name, err)
+			}
+
 			if err := k8sextops.Instance().DeleteSnapshotData(vsd.Metadata.Name); err != nil {
 				log.Errorf("Failed to prune VolumeSnapshotData: %s", vsd.Metadata.Name)
 			}
 		}
+		time.Sleep(1 * time.Minute)
 	}
+}
+
+func (s *Snapshot) deleteDriverSnapshot(vsd v1.VolumeSnapshotData) error {
+	volumeType := pxVolumeType
+
+	plugins := make(map[string]snapshotvolume.Plugin)
+	plugins[s.Driver.String()] = s.Driver.GetSnapshotPlugin()
+	plugin, ok := plugins[volumeType]
+	if !ok {
+		return fmt.Errorf("%s is not supported volume for snapshotting", volumeType)
+	}
+	source := vsd.Spec.VolumeSnapshotDataSource
+	// pv is a dummy object, it is not used by the plugin
+	var pv corev1.PersistentVolume
+	log.Infof("Deleting snapshot %#v", source)
+	err := plugin.SnapshotDelete(&source, &pv)
+	if err != nil {
+		return fmt.Errorf("failed to delete snapshot %#v, err: %v", source, err)
+	}
+	log.Infof("Snapshot %#v got deleted", source)
+	return nil
 }
