@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -13,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -21,8 +23,9 @@ import (
 )
 
 const (
-	snapshotProvisionerName = "stork-snapshot"
-	snapshotProvisionerID   = "stork"
+	snapshotProvisionerName     = "stork-snapshot"
+	snapshotProvisionerID       = "stork"
+	danglingSnapshotGCFrequency = 24 * time.Hour
 )
 
 // Snapshot snapshot
@@ -148,13 +151,13 @@ func (s *Snapshot) Stop() error {
 
 // PruneDanglingVolumeSnapshotDatas prunes the dangling VolumeSnapshotDatas
 func (s *Snapshot) PruneDanglingVolumeSnapshotDatas() {
-	ticker := time.NewTicker(30 * time.Minute)
+	ticker := time.NewTicker(danglingSnapshotGCFrequency)
 	for range ticker.C {
-		deleteDanglingVolumeSnapshotDatas()
+		s.deleteDanglingVolumeSnapshotDatas()
 	}
 }
 
-func deleteDanglingVolumeSnapshotDatas() {
+func (s *Snapshot) deleteDanglingVolumeSnapshotDatas() {
 	// Get all the volumesnapshotdatas
 	volumeSnapshotDatas, err := k8sextops.Instance().ListSnapshotDatas()
 	if err != nil {
@@ -176,10 +179,38 @@ func deleteDanglingVolumeSnapshotDatas() {
 	// Prune the dangling VolumeSnapshotDatas
 	for _, vsd := range volumeSnapshotDatas.Items {
 		if _, ok := vsMap[vsd.Spec.VolumeSnapshotRef.Name]; !ok {
-			log.Infof("Pruning VolumeSnapshotData: %s", vsd.Metadata.Name)
+			log.Infof("Pruning Dangling VolumeSnapshotData: %s", vsd.Metadata.Name)
+
+			// Delete the driver snapshot
+			err := s.deleteDriverSnapshot(vsd)
+			if err != nil {
+				log.Errorf("Failed to delete driver snapshot referenced in volumesnapshotdate %s: %v", vsd.Metadata.Name, err)
+			}
+
 			if err := k8sextops.Instance().DeleteSnapshotData(vsd.Metadata.Name); err != nil {
 				log.Errorf("Failed to prune VolumeSnapshotData: %s", vsd.Metadata.Name)
 			}
 		}
+		time.Sleep(1 * time.Minute)
 	}
+}
+
+func (s *Snapshot) deleteDriverSnapshot(vsd v1.VolumeSnapshotData) error {
+	volumeType := "pxd"
+
+	plugins := make(map[string]snapshotvolume.Plugin)
+	plugins[s.Driver.String()] = s.Driver.GetSnapshotPlugin()
+	plugin, ok := plugins[volumeType]
+	if !ok {
+		return fmt.Errorf("%s is not supported volume for snapshotting", volumeType)
+	}
+	source := vsd.Spec.VolumeSnapshotDataSource
+	// pv is a dummy object, it is not used by the plugin
+	var pv corev1.PersistentVolume
+	err := plugin.SnapshotDelete(&source, &pv)
+	if err != nil {
+		return fmt.Errorf("failed to delete snapshot %#v, err: %v", source, err)
+	}
+	log.Infof("snapshot %#v deleted", source)
+	return nil
 }
