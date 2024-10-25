@@ -79,6 +79,7 @@ const (
 	kopiaBackupString           = "kopiaexecutor backup"
 	// if providerType in node spec has this string then it is GCP hosted cluster
 	GCPBasedClusterString = "gce://"
+	runJobPodWithAnyUid   = "KDMP_JOB_WITH_ANYUID"
 )
 
 var (
@@ -1020,6 +1021,30 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 	if err != nil {
 		return nil, err
 	}
+
+	// read the kdmp-config configmap to read a key named KDMP_JOB_WITH_ANYUID
+	// If  it is true  only then exercise below code else return without doing anything
+	kdmpData, err := core.Instance().GetConfigMap(KdmpConfig, defaultPXNamespace)
+	if err != nil {
+		logrus.Tracef("error reading kdmp config map: %v", err)
+		return nil, err
+	}
+	if kdmpData.Data[runJobPodWithAnyUid] == "true" {
+		logrus.Infof("KDMP_JOB_WITH_ANYUID is set to true, running the job with anyuid SCC")
+
+		// IBM Customer Specific Fix: run job pod with privilege mode
+		// Add the annotation to force the pod to adopt anyuid scc in OCP
+		// It may not work if the pod's SA doesn't have permission to use anyuid SCC
+		if isOcp {
+			if job.Spec.Template.Annotations == nil {
+				job.Spec.Template.Annotations = make(map[string]string)
+			}
+			logrus.Infof("Adding annotation to force the pod to adopt anyuid scc in OCP, This is  an IBM specific private image")
+			job.Spec.Template.Annotations["openshift.io/required-scc"] = "anyuid"
+			return job, nil
+		}
+	}
+
 	// if the namespace is OCP, then overwrite the UID and GID from the namespace annotation
 	if isOcp {
 		podUserId = ocpUid

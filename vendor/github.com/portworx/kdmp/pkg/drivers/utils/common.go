@@ -51,6 +51,8 @@ const (
 	// BurstKey - configmap burst key name
 	BurstKey                             = "K8S_BURST"
 	k8sMinVersionSASecretTokenNotSupport = "1.24"
+	SccRoleBindingNameSuffix             = "-scc"
+	AnyUidClusterRoleName                = "system:openshift:scc:anyuid"
 )
 
 var (
@@ -92,6 +94,10 @@ func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 		}
 		if _, err := rbacops.Instance().CreateRoleBinding(roleBindingFor(name, namespace)); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("create %s/%s rolebinding: %s", namespace, name, err)
+		}
+		failed, err := addRoleBindingForScc(name, namespace, AnyUidClusterRoleName)
+		if failed {
+			return err
 		}
 	}
 	var sa *corev1.ServiceAccount
@@ -136,12 +142,49 @@ func SetupServiceAccount(name, namespace string, role *rbacv1.Role) error {
 	return nil
 }
 
+// Check if corresponding SCC cluster role exists, then only create rolebinding for it.
+// This way we will avoid creating rolebinding in non-ocp cluster.
+func addRoleBindingForScc(name string, namespace string, sccClusterRoleName string) (bool, error) {
+	// read the kdmp-config configmap to read a key named KDMP_JOB_WITH_ANYUID
+	// If  it is true  only then exercise below code else return without doing anything
+	kdmpConfigMap, err := coreops.Instance().GetConfigMap(KdmpConfigmapName, KdmpConfigmapNamespace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return true, fmt.Errorf("get %s/%s configmap: %s", KdmpConfigmapNamespace, KdmpConfigmapName, err)
+	}
+	value, ok := kdmpConfigMap.Data[runJobPodWithAnyUid]
+	if !ok || value != "true" {
+		return false, nil
+	}
+
+	// Check if the cluster role exists for  the given SCC
+	if _, err := rbacops.Instance().GetClusterRole(sccClusterRoleName); err == nil {
+		if _, err := rbacops.Instance().CreateRoleBinding(roleBindingForScc(name, namespace, sccClusterRoleName)); err != nil && !errors.IsAlreadyExists(err) {
+			return true, fmt.Errorf("create %s/%s rolebinding: %s", namespace, name+SccRoleBindingNameSuffix, err)
+		}
+	} else {
+
+		if !errors.IsNotFound(err) {
+			return true, fmt.Errorf("get anyuid clusterrole %s failed: %s", AnyUidClusterRoleName, err)
+		}
+	}
+	if _, err := rbacops.Instance().CreateClusterRoleBinding(clusterRoleBindingFor(name, namespace)); err != nil && !errors.IsAlreadyExists(err) {
+		return true, fmt.Errorf("create %s/%s cluster rolebinding: %s", namespace, name, err)
+	}
+	return false, nil
+}
+
 // CleanServiceAccount removes a service account with a corresponding role and rolebinding.
 func CleanServiceAccount(name, namespace string) error {
 	if err := rbacops.Instance().DeleteRole(name, namespace); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("delete %s/%s role: %s", namespace, name, err)
 	}
 	if err := rbacops.Instance().DeleteRoleBinding(name, namespace); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("delete %s/%s rolebinding: %s", namespace, name, err)
+	}
+	if err := rbacops.Instance().DeleteRoleBinding(name+SccRoleBindingNameSuffix, namespace); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("delete %s/%s rolebinding: %s", namespace, name, err)
 	}
 	if err := coreops.Instance().DeleteServiceAccount(name, namespace); err != nil && !errors.IsNotFound(err) {
@@ -168,6 +211,10 @@ func SetupNFSServiceAccount(name, namespace string, role *rbacv1.ClusterRole) er
 		}
 		if _, err := rbacops.Instance().CreateClusterRoleBinding(clusterRoleBindingFor(name, namespace)); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("create %s/%s cluster rolebinding: %s", namespace, name, err)
+		}
+		failed, err := addRoleBindingForScc(name, namespace, AnyUidClusterRoleName)
+		if failed {
+			return err
 		}
 	}
 	var sa *corev1.ServiceAccount
@@ -237,6 +284,31 @@ func roleBindingFor(name, namespace string) *rbacv1.RoleBinding {
 		RoleRef: rbacv1.RoleRef{
 			Name:     name,
 			Kind:     "Role",
+			APIGroup: rbacv1.GroupName,
+		},
+	}
+}
+
+// In OCP standard scc cluster role name are predefined and one pod can adhere to one SCC at a time.
+func roleBindingForScc(name, namespace string, sccClusterRoleName string) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + SccRoleBindingNameSuffix,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				SkipResourceAnnotation: "true",
+			},
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      name,
+				Namespace: namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Name:     sccClusterRoleName,
+			Kind:     "ClusterRole",
 			APIGroup: rbacv1.GroupName,
 		},
 	}
