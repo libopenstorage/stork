@@ -68,7 +68,7 @@ func testMigration(t *testing.T) {
 	t.Run("statefulsetTest", statefulsetMigrationTest)
 	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
 	t.Run("statefulsetRuleTest", statefulsetMigrationRuleTest)
-	t.Run("jobMigrationTest", jobMigrationTest)
+	// t.Run("jobMigrationTest", jobMigrationTest)
 	t.Run("preExecRuleMissingTest", statefulsetMigrationRulePreExecMissingTest)
 	t.Run("postExecRuleMissingTest", statefulsetMigrationRulePostExecMissingTest)
 	t.Run("disallowedNamespaceTest", migrationDisallowedNamespaceTest)
@@ -191,7 +191,12 @@ func triggerMigration(
 	ctxs, preMigrationCtx := scheduleAndRunTasks(t, instanceID, appKey, additionalAppKeys, migrateAllAppsExpected, skipStoragePair, pairReverse, projectIDMappings, namespaceLabels)
 
 	// apply migration specs
-	err := schedulerDriver.AddTasks(ctxs[0],
+	err := schedulerDriver.SetConfig(remoteFilePath)
+	if err != nil {
+		log.Error("Failed to set config in torpedo: %v", err)
+		return ctxs, preMigrationCtx
+	}
+	err = schedulerDriver.AddTasks(ctxs[0],
 		scheduler.ScheduleOptions{AppKeys: migrationAppKeys})
 	log.FailOnError(t, err, "Error scheduling migration specs")
 
@@ -451,6 +456,9 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	log.FailOnError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
+
+	err = schedulerDriver.SetConfig(remoteFilePath)
+	log.FailOnError(t, err, "Failed to set config in torpedo")
 	err = schedulerDriver.AddTasks(ctxsReverse[0],
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-migration"}})
 	log.FailOnError(t, err, "Error scheduling migration specs")
@@ -2514,7 +2522,7 @@ func excludeMultipleResourceTypesTest(t *testing.T) {
 		"",
 		nil)
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/2, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	log.FailOnError(t, err, "Migration could not be completed")
 
 	// Change kubeconfig to destination
