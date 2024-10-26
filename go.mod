@@ -33,7 +33,7 @@ require (
 	github.com/portworx/px-object-controller v0.0.0-20220804234424-40d3b8a84987
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2
 	github.com/prometheus/client_golang v1.17.0
-	github.com/pure-px/torpedo v0.0.0-20241023070534-06238143a17a
+	github.com/pure-px/torpedo v0.0.0-20241029143232-611042c497eb
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 	github.com/sirupsen/logrus v1.9.3

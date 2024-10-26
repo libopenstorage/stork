@@ -2382,6 +2382,7 @@ func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.V
 			Spec:     volumeSpec,
 		})
 		if err != nil {
+			log.Errorf("Failed to update volume [%s]: %v", volumeName, err)
 			return nil, true, fmt.Errorf("volume [%s] not updated yet", volumeName)
 		}
 		log.Debugf("Updated volume [%s]", volumeName)

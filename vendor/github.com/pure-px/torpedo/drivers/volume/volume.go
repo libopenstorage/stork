@@ -18,7 +18,8 @@ import (
 // Volume is a generic struct encapsulating volumes in the cluster
 type Volume struct {
 	ID            string
-	Name          string
+	Name          string // this is PVC Name, nto changing for backward compatibility
+	VolumeName    string // this is the volume name
 	Namespace     string
 	Annotations   map[string]string
 	Labels        map[string]string
@@ -26,6 +27,7 @@ type Volume struct {
 	RequestedSize uint64
 	Shared        bool
 	Raw           bool
+	StorageClass  string
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster

@@ -187,7 +187,7 @@ func (d *Dashboard) TestSetEnd() {
 			for v, t := range testCasesStack {
 				d.TestcaseID = v
 				d.testCase = t
-				d.setDashTestCaseId()
+				d.SetDashTestCaseId()
 				d.TestCaseEnd()
 			}
 			testCasesStack = nil
@@ -351,7 +351,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 			}
 		}
 		d.testCase = testCase
-		d.setDashTestCaseId()
+		d.SetDashTestCaseId()
 		d.Infof("Torpedo Command: %s", os.Args)
 		logrus.Infof("Adding testcaseID: %d to stack", d.TestcaseID)
 		testCasesStack[d.TestcaseID] = testCase
@@ -360,7 +360,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 }
 
 // SetDashTestCaseId sets the aetos dashboard testcase id for the current goroutine
-func (d *Dashboard) setDashTestCaseId() {
+func (d *Dashboard) SetDashTestCaseId() {
 	gid := getGoroutineID()
 	dgid := fmt.Sprintf("d-%d", gid)
 	testInfoMap.Store(dgid, d.TestcaseID)

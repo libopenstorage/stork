@@ -1216,7 +1216,7 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/pure-px/torpedo v0.0.0-20241023070534-06238143a17a
+# github.com/pure-px/torpedo v0.0.0-20241029143232-611042c497eb
 ## explicit; go 1.21.4
 github.com/pure-px/torpedo/drivers/api
 github.com/pure-px/torpedo/drivers/node

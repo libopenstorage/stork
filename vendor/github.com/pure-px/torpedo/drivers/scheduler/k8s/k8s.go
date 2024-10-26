@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
@@ -4376,16 +4377,18 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	pvcSize, _ := pvcSizeObj.AsInt64()
 	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
 	vol := &volume.Volume{
-		ID:          string(pvc.Spec.VolumeName),
-		Name:        pvc.Name,
-		Namespace:   pvc.Namespace,
-		Shared:      k.isPVCShared(pvc),
-		Annotations: pvc.Annotations,
-		Labels:      labels,
-		Size:        uint64(pvcSize),
-		Raw:         isRaw,
+		ID:           string(pvc.Spec.VolumeName),
+		Name:         pvc.Name,
+		VolumeName:   pvc.Spec.VolumeName,
+		Namespace:    pvc.Namespace,
+		Shared:       k.isPVCShared(pvc),
+		Annotations:  pvc.Annotations,
+		Labels:       labels,
+		Size:         uint64(pvcSize),
+		Raw:          isRaw,
+		StorageClass: *pvc.Spec.StorageClassName,
 	}
-	log.Debugf("Adding vol [%s/%s] to volume list", vol.ID, vol.Name)
+	log.Infof("Adding vol [%s/%s] to volume list", vol.ID, vol.Name)
 	return append(vols, vol), nil
 }
 
@@ -7421,6 +7424,11 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 			if err != nil {
 				return nil, err
 			}
+			provisioner, contains := pvc.Annotations["volume.kubernetes.io/storage-provisioner"]
+			// snapshots can be taken for CSI volumes as well
+			if contains && provisioner == "pxd.portworx.com" {
+				snapshotOkay = true
+			}
 			if snapshotOkay {
 				snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(int(time.Now().Unix()))
 				log.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
@@ -8017,6 +8025,11 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 			if err != nil {
 				return err
 			}
+			provisioner, contains := pvc.Annotations["volume.kubernetes.io/storage-provisioner"]
+			// snapshots can be taken for CSI volumes as well
+			if contains && provisioner == "pxd.portworx.com" {
+				snapshotOkay = true
+			}
 			if snapshotOkay {
 				snaplistForDelete, err := k.GetCsiSnapshots(obj.Namespace, pvc.Name)
 				if err != nil {
@@ -8246,26 +8259,34 @@ func (k *K8s) restoreCsiSnapshot(
 
 // CreateCsiSnapshotClass creates csi volume snapshot class
 func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	return k.CreateCSISnapshotClass(scheduler.CSISnapshotClassCreateRequest{
+		SnapClassName:  snapClassName,
+		DeletionPolicy: deleionPolicy,
+	})
+}
+
+func (k *K8s) CreateCSISnapshotClass(snapshotClassCreateRequest scheduler.CSISnapshotClassCreateRequest) (*volsnapv1.VolumeSnapshotClass, error) {
 	var err error
 	var annotation = make(map[string]string)
 	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
 	annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
 
 	v1obj := metav1.ObjectMeta{
-		Name:        snapClassName,
+		Name:        snapshotClassCreateRequest.SnapClassName,
 		Annotations: annotation,
 	}
 
 	snapClass := volsnapv1.VolumeSnapshotClass{
 		ObjectMeta:     v1obj,
 		Driver:         CsiProvisioner,
-		DeletionPolicy: volsnapv1.DeletionPolicy(deleionPolicy),
+		DeletionPolicy: volsnapv1.DeletionPolicy(snapshotClassCreateRequest.DeletionPolicy),
+		Parameters:     snapshotClassCreateRequest.Parameters,
 	}
 
-	log.Infof("Creating volume snapshot class: %v", snapClassName)
+	log.Infof("Creating volume snapshot class: %v", snapshotClassCreateRequest.SnapClassName)
 	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
-			Name:  snapClassName,
+			Name:  snapshotClassCreateRequest.SnapClassName,
 			Cause: err,
 		}
 	}

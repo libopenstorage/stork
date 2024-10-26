@@ -2,8 +2,9 @@ package scheduler
 
 import (
 	"fmt"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"time"
+
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -404,7 +405,11 @@ type Driver interface {
 	DeleteNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
+	// Deprecated, please use function below
 	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// CreateCSISnapshotClass create csi snapshot class
+	CreateCSISnapshotClass(snapshotClassCreateRequest CSISnapshotClassCreateRequest) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateVolumeSnapshotClasses creates a volume snapshot class
 	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)
@@ -570,4 +575,11 @@ type CSICloneRequest struct {
 	Timestamp       string
 	OriginalPVCName string
 	RestoredPVCName string
+}
+
+// CSISnapshotClassCreateRequest contains the necessary info to clone from an existing CSI volume
+type CSISnapshotClassCreateRequest struct {
+	SnapClassName  string
+	DeletionPolicy string
+	Parameters     map[string]string
 }

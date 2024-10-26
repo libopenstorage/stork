@@ -39,7 +39,7 @@ const (
 	clusterName            = "tp-cluster"
 	restoreNamePrefix      = "tp-restore"
 	configMapName          = "kubeconfigs"
-	migrationRetryTimeout  = 10 * time.Minute
+	migrationRetryTimeout  = 20 * time.Minute
 	migrationRetryInterval = 10 * time.Second
 
 	// DefaultClusterPairDir default directory where kubeconfig files will be generated

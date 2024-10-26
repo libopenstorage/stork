@@ -4259,8 +4259,8 @@ github.com/proullon/ramsql v0.0.0-20211120092837-c8d0a408b939/go.mod h1:jG8oAQG0
 github.com/pseudomuto/protoc-gen-doc v1.3.2/go.mod h1:y5+P6n3iGrbKG+9O04V5ld71in3v/bX88wUwgt+U8EA=
 github.com/pseudomuto/protoc-gen-doc v1.5.1/go.mod h1:XpMKYg6zkcpgfpCfQ8GcWBDRtRxOmMR5w7pz4Xo+dYM=
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
-github.com/pure-px/torpedo v0.0.0-20241023070534-06238143a17a h1:+NxH/ETna30GF8pHUJLXe+zFEHMdQSgxZu6aNOauEqo=
-github.com/pure-px/torpedo v0.0.0-20241023070534-06238143a17a/go.mod h1:5eXclIRiV4TF1zqZqWmSJC6hPhZFRPhx7LaefJz9zKg=
+github.com/pure-px/torpedo v0.0.0-20241029143232-611042c497eb h1:0oC9O+54iFsheWDoy8zJjVLo3QXSycfhQJLl6Wjuzrw=
+github.com/pure-px/torpedo v0.0.0-20241029143232-611042c497eb/go.mod h1:5eXclIRiV4TF1zqZqWmSJC6hPhZFRPhx7LaefJz9zKg=
 github.com/quasilyte/go-ruleguard v0.3.1-0.20210203134552-1b5a410e1cc8/go.mod h1:KsAh3x0e7Fkpgs+Q9pNLS5XpFSvYCEVl5gP9Pp1xp30=
 github.com/quasilyte/go-ruleguard v0.3.18/go.mod h1:lOIzcYlgxrQ2sGJ735EHXmf/e9MJ516j16K/Ifcttvs=
 github.com/quasilyte/go-ruleguard/dsl v0.3.0/go.mod h1:KeCP03KrjuSO0H1kTuZQCWlQPulDV6YMIXmpQss17rU=
