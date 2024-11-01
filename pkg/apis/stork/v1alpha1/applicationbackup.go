@@ -49,8 +49,9 @@ type ApplicationBackupSpec struct {
 	BackupObjectType string `json:"backupObjectType"`
 	// SkipAutoExecRules is false by default, if set true will skip auto exec rules for VM specific backup.
 	// This field is unused for non VM specific Backup.
-	SkipAutoExecRules bool `json:"skipAutoExecRules"`
-	DirectKDMP        bool `json:"directKDMP"`
+	SkipAutoExecRules    bool     `json:"skipAutoExecRules"`
+	DirectKDMP           bool     `json:"directKDMP"`
+	ExcludeResourceTypes []string `json:"excludeResourceTypes"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup

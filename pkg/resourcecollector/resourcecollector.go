@@ -708,9 +708,11 @@ func gatherResourceInChunks(dynamicClient dynamic.ResourceInterface, opts Option
 func IsNsPresentInIncludeResource(includeObjects map[stork_api.ObjectInfo]bool, namespace string) bool {
 	for obj := range includeObjects {
 		if obj.Namespace == namespace {
+			logrus.Infof("sivakumar --- IsNsPresentInIncludeResource return true for ns %v", namespace)
 			return true
 		}
 	}
+	logrus.Infof("sivakumar --- IsNsPresentInIncludeResource return false for ns %v", namespace)
 
 	return false
 }

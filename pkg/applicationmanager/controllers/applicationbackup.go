@@ -768,6 +768,7 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 }
 
 func (a *ApplicationBackupController) backupVolumes(backup *stork_api.ApplicationBackup, terminationChannels []chan bool) error {
+	logrus.Infof("sivakumar -- entering backupVolumes  .....")
 	var err error
 	// Start backup of the volumes if we don't have any status stored
 	pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
@@ -794,8 +795,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		return err
 	}
 	skipVolInfo := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
-
+	logrus.Infof("vb debug 1")
 	if a.IsVolsToBeBackedUp(backup) {
+		logrus.Infof("vb debug 2")
 		isResourceTypePVC := IsResourceTypePVC(backup)
 		var objectMap map[stork_api.ObjectInfo]bool
 		if IsBackupObjectTypeVirtualMachine(backup) {
@@ -847,7 +849,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						// We could have case where includeResource has data, current ns is not part of includeResource
 						// and the user has given ResourceType list and ResourceType does not contain PVC. In this case we don't
 						// want to collect vol data from this ns
-						if len(backup.Spec.ResourceTypes) != 0 && !isResourceTypePVC {
+						if (len(backup.Spec.ResourceTypes) != 0 && !isResourceTypePVC) ||
+							len(backup.Spec.ExcludeResourceTypes) != 0 {
 							break
 						}
 					}
@@ -911,7 +914,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 		}
 
+		logrus.Infof("vb debug 3")
 		if len(backup.Status.Volumes) != pvcCount {
+			logrus.Infof("vb debug 4")
 			for driverName, pvcs := range pvcMappings {
 				var driver volume.Driver
 				driver, err = volume.Get(driverName)
@@ -993,10 +998,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 		}
 
+		logrus.Infof("vb debug 5")
 		// In case Portworx if the snapshot ID is populated for every volume then the snapshot
 		// process is considered to be completed successfully.
 		// This ensures we don't execute the post-exec before all volume's snapshot is completed
 		for driverName := range pvcMappings {
+			logrus.Infof("vb debug 6")
 			var driver volume.Driver
 			driver, err = volume.Get(driverName)
 			if err != nil {
@@ -1023,6 +1030,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 			}
 		}
+		logrus.Infof("vb debug 7")
 		// Run any post exec rules once all volume backup is triggered
 		driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 		// If the driver combination of volumes are all non-kdmp, call the post exec rule immediately
@@ -1032,7 +1040,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// This ensures that snapshots for non-kdmp volumes are completed before calling the post-exec
 		// rules and ending the pre-exec pods if any. Additionally, it ensures we execute post-exec rule
 		// only once in the lifetime of certain backup.
+		logrus.Infof("vb debug 8")
 		if !a.execRulesCompleted[string(backup.UID)] {
+			logrus.Infof("vb debug 9")
 			if driverCombo == nonKdmpDriverOnly {
 				// Let's kill the pre-exec rule pod here so that application specific
 				// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
@@ -1069,6 +1079,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 		}
 
+		logrus.Infof("vb debug 10")
 		inProgress := false
 		// Skip checking status if no volumes are being backed up
 		if len(backup.Status.Volumes) != 0 {
@@ -1118,6 +1129,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 		}
 
+		logrus.Infof("vb debug 11")
 		// Return if we have any volume backups still in progress
 		if inProgress {
 			// temporarily store the volume status, So that it will be used during retry.
@@ -1153,11 +1165,13 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		}
 	}
 
+	logrus.Infof("vb debug 12")
 	// Run any post exec rules once backup is triggered
 	driverCombo := a.checkVolumeDriverCombination(backup.Status.Volumes)
 	// If the driver combination of volumes only kdmp or mixed of both kdmp and non-kdmp, call post exec rule
 	// backup of volume is success.
 	if !a.execRulesCompleted[string(backup.UID)] {
+		logrus.Infof("vb debug 13")
 		if driverCombo == kdmpDriverOnly || driverCombo == mixedDriver {
 			// Let's kill the pre-exec rule pod here so that application specific
 			// data  stream freezing logic works. Certain app actually unleash the WRITE when session ends.
@@ -1198,12 +1212,14 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	// append skipped volumes
 	backup.Status.Volumes = append(backup.Status.Volumes, skipVolInfo...)
 	backup.Status.FailedVolCount = 0
+	logrus.Infof("vb debug 14")
 	for _, vol := range backup.Status.Volumes {
 		if vol.Status == stork_api.ApplicationBackupStatusFailed {
 			backup.Status.FailedVolCount++
 		}
 	}
 	if (len(backup.Status.Volumes) != 0) && (len(backup.Status.Volumes) == backup.Status.FailedVolCount) {
+		logrus.Infof("vb debug 15")
 		// This case signifies that none of the volumes are successfully backed up
 		// hence marking it as failed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
@@ -1217,7 +1233,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		}
 	}
 	// If the backup hasn't failed move on to the next stage.
+	logrus.Infof("vb debug 16")
 	if backup.Status.Status != stork_api.ApplicationBackupStatusFailed {
+		logrus.Infof("vb debug 17")
 		backup.Status.Stage = stork_api.ApplicationBackupStageApplications
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 		backup.Status.Reason = "Application resources backup is in progress"
@@ -1241,6 +1259,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// We will not handle individual failure of resources as GetResources() being generic package
 		// returns error for the whole and it as no view of backp CR object. Also it is unlikely that
 		// only a particular resource fetching fails and rest passes.
+		logrus.Infof("vb debug 18")
 		err = a.backupResources(backup)
 		if err != nil {
 			isLargeResourceError, err := utils.ReorganizeLargeResourceError(err)
@@ -1840,13 +1859,15 @@ func (a *ApplicationBackupController) backupResources(
 ) error {
 	var err error
 	var resourceTypes []metav1.APIResource
+	logrus.Infof("sivakumar -- Entering backupResources ..")
 	nfs, err := utils.IsNFSBackuplocationType(backup.Namespace, backup.Spec.BackupLocation)
 	if err != nil {
 		logrus.Errorf("error in checking backuplocation type: %v", err)
 		return err
 	}
+	logrus.Infof("sivakumar --- debug 1")
 	// Listing all resource types
-	if len(backup.Spec.ResourceTypes) != 0 {
+	if len(backup.Spec.ResourceTypes) != 0 || len(backup.Spec.ExcludeResourceTypes) != 0 {
 		optionalResourceTypes := []string{}
 		resourceTypes, err = a.resourceCollector.GetResourceTypes(optionalResourceTypes, true)
 		if err != nil {
@@ -1856,6 +1877,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Don't modify resources if mentioned explicitly in specs
+	logrus.Infof("sivakumar --- debug 2")
 	resourceCollectorOpts := resourcecollector.Options{}
 	resourceCollectorOpts.ResourceCountLimit = k8sutils.DefaultResourceCountLimit
 	// Read configMap for any user provided value. this will be used in to List call of getResource eventually.
@@ -1876,6 +1898,7 @@ func (a *ApplicationBackupController) backupResources(
 		resourceCollectorOpts.SkipServices = true
 	}
 
+	logrus.Infof("sivakumar --- debug 3")
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	var objectMap map[stork_api.ObjectInfo]bool
@@ -1890,34 +1913,45 @@ func (a *ApplicationBackupController) backupResources(
 	} else {
 		objectMap = stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
 	}
+	logrus.Infof("sivakumar --- debug 4")
 	namespacelist := backup.Spec.Namespaces
 	// GetResources takes more time, if we have more number of namespaces
 	// So, submitting it in batches and in between each batch,
 	// updating the LastUpdateTimestamp to show that backup is progressing
 	allObjects := make([]runtime.Unstructured, 0)
 	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
+		logrus.Infof("sivakumar --- debug 5")
 		batch := namespacelist[i:min(i+backupResourcesBatchCount, len(namespacelist))]
 		var incResNsBatch []string
 		var resourceTypeNsBatch []string
 		for _, ns := range batch {
+			logrus.Infof("sivakumar --- debug 6")
 			if !a.isNsPresentForVmBackup(backup, ns) {
 				// For VM Backup, if namespace does not have any VMs to backup we would
 				// want to skip resources from this namespace for backup.
+				logrus.Infof("sivakumar --- debug 6.1")
 				continue
 			}
 			// As we support both includeResource and ResourceType to be mentioned
 			// match out ns for which we want to take includeResource path and
 			// for which we want to take ResourceType path
-			if len(backup.Spec.ResourceTypes) != 0 {
+			logrus.Infof("sivakumar --- debug 6.2")
+			if len(backup.Spec.ResourceTypes) != 0 || len(backup.Spec.ExcludeResourceTypes) != 0 {
+				logrus.Infof("sivakumar --- backup.Spec.ExcludeResourceTypes %v", backup.Spec.ExcludeResourceTypes)
 				if !resourcecollector.IsNsPresentInIncludeResource(objectMap, ns) {
+					logrus.Infof("sivakumar --- appending resourceTypeNsBatch with ns %v", ns)
 					resourceTypeNsBatch = append(resourceTypeNsBatch, ns)
 				} else {
+					logrus.Infof("sivakumar --- appending incResNsBatch with ns %v", ns)
 					incResNsBatch = append(incResNsBatch, ns)
 				}
 			} else {
 				incResNsBatch = append(incResNsBatch, ns)
 			}
+			logrus.Infof("sivakumar --- debug 6.3")
 		}
+		logrus.Infof("sivakumar --- debug 7")
+		logrus.Infof("sivakumar -- incResNsBatch %v", incResNsBatch)
 		if len(incResNsBatch) != 0 {
 			objects, _, err := a.resourceCollector.GetResources(
 				incResNsBatch,
@@ -1934,9 +1968,36 @@ func (a *ApplicationBackupController) backupResources(
 			}
 			allObjects = append(allObjects, objects...)
 		}
-
+		logrus.Infof("sivakumar -- resourceTypeNsBatch %v", resourceTypeNsBatch)
 		if len(resourceTypeNsBatch) != 0 {
-			for _, backupResourceType := range backup.Spec.ResourceTypes {
+			finalResourceTypes := make([]string, 0)
+			logrus.Infof("sivakumar -- backup.Spec.ResourceTypes %v", backup.Spec.ResourceTypes)
+			if len(backup.Spec.ResourceTypes) != 0 {
+				finalResourceTypes = backup.Spec.ResourceTypes
+			} else {
+				logrus.Infof("sivakumar -- backup.Spec.ExcludeResourceTypes %v", backup.Spec.ExcludeResourceTypes)
+				isPersistentVolumeType := false
+				for _, rType := range backup.Spec.ExcludeResourceTypes {
+					if rType == "PersistentVolumeClaim" {
+						isPersistentVolumeType = true
+					}
+				}
+				for _, resource := range resourceTypes {
+					match := false
+					for _, rType := range backup.Spec.ExcludeResourceTypes {
+						if resource.Kind == rType || (resource.Kind == "PersistentVolume" && isPersistentVolumeType) {
+							match = true
+							break
+						}
+					}
+					if !match {
+						finalResourceTypes = append(finalResourceTypes, resource.Kind)
+					}
+				}
+			}
+			logrus.Infof("sivakumar --- finalResourceTypes %v", finalResourceTypes)
+
+			for _, backupResourceType := range finalResourceTypes {
 				for _, resource := range resourceTypes {
 					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
 						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
@@ -2401,7 +2462,7 @@ func (a *ApplicationBackupController) createCRD() error {
 func (a *ApplicationBackupController) IsVolsToBeBackedUp(backup *stork_api.ApplicationBackup) bool {
 	// If ResourceType is mentioned and doesn't have PVC in it we would
 	// like to skip the vol backups IFF includeResources doesn't have any ref to PVC
-	if len(backup.Spec.ResourceTypes) != 0 {
+	if len(backup.Spec.ResourceTypes) != 0 || len(backup.Spec.ExcludeResourceTypes) != 0 {
 		if IsResourceTypePVC(backup) {
 			return true
 		}
