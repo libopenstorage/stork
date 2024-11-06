@@ -1012,7 +1012,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					if volInfo.Status == stork_api.ApplicationBackupStatusFailed {
 						continue
 					}
-					if volInfo.BackupID == "" {
+					// Check if the snapshot is completed only for pxd volumes by checking the backupID
+					if volInfo.DriverName == volume.PortworxDriverName && volInfo.BackupID == "" {
 						log.ApplicationBackupLog(backup).Infof("Snapshot of volume [%v] from namespace [%v] hasn't completed yet, retry checking status",
 							volInfo.PersistentVolumeClaim, volInfo.Namespace) // Some portworx volume snapshot is not completed yet
 						// hence we will retry checking the status in the next reconciler iteration
