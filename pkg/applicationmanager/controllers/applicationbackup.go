@@ -847,7 +847,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						// We could have case where includeResource has data, current ns is not part of includeResource
 						// and the user has given ResourceType list and ResourceType does not contain PVC. In this case we don't
 						// want to collect vol data from this ns
-						if len(backup.Spec.ResourceTypes) != 0 && !isResourceTypePVC {
+						if (len(backup.Spec.ResourceTypes) != 0 && !isResourceTypePVC) ||
+							(len(backup.Spec.ExcludeResourceTypes) != 0 && IsPVCInExcludeResourceType(backup)) {
 							break
 						}
 					}
@@ -1846,7 +1847,7 @@ func (a *ApplicationBackupController) backupResources(
 		return err
 	}
 	// Listing all resource types
-	if len(backup.Spec.ResourceTypes) != 0 {
+	if len(backup.Spec.ResourceTypes) != 0 || len(backup.Spec.ExcludeResourceTypes) != 0 {
 		optionalResourceTypes := []string{}
 		resourceTypes, err = a.resourceCollector.GetResourceTypes(optionalResourceTypes, true)
 		if err != nil {
@@ -1908,7 +1909,7 @@ func (a *ApplicationBackupController) backupResources(
 			// As we support both includeResource and ResourceType to be mentioned
 			// match out ns for which we want to take includeResource path and
 			// for which we want to take ResourceType path
-			if len(backup.Spec.ResourceTypes) != 0 {
+			if len(backup.Spec.ResourceTypes) != 0 || len(backup.Spec.ExcludeResourceTypes) != 0 {
 				if !resourcecollector.IsNsPresentInIncludeResource(objectMap, ns) {
 					resourceTypeNsBatch = append(resourceTypeNsBatch, ns)
 				} else {
@@ -1936,18 +1937,43 @@ func (a *ApplicationBackupController) backupResources(
 		}
 
 		if len(resourceTypeNsBatch) != 0 {
-			for _, backupResourceType := range backup.Spec.ResourceTypes {
-				for _, resource := range resourceTypes {
-					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
-						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
-						objects, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, nil, true, resourceCollectorOpts)
-						if err != nil {
-							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
-							return err
+			if len(backup.Spec.ResourceTypes) != 0 {
+				for _, backupResourceType := range backup.Spec.ResourceTypes {
+					for _, resource := range resourceTypes {
+						if resource.Kind == backupResourceType ||
+							(backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
+							log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
+							objects, _, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch,
+								backup.Spec.Selectors, nil, nil, true, resourceCollectorOpts)
+							if err != nil {
+								log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
+								return err
+							}
+							allObjects = append(allObjects, objects.Items...)
 						}
-						allObjects = append(allObjects, objects.Items...)
 					}
 				}
+			} else if len(backup.Spec.ExcludeResourceTypes) != 0 {
+				isPersistentVolumeType := IsPVCInExcludeResourceType(backup)
+				exclude := backup.Spec.ExcludeResourceTypes
+				if isPersistentVolumeType {
+					exclude = append(exclude, "PersistentVolume")
+				}
+				excludeTypeObjects, _, err := a.resourceCollector.GetResourcesExcludingTypes(
+					resourceTypeNsBatch,
+					exclude,
+					backup.Spec.Selectors,
+					nil,
+					nil,
+					optionalBackupResources,
+					true,
+					resourceCollectorOpts,
+				)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf("Error getting resources for ExcludeResouceTypes: %v", err)
+					return err
+				}
+				allObjects = append(allObjects, excludeTypeObjects...)
 			}
 		}
 
@@ -2401,8 +2427,9 @@ func (a *ApplicationBackupController) createCRD() error {
 func (a *ApplicationBackupController) IsVolsToBeBackedUp(backup *stork_api.ApplicationBackup) bool {
 	// If ResourceType is mentioned and doesn't have PVC in it we would
 	// like to skip the vol backups IFF includeResources doesn't have any ref to PVC
-	if len(backup.Spec.ResourceTypes) != 0 {
-		if IsResourceTypePVC(backup) {
+	if len(backup.Spec.ResourceTypes) != 0 || len(backup.Spec.ExcludeResourceTypes) != 0 {
+		if (len(backup.Spec.ResourceTypes) != 0 && IsResourceTypePVC(backup)) ||
+			(len(backup.Spec.ExcludeResourceTypes) != 0 && !IsPVCInExcludeResourceType(backup)) {
 			return true
 		}
 
@@ -2422,6 +2449,16 @@ func (a *ApplicationBackupController) IsVolsToBeBackedUp(backup *stork_api.Appli
 	}
 
 	return true
+}
+
+// IsPVCInExcludeResourceType check if given ResourceType is PVC
+func IsPVCInExcludeResourceType(backup *stork_api.ApplicationBackup) bool {
+	for _, resType := range backup.Spec.ExcludeResourceTypes {
+		if resType == "PersistentVolumeClaim" {
+			return true
+		}
+	}
+	return false
 }
 
 // IsResourceTypePVC check if given ResourceType is PVC
