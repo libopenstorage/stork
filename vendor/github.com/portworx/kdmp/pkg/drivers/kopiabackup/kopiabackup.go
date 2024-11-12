@@ -369,6 +369,13 @@ func jobFor(
 									ReadOnly:  true,
 								},
 							},
+							// SecurityContext: &corev1.SecurityContext{
+							// 	Capabilities: &corev1.Capabilities{
+							// 		Add: []corev1.Capability{
+							// 			"DAC_OVERRIDE",
+							// 		},
+							// 	},
+							// },
 						},
 					},
 					Tolerations: tolerations,
