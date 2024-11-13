@@ -1062,11 +1062,11 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 		// Add fsgroup in Pod security context with the same UID as RunAsUser
 		// But we shouldn't add fsgroup if it is a kopia backup because it will alter the permission
 		// of the backup pod filesystem.
-		if !strings.Contains(job.Spec.Template.Spec.Containers[0].Command[0], kopiaBackupString) {
-			job.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
-				FSGroup: &uid,
-			}
-		}
+		// if !strings.Contains(job.Spec.Template.Spec.Containers[0].Command[0], kopiaBackupString) {
+		// 	job.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
+		// 		FSGroup: &uid,
+		// 	}
+		// }
 	}
 	if podGroupId != "" {
 		gid, err := strconv.ParseInt(podGroupId, 10, 64)
