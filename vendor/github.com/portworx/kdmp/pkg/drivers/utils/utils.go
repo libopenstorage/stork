@@ -1029,12 +1029,12 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 		job.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
 	}
 
-	// logrus.Debug("kartik adding the capability DAC_OVERRIDE")
-	// job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
-	// 	Add: []corev1.Capability{
-	// 		"DAC_OVERRIDE",
-	// 	},
-	// }
+	logrus.Debug("kartik adding the capability DAC_OVERRIDE")
+	job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
+		Add: []corev1.Capability{
+			"DAC_OVERRIDE",
+		},
+	}
 	// call GetOcpNsUidGid to get the UID and GID from the namespace annotation if it is an OCP cluster.
 	// In case of OCP we cannot run with hardcoded UID and GID or backup CR preserved UID and GID.
 	// We need to run with the UID and GID from the namespace annotation.
@@ -1086,19 +1086,18 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 		Drop: []corev1.Capability{
 			"ALL",
 		},
-		Add: []corev1.Capability{
-			"DAC_OVERRIDE",
-		},
 	}
+
 	if isOcp {
 		if job.Spec.Template.Annotations == nil {
 			job.Spec.Template.Annotations = make(map[string]string)
 		}
-		logrus.Infof("Adding annotation to force the pod to adopt dac_override scc in OCP")
-		// job.Spec.Template.Annotations["openshift.io/required-scc"] = "anyuid"
-		job.Spec.Template.Annotations["openshift.io/scc"] = "allow-dac-override-scc"
+		logrus.Infof("Adding annotation to force the pod to adopt allow-dac-override-scc scc in OCP")
+		job.Spec.Template.Annotations["openshift.io/required-scc"] = "allow-dac-override-scc"
 		return job, nil
 	}
+
+
 	return job, nil
 }
 
