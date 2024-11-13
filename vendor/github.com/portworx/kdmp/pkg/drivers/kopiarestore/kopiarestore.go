@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/kdmp/pkg/jobratelimit"
 	kdmpops "github.com/portworx/kdmp/pkg/util/ops"
 	"github.com/portworx/sched-ops/k8s/batch"
+	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -116,6 +117,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+	/*
 	// Check whether mount point failure
 	mountFailed := utils.IsJobPodMountFailed(job, namespace)
 	if mountFailed {
@@ -123,6 +125,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		errMsg := fmt.Sprintf("job [%v/%v] failed to mount pvc, please check job pod's description for more detail", namespace, name)
 		return utils.ToJobStatus(0, errMsg, batchv1.JobFailed), nil
 	}
+	*/
 	err = utils.JobNodeExists(job)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to fetch the node info tied to the job %s/%s: %v", namespace, name, err)
@@ -171,7 +174,19 @@ func jobFor(
 	vb *v1alpha1.VolumeBackup,
 	jobName string,
 ) (*batchv1.Job, error) {
+	var pxd = false
 	labels := addJobLabels(jobOption)
+	pvc, err := coreops.Instance().GetPersistentVolumeClaim(jobOption.DestinationPVCName, jobOption.Namespace)
+	if err != nil {
+		logrus.Infof("jobFor: failed in fetching the pvc %v/%v: %v", jobOption.DestinationPVCName, jobOption.Namespace, err)
+		return nil, err
+	}
+	if _, ok := pvc.Annotations["volume.kubernetes.io/storage-provisioner"]; ok {
+		if pvc.Annotations["volume.kubernetes.io/storage-provisioner"] == "kubernetes.io/portworx-volume" || pvc.Annotations["volume.kubernetes.io/storage-provisioner"] == "pxd.portworx.com" {
+			pxd = true
+		}
+	}
+	logrus.Infof("pvc - %v/%v - pxd flag %v", jobOption.DestinationPVCName, jobOption.Namespace, pxd)
 
 	resources, err := utils.KopiaResourceRequirements(jobOption.JobConfigMap, jobOption.JobConfigMapNs)
 	if err != nil {
@@ -285,7 +300,12 @@ func jobFor(
 			},
 		},
 	}
-
+	if pxd {
+		job.Spec.Template.Spec.SchedulerName = "stork"
+		logrus.Infof("pxd pod, setting the scheduler to stork")
+		job.ObjectMeta.Annotations["stork.libopenstorage.org/preferRemoteNodeOnly"] = "true"
+		logrus.Infof("job pod annotation %v", job.ObjectMeta.Annotations)
+	}
 	// Add the image secret in job spec only if it is present in the stork deployment.
 	if len(imageRegistrySecret) != 0 {
 		job.Spec.Template.Spec.ImagePullSecrets = utils.ToImagePullSecret(utils.GetImageSecretName(jobName))

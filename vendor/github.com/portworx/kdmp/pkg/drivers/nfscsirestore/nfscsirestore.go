@@ -80,6 +80,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
+	/*
 	// Check for mount point failure
 	mountFailed := utils.IsJobPodMountFailed(job, namespace)
 	if mountFailed {
@@ -87,6 +88,7 @@ func (d Driver) JobStatus(id string) (*drivers.JobStatus, error) {
 		errMsg := fmt.Sprintf("job [%v/%v] failed while mounting NFS mount endpoint", namespace, name)
 		return utils.ToJobStatus(0, errMsg, batchv1.JobFailed), nil
 	}
+	*/
 	var jobStatus batchv1.JobConditionType
 	if len(job.Status.Conditions) != 0 {
 		jobStatus = job.Status.Conditions[0].Type
