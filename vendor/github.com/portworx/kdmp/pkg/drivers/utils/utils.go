@@ -78,7 +78,7 @@ const (
 	OcpGidRangeAnnotationKey    = "openshift.io/sa.scc.supplemental-groups"
 	kopiaBackupString           = "kopiaexecutor backup"
 	// if providerType in node spec has this string then it is GCP hosted cluster
-	GCPBasedClusterString = "gce://"
+	GCPBasedClusterString    = "gce://"
 	runJobPodWithDacOverride = "KDMP_JOB_WITH_DAC"
 )
 
@@ -1028,13 +1028,6 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 	if job.Spec.Template.Spec.Containers[0].SecurityContext == nil {
 		job.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
 	}
-
-	// logrus.Debug("kartik adding the capability DAC_OVERRIDE")
-	// job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
-	// 	Add: []corev1.Capability{
-	// 		"DAC_OVERRIDE",
-	// 	},
-	// }
 	// call GetOcpNsUidGid to get the UID and GID from the namespace annotation if it is an OCP cluster.
 	// In case of OCP we cannot run with hardcoded UID and GID or backup CR preserved UID and GID.
 	// We need to run with the UID and GID from the namespace annotation.
@@ -1062,11 +1055,18 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 		// Add fsgroup in Pod security context with the same UID as RunAsUser
 		// But we shouldn't add fsgroup if it is a kopia backup because it will alter the permission
 		// of the backup pod filesystem.
-		// if !strings.Contains(job.Spec.Template.Spec.Containers[0].Command[0], kopiaBackupString) {
-		// 	job.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
-		// 		FSGroup: &uid,
-		// 	}
-		// }
+		isKopiaBackup := false
+		for _, cmd := range job.Spec.Template.Spec.Containers[0].Command {
+			if strings.Contains(cmd, kopiaBackupString) {
+				isKopiaBackup = true
+			}
+		}
+		if !isKopiaBackup {
+			job.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
+				FSGroup: &uid,
+			}
+		}
+
 	}
 	if podGroupId != "" {
 		gid, err := strconv.ParseInt(podGroupId, 10, 64)
@@ -1100,7 +1100,6 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 		job.Spec.Template.Annotations["openshift.io/required-scc"] = "allow-dac-override-scc"
 		return job, nil
 	}
-
 
 	return job, nil
 }
