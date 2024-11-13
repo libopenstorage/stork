@@ -9,6 +9,7 @@ import (
 
 	version "github.com/hashicorp/go-version"
 	storkversion "github.com/libopenstorage/stork/pkg/version"
+	v1 "github.com/openshift/api/security/v1" // Provides SecurityContextConstraints type
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	rbacops "github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
@@ -21,8 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
-	"github.com/openshift/api/security/v1"  // Provides SecurityContextConstraints type
-
 )
 
 const (
@@ -164,7 +163,7 @@ func addRoleBindingForScc(name string, namespace string, sccClusterRoleName stri
 	// if !ok || value != "true" {
 	// 	return false, nil
 	// }
-	
+
 	sccName := "allow-dac-override-scc"
 	logrus.Debugf("kartik scc which is to be created is: %v", sccName)
 	if err := ensureDACOverrideSCC(sccName); err != nil {
@@ -172,63 +171,63 @@ func addRoleBindingForScc(name string, namespace string, sccClusterRoleName stri
 	}
 
 	// Step 2: Check if the ClusterRole for this SCC exists, create it if it doesn't
-    _, err := rbacops.Instance().GetClusterRole(sccClusterRoleName)
-    if err != nil {
-        if errors.IsNotFound(err) {
-            // Define the ClusterRole to allow use of the custom SCC
-            _, err = rbacops.Instance().CreateClusterRole(&rbacv1.ClusterRole{
-                ObjectMeta: metav1.ObjectMeta{
-                    Name: sccClusterRoleName,
-                },
-                Rules: []rbacv1.PolicyRule{
-                    {
-                        APIGroups:     []string{"security.openshift.io"},
-                        Resources:     []string{"securitycontextconstraints"},
-                        ResourceNames: []string{sccName},
-                        Verbs:         []string{"use"},
-                    },
-                },
-            })
-            if err != nil {
-                return true, fmt.Errorf("failed to create ClusterRole %s: %v", sccClusterRoleName, err)
-            }
-            fmt.Printf("ClusterRole %s created successfully\n", sccClusterRoleName)
-        } else {
-            return true, fmt.Errorf("failed to check ClusterRole %s: %v", sccClusterRoleName, err)
-        }
-    } else {
-        fmt.Printf("ClusterRole %s already exists\n", sccClusterRoleName)
-    }
+	_, err := rbacops.Instance().GetClusterRole(sccClusterRoleName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Define the ClusterRole to allow use of the custom SCC
+			_, err = rbacops.Instance().CreateClusterRole(&rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: sccClusterRoleName,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"security.openshift.io"},
+						Resources:     []string{"securitycontextconstraints"},
+						ResourceNames: []string{sccName},
+						Verbs:         []string{"use"},
+					},
+				},
+			})
+			if err != nil {
+				return true, fmt.Errorf("failed to create ClusterRole %s: %v", sccClusterRoleName, err)
+			}
+			fmt.Printf("ClusterRole %s created successfully\n", sccClusterRoleName)
+		} else {
+			return true, fmt.Errorf("failed to check ClusterRole %s: %v", sccClusterRoleName, err)
+		}
+	} else {
+		fmt.Printf("ClusterRole %s already exists\n", sccClusterRoleName)
+	}
 
-    // Step 3: Create ClusterRoleBinding for the service account
-    clusterRoleBinding := &rbacv1.ClusterRoleBinding{
-        ObjectMeta: metav1.ObjectMeta{
-            Name: name + "-dac-override-binding",
+	// Step 3: Create ClusterRoleBinding for the service account
+	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-dac-override-binding",
 			Namespace: namespace,
 			Annotations: map[string]string{
 				SkipResourceAnnotation: "true",
 			},
-        },
-        RoleRef: rbacv1.RoleRef{
-            APIGroup: rbacv1.GroupName,
-            Kind:     "ClusterRole",
-            Name:     sccClusterRoleName,
-        },
-        Subjects: []rbacv1.Subject{
-            {
-                Kind:      rbacv1.ServiceAccountKind,
-                Name:      name,       // Service account name
-                Namespace: namespace,  // Namespace where service account is located
-            },
-        },
-    }
-    _, err = rbacops.Instance().CreateClusterRoleBinding(clusterRoleBinding)
-    if err != nil && !errors.IsAlreadyExists(err) {
-        return true, fmt.Errorf("failed to create ClusterRoleBinding for %s/%s: %s", namespace, name, err)
-    }
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     sccClusterRoleName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      name,      // Service account name
+				Namespace: namespace, // Namespace where service account is located
+			},
+		},
+	}
+	_, err = rbacops.Instance().CreateClusterRoleBinding(clusterRoleBinding)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return true, fmt.Errorf("failed to create ClusterRoleBinding for %s/%s: %s", namespace, name, err)
+	}
 
-    fmt.Println("ClusterRoleBinding created successfully for DAC_OVERRIDE SCC")
-    return false, nil
+	fmt.Println("ClusterRoleBinding created successfully for DAC_OVERRIDE SCC")
+	return false, nil
 
 }
 
@@ -256,77 +255,80 @@ func getSCC(sccName string) (*unstructured.Unstructured, error) {
 
 func createSCC(sccName string) error {
 	logrus.Debug("kartik Entering create scc with dynmaic client")
-    client, err := getDynamicClient()
-    if err != nil {
-        return err
-    }
+	client, err := getDynamicClient()
+	if err != nil {
+		return err
+	}
 
-    // Define the SCC using the security/v1 API types
-    scc := &v1.SecurityContextConstraints{
-        TypeMeta: metav1.TypeMeta{
+	// Define the SCC using the security/v1 API types
+	scc := &v1.SecurityContextConstraints{
+		TypeMeta: metav1.TypeMeta{
 			APIVersion: "security.openshift.io/v1",
 			Kind:       "SecurityContextConstraints",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-            Name: sccName,
-        },
+			Name: sccName,
+		},
 		AllowedCapabilities: []corev1.Capability{
 			"DAC_OVERRIDE",
 		},
-        RunAsUser: v1.RunAsUserStrategyOptions{
-            Type: v1.RunAsUserStrategyRunAsAny,
-        },
-        SELinuxContext: v1.SELinuxContextStrategyOptions{
-            Type: v1.SELinuxStrategyRunAsAny,
-        },
-        FSGroup: v1.FSGroupStrategyOptions{
-            Type: v1.FSGroupStrategyRunAsAny,
-        },
-        SupplementalGroups: v1.SupplementalGroupsStrategyOptions{
-            Type: v1.SupplementalGroupsStrategyRunAsAny,
-        },
-    }
+		RunAsUser: v1.RunAsUserStrategyOptions{
+			Type: v1.RunAsUserStrategyRunAsAny,
+		},
+		SELinuxContext: v1.SELinuxContextStrategyOptions{
+			Type: v1.SELinuxStrategyRunAsAny,
+		},
+		FSGroup: v1.FSGroupStrategyOptions{
+			Type: v1.FSGroupStrategyRunAsAny,
+		},
+		SupplementalGroups: v1.SupplementalGroupsStrategyOptions{
+			Type: v1.SupplementalGroupsStrategyRunAsAny,
+		},
+		SeccompProfiles: []string{
+			"runtime/default",
+		},
+	}
 
-    // Convert the SCC object to unstructured JSON for dynamic client
-    sccUnstructured, err := toUnstructured(scc)
-    if err != nil {
-        return fmt.Errorf("failed to convert SCC to unstructured: %v", err)
-    }
+	// Convert the SCC object to unstructured JSON for dynamic client
+	sccUnstructured, err := toUnstructured(scc)
+	if err != nil {
+		return fmt.Errorf("failed to convert SCC to unstructured: %v", err)
+	}
 
-    // Create the SCC
-    _, err = client.Resource(sccGVR).Create(context.TODO(), sccUnstructured, metav1.CreateOptions{})
-    if err != nil {
-        return fmt.Errorf("failed to create SCC %s: %v", sccName, err)
-    }
-    fmt.Printf("SCC %s created successfully\n", sccName)
-    return nil
+	// Create the SCC
+	_, err = client.Resource(sccGVR).Create(context.TODO(), sccUnstructured, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create SCC %s: %v", sccName, err)
+	}
+	fmt.Printf("SCC %s created successfully\n", sccName)
+	return nil
 }
 
 func toUnstructured(obj interface{}) (*unstructured.Unstructured, error) {
-    data, err := json.Marshal(obj)
-    if err != nil {
+	data, err := json.Marshal(obj)
+	if err != nil {
 		logrus.Debugf("kartik error in marsshaling scc: %v", err)
-        return nil, err
-    }
-    unstructuredObj := &unstructured.Unstructured{}
-    if err := unstructuredObj.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+	unstructuredObj := &unstructured.Unstructured{}
+	if err := unstructuredObj.UnmarshalJSON(data); err != nil {
 		logrus.Debugf("kartik error in unmarshaling scc: %v", err)
-        return nil, err
-    }
-    return unstructuredObj, nil
+		return nil, err
+	}
+	return unstructuredObj, nil
 }
 
 func ensureDACOverrideSCC(sccName string) error {
-    _, err := getSCC(sccName)
-    if err != nil {
+	_, err := getSCC(sccName)
+	if err != nil {
 		logrus.Debugf("kartik error in getting scc: %v", err)
-        if errors.IsNotFound(err) {
-            return createSCC(sccName)
-        }
-        return fmt.Errorf("failed to get SCC %s: %v", sccName, err)
-    }
-    fmt.Printf("SCC %s already exists\n", sccName)
-    return nil
+		if errors.IsNotFound(err) {
+			return createSCC(sccName)
+		}
+		return fmt.Errorf("failed to get SCC %s: %v", sccName, err)
+	}
+	fmt.Printf("SCC %s already exists\n", sccName)
+	return nil
 }
 
 // CleanServiceAccount removes a service account with a corresponding role and rolebinding.

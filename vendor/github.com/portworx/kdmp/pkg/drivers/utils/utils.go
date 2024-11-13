@@ -1029,12 +1029,12 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 		job.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
 	}
 
-	logrus.Debug("kartik adding the capability DAC_OVERRIDE")
-	job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
-		Add: []corev1.Capability{
-			"DAC_OVERRIDE",
-		},
-	}
+	// logrus.Debug("kartik adding the capability DAC_OVERRIDE")
+	// job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
+	// 	Add: []corev1.Capability{
+	// 		"DAC_OVERRIDE",
+	// 	},
+	// }
 	// call GetOcpNsUidGid to get the UID and GID from the namespace annotation if it is an OCP cluster.
 	// In case of OCP we cannot run with hardcoded UID and GID or backup CR preserved UID and GID.
 	// We need to run with the UID and GID from the namespace annotation.
@@ -1082,9 +1082,13 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 	job.Spec.Template.Spec.Containers[0].SecurityContext.SeccompProfile = &corev1.SeccompProfile{
 		Type: "RuntimeDefault",
 	}
+	logrus.Debug("kartik adding the capability DAC_OVERRIDE")
 	job.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{
 		Drop: []corev1.Capability{
 			"ALL",
+		},
+		Add: []corev1.Capability{
+			"DAC_OVERRIDE",
 		},
 	}
 
