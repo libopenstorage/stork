@@ -1682,7 +1682,7 @@ func (c *csiDriver) createJob(pvc *v1.PersistentVolumeClaim, namespace string) (
 	}
 
 	// Setup service account
-	if err := utils.SetupServiceAccount(jobName, namespace, roleFor()); err != nil {
+	if err := utils.SetupServiceAccount(jobName, namespace, pvc.Name, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", namespace, jobName, err)
 		logrus.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)

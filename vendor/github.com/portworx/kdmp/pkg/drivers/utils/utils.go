@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -78,7 +79,9 @@ const (
 	OcpGidRangeAnnotationKey    = "openshift.io/sa.scc.supplemental-groups"
 	kopiaBackupString           = "kopiaexecutor backup"
 	// if providerType in node spec has this string then it is GCP hosted cluster
-	GCPBasedClusterString = "gce://"
+	GCPBasedClusterString    = "gce://"
+	provisionersToUseAnyUid  = "PROVISIONERS_TO_USE_ANYUID"
+	pvcStorageProvisionerKey = "volume.kubernetes.io/storage-provisioner"
 )
 
 var (
@@ -1020,7 +1023,7 @@ func GetShortUID(uid string) string {
 // If static uids like kdmpJobUid or kdmpJobGid is used that means
 // these are dummy UIDs used for backing up resources to backuplocation
 // which doesn't need specific UID specific permission.
-func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*batchv1.Job, error) {
+func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId, pvcName, pvcNamespace string) (*batchv1.Job, error) {
 	if job == nil {
 		return job, fmt.Errorf("recieved a nil job object to add security context")
 	}
@@ -1034,6 +1037,34 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 	if err != nil {
 		return nil, err
 	}
+
+	// If PROVISIONERS_TO_USE_ANYUID is set in kdmp-config, then add rolebinding for anyuid SCC
+	provisionersListToUseAnyUid, err := extractArrayFromKdmpConfigMap(provisionersToUseAnyUid)
+	if err != nil {
+		logrus.Errorf("failed to extract provisioners list from configmap: %v", err)
+		return nil, err
+	}
+
+	// Get provisioner name from the pvcName, pvcNamespace
+	provisionerName, err := GetProvisionerNameFromPvc(pvcName, pvcNamespace)
+	if err != nil {
+		logrus.Errorf("failed to get storage class name for pvc [%s/%s]: %v", pvcNamespace, pvcName, err)
+		return nil, err
+	}
+
+	if len(provisionersListToUseAnyUid) > 0 {
+		logrus.Infof("PROVISIONERS_TO_USE_ANYUID is set to use, running the job %v with anyuid SCC", job.Name)
+		// Add the annotation to force the pod to adopt anyuid scc in OCP
+		// It may not work if the pod's SA doesn't have permission to use anyuid SCC
+		if isOcp && contains(provisionersListToUseAnyUid, provisionerName) {
+			if job.Spec.Template.Annotations == nil {
+				job.Spec.Template.Annotations = make(map[string]string)
+			}
+			job.Spec.Template.Annotations["openshift.io/required-scc"] = "anyuid"
+			return job, nil
+		}
+	}
+
 	// if the namespace is OCP, then overwrite the UID and GID from the namespace annotation
 	if isOcp {
 		podUserId = ocpUid
@@ -1177,4 +1208,47 @@ func GetAccessModeFromPvc(srcPvcName, srcPvcNameSpace string) ([]corev1.Persiste
 	}
 	accessModes := srcPvc.Status.AccessModes
 	return accessModes, nil
+}
+
+func GetProvisionerNameFromPvc(pvcName, pvcNamespace string) (string, error) {
+	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pvcNamespace)
+	if err != nil {
+		return "", err
+	}
+	provisionerName := pvc.Annotations[pvcStorageProvisionerKey]
+	return provisionerName, nil
+}
+
+// this function extracts an array from a kdmp-config
+func extractArrayFromKdmpConfigMap(key string) ([]string, error) {
+	// read the kdmp-config configmap to read a key named key
+	kdmpData, err := core.Instance().GetConfigMap(KdmpConfig, defaultPXNamespace)
+	if err != nil {
+		logrus.Tracef("error reading kdmp config map: %v", err)
+		return nil, err
+	}
+
+	// Retrieve the JSON string from the ConfigMap
+	jsonData, ok := kdmpData.Data[key]
+	if !ok {
+		return nil, fmt.Errorf("key %s not found in ConfigMap", key)
+	}
+
+	// Parse the JSON string into a Go slice
+	var arrayData []string
+	if err := json.Unmarshal([]byte(jsonData), &arrayData); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	return arrayData, nil
+}
+
+// Helper function to check if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

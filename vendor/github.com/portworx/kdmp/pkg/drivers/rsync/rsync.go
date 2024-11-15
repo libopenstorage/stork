@@ -128,7 +128,7 @@ func jobFor(srcVol, dstVol, dataexportUID, namespace string, labels map[string]s
 	}
 
 	jobName := toJobName(srcVol, dataexportUID)
-	if err := utils.SetupServiceAccount(jobName, namespace, roleFor(utils.RsyncOpenshiftSCC())); err != nil {
+	if err := utils.SetupServiceAccount(jobName, namespace, srcVol, roleFor(utils.RsyncOpenshiftSCC())); err != nil {
 		return nil, err
 	}
 

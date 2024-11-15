@@ -396,7 +396,7 @@ func jobFor(
 	}
 	// Add security Context only if the PSA is enabled.
 	if jobOption.PodUserId != "" || jobOption.PodGroupId != "" {
-		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId)
+		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId, jobOption.SourcePVCName, jobOption.SourcePVCNamespace)
 		if err != nil {
 			return nil, err
 		}
@@ -537,7 +537,7 @@ func buildJob(jobName string, jobOptions drivers.JobOpts) (*batchv1.Job, error) 
 		}
 	}
 	resourceNamespace = jobOptions.Namespace
-	if err := utils.SetupServiceAccount(jobName, resourceNamespace, roleFor()); err != nil {
+	if err := utils.SetupServiceAccount(jobName, resourceNamespace, jobOptions.SourcePVCName, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", resourceNamespace, jobName, err)
 		logrus.Errorf("%s: %v", fn, errMsg)
 		return nil, fmt.Errorf(errMsg)

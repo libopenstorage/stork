@@ -159,7 +159,7 @@ func jobFor(
 	}
 
 	genName := toJobName(pvcName)
-	if err := utils.SetupServiceAccount(genName, namespace, roleFor()); err != nil {
+	if err := utils.SetupServiceAccount(genName, namespace, pvcName, roleFor()); err != nil {
 		return nil, err
 	}
 

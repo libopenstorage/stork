@@ -250,7 +250,7 @@ func buildJob(jobName string, o drivers.JobOpts) (*batchv1.Job, error) {
 		return nil, err
 	}
 
-	if err := utils.SetupServiceAccount(jobName, o.Namespace, roleFor()); err != nil {
+	if err := utils.SetupServiceAccount(jobName, o.Namespace, o.SourcePVCName, roleFor()); err != nil {
 		return nil, err
 	}
 	pods, err := coreops.Instance().GetPodsUsingPVC(o.SourcePVCName, o.Namespace)

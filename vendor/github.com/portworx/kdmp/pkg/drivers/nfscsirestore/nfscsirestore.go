@@ -141,7 +141,7 @@ func buildJob(
 	logrus.Infof("Inside %s function", funct)
 
 	jobName := utils.GetCsiRestoreJobName(drivers.NFSCSIRestore, jobOptions.DataExportName)
-	if err := utils.SetupNFSServiceAccount(jobName, jobOptions.Namespace, roleFor()); err != nil {
+	if err := utils.SetupNFSServiceAccount(jobName, jobOptions.Namespace, jobOptions.DestinationPVCName, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", jobOptions.Namespace, jobOptions.DataExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return nil, fmt.Errorf(errMsg)
@@ -277,7 +277,7 @@ func jobForRestoreCSISnapshot(
 	}
 	// Add security Context only if the PSA is enabled.
 	if jobOption.PodUserId != "" || jobOption.PodGroupId != "" {
-		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId)
+		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId, jobOption.DestinationPVCName, jobOption.Namespace)
 		if err != nil {
 			return nil, err
 		}

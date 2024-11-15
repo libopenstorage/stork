@@ -187,7 +187,7 @@ func jobFor(
 		return nil, err
 	}
 
-	if err := utils.SetupServiceAccount(jobName, jobOption.Namespace, roleFor()); err != nil {
+	if err := utils.SetupServiceAccount(jobName, jobOption.Namespace, jobOption.DestinationPVCName, roleFor()); err != nil {
 		return nil, err
 	}
 
@@ -297,7 +297,7 @@ func jobFor(
 	}
 	// Add security Context only if the PSA is enabled.
 	if jobOption.PodUserId != "" || jobOption.PodGroupId != "" {
-		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId)
+		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId, jobOption.DestinationPVCName, jobOption.Namespace)
 		if err != nil {
 			return nil, err
 		}

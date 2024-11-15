@@ -140,7 +140,7 @@ func buildJob(
 	funct := "NfsbuildJob"
 	// Setup service account using same role permission as stork role
 	logrus.Infof("Inside %s function", funct)
-	if err := utils.SetupNFSServiceAccount(jobOptions.RestoreExportName, jobOptions.Namespace, roleFor()); err != nil {
+	if err := utils.SetupNFSServiceAccount(jobOptions.RestoreExportName, jobOptions.Namespace, jobOptions.SourcePVCName, roleFor()); err != nil {
 		errMsg := fmt.Sprintf("error creating service account %s/%s: %v", jobOptions.Namespace, jobOptions.RestoreExportName, err)
 		logrus.Errorf("%s: %v", funct, errMsg)
 		return nil, fmt.Errorf(errMsg)
@@ -300,7 +300,7 @@ func jobForBackupResource(
 	// Not passing the groupId as we do not want to set the RunAsGroup field in the securityContext
 	// This helps us in setting the primaryGroup ID to root for the user ID.
 	if uid != "" {
-		job, err = utils.AddSecurityContextToJob(job, uid, "")
+		job, err = utils.AddSecurityContextToJob(job, uid, "", jobOption.SourcePVCName, jobOption.SourcePVCNamespace)
 		if err != nil {
 			return nil, err
 		}
