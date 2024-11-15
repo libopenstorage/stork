@@ -66,9 +66,11 @@ func validateAndDestroyCrMigration(t *testing.T, appName string, appPath string)
 	log.FailOnError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	appData := asyncdr.GetAppData(appName)
-	podsCreated, err := asyncdr.PrepareApp(appName, appPath)
+	_, err = asyncdr.PrepareApp(appName, appPath)
 	log.FailOnError(t, err, "Error creating pods")
 
+	podsCreated, err := core.Instance().GetPods(appData.Ns, nil)
+	log.FailOnError(t, err, "Error getting podlist, err: %v", err)
 	podsCreatedLen := len(podsCreated.Items)
 	log.InfoD("podsCreatedLen: %v", podsCreatedLen)
 	sourceClusterConfigPath, err := getClusterConfigPath(srcConfig)

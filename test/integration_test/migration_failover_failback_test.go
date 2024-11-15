@@ -299,6 +299,8 @@ func testMigrationFailback(
 	}
 	log.FailOnError(t, err, "Error scheduling cluster pair")
 
+	err = schedulerDriver.SetConfig(remoteFilePath)
+	log.FailOnError(t, err, "Error setting remote config")
 	// apply migration specs
 	err = schedulerDriver.AddTasks(ctxsReverse[0],
 		scheduler.ScheduleOptions{AppKeys: []string{instanceID}})

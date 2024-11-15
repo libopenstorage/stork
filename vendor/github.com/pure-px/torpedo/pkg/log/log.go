@@ -443,6 +443,7 @@ func SetTestName(testName string) {
 		testLog := New()
 		loggersMap.Store(testName, testLog)
 	}
+	dash.SetDashTestCaseId()
 
 }
 

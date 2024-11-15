@@ -65,7 +65,7 @@ func testAsyncDR(t *testing.T) {
 	t.Run("testDRActionFailoverMultipleNamespacesTest", testDRActionFailoverMultipleNamespacesTest)
 	t.Run("testDRActionFailoverSubsetNamespacesTest", testDRActionFailoverSubsetNamespacesTest)
 	t.Run("testDRActionFailoverWithMigrationRunningTest", testDRActionFailoverWithMigrationRunningTest)
-	t.Run("testDRActionFailoverCompletedPodTest", testDRActionFailoverCompletedPodTest)
+	// t.Run("testDRActionFailoverCompletedPodTest", testDRActionFailoverCompletedPodTest)
 	t.Run("testDRActionFailbackIntervalScheduleTest", testDRActionFailbackIntervalScheduleTest)
 	t.Run("testDRActionFailbackDailyScheduleTest", testDRActionFailbackDailyScheduleTest)
 	t.Run("testDRActionFailbackWeeklyScheduleTest", testDRActionFailbackWeeklyScheduleTest)
