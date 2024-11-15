@@ -2076,7 +2076,6 @@ func (a *ApplicationBackupController) backupResources(
 		if err != nil {
 			return err
 		}
-		return nil
 	}
 	// Do any additional preparation for the resources if required
 	if err = a.prepareResources(backup, allObjects); err != nil {
