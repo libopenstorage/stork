@@ -185,7 +185,7 @@ func main() {
 			Name:  "webhook-skip-resources-annotation",
 			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "kubevirt-skip-preload-statfs",
 			Usage: "Skip preloading statfs shared library for Kubevirt VM live migration",
 		},
