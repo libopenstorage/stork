@@ -417,7 +417,8 @@ func startNfsResourceJob(
 	if err != nil {
 		return "", err
 	}
-
+	// update latest JobFailureRetryTimeout
+	utils.UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs)
 	switch drv.Name() {
 	case drivers.NFSBackup:
 		return drv.StartJob(
