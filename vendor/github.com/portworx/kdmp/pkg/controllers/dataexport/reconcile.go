@@ -1907,6 +1907,8 @@ func startTransferJob(
 	if err != nil {
 		return "", err
 	}
+	// update latest JobFailureRetryTimeout
+	utils.UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs)
 
 	switch drv.Name() {
 	case drivers.Rsync:
@@ -1980,6 +1982,7 @@ func startTransferJob(
 			drivers.WithNfsExportDir(nfsExportPath),
 			drivers.WithPodUserId(psaJobUid),
 			drivers.WithPodGroupId(psaJobGid),
+			drivers.WithNfsMountOption(nfsMountOption),
 		)
 	}
 
@@ -2408,6 +2411,8 @@ func startNfsCSIRestoreVolumeJob(
 		return "", err
 	}
 
+	// update latest JobFailureRetryTimeout
+	utils.UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs)
 	switch drv.Name() {
 	case drivers.NFSCSIRestore:
 		return drv.StartJob(

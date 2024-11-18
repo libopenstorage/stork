@@ -79,6 +79,10 @@ const (
 	kopiaBackupString           = "kopiaexecutor backup"
 	// if providerType in node spec has this string then it is GCP hosted cluster
 	GCPBasedClusterString = "gce://"
+	// PxbJobFailureRetryTimeoutKey defines timeout key name to be set after job failure due to mount failure
+	PxbJobFailureRetryTimeoutKey = "MOUNT_FAILURE_RETRY_TIMEOUT"
+	// PxbDefaultJobFailureRetryTimeout default timeout after job failure due to mount failure
+	PxbDefaultJobFailureRetryTimeout = "30"
 )
 
 var (
@@ -92,6 +96,8 @@ var volumeAPICallBackoff = wait.Backoff{
 	Factor:   volumeFactor,
 	Steps:    volumeSteps,
 }
+
+var JobFailureRetryTimeout time.Duration
 
 // NamespacedName returns a name in form "<namespace>/<name>".
 func NamespacedName(namespace, name string) string {
@@ -876,7 +882,7 @@ func GetNodeLabelFromDeployment(name, namespace, key string) (map[string]string,
 // IsJobPodMountFailed - checks for mount failure in a Job pod
 func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 	fn := "IsJobPodMountFailed"
-
+	mountFailed := false
 	pod, err := core.Instance().GetPodsByOwner(job.UID, namespace)
 	if err != nil {
 		errMsg := fmt.Sprintf("Getting pod of job [%s/%s] failed: %v", namespace, job.Name, err)
@@ -899,12 +905,23 @@ func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 			}
 			for _, event := range events.Items {
 				if event.Reason == "FailedMount" && event.Count > 0 {
-					return true
+					mountFailed = true
+					break
 				}
 			}
 		}
 	}
-	return false
+
+	if mountFailed {
+		timeSinceStart := time.Since(job.CreationTimestamp.Time)
+		if timeSinceStart >= JobFailureRetryTimeout {
+			logrus.Debugf("%v: job error. Timeout elapsed for volume mount failure of pod [%s/%s]", fn, namespace, pod[0].Name)
+		} else {
+			logrus.Debugf("%v: error in volume mount for pod [%s/%s]. Retry until timeout", fn, namespace, pod[0].Name)
+			mountFailed = false
+		}
+	}
+	return mountFailed
 }
 
 // Check if a job has failed because of podSecurity violation
@@ -1177,4 +1194,28 @@ func GetAccessModeFromPvc(srcPvcName, srcPvcNameSpace string) ([]corev1.Persiste
 	}
 	accessModes := srcPvc.Status.AccessModes
 	return accessModes, nil
+}
+
+// UpdateJobFailureTimeOut this is called in reconciler before starting a new Job to update JobFailureRetryTimeout value
+// if we fail to read the latest values from configMap, we will reset to default value
+// return: This function returns nothing.
+func UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs string) {
+	fn := "UpdateJobFailureTimeOut"
+	timeOut := GetConfigValue(jobConfigMap, jobConfigMapNs, PxbJobFailureRetryTimeoutKey)
+	if timeOut == "" {
+		logrus.Debugf("%v: %s value not found in ConfigMap. Setting to default failure timeout value", fn, PxbJobFailureRetryTimeoutKey)
+		timeOut = PxbDefaultJobFailureRetryTimeout
+	} else {
+		// we could fail here if the value set is invalid or has some junk character
+		duration, err := time.ParseDuration(timeOut + "s")
+		if err != nil || duration <= 0 {
+			logrus.Debugf("%v:invalid %v value set. Should be numberic value > 0. Setting to default failure timeout value", fn, PxbJobFailureRetryTimeoutKey)
+			timeOut = PxbDefaultJobFailureRetryTimeout
+		}
+	}
+	JobFailureRetryTimeout, err := time.ParseDuration(timeOut + "s")
+	if err != nil {
+		// we should never reach here.
+		logrus.Debugf("%v: failed to parse the failure timeout set %v: %v", fn, JobFailureRetryTimeout, err)
+	}
 }
