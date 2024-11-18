@@ -1729,7 +1729,8 @@ func (a *ApplicationRestoreController) applyResources(
 			return err
 		}
 	}
-
+	// Move VM object to last so that dependent objects are applied first.
+	objects = resourcecollector.MoveVMObjectToLast(objects)
 	restore.Status.ResourceCount = len(objects)
 	tempResourceList := make([]*storkapi.ApplicationRestoreResourceInfo, 0)
 	for _, o := range objects {
@@ -1779,6 +1780,7 @@ func (a *ApplicationRestoreController) applyResources(
 			}
 		}
 		if err != nil {
+			logrus.Debugf("error applying resource %v", err)
 			if tempResourceList, err = a.updateResourceStatus(
 				restore,
 				o,
@@ -1789,6 +1791,7 @@ func (a *ApplicationRestoreController) applyResources(
 				return err
 			}
 		} else if retained {
+			logrus.Debugf("error applying resource %v", err)
 			if tempResourceList, err = a.updateResourceStatus(
 				restore,
 				o,
