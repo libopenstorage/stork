@@ -2711,9 +2711,16 @@ func (a *ApplicationBackupController) validateApplicationBackupParameters(backup
 		return fmt.Errorf("both ResourceTypes and ExcludeResourceTypes parameter can not be set together")
 	}
 	if IsBackupObjectTypeVirtualMachine(backup) {
+		//Check if excludeResourceType is not specified
+		if len(backup.Spec.ExcludeResourceTypes) != 0 {
+			return fmt.Errorf("excludeResourceType should be nil for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
+		}
 		//Check resourceTypes is not specified
 		if len(backup.Spec.ResourceTypes) != 0 {
 			return fmt.Errorf("resourceType should be nil for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
+		}
+		if len(backup.Spec.IncludeResources) != 0 {
+			return fmt.Errorf("includeResources should be nil for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
 		}
 		//check skipAutoExecRules is true for custom rules.
 		if backup.Spec.PreExecRule != "" || backup.Spec.PostExecRule != "" {
