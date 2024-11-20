@@ -147,6 +147,12 @@ func buildJob(
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	if err := utils.SetupRoleBindingForSCC(jobName, jobOptions.Namespace, jobOptions.DestinationPVCName); err != nil {
+		errMsg := fmt.Sprintf("error creating role binding %s/%s: %v", jobOptions.Namespace, jobName, err)
+		logrus.Errorf("%s: %v", funct, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	resources, err := utils.NFSResourceRequirements(jobOptions.JobConfigMap, jobOptions.JobConfigMapNs)
 	if err != nil {
 		return nil, err
@@ -277,7 +283,7 @@ func jobForRestoreCSISnapshot(
 	}
 	// Add security Context only if the PSA is enabled.
 	if jobOption.PodUserId != "" || jobOption.PodGroupId != "" {
-		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId)
+		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId, jobOption.DestinationPVCName, jobOption.Namespace)
 		if err != nil {
 			return nil, err
 		}

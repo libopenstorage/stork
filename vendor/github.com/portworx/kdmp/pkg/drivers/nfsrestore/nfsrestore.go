@@ -147,6 +147,12 @@ func buildJob(
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	if err := utils.SetupRoleBindingForSCC(jobOptions.RestoreExportName, jobOptions.Namespace, jobOptions.DestinationPVCName); err != nil {
+		errMsg := fmt.Sprintf("error creating role binding %s/%s: %v", jobOptions.Namespace, jobOptions.RestoreExportName, err)
+		logrus.Errorf("%s: %v", funct, errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	resources, err := utils.NFSResourceRequirements(jobOptions.JobConfigMap, jobOptions.JobConfigMapNs)
 	if err != nil {
 		return nil, err
@@ -323,7 +329,7 @@ func jobForRestoreResource(
 	}
 	// Not passing the groupId as we do not want to set the RunAsGroup field in the securityContext
 	// This helps us in setting the primaryGroup ID to root for the user ID.
-	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, "")
+	job, err = utils.AddSecurityContextToJob(job, utils.KdmpJobUid, "", jobOption.DestinationPVCName, jobOption.Namespace)
 	if err != nil {
 		return nil, err
 	}

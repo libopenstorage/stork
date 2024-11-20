@@ -83,6 +83,8 @@ const (
 	PxbJobFailureRetryTimeoutKey = "MOUNT_FAILURE_RETRY_TIMEOUT"
 	// PxbDefaultJobFailureRetryTimeout default timeout after job failure due to mount failure
 	PxbDefaultJobFailureRetryTimeout = "30"
+	provisionersToUseAnyUid          = "PROVISIONERS_TO_USE_ANYUID"
+	pvcStorageProvisionerKey         = "volume.kubernetes.io/storage-provisioner"
 )
 
 var (
@@ -1037,7 +1039,7 @@ func GetShortUID(uid string) string {
 // If static uids like kdmpJobUid or kdmpJobGid is used that means
 // these are dummy UIDs used for backing up resources to backuplocation
 // which doesn't need specific UID specific permission.
-func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*batchv1.Job, error) {
+func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId, pvcName, pvcNamespace string) (*batchv1.Job, error) {
 	if job == nil {
 		return job, fmt.Errorf("recieved a nil job object to add security context")
 	}
@@ -1051,6 +1053,36 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId string) (*b
 	if err != nil {
 		return nil, err
 	}
+
+	// If PROVISIONERS_TO_USE_ANYUID is set in kdmp-config, then add rolebinding for anyuid SCC
+	provisionersListToUseAnyUid, err := GetArrayConfigValue(KdmpConfigmapName, KdmpConfigmapNamespace, provisionersToUseAnyUid)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to extract provisioners list from configmap: %v", err)
+		logrus.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	// Get provisioner name from the pvcName, pvcNamespace
+	provisionerName, err := GetProvisionerNameFromPvc(pvcName, pvcNamespace)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to get provisionerName name for pvc [%s/%s]: %v", pvcNamespace, pvcName, err)
+		logrus.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	if len(provisionersListToUseAnyUid) > 0 {
+		if isOcp && contains(provisionersListToUseAnyUid, provisionerName) {
+			logrus.Infof("PROVISIONERS_TO_USE_ANYUID is set to use, running the job %v with anyuid SCC", job.Name)
+			// Add the annotation to force the pod to adopt anyuid scc in OCP
+			// It may not work if the pod's SA doesn't have permission to use anyuid SCC
+			if job.Spec.Template.Annotations == nil {
+				job.Spec.Template.Annotations = make(map[string]string)
+			}
+			job.Spec.Template.Annotations["openshift.io/required-scc"] = "anyuid"
+			return job, nil
+		}
+	}
+
 	// if the namespace is OCP, then overwrite the UID and GID from the namespace annotation
 	if isOcp {
 		podUserId = ocpUid
@@ -1218,4 +1250,37 @@ func UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs string) {
 		// we should never reach here.
 		logrus.Debugf("%v: failed to parse the failure timeout set %v: %v", fn, JobFailureRetryTimeout, err)
 	}
+}
+
+func GetProvisionerNameFromPvc(pvcName, pvcNamespace string) (string, error) {
+	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pvcNamespace)
+	if err != nil {
+		return "", err
+	}
+	provisionerName := pvc.Annotations[pvcStorageProvisionerKey]
+	return provisionerName, nil
+}
+
+// GetArrayConfigValue reads the configMap and returns the an array value of requested parameter
+// If error in reading from configmap, we try reading from env variable
+// Ex: provisionersToUseAnyUid: provisioner1,provisioner2 will return ["provisioner1", "provisioner2"]
+func GetArrayConfigValue(cm, ns, key string) ([]string, error) {
+	arrayDataAsString := GetConfigValue(cm, ns, key)
+
+	arrayData := strings.Split(arrayDataAsString, ",")
+	for k, str := range arrayData {
+		arrayData[k] = strings.TrimSpace(str)
+	}
+
+	return arrayData, nil
+}
+
+// Helper function to check if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

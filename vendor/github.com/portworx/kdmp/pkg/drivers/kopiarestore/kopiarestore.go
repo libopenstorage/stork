@@ -191,6 +191,12 @@ func jobFor(
 		return nil, err
 	}
 
+	if err := utils.SetupRoleBindingForSCC(jobName, jobOption.Namespace, jobOption.DestinationPVCName); err != nil {
+		errMsg := fmt.Sprintf("error creating role binding %s/%s: %v", jobOption.Namespace, jobName, err)
+		logrus.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
 	cmd := strings.Join([]string{
 		"/kopiaexecutor",
 		"restore",
@@ -297,7 +303,7 @@ func jobFor(
 	}
 	// Add security Context only if the PSA is enabled.
 	if jobOption.PodUserId != "" || jobOption.PodGroupId != "" {
-		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId)
+		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId, jobOption.DestinationPVCName, jobOption.Namespace)
 		if err != nil {
 			return nil, err
 		}
