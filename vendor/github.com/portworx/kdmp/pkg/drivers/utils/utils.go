@@ -1054,7 +1054,7 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId, pvcName, p
 		return nil, err
 	}
 
-	// If PROVISIONERS_TO_USE_ANYUID is set in kdmp-config, then add rolebinding for anyuid SCC
+	// If PROVISIONERS_TO_USE_ANYUID is set in kdmp-config, then add anyuid SCC to the job pod
 	provisionersListToUseAnyUid, err := GetArrayConfigValue(KdmpConfigmapName, KdmpConfigmapNamespace, provisionersToUseAnyUid)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to extract provisioners list from configmap: %v", err)
@@ -1062,24 +1062,27 @@ func AddSecurityContextToJob(job *batchv1.Job, podUserId, podGroupId, pvcName, p
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	// Get provisioner name from the pvcName, pvcNamespace
-	provisionerName, err := GetProvisionerNameFromPvc(pvcName, pvcNamespace)
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to get provisionerName name for pvc [%s/%s]: %v", pvcNamespace, pvcName, err)
-		logrus.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-
 	if len(provisionersListToUseAnyUid) > 0 {
-		if isOcp && contains(provisionersListToUseAnyUid, provisionerName) {
-			logrus.Infof("PROVISIONERS_TO_USE_ANYUID is set to use, running the job %v with anyuid SCC", job.Name)
-			// Add the annotation to force the pod to adopt anyuid scc in OCP
-			// It may not work if the pod's SA doesn't have permission to use anyuid SCC
-			if job.Spec.Template.Annotations == nil {
-				job.Spec.Template.Annotations = make(map[string]string)
+		// In case of nfs backup, nfs restore job pods when they are invoked for resources backup, we don't send any pvcName
+		if pvcName != "" {
+			// Get provisioner name from the pvcName, pvcNamespace
+			provisionerName, err := GetProvisionerNameFromPvc(pvcName, pvcNamespace)
+			if err != nil {
+				errMsg := fmt.Sprintf("failed to get provisionerName name for pvc [%s/%s]: %v", pvcNamespace, pvcName, err)
+				logrus.Errorf(errMsg)
+				return nil, fmt.Errorf(errMsg)
 			}
-			job.Spec.Template.Annotations["openshift.io/required-scc"] = "anyuid"
-			return job, nil
+
+			if isOcp && contains(provisionersListToUseAnyUid, provisionerName) {
+				logrus.Infof("PROVISIONERS_TO_USE_ANYUID is set to use, running the job %v with anyuid SCC", job.Name)
+				// Add the annotation to force the pod to adopt anyuid scc in OCP
+				// It may not work if the pod's SA doesn't have permission to use anyuid SCC
+				if job.Spec.Template.Annotations == nil {
+					job.Spec.Template.Annotations = make(map[string]string)
+				}
+				job.Spec.Template.Annotations["openshift.io/required-scc"] = "anyuid"
+				return job, nil
+			}
 		}
 	}
 

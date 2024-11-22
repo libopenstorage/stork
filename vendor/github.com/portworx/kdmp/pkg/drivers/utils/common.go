@@ -144,21 +144,24 @@ func SetupRoleBindingForSCC(name, namespace, pvcName string) error {
 		return fmt.Errorf("failed to check if cluster is OCP: %v", err)
 	}
 
-	provisionerName, err := GetProvisionerNameFromPvc(pvcName, namespace)
-	if err != nil {
-		return fmt.Errorf("failed to get provisioner name from pvc: %v", err)
-	}
-
 	provisionersListToUseAnyUid, err := GetArrayConfigValue(KdmpConfigmapName, KdmpConfigmapNamespace, provisionersToUseAnyUid)
 	if err != nil {
 		logrus.Errorf("failed to extract provisioners list from configmap: %v", err)
 		return err
 	}
+
 	if len(provisionersListToUseAnyUid) > 0 {
-		if isOCP && contains(provisionersListToUseAnyUid, provisionerName) {
-			failed, err := addRoleBindingForScc(name, namespace, AnyUidClusterRoleName)
-			if failed {
-				return err
+		// In case of nfs backup, nfs restore job pods when they are invoked for resources backup, we don't send any pvcName
+		if pvcName != "" {
+			provisionerName, err := GetProvisionerNameFromPvc(pvcName, namespace)
+			if err != nil {
+				return fmt.Errorf("failed to get provisioner name from pvc: %v", err)
+			}
+			if isOCP && contains(provisionersListToUseAnyUid, provisionerName) {
+				failed, err := addRoleBindingForScc(name, namespace, AnyUidClusterRoleName)
+				if failed {
+					return err
+				}
 			}
 		}
 	}
