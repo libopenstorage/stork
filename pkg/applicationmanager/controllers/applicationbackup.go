@@ -2719,9 +2719,6 @@ func (a *ApplicationBackupController) validateApplicationBackupParameters(backup
 		if len(backup.Spec.ResourceTypes) != 0 {
 			return fmt.Errorf("resourceType should be nil for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
 		}
-		if len(backup.Spec.IncludeResources) != 0 {
-			return fmt.Errorf("includeResources should be nil for backup Object type %v", resourcecollector.PxBackupObjectType_virtualMachine)
-		}
 		//check skipAutoExecRules is true for custom rules.
 		if backup.Spec.PreExecRule != "" || backup.Spec.PostExecRule != "" {
 			if !backup.Spec.SkipAutoExecRules {
