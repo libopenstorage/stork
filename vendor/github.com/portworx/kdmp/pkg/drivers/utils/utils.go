@@ -82,7 +82,8 @@ const (
 	// PxbJobFailureRetryTimeoutKey defines timeout key name to be set after job failure due to mount failure
 	PxbJobFailureRetryTimeoutKey = "MOUNT_FAILURE_RETRY_TIMEOUT"
 	// PxbDefaultJobFailureRetryTimeout default timeout after job failure due to mount failure
-	PxbDefaultJobFailureRetryTimeout = "30"
+	// The value is set to little above the pod mount failure timeout of 2m
+	PxbDefaultJobFailureRetryTimeout = "150"
 	provisionersToUseAnyUid          = "PROVISIONERS_TO_USE_ANYUID"
 	pvcStorageProvisionerKey         = "volume.kubernetes.io/storage-provisioner"
 )
@@ -917,9 +918,9 @@ func IsJobPodMountFailed(job *batchv1.Job, namespace string) bool {
 	if mountFailed {
 		timeSinceStart := time.Since(job.CreationTimestamp.Time)
 		if timeSinceStart >= JobFailureRetryTimeout {
-			logrus.Debugf("%v: job error. Timeout elapsed for volume mount failure of pod [%s/%s]", fn, namespace, pod[0].Name)
+			logrus.Debugf("%v: job error. Timeout elapsed %v/%v for volume mount failure of pod [%s/%s]", fn, timeSinceStart, JobFailureRetryTimeout, namespace, pod[0].Name)
 		} else {
-			logrus.Debugf("%v: error in volume mount for pod [%s/%s]. Retry until timeout", fn, namespace, pod[0].Name)
+			logrus.Debugf("%v: error in volume mount for pod [%s/%s]. Retry until timeout %v/%v", fn, namespace, pod[0].Name, timeSinceStart, JobFailureRetryTimeout)
 			mountFailed = false
 		}
 	}
@@ -1238,21 +1239,23 @@ func UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs string) {
 	fn := "UpdateJobFailureTimeOut"
 	timeOut := GetConfigValue(jobConfigMap, jobConfigMapNs, PxbJobFailureRetryTimeoutKey)
 	if timeOut == "" {
-		logrus.Debugf("%v: %s value not found in ConfigMap. Setting to default failure timeout value", fn, PxbJobFailureRetryTimeoutKey)
+		logrus.Debugf("%v: %s value not found in ConfigMap. Setting to default failure timeout value %v", fn, PxbJobFailureRetryTimeoutKey, PxbDefaultJobFailureRetryTimeout)
 		timeOut = PxbDefaultJobFailureRetryTimeout
 	} else {
 		// we could fail here if the value set is invalid or has some junk character
 		duration, err := time.ParseDuration(timeOut + "s")
 		if err != nil || duration <= 0 {
-			logrus.Debugf("%v:invalid %v value set. Should be numberic value > 0. Setting to default failure timeout value", fn, PxbJobFailureRetryTimeoutKey)
+			logrus.Debugf("%v:invalid %v value set. Should be numberic value > 0. Setting to default failure timeout value %v", fn, PxbJobFailureRetryTimeoutKey, PxbDefaultJobFailureRetryTimeout)
 			timeOut = PxbDefaultJobFailureRetryTimeout
 		}
 	}
-	JobFailureRetryTimeout, err := time.ParseDuration(timeOut + "s")
+	duration, err := time.ParseDuration(timeOut + "s")
 	if err != nil {
 		// we should never reach here.
-		logrus.Debugf("%v: failed to parse the failure timeout set %v: %v", fn, JobFailureRetryTimeout, err)
+		logrus.Debugf("%v: error parsing %v value. Retaining current setting %v: %v", fn, PxbJobFailureRetryTimeoutKey, JobFailureRetryTimeout, err)
 	}
+	JobFailureRetryTimeout = duration
+	logrus.Debugf("%v: %v value set to %v", fn, PxbJobFailureRetryTimeoutKey, JobFailureRetryTimeout)
 }
 
 func GetProvisionerNameFromPvc(pvcName, pvcNamespace string) (string, error) {
