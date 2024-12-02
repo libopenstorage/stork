@@ -230,6 +230,7 @@ func main() {
 
 	// Export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 	log.Warnf("Export USE_GKE_GCLOUD_AUTH_PLUGIN=True")
+	log.Infof("mithun - starting stork")
 	os.Setenv("USE_GKE_GCLOUD_AUTH_PLUGIN", "True")
 
 	if err := app.Run(os.Args); err != nil {
