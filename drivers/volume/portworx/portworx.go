@@ -3734,7 +3734,7 @@ func (p *portworx) StartRestore(
 		volumeInfo.PersistentVolumeClaimUID = backupVolumeInfo.PersistentVolumeClaimUID
 		volumeInfo.SourceNamespace = backupVolumeInfo.Namespace
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
-		volumeInfo.RestoreVolume = p.generatePVName()
+		volumeInfo.RestoreVolume = p.generatePVName() + "-sfr"
 		volumeInfo.DriverName = storkvolume.PortworxDriverName
 
 		authLabels := p.mergeAuthLabels(nil, nil, backupVolumeInfo.Options)
@@ -3786,6 +3786,7 @@ func (p *portworx) StartRestore(
 		if err != nil {
 			return volumeInfos, fmt.Errorf("failed to parse restore volume spec: %v ", err)
 		}
+		logrus.Debugf("StartRestore: ********** restoreSpec.pvc = %v", volumeInfo.PersistentVolumeClaim)
 		request := &api.CloudBackupRestoreRequest{
 			Name:              taskID,
 			ID:                backupVolumeInfo.BackupID,
@@ -3794,7 +3795,7 @@ func (p *portworx) StartRestore(
 			Locator:           locator,
 			Spec:              restoreSpec,
 		}
-
+		logrus.Debugf("StartRestore: ********** backupRestoreReq.pvc = %v", request.RestoreVolumeName)
 		var cloudRestoreErr error
 		err = wait.ExponentialBackoff(cloudBackupCreateBackoff, func() (bool, error) {
 			_, cloudRestoreErr = volDriver.CloudBackupRestore(request)

@@ -62,18 +62,19 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 	var updatedName string
 	var present bool
 
-	metadata, err := meta.Accessor(object)
-	if err != nil {
-		return false, err
-	}
+	// metadata, err := meta.Accessor(object)
+	// if err != nil {
+	// 	return false, err
+	// }
 
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pvc); err != nil {
 		return false, fmt.Errorf("error converting PVC object: %v: %v", object, err)
 	}
-
+	pvc.Name = pvc.Name + "-sfr"
+	pvc.Spec.VolumeName = pvc.Spec.VolumeName + "-sfr"
 	if len(pvNameMappings) != 0 {
 		if updatedName, present = pvNameMappings[pvc.Spec.VolumeName]; !present {
-			return false, fmt.Errorf("PV name mapping not found for %v", metadata.GetName())
+			return false, fmt.Errorf("PV name mapping not found for %v", pvc.Name)
 		}
 	}
 	pvc.Spec.VolumeName = updatedName

@@ -2,6 +2,7 @@ package resourcecollector
 
 import (
 	"fmt"
+
 	"github.com/libopenstorage/stork/pkg/utils"
 	"github.com/sirupsen/logrus"
 
@@ -154,7 +155,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
 		return false, fmt.Errorf("error converting to persistent volume: %v", err)
 	}
-
+	pv.Name = pv.Name + "-sfr"
 	// Skip the PV if it isn't bound to a PVC that needs to be restored
 	if len(pvNameMappings) == 0 {
 		return true, nil
