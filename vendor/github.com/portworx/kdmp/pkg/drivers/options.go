@@ -62,6 +62,7 @@ type JobOpts struct {
 	// psa specifc option to be used by job
 	PodUserId  string
 	PodGroupId string
+	VolumeMode string
 }
 
 // WithS3DisableSSL is job parameter
@@ -533,6 +534,13 @@ func WithPodUserId(podUserId string) JobOption {
 func WithPodGroupId(PodGroupId string) JobOption {
 	return func(opts *JobOpts) error {
 		opts.PodGroupId = PodGroupId
+		return nil
+	}
+}
+
+func WithVolumeMode(VolumeMode string) JobOption {
+	return func(opts *JobOpts) error {
+		opts.VolumeMode = VolumeMode
 		return nil
 	}
 }

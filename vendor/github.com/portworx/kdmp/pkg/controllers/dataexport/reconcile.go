@@ -1909,7 +1909,7 @@ func startTransferJob(
 	}
 	// update latest JobFailureRetryTimeout
 	utils.UpdateJobFailureTimeOut(jobConfigMap, jobConfigMapNs)
-
+	
 	switch drv.Name() {
 	case drivers.Rsync:
 		return drv.StartJob(
@@ -1937,6 +1937,11 @@ func startTransferJob(
 			drivers.WithLabels(dataExport.Labels),
 		)
 	case drivers.KopiaBackup:
+		pvc, err := core.Instance().GetPersistentVolumeClaim(srcPVCName, dataExport.Spec.Source.Namespace)
+		if err != nil {
+			return "", err
+		}
+		
 		return drv.StartJob(
 			drivers.WithKopiaImageExecutorSource(dataExport.Spec.TriggeredFrom),
 			drivers.WithKopiaImageExecutorSourceNs(dataExport.Spec.TriggeredFromNs),
@@ -1961,6 +1966,7 @@ func startTransferJob(
 			drivers.WithNfsMountOption(nfsMountOption),
 			drivers.WithPodUserId(psaJobUid),
 			drivers.WithPodGroupId(psaJobGid),
+			drivers.WithVolumeMode(string(*pvc.Spec.VolumeMode)),
 		)
 	case drivers.KopiaRestore:
 		return drv.StartJob(

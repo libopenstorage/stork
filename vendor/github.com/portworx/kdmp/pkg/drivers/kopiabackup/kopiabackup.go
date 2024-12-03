@@ -294,8 +294,6 @@ func jobFor(
 		jobOption.BackupLocationNamespace,
 		"--backup-namespace",
 		jobOption.Namespace,
-		"--source-path",
-		"/data",
 	}, " ")
 
 	if jobOption.Compression != "" {
@@ -326,6 +324,26 @@ func jobFor(
 	if err != nil {
 		logrus.Errorf("failed to get the toleration details: %v", err)
 		return nil, fmt.Errorf("failed to get the toleration details for job [%s/%s]", jobOption.Namespace, jobName)
+	}
+	VolumeMount := corev1.VolumeMount{}
+	VolumeDevice := corev1.VolumeDevice {}
+
+	if jobOption.VolumeMode == "Filesystem" || len(jobOption.VolumeMode) == 0 {
+		VolumeMount.Name = "vol"
+		VolumeMount.MountPath = "/data"
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--source-path" ,"/data")
+		cmd = strings.Join(splitCmd, " ")
+	}
+
+	if jobOption.VolumeMode == "Block"  {
+		logrus.Infof("line 339 mode %v", jobOption.VolumeMode)
+		VolumeDevice.Name = "vol"
+		VolumeDevice.DevicePath = "/dev/volblk"
+		splitCmd := strings.Split(cmd, " ")
+		splitCmd = append(splitCmd, "--mode" ,"block")
+		splitCmd = append(splitCmd, "--source-path" ,"/dev/volblk")
+		cmd = strings.Join(splitCmd, " ")
 	}
 
 	job := &batchv1.Job{
@@ -360,10 +378,6 @@ func jobFor(
 							Resources: resources,
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "vol",
-									MountPath: "/data",
-								},
-								{
 									Name:      "cred-secret",
 									MountPath: drivers.KopiaCredSecretMount,
 									ReadOnly:  true,
@@ -394,6 +408,17 @@ func jobFor(
 			},
 		},
 	}
+
+
+	// Based in volumeMode of PVC either mount is as vol mount or device mount
+	if jobOption.VolumeMode == "Filesystem" || len(jobOption.VolumeMode) == 0 {
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(job.Spec.Template.Spec.Containers[0].VolumeMounts, VolumeMount)
+	}
+	if jobOption.VolumeMode == "Block"  {
+		job.Spec.Template.Spec.Containers[0].VolumeDevices = append(job.Spec.Template.Spec.Containers[0].VolumeDevices, VolumeDevice)
+	}
+
+
 	// Add security Context only if the PSA is enabled.
 	if jobOption.PodUserId != "" || jobOption.PodGroupId != "" {
 		job, err = utils.AddSecurityContextToJob(job, jobOption.PodUserId, jobOption.PodGroupId)
