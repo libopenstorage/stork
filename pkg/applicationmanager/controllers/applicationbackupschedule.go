@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	storkops "github.com/libopenstorage/stork/pkg/crud/stork"
@@ -244,29 +245,27 @@ func (s *ApplicationBackupScheduleController) isApplicationBackupComplete(status
 }
 
 func (s *ApplicationBackupScheduleController) shouldStartApplicationBackup(backupSchedule *stork_api.ApplicationBackupSchedule) (stork_api.SchedulePolicyType, bool, error) {
-	// Don't trigger a new backup if one is already in progress
+	isParallelBackupEnabled := *backupSchedule.Spec.ParallelBackup
 	for _, policyType := range stork_api.GetValidSchedulePolicyTypes() {
-		policyApplicationBackup, present := backupSchedule.Status.Items[policyType]
-		if present {
-			for _, backup := range policyApplicationBackup {
-				if !s.isApplicationBackupComplete(backup.Status) {
-					return stork_api.SchedulePolicyTypeInvalid, false, nil
-				}
-			}
-		}
-	}
-
-	for _, policyType := range stork_api.GetValidSchedulePolicyTypes() {
+		var latestScheduledApplicationBackupStatus *stork_api.ScheduledApplicationBackupStatus
 		var latestApplicationBackupTimestamp meta.Time
 		policyApplicationBackup, present := backupSchedule.Status.Items[policyType]
 		if present {
 			for _, backup := range policyApplicationBackup {
-				if latestApplicationBackupTimestamp.Before(&backup.CreationTimestamp) {
-					latestApplicationBackupTimestamp = backup.CreationTimestamp
+				if (!isParallelBackupEnabled && backup.Status == stork_api.ApplicationBackupStatusInProgress) ||
+					backup.Status == stork_api.ApplicationBackupStatusInitial ||
+					backup.Status == stork_api.ApplicationBackupStatusPending {
+					return stork_api.SchedulePolicyTypeInvalid, false, nil
+				}
+				if latestScheduledApplicationBackupStatus == nil || latestScheduledApplicationBackupStatus.CreationTimestamp.Before(&backup.CreationTimestamp) {
+					latestScheduledApplicationBackupStatus = backup
 				}
 			}
 		}
-		trigger, err := schedule.TriggerRequired(
+		if latestScheduledApplicationBackupStatus != nil {
+			latestApplicationBackupTimestamp = latestScheduledApplicationBackupStatus.CreationTimestamp
+		}
+		isTriggerRequired, err := schedule.TriggerRequired(
 			backupSchedule.Spec.SchedulePolicyName,
 			backupSchedule.Namespace,
 			policyType,
@@ -275,11 +274,41 @@ func (s *ApplicationBackupScheduleController) shouldStartApplicationBackup(backu
 		if err != nil {
 			return stork_api.SchedulePolicyTypeInvalid, false, err
 		}
-		if trigger {
-			return policyType, true, nil
+		if !isTriggerRequired {
+			continue
 		}
+		if latestScheduledApplicationBackupStatus != nil {
+			isLatestScheduleBackupInProgress := latestScheduledApplicationBackupStatus.Status == stork_api.ApplicationBackupStatusInProgress
+			if isLatestScheduleBackupInProgress {
+				isScheduleBackupAllowed, err := verifyAllPXDVolumesSnapshotCompleted(latestScheduledApplicationBackupStatus.Name, backupSchedule.Namespace)
+				if err != nil {
+					logrus.Errorf("Error while verifyAllPXDVolumesSnapshotCompleted: %v", err)
+					return stork_api.SchedulePolicyTypeInvalid, false, err
+				}
+				if !isScheduleBackupAllowed {
+					continue
+				}
+			}
+		}
+		return policyType, true, nil
 	}
 	return stork_api.SchedulePolicyTypeInvalid, false, nil
+}
+
+func verifyAllPXDVolumesSnapshotCompleted(backupName, backupNamespace string) (bool, error) {
+	fn := "verifyAllPXDVolumesSnapshotCompleted"
+	backup, err := storkops.Instance().GetApplicationBackup(backupName, backupNamespace)
+	if err != nil {
+		return false, err
+	}
+	// verify all the volumes driver are PXD and BackupID is non-empty(Snapshot for that volume is completed)
+	for _, volumeInfo := range backup.Status.Volumes {
+		if !(volumeInfo.DriverName == volume.PortworxDriverName && volumeInfo.BackupID != "") {
+			logrus.Errorf("%s: pvcName: %v, driverName: %v, backupID: %v", fn, volumeInfo.PersistentVolumeClaim, volumeInfo.DriverName, volumeInfo.BackupID)
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (s *ApplicationBackupScheduleController) formatApplicationBackupName(backupSchedule *stork_api.ApplicationBackupSchedule, policyType stork_api.SchedulePolicyType) string {

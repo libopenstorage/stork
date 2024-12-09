@@ -18,6 +18,7 @@ type ApplicationBackupScheduleSpec struct {
 	Suspend            *bool                         `json:"suspend"`
 	ReclaimPolicy      ReclaimPolicyType             `json:"reclaimPolicy"`
 	BackupType         string                        `json:"backupType"`
+	ParallelBackup     *bool                         `json:"parallelBackup"`
 }
 
 // ApplicationBackupTemplateSpec describes the data a ApplicationBackup should have when created
