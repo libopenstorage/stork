@@ -1969,6 +1969,8 @@ func startTransferJob(
 			drivers.WithVolumeMode(string(*pvc.Spec.VolumeMode)),
 		)
 	case drivers.KopiaRestore:
+		pvcSpec := dataExport.Status.RestorePVC
+
 		return drv.StartJob(
 			drivers.WithKopiaImageExecutorSource(dataExport.Spec.TriggeredFrom),
 			drivers.WithKopiaImageExecutorSourceNs(dataExport.Spec.TriggeredFromNs),
@@ -1989,6 +1991,7 @@ func startTransferJob(
 			drivers.WithPodUserId(psaJobUid),
 			drivers.WithPodGroupId(psaJobGid),
 			drivers.WithNfsMountOption(nfsMountOption),
+			drivers.WithVolumeMode(string(*pvcSpec.Spec.VolumeMode)),
 		)
 	}
 
