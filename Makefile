@@ -141,6 +141,7 @@ test:
 			  done'
 
 integration-test:
+	@echo "CBT demo:"
 	@echo "Building stork integration tests"
 	docker run --rm $(SECCOMP_OPTIONS) -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
 		   /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/test/integration_test && \
@@ -160,6 +161,7 @@ codegen:
 	(GOFLAGS="" hack/update-codegen.sh)
 
 stork:
+	@echo "CBT demo:"
 	@echo "Building the stork binary"
 	docker run --rm $(SECCOMP_OPTIONS)  -v $(shell pwd):/go/src/github.com/libopenstorage/stork  $(DOCK_BUILD_CNT) \
            /bin/bash -c 'cd /go/src/github.com/libopenstorage/stork/cmd/stork && \
