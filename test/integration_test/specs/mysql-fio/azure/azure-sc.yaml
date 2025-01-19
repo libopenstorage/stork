@@ -1,0 +1,16 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fio-sc
+provisioner: kubernetes.io/azure-disk
+parameters:
+  skuName: Standard_LRS
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fio-log
+provisioner: kubernetes.io/azure-disk
+parameters:
+  skuName: Standard_LRS
