@@ -518,6 +518,12 @@ func (r *ResourceCollector) GetResources(
 		if crdList != nil {
 			for _, crd := range crdList.Items {
 				for _, kind := range crd.Resources {
+					if kind.Kind == "InstallPlan" ||
+						kind.Kind == "ClusterServiceVersion" ||
+						kind.Kind == "OperatorCondition" {
+						logrus.Infof("sivakumar --- crd kind %v", kind)
+						continue
+					}
 					crdResources = append(crdResources, kind.GroupVersionKind)
 				}
 			}
@@ -1187,6 +1193,12 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	case "VirtualMachine":
 		logrus.Tracef("Transforming kubevirt VM resource for apply")
 		return false, r.prepareVirtualMachineForApply(object, nil)
+	case "OperatorGroup":
+		logrus.Infof("sivakumar Fixing OG namespace fields....")
+		return false, r.prepareOgForApply(object, namespaceMappings)
+	case "Elasticsearch":
+		logrus.Infof("sivakumar Fixing  Elasticsearch ....")
+		return false, r.prepareElasticsearchForApply(object, nil)
 	}
 	return false, nil
 }
